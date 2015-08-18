@@ -1,0 +1,11 @@
+{
+  "name": "parpar",
+  "version": "0.1",
+  "description": "High performance multi-threaded PAR2 creation library",
+  "license": "Public Domain",
+  "author": "Anime Tosho",
+  "main": "build/Release/parpar_gf.node",
+  "scripts": {
+    "test": "if [ -n `which nodejs` ]; then nodejs test; else node test; fi"
+  }
+}
