@@ -74,7 +74,7 @@ const int maxNumThreads = 1;
    - input and length of each output is the same and == len
    - number of outputs and scales is same and == numOutputs
 */
-static inline void multiply_multi(/*const*/ uint16_t* input, size_t len, uint16_t** outputs, uint_fast16_t* scales, unsigned int numOutputs, bool add) {
+static inline void multiply_multi(/*const*/ uint16_t** inputs, unsigned int numInputs, size_t len, uint16_t** outputs, uint_fast16_t* scales, unsigned int numOutputs, bool add) {
 #ifdef _OPENMP
 	int max_threads = omp_get_max_threads();
 	if(max_threads != maxNumThreads)
@@ -101,14 +101,16 @@ static inline void multiply_multi(/*const*/ uint16_t* input, size_t len, uint16_
 	#pragma omp parallel for private(_gf)
 	for(int i = 0; i < (int)numOutputs; i++) {
 		_gf = &(gf[omp_get_thread_num()]);
-		_gf->multiply_region.w32(_gf, input, outputs[i], scales[i], len, add);
+		for(unsigned int j = 0; j < numInputs; j++)
+			_gf->multiply_region.w32(_gf, inputs[j], outputs[i], scales[i], len, add || j>0);
 	}
 	
 	// if(max_threads != maxNumThreads)
 		// omp_set_num_threads(max_threads);
 #else
-	for(int i = 0; i < (int)numOutputs; i++) {
-		gf->multiply_region.w32(gf, input, outputs[i], scales[i], len, add);
+	for(unsigned int i = 0; i < numOutputs; i++) {
+		for(unsigned int j = 0; j < numInputs; j++)
+			gf->multiply_region.w32(gf, inputs[j], outputs[i], scales[i], len, add || j>0);
 	}
 #endif
 }
@@ -256,6 +258,7 @@ struct MMRequest {
 		obj_.Dispose();
 		obj_.Clear();
 #endif
+		delete[] inputs;
 		delete[] outputs;
 		delete[] scales;
 	};
@@ -265,7 +268,8 @@ struct MMRequest {
 	Persistent<Object> obj_;
 	uv_work_t work_req_;
 	
-	uint16_t* input;
+	uint16_t** inputs;
+	unsigned int numInputs;
 	size_t len;
 	uint16_t** outputs;
 	uint_fast16_t* scales;
@@ -280,7 +284,7 @@ struct MMRequest {
 void MMWork(uv_work_t* work_req) {
 	MMRequest* req = (MMRequest*)work_req->data;
 	multiply_multi(
-		req->input, req->len, req->outputs, req->scales, req->numOutputs, req->add
+		req->inputs, req->numInputs, req->len, req->outputs, req->scales, req->numOutputs, req->add
 	);
 }
 void MMAfter(uv_work_t* work_req, int status) {
@@ -309,13 +313,15 @@ FUNC(MultiplyMulti) {
 	if (args.Length() < 4)
 		RETURN_ERROR("4 arguments required");
 	
+	// TODO: support multiple input blocks
 	if (!node::Buffer::HasInstance(args[0]))
 		RETURN_ERROR("Input must be a Buffer");
 	
 	size_t len = node::Buffer::Length(args[0]);
 	if (len % 2)
 		RETURN_ERROR("Length of input must be a multiple of 2");
-	intptr_t inputAddress = (intptr_t)node::Buffer::Data(args[0]);
+	uint16_t* data = (uint16_t*)node::Buffer::Data(args[0]);
+	intptr_t inputAddress = (intptr_t)data;
 	if (inputAddress & 1)
 		RETURN_ERROR("Input buffer must be address aligned to a 16-bit boundary");
 	
@@ -381,7 +387,9 @@ FUNC(MultiplyMulti) {
 		req->isolate = isolate;
 #endif
 		
-		req->input = (uint16_t*)node::Buffer::Data(args[0]);
+		req->inputs = new uint16_t*[1];
+		req->inputs[0] = data;
+		req->numInputs = 1;
 		req->len = len;
 		req->outputs = outputs;
 		req->scales = scales;
@@ -423,7 +431,7 @@ FUNC(MultiplyMulti) {
 		// does req->obj_ need to be returned?
 	} else {
 		multiply_multi(
-			(uint16_t*)node::Buffer::Data(args[0]),
+			&data, 1,
 			len, outputs, scales, numOutputs, add
 		);
 		delete[] outputs;
