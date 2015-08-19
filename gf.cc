@@ -7,7 +7,7 @@
 #include <stdio.h>
 #include <uv.h>
 
-#if defined(_MSC_VER) && _MSC_VER < 1800
+#if defined(_MSC_VER)
 #include <malloc.h>
 #endif
 
@@ -102,7 +102,7 @@ static inline void multiply_multi(/*const*/ uint16_t** inputs, unsigned int numI
 	for(int i = 0; i < (int)numOutputs; i++) {
 		_gf = &(gf[omp_get_thread_num()]);
 		for(unsigned int j = 0; j < numInputs; j++)
-			_gf->multiply_region.w32(_gf, inputs[j], outputs[i], scales[i], len, add || j>0);
+			_gf->multiply_region.w32(_gf, inputs[j], outputs[i], scales[i], (int)len, add || j>0);
 	}
 	
 	// if(max_threads != maxNumThreads)
@@ -110,7 +110,7 @@ static inline void multiply_multi(/*const*/ uint16_t** inputs, unsigned int numI
 #else
 	for(unsigned int i = 0; i < numOutputs; i++) {
 		for(unsigned int j = 0; j < numInputs; j++)
-			gf->multiply_region.w32(gf, inputs[j], outputs[i], scales[i], len, add || j>0);
+			gf->multiply_region.w32(gf, inputs[j], outputs[i], scales[i], (int)len, add || j>0);
 	}
 #endif
 }
@@ -196,13 +196,13 @@ FUNC(AlignedBuffer) {
 		len = (size_t)args[0]->ToInteger()->Value();
 	
 	char* buf = NULL;
-#if (defined(__cplusplus) && __cplusplus > 201100) || (defined(_MSC_VER) && _MSC_VER >= 1800)
+#if defined(__cplusplus) && __cplusplus > 201100
 	// C++11 method
 	buf = (char*)aligned_alloc(MEM_ALIGN, (len + MEM_ALIGN-1) & ~(MEM_ALIGN-1)); // len needs to be a multiple of 16, although it sometimes works if it isn't...
 #elif defined(_MSC_VER)
 	buf = (char*)_aligned_malloc(len, MEM_ALIGN);
 #else
-	if(posix_memalign(&buf, MEM_ALIGN, len))
+	if(posix_memalign((void**)&buf, MEM_ALIGN, len))
 		buf = NULL;
 #endif
 
@@ -223,7 +223,7 @@ FUNC(AlignedBuffer) {
 	// convert SlowBuffer to JS Buffer object and return it
 	Handle<Value> _tmp[] = {
 		node::Buffer::New((char*)buf, len, free_buffer, (void*)len)->handle_,
-		Integer::New(len),
+		Integer::New((int32_t)len),
 		Integer::New(0)
 	};
 	RETURN_VAL(
