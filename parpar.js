@@ -1,7 +1,7 @@
 "use strict";
 
 var crypto = require('crypto');
-var gf = require('./build/Release/parpar-gf.node');
+var gf = require('./build/Release/parpar_gf.node');
 var y = require('yencode');
 
 var SAFE_INT = 0xffffffff; // JS only does 32-bit bit operations
@@ -30,8 +30,18 @@ var Buffer_writeUInt64LE = function(buf, num, offset) {
 	}
 };
 
+var hasUnicode = function(s) {
+	return s.match(/[\u0100-\uffff]/);
+};
 
 var MAGIC = new Buffer('PAR2\0PKT');
+// constants for ascii/unicode encoding
+var CHAR_CONST = {
+	AUTO: 0,
+	BOTH: 1,
+	ASCII: 2,
+	UNICODE: 3,
+};
 
 // files needs to be an array of {md5_16k: <Buffer>, size: <int>, name: <string>}
 function PAR2(files, sliceSize) {
@@ -94,7 +104,7 @@ PAR2.prototype = {
 		Buffer_writeUInt64LE(buf, pktLen, offset+8);
 		// skip MD5
 		this.setID.copy(buf, offset+32);
-		buf.write(name, 48);
+		buf.write(name, offset+48);
 		
 		// put in packet hash
 		crypto.createHash('md5')
@@ -162,8 +172,53 @@ PAR2.prototype = {
 		pkt.write(creator, 64, 'ascii');
 		this._writePktHeader(pkt, "PAR 2.0\0Creator\0");
 		return pkt;
+	},
+	getPacketComment: function(comment, unicode) {
+		if(!unicode) {
+			unicode = (hasUnicode(comment) ? CHAR_CONST.BOTH : CHAR_CONST.ASCII);
+		} else if([CHAR_CONST.BOTH, CHAR_CONST.ASCII, CHAR_CONST.UNICODE].indexOf(unicode) < 0) {
+			throw new Error('Unknown unicode option');
+		}
+		
+		var doAscii = (unicode == CHAR_CONST.BOTH || unicode == CHAR_CONST.ASCII);
+		var doUni = (unicode == CHAR_CONST.BOTH || unicode == CHAR_CONST.UNICODE);
+		
+		var len = comment.length, len2 = comment.length*2;
+		len = Math.ceil(len / 4) * 4;
+		len2 = Math.ceil(len2 / 4) * 4;
+		
+		var pktLen = 0;
+		if(doAscii)
+			pktLen += 64 + len;
+		if(doUni)
+			pktLen += 64 + 16 + len2;
+		
+		var pkt = new Buffer(pktLen);
+		var offset = 0;
+		if(doAscii) {
+			offset = 64 + len;
+			
+			pkt.fill(0, 64 + comment.length, offset);
+			pkt.write(comment, 64, 'ascii');
+			this._writePktHeader(pkt, "PAR 2.0\0CommASCI", 0, offset);
+		}
+		if(doUni) {
+			var pktEnd = 64 + 16 + len2 + offset;
+			pkt[pktEnd - 2] = 0;
+			pkt[pktEnd - 1] = 0;
+			pkt.write(comment, 64 + 16 + offset, 'ucs2');
+			// fill MD5 link
+			if(doAscii) {
+				pkt.copy(pkt, offset + 64, 16, 32);
+			} else {
+				pkt.fill(0, offset + 64, 64 + 16 + offset);
+			}
+			// TODO: specs only provide a 15 character identifier - we just pad it with a null; check if valid!
+			this._writePktHeader(pkt, "PAR 2.0\0CommUni\0", offset, pktEnd);
+		}
+		
+		return pkt;
 	}
-	
 };
 
 function PAR2File(par2, file) {
@@ -201,6 +256,7 @@ PAR2File.prototype = {
 	_md5ctx: null,
 	size: 0,
 	name: '',
+	inRecvSet: false, // TODO: support non-recovery set files
 	
 	sliceOffset: 0,
 	
@@ -272,24 +328,60 @@ PAR2File.prototype = {
 		this.par2._writePktHeader(pkt, "PAR 2.0\0IFSC\0\0\0\0");
 		return pkt;
 	},
-	getPacketDescription: function() {
-		var len = this.name.length;
-		len = Math.ceil(len / 4) * 4;
+	getPacketDescription: function(unicode) {
+		if(!unicode) {
+			unicode = (hasUnicode(this.name) ? CHAR_CONST.BOTH : CHAR_CONST.ASCII);
+		} else if([CHAR_CONST.BOTH, CHAR_CONST.ASCII].indexOf(unicode) < 0) {
+			throw new Error('Unknown unicode option');
+		}
 		
-		var pkt = new Buffer(64 + 56 + len);
+		var len = this.name.length, len2 = this.name.length*2;
+		len = Math.ceil(len / 4) * 4;
+		len2 = Math.ceil(len2 / 4) * 4;
+		
+		var pktLen = 64 + 56 + len, pkt1Len = pktLen;
+		if(unicode == CHAR_CONST.BOTH)
+			pktLen += 64 + 16 + len2;
+		var pkt = new Buffer(pktLen);
 		this.id.copy(pkt, 64);
 		if(this.md5) this.md5.copy(pkt, 64+16);
 		this.md5_16k.copy(pkt, 64+32);
 		Buffer_writeUInt64LE(pkt, this.size, 64+48);
 		pkt.write(this.name, 64+56, 'ascii');
-		pkt.fill(0, 64 + 56 + this.name.length);
-		this.par2._writePktHeader(pkt, "PAR 2.0\0FileDesc");
+		pkt.fill(0, 64 + 56 + this.name.length, pkt1Len);
+		this.par2._writePktHeader(pkt, "PAR 2.0\0FileDesc", 0, 56 + len);
+		
+		if(unicode == CHAR_CONST.BOTH) {
+			this._writePacketUniName(pkt, pkt1Len);
+		}
+		return pkt;
+	},
+	_writePacketUniName: function(pkt, offset) {
+		var len = this.name.length * 2;
+		len = Math.ceil(len / 4) * 4;
+		
+		this.id.copy(pkt, offset + 64);
+		// clear last two bytes
+		var pktEnd = offset + 64 + 16 + len;
+		pkt[pktEnd - 2] = 0;
+		pkt[pktEnd - 1] = 0;
+		pkt.write(this.name, offset + 64+16, 'ucs2');
+		this.par2._writePktHeader(pkt, "PAR 2.0\0UniFileN", offset); // TODO: include length?
+	},
+	getPacketUniName: function() {
+		var len = this.name.length * 2;
+		len = Math.ceil(len / 4) * 4;
+		
+		var pkt = new Buffer(64 + 16 + len);
+		this._writePacketUniName(pkt, 0);
 		return pkt;
 	}
 };
 
 var fs = require('fs'), async = require('async');
 module.exports = {
+	CHAR: CHAR_CONST,
+	
 	PAR2: PAR2,
 	AlignedBuffer: gf.AlignedBuffer,
 	fileInfo: function(files, cb) {
