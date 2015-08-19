@@ -3,15 +3,14 @@
 #include <node_buffer.h>
 #include <v8.h>
 #include <stdlib.h>
-#include <inttypes.h>
+//#include <inttypes.h>
 #include <stdio.h>
 #include <uv.h>
 
-/*
-#if !defined(aligned_alloc) && defined(_MSC_VER)
+#if defined(_MSC_VER) && _MSC_VER < 1800
 #include <malloc.h>
 #endif
-*/
+
 
 extern "C" {
 #ifdef _OPENMP
@@ -100,7 +99,7 @@ static inline void multiply_multi(/*const*/ uint16_t* input, size_t len, uint16_
 #ifdef _OPENMP
 	gf_t* _gf;
 	#pragma omp parallel for private(_gf)
-	for(unsigned int i = 0; i < numOutputs; i++) {
+	for(int i = 0; i < (int)numOutputs; i++) {
 		_gf = &(gf[omp_get_thread_num()]);
 		_gf->multiply_region.w32(_gf, input, outputs[i], scales[i], len, add);
 	}
@@ -108,7 +107,7 @@ static inline void multiply_multi(/*const*/ uint16_t* input, size_t len, uint16_
 	// if(max_threads != maxNumThreads)
 		// omp_set_num_threads(max_threads);
 #else
-	for(unsigned int i = 0; i < numOutputs; i++) {
+	for(int i = 0; i < (int)numOutputs; i++) {
 		gf->multiply_region.w32(gf, input, outputs[i], scales[i], len, add);
 	}
 #endif
@@ -192,21 +191,19 @@ FUNC(AlignedBuffer) {
 		len = node::StringBytes::Size(ISOLATE args[0]->ToString(), enc);
 	} else
 	*/
-		len = args[0]->ToInteger()->Value();
+		len = (size_t)args[0]->ToInteger()->Value();
 	
 	char* buf = NULL;
-//#if defined(aligned_alloc)
+#if (defined(__cplusplus) && __cplusplus > 201100) || (defined(_MSC_VER) && _MSC_VER >= 1800)
+	// C++11 method
 	buf = (char*)aligned_alloc(MEM_ALIGN, (len + MEM_ALIGN-1) & ~(MEM_ALIGN-1)); // len needs to be a multiple of 16, although it sometimes works if it isn't...
-/*
-#elif defined(posix_memalign)
-	if(posix_memalign(&buf, MEM_ALIGN, len))
-		buf = NULL;
-#elif defined(_aligned_malloc)
+#elif defined(_MSC_VER)
 	buf = (char*)_aligned_malloc(len, MEM_ALIGN);
 #else
-	#error No way to perform aligned allocation
+	if(posix_memalign(&buf, MEM_ALIGN, len))
+		buf = NULL;
 #endif
-*/
+
 	
 #ifndef NODE_010
 	if(!buf)
