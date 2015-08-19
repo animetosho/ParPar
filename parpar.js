@@ -409,14 +409,11 @@ PAR2File.prototype = {
 		this.par2._writePktHeader(pkt, "PAR 2.0\0FileDesc", 0, 56 + len);
 		
 		if(unicode == CHAR_CONST.BOTH) {
-			this._writePacketUniName(pkt, pkt1Len);
+			this._writePacketUniName(pkt, len2, pkt1Len);
 		}
 		return pkt;
 	},
-	_writePacketUniName: function(pkt, offset) {
-		var len = this.name.length * 2;
-		len = Math.ceil(len / 4) * 4;
-		
+	_writePacketUniName: function(pkt, len, offset) {
 		this.id.copy(pkt, offset + 64);
 		// clear last two bytes
 		var pktEnd = offset + 64 + 16 + len;
@@ -430,7 +427,7 @@ PAR2File.prototype = {
 		len = Math.ceil(len / 4) * 4;
 		
 		var pkt = new Buffer(64 + 16 + len);
-		this._writePacketUniName(pkt, 0);
+		this._writePacketUniName(pkt, len, 0);
 		return pkt;
 	}
 };
