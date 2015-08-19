@@ -140,7 +140,10 @@ PAR2.prototype = {
 		this._allocRecovery();
 	},
 	
+	// Warning: this never checks if the recovery block is fully generated
 	getPacketRecovery: function(block) {
+		if(this.chunkSize) throw new Error('Cannot get recovery packet in chunked mode');
+		
 		var index = block; // TODO: lookup index
 		var pkt = this.recoveryPackets[index];
 		
@@ -149,6 +152,7 @@ PAR2.prototype = {
 	},
 	
 	setChunkSize: function(chunkSize, keepRecvBlocks) {
+		if(chunkSize == this.blockSize) chunkSize = null;
 		this.chunkSize = chunkSize;
 		
 		if(keepRecvBlocks) {
@@ -261,6 +265,8 @@ PAR2File.prototype = {
 	sliceOffset: 0,
 	
 	process: function(data, cb) {
+		if(this.slicePos >= this.numSlices) throw new Error('Too many slices given');
+		
 		var lastPiece = this.slicePos == this.numSlices-1;
 		// TODO: check size of data if last piece
 		
@@ -321,7 +327,7 @@ PAR2File.prototype = {
 		this.id.copy(pkt, 64);
 		for(var i in this.sliceChk) {
 			var chk = this.sliceChk[i];
-			if(!chk) continue; // if this happens, bad...!
+			if(!chk) throw new Error('Cannot generate checksums before data is read');
 			
 			chk.copy(pkt, 80 + 20*i);
 		}
@@ -344,7 +350,8 @@ PAR2File.prototype = {
 			pktLen += 64 + 16 + len2;
 		var pkt = new Buffer(pktLen);
 		this.id.copy(pkt, 64);
-		if(this.md5) this.md5.copy(pkt, 64+16);
+		if(!this.md5) throw new Error('MD5 of file not available. Ensure that all data has been read and processed.');
+		this.md5.copy(pkt, 64+16);
 		this.md5_16k.copy(pkt, 64+32);
 		Buffer_writeUInt64LE(pkt, this.size, 64+48);
 		pkt.write(this.name, 64+56, 'ascii');
