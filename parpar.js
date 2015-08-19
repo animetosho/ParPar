@@ -43,6 +43,8 @@ var CHAR_CONST = {
 	UNICODE: 3,
 };
 
+// TODO: consider way to clear out memory
+
 // files needs to be an array of {md5_16k: <Buffer>, size: <int>, name: <string>}
 function PAR2(files, sliceSize) {
 	if(!(this instanceof PAR2))
@@ -115,19 +117,27 @@ PAR2.prototype = {
 	},
 	
 	_allocRecovery: function() {
-		var size = this.chunkSize || this.blockSize;
-		// allocate space for recvslic header & alignment
-		var headerSize = Math.ceil(68 / gf.alignment) * gf.alignment;
-		size += headerSize;
-		this.recoveryPackets = Array(this.recoveryBlocks.length);
 		this.recoveryData = Array(this.recoveryBlocks.length);
-		for(var i in this.recoveryBlocks) {
-			this.recoveryPackets[i] = gf.AlignedBuffer(size).slice(headerSize - 68); // offset for alignment purposes
-			this.recoveryPackets[i].writeUInt32LE(this.recoveryBlocks[i], 64);
-			
-			this.recoveryData[i] = this.recoveryPackets[i].slice(68);
-		}
 		this._mergeRecovery = false;
+		
+		if(this.chunkSize) {
+			for(var i in this.recoveryBlocks) {
+				this.recoveryData[i] = gf.AlignedBuffer(this.chunkSize);
+			}
+		} else {
+			this.recoveryPackets = Array(this.recoveryBlocks.length);
+			
+			var size = this.chunkSize || this.blockSize;
+			// allocate space for recvslic header & alignment
+			var headerSize = Math.ceil(68 / gf.alignment) * gf.alignment;
+			size += headerSize;
+			for(var i in this.recoveryBlocks) {
+				this.recoveryPackets[i] = gf.AlignedBuffer(size).slice(headerSize - 68); // offset for alignment purposes
+				this.recoveryPackets[i].writeUInt32LE(this.recoveryBlocks[i], 64);
+				
+				this.recoveryData[i] = this.recoveryPackets[i].slice(68);
+			}
+		}
 	},
 	setRecoveryBlocks: function(blocks) {
 		if(Array.isArray(blocks))
@@ -151,6 +161,35 @@ PAR2.prototype = {
 		return pkt;
 	},
 	
+	// for dealing with recovery data in chunked mode
+	getRecoveryChunk: function(block) {
+		var index = block; // TODO: lookup index
+		return this.recoveryData[index];
+	},
+	getRecoveryHeader: function(chunks) {
+		if(!Array.isArray(chunks)) chunks = [chunks];
+		
+		var pkt = new Buffer(64);
+		MAGIC.copy(pkt, 0);
+		// skip len & MD5
+		this.setID.copy(pkt, 32);
+		buf.write("PAR 2.0\0RecvSlic", 48);
+		
+		var md5 = crypto.createHash('md5').update(pkt.slice(32));
+		var len = 64;
+		
+		chunks.forEach(function(chunk) {
+			md5.update(chunk);
+			len += chunk.length;
+		});
+		
+		// put in len & MD5
+		Buffer_writeUInt64LE(pkt, len, 8);
+		md5.digest().copy(pkt, 16);
+		
+		return pkt;
+	},
+	
 	setChunkSize: function(chunkSize, keepRecvBlocks) {
 		if(chunkSize == this.blockSize) chunkSize = null;
 		this.chunkSize = chunkSize;
@@ -162,6 +201,15 @@ PAR2.prototype = {
 			this.recoveryData = null;
 			this.recoveryBlocks = [];
 		}
+	},
+	
+	rewind: function() {
+		this.files.forEach(function(file) {
+			file.slicePos = 0;
+			if(!file.md5) {
+				file._md5ctx = crypto.createHash('md5');
+			}
+		});
 	},
 	
 	getPacketMain: function() {
@@ -208,6 +256,7 @@ PAR2.prototype = {
 		}
 		if(doUni) {
 			var pktEnd = 64 + 16 + len2 + offset;
+			
 			pkt[pktEnd - 2] = 0;
 			pkt[pktEnd - 1] = 0;
 			pkt.write(comment, 64 + 16 + offset, 'ucs2');
@@ -217,6 +266,7 @@ PAR2.prototype = {
 			} else {
 				pkt.fill(0, offset + 64, 64 + 16 + offset);
 			}
+			
 			// TODO: specs only provide a 15 character identifier - we just pad it with a null; check if valid!
 			this._writePktHeader(pkt, "PAR 2.0\0CommUni\0", offset, pktEnd);
 		}
