@@ -303,6 +303,9 @@ void MMAfter(uv_work_t* work_req, int status) {
 FUNC(MultiplyMulti) {
 	FUNC_START;
 	
+	if (mmActiveTasks)
+		RETURN_ERROR("Calculation already in progress");
+	
 	if (args.Length() < 4)
 		RETURN_ERROR("4 arguments required");
 	
