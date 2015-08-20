@@ -252,7 +252,7 @@ PAR2.prototype = {
 			
 			pkt.fill(0, 64 + comment.length, offset);
 			pkt.write(comment, 64, 'ascii');
-			this._writePktHeader(pkt, "PAR 2.0\0CommASCI", 0, offset);
+			this._writePktHeader(pkt, "PAR 2.0\0CommASCI", 0, len);
 		}
 		if(doUni) {
 			var pktEnd = 64 + 16 + len2 + offset;
@@ -268,7 +268,7 @@ PAR2.prototype = {
 			}
 			
 			// TODO: specs only provide a 15 character identifier - we just pad it with a null; check if valid!
-			this._writePktHeader(pkt, "PAR 2.0\0CommUni\0", offset, pktEnd);
+			this._writePktHeader(pkt, "PAR 2.0\0CommUni\0", offset, 16 + len2);
 		}
 		
 		return pkt;
