@@ -171,20 +171,22 @@ PAR2.prototype = {
 		
 		var pkt = new Buffer(64);
 		MAGIC.copy(pkt, 0);
-		// skip len & MD5
+		Buffer_writeUInt64LE(pkt, this.blockSize, 8);
+		// skip MD5
 		this.setID.copy(pkt, 32);
 		buf.write("PAR 2.0\0RecvSlic", 48);
 		
 		var md5 = crypto.createHash('md5').update(pkt.slice(32));
-		var len = 64;
+		var len = this.blockSize;
 		
 		chunks.forEach(function(chunk) {
 			md5.update(chunk);
-			len += chunk.length;
+			len -= chunk.length;
 		});
 		
-		// put in len & MD5
-		Buffer_writeUInt64LE(pkt, len, 8);
+		if(len) throw new Error('Length of recovery slice doesn\'t match PAR2 slice size');
+		
+		// put in MD5
 		md5.digest().copy(pkt, 16);
 		
 		return pkt;
@@ -322,7 +324,7 @@ PAR2File.prototype = {
 		
 		var dataBlock = data;
 		var fullBlock = data.length == this.par2.blockSize;
-		if(!fullBlock && data.length != this.par2.chunkSize) {
+		if(!fullBlock && data.length !== this.par2.chunkSize) {
 			if(lastPiece) {
 				// zero pad the block
 				var dataBlock = gf.AlignedBuffer(this.par2.chunkSize || this.par2.blockSize);
