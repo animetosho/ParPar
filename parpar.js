@@ -117,6 +117,12 @@ PAR2.prototype = {
 	},
 	
 	_allocRecovery: function() {
+		if(!this.recoveryBlocks.length) {
+			this.recoveryPackets = null;
+			this.recoveryData = null;
+			return;
+		}
+		
 		this.recoveryData = Array(this.recoveryBlocks.length);
 		this._mergeRecovery = false;
 		
@@ -143,6 +149,7 @@ PAR2.prototype = {
 		if(Array.isArray(blocks))
 			this.recoveryBlocks = blocks;
 		else {
+			if(!blocks) blocks = 0;
 			this.recoveryBlocks = Array(blocks);
 			for(var i=0; i<blocks; i++)
 				this.recoveryBlocks[i] = i;
@@ -192,17 +199,11 @@ PAR2.prototype = {
 		return pkt;
 	},
 	
-	setChunkSize: function(chunkSize, keepRecvBlocks) {
+	setChunkSize: function(chunkSize) {
 		if(chunkSize == this.blockSize) chunkSize = null;
 		this.chunkSize = chunkSize;
 		
-		if(keepRecvBlocks) {
-			this._allocRecovery();
-		} else {
-			this.recoveryPackets = null;
-			this.recoveryData = null;
-			this.recoveryBlocks = [];
-		}
+		this._allocRecovery();
 	},
 	
 	rewind: function() {
