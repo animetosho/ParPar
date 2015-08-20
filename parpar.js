@@ -321,7 +321,8 @@ PAR2File.prototype = {
 		// TODO: check size of data if last piece
 		
 		var dataBlock = data;
-		if(data.length != (this.par2.chunkSize || this.par2.blockSize)) {
+		var fullBlock = data.length == this.par2.blockSize;
+		if(!fullBlock && data.length != this.par2.chunkSize) {
 			if(lastPiece) {
 				// zero pad the block
 				var dataBlock = gf.AlignedBuffer(this.par2.chunkSize || this.par2.blockSize);
@@ -332,7 +333,8 @@ PAR2File.prototype = {
 		}
 		
 		// calc slice CRC/MD5
-		if(!this.par2.chunkSize) {
+		if(fullBlock) {
+			// TODO: check that user hasn't done something weird and fed a mix of partial and complete blocks
 			var chk = new Buffer(20);
 			crypto.createHash('md5').update(dataBlock).digest().copy(chk);
 			var crc = y.crc32(dataBlock);
@@ -358,9 +360,10 @@ PAR2File.prototype = {
 			var _data = dataBlock;
 			// if data not aligned, align it
 			if(gf.alignment_offset(dataBlock) != 0) {
-				_data = gf.AlignedBuffer(dataBlock.length);
-				dataBlock.copy(_data);
-			}
+				_data = gf.AlignedBuffer(this.par2.chunkSize || dataBlock.length);
+				dataBlock.copy(_data, 0, 0, this.par2.chunkSize || undefined);
+			} else if(this.par2.chunkSize)
+				_data = _data.slice(0, this.par2.chunkSize);
 			
 			gf.generate(_data, this.sliceOffset + this.slicePos, this.par2.recoveryData, this.par2.recoveryBlocks, this.par2._mergeRecovery, cb);
 			this.par2._mergeRecovery = true;
