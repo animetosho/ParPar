@@ -51,11 +51,13 @@ static inline uint16_t calc_factor(uint_fast16_t inputBlock, uint_fast16_t recov
 }
 
 gf_t* gf = NULL;
+void** gf_mem = NULL;
 int gfCount = 0;
 
 static inline void cleanup_gf(void) {
 	while(gfCount--) {
 		gf_free(&(gf[gfCount]), 1);
+		free(gf_mem[gfCount]);
 	}
 	free(gf);
 	gfCount = 0;
@@ -86,12 +88,20 @@ static inline void multiply_multi(/*const*/ uint16_t** inputs, unsigned int numI
 		if(gfCount) {
 			// for whatever reason, someone wanted moar threads...
 			gf = (gf_t*)realloc(gf, sizeof(gf_t) * maxNumThreads);
+			gf_mem = (void**)realloc(gf_mem, sizeof(void*) * maxNumThreads);
 		} else {
 			gf = (gf_t*)malloc(sizeof(gf_t) * maxNumThreads);
+			gf_mem = (void**)malloc(sizeof(void*) * maxNumThreads);
 		}
-		for(int i = gfCount; i < maxNumThreads; i++)
+		int sz = gf_scratch_size(16, GF_MULT_DEFAULT, GF_REGION_DEFAULT, GF_DIVIDE_DEFAULT, 0, 0);
+		for(int i = gfCount; i < maxNumThreads; i++) {
 			// is there any way to perform a more efficient copy operation?
-			gf_init_easy(&(gf[i]), 16);
+			//gf_init_easy(&(gf[i]), 16);
+			
+			gf_mem[i] = malloc(sz);
+			gf_init_hard(&(gf[i]), 16, GF_MULT_DEFAULT, GF_REGION_DEFAULT, GF_DIVIDE_DEFAULT, 
+                      0, 0, 0, NULL, gf_mem[i]);
+		}
 		gfCount = maxNumThreads;
 	}
 	
