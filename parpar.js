@@ -331,6 +331,8 @@ PAR2File.prototype = {
 				var dataBlock = gf.AlignedBuffer(this.par2.chunkSize || this.par2.blockSize);
 				data.copy(dataBlock);
 				dataBlock.fill(0, data.length);
+				
+				fullBlock = dataBlock.length == this.par2.blockSize;
 			} else
 				throw new Error('Invalid data length');
 		}
@@ -358,6 +360,7 @@ PAR2File.prototype = {
 			}
 		}
 		
+		this.slicePos++;
 		
 		if(this.par2.recoveryBlocks.length) {
 			var _data = dataBlock;
@@ -368,14 +371,13 @@ PAR2File.prototype = {
 			} else if(this.par2.chunkSize)
 				_data = _data.slice(0, this.par2.chunkSize);
 			
-			gf.generate(_data, this.sliceOffset + this.slicePos, this.par2.recoveryData, this.par2.recoveryBlocks, this.par2._mergeRecovery, cb);
+			var merge = this.par2._mergeRecovery;
 			this.par2._mergeRecovery = true;
+			gf.generate(_data, this.sliceOffset + this.slicePos-1, this.par2.recoveryData, this.par2.recoveryBlocks, merge, cb);
 		} else {
 			// no recovery being generated...
 			process.nextTick(cb);
 		}
-		
-		this.slicePos++;
 	},
 	
 	getPacketChecksums: function() {
