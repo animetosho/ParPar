@@ -50,18 +50,8 @@ static inline uint16_t calc_factor(uint_fast16_t inputBlock, uint_fast16_t recov
 	return gf_exp[result];
 }
 
-gf_t* gf = NULL;
-void** gf_mem = NULL;
-int gfCount = 0;
-
-static inline void cleanup_gf(void) {
-	while(gfCount--) {
-		gf_free(&(gf[gfCount]), 1);
-		free(gf_mem[gfCount]);
-	}
-	free(gf);
-	gfCount = 0;
-}
+gf_t gf;
+void* gf_mem;
 
 #ifdef _OPENMP
 int maxNumThreads = 1, defaultNumThreads = 1;
@@ -82,37 +72,11 @@ static inline void multiply_multi(/*const*/ uint16_t** inputs, unsigned int numI
 	if(max_threads != maxNumThreads)
 		// handle the possibility that some other module changes this
 		omp_set_num_threads(maxNumThreads);
-#endif
-	if(maxNumThreads > gfCount) {
-		// because of these malloc operations, you can't run multiple copies of this!
-		if(gfCount) {
-			// for whatever reason, someone wanted moar threads...
-			gf = (gf_t*)realloc(gf, sizeof(gf_t) * maxNumThreads);
-			gf_mem = (void**)realloc(gf_mem, sizeof(void*) * maxNumThreads);
-		} else {
-			gf = (gf_t*)malloc(sizeof(gf_t) * maxNumThreads);
-			gf_mem = (void**)malloc(sizeof(void*) * maxNumThreads);
-		}
-		int sz = gf_scratch_size(16, GF_MULT_DEFAULT, GF_REGION_DEFAULT, GF_DIVIDE_DEFAULT, 0, 0);
-		for(int i = gfCount; i < maxNumThreads; i++) {
-			// is there any way to perform a more efficient copy operation?
-			//gf_init_easy(&(gf[i]), 16);
-			
-			gf_mem[i] = malloc(sz);
-			gf_init_hard(&(gf[i]), 16, GF_MULT_DEFAULT, GF_REGION_DEFAULT, GF_DIVIDE_DEFAULT, 
-                      0, 0, 0, NULL, gf_mem[i]);
-		}
-		gfCount = maxNumThreads;
-	}
 	
-	
-#ifdef _OPENMP
-	gf_t* _gf;
-	#pragma omp parallel for private(_gf)
+	#pragma omp parallel for
 	for(int i = 0; i < (int)numOutputs; i++) {
-		_gf = &(gf[omp_get_thread_num()]);
 		for(unsigned int j = 0; j < numInputs; j++)
-			_gf->multiply_region.w32(_gf, inputs[j], outputs[i], scales[i], (int)len, add || j>0);
+			gf.multiply_region.w32(&gf, inputs[j], outputs[i], scales[i], (int)len, add || j>0);
 	}
 	
 	// if(max_threads != maxNumThreads)
@@ -120,7 +84,7 @@ static inline void multiply_multi(/*const*/ uint16_t** inputs, unsigned int numI
 #else
 	for(unsigned int i = 0; i < numOutputs; i++) {
 		for(unsigned int j = 0; j < numInputs; j++)
-			gf->multiply_region.w32(gf, inputs[j], outputs[i], scales[i], (int)len, add || j>0);
+			gf.multiply_region.w32(&gf, inputs[j], outputs[i], scales[i], (int)len, add || j>0);
 	}
 #endif
 }
@@ -154,15 +118,6 @@ static inline void multiply_multi(/*const*/ uint16_t** inputs, unsigned int numI
 #endif
 
 int mmActiveTasks = 0;
-
-FUNC(Cleanup) {
-	FUNC_START;
-	if(mmActiveTasks)
-		RETURN_ERROR("Cannot cleanup whilst tasks are running");
-	
-	cleanup_gf();
-	RETURN_UNDEF
-}
 
 #ifdef _OPENMP
 FUNC(SetMaxThreads) {
@@ -456,8 +411,6 @@ void init(Handle<Object> target) {
 	// generate(Buffer input, int inputBlockNum, Array<Buffer> outputs, Array<int> recoveryBlockNums [, bool add [, Function callback]])
 	// ** DON'T modify buffers whilst function is running! **
 	NODE_SET_METHOD(target, "generate", MultiplyMulti);
-	// cleanup()
-	NODE_SET_METHOD(target, "cleanup", Cleanup);
 	// int alignment_offset(Buffer buffer)
 	NODE_SET_METHOD(target, "alignment_offset", AlignmentOffset);
 	// Buffer AlignedBuffer(int size)
@@ -478,6 +431,11 @@ void init(Handle<Object> target) {
 	maxNumThreads = omp_get_num_procs();
 	defaultNumThreads = maxNumThreads;
 #endif
+
+	#define GF_ARGS 16, GF_MULT_DEFAULT, GF_REGION_DEFAULT, GF_DIVIDE_DEFAULT
+	gf_mem = malloc(gf_scratch_size(GF_ARGS, 0, 0));
+	gf_init_hard(&gf, GF_ARGS, 0, 0, 0, NULL, gf_mem);
+
 }
 
 NODE_MODULE(parpar_gf, init);
