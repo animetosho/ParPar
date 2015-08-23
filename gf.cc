@@ -66,7 +66,7 @@ const int maxNumThreads = 1;
    - input and length of each output is the same and == len
    - number of outputs and scales is same and == numOutputs
 */
-static inline void multiply_multi(/*const*/ uint16_t** inputs, unsigned int numInputs, size_t len, uint16_t** outputs, uint_fast16_t* scales, unsigned int numOutputs, bool add) {
+static inline void multiply_mat(/*const*/ uint16_t** inputs, uint_fast16_t* iNums, unsigned int numInputs, size_t len, uint16_t** outputs, uint_fast16_t* oNums, unsigned int numOutputs, bool add) {
 #ifdef _OPENMP
 	int max_threads = omp_get_max_threads();
 	if(max_threads != maxNumThreads)
@@ -75,16 +75,18 @@ static inline void multiply_multi(/*const*/ uint16_t** inputs, unsigned int numI
 	
 	#pragma omp parallel for
 	for(int i = 0; i < (int)numOutputs; i++) {
-		for(unsigned int j = 0; j < numInputs; j++)
-			gf.multiply_region.w32(&gf, inputs[j], outputs[i], scales[i], (int)len, add || j>0);
+		gf.multiply_region.w32(&gf, inputs[0], outputs[i], calc_factor(iNums[0], oNums[i]), (int)len, add);
+		for(unsigned int j = 1; j < numInputs; j++)
+			gf.multiply_region.w32(&gf, inputs[j], outputs[i], calc_factor(iNums[j], oNums[i]), (int)len, true);
 	}
 	
 	// if(max_threads != maxNumThreads)
 		// omp_set_num_threads(max_threads);
 #else
 	for(unsigned int i = 0; i < numOutputs; i++) {
-		for(unsigned int j = 0; j < numInputs; j++)
-			gf.multiply_region.w32(&gf, inputs[j], outputs[i], scales[i], (int)len, add || j>0);
+		gf.multiply_region.w32(&gf, inputs[0], outputs[i], calc_factor(iNums[0], oNums[i]), (int)len, add);
+		for(unsigned int j = 1; j < numInputs; j++)
+			gf.multiply_region.w32(&gf, inputs[j], outputs[i], calc_factor(iNums[j], oNums[i]), (int)len, true);
 	}
 #endif
 }
@@ -209,23 +211,29 @@ FUNC(AlignmentOffset) {
 	RETURN_VAL( Integer::New(ISOLATE (intptr_t)node::Buffer::Data(args[0]) & (MEM_ALIGN-1)) );
 }
 
+#define CLEANUP_MM { \
+	delete[] inputs; \
+	delete[] iNums; \
+	delete[] outputs; \
+	delete[] oNums; \
+}
+
+
 // async stuff
 struct MMRequest {
 	~MMRequest() {
 #ifndef NODE_010
-		inputBuffer.Reset();
-		buffers.Reset();
+		inputBuffers.Reset();
+		outputBuffers.Reset();
 		obj_.Reset();
 #else
-		inputBuffer.Dispose();
-		buffers.Dispose();
+		inputBuffers.Dispose();
+		outputBuffers.Dispose();
 		//if (obj_.IsEmpty()) return;
 		obj_.Dispose();
 		obj_.Clear();
 #endif
-		delete[] inputs;
-		delete[] outputs;
-		delete[] scales;
+		CLEANUP_MM
 	};
 #ifndef NODE_010
 	Isolate* isolate;
@@ -234,22 +242,23 @@ struct MMRequest {
 	uv_work_t work_req_;
 	
 	uint16_t** inputs;
+	uint_fast16_t* iNums;
 	unsigned int numInputs;
 	size_t len;
 	uint16_t** outputs;
-	uint_fast16_t* scales;
+	uint_fast16_t* oNums;
 	unsigned int numOutputs;
 	bool add;
 	
 	// persist copies of buffers for the duration of the job
-	Persistent<Value> inputBuffer;
-	Persistent<Array> buffers;
+	Persistent<Array> inputBuffers;
+	Persistent<Array> outputBuffers;
 };
 
 void MMWork(uv_work_t* work_req) {
 	MMRequest* req = (MMRequest*)work_req->data;
-	multiply_multi(
-		req->inputs, req->numInputs, req->len, req->outputs, req->scales, req->numOutputs, req->add
+	multiply_mat(
+		req->inputs, req->iNums, req->numInputs, req->len, req->outputs, req->oNums, req->numOutputs, req->add
 	);
 }
 void MMAfter(uv_work_t* work_req, int status) {
@@ -274,69 +283,87 @@ FUNC(MultiplyMulti) {
 	
 	if (mmActiveTasks)
 		RETURN_ERROR("Calculation already in progress");
-	
 	if (args.Length() < 4)
 		RETURN_ERROR("4 arguments required");
 	
-	// TODO: support multiple input blocks
-	if (!node::Buffer::HasInstance(args[0]))
-		RETURN_ERROR("Input must be a Buffer");
-	
-	size_t len = node::Buffer::Length(args[0]);
-	if (len % 2)
-		RETURN_ERROR("Length of input must be a multiple of 2");
-	uint16_t* data = (uint16_t*)node::Buffer::Data(args[0]);
-	intptr_t inputAddress = (intptr_t)data;
-	if (inputAddress & 1)
-		RETURN_ERROR("Input buffer must be address aligned to a 16-bit boundary");
-	
-	int inputBlock = args[1]->ToInt32()->Value();
-	if (inputBlock < 0 || inputBlock > 32767)
-		RETURN_ERROR("Invalid input block number");
-	
+	if (!args[0]->IsArray() || !args[2]->IsArray())
+		RETURN_ERROR("Inputs and inputBlockNumbers must be arrays");
 	if (!args[2]->IsArray() || !args[3]->IsArray())
 		RETURN_ERROR("Outputs and recoveryBlockNumbers must be arrays");
 	
+	unsigned int numInputs = Local<Array>::Cast(args[0])->Length();
 	unsigned int numOutputs = Local<Array>::Cast(args[2])->Length();
 	
+	if(numInputs != Local<Array>::Cast(args[1])->Length())
+		RETURN_ERROR("Input and inputBlockNumber arrays must have the same length");
 	if(numOutputs != Local<Array>::Cast(args[3])->Length())
 		RETURN_ERROR("Output and recoveryBlockNumber arrays must have the same length");
 	
-	int inputAlignmentOffset = inputAddress & (MEM_ALIGN-1);
+	if(numInputs < 1 || numOutputs < 1)
+		RETURN_ERROR("Must have at least one input and output");
+	
+	Local<Object> oInputs = args[0]->ToObject();
+	Local<Object> oIBNums = args[1]->ToObject();
+	uint16_t** inputs = new uint16_t*[numInputs];
+	uint_fast16_t* iNums = new uint_fast16_t[numInputs];
+	
 	Local<Object> oOutputs = args[2]->ToObject();
 	Local<Object> oRBNums = args[3]->ToObject();
 	uint16_t** outputs = new uint16_t*[numOutputs];
-	uint_fast16_t* scales = new uint_fast16_t[numOutputs];
+	uint_fast16_t* oNums = new uint_fast16_t[numOutputs];
+	
+	
+	#define RTN_ERROR(m) { \
+		CLEANUP_MM \
+		RETURN_ERROR(m); \
+	}
+	
+	
+	size_t len = 0;
+	int addressOffset = 0;
+	for(unsigned int i = 0; i < numInputs; i++) {
+		Local<Value> input = oInputs->Get(i);
+		if (!node::Buffer::HasInstance(input))
+			RTN_ERROR("All inputs must be Buffers");
+		inputs[i] = (uint16_t*)node::Buffer::Data(input);
+		intptr_t inputAddr = (intptr_t)inputs[i];
+		if (inputAddr & 1)
+			RTN_ERROR("All input buffers must be address aligned to a 16-bit boundary");
+		
+		if(i) {
+			if (node::Buffer::Length(input) != len)
+				RTN_ERROR("All inputs' length must be equal");
+			if ((inputAddr & (MEM_ALIGN-1)) != addressOffset)
+				RTN_ERROR("All input buffers must be address aligned to the same alignment for a 128-bit boundary");
+		} else {
+			len = node::Buffer::Length(input);
+			if (len % 2)
+				RTN_ERROR("Length of input must be a multiple of 2");
+			addressOffset = inputAddr & (MEM_ALIGN-1);
+		}
+		
+		int ibNum = oIBNums->Get(i)->ToInt32()->Value();
+		if (ibNum < 0 || ibNum > 32767)
+			RTN_ERROR("Invalid input block number specified");
+		iNums[i] = ibNum;
+	}
+	
+	
 	for(unsigned int i = 0; i < numOutputs; i++) {
 		Local<Value> output = oOutputs->Get(i);
-		if (!node::Buffer::HasInstance(output)) {
-			delete[] outputs;
-			delete[] scales;
-			RETURN_ERROR("All outputs must be Buffers");
-		}
-		if (node::Buffer::Length(output) != len) {
-			delete[] outputs;
-			delete[] scales;
-			RETURN_ERROR("All outputs' length must equal the input's length");
-		}
+		if (!node::Buffer::HasInstance(output))
+			RTN_ERROR("All outputs must be Buffers");
+		if (node::Buffer::Length(output) != len)
+			RTN_ERROR("All outputs' length must equal the input's length");
 		outputs[i] = (uint16_t*)node::Buffer::Data(output);
-		if ((intptr_t)outputs[i] & 1) {
-			delete[] outputs;
-			delete[] scales;
-			RETURN_ERROR("All output buffers must be address aligned to a 16-bit boundary");
-		}
-		if (((intptr_t)outputs[i] & (MEM_ALIGN-1)) != inputAlignmentOffset) {
-			delete[] outputs;
-			delete[] scales;
-			RETURN_ERROR("All output buffers must be address aligned to the same alignment as the input buffer for a 128-bit boundary");
-		}
+		if ((intptr_t)outputs[i] & 1)
+			RTN_ERROR("All output buffers must be address aligned to a 16-bit boundary");
+		if (((intptr_t)outputs[i] & (MEM_ALIGN-1)) != addressOffset)
+			RTN_ERROR("All output buffers must be address aligned to the same alignment as the input buffer for a 128-bit boundary");
 		int rbNum = oRBNums->Get(i)->ToInt32()->Value();
-		if (rbNum < 0 || rbNum > 32767) {
-			delete[] outputs;
-			delete[] scales;
-			RETURN_ERROR("Invalid recovery block number specified");
-		}
-		scales[i] = calc_factor(inputBlock, rbNum);
+		if (rbNum < 0 || rbNum > 32767)
+			RTN_ERROR("Invalid recovery block number specified");
+		oNums[i] = rbNum;
 	}
 	
 	bool add = false;
@@ -352,12 +379,12 @@ FUNC(MultiplyMulti) {
 		req->isolate = isolate;
 #endif
 		
-		req->inputs = new uint16_t*[1];
-		req->inputs[0] = data;
-		req->numInputs = 1;
+		req->inputs = inputs;
+		req->iNums = iNums;
+		req->numInputs = numInputs;
 		req->len = len;
 		req->outputs = outputs;
-		req->scales = scales;
+		req->oNums = oNums;
 		req->numOutputs = numOutputs;
 		req->add = add;
 		
@@ -377,8 +404,8 @@ FUNC(MultiplyMulti) {
 		//SetActiveDomain(req->obj_); // never set in node_zlib.cc - perhaps domains aren't that important?
 		
 		// keep a copy of the buffers so that they don't get GC'd whilst being written to
-		req->inputBuffer = Persistent<Object>::New(ISOLATE args[0]->ToObject());
-		req->buffers = Persistent<Array>::New(ISOLATE Local<Array>::Cast(args[2]));
+		req->inputBuffers = Persistent<Array>::New(ISOLATE Local<Array>::Cast(args[0]));
+		req->outputBuffers = Persistent<Array>::New(ISOLATE Local<Array>::Cast(args[2]));
 #endif
 		
 		mmActiveTasks++;
@@ -395,12 +422,11 @@ FUNC(MultiplyMulti) {
 		);
 		// does req->obj_ need to be returned?
 	} else {
-		multiply_multi(
-			&data, 1,
-			len, outputs, scales, numOutputs, add
+		multiply_mat(
+			inputs, iNums, numInputs,
+			len, outputs, oNums, numOutputs, add
 		);
-		delete[] outputs;
-		delete[] scales;
+		CLEANUP_MM
 	}
 	RETURN_UNDEF
 }
