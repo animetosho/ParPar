@@ -33,6 +33,14 @@ var Buffer_writeUInt64LE = function(buf, num, offset) {
 var hasUnicode = function(s) {
 	return s.match(/[\u0100-\uffff]/);
 };
+// create an array range from (inclusive) to (exclusive)
+var range = function(from, to) {
+	var num = to - from;
+	var ret = Array(num);
+	for(var i=0; i<num; i++)
+		ret[i] = i+from;
+	return ret;
+};
 
 var MAGIC = new Buffer('PAR2\0PKT');
 // constants for ascii/unicode encoding
@@ -150,9 +158,7 @@ PAR2.prototype = {
 			this.recoveryBlocks = blocks;
 		else {
 			if(!blocks) blocks = 0;
-			this.recoveryBlocks = Array(blocks);
-			for(var i=0; i<blocks; i++)
-				this.recoveryBlocks[i] = i;
+			this.recoveryBlocks = range(0, blocks);
 		}
 		this._allocRecovery();
 	},
@@ -373,7 +379,8 @@ PAR2File.prototype = {
 			
 			var merge = this.par2._mergeRecovery;
 			this.par2._mergeRecovery = true;
-			gf.generate(_data, this.sliceOffset + this.slicePos-1, this.par2.recoveryData, this.par2.recoveryBlocks, merge, cb);
+			var ib = this.sliceOffset + this.slicePos-1;
+			gf.generate([_data], range(ib, ib+1), this.par2.recoveryData, this.par2.recoveryBlocks, merge, cb);
 		} else {
 			// no recovery being generated...
 			process.nextTick(cb);
