@@ -16,6 +16,8 @@
 #include <stdint.h>
 #endif
 
+#include "platform.h"
+
 #ifdef INTEL_SSSE3
   #include <tmmintrin.h>
 #endif
