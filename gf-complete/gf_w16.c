@@ -12,6 +12,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "gf_w16.h"
+#include "gf_w16_additions.c"
 
 #ifdef _MSC_VER
 #define inline __inline
@@ -605,7 +606,9 @@ int gf_w16_log_init(gf_t *gf)
     if (h->mult_type != GF_MULT_LOG_TABLE) {
 
 #ifdef INTEL_SSE4_PCLMUL
+    if (has_pclmul)
       return gf_w16_cfm_init(gf);
+    else
 #endif
       return gf_w16_shift_init(gf);
     } else {
@@ -1131,17 +1134,12 @@ int gf_w16_split_init(gf_t *gf)
 {
   gf_internal_t *h;
   struct gf_w16_split_8_8_data *d8;
-  int i, j, exp, issse3;
+  int i, j, exp;
   int isneon = 0;
   uint32_t p, basep;
 
   h = (gf_internal_t *) gf->scratch;
 
-#ifdef INTEL_SSSE3
-  issse3 = 1;
-#else
-  issse3 = 0;
-#endif
 #ifdef ARM_NEON
   isneon = 1;
 #endif
@@ -1187,7 +1185,7 @@ int gf_w16_split_init(gf_t *gf)
 
   /* Defaults */
 
-  if (issse3) {
+  if (has_ssse3) {
     gf->multiply_region.w32 = gf_w16_split_4_16_lazy_sse_multiply_region;
   } else if (isneon) {
 #ifdef ARM_NEON
@@ -1202,12 +1200,12 @@ int gf_w16_split_init(gf_t *gf)
     gf->multiply_region.w32 = gf_w16_split_8_16_lazy_multiply_region;
 
   } else if ((h->arg1 == 4 && h->arg2 == 16) || (h->arg2 == 4 && h->arg1 == 16)) {
-    if (issse3 || isneon) {
+    if (has_ssse3 || isneon) {
       if(h->region_type & GF_REGION_ALTMAP && h->region_type & GF_REGION_NOSIMD)
         gf->multiply_region.w32 = gf_w16_split_4_16_lazy_nosse_altmap_multiply_region;
       else if(h->region_type & GF_REGION_NOSIMD)
         gf->multiply_region.w32 = gf_w16_split_4_16_lazy_multiply_region;
-      else if(h->region_type & GF_REGION_ALTMAP && issse3)
+      else if(h->region_type & GF_REGION_ALTMAP && has_ssse3)
         gf->multiply_region.w32 = gf_w16_split_4_16_lazy_sse_altmap_multiply_region;
     } else {
       if(h->region_type & GF_REGION_SIMD)
@@ -1998,6 +1996,8 @@ int gf_w16_scratch_size(int mult_type, int region_type, int divide_type, int arg
 int gf_w16_init(gf_t *gf)
 {
   gf_internal_t *h;
+
+  detect_cpu();
 
   h = (gf_internal_t *) gf->scratch;
 

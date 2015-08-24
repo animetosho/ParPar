@@ -21,8 +21,7 @@
 	#define INTEL_SSE4_PCLMUL 1
 #endif
 
-//#define ARCH_AARCH64 1
-//#define ARM_NEON 1
+/*#define ARCH_AARCH64 1*/
+/*#define ARM_NEON 1*/
 
-#endif // _MSC_VER
-
+#endif /* _MSC_VER */
