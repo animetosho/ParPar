@@ -13,6 +13,10 @@
 #include <stdlib.h>
 #include "gf_w16.h"
 
+#ifdef _MSC_VER
+#define inline __inline
+#endif
+
 #define AB2(ip, am1 ,am2, b, t1, t2) {\
   t1 = (b << 1) & am1;\
   t2 = b & am2; \
@@ -1794,7 +1798,7 @@ int gf_w16_log_zero_init(gf_t *gf)
 
   ltd->log_tbl[0] = (-GF_MULT_GROUP_SIZE) + 1;
 
-  bzero(&(ltd->_antilog_tbl[0]), sizeof(ltd->_antilog_tbl));
+  memset(&(ltd->_antilog_tbl[0]), 0, sizeof(ltd->_antilog_tbl));
 
   ltd->antilog_tbl = &(ltd->_antilog_tbl[GF_FIELD_SIZE * 2]);
 
@@ -1877,11 +1881,12 @@ void gf_w16_group_4_4_region_multiply(gf_t *gf, void *src, void *dest, gf_val_32
   struct gf_w16_group_4_4_data *d44;
   gf_region_data rd;
   uint16_t *s16, *d16, *top;
+  gf_internal_t *h;
   
   if (val == 0) { gf_multby_zero(dest, bytes, xor); return; }
   if (val == 1) { gf_multby_one(src, dest, bytes, xor); return; }
 
-  gf_internal_t *h = (gf_internal_t *) gf->scratch;
+  h = (gf_internal_t *) gf->scratch;
   d44 = (struct gf_w16_group_4_4_data *) h->private;
   gf_w16_group_4_set_shift_tables(d44->shift, val, h);
 

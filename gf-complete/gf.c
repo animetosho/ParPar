@@ -728,7 +728,7 @@ void gf_do_final_region_alignment(gf_region_data *rd)
 void gf_multby_zero(void *dest, int bytes, int xor) 
 {
   if (xor) return;
-  bzero(dest, bytes);
+  memset(dest, 0, bytes);
   return;
 }
 
