@@ -21,16 +21,6 @@ uint64_t gf_composite_get_default_poly(gf_t *base)
   int rv;
 
   h = (gf_internal_t *) base->scratch;
-  if (h->w == 4) {
-    if (h->mult_type == GF_MULT_COMPOSITE) return 0;
-    if (h->prim_poly == 0x13) return 2;
-    return 0;
-  } 
-  if (h->w == 8) {
-    if (h->mult_type == GF_MULT_COMPOSITE) return 0;
-    if (h->prim_poly == 0x11d) return 3;
-    return 0;
-  }
   if (h->w == 16) {
     if (h->mult_type == GF_MULT_COMPOSITE) {
       rv = gf_composite_get_default_poly(h->base_gf);
@@ -40,36 +30,6 @@ uint64_t gf_composite_get_default_poly(gf_t *base)
     } else {
       if (h->prim_poly == 0x1100b) return 2;
       if (h->prim_poly == 0x1002d) return 7;
-      return 0;
-    }
-  }
-  if (h->w == 32) {
-    if (h->mult_type == GF_MULT_COMPOSITE) {
-      rv = gf_composite_get_default_poly(h->base_gf);
-      if (rv != h->prim_poly) return 0;
-      if (rv == 2) return 0x10005;
-      if (rv == 7) return 0x10008;
-      if (rv == 0x105) return 0x10002;
-      return 0;
-    } else {
-      if (h->prim_poly == 0x400007) return 2;
-      if (h->prim_poly == 0xc5) return 3;
-      return 0;
-    }
-  }
-  if (h->w == 64) {
-    if (h->mult_type == GF_MULT_COMPOSITE) {
-      rv = gf_composite_get_default_poly(h->base_gf);
-      if (rv != h->prim_poly) return 0;
-      if (rv == 3) return 0x100000009ULL;
-      if (rv == 2) return 0x100000004ULL;
-      if (rv == 0x10005) return 0x100000003ULL;
-      if (rv == 0x10002) return 0x100000005ULL;
-      if (rv == 0x10008) return 0x100000006ULL;  /* JSP: (0x0x100000003 works too, 
-                                                    but I want to differentiate cases). */
-      return 0;
-    } else {
-      if (h->prim_poly == 0x1bULL) return 2;
       return 0;
     }
   }
@@ -818,7 +778,7 @@ void gf_multby_one(void *src, void *dest, int bytes, int xor)
   }
   return;
 #endif
-#if defined(ARM_NEON)
+#ifdef ARM_NEON
   s8 = (uint8_t *) src;
   d8 = (uint8_t *) dest;
 

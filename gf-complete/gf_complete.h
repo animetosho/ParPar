@@ -37,7 +37,7 @@
   #include <wmmintrin.h>
 #endif
 
-#if defined(ARM_NEON)
+#ifdef ARM_NEON
   #include <arm_neon.h>
 #endif
 
