@@ -73,6 +73,7 @@ static inline void multiply_mat(/*const*/ uint16_t** inputs, uint_fast16_t* iNum
 		// handle the possibility that some other module changes this
 		omp_set_num_threads(maxNumThreads);
 	
+	// TODO: consider chunking for better cache hits?
 	#pragma omp parallel for
 	for(int i = 0; i < (int)numOutputs; i++) {
 		gf.multiply_region.w32(&gf, inputs[0], outputs[i], calc_factor(iNums[0], oNums[i]), (int)len, add);
@@ -286,7 +287,7 @@ FUNC(MultiplyMulti) {
 	if (args.Length() < 4)
 		RETURN_ERROR("4 arguments required");
 	
-	if (!args[0]->IsArray() || !args[2]->IsArray())
+	if (!args[0]->IsArray() || !args[1]->IsArray())
 		RETURN_ERROR("Inputs and inputBlockNumbers must be arrays");
 	if (!args[2]->IsArray() || !args[3]->IsArray())
 		RETURN_ERROR("Outputs and recoveryBlockNumbers must be arrays");
@@ -298,9 +299,6 @@ FUNC(MultiplyMulti) {
 		RETURN_ERROR("Input and inputBlockNumber arrays must have the same length");
 	if(numOutputs != Local<Array>::Cast(args[3])->Length())
 		RETURN_ERROR("Output and recoveryBlockNumber arrays must have the same length");
-	
-	if(numInputs < 1 || numOutputs < 1)
-		RETURN_ERROR("Must have at least one input and output");
 	
 	Local<Object> oInputs = args[0]->ToObject();
 	Local<Object> oIBNums = args[1]->ToObject();
@@ -317,7 +315,6 @@ FUNC(MultiplyMulti) {
 		CLEANUP_MM \
 		RETURN_ERROR(m); \
 	}
-	
 	
 	size_t len = 0;
 	int addressOffset = 0;
@@ -356,8 +353,6 @@ FUNC(MultiplyMulti) {
 		if (node::Buffer::Length(output) != len)
 			RTN_ERROR("All outputs' length must equal the input's length");
 		outputs[i] = (uint16_t*)node::Buffer::Data(output);
-		if ((intptr_t)outputs[i] & 1)
-			RTN_ERROR("All output buffers must be address aligned to a 16-bit boundary");
 		if (((intptr_t)outputs[i] & (MEM_ALIGN-1)) != addressOffset)
 			RTN_ERROR("All output buffers must be address aligned to the same alignment as the input buffer for a 128-bit boundary");
 		int rbNum = oRBNums->Get(i)->ToInt32()->Value();
@@ -396,8 +391,8 @@ FUNC(MultiplyMulti) {
 		//	req->obj_->Set(env->domain_string(), env->domain_array()->Get(0));
 		
 		// keep a copy of the buffers so that they don't get GC'd whilst being written to
-		req->inputBuffer.Reset(ISOLATE args[0]);
-		req->buffers.Reset(ISOLATE Local<Array>::Cast(args[2]));
+		req->inputBuffers.Reset(ISOLATE Local<Array>::Cast(args[0]));
+		req->outputBuffers.Reset(ISOLATE Local<Array>::Cast(args[2]));
 #else
 		req->obj_ = Persistent<Object>::New(ISOLATE Object::New());
 		req->obj_->Set(String::New(ISOLATE "ondone"), args[5]);
