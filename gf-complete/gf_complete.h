@@ -91,8 +91,6 @@ typedef enum { GF_DIVIDE_DEFAULT,
  */
 
 typedef uint32_t    gf_val_32_t;
-typedef uint64_t    gf_val_64_t;
-typedef uint64_t   *gf_val_128_t;
 
 extern int _gf_errno;
 extern void gf_error();
@@ -101,26 +99,18 @@ typedef struct gf *GFP;
 
 typedef union gf_func_a_b {
     gf_val_32_t  (*w32) (GFP gf, gf_val_32_t a,  gf_val_32_t b);
-    gf_val_64_t  (*w64) (GFP gf, gf_val_64_t a,  gf_val_64_t b);
-    void         (*w128)(GFP gf, gf_val_128_t a, gf_val_128_t b, gf_val_128_t c);
 } gf_func_a_b;
   
 typedef union {
   gf_val_32_t  (*w32) (GFP gf, gf_val_32_t a);
-  gf_val_64_t  (*w64) (GFP gf, gf_val_64_t a);
-  void         (*w128)(GFP gf, gf_val_128_t a, gf_val_128_t b);
 } gf_func_a;
   
 typedef union {
   void  (*w32) (GFP gf, void *src, void *dest, gf_val_32_t val,  int bytes, int add);
-  void  (*w64) (GFP gf, void *src, void *dest, gf_val_64_t val,  int bytes, int add);
-  void  (*w128)(GFP gf, void *src, void *dest, gf_val_128_t val, int bytes, int add);
 } gf_region;
 
 typedef union {
   gf_val_32_t  (*w32) (GFP gf, void *start, int bytes, int index);
-  gf_val_64_t  (*w64) (GFP gf, void *start, int bytes, int index);
-  void         (*w128)(GFP gf, void *start, int bytes, int index, gf_val_128_t rv);
 } gf_extract;
 
 typedef struct gf {
@@ -184,16 +174,6 @@ extern int gf_free(GFP gf, int recursive);
    To use inline multiplication and division with w=4 or 8, you should use the 
    default gf_t, or one with a single table.  Otherwise, gf_w4/8_get_mult_table()
    will return NULL. Similarly, with w=16, the gf_t must be LOG */
-
-uint8_t *gf_w4_get_mult_table(GFP gf);
-uint8_t *gf_w4_get_div_table(GFP gf);
-
-#define GF_W4_INLINE_MULTDIV(table, a, b) (table[((a)<<4)|(b)])
-
-uint8_t *gf_w8_get_mult_table(GFP gf);
-uint8_t *gf_w8_get_div_table(GFP gf);
-
-#define GF_W8_INLINE_MULTDIV(table, a, b) (table[(((uint32_t) (a))<<8)|(b)])
 
 uint16_t *gf_w16_get_log_table(GFP gf);
 uint16_t *gf_w16_get_mult_alog_table(GFP gf);

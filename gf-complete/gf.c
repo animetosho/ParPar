@@ -15,107 +15,6 @@
 
 int _gf_errno = GF_E_DEFAULT;
 
-void gf_error()
-{
-  char *s;
-
-  switch(_gf_errno) {
-    case GF_E_DEFAULT: s = "No Error."; break;
-    case GF_E_TWOMULT: s = "Cannot specify two -m's."; break;
-    case GF_E_TWO_DIV: s = "Cannot specify two -d's."; break;
-    case GF_E_POLYSPC: s = "-p needs to be followed by a number in hex (0x optional)."; break;
-    case GF_E_GROUPAR: s = "Ran out of arguments in -m GROUP."; break;
-    case GF_E_GROUPNU: s = "In -m GROUP g_s g_r -- g_s and g_r need to be numbers."; break;
-    case GF_E_SPLITAR: s = "Ran out of arguments in -m SPLIT."; break;
-    case GF_E_SPLITNU: s = "In -m SPLIT w_a w_b -- w_a and w_b need to be numbers."; break;
-    case GF_E_FEWARGS: s = "Not enough arguments (Perhaps end with '-'?)"; break;
-    case GF_E_CFM___W: s = "-m CARRY_FREE, w must be 4, 8, 16, 32, 64 or 128."; break;
-    case GF_E_COMPXPP: s = "-m COMPOSITE, No poly specified, and we don't have a default for the given sub-field."; break;
-    case GF_E_BASE__W: s = "-m COMPOSITE and the base field is not for w/2."; break;
-    case GF_E_CFM4POL: s = "-m CARRY_FREE, w=4. (Prim-poly & 0xc) must equal 0."; break;
-    case GF_E_CFM8POL: s = "-m CARRY_FREE, w=8. (Prim-poly & 0x80) must equal 0."; break;
-    case GF_E_CF16POL: s = "-m CARRY_FREE, w=16. (Prim-poly & 0xe000) must equal 0."; break;
-    case GF_E_CF32POL: s = "-m CARRY_FREE, w=32. (Prim-poly & 0xfe000000) must equal 0."; break;
-    case GF_E_CF64POL: s = "-m CARRY_FREE, w=64. (Prim-poly & 0xfffe000000000000ULL) must equal 0."; break;
-    case GF_E_MDEFDIV: s = "If multiplication method == default, can't change division."; break;
-    case GF_E_MDEFREG: s = "If multiplication method == default, can't change region."; break;
-    case GF_E_MDEFARG: s = "If multiplication method == default, can't use arg1/arg2."; break;
-    case GF_E_DIVCOMP: s = "Cannot change the division technique with -m COMPOSITE."; break;
-    case GF_E_DOUQUAD: s = "Cannot specify -r DOUBLE and -r QUAD."; break;
-    case GF_E_SIMD_NO: s = "Cannot specify -r SIMD and -r NOSIMD."; break;
-    case GF_E_CAUCHYB: s = "Cannot specify -r CAUCHY and any other -r."; break;
-    case GF_E_CAUCOMP: s = "Cannot specify -m COMPOSITE and -r CAUCHY."; break;
-    case GF_E_CAUGT32: s = "Cannot specify -r CAUCHY with w > 32."; break;
-    case GF_E_ARG1SET: s = "Only use arg1 with SPLIT, GROUP or COMPOSITE."; break;
-    case GF_E_ARG2SET: s = "Only use arg2 with SPLIT or GROUP."; break;
-    case GF_E_MATRIXW: s = "Cannot specify -d MATRIX with w > 32."; break;
-    case GF_E_BAD___W: s = "W must be 1-32, 64 or 128."; break;
-    case GF_E_DOUBLET: s = "Can only specify -r DOUBLE with -m TABLE."; break;
-    case GF_E_DOUBLEW: s = "Can only specify -r DOUBLE w = 4 or w = 8."; break;
-    case GF_E_DOUBLEJ: s = "Cannot specify -r DOUBLE with -r ALTMAP|SIMD|NOSIMD."; break;
-    case GF_E_DOUBLEL: s = "Can only specify -r DOUBLE -r LAZY with w = 8"; break;
-    case GF_E_QUAD__T: s = "Can only specify -r QUAD with -m TABLE."; break;
-    case GF_E_QUAD__W: s = "Can only specify -r QUAD w = 4."; break;
-    case GF_E_QUAD__J: s = "Cannot specify -r QUAD with -r ALTMAP|SIMD|NOSIMD."; break;
-    case GF_E_BADPOLY: s = "Bad primitive polynomial (high bits set)."; break;
-    case GF_E_COMP_PP: s = "Bad primitive polynomial -- bigger than sub-field."; break;
-    case GF_E_LAZY__X: s = "If -r LAZY, then -r must be DOUBLE or QUAD."; break;
-    case GF_E_ALTSHIF: s = "Cannot specify -m SHIFT and -r ALTMAP."; break;
-    case GF_E_SSESHIF: s = "Cannot specify -m SHIFT and -r SIMD|NOSIMD."; break;
-    case GF_E_ALT_CFM: s = "Cannot specify -m CARRY_FREE and -r ALTMAP."; break;
-    case GF_E_SSE_CFM: s = "Cannot specify -m CARRY_FREE and -r SIMD|NOSIMD."; break;
-    case GF_E_PCLMULX: s = "Specified -m CARRY_FREE, but PCLMUL is not supported."; break;
-    case GF_E_ALT_BY2: s = "Cannot specify -m BYTWO_x and -r ALTMAP."; break;
-    case GF_E_BY2_SSE: s = "Specified -m BYTWO_x -r SIMD, but SSE2 is not supported."; break;
-    case GF_E_LOGBADW: s = "With Log Tables, w must be <= 27."; break;
-    case GF_E_LOG___J: s = "Cannot use Log tables with -r ALTMAP|SIMD|NOSIMD."; break;
-    case GF_E_LOGPOLY: s = "Cannot use Log tables because the polynomial is not primitive."; break;
-    case GF_E_ZERBADW: s = "With -m LOG_ZERO, w must be 8 or 16."; break;
-    case GF_E_ZEXBADW: s = "With -m LOG_ZERO_EXT, w must be 8."; break;
-    case GF_E_GR_ARGX: s = "With -m GROUP, arg1 and arg2 must be >= 0."; break;
-    case GF_E_GR_W_48: s = "With -m GROUP, w cannot be 4 or 8."; break;
-    case GF_E_GR_W_16: s = "With -m GROUP, w == 16, arg1 and arg2 must be 4."; break;
-    case GF_E_GR_128A: s = "With -m GROUP, w == 128, arg1 must be 4, and arg2 in { 4,8,16 }."; break;
-    case GF_E_GR_A_27: s = "With -m GROUP, arg1 and arg2 must be <= 27."; break;
-    case GF_E_GR_AR_W: s = "With -m GROUP, arg1 and arg2 must be <= w."; break;
-    case GF_E_GR____J: s = "Cannot use GROUP with -r ALTMAP|SIMD|NOSIMD."; break;
-    case GF_E_TABLE_W: s = "With -m TABLE, w must be < 15, or == 16."; break;
-    case GF_E_TAB_SSE: s = "With -m TABLE, SIMD|NOSIMD only applies to w=4."; break;
-    case GF_E_TABSSE3: s = "With -m TABLE, -r SIMD, you need SSSE3 supported."; break;
-    case GF_E_TAB_ALT: s = "With -m TABLE, you cannot use ALTMAP."; break;
-    case GF_E_SP128AR: s = "With -m SPLIT, w=128, bad arg1/arg2."; break;
-    case GF_E_SP128AL: s = "With -m SPLIT, w=128, -r SIMD requires -r ALTMAP."; break;
-    case GF_E_SP128AS: s = "With -m SPLIT, w=128, ALTMAP needs SSSE3 supported."; break;
-    case GF_E_SP128_A: s = "With -m SPLIT, w=128, -r ALTMAP only with arg1/arg2 = 4/128."; break;
-    case GF_E_SP128_S: s = "With -m SPLIT, w=128, -r SIMD|NOSIMD only with arg1/arg2 = 4/128."; break;
-    case GF_E_SPLIT_W: s = "With -m SPLIT, w must be in {8, 16, 32, 64, 128}."; break;
-    case GF_E_SP_16AR: s = "With -m SPLIT, w=16, Bad arg1/arg2."; break;
-    case GF_E_SP_16_A: s = "With -m SPLIT, w=16, -r ALTMAP only with arg1/arg2 = 4/16."; break;
-    case GF_E_SP_16_S: s = "With -m SPLIT, w=16, -r SIMD|NOSIMD only with arg1/arg2 = 4/16."; break;
-    case GF_E_SP_32AR: s = "With -m SPLIT, w=32, Bad arg1/arg2."; break;
-    case GF_E_SP_32AS: s = "With -m SPLIT, w=32, -r ALTMAP needs SSSE3 supported."; break;
-    case GF_E_SP_32_A: s = "With -m SPLIT, w=32, -r ALTMAP only with arg1/arg2 = 4/32."; break;
-    case GF_E_SP_32_S: s = "With -m SPLIT, w=32, -r SIMD|NOSIMD only with arg1/arg2 = 4/32."; break;
-    case GF_E_SP_64AR: s = "With -m SPLIT, w=64, Bad arg1/arg2."; break;
-    case GF_E_SP_64AS: s = "With -m SPLIT, w=64, -r ALTMAP needs SSSE3 supported."; break;
-    case GF_E_SP_64_A: s = "With -m SPLIT, w=64, -r ALTMAP only with arg1/arg2 = 4/64."; break;
-    case GF_E_SP_64_S: s = "With -m SPLIT, w=64, -r SIMD|NOSIMD only with arg1/arg2 = 4/64."; break;
-    case GF_E_SP_8_AR: s = "With -m SPLIT, w=8, Bad arg1/arg2."; break;
-    case GF_E_SP_8__A: s = "With -m SPLIT, w=8, Can't have -r ALTMAP."; break;
-    case GF_E_SP_SSE3: s = "With -m SPLIT, Need SSSE3 support for SIMD."; break;
-    case GF_E_COMP_A2: s = "With -m COMPOSITE, arg1 must equal 2."; break;
-    case GF_E_COMP_SS: s = "With -m COMPOSITE, -r SIMD and -r NOSIMD do not apply."; break;
-    case GF_E_COMP__W: s = "With -m COMPOSITE, w must be 8, 16, 32, 64 or 128."; break;
-    case GF_E_UNKFLAG: s = "Unknown method flag - should be -m, -d, -r or -p."; break;
-    case GF_E_UNKNOWN: s = "Unknown multiplication type."; break;
-    case GF_E_UNK_REG: s = "Unknown region type."; break;
-    case GF_E_UNK_DIV: s = "Unknown division type."; break;
-    default: s = "Undefined error.";
-  }
-
-  fprintf(stderr, "%s\n", s);
-}
-
 uint64_t gf_composite_get_default_poly(gf_t *base) 
 {
   gf_internal_t *h;
@@ -427,13 +326,7 @@ int gf_scratch_size(int w,
   if (gf_error_check(w, mult_type, region_type, divide_type, arg1, arg2, 0, NULL) == 0) return 0;
 
   switch(w) {
-    case 4: return gf_w4_scratch_size(mult_type, region_type, divide_type, arg1, arg2);
-    case 8: return gf_w8_scratch_size(mult_type, region_type, divide_type, arg1, arg2);
     case 16: return gf_w16_scratch_size(mult_type, region_type, divide_type, arg1, arg2);
-    case 32: return gf_w32_scratch_size(mult_type, region_type, divide_type, arg1, arg2);
-    case 64: return gf_w64_scratch_size(mult_type, region_type, divide_type, arg1, arg2);
-    case 128: return gf_w128_scratch_size(mult_type, region_type, divide_type, arg1, arg2);
-    default: return gf_wgen_scratch_size(w, mult_type, region_type, divide_type, arg1, arg2);
   }
 }
 
@@ -490,24 +383,16 @@ int gf_init_hard(gf_t *gf, int w, int mult_type,
   gf->scratch = (void *) h;
   h->mult_type = mult_type;
   h->region_type = region_type;
-  h->divide_type = divide_type;
   h->w = w;
   h->prim_poly = prim_poly;
   h->arg1 = arg1;
   h->arg2 = arg2;
-  h->base_gf = base_gf;
   h->private = (void *) gf->scratch;
   h->private = (uint8_t *)h->private + (sizeof(gf_internal_t));
   gf->extract_word.w32 = NULL;
 
   switch(w) {
-    case 4: return gf_w4_init(gf);
-    case 8: return gf_w8_init(gf);
     case 16: return gf_w16_init(gf);
-    case 32: return gf_w32_init(gf);
-    case 64: return gf_w64_init(gf);
-    case 128: return gf_w128_init(gf);
-    default: return gf_wgen_init(gf);
   }
 }
 
@@ -665,38 +550,11 @@ static void gf_slow_multiply_region(gf_region_data *rd, void *src, void *dest, v
   
   while (src < s_top) {
     switch (h->w) {
-    case 8:
-      s8 = (uint8_t *) src;
-      d8 = (uint8_t *) dest;
-      *d8 = (rd->xor) ? (*d8 ^ rd->gf->multiply.w32(rd->gf, rd->val, *s8)) : 
-                      rd->gf->multiply.w32(rd->gf, rd->val, *s8);
-      break;
-    case 4:
-      s8 = (uint8_t *) src;
-      d8 = (uint8_t *) dest;
-      a = *s8;
-      p = rd->gf->multiply.w32(rd->gf, rd->val, a&0xf);
-      p |= (rd->gf->multiply.w32(rd->gf, rd->val, a >> 4) << 4);
-      if (rd->xor) p ^= *d8;
-      *d8 = p;
-      break;
     case 16:
       s16 = (uint16_t *) src;
       d16 = (uint16_t *) dest;
       *d16 = (rd->xor) ? (*d16 ^ rd->gf->multiply.w32(rd->gf, rd->val, *s16)) : 
                       rd->gf->multiply.w32(rd->gf, rd->val, *s16);
-      break;
-    case 32:
-      s32 = (uint32_t *) src;
-      d32 = (uint32_t *) dest;
-      *d32 = (rd->xor) ? (*d32 ^ rd->gf->multiply.w32(rd->gf, rd->val, *s32)) : 
-                      rd->gf->multiply.w32(rd->gf, rd->val, *s32);
-      break;
-    case 64:
-      s64 = (uint64_t *) src;
-      d64 = (uint64_t *) dest;
-      *d64 = (rd->xor) ? (*d64 ^ rd->gf->multiply.w64(rd->gf, rd->val, *s64)) : 
-                      rd->gf->multiply.w64(rd->gf, rd->val, *s64);
       break;
     default:
       fprintf(stderr, "Error: gf_slow_multiply_region: w=%d not implemented.\n", h->w);

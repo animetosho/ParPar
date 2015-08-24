@@ -31,21 +31,6 @@
 #define GF_MULTBY_TWO(p) (((p) & GF_FIRST_BIT) ? (((p) << 1) ^ h->prim_poly) : (p) << 1)
 
 static
-inline
-gf_val_32_t gf_w16_inverse_from_divide (gf_t *gf, gf_val_32_t a)
-{
-  return gf->divide.w32(gf, 1, a);
-}
-
-static
-inline
-gf_val_32_t gf_w16_divide_from_inverse (gf_t *gf, gf_val_32_t a, gf_val_32_t b)
-{
-  b = gf->inverse.w32(gf, b);
-  return gf->multiply.w32(gf, a, b);
-}
-
-static
 void
 gf_w16_multiply_region_from_single(gf_t *gf, void *src, void *dest, gf_val_32_t val, int bytes, int xor)
 {
@@ -282,49 +267,6 @@ gf_w16_clm_multiply_region_from_single_4(gf_t *gf, void *src, void *dest, gf_val
 #endif
 
 static
-inline
-gf_val_32_t gf_w16_euclid (gf_t *gf, gf_val_32_t b)
-{
-  gf_val_32_t e_i, e_im1, e_ip1;
-  gf_val_32_t d_i, d_im1, d_ip1;
-  gf_val_32_t y_i, y_im1, y_ip1;
-  gf_val_32_t c_i;
-
-  if (b == 0) return -1;
-  e_im1 = ((gf_internal_t *) (gf->scratch))->prim_poly;
-  e_i = b;
-  d_im1 = 16;
-  for (d_i = d_im1; ((1 << d_i) & e_i) == 0; d_i--) ;
-  y_i = 1;
-  y_im1 = 0;
-
-  while (e_i != 1) {
-
-    e_ip1 = e_im1;
-    d_ip1 = d_im1;
-    c_i = 0;
-
-    while (d_ip1 >= d_i) {
-      c_i ^= (1 << (d_ip1 - d_i));
-      e_ip1 ^= (e_i << (d_ip1 - d_i));
-      if (e_ip1 == 0) return 0;
-      while ((e_ip1 & (1 << d_ip1)) == 0) d_ip1--;
-    }
-
-    y_ip1 = y_im1 ^ gf->multiply.w32(gf, c_i, y_i);
-    y_im1 = y_i;
-    y_i = y_ip1;
-
-    e_im1 = e_i;
-    d_im1 = d_i;
-    e_i = e_ip1;
-    d_i = d_ip1;
-  }
-
-  return y_i;
-}
-
-static
 gf_val_32_t gf_w16_extract_word(gf_t *gf, void *start, int bytes, int index)
 {
   uint16_t *r16, rv;
@@ -332,30 +274,6 @@ gf_val_32_t gf_w16_extract_word(gf_t *gf, void *start, int bytes, int index)
   r16 = (uint16_t *) start;
   rv = r16[index];
   return rv;
-}
-
-static
-gf_val_32_t gf_w16_composite_extract_word(gf_t *gf, void *start, int bytes, int index)
-{
-  int sub_size;
-  gf_internal_t *h;
-  uint8_t *r8, *top;
-  uint16_t a, b, *r16;
-  gf_region_data rd;
-
-  h = (gf_internal_t *) gf->scratch;
-  gf_set_region_data(&rd, gf, start, start, bytes, 0, 0, 32);
-  r16 = (uint16_t *) start;
-  if (r16 + index < (uint16_t *) rd.d_start) return r16[index];
-  if (r16 + index >= (uint16_t *) rd.d_top) return r16[index];
-  index -= (((uint16_t *) rd.d_start) - r16);
-  r8 = (uint8_t *) rd.d_start;
-  top = (uint8_t *) rd.d_top;
-  sub_size = (top-r8)/2;
-
-  a = h->base_gf->extract_word.w32(h->base_gf, r8, sub_size, index);
-  b = h->base_gf->extract_word.w32(h->base_gf, r8+sub_size, sub_size, index);
-  return (a | (b << 8));
 }
 
 static
@@ -377,13 +295,6 @@ gf_val_32_t gf_w16_split_extract_word(gf_t *gf, void *start, int bytes, int inde
   r8 += 16;
   rv |= *r8;
   return rv;
-}
-
-static
-inline
-gf_val_32_t gf_w16_matrix (gf_t *gf, gf_val_32_t b)
-{
-  return gf_bitmatrix_inverse(b, 16, ((gf_internal_t *) (gf->scratch))->prim_poly);
 }
 
 /* JSP: GF_MULT_SHIFT: The world's dumbest multiplication algorithm.  I only
@@ -1911,256 +1822,6 @@ int gf_w16_log_zero_init(gf_t *gf)
 }
 
 static
-gf_val_32_t
-gf_w16_composite_multiply_recursive(gf_t *gf, gf_val_32_t a, gf_val_32_t b)
-{
-  gf_internal_t *h = (gf_internal_t *) gf->scratch;
-  gf_t *base_gf = h->base_gf;
-  uint8_t b0 = b & 0x00ff;
-  uint8_t b1 = (b & 0xff00) >> 8;
-  uint8_t a0 = a & 0x00ff;
-  uint8_t a1 = (a & 0xff00) >> 8;
-  uint8_t a1b1;
-  uint16_t rv;
-
-  a1b1 = base_gf->multiply.w32(base_gf, a1, b1);
-
-  rv = ((base_gf->multiply.w32(base_gf, a0, b0) ^ a1b1) | ((base_gf->multiply.w32(base_gf, a1, b0) ^ base_gf->multiply.w32(base_gf, a0, b1) ^ base_gf->multiply.w32(base_gf, a1b1, h->prim_poly)) << 8));
-  return rv;
-}
-
-static
-gf_val_32_t
-gf_w16_composite_multiply_inline(gf_t *gf, gf_val_32_t a, gf_val_32_t b)
-{
-  gf_internal_t *h = (gf_internal_t *) gf->scratch;
-  uint8_t b0 = b & 0x00ff;
-  uint8_t b1 = (b & 0xff00) >> 8;
-  uint8_t a0 = a & 0x00ff;
-  uint8_t a1 = (a & 0xff00) >> 8;
-  uint8_t a1b1, *mt;
-  uint16_t rv;
-  struct gf_w16_composite_data *cd;
-
-  cd = (struct gf_w16_composite_data *) h->private;
-  mt = cd->mult_table;
-
-  a1b1 = GF_W8_INLINE_MULTDIV(mt, a1, b1);
-
-  rv = ((GF_W8_INLINE_MULTDIV(mt, a0, b0) ^ a1b1) | ((GF_W8_INLINE_MULTDIV(mt, a1, b0) ^ GF_W8_INLINE_MULTDIV(mt, a0, b1) ^ GF_W8_INLINE_MULTDIV(mt, a1b1, h->prim_poly)) << 8));
-  return rv;
-}
-
-/*
- * Composite field division trick (explained in 2007 tech report)
- *
- * Compute a / b = a*b^-1, where p(x) = x^2 + sx + 1
- *
- * let c = b^-1
- *
- * c*b = (s*b1c1+b1c0+b0c1)x+(b1c1+b0c0)
- *
- * want (s*b1c1+b1c0+b0c1) = 0 and (b1c1+b0c0) = 1
- *
- * let d = b1c1 and d+1 = b0c0
- *
- * solve s*b1c1+b1c0+b0c1 = 0
- *
- * solution: d = (b1b0^-1)(b1b0^-1+b0b1^-1+s)^-1
- *
- * c0 = (d+1)b0^-1
- * c1 = d*b1^-1
- *
- * a / b = a * c
- */
-
-static
-gf_val_32_t
-gf_w16_composite_inverse(gf_t *gf, gf_val_32_t a)
-{
-  gf_internal_t *h = (gf_internal_t *) gf->scratch;
-  gf_t *base_gf = h->base_gf;
-  uint8_t a0 = a & 0x00ff;
-  uint8_t a1 = (a & 0xff00) >> 8;
-  uint8_t c0, c1, d, tmp;
-  uint16_t c;
-  uint8_t a0inv, a1inv;
-
-  if (a0 == 0) {
-    a1inv = base_gf->inverse.w32(base_gf, a1);
-    c0 = base_gf->multiply.w32(base_gf, a1inv, h->prim_poly);
-    c1 = a1inv;
-  } else if (a1 == 0) {
-    c0 = base_gf->inverse.w32(base_gf, a0);
-    c1 = 0;
-  } else {
-    a1inv = base_gf->inverse.w32(base_gf, a1);
-    a0inv = base_gf->inverse.w32(base_gf, a0);
-
-    d = base_gf->multiply.w32(base_gf, a1, a0inv);
-
-    tmp = (base_gf->multiply.w32(base_gf, a1, a0inv) ^ base_gf->multiply.w32(base_gf, a0, a1inv) ^ h->prim_poly);
-    tmp = base_gf->inverse.w32(base_gf, tmp);
-
-    d = base_gf->multiply.w32(base_gf, d, tmp);
-
-    c0 = base_gf->multiply.w32(base_gf, (d^1), a0inv);
-    c1 = base_gf->multiply.w32(base_gf, d, a1inv);
-  }
-
-  c = c0 | (c1 << 8);
-
-  return c;
-}
-
-static
-void
-gf_w16_composite_multiply_region(gf_t *gf, void *src, void *dest, gf_val_32_t val, int bytes, int xor)
-{
-  gf_internal_t *h = (gf_internal_t *) gf->scratch;
-  gf_t *base_gf = h->base_gf;
-  uint8_t b0 = val & 0x00ff;
-  uint8_t b1 = (val & 0xff00) >> 8;
-  uint16_t *s16, *d16, *top;
-  uint8_t a0, a1, a1b1, *mt;
-  gf_region_data rd;
-  struct gf_w16_composite_data *cd;
-
-  cd = (struct gf_w16_composite_data *) h->private;
-  mt = cd->mult_table;
-  
-  if (val == 0) { gf_multby_zero(dest, bytes, xor); return; }
-  gf_set_region_data(&rd, gf, src, dest, bytes, val, xor, 2);
-
-  s16 = rd.s_start;
-  d16 = rd.d_start;
-  top = rd.d_top;
-
-  if (mt == NULL) {
-    if (xor) {
-      while (d16 < top) {
-        a0 = (*s16) & 0x00ff;
-        a1 = ((*s16) & 0xff00) >> 8;
-        a1b1 = base_gf->multiply.w32(base_gf, a1, b1);
-  
-        (*d16) ^= ((base_gf->multiply.w32(base_gf, a0, b0) ^ a1b1) |
-                  ((base_gf->multiply.w32(base_gf, a1, b0) ^ 
-                    base_gf->multiply.w32(base_gf, a0, b1) ^ 
-                    base_gf->multiply.w32(base_gf, a1b1, h->prim_poly)) << 8));
-        s16++;
-        d16++;
-      }
-    } else {
-      while (d16 < top) {
-        a0 = (*s16) & 0x00ff;
-        a1 = ((*s16) & 0xff00) >> 8;
-        a1b1 = base_gf->multiply.w32(base_gf, a1, b1);
-  
-        (*d16) = ((base_gf->multiply.w32(base_gf, a0, b0) ^ a1b1) |
-                  ((base_gf->multiply.w32(base_gf, a1, b0) ^ 
-                    base_gf->multiply.w32(base_gf, a0, b1) ^ 
-                    base_gf->multiply.w32(base_gf, a1b1, h->prim_poly)) << 8));
-        s16++;
-        d16++;
-      }
-    }
-  } else {
-    if (xor) {
-      while (d16 < top) {
-        a0 = (*s16) & 0x00ff;
-        a1 = ((*s16) & 0xff00) >> 8;
-        a1b1 = GF_W8_INLINE_MULTDIV(mt, a1, b1);
-  
-        (*d16) ^= ((GF_W8_INLINE_MULTDIV(mt, a0, b0) ^ a1b1) |
-                  ((GF_W8_INLINE_MULTDIV(mt, a1, b0) ^ 
-                    GF_W8_INLINE_MULTDIV(mt, a0, b1) ^ 
-                    GF_W8_INLINE_MULTDIV(mt, a1b1, h->prim_poly)) << 8));
-        s16++;
-        d16++;
-      }
-    } else {
-      while (d16 < top) {
-        a0 = (*s16) & 0x00ff;
-        a1 = ((*s16) & 0xff00) >> 8;
-        a1b1 = GF_W8_INLINE_MULTDIV(mt, a1, b1);
-  
-        (*d16) = ((GF_W8_INLINE_MULTDIV(mt, a0, b0) ^ a1b1) |
-                  ((GF_W8_INLINE_MULTDIV(mt, a1, b0) ^ 
-                    GF_W8_INLINE_MULTDIV(mt, a0, b1) ^ 
-                    GF_W8_INLINE_MULTDIV(mt, a1b1, h->prim_poly)) << 8));
-        s16++;
-        d16++;
-      }
-    }
-  }
-}
-
-static
-void
-gf_w16_composite_multiply_region_alt(gf_t *gf, void *src, void *dest, gf_val_32_t val, int bytes, int xor)
-{
-  gf_internal_t *h = (gf_internal_t *) gf->scratch;
-  gf_t *base_gf = h->base_gf;
-  uint8_t val0 = val & 0x00ff;
-  uint8_t val1 = (val & 0xff00) >> 8;
-  gf_region_data rd;
-  int sub_reg_size;
-  uint8_t *slow, *shigh;
-  uint8_t *dlow, *dhigh, *top;;
-
-  /* JSP: I want the two pointers aligned wrt each other on 16 byte 
-     boundaries.  So I'm going to make sure that the area on 
-     which the two operate is a multiple of 32. Of course, that 
-     junks up the mapping, but so be it -- that's why we have extract_word.... */
-
-  gf_set_region_data(&rd, gf, src, dest, bytes, val, xor, 32);
-  gf_do_initial_region_alignment(&rd);
-
-  slow = (uint8_t *) rd.s_start;
-  dlow = (uint8_t *) rd.d_start;
-  top = (uint8_t *)  rd.d_top;
-  sub_reg_size = (top - dlow)/2;
-  shigh = slow + sub_reg_size;
-  dhigh = dlow + sub_reg_size;
-
-  base_gf->multiply_region.w32(base_gf, slow, dlow, val0, sub_reg_size, xor);
-  base_gf->multiply_region.w32(base_gf, shigh, dlow, val1, sub_reg_size, 1);
-  base_gf->multiply_region.w32(base_gf, slow, dhigh, val1, sub_reg_size, xor);
-  base_gf->multiply_region.w32(base_gf, shigh, dhigh, val0, sub_reg_size, 1);
-  base_gf->multiply_region.w32(base_gf, shigh, dhigh, base_gf->multiply.w32(base_gf, h->prim_poly, val1), sub_reg_size, 1);
-
-  gf_do_final_region_alignment(&rd);
-}
-
-static
-int gf_w16_composite_init(gf_t *gf)
-{
-  gf_internal_t *h = (gf_internal_t *) gf->scratch;
-  struct gf_w16_composite_data *cd;
-
-  if (h->base_gf == NULL) return 0;
-
-  cd = (struct gf_w16_composite_data *) h->private;
-  cd->mult_table = gf_w8_get_mult_table(h->base_gf);
-
-  if (h->region_type & GF_REGION_ALTMAP) {
-    gf->multiply_region.w32 = gf_w16_composite_multiply_region_alt;
-  } else {
-    gf->multiply_region.w32 = gf_w16_composite_multiply_region;
-  }
-
-  if (cd->mult_table == NULL) {
-    gf->multiply.w32 = gf_w16_composite_multiply_recursive;
-  } else {
-    gf->multiply.w32 = gf_w16_composite_multiply_inline;
-  }
-  gf->divide.w32 = NULL;
-  gf->inverse.w32 = gf_w16_composite_inverse;
-
-  return 1;
-}
-
-static
 void
 gf_w16_group_4_set_shift_tables(uint16_t *shift, uint16_t val, gf_internal_t *h)
 {
@@ -2322,9 +1983,6 @@ int gf_w16_scratch_size(int mult_type, int region_type, int divide_type, int arg
     case GF_MULT_SHIFT:
       return sizeof(gf_internal_t);
       break;
-    case GF_MULT_COMPOSITE:
-      return sizeof(gf_internal_t) + sizeof(struct gf_w16_composite_data) + 64;
-      break;
 
     default:
       return 0;
@@ -2341,10 +1999,6 @@ int gf_w16_init(gf_t *gf)
   /* Allen: set default primitive polynomial / irreducible polynomial if needed */
 
   if (h->prim_poly == 0) {
-    if (h->mult_type == GF_MULT_COMPOSITE) {
-      h->prim_poly = gf_composite_get_default_poly(h->base_gf);
-      if (h->prim_poly == 0) return 0;
-    } else { 
 
      /* Allen: use the following primitive polynomial to make 
                carryless multiply work more efficiently for GF(2^16).
@@ -2354,14 +2008,9 @@ int gf_w16_init(gf_t *gf)
         The following is the traditional primitive polynomial for GF(2^16) */
 
       h->prim_poly = 0x1100b;
-    } 
   }
 
-  if (h->mult_type != GF_MULT_COMPOSITE) h->prim_poly |= (1 << 16);
-
   gf->multiply.w32 = NULL;
-  gf->divide.w32 = NULL;
-  gf->inverse.w32 = NULL;
   gf->multiply_region.w32 = NULL;
 
   switch(h->mult_type) {
@@ -2372,36 +2021,13 @@ int gf_w16_init(gf_t *gf)
     case GF_MULT_TABLE:       if (gf_w16_table_init(gf) == 0) return 0; break;
     case GF_MULT_CARRY_FREE:  if (gf_w16_cfm_init(gf) == 0) return 0; break;
     case GF_MULT_SHIFT:       if (gf_w16_shift_init(gf) == 0) return 0; break;
-    case GF_MULT_COMPOSITE:   if (gf_w16_composite_init(gf) == 0) return 0; break;
     case GF_MULT_BYTWO_p: 
     case GF_MULT_BYTWO_b:     if (gf_w16_bytwo_init(gf) == 0) return 0; break;
     case GF_MULT_GROUP:       if (gf_w16_group_init(gf) == 0) return 0; break;
     default: return 0;
   }
-  if (h->divide_type == GF_DIVIDE_EUCLID) {
-    gf->divide.w32 = gf_w16_divide_from_inverse;
-    gf->inverse.w32 = gf_w16_euclid;
-  } else if (h->divide_type == GF_DIVIDE_MATRIX) {
-    gf->divide.w32 = gf_w16_divide_from_inverse;
-    gf->inverse.w32 = gf_w16_matrix;
-  }
-
-  if (gf->divide.w32 == NULL) {
-    gf->divide.w32 = gf_w16_divide_from_inverse;
-    if (gf->inverse.w32 == NULL) gf->inverse.w32 = gf_w16_euclid;
-  }
-
-  if (gf->inverse.w32 == NULL)  gf->inverse.w32 = gf_w16_inverse_from_divide;
-
   if (h->region_type & GF_REGION_ALTMAP) {
-    if (h->mult_type == GF_MULT_COMPOSITE) {
-      gf->extract_word.w32 = gf_w16_composite_extract_word;
-    } else {
-      gf->extract_word.w32 = gf_w16_split_extract_word;
-    }
-  } else if (h->region_type == GF_REGION_CAUCHY) {
-    gf->multiply_region.w32 = gf_wgen_cauchy_region;
-    gf->extract_word.w32 = gf_wgen_extract_word;
+    gf->extract_word.w32 = gf_w16_split_extract_word;
   } else {
     gf->extract_word.w32 = gf_w16_extract_word;
   }

@@ -57,10 +57,6 @@ struct gf_w16_group_4_4_data {
     uint16_t shift[16];
 };
 
-struct gf_w16_composite_data {
-  uint8_t *mult_table;
-};
-
 void gf_w16_neon_split_init(gf_t *gf);
 
 #endif /* GF_COMPLETE_GF_W16_H */
