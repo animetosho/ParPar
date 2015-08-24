@@ -496,13 +496,9 @@ void gf_two_byte_region_table_multiply(gf_region_data *rd, uint16_t *base)
 
 static void gf_slow_multiply_region(gf_region_data *rd, void *src, void *dest, void *s_top)
 {
-  uint8_t *s8, *d8;
   uint16_t *s16, *d16;
-  uint32_t *s32, *d32;
-  uint64_t *s64, *d64;
   gf_internal_t *h;
   int wb;
-  uint32_t p, a;
 
   h = rd->gf->scratch;
   wb = (h->w)/8;

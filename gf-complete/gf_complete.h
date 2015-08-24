@@ -11,7 +11,7 @@
 #ifndef _GF_COMPLETE_H_
 #define _GF_COMPLETE_H_
 #ifdef _MSC_VER
-#include "stdint.h"
+#include "msc_stdint.h"
 #else
 #include <stdint.h>
 #endif
