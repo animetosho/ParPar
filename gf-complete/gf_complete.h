@@ -16,15 +16,6 @@
 #include <stdint.h>
 #endif
 
-#ifdef INTEL_SSE4
-  #ifdef __SSE4_2__
-    #include <nmmintrin.h>
-  #endif
-  #ifdef __SSE4_1__
-    #include <smmintrin.h>
-  #endif
-#endif
-
 #ifdef INTEL_SSSE3
   #include <tmmintrin.h>
 #endif

@@ -721,6 +721,7 @@ void gf_multby_one(void *src, void *dest, int bytes, int xor)
 {
 #ifdef   INTEL_SSE2
   __m128i ms, md;
+  int abytes;
 #endif
   unsigned long uls, uld;
   uint8_t *s8, *d8;
@@ -735,7 +736,6 @@ void gf_multby_one(void *src, void *dest, int bytes, int xor)
   uld = (unsigned long) dest;
 
 #ifdef   INTEL_SSE2
-  int abytes;
   s8 = (uint8_t *) src;
   d8 = (uint8_t *) dest;
   if (uls % 16 == uld % 16) {
