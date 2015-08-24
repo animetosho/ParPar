@@ -288,6 +288,7 @@ int gf_scratch_size(int w,
   switch(w) {
     case 16: return gf_w16_scratch_size(mult_type, region_type, divide_type, arg1, arg2);
   }
+  return 0;
 }
 
 extern int gf_size(gf_t *gf)
@@ -354,6 +355,7 @@ int gf_init_hard(gf_t *gf, int w, int mult_type,
   switch(w) {
     case 16: return gf_w16_init(gf);
   }
+  return 0;
 }
 
 int gf_free(gf_t *gf, int recursive)
