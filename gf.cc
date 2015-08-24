@@ -141,7 +141,11 @@ void free_buffer(char* data, void* _size) {
 	int size = (int)(size_t)_size;
 	V8::AdjustAmountOfExternalAllocatedMemory(-size);
 #endif
+#if (!defined(__cplusplus) || __cplusplus <= 201100) && defined(_MSC_VER)
+	_aligned_free(data);
+#else
 	free(data);
+#endif
 }
 
 FUNC(AlignedBuffer) {
@@ -175,10 +179,8 @@ FUNC(AlignedBuffer) {
 #endif
 
 	
-#ifndef NODE_010
 	if(!buf)
-		node::FatalError("AlignedBuffer", "Out Of Memory");
-#endif
+		RETURN_ERROR("Out Of Memory");
 	
 	/*
 	if(hasString)
