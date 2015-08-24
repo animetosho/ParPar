@@ -32,26 +32,8 @@ typedef struct {
   void *private;
 } gf_internal_t;
 
-extern int gf_w4_init (gf_t *gf);
-extern int gf_w4_scratch_size(int mult_type, int region_type, int divide_type, int arg1, int arg2);
-
-extern int gf_w8_init (gf_t *gf);
-extern int gf_w8_scratch_size(int mult_type, int region_type, int divide_type, int arg1, int arg2);
-
 extern int gf_w16_init (gf_t *gf);
 extern int gf_w16_scratch_size(int mult_type, int region_type, int divide_type, int arg1, int arg2);
-
-extern int gf_w32_init (gf_t *gf);
-extern int gf_w32_scratch_size(int mult_type, int region_type, int divide_type, int arg1, int arg2);
-
-extern int gf_w64_init (gf_t *gf);
-extern int gf_w64_scratch_size(int mult_type, int region_type, int divide_type, int arg1, int arg2);
-
-extern int gf_w128_init (gf_t *gf);
-extern int gf_w128_scratch_size(int mult_type, int region_type, int divide_type, int arg1, int arg2);
-
-extern int gf_wgen_init (gf_t *gf);
-extern int gf_wgen_scratch_size(int w, int mult_type, int region_type, int divide_type, int arg1, int arg2);
 
 void gf_wgen_cauchy_region(gf_t *gf, void *src, void *dest, gf_val_32_t val, int bytes, int xor);
 gf_val_32_t gf_wgen_extract_word(gf_t *gf, void *start, int bytes, int index);
