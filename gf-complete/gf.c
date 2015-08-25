@@ -723,7 +723,7 @@ void gf_multby_one(void *src, void *dest, int bytes, int xor)
 #endif
   unsigned long uls, uld;
   uint8_t *s8, *d8;
-  uint64_t *s64, *d64, *dtop64;
+  FAST_U8 *s64, *d64, *dtop64;
   gf_region_data rd;
 
   if (!xor) {
@@ -825,10 +825,10 @@ void gf_multby_one(void *src, void *dest, int bytes, int xor)
     d8++;
     s8++;
   }
-  dtop64 = (uint64_t *) rd.d_top;
+  dtop64 = (FAST_U8 *) rd.d_top;
 
-  d64 = (uint64_t *) rd.d_start;
-  s64 = (uint64_t *) rd.s_start;
+  d64 = (FAST_U8 *) rd.d_start;
+  s64 = (FAST_U8 *) rd.s_start;
 
   while (d64 < dtop64) {
     *d64 ^= *s64;
@@ -848,10 +848,11 @@ void gf_multby_one(void *src, void *dest, int bytes, int xor)
 }
 
 #define UNALIGNED_BUFSIZE (8)
+#define UNALIGNED_BUFSIZE_BYTES (8 * sizeof(FAST_U8))
 
 static void gf_unaligned_xor(void *src, void *dest, int bytes)
 {
-  uint64_t scopy[UNALIGNED_BUFSIZE], *d64;
+  FAST_U8 scopy[UNALIGNED_BUFSIZE], *d64;
   int i;
   gf_region_data rd;
   uint8_t *s8, *d8;
@@ -863,7 +864,7 @@ static void gf_unaligned_xor(void *src, void *dest, int bytes)
      If I change gf_set_region_data() to split alignment & chunksize, then 
      I could do this correctly. */
 
-  gf_set_region_data(&rd, NULL, dest, dest, bytes, 1, 1, 8*UNALIGNED_BUFSIZE);
+  gf_set_region_data(&rd, NULL, dest, dest, bytes, 1, 1, UNALIGNED_BUFSIZE_BYTES);
   s8 = (uint8_t *) src;
   d8 = (uint8_t *) dest;
 
@@ -873,10 +874,10 @@ static void gf_unaligned_xor(void *src, void *dest, int bytes)
     s8++;
   }
   
-  d64 = (uint64_t *) d8;
-  while (d64 < (uint64_t *) rd.d_top) {
-    memcpy(scopy, s8, 8*UNALIGNED_BUFSIZE);
-    s8 += 8*UNALIGNED_BUFSIZE;
+  d64 = (FAST_U8 *) d8;
+  while (d64 < (FAST_U8 *) rd.d_top) {
+    memcpy(scopy, s8, UNALIGNED_BUFSIZE_BYTES);
+    s8 += UNALIGNED_BUFSIZE_BYTES;
     for (i = 0; i < UNALIGNED_BUFSIZE; i++) {
       *d64 ^= scopy[i];
       d64++;

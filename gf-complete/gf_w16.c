@@ -12,6 +12,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "gf_w16.h"
+#include "platform.h"
 #include "gf_w16_additions.c"
 
 #ifdef _MSC_VER
@@ -742,9 +743,9 @@ static
 void
 gf_w16_split_8_16_lazy_multiply_region(gf_t *gf, void *src, void *dest, gf_val_32_t val, int bytes, int xor)
 {
-  uint64_t j, k, v, a, prod, *s64, *d64, *top64;
+  FAST_U32 j, k, v, a, prod, *s64, *d64, *top64;
   gf_internal_t *h;
-  uint64_t htable[256], ltable[256];
+  FAST_U32 htable[256], ltable[256];
   gf_region_data rd;
 
   if (val == 0) { gf_multby_zero(dest, bytes, xor); return; }
@@ -767,9 +768,9 @@ gf_w16_split_8_16_lazy_multiply_region(gf_t *gf, void *src, void *dest, gf_val_3
     v = GF_MULTBY_TWO(v);
   }
 
-  s64 = (uint64_t *) rd.s_start;
-  d64 = (uint64_t *) rd.d_start;
-  top64 = (uint64_t *) rd.d_top;
+  s64 = (FAST_U32 *) rd.s_start;
+  d64 = (FAST_U32 *) rd.d_start;
+  top64 = (FAST_U32 *) rd.d_top;
   
 /* Does Unrolling Matter?  -- Doesn't seem to.
   while (d64 != top64) {
@@ -807,11 +808,11 @@ gf_w16_split_8_16_lazy_multiply_region(gf_t *gf, void *src, void *dest, gf_val_3
     a = *s64;
 
     prod = 0;
-    for (j = 0; j < 4; j++) {
+    for (j = 0; j < sizeof(FAST_U32)/2; j++) {
       prod <<= 16;
-      prod ^= htable[a >> 56];
+      prod ^= htable[a >> ((sizeof(FAST_U32)-1)<<3)];
       a <<= 8;
-      prod ^= ltable[a >> 56];
+      prod ^= ltable[a >> ((sizeof(FAST_U32)-1)<<3)];
       a <<= 8;
     }
 
