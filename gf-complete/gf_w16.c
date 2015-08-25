@@ -804,25 +804,41 @@ gf_w16_split_8_16_lazy_multiply_region(gf_t *gf, void *src, void *dest, gf_val_3
   }
 */
   
-  while (d64 != top64) {
-    a = *s64;
+  if (xor)
+    while (d64 != top64) {
+      a = *s64;
 
-    prod = 0;
-    for (j = 0; j < sizeof(FAST_U32)/2; j++) {
-      prod <<= 16;
-      prod ^= htable[a >> ((sizeof(FAST_U32)-1)<<3)];
-      a <<= 8;
-      prod ^= ltable[a >> ((sizeof(FAST_U32)-1)<<3)];
-      a <<= 8;
+      prod = 0;
+      for (j = 0; j < sizeof(FAST_U32)/2; j++) {
+        prod <<= 16;
+        prod ^= htable[a >> ((sizeof(FAST_U32)-1)<<3)];
+        a <<= 8;
+        prod ^= ltable[a >> ((sizeof(FAST_U32)-1)<<3)];
+        a <<= 8;
+      }
+
+      *d64 ^= prod;
+      s64++;
+      d64++;
+    }
+  else
+    while (d64 != top64) {
+      a = *s64;
+
+      prod = 0;
+      for (j = 0; j < sizeof(FAST_U32)/2; j++) {
+        prod <<= 16;
+        prod ^= htable[a >> ((sizeof(FAST_U32)-1)<<3)];
+        a <<= 8;
+        prod ^= ltable[a >> ((sizeof(FAST_U32)-1)<<3)];
+        a <<= 8;
+      }
+
+      *d64 = prod;
+      s64++;
+      d64++;
     }
 
-    //JSP: We can move the conditional outside the while loop, but we need to fully test it to understand which is better.
-   
-    prod ^= ((xor) ? *d64 : 0); 
-    *d64 = prod;
-    s64++;
-    d64++;
-  }
   gf_do_final_region_alignment(&rd);
 }
 
