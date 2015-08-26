@@ -743,7 +743,8 @@ static
 void
 gf_w16_split_8_16_lazy_multiply_region(gf_t *gf, void *src, void *dest, gf_val_32_t val, int bytes, int xor)
 {
-  FAST_U32 j, k, v, a, prod, *s64, *d64, *top64;
+  FAST_U32 j, k, v, *d64, *top64;
+  unsigned char *s8;
   gf_internal_t *h;
   FAST_U32 htable[256], ltable[256];
   gf_region_data rd;
@@ -751,7 +752,7 @@ gf_w16_split_8_16_lazy_multiply_region(gf_t *gf, void *src, void *dest, gf_val_3
   if (val == 0) { gf_multby_zero(dest, bytes, xor); return; }
   if (val == 1) { gf_multby_one(src, dest, bytes, xor); return; }
 
-  gf_set_region_data(&rd, gf, src, dest, bytes, val, xor, 8);
+  gf_set_region_data(&rd, gf, src, dest, bytes, val, xor, sizeof(FAST_U32));
   gf_do_initial_region_alignment(&rd);
   
   h = (gf_internal_t *) gf->scratch;
@@ -768,74 +769,53 @@ gf_w16_split_8_16_lazy_multiply_region(gf_t *gf, void *src, void *dest, gf_val_3
     v = GF_MULTBY_TWO(v);
   }
 
-  s64 = (FAST_U32 *) rd.s_start;
+  s8 = (unsigned char *) rd.s_start;
   d64 = (FAST_U32 *) rd.d_start;
   top64 = (FAST_U32 *) rd.d_top;
-  
-/* Does Unrolling Matter?  -- Doesn't seem to.
-  while (d64 != top64) {
-    a = *s64;
-
-    prod = htable[a >> 56];
-    a <<= 8;
-    prod ^= ltable[a >> 56];
-    a <<= 8;
-    prod <<= 16;
-
-    prod ^= htable[a >> 56];
-    a <<= 8;
-    prod ^= ltable[a >> 56];
-    a <<= 8;
-    prod <<= 16;
-
-    prod ^= htable[a >> 56];
-    a <<= 8;
-    prod ^= ltable[a >> 56];
-    a <<= 8;
-    prod <<= 16;
-
-    prod ^= htable[a >> 56];
-    a <<= 8;
-    prod ^= ltable[a >> 56];
-    prod ^= ((xor) ? *d64 : 0); 
-    *d64 = prod;
-    s64++;
-    d64++;
-  }
-*/
-  
-  if (xor)
+    
+  if (xor) {
     while (d64 != top64) {
-      a = *s64;
-
-      prod = 0;
-      for (j = 0; j < sizeof(FAST_U32)/2; j++) {
+#if FAST_U32_SIZE == 4 || FAST_U32_SIZE == 8
+      *d64 ^=
+          ltable[s8[0]] ^ htable[s8[1]] ^
+        ((ltable[s8[2]] ^ htable[s8[3]]) << 16)
+  #if FAST_U32_SIZE == 8
+      ^ ((ltable[s8[4]] ^ htable[s8[5]]) << 32) ^
+        ((ltable[s8[6]] ^ htable[s8[7]]) << 48)
+  #endif
+      ;
+#else
+      FAST_U32 prod = 0;
+      for (j = sizeof(FAST_U32); j > 0; j-=2) {
         prod <<= 16;
-        prod ^= htable[a >> ((sizeof(FAST_U32)-1)<<3)];
-        a <<= 8;
-        prod ^= ltable[a >> ((sizeof(FAST_U32)-1)<<3)];
-        a <<= 8;
+        prod ^= ltable[s8[j]] ^ htable[s8[j+1]];
       }
-
-      *d64 ^= prod;
-      s64++;
+      d64 ^= prod;
+#endif
+      s8 += sizeof(FAST_U32);
       d64++;
     }
+  }
   else
     while (d64 != top64) {
-      a = *s64;
-
-      prod = 0;
-      for (j = 0; j < sizeof(FAST_U32)/2; j++) {
+#if FAST_U32_SIZE == 4 || FAST_U32_SIZE == 8
+      *d64 =
+          ltable[s8[0]] ^ htable[s8[1]] ^
+        ((ltable[s8[2]] ^ htable[s8[3]]) << 16)
+  #if FAST_U32_SIZE == 8
+      ^ ((ltable[s8[4]] ^ htable[s8[5]]) << 32) ^
+        ((ltable[s8[6]] ^ htable[s8[7]]) << 48)
+  #endif
+      ;
+#else
+      FAST_U32 prod = 0;
+      for (j = sizeof(FAST_U32); j > 0; j-=2) {
         prod <<= 16;
-        prod ^= htable[a >> ((sizeof(FAST_U32)-1)<<3)];
-        a <<= 8;
-        prod ^= ltable[a >> ((sizeof(FAST_U32)-1)<<3)];
-        a <<= 8;
+        prod ^= ltable[s8[j]] ^ htable[s8[j+1]];
       }
-
-      *d64 = prod;
-      s64++;
+      d64 = prod;
+#endif
+      s8 += sizeof(FAST_U32);
       d64++;
     }
 

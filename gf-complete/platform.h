@@ -16,10 +16,16 @@
 typedef unsigned __int64 FAST_U8;
 typedef unsigned __int64 FAST_U16;
 typedef unsigned __int64 FAST_U32;
+#define FAST_U8_SIZE 8
+#define FAST_U16_SIZE 8
+#define FAST_U32_SIZE 8
 #else
 typedef unsigned __int32 FAST_U8;
 typedef unsigned __int32 FAST_U16;
 typedef unsigned __int32 FAST_U32;
+#define FAST_U8_SIZE 4
+#define FAST_U16_SIZE 4
+#define FAST_U32_SIZE 4
 #endif
 
 #else
@@ -46,6 +52,9 @@ typedef unsigned int FAST_U8;
 typedef unsigned int FAST_U16;
 typedef unsigned int FAST_U32;
 #endif
+#define FAST_U8_SIZE (__WORDSIZE / 8)
+#define FAST_U16_SIZE (__WORDSIZE / 8)
+#define FAST_U32_SIZE (__WORDSIZE / 8)
 
 
 #endif /* _MSC_VER */
