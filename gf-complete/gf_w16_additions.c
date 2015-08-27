@@ -36,7 +36,7 @@ void detect_cpu(void) {
 #define _mword __m128i
 #define _MM(f) _mm_ ## f
 #define _MMI(f) _mm_ ## f ## i128
-#define _FN(f) f
+#define _FN(f) f ## _sse
 #include "gf_w16_split.c"
 
 /*
