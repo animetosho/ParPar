@@ -8,6 +8,7 @@
 
 /* src can be the same as dest */
 static void _FN(gf_w16_split_start)(void* src, int bytes, void* dest) {
+#ifdef INTEL_SSE2
 	gf_region_data rd;
 	_mword *sW, *dW, *topW;
 	_mword ta, tb, lmask;
@@ -47,10 +48,12 @@ static void _FN(gf_w16_split_start)(void* src, int bytes, void* dest) {
 		sW += 2;
 		dW += 2;
 	}
+#endif
 }
 
 /* src can be the same as dest */
 static void _FN(gf_w16_split_final)(void* src, int bytes, void* dest) {
+#ifdef INTEL_SSE2
 	gf_region_data rd;
 	_mword *sW, *dW, *topW;
 	_mword tpl, tph;
@@ -78,6 +81,7 @@ static void _FN(gf_w16_split_final)(void* src, int bytes, void* dest) {
 		sW += 2;
 		dW += 2;
 	}
+#endif
 }
 
 
@@ -188,4 +192,89 @@ _FN(gf_w16_split_4_16_lazy_altmap_multiply_region)(gf_t *gf, void *src, void *de
 
 #endif
 }
+
+
+
+#define MUL_REGIONS 4
+
+static
+void
+_FN(gf_w16_split_4_16_lazy_altmap_multiply_regionX)(gf_t *gf, uint16_t **src, void *dest, gf_val_32_t *val, int bytes)
+{
+#ifdef INTEL_SSSE3
+  FAST_U32 i, j, k, r;
+  FAST_U32 prod, pos;
+  _mword *dW, *topW;
+  gf_region_data rd;
+  _mword  mask, ta, tb, ti, tpl, tph;
+  ALIGN(MWORD_SIZE, gf_mm low[MUL_REGIONS][4]);
+  ALIGN(MWORD_SIZE, gf_mm high[MUL_REGIONS][4]);
+
+  
+  for (r = 0; r < MUL_REGIONS; r++) {
+    _mm_prefetch(src[r], _MM_HINT_T0);
+    _mm_prefetch(src[r] + 8, _MM_HINT_T0);
+    _mm_prefetch(src[r] + 16, _MM_HINT_T0);
+    _mm_prefetch(src[r] + 24, _MM_HINT_T0);
+
+    gf_set_region_data(&rd, gf, src[r], dest, bytes, val[r], 1, sizeof(_mword)*2);
+    gf_do_initial_region_alignment(&rd);
+    gf_do_final_region_alignment(&rd);
+    
+    for (j = 0; j < 16; j++) {
+      for (i = 0; i < 4; i++) {
+        prod = gf->multiply.w32(gf, (j << (i*4)), val[r]);
+        for (k = 0; k < MWORD_SIZE; k += 16) {
+          low[r][i].u8[j + k] = (prod & 0xff);
+          high[r][i].u8[j + k] = (prod >> 8);
+        }
+      }
+    }
+  }
+
+  pos = 0;
+  dW = (_mword *) rd.d_start;
+  topW = (_mword *) rd.d_top;
+
+  mask = _MM(set1_epi8) (0x0f);
+  while (dW != topW) {
+/*
+    for (r = 0; r < MUL_REGIONS; r++) {
+      _mm_prefetch((_mword*)src[r] + pos + 8, _MM_HINT_T0);
+    }
+*/
+    tph = _MMI(load_s)(dW);
+    tpl = _MMI(load_s)(dW+1);
+
+    for (r = 0; r < MUL_REGIONS; r++) {
+      ta = _MMI(load_s)((_mword*)src[r] + pos);
+      tb = _MMI(load_s)((_mword*)src[r] + pos + 1);
+
+      ti = _MMI(and_s) (mask, tb);
+      tpl = _MMI(xor_s)(_MM(shuffle_epi8) (low[r][0].uW, ti), tpl);
+      tph = _MMI(xor_s)(_MM(shuffle_epi8) (high[r][0].uW, ti), tph);
+  
+      ti = _MMI(and_s) (mask, _MM(srli_epi16)(tb, 4));
+      tpl = _MMI(xor_s)(_MM(shuffle_epi8) (low[r][1].uW, ti), tpl);
+      tph = _MMI(xor_s)(_MM(shuffle_epi8) (high[r][1].uW, ti), tph);
+
+      ti = _MMI(and_s) (mask, ta);
+      tpl = _MMI(xor_s)(_MM(shuffle_epi8) (low[r][2].uW, ti), tpl);
+      tph = _MMI(xor_s)(_MM(shuffle_epi8) (high[r][2].uW, ti), tph);
+  
+      ti = _MMI(and_s) (mask, _MM(srli_epi16)(ta, 4));
+      tpl = _MMI(xor_s)(_MM(shuffle_epi8) (low[r][3].uW, ti), tpl);
+      tph = _MMI(xor_s)(_MM(shuffle_epi8) (high[r][3].uW, ti), tph);
+    }
+    
+    _MMI(store_s) (dW, tph);
+    _MMI(store_s) (dW+1, tpl);
+
+    dW += 2;
+    pos += 2;
+  }
+
+#endif
+}
+
 

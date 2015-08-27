@@ -115,6 +115,10 @@ typedef union {
 } gf_region;
 
 typedef union {
+  void  (*w16) (GFP gf, uint16_t **src, void *dest, gf_val_32_t* val,  int bytes);
+} gf_regionX;
+
+typedef union {
   gf_val_32_t  (*w32) (GFP gf, void *start, int bytes, int index);
 } gf_extract;
 
@@ -125,6 +129,7 @@ typedef struct gf {
   gf_func_a_b    divide;
   gf_func_a      inverse;
   gf_region      multiply_region;
+  gf_regionX     multiply_regionX;
   gf_extract     extract_word;
   gf_altmap      altmap_region;
   gf_altmap      unaltmap_region;

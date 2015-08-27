@@ -1204,6 +1204,7 @@ int gf_w16_split_init(gf_t *gf)
         gf->multiply_region.w32 = gf_w16_split_4_16_lazy_multiply_region;
       else if(h->region_type & GF_REGION_ALTMAP && has_ssse3)
         gf->multiply_region.w32 = gf_w16_split_4_16_lazy_altmap_multiply_region_sse;
+        gf->multiply_regionX.w16 = gf_w16_split_4_16_lazy_altmap_multiply_regionX_sse;
     } else {
       if(h->region_type & GF_REGION_SIMD)
         return 0;
@@ -2014,6 +2015,7 @@ int gf_w16_init(gf_t *gf)
 
   gf->multiply.w32 = NULL;
   gf->multiply_region.w32 = NULL;
+  gf->multiply_regionX.w16 = NULL;
 
   switch(h->mult_type) {
     case GF_MULT_LOG_ZERO:    if (gf_w16_log_zero_init(gf) == 0) return 0; break;

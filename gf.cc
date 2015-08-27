@@ -82,6 +82,25 @@ static inline void multiply_mat(uint16_t** inputs, uint_fast16_t* iNums, unsigne
 		for(int in = 0; in < (int)numInputs; in++)
 			// trash our input!
 			gf.altmap_region(inputs[in], len, inputs[in]);
+		
+		/*
+		#pragma omp parallel for
+		for(int out = 0; out < (int)numOutputs; out++) {
+			unsigned int in = 1;
+			gf.multiply_region.w32(&gf, inputs[0], outputs[out], calc_factor(iNums[0], oNums[out]), (int)len, add);
+			for(; in < numInputs-3; in+=4) {
+				gf_val_32_t inNum4[4] = {
+					calc_factor(iNums[in], oNums[out]),
+					calc_factor(iNums[in+1], oNums[out]),
+					calc_factor(iNums[in+2], oNums[out]),
+					calc_factor(iNums[in+3], oNums[out])
+				};
+				gf.multiply_regionX.w16(&gf, inputs + in, outputs[out], inNum4, (int)len);
+			}
+			for(; in < numInputs; in++)
+				gf.multiply_region.w32(&gf, inputs[in], outputs[out], calc_factor(iNums[in], oNums[out]), (int)len, true);
+		}
+		*/
 	}
 	
 	// TODO: consider chunking for better cache hits?
