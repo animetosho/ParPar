@@ -30,6 +30,14 @@
   #include <wmmintrin.h>
 #endif
 
+#ifdef INTEL_AVX2
+  #include <immintrin.h>
+#endif
+
+#ifdef INTEL_AVX512
+  #include <zmmintrin.h>
+#endif
+
 #ifdef ARM_NEON
   #include <arm_neon.h>
 #endif
@@ -110,12 +118,16 @@ typedef union {
   gf_val_32_t  (*w32) (GFP gf, void *start, int bytes, int index);
 } gf_extract;
 
+typedef void (*gf_altmap) (void *src, int bytes, void* dest);
+
 typedef struct gf {
   gf_func_a_b    multiply;
   gf_func_a_b    divide;
   gf_func_a      inverse;
   gf_region      multiply_region;
   gf_extract     extract_word;
+  gf_altmap      altmap_region;
+  gf_altmap      unaltmap_region;
   void           *scratch;
 } gf_t;
     

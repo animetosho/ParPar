@@ -2030,8 +2030,12 @@ int gf_w16_init(gf_t *gf)
   }
   if (h->region_type & GF_REGION_ALTMAP) {
     gf->extract_word.w32 = gf_w16_split_extract_word;
+    gf->altmap_region = gf_w16_split_start;
+    gf->unaltmap_region = gf_w16_split_final;
   } else {
     gf->extract_word.w32 = gf_w16_extract_word;
+    gf->altmap_region = gf_w16_split_null;
+    gf->unaltmap_region = gf_w16_split_null;
   }
   if (gf->multiply_region.w32 == NULL) {
     gf->multiply_region.w32 = gf_w16_multiply_region_from_single;

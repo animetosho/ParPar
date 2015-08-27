@@ -59,4 +59,10 @@ typedef unsigned int FAST_U32;
 
 #endif /* _MSC_VER */
 
+#ifdef __AVX2__
+	#define INTEL_AVX2 1
+#endif
+
+
+
 #endif /* GF_COMPLETE_PLATFORM_H */

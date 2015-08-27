@@ -351,6 +351,8 @@ int gf_init_hard(gf_t *gf, int w, int mult_type,
   h->private = (void *) gf->scratch;
   h->private = (uint8_t *)h->private + (sizeof(gf_internal_t));
   gf->extract_word.w32 = NULL;
+  gf->altmap_region = NULL;
+  gf->unaltmap_region = NULL;
 
   switch(w) {
     case 16: return gf_w16_init(gf);

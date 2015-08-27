@@ -9,6 +9,7 @@
 
 #if defined(_MSC_VER)
 #include <malloc.h>
+#include <intrin.h>
 #endif
 
 
@@ -52,6 +53,7 @@ static inline uint16_t calc_factor(uint_fast16_t inputBlock, uint_fast16_t recov
 
 gf_t gf;
 void* gf_mem;
+bool using_altmap = false;
 
 #ifdef _OPENMP
 int maxNumThreads = 1, defaultNumThreads = 1;
@@ -60,35 +62,40 @@ const int maxNumThreads = 1;
 #endif
 
 // performs multiple multiplies for a region, using threads
+// note that inputs will get trashed
 /* REQUIRES:
    - input and each pointer in outputs must be aligned to 2 bytes
    - len must be a multiple of two (duh)
    - input and length of each output is the same and == len
    - number of outputs and scales is same and == numOutputs
 */
-static inline void multiply_mat(/*const*/ uint16_t** inputs, uint_fast16_t* iNums, unsigned int numInputs, size_t len, uint16_t** outputs, uint_fast16_t* oNums, unsigned int numOutputs, bool add) {
+static inline void multiply_mat(uint16_t** inputs, uint_fast16_t* iNums, unsigned int numInputs, size_t len, uint16_t** outputs, uint_fast16_t* oNums, unsigned int numOutputs, bool add) {
 #ifdef _OPENMP
 	int max_threads = omp_get_max_threads();
 	if(max_threads != maxNumThreads)
 		// handle the possibility that some other module changes this
 		omp_set_num_threads(maxNumThreads);
+#endif
+	
+	if(using_altmap) {
+		#pragma omp parallel for
+		for(int in = 0; in < (int)numInputs; in++)
+			// trash our input!
+			gf.altmap_region(inputs[in], len, inputs[in]);
+	}
 	
 	// TODO: consider chunking for better cache hits?
 	#pragma omp parallel for
-	for(int i = 0; i < (int)numOutputs; i++) {
-		gf.multiply_region.w32(&gf, inputs[0], outputs[i], calc_factor(iNums[0], oNums[i]), (int)len, add);
-		for(unsigned int j = 1; j < numInputs; j++)
-			gf.multiply_region.w32(&gf, inputs[j], outputs[i], calc_factor(iNums[j], oNums[i]), (int)len, true);
+	for(int out = 0; out < (int)numOutputs; out++) {
+		gf.multiply_region.w32(&gf, inputs[0], outputs[out], calc_factor(iNums[0], oNums[out]), (int)len, add);
+		for(unsigned int in = 1; in < numInputs; in++) {
+			gf.multiply_region.w32(&gf, inputs[in], outputs[out], calc_factor(iNums[in], oNums[out]), (int)len, true);
+		}
 	}
 	
+#ifdef _OPENMP
 	// if(max_threads != maxNumThreads)
 		// omp_set_num_threads(max_threads);
-#else
-	for(unsigned int i = 0; i < numOutputs; i++) {
-		gf.multiply_region.w32(&gf, inputs[0], outputs[i], calc_factor(iNums[0], oNums[i]), (int)len, add);
-		for(unsigned int j = 1; j < numInputs; j++)
-			gf.multiply_region.w32(&gf, inputs[j], outputs[i], calc_factor(iNums[j], oNums[i]), (int)len, true);
-	}
 #endif
 }
 
@@ -103,7 +110,7 @@ static inline void multiply_mat(/*const*/ uint16_t** inputs, uint_fast16_t* iNum
 
 #define RETURN_ERROR(e) { isolate->ThrowException(Exception::Error(String::NewFromOneByte(isolate, (const uint8_t*)e))); return; }
 #define RETURN_VAL(v) args.GetReturnValue().Set(v)
-#define RETURN_UNDEF
+#define RETURN_UNDEF return;
 #define ISOLATE isolate,
 
 #else
@@ -363,6 +370,8 @@ FUNC(MultiplyMulti) {
 		oNums[i] = rbNum;
 	}
 	
+	#undef RTN_ERROR
+	
 	bool add = false;
 	if (args.Length() >= 5) {
 		add = args[4]->ToBoolean()->Value();
@@ -428,6 +437,57 @@ FUNC(MultiplyMulti) {
 	RETURN_UNDEF
 }
 
+FUNC(Finalise) {
+	FUNC_START;
+	
+	if (args.Length() < 1 || !args[0]->IsArray())
+		RETURN_ERROR("First argument must be an array");
+	
+	unsigned int numInputs = Local<Array>::Cast(args[0])->Length();
+	
+	Local<Object> oInputs = args[0]->ToObject();
+	uint16_t** inputs = new uint16_t*[numInputs];
+	
+	#define RTN_ERROR(m) { \
+		delete[] inputs; \
+		RETURN_ERROR(m); \
+	}
+	
+	size_t len = 0;
+	int addressOffset = 0;
+	for(unsigned int i = 0; i < numInputs; i++) {
+		Local<Value> input = oInputs->Get(i);
+		if (!node::Buffer::HasInstance(input))
+			RTN_ERROR("All inputs must be Buffers");
+		inputs[i] = (uint16_t*)node::Buffer::Data(input);
+		intptr_t inputAddr = (intptr_t)inputs[i];
+		if (inputAddr & 1)
+			RTN_ERROR("All input buffers must be address aligned to a 16-bit boundary");
+		
+		if(i) {
+			if (node::Buffer::Length(input) != len)
+				RTN_ERROR("All inputs' length must be equal");
+			if ((inputAddr & (MEM_ALIGN-1)) != addressOffset)
+				RTN_ERROR("All input buffers must be address aligned to the same alignment for a 128-bit boundary");
+		} else {
+			len = node::Buffer::Length(input);
+			if (len % 2)
+				RTN_ERROR("Length of input must be a multiple of 2");
+			addressOffset = inputAddr & (MEM_ALIGN-1);
+		}
+	}
+	
+	if(using_altmap) {
+		// TODO: multi-thread this?
+		for(int in = 0; in < (int)numInputs; in++)
+			gf.unaltmap_region(inputs[in], len, inputs[in]);
+	}
+	
+	delete[] inputs;
+	RETURN_UNDEF
+}
+
+
 void init(Handle<Object> target) {
 	init_constants();
 	
@@ -438,6 +498,7 @@ void init(Handle<Object> target) {
 	NODE_SET_METHOD(target, "alignment_offset", AlignmentOffset);
 	// Buffer AlignedBuffer(int size)
 	NODE_SET_METHOD(target, "AlignedBuffer", AlignedBuffer);
+	NODE_SET_METHOD(target, "finalise", Finalise);
 	
 #ifndef NODE_010
 	HandleScope scope(Isolate::GetCurrent());
@@ -455,10 +516,39 @@ void init(Handle<Object> target) {
 	defaultNumThreads = maxNumThreads;
 #endif
 
-	#define GF_ARGS 16, GF_MULT_DEFAULT, GF_REGION_DEFAULT, GF_DIVIDE_DEFAULT
-	gf_mem = malloc(gf_scratch_size(GF_ARGS, 0, 0));
-	gf_init_hard(&gf, GF_ARGS, 0, 0, 0, NULL, gf_mem);
 
+
+// if SSSE3 supported, use ALTMAP
+#ifdef _MSC_VER
+	int cpuInfo[4];
+	__cpuid(cpuInfo, 1);
+	#ifdef INTEL_SSSE3
+	using_altmap = (cpuInfo[2] & 0x200) != 0;
+	#endif
+#elif defined(_IS_X86)
+	uint32_t flags;
+	__asm__ __volatile__ (
+		"cpuid"
+	: "=c" (flags)
+	: "a" (1)
+	: "%edx", "%ebx"
+	);
+	#ifdef INTEL_SSSE3
+	using_altmap = (flags & 0x200) != 0;
+	#endif
+#endif
+
+	if(using_altmap) {
+		#define GF_ARGS 16, GF_MULT_SPLIT_TABLE, GF_REGION_ALTMAP, GF_DIVIDE_DEFAULT
+		gf_mem = malloc(gf_scratch_size(GF_ARGS, 16, 4));
+		gf_init_hard(&gf, GF_ARGS, 0, 16, 4, NULL, gf_mem);
+		#undef GF_ARGS
+	} else {
+		#define GF_ARGS 16, GF_MULT_DEFAULT, GF_REGION_DEFAULT, GF_DIVIDE_DEFAULT
+		gf_mem = malloc(gf_scratch_size(GF_ARGS, 0, 0));
+		gf_init_hard(&gf, GF_ARGS, 0, 0, 0, NULL, gf_mem);
+		#undef GF_ARGS
+	}
 }
 
 NODE_MODULE(parpar_gf, init);
