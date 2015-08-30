@@ -1190,12 +1190,13 @@ int gf_w16_split_init(gf_t *gf)
 #endif
   } else {
     gf->multiply_region.w32 = gf_w16_split_8_16_lazy_multiply_region;
+    gf->alignment = sizeof(FAST_U32);
   }
 
 
   if ((h->arg1 == 8 && h->arg2 == 16) || (h->arg2 == 8 && h->arg1 == 16)) {
     gf->multiply_region.w32 = gf_w16_split_8_16_lazy_multiply_region;
-
+    gf->alignment = sizeof(FAST_U32);
   } else if ((h->arg1 == 4 && h->arg2 == 16) || (h->arg2 == 4 && h->arg1 == 16)) {
     if (has_ssse3 || isneon) {
       if(h->region_type & GF_REGION_ALTMAP && h->region_type & GF_REGION_NOSIMD)
@@ -1205,9 +1206,9 @@ int gf_w16_split_init(gf_t *gf)
       else if(h->region_type & GF_REGION_ALTMAP && has_ssse3) {
         FUNC_ASSIGN(gf->multiply_region.w32, gf_w16_split_4_16_lazy_altmap_multiply_region)
         FUNC_ASSIGN(gf->multiply_regionX.w16, gf_w16_split_4_16_lazy_altmap_multiply_regionX)
-        if(has_avx512bw) gf->alignment = 64;
-        else if(has_avx2) gf->alignment = 32;
-        else gf->alignment = 16;
+        if(has_avx512bw) gf->alignment = 128;
+        else if(has_avx2) gf->alignment = 64;
+        else gf->alignment = 32;
       }
     } else {
       if(h->region_type & GF_REGION_SIMD)
