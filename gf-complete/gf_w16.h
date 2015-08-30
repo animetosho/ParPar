@@ -11,7 +11,7 @@
 #ifndef GF_COMPLETE_GF_W16_H
 #define GF_COMPLETE_GF_W16_H
 
-#ifdef _MSC_VER
+#if defined(_MSC_VER) && _MSC_VER < 1900
 #include "msc_stdint.h"
 #else
 #include <stdint.h>
