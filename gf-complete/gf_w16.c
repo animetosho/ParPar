@@ -1202,9 +1202,10 @@ int gf_w16_split_init(gf_t *gf)
         gf->multiply_region.w32 = gf_w16_split_4_16_lazy_nosse_altmap_multiply_region;
       else if(h->region_type & GF_REGION_NOSIMD)
         gf->multiply_region.w32 = gf_w16_split_4_16_lazy_multiply_region;
-      else if(h->region_type & GF_REGION_ALTMAP && has_ssse3)
-        gf->multiply_region.w32 = gf_w16_split_4_16_lazy_altmap_multiply_region_sse;
-        gf->multiply_regionX.w16 = gf_w16_split_4_16_lazy_altmap_multiply_regionX_sse;
+      else if(h->region_type & GF_REGION_ALTMAP && has_ssse3) {
+        FUNC_ASSIGN(gf->multiply_region.w32, gf_w16_split_4_16_lazy_altmap_multiply_region)
+        FUNC_ASSIGN(gf->multiply_regionX.w16, gf_w16_split_4_16_lazy_altmap_multiply_regionX)
+      }
     } else {
       if(h->region_type & GF_REGION_SIMD)
         return 0;
@@ -2034,8 +2035,8 @@ int gf_w16_init(gf_t *gf)
     gf->extract_word.w32 = gf_w16_split_extract_word;
     /* !! There's no fallback if SSE not supported !!
      * ParPar never uses ALTMAP if SSSE3 isn't available, but this isn't ideal in gf-complete */
-    gf->altmap_region = gf_w16_split_start_sse;
-    gf->unaltmap_region = gf_w16_split_final_sse;
+    FUNC_ASSIGN(gf->altmap_region, gf_w16_split_start)
+    FUNC_ASSIGN(gf->unaltmap_region, gf_w16_split_final)
   } else {
     gf->extract_word.w32 = gf_w16_extract_word;
     gf->altmap_region = gf_w16_split_null;

@@ -34,7 +34,7 @@
   #include <immintrin.h>
 #endif
 
-#ifdef INTEL_AVX512
+#ifdef INTEL_AVX512BW
   #include <zmmintrin.h>
 #endif
 
