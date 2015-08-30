@@ -133,6 +133,8 @@ typedef struct gf {
   gf_extract     extract_word;
   gf_altmap      altmap_region;
   gf_altmap      unaltmap_region;
+  int            using_altmap;
+  int            alignment;
   void           *scratch;
 } gf_t;
     

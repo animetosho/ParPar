@@ -20,8 +20,8 @@ extern "C" {
 #include <gf_complete.h>
 }
 
-// memory alignment to 16-bytes for SSE operations
-#define MEM_ALIGN 16
+// memory alignment to 16-bytes for SSE operations (may grow for AVX operations)
+int MEM_ALIGN = 16;
 
 using namespace v8;
 
@@ -519,14 +519,6 @@ void init(Handle<Object> target) {
 	NODE_SET_METHOD(target, "AlignedBuffer", AlignedBuffer);
 	NODE_SET_METHOD(target, "finalise", Finalise);
 	
-#ifndef NODE_010
-	HandleScope scope(Isolate::GetCurrent());
-	target->Set(String::NewFromUtf8(isolate, "alignment"), Integer::New(MEM_ALIGN));
-#else
-	HandleScope scope;
-	target->Set(String::New("alignment"), Integer::New(MEM_ALIGN));
-#endif
-
 #ifdef _OPENMP
 	// set_max_threads(int num_threads)
 	NODE_SET_METHOD(target, "set_max_threads", SetMaxThreads);
@@ -568,6 +560,15 @@ void init(Handle<Object> target) {
 		gf_init_hard(&gf, GF_ARGS, 0, 0, 0, NULL, gf_mem);
 		#undef GF_ARGS
 	}
+	MEM_ALIGN = gf.alignment;
+	
+#ifndef NODE_010
+	HandleScope scope(Isolate::GetCurrent());
+	target->Set(String::NewFromUtf8(isolate, "alignment"), Integer::New(MEM_ALIGN));
+#else
+	HandleScope scope;
+	target->Set(String::New("alignment"), Integer::New(MEM_ALIGN));
+#endif
 }
 
 NODE_MODULE(parpar_gf, init);

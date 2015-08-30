@@ -1205,6 +1205,9 @@ int gf_w16_split_init(gf_t *gf)
       else if(h->region_type & GF_REGION_ALTMAP && has_ssse3) {
         FUNC_ASSIGN(gf->multiply_region.w32, gf_w16_split_4_16_lazy_altmap_multiply_region)
         FUNC_ASSIGN(gf->multiply_regionX.w16, gf_w16_split_4_16_lazy_altmap_multiply_regionX)
+        if(has_avx512bw) gf->alignment = 64;
+        else if(has_avx2) gf->alignment = 32;
+        else gf->alignment = 16;
       }
     } else {
       if(h->region_type & GF_REGION_SIMD)
@@ -2017,6 +2020,7 @@ int gf_w16_init(gf_t *gf)
   gf->multiply.w32 = NULL;
   gf->multiply_region.w32 = NULL;
   gf->multiply_regionX.w16 = NULL;
+  gf->alignment = 16;
 
   switch(h->mult_type) {
     case GF_MULT_LOG_ZERO:    if (gf_w16_log_zero_init(gf) == 0) return 0; break;
@@ -2034,7 +2038,8 @@ int gf_w16_init(gf_t *gf)
   if (h->region_type & GF_REGION_ALTMAP) {
     gf->extract_word.w32 = gf_w16_split_extract_word;
     /* !! There's no fallback if SSE not supported !!
-     * ParPar never uses ALTMAP if SSSE3 isn't available, but this isn't ideal in gf-complete */
+     * ParPar never uses ALTMAP if SSSE3 isn't available, but this isn't ideal in gf-complete
+     * Also: ALTMAP implementations differ on SSE/AVX support, so it doesn't make too much sense for a fallback */
     FUNC_ASSIGN(gf->altmap_region, gf_w16_split_start)
     FUNC_ASSIGN(gf->unaltmap_region, gf_w16_split_final)
   } else {
@@ -2042,6 +2047,7 @@ int gf_w16_init(gf_t *gf)
     gf->altmap_region = gf_w16_split_null;
     gf->unaltmap_region = gf_w16_split_null;
   }
+  gf->using_altmap = (h->region_type & GF_REGION_ALTMAP);
   if (gf->multiply_region.w32 == NULL) {
     gf->multiply_region.w32 = gf_w16_multiply_region_from_single;
   }
