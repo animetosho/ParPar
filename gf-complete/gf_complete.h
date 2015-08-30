@@ -115,7 +115,7 @@ typedef union {
 } gf_region;
 
 typedef union {
-  void  (*w16) (GFP gf, uint16_t **src, void *dest, gf_val_32_t* val,  int bytes);
+  void  (*w16) (GFP gf, uint16_t **src, void *dest, gf_val_32_t* val,  int bytes, int add);
 } gf_regionX;
 
 typedef union {

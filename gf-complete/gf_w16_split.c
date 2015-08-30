@@ -199,7 +199,7 @@ _FN(gf_w16_split_4_16_lazy_altmap_multiply_region)(gf_t *gf, void *src, void *de
 
 static
 void
-_FN(gf_w16_split_4_16_lazy_altmap_multiply_regionX)(gf_t *gf, uint16_t **src, void *dest, gf_val_32_t *val, int bytes)
+_FN(gf_w16_split_4_16_lazy_altmap_multiply_regionX)(gf_t *gf, uint16_t **src, void *dest, gf_val_32_t *val, int bytes, int xor)
 {
 #ifdef INTEL_SSSE3
   FAST_U32 i, j, k, r;
@@ -212,10 +212,12 @@ _FN(gf_w16_split_4_16_lazy_altmap_multiply_regionX)(gf_t *gf, uint16_t **src, vo
 
   
   for (r = 0; r < MUL_REGIONS; r++) {
+/*
     _mm_prefetch(src[r], _MM_HINT_T0);
     _mm_prefetch(src[r] + 8, _MM_HINT_T0);
     _mm_prefetch(src[r] + 16, _MM_HINT_T0);
     _mm_prefetch(src[r] + 24, _MM_HINT_T0);
+*/
 
     gf_set_region_data(&rd, gf, src[r], dest, bytes, val[r], 1, sizeof(_mword)*2);
     gf_do_initial_region_alignment(&rd);
@@ -237,41 +239,92 @@ _FN(gf_w16_split_4_16_lazy_altmap_multiply_regionX)(gf_t *gf, uint16_t **src, vo
   topW = (_mword *) rd.d_top;
 
   mask = _MM(set1_epi8) (0x0f);
-  while (dW != topW) {
+  if (xor) {
+    while (dW != topW) {
 /*
-    for (r = 0; r < MUL_REGIONS; r++) {
-      _mm_prefetch((_mword*)src[r] + pos + 8, _MM_HINT_T0);
-    }
+      for (r = 0; r < MUL_REGIONS; r++) {
+        _mm_prefetch((_mword*)src[r] + pos + 8, _MM_HINT_T0);
+      }
 */
-    tph = _MMI(load_s)(dW);
-    tpl = _MMI(load_s)(dW+1);
+      tph = _MMI(load_s)(dW);
+      tpl = _MMI(load_s)(dW+1);
 
-    for (r = 0; r < MUL_REGIONS; r++) {
-      ta = _MMI(load_s)((_mword*)src[r] + pos);
-      tb = _MMI(load_s)((_mword*)src[r] + pos + 1);
+      for (r = 0; r < MUL_REGIONS; r++) {
+        ta = _MMI(load_s)((_mword*)src[r] + pos);
+        tb = _MMI(load_s)((_mword*)src[r] + pos + 1);
+
+        ti = _MMI(and_s) (mask, tb);
+        tpl = _MMI(xor_s)(_MM(shuffle_epi8) (low[r][0].uW, ti), tpl);
+        tph = _MMI(xor_s)(_MM(shuffle_epi8) (high[r][0].uW, ti), tph);
+  
+        ti = _MMI(and_s) (mask, _MM(srli_epi16)(tb, 4));
+        tpl = _MMI(xor_s)(_MM(shuffle_epi8) (low[r][1].uW, ti), tpl);
+        tph = _MMI(xor_s)(_MM(shuffle_epi8) (high[r][1].uW, ti), tph);
+
+        ti = _MMI(and_s) (mask, ta);
+        tpl = _MMI(xor_s)(_MM(shuffle_epi8) (low[r][2].uW, ti), tpl);
+        tph = _MMI(xor_s)(_MM(shuffle_epi8) (high[r][2].uW, ti), tph);
+  
+        ti = _MMI(and_s) (mask, _MM(srli_epi16)(ta, 4));
+        tpl = _MMI(xor_s)(_MM(shuffle_epi8) (low[r][3].uW, ti), tpl);
+        tph = _MMI(xor_s)(_MM(shuffle_epi8) (high[r][3].uW, ti), tph);
+      }
+    
+      _MMI(store_s) (dW, tph);
+      _MMI(store_s) (dW+1, tpl);
+
+      dW += 2;
+      pos += 2;
+    }
+  } else {
+    while (dW != topW) {
+
+      ta = _MMI(load_s)((_mword*)src[0] + pos);
+      tb = _MMI(load_s)((_mword*)src[0] + pos + 1);
 
       ti = _MMI(and_s) (mask, tb);
-      tpl = _MMI(xor_s)(_MM(shuffle_epi8) (low[r][0].uW, ti), tpl);
-      tph = _MMI(xor_s)(_MM(shuffle_epi8) (high[r][0].uW, ti), tph);
+      tpl = _MM(shuffle_epi8) (low[0][0].uW, ti);
+      tph = _MM(shuffle_epi8) (high[0][0].uW, ti);
   
       ti = _MMI(and_s) (mask, _MM(srli_epi16)(tb, 4));
-      tpl = _MMI(xor_s)(_MM(shuffle_epi8) (low[r][1].uW, ti), tpl);
-      tph = _MMI(xor_s)(_MM(shuffle_epi8) (high[r][1].uW, ti), tph);
+      tpl = _MMI(xor_s)(_MM(shuffle_epi8) (low[0][1].uW, ti), tpl);
+      tph = _MMI(xor_s)(_MM(shuffle_epi8) (high[0][1].uW, ti), tph);
 
       ti = _MMI(and_s) (mask, ta);
-      tpl = _MMI(xor_s)(_MM(shuffle_epi8) (low[r][2].uW, ti), tpl);
-      tph = _MMI(xor_s)(_MM(shuffle_epi8) (high[r][2].uW, ti), tph);
+      tpl = _MMI(xor_s)(_MM(shuffle_epi8) (low[0][2].uW, ti), tpl);
+      tph = _MMI(xor_s)(_MM(shuffle_epi8) (high[0][2].uW, ti), tph);
   
       ti = _MMI(and_s) (mask, _MM(srli_epi16)(ta, 4));
-      tpl = _MMI(xor_s)(_MM(shuffle_epi8) (low[r][3].uW, ti), tpl);
-      tph = _MMI(xor_s)(_MM(shuffle_epi8) (high[r][3].uW, ti), tph);
-    }
-    
-    _MMI(store_s) (dW, tph);
-    _MMI(store_s) (dW+1, tpl);
+      tpl = _MMI(xor_s)(_MM(shuffle_epi8) (low[0][3].uW, ti), tpl);
+      tph = _MMI(xor_s)(_MM(shuffle_epi8) (high[0][3].uW, ti), tph);
 
-    dW += 2;
-    pos += 2;
+      for (r = 1; r < MUL_REGIONS; r++) {
+        ta = _MMI(load_s)((_mword*)src[r] + pos);
+        tb = _MMI(load_s)((_mword*)src[r] + pos + 1);
+
+        ti = _MMI(and_s) (mask, tb);
+        tpl = _MMI(xor_s)(_MM(shuffle_epi8) (low[r][0].uW, ti), tpl);
+        tph = _MMI(xor_s)(_MM(shuffle_epi8) (high[r][0].uW, ti), tph);
+  
+        ti = _MMI(and_s) (mask, _MM(srli_epi16)(tb, 4));
+        tpl = _MMI(xor_s)(_MM(shuffle_epi8) (low[r][1].uW, ti), tpl);
+        tph = _MMI(xor_s)(_MM(shuffle_epi8) (high[r][1].uW, ti), tph);
+
+        ti = _MMI(and_s) (mask, ta);
+        tpl = _MMI(xor_s)(_MM(shuffle_epi8) (low[r][2].uW, ti), tpl);
+        tph = _MMI(xor_s)(_MM(shuffle_epi8) (high[r][2].uW, ti), tph);
+  
+        ti = _MMI(and_s) (mask, _MM(srli_epi16)(ta, 4));
+        tpl = _MMI(xor_s)(_MM(shuffle_epi8) (low[r][3].uW, ti), tpl);
+        tph = _MMI(xor_s)(_MM(shuffle_epi8) (high[r][3].uW, ti), tph);
+      }
+    
+      _MMI(store_s) (dW, tph);
+      _MMI(store_s) (dW+1, tpl);
+
+      dW += 2;
+      pos += 2;
+    }
   }
 
 #endif

@@ -95,7 +95,7 @@ static inline void multiply_mat(uint16_t** inputs, uint_fast16_t* iNums, unsigne
 					calc_factor(iNums[in+2], oNums[out]),
 					calc_factor(iNums[in+3], oNums[out])
 				};
-				gf.multiply_regionX.w16(&gf, inputs + in, outputs[out], inNum4, (int)len);
+				gf.multiply_regionX.w16(&gf, inputs + in, outputs[out], inNum4, (int)len, true);
 			}
 			for(; in < numInputs; in++)
 				gf.multiply_region.w32(&gf, inputs[in], outputs[out], calc_factor(iNums[in], oNums[out]), (int)len, true);
