@@ -23,10 +23,10 @@ void detect_cpu(void) {
 	has_avx512bw = (cpuInfo[1] & 0x40010000) == 0x40010000;
 	#endif
 	
-#elif defined(_IS_X86)
+#elif defined(__x86_64__) || defined(__i386__)
 	uint32_t flags;
 
-	__asm__ __volatile__ (
+	__asm__ (
 		"cpuid"
 	: "=c" (flags)
 	: "a" (1)
@@ -39,11 +39,11 @@ void detect_cpu(void) {
 	has_pclmul = (flags & 0x2);
 	#endif
 	
-	__asm__ __volatile__ (
+	__asm__ (
 		"cpuid"
 	: "=b" (flags)
 	: "a" (7), "c" (0)
-	: "%edx", "%ecx"
+	: "%edx"
 	);
 	#ifdef INTEL_AVX2
 	has_avx2 = (flags & 0x20);

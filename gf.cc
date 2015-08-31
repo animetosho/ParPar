@@ -12,6 +12,9 @@
 #include <intrin.h>
 #endif
 
+#if defined(__x86_64__) || defined(__i386__) || defined(_MSC_VER)
+#define _IS_X86 1
+#endif
 
 extern "C" {
 #ifdef _OPENMP
@@ -110,7 +113,7 @@ static inline void multiply_mat(uint16_t** inputs, uint_fast16_t* iNums, unsigne
 	
 	// break the slice into smaller chunks so that we maximise CPU cache usage
 	int numChunks = (len / CHUNK_SIZE) + ((len % CHUNK_SIZE) ? 1 : 0);
-	int chunkSize = (CEIL_DIV(len, numChunks) + MEM_ALIGN-1) & ~(MEM_ALIGN-1); // we'll assume that input chunks are memory aligned here (though it will work if not)
+	unsigned int chunkSize = (CEIL_DIV(len, numChunks) + MEM_ALIGN-1) & ~(MEM_ALIGN-1); // we'll assume that input chunks are memory aligned here (though it will work if not)
 	
 	// avoid nested loop issues by combining chunk & output loop into one
 	// the loop goes through outputs before chunks
@@ -553,7 +556,7 @@ void init(Handle<Object> target) {
 	#endif
 #elif defined(_IS_X86)
 	uint32_t flags;
-	__asm__ __volatile__ (
+	__asm__ (
 		"cpuid"
 	: "=c" (flags)
 	: "a" (1)
