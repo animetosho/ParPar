@@ -96,12 +96,16 @@ function PAR2(files, sliceSize) {
 	// -- other init
 	this.recoveryBlocks = [];
 	this.chunkSize = false;
+	
 	this._mergeRecovery = false;
+	this.bufferedInputs = [];
+	this.bufferedInBlocks = [];
 };
 
 PAR2.prototype = {
 	recoveryData: null,
 	recoveryPackets: null,
+	bufferInputs: 16,
 	
 	// write in a packet's header; data must already be present at offset+64
 	_writePktHeader: function(buf, name, offset, len) {
@@ -281,6 +285,46 @@ PAR2.prototype = {
 		}
 		
 		return pkt;
+	},
+	
+	processBlock: function(data, blockNum, cb) {
+		if(this.recoveryBlocks.length) {
+			var _data = data;
+			// if data not aligned, align it
+			if(gf.alignment_offset(data) != 0) {
+				_data = gf.AlignedBuffer(this.chunkSize || data.length);
+				data.copy(_data, 0, 0, this.chunkSize || undefined);
+			} else if(this.chunkSize)
+				_data = _data.slice(0, this.chunkSize);
+			
+			this.bufferedInputs.push(_data);
+			this.bufferedInBlocks.push(blockNum);
+			if(this.bufferedInputs.length >= this.bufferInputs) {
+				gf.generate(this.bufferedInputs, this.bufferedInBlocks, this.recoveryData, this.recoveryBlocks, this._mergeRecovery, cb);
+				this._mergeRecovery = true;
+				this.bufferedInputs = [];
+				this.bufferedInBlocks = [];
+				return;
+			}
+		}
+		process.nextTick(cb);
+	},
+	finalise: function(cb) {
+		if(!this.recoveryBlocks.length)
+			return process.nextTick(cb);
+		
+		if(this.bufferedInputs.length) {
+			gf.generate(this.bufferedInputs, this.bufferedInBlocks, this.recoveryData, this.recoveryBlocks, this._mergeRecovery, function() {
+				gf.finalise(this.recoveryData);
+				cb();
+			}.bind(this));
+			this._mergeRecovery = false;
+			this.bufferedInputs = [];
+			this.bufferedInBlocks = [];
+		} else {
+			gf.finalise(this.recoveryData);
+			process.nextTick(cb);
+		}
 	}
 };
 
@@ -367,24 +411,7 @@ PAR2File.prototype = {
 		}
 		
 		this.slicePos++;
-		
-		if(this.par2.recoveryBlocks.length) {
-			var _data = dataBlock;
-			// if data not aligned, align it
-			if(gf.alignment_offset(dataBlock) != 0) {
-				_data = gf.AlignedBuffer(this.par2.chunkSize || dataBlock.length);
-				dataBlock.copy(_data, 0, 0, this.par2.chunkSize || undefined);
-			} else if(this.par2.chunkSize)
-				_data = _data.slice(0, this.par2.chunkSize);
-			
-			var merge = this.par2._mergeRecovery;
-			this.par2._mergeRecovery = true;
-			var ib = this.sliceOffset + this.slicePos-1;
-			gf.generate([_data], range(ib, ib+1), this.par2.recoveryData, this.par2.recoveryBlocks, merge, cb);
-		} else {
-			// no recovery being generated...
-			process.nextTick(cb);
-		}
+		this.par2.processBlock(dataBlock, this.sliceOffset + this.slicePos-1, cb);
 	},
 	
 	getPacketChecksums: function() {
