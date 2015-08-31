@@ -61,6 +61,11 @@ int maxNumThreads = 1, defaultNumThreads = 1;
 const int maxNumThreads = 1;
 #endif
 
+// TODO: this needs to be variable depending on the CPU
+#define CHUNK_SIZE (512*1024)
+#define MIN(a, b) ((a) < (b) ? (a) : (b))
+#define CEIL_DIV(a, b) (((a) + (b)-1) / (b))
+
 // performs multiple multiplies for a region, using threads
 // note that inputs will get trashed
 /* REQUIRES:
@@ -103,12 +108,21 @@ static inline void multiply_mat(uint16_t** inputs, uint_fast16_t* iNums, unsigne
 		*/
 	}
 	
-	// TODO: consider chunking for better cache hits?
+	// break the slice into smaller chunks so that we maximise CPU cache usage
+	int numChunks = (len / CHUNK_SIZE) + ((len % CHUNK_SIZE) ? 1 : 0);
+	int chunkSize = (CEIL_DIV(len, numChunks) + MEM_ALIGN-1) & ~(MEM_ALIGN-1); // we'll assume that input chunks are memory aligned here (though it will work if not)
+	
+	// avoid nested loop issues by combining chunk & output loop into one
+	// the loop goes through outputs before chunks
 	#pragma omp parallel for
-	for(int out = 0; out < (int)numOutputs; out++) {
-		gf.multiply_region.w32(&gf, inputs[0], outputs[out], calc_factor(iNums[0], oNums[out]), (int)len, add);
+	for(int loop = 0; loop < (int)(numOutputs * numChunks); loop++) {
+		size_t offset = (loop / numOutputs) * chunkSize;
+		unsigned int out = loop % numOutputs;
+		int procSize = MIN(len-offset, chunkSize);
+		
+		gf.multiply_region.w32(&gf, inputs[0] + offset, outputs[out] + offset, calc_factor(iNums[0], oNums[out]), procSize, add);
 		for(unsigned int in = 1; in < numInputs; in++) {
-			gf.multiply_region.w32(&gf, inputs[in], outputs[out], calc_factor(iNums[in], oNums[out]), (int)len, true);
+			gf.multiply_region.w32(&gf, inputs[in] + offset, outputs[out] + offset, calc_factor(iNums[in], oNums[out]), procSize, true);
 		}
 	}
 	
