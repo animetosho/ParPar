@@ -62,7 +62,7 @@ const int maxNumThreads = 1;
 #endif
 
 // TODO: this needs to be variable depending on the CPU
-#define CHUNK_SIZE (512*1024)
+#define CHUNK_SIZE (32768)
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 #define CEIL_DIV(a, b) (((a) + (b)-1) / (b))
 
@@ -119,6 +119,7 @@ static inline void multiply_mat(uint16_t** inputs, uint_fast16_t* iNums, unsigne
 		size_t offset = (loop / numOutputs) * chunkSize;
 		unsigned int out = loop % numOutputs;
 		int procSize = MIN(len-offset, chunkSize);
+		offset /= sizeof(**outputs);
 		
 		gf.multiply_region.w32(&gf, inputs[0] + offset, outputs[out] + offset, calc_factor(iNums[0], oNums[out]), procSize, add);
 		for(unsigned int in = 1; in < numInputs; in++) {

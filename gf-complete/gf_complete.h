@@ -27,6 +27,7 @@
 #endif
 
 #ifdef INTEL_SSE4_PCLMUL
+  #include <smmintrin.h>
   #include <wmmintrin.h>
 #endif
 
