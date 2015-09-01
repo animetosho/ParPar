@@ -57,12 +57,20 @@ void detect_cpu(void) {
 
 
 #ifdef INTEL_AVX512BW
+
 #define MWORD_SIZE 64
 #define _mword __m512i
 #define _MM(f) _mm512_ ## f
 #define _MMI(f) _mm512_ ## f ## i512
 #define _FN(f) f ## _avx512
+
 #include "gf_w16_split.c"
+
+#undef MWORD_SIZE
+#undef _mword
+#undef _MM
+#undef _MMI
+#undef _FN
 
 #define FUNC_ASSIGN(v, f) { \
 	if(has_avx512bw) { \
@@ -81,7 +89,14 @@ void detect_cpu(void) {
 #define _MM(f) _mm256_ ## f
 #define _MMI(f) _mm256_ ## f ## i256
 #define _FN(f) f ## _avx2
+
 #include "gf_w16_split.c"
+
+#undef MWORD_SIZE
+#undef _mword
+#undef _MM
+#undef _MMI
+#undef _FN
 
 #ifndef FUNC_ASSIGN
 #define FUNC_ASSIGN(v, f) { \
@@ -99,7 +114,14 @@ void detect_cpu(void) {
 #define _MM(f) _mm_ ## f
 #define _MMI(f) _mm_ ## f ## i128
 #define _FN(f) f ## _sse
+
 #include "gf_w16_split.c"
+
+#undef MWORD_SIZE
+#undef _mword
+#undef _MM
+#undef _MMI
+#undef _FN
 
 #ifndef FUNC_ASSIGN
 #define FUNC_ASSIGN(v, f) { \

@@ -91,7 +91,7 @@ typedef union {
 	uint8_t u8[MWORD_SIZE];
 	uint16_t u16[MWORD_SIZE/2];
 	_mword uW;
-} gf_mm;
+} _FN(gf_mm);
 
 static
 void
@@ -101,8 +101,8 @@ _FN(gf_w16_split_4_16_lazy_altmap_multiply_region)(gf_t *gf, void *src, void *de
   FAST_U32 i, j, k;
   FAST_U32 prod;
   _mword *sW, *dW, *topW;
-  ALIGN(MWORD_SIZE, gf_mm low[4]);
-  ALIGN(MWORD_SIZE, gf_mm high[4]);
+  ALIGN(MWORD_SIZE, _FN(gf_mm) low[4]);
+  ALIGN(MWORD_SIZE, _FN(gf_mm) high[4]);
   gf_region_data rd;
   _mword  mask, ta, tb, ti, tpl, tph;
 
@@ -207,8 +207,8 @@ _FN(gf_w16_split_4_16_lazy_altmap_multiply_regionX)(gf_t *gf, uint16_t **src, vo
   _mword *dW, *topW;
   gf_region_data rd;
   _mword  mask, ta, tb, ti, tpl, tph;
-  ALIGN(MWORD_SIZE, gf_mm low[MUL_REGIONS][4]);
-  ALIGN(MWORD_SIZE, gf_mm high[MUL_REGIONS][4]);
+  ALIGN(MWORD_SIZE, _FN(gf_mm) low[MUL_REGIONS][4]);
+  ALIGN(MWORD_SIZE, _FN(gf_mm) high[MUL_REGIONS][4]);
 
   
   for (r = 0; r < MUL_REGIONS; r++) {
