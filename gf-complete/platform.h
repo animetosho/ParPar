@@ -11,6 +11,9 @@
 		#define INTEL_SSE4_PCLMUL 1
 	#endif
 #endif
+#if defined(__AVX2__) || _MSC_VER >= 1800
+	#define INTEL_AVX2 1
+#endif
 
 #ifdef _WIN64
 typedef unsigned __int64 FAST_U8;
@@ -39,6 +42,9 @@ typedef unsigned __int32 FAST_U32;
 #ifdef __PCLMUL__
 	#define INTEL_SSE4_PCLMUL 1
 #endif
+#ifdef __AVX2__
+	#define INTEL_AVX2 1
+#endif
 
 /*#define ARCH_AARCH64 1*/
 /*#define ARM_NEON 1*/
@@ -59,9 +65,6 @@ typedef unsigned int FAST_U32;
 
 #endif /* _MSC_VER */
 
-#ifdef __AVX2__
-	#define INTEL_AVX2 1
-#endif
 #ifdef __AVX512BW__
 	#define INTEL_AVX512BW 1
 #endif
