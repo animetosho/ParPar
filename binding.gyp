@@ -14,8 +14,8 @@
           "variables": {
             "node_version": '<!((if [ -n `which nodejs` ]; then nodejs --version; else node --version; fi) | sed -e "s/^v\([0-9]*\\.[0-9]*\).*$/\\1/")',
           },
-          "cflags": ["-march=native", "-fopenmp"],
-          "libraries": ["-fopenmp"],
+          "cflags": ["-march=native", "-fopenmp", "-flto"],
+          "ldflags": ["-fopenmp", "-flto"],
           "conditions": [ [ "node_version == '0.10'", { "defines": ["NODE_010"] } ] ]
         }]
       ]
@@ -31,7 +31,8 @@
         ['OS=="win"', {
           "msvs_settings": {"VCCLCompilerTool": {"EnableEnhancedInstructionSet": "2"}}
         }, {
-          "cflags": ["-march=native","-Wall","-Wpointer-arith","-O3"]
+          "cflags": ["-march=native","-Wall","-Wpointer-arith","-O3","-flto"],
+          "ldflags": ["-flto"]
         }]
       ]
     }
