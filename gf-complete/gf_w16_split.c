@@ -15,14 +15,14 @@ static void _FN(gf_w16_split_start)(void* src, int bytes, void* dest) {
 	
 	lmask = _MM(set1_epi16) (0xff);
 	
-	if(src % sizeof(_mword) != dest % sizeof(_mword)) {
+	if((intptr_t)src % sizeof(_mword) != (intptr_t)dest % sizeof(_mword)) {
 		// unaligned version, note that we go by destination alignment
 		gf_set_region_data(&rd, NULL, dest, dest, bytes, 0, 0, sizeof(_mword), sizeof(_mword)*2);
 		
 		memcpy(rd.d_top, (intptr_t)src + (intptr_t)rd.d_top - (intptr_t)rd.dest, (intptr_t)rd.dest + rd.bytes - (intptr_t)rd.d_top);
 		memcpy(rd.dest, src, (intptr_t)rd.d_start - (intptr_t)rd.dest);
 		
-		sW = (_mword*)(src + (intptr_t)rd.d_start - (intptr_t)rd.dest);
+		sW = (_mword*)((intptr_t)src + (intptr_t)rd.d_start - (intptr_t)rd.dest);
 		dW = (_mword*)rd.d_start;
 		topW = (_mword*)rd.d_top;
 		
@@ -92,7 +92,7 @@ static void _FN(gf_w16_split_final)(void* src, int bytes, void* dest) {
 	_mword *sW, *dW, *topW;
 	_mword tpl, tph;
 	
-	if(src % sizeof(_mword) != dest % sizeof(_mword)) {
+	if((intptr_t)src % sizeof(_mword) != (intptr_t)dest % sizeof(_mword)) {
 		// unaligned version, note that we go by src alignment
 		gf_set_region_data(&rd, NULL, src, src, bytes, 0, 0, sizeof(_mword), sizeof(_mword)*2);
 		
@@ -100,7 +100,7 @@ static void _FN(gf_w16_split_final)(void* src, int bytes, void* dest) {
 		memcpy(dest, rd.src, (intptr_t)rd.s_start - (intptr_t)rd.src);
 		
 		sW = (_mword*)rd.s_start;
-		dW = (_mword*)(dest + (intptr_t)rd.s_start - (intptr_t)rd.src);
+		dW = (_mword*)((intptr_t)dest + (intptr_t)rd.s_start - (intptr_t)rd.src);
 		topW = (_mword*)rd.d_top;
 		
 		while(dW != topW) {

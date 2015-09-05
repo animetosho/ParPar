@@ -375,7 +375,7 @@ FUNC(MultiplyMulti) {
 			memcpy(inputs[i], node::Buffer::Data(input), inputLen);
 		
 		if(inputLen < len) // fill empty bytes with 0
-			memset(inputs[i] + inputLen, 0, len - inputLen);
+			memset((void*)((intptr_t)(inputs[i]) + inputLen), 0, len - inputLen);
 		
 		int ibNum = oIBNums->Get(i)->ToInt32()->Value();
 		if (ibNum < 0 || ibNum > 32767)
