@@ -29,10 +29,10 @@ int MEM_ALIGN = 16;
 #if defined(__cplusplus) && __cplusplus > 201100
 	// C++11 method
 	// len needs to be a multiple of alignment, although it sometimes works if it isn't...
-	#define ALIGN_ALLOC(buf, len) (void*)(buf) = aligned_alloc(MEM_ALIGN, ((len) + MEM_ALIGN-1) & ~(MEM_ALIGN-1))
+	#define ALIGN_ALLOC(buf, len) *(void**)&(buf) = aligned_alloc(MEM_ALIGN, ((len) + MEM_ALIGN-1) & ~(MEM_ALIGN-1))
 	#define ALIGN_FREE free
 #elif defined(_MSC_VER)
-	#define ALIGN_ALLOC(buf, len) (void*)(buf) = _aligned_malloc((len), MEM_ALIGN)
+	#define ALIGN_ALLOC(buf, len) *(void**)&(buf) = _aligned_malloc((len), MEM_ALIGN)
 	#define ALIGN_FREE _aligned_free
 #else
 	#define ALIGN_ALLOC(buf, len) if(posix_memalign((void**)&(buf), MEM_ALIGN, (len))) (buf) = NULL
@@ -370,7 +370,7 @@ FUNC(MultiplyMulti) {
 		
 		ALIGN_ALLOC(inputs[i], len);
 		if(using_altmap)
-			gf.altmap_region(node::Buffer::Data(input), inputLen, inputs[in]);
+			gf.altmap_region(node::Buffer::Data(input), inputLen, inputs[i]);
 		else
 			memcpy(inputs[i], node::Buffer::Data(input), inputLen);
 		
@@ -487,11 +487,6 @@ FUNC(Finalise) {
 		if (!node::Buffer::HasInstance(input))
 			RTN_ERROR("All inputs must be Buffers");
 		inputs[i] = (uint16_t*)node::Buffer::Data(input);
-		intptr_t inputAddr = (intptr_t)inputs[i];
-		if (inputAddr & 1)
-			RTN_ERROR("All input buffers must be address aligned to a 16-bit boundary");
-		if (inputAddr & (MEM_ALIGN-1))
-			RTN_ERROR("All input buffers must be address aligned");
 		
 		if(i) {
 			if (node::Buffer::Length(input) != len)
