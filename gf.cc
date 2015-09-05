@@ -26,6 +26,20 @@ extern "C" {
 // memory alignment to 16-bytes for SSE operations (may grow for AVX operations)
 int MEM_ALIGN = 16;
 
+#if defined(__cplusplus) && __cplusplus > 201100
+	// C++11 method
+	// len needs to be a multiple of alignment, although it sometimes works if it isn't...
+	#define ALIGN_ALLOC(buf, len) (void*)(buf) = aligned_alloc(MEM_ALIGN, ((len) + MEM_ALIGN-1) & ~(MEM_ALIGN-1))
+	#define ALIGN_FREE free
+#elif defined(_MSC_VER)
+	#define ALIGN_ALLOC(buf, len) (void*)(buf) = _aligned_malloc((len), MEM_ALIGN)
+	#define ALIGN_FREE _aligned_free
+#else
+	#define ALIGN_ALLOC(buf, len) if(posix_memalign((void**)&(buf), MEM_ALIGN, (len))) (buf) = NULL
+	#define ALIGN_FREE free
+#endif
+
+
 using namespace v8;
 
 // these lookup tables consume a hefty 192KB... oh well
@@ -185,11 +199,7 @@ void free_buffer(char* data, void* _size) {
 	int size = (int)(size_t)_size;
 	V8::AdjustAmountOfExternalAllocatedMemory(-size);
 #endif
-#if (!defined(__cplusplus) || __cplusplus <= 201100) && defined(_MSC_VER)
-	_aligned_free(data);
-#else
-	free(data);
-#endif
+	ALIGN_FREE(data);
 }
 
 FUNC(AlignedBuffer) {
@@ -212,16 +222,7 @@ FUNC(AlignedBuffer) {
 		len = (size_t)args[0]->ToInteger()->Value();
 	
 	char* buf = NULL;
-#if defined(__cplusplus) && __cplusplus > 201100
-	// C++11 method
-	buf = (char*)aligned_alloc(MEM_ALIGN, (len + MEM_ALIGN-1) & ~(MEM_ALIGN-1)); // len needs to be a multiple of 16, although it sometimes works if it isn't...
-#elif defined(_MSC_VER)
-	buf = (char*)_aligned_malloc(len, MEM_ALIGN);
-#else
-	if(posix_memalign((void**)&buf, MEM_ALIGN, len))
-		buf = NULL;
-#endif
-
+	ALIGN_ALLOC(buf, len);
 	
 	if(!buf)
 		RETURN_ERROR("Out Of Memory");
@@ -253,6 +254,8 @@ FUNC(AlignmentOffset) {
 }
 
 #define CLEANUP_MM { \
+	for(unsigned int _i=0; _i<numInputs; _i++) \
+		if(inputs[_i]) ALIGN_FREE(inputs[_i]); \
 	delete[] inputs; \
 	delete[] iNums; \
 	delete[] outputs; \
@@ -264,11 +267,9 @@ FUNC(AlignmentOffset) {
 struct MMRequest {
 	~MMRequest() {
 #ifndef NODE_010
-		inputBuffers.Reset();
 		outputBuffers.Reset();
 		obj_.Reset();
 #else
-		inputBuffers.Dispose();
 		outputBuffers.Dispose();
 		//if (obj_.IsEmpty()) return;
 		obj_.Dispose();
@@ -292,7 +293,6 @@ struct MMRequest {
 	bool add;
 	
 	// persist copies of buffers for the duration of the job
-	Persistent<Array> inputBuffers;
 	Persistent<Array> outputBuffers;
 };
 
@@ -350,6 +350,7 @@ FUNC(MultiplyMulti) {
 	uint16_t** outputs = new uint16_t*[numOutputs];
 	uint_fast16_t* oNums = new uint_fast16_t[numOutputs];
 	
+	memset(inputs, 0, sizeof(uint16_t*) * numInputs); // set all pointers to zero so that CLEANUP_MM works with uninitialized inputs
 	
 	#define RTN_ERROR(m) { \
 		CLEANUP_MM \
@@ -357,27 +358,22 @@ FUNC(MultiplyMulti) {
 	}
 	
 	size_t len = 0;
-	int addressOffset = 0;
 	for(unsigned int i = 0; i < numInputs; i++) {
 		Local<Value> input = oInputs->Get(i);
 		if (!node::Buffer::HasInstance(input))
 			RTN_ERROR("All inputs must be Buffers");
-		inputs[i] = (uint16_t*)node::Buffer::Data(input);
-		intptr_t inputAddr = (intptr_t)inputs[i];
-		if (inputAddr & 1)
-			RTN_ERROR("All input buffers must be address aligned to a 16-bit boundary");
 		
 		if(i) {
 			if (node::Buffer::Length(input) != len)
 				RTN_ERROR("All inputs' length must be equal");
-			if ((inputAddr & (MEM_ALIGN-1)) != addressOffset)
-				RTN_ERROR("All input buffers must be address aligned to the same alignment for a 128-bit boundary");
 		} else {
 			len = node::Buffer::Length(input);
 			if (len % 2)
 				RTN_ERROR("Length of input must be a multiple of 2");
-			addressOffset = inputAddr & (MEM_ALIGN-1);
 		}
+		
+		ALIGN_ALLOC(inputs[i], len);
+		memcpy(inputs[i], node::Buffer::Data(input));
 		
 		int ibNum = oIBNums->Get(i)->ToInt32()->Value();
 		if (ibNum < 0 || ibNum > 32767)
@@ -393,8 +389,8 @@ FUNC(MultiplyMulti) {
 		if (node::Buffer::Length(output) != len)
 			RTN_ERROR("All outputs' length must equal the input's length");
 		outputs[i] = (uint16_t*)node::Buffer::Data(output);
-		if (((intptr_t)outputs[i] & (MEM_ALIGN-1)) != addressOffset)
-			RTN_ERROR("All output buffers must be address aligned to the same alignment as the input buffer for a 128-bit boundary");
+		if ((intptr_t)outputs[i] & (MEM_ALIGN-1))
+			RTN_ERROR("All output buffers must be address aligned");
 		int rbNum = oRBNums->Get(i)->ToInt32()->Value();
 		if (rbNum < 0 || rbNum > 32767)
 			RTN_ERROR("Invalid recovery block number specified");
@@ -433,7 +429,6 @@ FUNC(MultiplyMulti) {
 		//	req->obj_->Set(env->domain_string(), env->domain_array()->Get(0));
 		
 		// keep a copy of the buffers so that they don't get GC'd whilst being written to
-		req->inputBuffers.Reset(ISOLATE Local<Array>::Cast(args[0]));
 		req->outputBuffers.Reset(ISOLATE Local<Array>::Cast(args[2]));
 #else
 		req->obj_ = Persistent<Object>::New(ISOLATE Object::New());
@@ -441,7 +436,6 @@ FUNC(MultiplyMulti) {
 		//SetActiveDomain(req->obj_); // never set in node_zlib.cc - perhaps domains aren't that important?
 		
 		// keep a copy of the buffers so that they don't get GC'd whilst being written to
-		req->inputBuffers = Persistent<Array>::New(ISOLATE Local<Array>::Cast(args[0]));
 		req->outputBuffers = Persistent<Array>::New(ISOLATE Local<Array>::Cast(args[2]));
 #endif
 		
@@ -485,7 +479,6 @@ FUNC(Finalise) {
 	}
 	
 	size_t len = 0;
-	int addressOffset = 0;
 	for(unsigned int i = 0; i < numInputs; i++) {
 		Local<Value> input = oInputs->Get(i);
 		if (!node::Buffer::HasInstance(input))
@@ -494,17 +487,16 @@ FUNC(Finalise) {
 		intptr_t inputAddr = (intptr_t)inputs[i];
 		if (inputAddr & 1)
 			RTN_ERROR("All input buffers must be address aligned to a 16-bit boundary");
+		if (inputAddr & (MEM_ALIGN-1))
+			RTN_ERROR("All input buffers must be address aligned");
 		
 		if(i) {
 			if (node::Buffer::Length(input) != len)
 				RTN_ERROR("All inputs' length must be equal");
-			if ((inputAddr & (MEM_ALIGN-1)) != addressOffset)
-				RTN_ERROR("All input buffers must be address aligned to the same alignment for a 128-bit boundary");
 		} else {
 			len = node::Buffer::Length(input);
 			if (len % 2)
 				RTN_ERROR("Length of input must be a multiple of 2");
-			addressOffset = inputAddr & (MEM_ALIGN-1);
 		}
 	}
 	
