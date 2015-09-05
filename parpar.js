@@ -157,13 +157,17 @@ PAR2.prototype = {
 		if(!notSequential) {
 			var pkt = new Buffer(64);
 			MAGIC.copy(pkt, 0);
-			Buffer_writeUInt64LE(pkt, this.blockSize, 8);
+			Buffer_writeUInt64LE(pkt, this.blockSize + 68, 8);
 			// skip MD5
 			this.setID.copy(pkt, 32);
 			pkt.write("PAR 2.0\0RecvSlic", 48);
 		}
 		
 		return new PAR2Chunked(recoveryBlocks, pkt);
+	},
+	recoverySize: function(numBlocks) {
+		if(numBlocks === undefined) numBlocks = 1;
+		return (this.blockSize + 68) * numBlocks;
 	},
 	
 	_allocRecovery: function() {
@@ -493,7 +497,7 @@ function PAR2Chunked(recoveryBlocks, packetHeader) {
 	if(packetHeader) {
 		this.recoveryChunkHash = this.recoveryBlocks.map(function(blockNum) {
 			var tmp = new Buffer(4);
-			tmp.writeUInt32LE(blockNum);
+			tmp.writeUInt32LE(blockNum, 0);
 			return crypto.createHash('md5')
 				.update(packetHeader.slice(32))
 				.update(tmp);
@@ -539,7 +543,7 @@ PAR2Chunked.prototype = {
 		}
 		
 		var sliceNum = fileOrNum;
-		if(Object.isObject(fileOrNum)) {
+		if(typeof fileOrNum == 'object') {
 			sliceNum = fileOrNum.sliceOffset + fileOrNum.chunkSlicePos;
 			fileOrNum.chunkSlicePos++;
 		}
@@ -558,7 +562,7 @@ PAR2Chunked.prototype = {
 				file.chunkSlicePos = 0;
 			});
 		}
-		if(this.calcHash) {
+		if(this.recoveryChunkHash) {
 			bufferedFinish.call(this, function() {
 				for(var i in this.recoveryChunkHash) {
 					if(!this.recoveryChunkHash[i])
