@@ -23,39 +23,6 @@
 #define GF_MULTBY_TWO(p) (((p) & GF_FIRST_BIT) ? (((p) << 1) ^ h->prim_poly) : (p) << 1) */
 #define GF_MULTBY_TWO(p) (((p) << 1) ^ (h->prim_poly & -((p) >> 15)))
 
-static
-void
-gf_w16_multiply_region_from_single(gf_t *gf, void *src, void *dest, gf_val_32_t val, int bytes, int xor)
-{
-  gf_region_data rd;
-  uint16_t *s16;
-  uint16_t *d16;
-  
-  if (val == 0) { gf_multby_zero(dest, bytes, xor); return; }
-  if (val == 1) { gf_multby_one(src, dest, bytes, xor); return; }
-
-  gf_set_region_data(&rd, gf, src, dest, bytes, val, xor, 2);
-  gf_do_initial_region_alignment(&rd);
-
-  s16 = (uint16_t *) rd.s_start;
-  d16 = (uint16_t *) rd.d_start;
-
-  if (xor) {
-    while (d16 < ((uint16_t *) rd.d_top)) {
-      *d16 ^= gf->multiply.w32(gf, val, *s16);
-      d16++;
-      s16++;
-    } 
-  } else {
-    while (d16 < ((uint16_t *) rd.d_top)) {
-      *d16 = gf->multiply.w32(gf, val, *s16);
-      d16++;
-      s16++;
-    } 
-  }
-  gf_do_final_region_alignment(&rd);
-}
-
 #ifdef INTEL_SSE4_PCLMUL
 static
 void
@@ -258,37 +225,6 @@ gf_w16_clm_multiply_region_from_single_4(gf_t *gf, void *src, void *dest, gf_val
   gf_do_final_region_alignment(&rd);
 }
 #endif
-
-static
-gf_val_32_t gf_w16_extract_word(gf_t *gf, void *start, int bytes, int index)
-{
-  uint16_t *r16, rv;
-
-  r16 = (uint16_t *) start;
-  rv = r16[index];
-  return rv;
-}
-
-static
-gf_val_32_t gf_w16_split_extract_word(gf_t *gf, void *start, int bytes, int index)
-{
-  uint16_t *r16, rv;
-  uint8_t *r8;
-  gf_region_data rd;
-
-  gf_set_region_data(&rd, gf, start, start, bytes, 0, 0, 32);
-  r16 = (uint16_t *) start;
-  if (r16 + index < (uint16_t *) rd.d_start) return r16[index];
-  if (r16 + index >= (uint16_t *) rd.d_top) return r16[index];
-  index -= (((uint16_t *) rd.d_start) - r16);
-  r8 = (uint8_t *) rd.d_start;
-  r8 += ((index & 0xfffffff0)*2);
-  r8 += (index & 0xf);
-  rv = (*r8 << 8);
-  r8 += 16;
-  rv |= *r8;
-  return rv;
-}
 
 /* JSP: GF_MULT_SHIFT: The world's dumbest multiplication algorithm.  I only
    include it for completeness.  It does have the feature that it requires no
@@ -1192,26 +1128,17 @@ int gf_w16_init(gf_t *gf)
   gf->multiply_regionX.w16 = NULL;
   gf->alignment = 16;
 
-  switch(h->mult_type) {
-    case GF_MULT_DEFAULT: 
-    case GF_MULT_SPLIT_TABLE: if (gf_w16_split_init(gf) == 0) return 0; break;
-    default: return 0;
-  }
+  if (gf_w16_split_init(gf) == 0) return 0;
   if (h->region_type & GF_REGION_ALTMAP) {
-    gf->extract_word.w32 = gf_w16_split_extract_word;
     /* !! There's no fallback if SSE not supported !!
      * ParPar never uses ALTMAP if SSSE3 isn't available, but this isn't ideal in gf-complete
      * Also: ALTMAP implementations differ on SSE/AVX support, so it doesn't make too much sense for a fallback */
     FUNC_ASSIGN(gf->altmap_region, gf_w16_split_start)
     FUNC_ASSIGN(gf->unaltmap_region, gf_w16_split_final)
   } else {
-    gf->extract_word.w32 = gf_w16_extract_word;
     gf->altmap_region = gf_w16_split_null;
     gf->unaltmap_region = gf_w16_split_null;
   }
   gf->using_altmap = (h->region_type & GF_REGION_ALTMAP);
-  if (gf->multiply_region.w32 == NULL) {
-    gf->multiply_region.w32 = gf_w16_multiply_region_from_single;
-  }
   return 1;
 }
