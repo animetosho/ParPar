@@ -13,40 +13,74 @@ static void _FN(gf_w16_split_start)(void* src, int bytes, void* dest) {
 	_mword *sW, *dW, *topW;
 	_mword ta, tb, lmask;
 	
-	gf_set_region_data(&rd, NULL, src, dest, bytes, 0, 0, sizeof(_mword), sizeof(_mword)*2);
-	
-	
-	if(src != dest) {
-		/* copy end and initial parts */
-		memcpy(rd.d_top, rd.s_top, (intptr_t)rd.src + rd.bytes - (intptr_t)rd.s_top);
-		memcpy(rd.dest, rd.src, (intptr_t)rd.s_start - (intptr_t)rd.src);
-	}
-	
-	sW = (_mword*)rd.s_start;
-	dW = (_mword*)rd.d_start;
-	topW = (_mword*)rd.d_top;
-	
 	lmask = _MM(set1_epi16) (0xff);
 	
-	while(dW != topW) {
-		ta = _MMI(load_s)( sW);
-		tb = _MMI(load_s)(sW+1);
+	if(src % sizeof(_mword) != dest % sizeof(_mword)) {
+		// unaligned version, note that we go by destination alignment
+		gf_set_region_data(&rd, NULL, dest, dest, bytes, 0, 0, sizeof(_mword), sizeof(_mword)*2);
 		
-		_MMI(store_s) (dW,
-			_MM(packus_epi16)(
-				_MM(srli_epi16)(tb, 8),
-				_MM(srli_epi16)(ta, 8)
-			)
-		);
-		_MMI(store_s) (dW+1,
-			_MM(packus_epi16)(
-				_MMI(and_s)(tb, lmask),
-				_MMI(and_s)(ta, lmask)
-			)
-		);
+		memcpy(rd.d_top, (intptr_t)src + (intptr_t)rd.d_top - (intptr_t)rd.dest, (intptr_t)rd.dest + rd.bytes - (intptr_t)rd.d_top);
+		memcpy(rd.dest, src, (intptr_t)rd.d_start - (intptr_t)rd.dest);
 		
-		sW += 2;
-		dW += 2;
+		sW = (_mword*)(src + (intptr_t)rd.d_start - (intptr_t)rd.dest);
+		dW = (_mword*)rd.d_start;
+		topW = (_mword*)rd.d_top;
+		
+		while(dW != topW) {
+			ta = _MMI(loadu_s)( sW);
+			tb = _MMI(loadu_s)(sW+1);
+			
+			_MMI(store_s) (dW,
+				_MM(packus_epi16)(
+					_MM(srli_epi16)(tb, 8),
+					_MM(srli_epi16)(ta, 8)
+				)
+			);
+			_MMI(store_s) (dW+1,
+				_MM(packus_epi16)(
+					_MMI(and_s)(tb, lmask),
+					_MMI(and_s)(ta, lmask)
+				)
+			);
+			
+			sW += 2;
+			dW += 2;
+		}
+	} else {
+		// standard, aligned version
+		gf_set_region_data(&rd, NULL, src, dest, bytes, 0, 0, sizeof(_mword), sizeof(_mword)*2);
+		
+		
+		if(src != dest) {
+			/* copy end and initial parts */
+			memcpy(rd.d_top, rd.s_top, (intptr_t)rd.src + rd.bytes - (intptr_t)rd.s_top);
+			memcpy(rd.dest, rd.src, (intptr_t)rd.s_start - (intptr_t)rd.src);
+		}
+		
+		sW = (_mword*)rd.s_start;
+		dW = (_mword*)rd.d_start;
+		topW = (_mword*)rd.d_top;
+		
+		while(dW != topW) {
+			ta = _MMI(load_s)( sW);
+			tb = _MMI(load_s)(sW+1);
+			
+			_MMI(store_s) (dW,
+				_MM(packus_epi16)(
+					_MM(srli_epi16)(tb, 8),
+					_MM(srli_epi16)(ta, 8)
+				)
+			);
+			_MMI(store_s) (dW+1,
+				_MM(packus_epi16)(
+					_MMI(and_s)(tb, lmask),
+					_MMI(and_s)(ta, lmask)
+				)
+			);
+			
+			sW += 2;
+			dW += 2;
+		}
 	}
 #endif
 }
@@ -58,28 +92,51 @@ static void _FN(gf_w16_split_final)(void* src, int bytes, void* dest) {
 	_mword *sW, *dW, *topW;
 	_mword tpl, tph;
 	
-	gf_set_region_data(&rd, NULL, src, dest, bytes, 0, 0, sizeof(_mword), sizeof(_mword)*2);
-	
-	
-	if(src != dest) {
-		/* copy end and initial parts */
-		memcpy(rd.d_top, rd.s_top, (intptr_t)rd.src + rd.bytes - (intptr_t)rd.s_top);
-		memcpy(rd.dest, rd.src, (intptr_t)rd.s_start - (intptr_t)rd.src);
-	}
-	
-	sW = (_mword*)rd.s_start;
-	dW = (_mword*)rd.d_start;
-	topW = (_mword*)rd.d_top;
-	
-	while(dW != topW) {
-		tph = _MMI(load_s)( sW);
-		tpl = _MMI(load_s)(sW+1);
-
-		_MMI(store_s) (dW, _MM(unpackhi_epi8)(tpl, tph));
-		_MMI(store_s) (dW+1, _MM(unpacklo_epi8)(tpl, tph));
+	if(src % sizeof(_mword) != dest % sizeof(_mword)) {
+		// unaligned version, note that we go by src alignment
+		gf_set_region_data(&rd, NULL, src, src, bytes, 0, 0, sizeof(_mword), sizeof(_mword)*2);
 		
-		sW += 2;
-		dW += 2;
+		memcpy((intptr_t)dest + (intptr_t)rd.s_top - (intptr_t)rd.src, rd.s_top, (intptr_t)rd.src + rd.bytes - (intptr_t)rd.s_top);
+		memcpy(dest, rd.src, (intptr_t)rd.s_start - (intptr_t)rd.src);
+		
+		sW = (_mword*)rd.s_start;
+		dW = (_mword*)(dest + (intptr_t)rd.s_start - (intptr_t)rd.src);
+		topW = (_mword*)rd.d_top;
+		
+		while(dW != topW) {
+			tph = _MMI(load_s)( sW);
+			tpl = _MMI(load_s)(sW+1);
+
+			_MMI(storeu_s) (dW, _MM(unpackhi_epi8)(tpl, tph));
+			_MMI(storeu_s) (dW+1, _MM(unpacklo_epi8)(tpl, tph));
+			
+			sW += 2;
+			dW += 2;
+		}
+	} else {
+		// aligned version
+		gf_set_region_data(&rd, NULL, src, dest, bytes, 0, 0, sizeof(_mword), sizeof(_mword)*2);
+		
+		if(src != dest) {
+			/* copy end and initial parts */
+			memcpy(rd.d_top, rd.s_top, (intptr_t)rd.src + rd.bytes - (intptr_t)rd.s_top);
+			memcpy(rd.dest, rd.src, (intptr_t)rd.s_start - (intptr_t)rd.src);
+		}
+		
+		sW = (_mword*)rd.s_start;
+		dW = (_mword*)rd.d_start;
+		topW = (_mword*)rd.d_top;
+		
+		while(dW != topW) {
+			tph = _MMI(load_s)( sW);
+			tpl = _MMI(load_s)(sW+1);
+
+			_MMI(store_s) (dW, _MM(unpackhi_epi8)(tpl, tph));
+			_MMI(store_s) (dW+1, _MM(unpacklo_epi8)(tpl, tph));
+			
+			sW += 2;
+			dW += 2;
+		}
 	}
 #endif
 }
