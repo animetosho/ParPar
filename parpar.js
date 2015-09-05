@@ -52,6 +52,7 @@ var CHAR_CONST = {
 };
 
 var bufferedProcess = function(dataBlock, sliceNum, len, cb) {
+	if(!len) return process.nextTick(cb);
 	if(!this.bufferedInputs) {
 		this.bufferedInputs = Array(this.bufferInputs);
 		for(var i=0; i<this.bufferInputs; i++)
@@ -70,16 +71,19 @@ var bufferedProcess = function(dataBlock, sliceNum, len, cb) {
 		process.nextTick(cb);
 };
 var bufferedFinish = function(cb) {
+	var recData = this.recoveryData;
 	if(this.bufferedInputPos) {
-		gf.generate(this.bufferedInputs.slice(0, this.bufferedInputPos), this.bufferedInBlocks.slice(0, this.bufferedInputPos), this.recoveryData, this.recoveryBlocks, this._mergeRecovery, function() {
-			gf.finalise(this.recoveryData);
+		gf.generate(this.bufferedInputs.slice(0, this.bufferedInputPos), this.bufferedInBlocks.slice(0, this.bufferedInputPos), recData, this.recoveryBlocks, this._mergeRecovery, function() {
+			gf.finalise(recData);
 			cb();
-		}.bind(this));
+		});
 	} else {
-		gf.finalise(this.recoveryData);
+		gf.finalise(recData);
 		process.nextTick(cb);
 	}
 	this._mergeRecovery = false;
+};
+var bufferedClear = function() {
 	this.bufferedInputs = null;
 	this.bufferedInBlocks = null;
 	this.bufferedInputPos = 0;
@@ -95,10 +99,12 @@ function PAR2(files, sliceSize) {
 	if(sliceSize % 4) throw new Error('Slice size must be a multiple of 4');
 	this.blockSize = sliceSize;
 	
+	var self = this;
+	
 	// process files list to get IDs
 	this.files = files.map(function(file) {
-		return new PAR2File(this, file);
-	}.bind(this)).sort(function(a, b) { // TODO: is this efficient?
+		return new PAR2File(self, file);
+	}).sort(function(a, b) { // TODO: is this efficient?
 		return Buffer.compare(a.id, b.id);
 	});
 	
@@ -119,9 +125,9 @@ function PAR2(files, sliceSize) {
 	
 	var offs = 76;
 	this.files.forEach(function(file) {
-		file.id.copy(this.pktMain, offs);
+		file.id.copy(self.pktMain, offs);
 		offs += 16;
-	}.bind(this));
+	});
 	
 	this.setID = crypto.createHash('md5').update(this.pktMain.slice(64)).digest();
 	// lastly, header
@@ -201,6 +207,7 @@ PAR2.prototype = {
 			this.recoveryData[i] = this.recoveryPackets[i].slice(68);
 		}
 	},
+	// can call PAR2.setRecoveryBlocks(0) to clear out recovery data
 	setRecoveryBlocks: function(blocks) {
 		if(Array.isArray(blocks))
 			this.recoveryBlocks = blocks;
@@ -337,6 +344,7 @@ PAR2.prototype = {
 			return process.nextTick(cb);
 		
 		bufferedFinish.call(this, cb);
+		bufferedClear.call(this);
 	}
 };
 
@@ -492,6 +500,7 @@ function PAR2Chunked(recoveryBlocks, packetHeader) {
 		throw new Error('Must supply recovery blocks for chunked operation');
 	
 	this.recoveryData = Array(this.recoveryBlocks.length);
+	this.unconsumedHeaders = this.recoveryBlocks.length;
 	
 	if(packetHeader) {
 		var tmp = new Buffer(4);
@@ -514,19 +523,19 @@ PAR2Chunked.prototype = {
 	bufferedInBlocks: null,
 	bufferedInputPos: 0,
 	
+	// can clear recovery data somewhat with setChunkSize(0)
+	// I don't know why you'd want to though, as you may as well delete the chunker when you're done with it
 	setChunkSize: function(size) {
 		if(size % 2)
 			throw new Error('Chunk size must be a multiple of 2');
 		
 		this.chunkSize = size;
 		for(var i in this.recoveryBlocks)
-			this.recoveryData[i] = gf.AlignedBuffer(size);
+			this.recoveryData[i] = size ? gf.AlignedBuffer(size) : null;
 		
 		// effective reset
 		this._mergeRecovery = false;
-		this.bufferedInputs = null;
-		this.bufferedInBlocks = null;
-		this.bufferedInputPos = 0;
+		bufferedClear.call(this);
 	},
 	
 	getRecoveryChunk: function(block) {
@@ -555,15 +564,16 @@ PAR2Chunked.prototype = {
 				file.chunkSlicePos = 0;
 			});
 		}
-		if(this.recoveryChunkHash) {
+		if(this.recoveryChunkHash && this.chunkSize) {
+			var rch = this.recoveryChunkHash, recData = this.recoveryData;
 			bufferedFinish.call(this, function() {
-				for(var i in this.recoveryChunkHash) {
-					if(!this.recoveryChunkHash[i])
+				for(var i in rch) {
+					if(!rch[i])
 						throw new Error('Cannot process data after packet header has been generated');
-					this.recoveryChunkHash[i].update(this.recoveryData[i]);
+					rch[i].update(recData[i]);
 				}
 				cb();
-			}.bind(this));
+			});
 		} else
 			bufferedFinish.call(this, cb);
 	},
@@ -577,6 +587,12 @@ PAR2Chunked.prototype = {
 		this.recoveryChunkHash[index].digest().copy(pkt, 16);
 		this.recoveryChunkHash[index] = false;
 		pkt.writeUInt32LE(block, 64);
+		
+		if(--this.unconsumedHeaders < 1) {
+			// all headers consumed, clean up some stuff
+			this.recoveryChunkHash = null;
+			this.packetHeader = null;
+		}
 		
 		return pkt;
 	}
