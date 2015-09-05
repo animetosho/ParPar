@@ -122,7 +122,8 @@ static inline void multiply_mat(uint16_t** inputs, uint_fast16_t* iNums, unsigne
 	
 	// break the slice into smaller chunks so that we maximise CPU cache usage
 	int numChunks = (len / CHUNK_SIZE) + ((len % CHUNK_SIZE) ? 1 : 0);
-	unsigned int chunkSize = (CEIL_DIV(len, numChunks) + MEM_ALIGN-1) & ~(MEM_ALIGN-1); // we'll assume that input chunks are memory aligned here (though it will work if not)
+	unsigned int alignMask = (MEM_ALIGN << (using_altmap ? 1:0))-1; // for ALTMAP, width needs to be double the alignment
+	unsigned int chunkSize = (CEIL_DIV(len, numChunks) + alignMask) & ~alignMask; // we'll assume that input chunks are memory aligned here
 	
 	// avoid nested loop issues by combining chunk & output loop into one
 	// the loop goes through outputs before chunks
@@ -245,16 +246,28 @@ FUNC(PrepInput) {
 	size_t destLen = node::Buffer::Length(args[1]),
 		inputLen = node::Buffer::Length(args[0]);
 	char* dest = node::Buffer::Data(args[1]);
+	char* src = node::Buffer::Data(args[0]);
 	
 	if((intptr_t)dest & (MEM_ALIGN-1))
 		RETURN_ERROR("Destination not aligned");
 	if(inputLen > destLen)
 		RETURN_ERROR("Destination not large enough to hold input");
 	
-	if(using_altmap)
-		gf.altmap_region(node::Buffer::Data(args[0]), inputLen, dest);
-	else
-		memcpy(dest, node::Buffer::Data(args[0]), inputLen);
+	if(using_altmap) {
+		// ugly hack to deal with zero filling case
+		int lenTail = inputLen & ((MEM_ALIGN << 1)-1);
+		if(inputLen < destLen && lenTail) {
+			int lenMain = inputLen - lenTail;
+			gf.altmap_region(src, lenMain, dest);
+			// copy remaining, with zero fill, then ALTMAP over it
+			memcpy(dest + lenMain, src + lenMain, lenTail);
+			memset(dest + inputLen, 0, destLen - inputLen);
+			gf.altmap_region(dest + lenMain, MEM_ALIGN << 1, dest + lenMain);
+			RETURN_UNDEF
+		} else
+			gf.altmap_region(src, inputLen, dest);
+	} else
+		memcpy(dest, src, inputLen);
 	
 	if(inputLen < destLen) // fill empty bytes with 0
 		memset(dest + inputLen, 0, destLen - inputLen);

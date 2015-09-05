@@ -401,7 +401,7 @@ PAR2File.prototype = {
 			var b = new Buffer(this.par2.blockSize - data.length);
 			b.fill(0);
 			md5.update(b);
-			crc = y.crc32(data, crc);
+			crc = y.crc32(b, crc); // TODO: consider doing a more efficient "crc of zeroes"
 			b = null;
 		}
 		md5.digest().copy(chk);
@@ -527,6 +527,9 @@ PAR2Chunked.prototype = {
 		
 		// effective reset
 		this._mergeRecovery = false;
+		this.bufferedInputs = null;
+		this.bufferedInBlocks = null;
+		this.bufferedInputPos = 0;
 	},
 	
 	getRecoveryChunk: function(block) {
