@@ -73,6 +73,7 @@ var bufferedFinish = function(cb) {
 		this.bufferedInBlocks = [];
 	} else {
 		gf.finalise(this.recoveryData);
+		this._mergeRecovery = false;
 		process.nextTick(cb);
 	}
 };
