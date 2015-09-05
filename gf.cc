@@ -99,13 +99,8 @@ static inline void multiply_mat(uint16_t** inputs, uint_fast16_t* iNums, unsigne
 		omp_set_num_threads(maxNumThreads);
 #endif
 	
+	/*
 	if(using_altmap) {
-		#pragma omp parallel for
-		for(int in = 0; in < (int)numInputs; in++)
-			// trash our input!
-			gf.altmap_region(inputs[in], len, inputs[in]);
-		
-		/*
 		#pragma omp parallel for
 		for(int out = 0; out < (int)numOutputs; out++) {
 			unsigned int in = 0;
@@ -122,8 +117,8 @@ static inline void multiply_mat(uint16_t** inputs, uint_fast16_t* iNums, unsigne
 				gf.multiply_region.w32(&gf, inputs[in], outputs[out], calc_factor(iNums[in], oNums[out]), (int)len, true);
 		}
 		return;
-		*/
 	}
+	*/
 	
 	// break the slice into smaller chunks so that we maximise CPU cache usage
 	int numChunks = (len / CHUNK_SIZE) + ((len % CHUNK_SIZE) ? 1 : 0);
@@ -363,17 +358,24 @@ FUNC(MultiplyMulti) {
 		if (!node::Buffer::HasInstance(input))
 			RTN_ERROR("All inputs must be Buffers");
 		
+		size_t inputLen = node::Buffer::Length(input);
 		if(i) {
-			if (node::Buffer::Length(input) != len)
-				RTN_ERROR("All inputs' length must be equal");
+			if (inputLen > len)
+				RTN_ERROR("All inputs' length must be equal, _or_ later inputs need to be shorter than earlier ones");
 		} else {
-			len = node::Buffer::Length(input);
+			len = inputLen;
 			if (len % 2)
 				RTN_ERROR("Length of input must be a multiple of 2");
 		}
 		
 		ALIGN_ALLOC(inputs[i], len);
-		memcpy(inputs[i], node::Buffer::Data(input));
+		if(using_altmap)
+			gf.altmap_region(node::Buffer::Data(input), inputLen, inputs[in]);
+		else
+			memcpy(inputs[i], node::Buffer::Data(input), inputLen);
+		
+		if(inputLen < len) // fill empty bytes with 0
+			memset(inputs[i] + inputLen, 0, len - inputLen);
 		
 		int ibNum = oIBNums->Get(i)->ToInt32()->Value();
 		if (ibNum < 0 || ibNum > 32767)
@@ -386,8 +388,9 @@ FUNC(MultiplyMulti) {
 		Local<Value> output = oOutputs->Get(i);
 		if (!node::Buffer::HasInstance(output))
 			RTN_ERROR("All outputs must be Buffers");
-		if (node::Buffer::Length(output) != len)
-			RTN_ERROR("All outputs' length must equal the input's length");
+		if (node::Buffer::Length(output) < len)
+			RTN_ERROR("All outputs' length must equal or greater than the input's length");
+		// the length of output buffers should all be equal, but I'm too lazy to check for that :P
 		outputs[i] = (uint16_t*)node::Buffer::Data(output);
 		if ((intptr_t)outputs[i] & (MEM_ALIGN-1))
 			RTN_ERROR("All output buffers must be address aligned");
