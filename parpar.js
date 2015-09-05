@@ -363,9 +363,14 @@ function PAR2File(par2, file) {
 	}
 	
 	this.numSlices = Math.ceil(file.size / par2.blockSize);
-	this.sliceChk = Array(this.numSlices);
+	this.pktCheck = new Buffer(64 + 16 + 20*this.numSlices);
+	
 	this.slicePos = 0;
 }
+
+// for zero-filling, to avoid constant allocating of new buffers
+var nulls = new Buffer(8192);
+nulls.fill(0);
 
 PAR2File.prototype = {
 	par2: null,
@@ -375,7 +380,6 @@ PAR2File.prototype = {
 	_md5ctx: null,
 	size: 0,
 	name: '',
-	inRecvSet: false, // TODO: support non-recovery set files
 	
 	sliceOffset: 0,
 	chunkSlicePos: 0, // only used externally
@@ -391,26 +395,26 @@ PAR2File.prototype = {
 		}
 		
 		// calc slice CRC/MD5
-		// TODO: check that user hasn't done something weird and fed a mix of partial and complete blocks
-		var chk = new Buffer(20);
 		var md5 = crypto.createHash('md5').update(data);
 		var crc = y.crc32(data);
 		if(data.length != this.par2.blockSize) {
 			// feed in zero padding
-			// TODO: consider attaching buffer to PAR2 object to avoid constantly allocating new buffers
-			var b = new Buffer(this.par2.blockSize - data.length);
-			b.fill(0);
-			md5.update(b);
-			crc = y.crc32(b, crc); // TODO: consider doing a more efficient "crc of zeroes"
-			b = null;
+			var p;
+			for(p = data.length; p < this.par2.blockSize - nulls.length; p += nulls.length) {
+				md5.update(nulls);
+				crc = y.crc32(nulls, crc); // TODO: consider doing a more efficient "crc of zeroes"
+			}
+			var nullsP = nulls.slice(0, this.par2.blockSize - p);
+			md5.update(nullsP);
+			crc = y.crc32(nullsP, crc);
 		}
-		md5.digest().copy(chk);
+		var chkAddr = 64 + 16 + 20*this.slicePos;
+		md5.digest().copy(this.pktCheck, chkAddr);
 		// need to reverse the CRC
-		chk[16] = crc[3];
-		chk[17] = crc[2];
-		chk[18] = crc[1];
-		chk[19] = crc[0];
-		this.sliceChk[this.slicePos] = chk;
+		this.pktCheck[chkAddr + 16] = crc[3];
+		this.pktCheck[chkAddr + 17] = crc[2];
+		this.pktCheck[chkAddr + 18] = crc[1];
+		this.pktCheck[chkAddr + 19] = crc[0];
 		
 		if(!this.md5) {
 			this._md5ctx.update(data);
@@ -426,16 +430,9 @@ PAR2File.prototype = {
 	},
 	
 	getPacketChecksums: function() {
-		var pkt = new Buffer(64 + 16 + 20*this.numSlices);
-		this.id.copy(pkt, 64);
-		for(var i in this.sliceChk) {
-			var chk = this.sliceChk[i];
-			if(!chk) throw new Error('Cannot generate checksums before data is read');
-			
-			chk.copy(pkt, 80 + 20*i);
-		}
-		this.par2._writePktHeader(pkt, "PAR 2.0\0IFSC\0\0\0\0");
-		return pkt;
+		this.id.copy(this.pktCheck, 64);
+		this.par2._writePktHeader(this.pktCheck, "PAR 2.0\0IFSC\0\0\0\0");
+		return this.pktCheck;
 	},
 	getPacketDescription: function(unicode) {
 		if(!unicode) {
@@ -497,8 +494,8 @@ function PAR2Chunked(recoveryBlocks, packetHeader) {
 	this.recoveryData = Array(this.recoveryBlocks.length);
 	
 	if(packetHeader) {
+		var tmp = new Buffer(4);
 		this.recoveryChunkHash = this.recoveryBlocks.map(function(blockNum) {
-			var tmp = new Buffer(4);
 			tmp.writeUInt32LE(blockNum, 0);
 			return crypto.createHash('md5')
 				.update(packetHeader.slice(32))
@@ -595,6 +592,7 @@ module.exports = {
 	PAR2: PAR2,
 	AlignedBuffer: gf.AlignedBuffer,
 	fileInfo: function(files, cb) {
+		var buf = new Buffer(16384);
 		async.mapSeries(files, function(file, cb) {
 			var info = {name: file, size: 0, md5_16k: null};
 			var fd;
@@ -606,7 +604,7 @@ module.exports = {
 				},
 				function(_fd, cb) {
 					fd = _fd;
-					fs.read(fd, new Buffer(16384), 0, 16384, null, cb);
+					fs.read(fd, buf, 0, 16384, null, cb);
 				},
 				function(bytesRead, buffer, cb) {
 					info.md5_16k = crypto.createHash('md5').update(buffer.slice(0, bytesRead)).digest();
