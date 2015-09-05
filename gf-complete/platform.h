@@ -11,7 +11,7 @@
 		#define INTEL_SSE4_PCLMUL 1
 	#endif
 #endif
-#if defined(__AVX2__) || _MSC_VER >= 1800
+#if defined(__AVX2__) || (_MSC_VER >= 1800 && defined(INTEL_SSE2))
 	#define INTEL_AVX2 1
 #endif
 
