@@ -58,7 +58,6 @@ typedef struct {
   int bytes;
   uint64_t val;
   int xor;
-  int align;           /* The number of bytes to which to align. */
   void *s_start;       /* The start and the top of the aligned region. */
   void *d_start;
   void *s_top;
@@ -74,7 +73,8 @@ void gf_set_region_data(gf_region_data *rd,
                         int bytes,
                         uint64_t val,
                         int xor,
-                        int align);
+                        int align,
+                        int walign);
 
 /* This performs gf->multiply.32() on all of the unaligned bytes in the beginning of the region */
 

@@ -41,7 +41,7 @@ gf_w16_clm_multiply_region_from_single_2(gf_t *gf, void *src, void *dest, gf_val
   if (val == 0) { gf_multby_zero(dest, bytes, xor); return; }
   if (val == 1) { gf_multby_one(src, dest, bytes, xor); return; }
 
-  gf_set_region_data(&rd, gf, src, dest, bytes, val, xor, 2);
+  gf_set_region_data(&rd, gf, src, dest, bytes, val, xor, 2, 2);
   gf_do_initial_region_alignment(&rd);
 
   a = _mm_insert_epi32 (_mm_setzero_si128(), val, 0);
@@ -107,7 +107,7 @@ gf_w16_clm_multiply_region_from_single_3(gf_t *gf, void *src, void *dest, gf_val
 
   a = _mm_insert_epi32 (_mm_setzero_si128(), val, 0);
   
-  gf_set_region_data(&rd, gf, src, dest, bytes, val, xor, 2);
+  gf_set_region_data(&rd, gf, src, dest, bytes, val, xor, 2, 2);
   gf_do_initial_region_alignment(&rd);
 
   s16 = (uint16_t *) rd.s_start;
@@ -173,7 +173,7 @@ gf_w16_clm_multiply_region_from_single_4(gf_t *gf, void *src, void *dest, gf_val
   if (val == 0) { gf_multby_zero(dest, bytes, xor); return; }
   if (val == 1) { gf_multby_one(src, dest, bytes, xor); return; }
 
-  gf_set_region_data(&rd, gf, src, dest, bytes, val, xor, 2);
+  gf_set_region_data(&rd, gf, src, dest, bytes, val, xor, 2, 2);
   gf_do_initial_region_alignment(&rd);
 
   a = _mm_insert_epi32 (_mm_setzero_si128(), val, 0);
@@ -434,7 +434,7 @@ gf_w16_log_multiply_region(gf_t *gf, void *src, void *dest, gf_val_32_t val, int
   if (val == 0) { gf_multby_zero(dest, bytes, xor); return; }
   if (val == 1) { gf_multby_one(src, dest, bytes, xor); return; }
 
-  gf_set_region_data(&rd, gf, src, dest, bytes, val, xor, 2);
+  gf_set_region_data(&rd, gf, src, dest, bytes, val, xor, 2, 2);
   gf_do_initial_region_alignment(&rd);
 
   ltd = (struct gf_w16_logtable_data *) ((gf_internal_t *) gf->scratch)->private;
@@ -547,7 +547,7 @@ gf_w16_split_4_16_lazy_nosse_altmap_multiply_region(gf_t *gf, void *src, void *d
   if (val == 0) { gf_multby_zero(dest, bytes, xor); return; }
   if (val == 1) { gf_multby_one(src, dest, bytes, xor); return; }
 
-  gf_set_region_data(&rd, gf, src, dest, bytes, val, xor, 32);
+  gf_set_region_data(&rd, gf, src, dest, bytes, val, xor, 16, 32);
   gf_do_initial_region_alignment(&rd);    
 
   /*Ben: Constructs lazy multiplication table*/
@@ -608,7 +608,7 @@ gf_w16_split_4_16_lazy_multiply_region(gf_t *gf, void *src, void *dest, gf_val_3
   if (val == 0) { gf_multby_zero(dest, bytes, xor); return; }
   if (val == 1) { gf_multby_one(src, dest, bytes, xor); return; }
 
-  gf_set_region_data(&rd, gf, src, dest, bytes, val, xor, 2);
+  gf_set_region_data(&rd, gf, src, dest, bytes, val, xor, 2, 2);
   gf_do_initial_region_alignment(&rd);    
 
   for (j = 0; j < 16; j++) {
@@ -648,7 +648,7 @@ gf_w16_split_8_16_lazy_multiply_region(gf_t *gf, void *src, void *dest, gf_val_3
   if (val == 0) { gf_multby_zero(dest, bytes, xor); return; }
   if (val == 1) { gf_multby_one(src, dest, bytes, xor); return; }
 
-  gf_set_region_data(&rd, gf, src, dest, bytes, val, xor, sizeof(FAST_U32));
+  gf_set_region_data(&rd, gf, src, dest, bytes, val, xor, 2, sizeof(FAST_U32));
   gf_do_initial_region_alignment(&rd);
   
   h = (gf_internal_t *) gf->scratch;
@@ -734,7 +734,7 @@ gf_w16_split_4_16_lazy_sse_multiply_region(gf_t *gf, void *src, void *dest, gf_v
   if (val == 0) { gf_multby_zero(dest, bytes, xor); return; }
   if (val == 1) { gf_multby_one(src, dest, bytes, xor); return; }
 
-  gf_set_region_data(&rd, gf, src, dest, bytes, val, xor, 32);
+  gf_set_region_data(&rd, gf, src, dest, bytes, val, xor, 16, 32);
   gf_do_initial_region_alignment(&rd);
 
   for (j = 0; j < 16; j++) {
@@ -866,7 +866,7 @@ gf_w16_split_4_16_lazy_sse_altmap_multiply_region(gf_t *gf, void *src, void *des
   if (val == 0) { gf_multby_zero(dest, bytes, xor); return; }
   if (val == 1) { gf_multby_one(src, dest, bytes, xor); return; }
 
-  gf_set_region_data(&rd, gf, src, dest, bytes, val, xor, 32);
+  gf_set_region_data(&rd, gf, src, dest, bytes, val, xor, 16, 32);
   gf_do_initial_region_alignment(&rd);
 
   for (j = 0; j < 16; j++) {

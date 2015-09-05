@@ -13,7 +13,7 @@ static void _FN(gf_w16_split_start)(void* src, int bytes, void* dest) {
 	_mword *sW, *dW, *topW;
 	_mword ta, tb, lmask;
 	
-	gf_set_region_data(&rd, NULL, src, dest, bytes, 0, 0, sizeof(_mword)*2);
+	gf_set_region_data(&rd, NULL, src, dest, bytes, 0, 0, sizeof(_mword), sizeof(_mword)*2);
 	
 	
 	if(src != dest) {
@@ -58,7 +58,7 @@ static void _FN(gf_w16_split_final)(void* src, int bytes, void* dest) {
 	_mword *sW, *dW, *topW;
 	_mword tpl, tph;
 	
-	gf_set_region_data(&rd, NULL, src, dest, bytes, 0, 0, sizeof(_mword)*2);
+	gf_set_region_data(&rd, NULL, src, dest, bytes, 0, 0, sizeof(_mword), sizeof(_mword)*2);
 	
 	
 	if(src != dest) {
@@ -109,7 +109,7 @@ _FN(gf_w16_split_4_16_lazy_altmap_multiply_region)(gf_t *gf, void *src, void *de
   if (val == 0) { gf_multby_zero(dest, bytes, xor); return; }
   if (val == 1) { gf_multby_one(src, dest, bytes, xor); return; }
 
-  gf_set_region_data(&rd, gf, src, dest, bytes, val, xor, sizeof(_mword)*2);
+  gf_set_region_data(&rd, gf, src, dest, bytes, val, xor, sizeof(_mword), sizeof(_mword)*2);
   gf_do_initial_region_alignment(&rd);
 
   for (j = 0; j < 16; j++) {
@@ -219,7 +219,7 @@ _FN(gf_w16_split_4_16_lazy_altmap_multiply_regionX)(gf_t *gf, uint16_t **src, vo
     _mm_prefetch(src[r] + 24, _MM_HINT_T0);
 */
 
-    gf_set_region_data(&rd, gf, src[r], dest, bytes, val[r], 1, sizeof(_mword)*2);
+    gf_set_region_data(&rd, gf, src[r], dest, bytes, val[r], xor, sizeof(_mword), sizeof(_mword)*2);
     gf_do_initial_region_alignment(&rd);
     gf_do_final_region_alignment(&rd);
     

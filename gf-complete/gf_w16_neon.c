@@ -302,7 +302,7 @@ neon_w16_split_4_16_lazy_multiply_region(gf_t *gf, void *src, void *dest,
     }
   }
 
-  gf_set_region_data(&rd, gf, src, dest, bytes, val, xor, 32);
+  gf_set_region_data(&rd, gf, src, dest, bytes, val, xor, 16, 32);
   gf_do_initial_region_alignment(&rd);
 
   if (altmap) {
