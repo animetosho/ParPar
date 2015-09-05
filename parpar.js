@@ -318,16 +318,9 @@ PAR2.prototype = {
 	},
 	
 	processBlock: function(data, blockNum, cb) {
-		if(this.recoveryBlocks.length) {
-			var _data = data;
-			// if data not aligned, align it
-			if(gf.alignment_offset(data) != 0) {
-				_data = gf.AlignedBuffer(data.length);
-				data.copy(_data);
-			}
-			
-			bufferedProcess.call(this, _data, blockNum, cb);
-		} else
+		if(this.recoveryBlocks.length)
+			bufferedProcess.call(this, data, blockNum, cb);
+		else
 			process.nextTick(cb);
 	},
 	finalise: function(cb) {
@@ -384,22 +377,25 @@ PAR2File.prototype = {
 		var lastPiece = this.slicePos == this.numSlices-1;
 		// TODO: check size of data if last piece
 		
-		var dataBlock = data;
-		if(data.length != this.par2.blockSize) {
-			if(lastPiece) {
-				// zero pad the block
-				dataBlock = gf.AlignedBuffer(this.par2.blockSize);
-				data.copy(dataBlock);
-				dataBlock.fill(0, data.length);
-			} else
-				throw new Error('Invalid data length');
+		if(data.length != this.par2.blockSize && !lastPiece) {
+			throw new Error('Invalid data length');
 		}
 		
 		// calc slice CRC/MD5
 		// TODO: check that user hasn't done something weird and fed a mix of partial and complete blocks
 		var chk = new Buffer(20);
-		crypto.createHash('md5').update(dataBlock).digest().copy(chk);
-		var crc = y.crc32(dataBlock);
+		var md5 = crypto.createHash('md5').update(data);
+		var crc = y.crc32(data);
+		if(data.length != this.par2.blockSize) {
+			// feed in zero padding
+			// TODO: consider attaching buffer to PAR2 object to avoid constantly allocating new buffers
+			var b = new Buffer(this.par2.blockSize - data.length);
+			b.fill(0);
+			md5.update(b);
+			crc = y.crc32(data, crc);
+			b = null;
+		}
+		md5.digest().copy(chk);
 		// need to reverse the CRC
 		chk[16] = crc[3];
 		chk[17] = crc[2];
@@ -417,7 +413,7 @@ PAR2File.prototype = {
 		}
 		
 		this.slicePos++;
-		this.par2.processBlock(dataBlock, this.sliceOffset + this.slicePos-1, cb);
+		this.par2.processBlock(data, this.sliceOffset + this.slicePos-1, cb);
 	},
 	
 	getPacketChecksums: function() {
@@ -530,25 +526,13 @@ PAR2Chunked.prototype = {
 	},
 	
 	process: function(fileOrNum, data, cb) {
-		var dataBlock = data;
-		if(data.length !== this.chunkSize) {
-			// zero pad the block
-			dataBlock = gf.AlignedBuffer(this.chunkSize);
-			data.copy(dataBlock);
-			dataBlock.fill(0, data.length);
-		} else if(gf.alignment_offset(dataBlock) != 0) {
-			// align block
-			dataBlock = gf.AlignedBuffer(this.chunkSize || data.length);
-			data.copy(dataBlock, 0, 0, this.chunkSize || undefined);
-		}
-		
 		var sliceNum = fileOrNum;
 		if(typeof fileOrNum == 'object') {
 			sliceNum = fileOrNum.sliceOffset + fileOrNum.chunkSlicePos;
 			fileOrNum.chunkSlicePos++;
 		}
 		
-		bufferedProcess.call(this, dataBlock, sliceNum, cb);
+		bufferedProcess.call(this, data, sliceNum, cb);
 	},
 	
 	finalise: function(files, cb) {
