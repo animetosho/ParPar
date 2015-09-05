@@ -94,8 +94,7 @@ static inline void multiply_mat(uint16_t** inputs, uint_fast16_t* iNums, unsigne
 		/*
 		#pragma omp parallel for
 		for(int out = 0; out < (int)numOutputs; out++) {
-			unsigned int in = 1;
-			gf.multiply_region.w32(&gf, inputs[0], outputs[out], calc_factor(iNums[0], oNums[out]), (int)len, add);
+			unsigned int in = 0;
 			for(; in < numInputs-3; in+=4) {
 				gf_val_32_t inNum4[4] = {
 					calc_factor(iNums[in], oNums[out]),
@@ -103,11 +102,12 @@ static inline void multiply_mat(uint16_t** inputs, uint_fast16_t* iNums, unsigne
 					calc_factor(iNums[in+2], oNums[out]),
 					calc_factor(iNums[in+3], oNums[out])
 				};
-				gf.multiply_regionX.w16(&gf, inputs + in, outputs[out], inNum4, (int)len, true);
+				gf.multiply_regionX.w16(&gf, inputs + in, outputs[out], inNum4, (int)len, add || in>0);
 			}
 			for(; in < numInputs; in++)
 				gf.multiply_region.w32(&gf, inputs[in], outputs[out], calc_factor(iNums[in], oNums[out]), (int)len, true);
 		}
+		return;
 		*/
 	}
 	
@@ -234,15 +234,9 @@ FUNC(AlignedBuffer) {
 #ifndef NODE_010
 	RETURN_VAL( node::Buffer::New(ISOLATE (char*)buf, len, free_buffer, (void*)len) );
 #else
-	// convert SlowBuffer to JS Buffer object and return it
-	Handle<Value> _tmp[] = {
-		node::Buffer::New((char*)buf, len, free_buffer, (void*)len)->handle_,
-		Integer::New((int32_t)len),
-		Integer::New(0)
-	};
-	RETURN_VAL(
-		Local<Function>::Cast(Context::GetCurrent()->Global()->Get(String::New("Buffer")))->NewInstance(3, _tmp)
-	);
+	RETURN_VAL(Local<Object>::New(
+		node::Buffer::New((char*)buf, len, free_buffer, (void*)len)->handle_
+	));
 #endif
 }
 
