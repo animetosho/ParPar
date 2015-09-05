@@ -15,12 +15,14 @@ void detect_cpu(void) {
 	has_pclmul = (cpuInfo[2] & 0x2);
 	#endif
 	
-	__cpuidex(cpuInfo, 7, 0);
-	#ifdef INTEL_AVX2
-	has_avx2 = (cpuInfo[1] & 0x20);
-	#endif
-	#ifdef INTEL_AVX512BW
-	has_avx512bw = (cpuInfo[1] & 0x40010000) == 0x40010000;
+	#if _MSC_VER >= 1600
+		__cpuidex(cpuInfo, 7, 0);
+		#ifdef INTEL_AVX2
+		has_avx2 = (cpuInfo[1] & 0x20);
+		#endif
+		#ifdef INTEL_AVX512BW
+		has_avx512bw = (cpuInfo[1] & 0x40010000) == 0x40010000;
+		#endif
 	#endif
 	
 #elif defined(__x86_64__) || defined(__i386__)
