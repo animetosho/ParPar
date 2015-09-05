@@ -349,8 +349,11 @@ PAR2.prototype = {
 };
 
 function PAR2File(par2, file) {
-	for(var k in file)
-		this[k] = file[k];
+	// allow copying some custom properties
+	for(var k in file) {
+		if(!(k in this))
+			this[k] = file[k];
+	}
 	
 	if(!file.md5_16k || (typeof file.size != 'number') || !('name' in file))
 		throw new Error('Missing file details');
@@ -381,14 +384,6 @@ var nulls = new Buffer(8192);
 nulls.fill(0);
 
 PAR2File.prototype = {
-	par2: null,
-	id: null,
-	md5_16k: null,
-	md5: null,
-	_md5ctx: null,
-	size: 0,
-	name: '',
-	
 	sliceOffset: 0,
 	chunkSlicePos: 0, // only used externally
 	
