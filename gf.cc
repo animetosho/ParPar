@@ -236,6 +236,32 @@ FUNC(AlignedBuffer) {
 #endif
 }
 
+FUNC(PrepInput) {
+	FUNC_START;
+	
+	if (args.Length() < 2 || !node::Buffer::HasInstance(args[0]) || !node::Buffer::HasInstance(args[1]))
+		RETURN_ERROR("Two Buffers required");
+	
+	size_t destLen = node::Buffer::Length(args[1]),
+		inputLen = node::Buffer::Length(args[0]);
+	char* dest = node::Buffer::Data(args[1]);
+	
+	if((intptr_t)dest & (MEM_ALIGN-1))
+		RETURN_ERROR("Destination not aligned");
+	if(inputLen > destLen)
+		RETURN_ERROR("Destination not large enough to hold input");
+	
+	if(using_altmap)
+		gf.altmap_region(node::Buffer::Data(args[0]), inputLen, dest);
+	else
+		memcpy(dest, node::Buffer::Data(args[0]), inputLen);
+	
+	if(inputLen < destLen) // fill empty bytes with 0
+		memset(dest + inputLen, 0, destLen - inputLen);
+	
+	RETURN_UNDEF
+}
+
 FUNC(AlignmentOffset) {
 	FUNC_START;
 	
@@ -249,8 +275,6 @@ FUNC(AlignmentOffset) {
 }
 
 #define CLEANUP_MM { \
-	for(unsigned int _i=0; _i<numInputs; _i++) \
-		if(inputs[_i]) ALIGN_FREE(inputs[_i]); \
 	delete[] inputs; \
 	delete[] iNums; \
 	delete[] outputs; \
@@ -262,9 +286,11 @@ FUNC(AlignmentOffset) {
 struct MMRequest {
 	~MMRequest() {
 #ifndef NODE_010
+		inputBuffers.Reset();
 		outputBuffers.Reset();
 		obj_.Reset();
 #else
+		inputBuffers.Dispose();
 		outputBuffers.Dispose();
 		//if (obj_.IsEmpty()) return;
 		obj_.Dispose();
@@ -288,6 +314,7 @@ struct MMRequest {
 	bool add;
 	
 	// persist copies of buffers for the duration of the job
+	Persistent<Array> inputBuffers;
 	Persistent<Array> outputBuffers;
 };
 
@@ -345,8 +372,6 @@ FUNC(MultiplyMulti) {
 	uint16_t** outputs = new uint16_t*[numOutputs];
 	uint_fast16_t* oNums = new uint_fast16_t[numOutputs];
 	
-	memset(inputs, 0, sizeof(uint16_t*) * numInputs); // set all pointers to zero so that CLEANUP_MM works with uninitialized inputs
-	
 	#define RTN_ERROR(m) { \
 		CLEANUP_MM \
 		RETURN_ERROR(m); \
@@ -358,24 +383,19 @@ FUNC(MultiplyMulti) {
 		if (!node::Buffer::HasInstance(input))
 			RTN_ERROR("All inputs must be Buffers");
 		
-		size_t inputLen = node::Buffer::Length(input);
+		inputs[i] = (uint16_t*)node::Buffer::Data(input);
+		intptr_t inputAddr = (intptr_t)inputs[i];
+		if (inputAddr & (MEM_ALIGN-1))
+			RTN_ERROR("All input buffers must be address aligned");
+		
 		if(i) {
-			if (inputLen > len)
-				RTN_ERROR("All inputs' length must be equal, _or_ later inputs need to be shorter than earlier ones");
+			if (node::Buffer::Length(input) != len)
+				RTN_ERROR("All inputs' length must be equal");
 		} else {
-			len = inputLen;
+			len = node::Buffer::Length(input);
 			if (len % 2)
 				RTN_ERROR("Length of input must be a multiple of 2");
 		}
-		
-		ALIGN_ALLOC(inputs[i], len);
-		if(using_altmap)
-			gf.altmap_region(node::Buffer::Data(input), inputLen, inputs[i]);
-		else
-			memcpy(inputs[i], node::Buffer::Data(input), inputLen);
-		
-		if(inputLen < len) // fill empty bytes with 0
-			memset((void*)((intptr_t)(inputs[i]) + inputLen), 0, len - inputLen);
 		
 		int ibNum = oIBNums->Get(i)->ToInt32()->Value();
 		if (ibNum < 0 || ibNum > 32767)
@@ -432,6 +452,7 @@ FUNC(MultiplyMulti) {
 		//	req->obj_->Set(env->domain_string(), env->domain_array()->Get(0));
 		
 		// keep a copy of the buffers so that they don't get GC'd whilst being written to
+		req->inputBuffers.Reset(ISOLATE Local<Array>::Cast(args[0]));
 		req->outputBuffers.Reset(ISOLATE Local<Array>::Cast(args[2]));
 #else
 		req->obj_ = Persistent<Object>::New(ISOLATE Object::New());
@@ -439,6 +460,7 @@ FUNC(MultiplyMulti) {
 		//SetActiveDomain(req->obj_); // never set in node_zlib.cc - perhaps domains aren't that important?
 		
 		// keep a copy of the buffers so that they don't get GC'd whilst being written to
+		req->inputBuffers = Persistent<Array>::New(ISOLATE Local<Array>::Cast(args[0]));
 		req->outputBuffers = Persistent<Array>::New(ISOLATE Local<Array>::Cast(args[2]));
 #endif
 		
@@ -519,6 +541,7 @@ void init(Handle<Object> target) {
 	NODE_SET_METHOD(target, "alignment_offset", AlignmentOffset);
 	// Buffer AlignedBuffer(int size)
 	NODE_SET_METHOD(target, "AlignedBuffer", AlignedBuffer);
+	NODE_SET_METHOD(target, "copy", PrepInput);
 	NODE_SET_METHOD(target, "finalise", Finalise);
 	
 #ifdef _OPENMP

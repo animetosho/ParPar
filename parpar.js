@@ -51,31 +51,38 @@ var CHAR_CONST = {
 	UNICODE: 3,
 };
 
-var bufferedProcess = function(dataBlock, sliceNum, cb) {
-	this.bufferedInputs.push(dataBlock);
-	this.bufferedInBlocks.push(sliceNum);
-	if(this.bufferedInputs.length >= this.bufferInputs) {
+var bufferedProcess = function(dataBlock, sliceNum, len, cb) {
+	if(!this.bufferedInputs) {
+		this.bufferedInputs = Array(this.bufferInputs);
+		for(var i=0; i<this.bufferInputs; i++)
+			this.bufferedInputs[i] = gf.AlignedBuffer(len);
+		this.bufferedInBlocks = Array(this.bufferInputs);
+		this.bufferedInputPos = 0;
+	}
+	gf.copy(dataBlock, this.bufferedInputs[this.bufferedInputPos]);
+	this.bufferedInBlocks[this.bufferedInputPos] = sliceNum;
+	this.bufferedInputPos++;
+	if(this.bufferedInputPos >= this.bufferInputs) {
 		gf.generate(this.bufferedInputs, this.bufferedInBlocks, this.recoveryData, this.recoveryBlocks, this._mergeRecovery, cb);
 		this._mergeRecovery = true;
-		this.bufferedInputs = [];
-		this.bufferedInBlocks = [];
+		this.bufferedInputPos = 0;
 	} else
 		process.nextTick(cb);
 };
 var bufferedFinish = function(cb) {
-	if(this.bufferedInputs.length) {
-		gf.generate(this.bufferedInputs, this.bufferedInBlocks, this.recoveryData, this.recoveryBlocks, this._mergeRecovery, function() {
+	if(this.bufferedInputPos) {
+		gf.generate(this.bufferedInputs.slice(0, this.bufferedInputPos), this.bufferedInBlocks.slice(0, this.bufferedInputPos), this.recoveryData, this.recoveryBlocks, this._mergeRecovery, function() {
 			gf.finalise(this.recoveryData);
 			cb();
 		}.bind(this));
-		this._mergeRecovery = false;
-		this.bufferedInputs = [];
-		this.bufferedInBlocks = [];
 	} else {
 		gf.finalise(this.recoveryData);
-		this._mergeRecovery = false;
 		process.nextTick(cb);
 	}
+	this._mergeRecovery = false;
+	this.bufferedInputs = null;
+	this.bufferedInBlocks = null;
+	this.bufferedInputPos = 0;
 };
 
 // TODO: consider way to clear out memory
@@ -123,14 +130,15 @@ function PAR2(files, sliceSize) {
 	// -- other init
 	this.recoveryBlocks = [];
 	this._mergeRecovery = false;
-	this.bufferedInputs = [];
-	this.bufferedInBlocks = [];
 };
 
 PAR2.prototype = {
 	recoveryData: null,
 	recoveryPackets: null,
 	bufferInputs: 16,
+	bufferedInputs: null,
+	bufferedInBlocks: null,
+	bufferedInputPos: 0,
 	
 	// write in a packet's header; data must already be present at offset+64
 	_writePktHeader: function(buf, name, offset, len) {
@@ -320,7 +328,7 @@ PAR2.prototype = {
 	
 	processBlock: function(data, blockNum, cb) {
 		if(this.recoveryBlocks.length)
-			bufferedProcess.call(this, data, blockNum, cb);
+			bufferedProcess.call(this, data, blockNum, this.blockSize, cb);
 		else
 			process.nextTick(cb);
 	},
@@ -479,9 +487,6 @@ PAR2File.prototype = {
 
 
 function PAR2Chunked(recoveryBlocks, packetHeader) {
-	this.bufferedInputs = [];
-	this.bufferedInBlocks = [];
-	
 	if(Array.isArray(recoveryBlocks))
 		this.recoveryBlocks = recoveryBlocks;
 	else
@@ -508,6 +513,9 @@ PAR2Chunked.prototype = {
 	_mergeRecovery: false,
 	bufferInputs: 16,
 	recoveryChunkHash: null,
+	bufferedInputs: null,
+	bufferedInBlocks: null,
+	bufferedInputPos: 0,
 	
 	setChunkSize: function(size) {
 		if(size % 2)
@@ -533,7 +541,7 @@ PAR2Chunked.prototype = {
 			fileOrNum.chunkSlicePos++;
 		}
 		
-		bufferedProcess.call(this, data, sliceNum, cb);
+		bufferedProcess.call(this, data, sliceNum, this.chunkSize, cb);
 	},
 	
 	finalise: function(files, cb) {
