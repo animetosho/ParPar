@@ -15,27 +15,6 @@
 
 int _gf_errno = GF_E_DEFAULT;
 
-uint64_t gf_composite_get_default_poly(gf_t *base) 
-{
-  gf_internal_t *h;
-  int rv;
-
-  h = (gf_internal_t *) base->scratch;
-  if (h->w == 16) {
-    if (h->mult_type == GF_MULT_COMPOSITE) {
-      rv = gf_composite_get_default_poly(h->base_gf);
-      if (rv != h->prim_poly) return 0;
-      if (rv == 3) return 0x105;
-      return 0;
-    } else {
-      if (h->prim_poly == 0x1100b) return 2;
-      if (h->prim_poly == 0x1002d) return 7;
-      return 0;
-    }
-  }
-  return 0;
-}
-
 int gf_error_check(int w, int mult_type, int region_type, int divide_type,
                    int arg1, int arg2, uint64_t poly, gf_t *base)
 {
@@ -255,23 +234,6 @@ int gf_error_check(int w, int mult_type, int region_type, int divide_type,
     return 1;
   }
 
-  if (mult_type == GF_MULT_COMPOSITE) {
-    if (w != 8 && w != 16 && w != 32 
-               && w != 64 && w != 128)          { _gf_errno = GF_E_COMP__W; return 0; }
-    if (w < 128 && (poly >> (w/2)) != 0)                   { _gf_errno = GF_E_COMP_PP; return 0; }
-    if (divide_type != GF_DIVIDE_DEFAULT)       { _gf_errno = GF_E_DIVCOMP; return 0; }
-    if (arg1 != 2)                              { _gf_errno = GF_E_COMP_A2; return 0; }
-    if (rsimd || rnosimd)                       { _gf_errno = GF_E_COMP_SS; return 0; }
-    if (base != NULL) {
-      sub = (gf_internal_t *) base->scratch;
-      if (sub->w != w/2)                      { _gf_errno = GF_E_BASE__W; return 0; }
-      if (poly == 0) {
-        if (gf_composite_get_default_poly(base) == 0) { _gf_errno = GF_E_COMPXPP; return 0; }
-      }
-    }
-    return 1;
-  }
-
   _gf_errno = GF_E_UNKNOWN; 
   return 0;
 }
@@ -371,131 +333,6 @@ int gf_free(gf_t *gf, int recursive)
   }
   if (h->free_me) free(h);
   return 0; /* Making compiler happy */
-}
-
-void gf_alignment_error(char *s, int a)
-{
-  fprintf(stderr, "Alignment error in %s:\n", s);
-  fprintf(stderr, "   The source and destination buffers must be aligned to each other,\n");
-  fprintf(stderr, "   and they must be aligned to a %d-byte address.\n", a);
-  assert(0);
-}
-
-static 
-void gf_invert_binary_matrix(uint32_t *mat, uint32_t *inv, int rows) {
-  int cols, i, j;
-  uint32_t tmp;
-
-  cols = rows;
-
-  for (i = 0; i < rows; i++) inv[i] = (1 << i);
-
-  /* First -- convert into upper triangular */
-
-  for (i = 0; i < cols; i++) {
-
-    /* Swap rows if we ave a zero i,i element.  If we can't swap, then the
-       matrix was not invertible */
-
-    if ((mat[i] & (1 << i)) == 0) {
-      for (j = i+1; j < rows && (mat[j] & (1 << i)) == 0; j++) ;
-      if (j == rows) {
-        fprintf(stderr, "galois_invert_matrix: Matrix not invertible!!\n");
-        assert(0);
-      }
-      tmp = mat[i]; mat[i] = mat[j]; mat[j] = tmp;
-      tmp = inv[i]; inv[i] = inv[j]; inv[j] = tmp;
-    }
-
-    /* Now for each j>i, add A_ji*Ai to Aj */
-    for (j = i+1; j != rows; j++) {
-      if ((mat[j] & (1 << i)) != 0) {
-        mat[j] ^= mat[i];
-        inv[j] ^= inv[i];
-      }
-    }
-  }
-
-  /* Now the matrix is upper triangular.  Start at the top and multiply down */
-
-  for (i = rows-1; i >= 0; i--) {
-    for (j = 0; j < i; j++) {
-      if (mat[j] & (1 << i)) {
-        /*  mat[j] ^= mat[i]; */
-        inv[j] ^= inv[i];
-      }
-    }
-  }
-}
-
-uint32_t gf_bitmatrix_inverse(uint32_t y, int w, uint32_t pp) 
-{
-  uint32_t mat[32], inv[32], mask;
-  int i;
-
-  mask = (w == 32) ? 0xffffffff : (1 << w) - 1;
-  for (i = 0; i < w; i++) {
-    mat[i] = y;
-
-    if (y & (1 << (w-1))) {
-      y = y << 1;
-      y = ((y ^ pp) & mask);
-    } else {
-      y = y << 1;
-    }
-  }
-
-  gf_invert_binary_matrix(mat, inv, w);
-  return inv[0];
-}
-
-void gf_two_byte_region_table_multiply(gf_region_data *rd, uint16_t *base)
-{
-  uint64_t a, prod;
-  int xor;
-  uint64_t *s64, *d64, *top;
-
-  s64 = rd->s_start;
-  d64 = rd->d_start;
-  top = rd->d_top;
-  xor = rd->xor;
-  
-  if (xor) {
-    while (d64 != top) {
-      a = *s64;
-      prod = base[a >> 48];
-      a <<= 16;
-      prod <<= 16;
-      prod ^= base[a >> 48];
-      a <<= 16;
-      prod <<= 16;
-      prod ^= base[a >> 48];
-      a <<= 16;
-      prod <<= 16;
-      prod ^= base[a >> 48];
-      prod ^= *d64;
-      *d64 = prod;
-      s64++;
-      d64++;
-    }
-  } else {
-    while (d64 != top) {
-      a = *s64;
-      prod = base[a >> 48];
-      a <<= 16;
-      prod <<= 16;
-      prod ^= base[a >> 48];
-      a <<= 16;
-      prod <<= 16;
-      prod ^= base[a >> 48];
-      a <<= 16;
-      prod <<= 16;
-      prod ^= base[a >> 48];
-      *d64 = prod;
-      s64++;
-      d64++;
-    }
-  }
 }
 
 static void gf_slow_multiply_region(gf_region_data *rd, void *src, void *dest, void *s_top)

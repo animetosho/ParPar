@@ -15,10 +15,6 @@
 
 #include <string.h>
 
-extern void     timer_start (double *t);
-extern double   timer_split (const double *t);
-extern void     galois_fill_random (void *buf, int len, unsigned int seed);
-
 typedef struct {
   int mult_type;
   int region_type;
@@ -34,18 +30,6 @@ typedef struct {
 
 extern int gf_w16_init (gf_t *gf);
 extern int gf_w16_scratch_size(int mult_type, int region_type, int divide_type, int arg1, int arg2);
-
-void gf_wgen_cauchy_region(gf_t *gf, void *src, void *dest, gf_val_32_t val, int bytes, int xor);
-gf_val_32_t gf_wgen_extract_word(gf_t *gf, void *start, int bytes, int index);
-
-extern void gf_alignment_error(char *s, int a);
-
-extern uint32_t gf_bitmatrix_inverse(uint32_t y, int w, uint32_t pp);
-
-/* This returns the correct default for prim_poly when base is used as the base
-   field for COMPOSITE.  It returns 0 if we don't have a default prim_poly. */
-
-extern uint64_t gf_composite_get_default_poly(gf_t *base);
 
 /* This structure lets you define a region multiply.  It helps because you can handle
    unaligned portions of the data with the procedures below, which really cleans
@@ -83,8 +67,6 @@ extern void gf_do_initial_region_alignment(gf_region_data *rd);
 /* This performs gf->multiply.32() on all of the unaligned bytes in the end of the region */
 
 extern void gf_do_final_region_alignment(gf_region_data *rd);
-
-extern void gf_two_byte_region_table_multiply(gf_region_data *rd, uint16_t *base);
 
 extern void gf_multby_zero(void *dest, int bytes, int xor);
 extern void gf_multby_one(void *src, void *dest, int bytes, int xor);
