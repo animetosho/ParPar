@@ -224,8 +224,7 @@ PAR2.prototype = {
 	},
 	
 	// Warning: this never checks if the recovery block is fully generated
-	getPacketRecovery: function(block, keep) {
-		var index = block; // TODO: lookup index
+	getPacketRecovery: function(index, keep) {
 		var pkt = this.recoveryPackets[index];
 		
 		this._writePktHeader(pkt, "PAR 2.0\0RecvSlic");
@@ -384,10 +383,13 @@ PAR2File.prototype = {
 		if(this.slicePos >= this.numSlices) throw new Error('Too many slices given');
 		
 		var lastPiece = this.slicePos == this.numSlices-1;
-		// TODO: check size of data if last piece
 		
-		if(data.length != this.par2.blockSize && !lastPiece) {
-			throw new Error('Invalid data length');
+		if(lastPiece) {
+			if(data.length != (this.size % this.par2.blockSize))
+				throw new Error('Invalid data length');
+		} else {
+			if(data.length != this.par2.blockSize)
+				throw new Error('Invalid data length');
 		}
 		
 		// calc slice CRC/MD5
@@ -530,11 +532,6 @@ PAR2Chunked.prototype = {
 		bufferedClear.call(this);
 	},
 	
-	getRecoveryChunk: function(block) {
-		var index = block; // TODO: lookup index
-		return this.recoveryData[index];
-	},
-	
 	process: function(fileOrNum, data, cb) {
 		var sliceNum = fileOrNum;
 		if(typeof fileOrNum == 'object') {
@@ -572,7 +569,7 @@ PAR2Chunked.prototype = {
 	
 	getHeader: function(block, keep) {
 		if(!this.packetHeader) throw new Error('Need MD5 hash to generate header');
-		var index = block; // TODO: lookup index
+		var index = block; // may eventually make these different?
 		
 		var pkt = new Buffer(68);
 		this.packetHeader.copy(pkt);
