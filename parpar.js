@@ -89,8 +89,6 @@ var bufferedClear = function() {
 	this.bufferedInputPos = 0;
 };
 
-// TODO: consider way to clear out memory
-
 // files needs to be an array of {md5_16k: <Buffer>, size: <int>, name: <string>}
 function PAR2(files, sliceSize) {
 	if(!(this instanceof PAR2))
@@ -145,6 +143,13 @@ PAR2.prototype = {
 	bufferedInputs: null,
 	bufferedInBlocks: null,
 	bufferedInputPos: 0,
+	
+	getFiles: function(keep) {
+		if(keep) return this.files;
+		var files = this.files;
+		this.files = null;
+		return files;
+	},
 	
 	// write in a packet's header; data must already be present at offset+64
 	_writePktHeader: function(buf, name, offset, len) {
@@ -219,15 +224,16 @@ PAR2.prototype = {
 	},
 	
 	// Warning: this never checks if the recovery block is fully generated
-	getPacketRecovery: function(block) {
+	getPacketRecovery: function(block, keep) {
 		var index = block; // TODO: lookup index
 		var pkt = this.recoveryPackets[index];
 		
 		this._writePktHeader(pkt, "PAR 2.0\0RecvSlic");
+		if(!keep) this.recoveryPackets[index] = null;
 		return pkt;
 	},
 	
-	getRecoveryHeader: function(chunks, num) {
+	makeRecoveryHeader: function(chunks, num) {
 		if(!Array.isArray(chunks)) chunks = [chunks];
 		
 		var pkt = new Buffer(68);
@@ -254,27 +260,14 @@ PAR2.prototype = {
 		return pkt;
 	},
 	
-	/*
-	rewind: function() {
-		this.files.forEach(function(file) {
-			file.slicePos = 0;
-			if(!file.md5) {
-				file._md5ctx = crypto.createHash('md5');
-			}
-		});
-		this._mergeRecovery = false;
-		if(this.chunkSeq) {
-			// assume that rewind implies that the previous chunk has done processing
-			for(var i in this.recoveryChunkHash)
-				this.recoveryChunkHash[i].update(this.recoveryData[i]);
-			this.chunkPos += this.chunkSize;
-		}
+	getPacketMain: function(keep) {
+		if(keep)
+			return this.pktMain;
+		var pkt = this.pktMain;
+		this.pktMain = null;
+		return pkt;
 	},
-	*/
-	getPacketMain: function() {
-		return this.pktMain;
-	},
-	getPacketCreator: function(creator) {
+	makePacketCreator: function(creator) {
 		var len = creator.length;
 		len = Math.ceil(len / 4) * 4;
 		
@@ -284,7 +277,7 @@ PAR2.prototype = {
 		this._writePktHeader(pkt, "PAR 2.0\0Creator\0");
 		return pkt;
 	},
-	getPacketComment: function(comment, unicode) {
+	makePacketComment: function(comment, unicode) {
 		if(!unicode) {
 			unicode = (hasUnicode(comment) ? CHAR_CONST.BOTH : CHAR_CONST.ASCII);
 		} else if([CHAR_CONST.BOTH, CHAR_CONST.ASCII, CHAR_CONST.UNICODE].indexOf(unicode) < 0) {
@@ -432,12 +425,16 @@ PAR2File.prototype = {
 		this.par2.processBlock(data, this.sliceOffset + this.slicePos-1, cb);
 	},
 	
-	getPacketChecksums: function() {
+	getPacketChecksums: function(keep) {
 		this.id.copy(this.pktCheck, 64);
 		this.par2._writePktHeader(this.pktCheck, "PAR 2.0\0IFSC\0\0\0\0");
-		return this.pktCheck;
+		if(keep)
+			return this.pktCheck;
+		var pkt = this.pktCheck;
+		this.pktCheck = null;
+		return pkt;
 	},
-	getPacketDescription: function(unicode) {
+	makePacketDescription: function(unicode) {
 		if(!unicode) {
 			unicode = (hasUnicode(this.name) ? CHAR_CONST.BOTH : CHAR_CONST.ASCII);
 		} else if([CHAR_CONST.BOTH, CHAR_CONST.ASCII].indexOf(unicode) < 0) {
@@ -475,7 +472,7 @@ PAR2File.prototype = {
 		pkt.write(this.name, offset + 64+16, 'ucs2');
 		this.par2._writePktHeader(pkt, "PAR 2.0\0UniFileN", offset); // TODO: include length?
 	},
-	getPacketUniName: function() {
+	makePacketUniName: function() {
 		var len = this.name.length * 2;
 		len = Math.ceil(len / 4) * 4;
 		
@@ -573,20 +570,24 @@ PAR2Chunked.prototype = {
 			bufferedFinish.call(this, cb);
 	},
 	
-	getHeader: function(block) {
+	getHeader: function(block, keep) {
 		if(!this.packetHeader) throw new Error('Need MD5 hash to generate header');
 		var index = block; // TODO: lookup index
 		
 		var pkt = new Buffer(68);
 		this.packetHeader.copy(pkt);
-		this.recoveryChunkHash[index].digest().copy(pkt, 16);
-		this.recoveryChunkHash[index] = false;
+		if(!Buffer.isBuffer(this.recoveryChunkHash[index]))
+			this.recoveryChunkHash[index] = this.recoveryChunkHash[index].digest();
+		this.recoveryChunkHash[index].copy(pkt, 16);
 		pkt.writeUInt32LE(block, 64);
 		
-		if(--this.unconsumedHeaders < 1) {
-			// all headers consumed, clean up some stuff
-			this.recoveryChunkHash = null;
-			this.packetHeader = null;
+		if(!keep) {
+			this.recoveryChunkHash[index] = false;
+			if(--this.unconsumedHeaders < 1) {
+				// all headers consumed, clean up some stuff
+				this.recoveryChunkHash = null;
+				this.packetHeader = null;
+			}
 		}
 		
 		return pkt;
