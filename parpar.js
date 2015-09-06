@@ -51,20 +51,20 @@ var CHAR_CONST = {
 	UNICODE: 3,
 };
 
-var bufferedProcess = function(dataBlock, sliceNum, len, cb) {
+var bufferedProcess = function(dataSlice, sliceNum, len, cb) {
 	if(!len) return process.nextTick(cb);
 	if(!this.bufferedInputs) {
 		this.bufferedInputs = Array(this.bufferInputs);
 		for(var i=0; i<this.bufferInputs; i++)
 			this.bufferedInputs[i] = gf.AlignedBuffer(len);
-		this.bufferedInBlocks = Array(this.bufferInputs);
+		this.bufferedInSlices = Array(this.bufferInputs);
 		this.bufferedInputPos = 0;
 	}
-	gf.copy(dataBlock, this.bufferedInputs[this.bufferedInputPos]);
-	this.bufferedInBlocks[this.bufferedInputPos] = sliceNum;
+	gf.copy(dataSlice, this.bufferedInputs[this.bufferedInputPos]);
+	this.bufferedInSlices[this.bufferedInputPos] = sliceNum;
 	this.bufferedInputPos++;
 	if(this.bufferedInputPos >= this.bufferInputs) {
-		gf.generate(this.bufferedInputs, this.bufferedInBlocks, this.recoveryData, this.recoveryBlocks, this._mergeRecovery, cb);
+		gf.generate(this.bufferedInputs, this.bufferedInSlices, this.recoveryData, this.recoverySlices, this._mergeRecovery, cb);
 		this._mergeRecovery = true;
 		this.bufferedInputPos = 0;
 	} else
@@ -73,7 +73,7 @@ var bufferedProcess = function(dataBlock, sliceNum, len, cb) {
 var bufferedFinish = function(cb) {
 	var recData = this.recoveryData;
 	if(this.bufferedInputPos) {
-		gf.generate(this.bufferedInputs.slice(0, this.bufferedInputPos), this.bufferedInBlocks.slice(0, this.bufferedInputPos), recData, this.recoveryBlocks, this._mergeRecovery, function() {
+		gf.generate(this.bufferedInputs.slice(0, this.bufferedInputPos), this.bufferedInSlices.slice(0, this.bufferedInputPos), recData, this.recoverySlices, this._mergeRecovery, function() {
 			gf.finalise(recData);
 			cb();
 		});
@@ -85,7 +85,7 @@ var bufferedFinish = function(cb) {
 };
 var bufferedClear = function() {
 	this.bufferedInputs = null;
-	this.bufferedInBlocks = null;
+	this.bufferedInSlices = null;
 	this.bufferedInputPos = 0;
 };
 
@@ -95,7 +95,7 @@ function PAR2(files, sliceSize) {
 		return new PAR2(files, sliceSize);
 	
 	if(sliceSize % 4) throw new Error('Slice size must be a multiple of 4');
-	this.blockSize = sliceSize;
+	this.sliceSize = sliceSize;
 	
 	var self = this;
 	
@@ -132,7 +132,7 @@ function PAR2(files, sliceSize) {
 	this._writePktHeader(this.pktMain, 'PAR 2.0\0Main\0\0\0\0');
 	
 	// -- other init
-	this.recoveryBlocks = [];
+	this.recoverySlices = [];
 	this._mergeRecovery = false;
 };
 
@@ -141,7 +141,7 @@ PAR2.prototype = {
 	recoveryPackets: null,
 	bufferInputs: 16,
 	bufferedInputs: null,
-	bufferedInBlocks: null,
+	bufferedInSlices: null,
 	bufferedInputPos: 0,
 	
 	getFiles: function(keep) {
@@ -172,58 +172,58 @@ PAR2.prototype = {
 		
 	},
 	
-	startChunking: function(recoveryBlocks, notSequential) {
+	startChunking: function(recoverySlices, notSequential) {
 		var pkt;
 		if(!notSequential) {
 			var pkt = new Buffer(64);
 			MAGIC.copy(pkt, 0);
-			Buffer_writeUInt64LE(pkt, this.blockSize + 68, 8);
+			Buffer_writeUInt64LE(pkt, this.sliceSize + 68, 8);
 			// skip MD5
 			this.setID.copy(pkt, 32);
 			pkt.write("PAR 2.0\0RecvSlic", 48);
 		}
 		
-		return new PAR2Chunked(recoveryBlocks, pkt);
+		return new PAR2Chunked(recoverySlices, pkt);
 	},
-	recoverySize: function(numBlocks) {
-		if(numBlocks === undefined) numBlocks = 1;
-		return (this.blockSize + 68) * numBlocks;
+	recoverySize: function(numSlices) {
+		if(numSlices === undefined) numSlices = 1;
+		return (this.sliceSize + 68) * numSlices;
 	},
 	
 	_allocRecovery: function() {
-		if(!this.recoveryBlocks.length) {
+		if(!this.recoverySlices.length) {
 			this.recoveryPackets = null;
 			this.recoveryData = null;
 			return;
 		}
 		
-		this.recoveryData = Array(this.recoveryBlocks.length);
+		this.recoveryData = Array(this.recoverySlices.length);
 		this._mergeRecovery = false;
 		
-		this.recoveryPackets = Array(this.recoveryBlocks.length);
+		this.recoveryPackets = Array(this.recoverySlices.length);
 		
 		// allocate space for recvslic header & alignment
 		var headerSize = Math.ceil(68 / gf.alignment) * gf.alignment;
-		var size = this.blockSize + headerSize;
-		for(var i in this.recoveryBlocks) {
+		var size = this.sliceSize + headerSize;
+		for(var i in this.recoverySlices) {
 			this.recoveryPackets[i] = gf.AlignedBuffer(size).slice(headerSize - 68); // offset for alignment purposes
-			this.recoveryPackets[i].writeUInt32LE(this.recoveryBlocks[i], 64);
+			this.recoveryPackets[i].writeUInt32LE(this.recoverySlices[i], 64);
 			
 			this.recoveryData[i] = this.recoveryPackets[i].slice(68);
 		}
 	},
-	// can call PAR2.setRecoveryBlocks(0) to clear out recovery data
-	setRecoveryBlocks: function(blocks) {
-		if(Array.isArray(blocks))
-			this.recoveryBlocks = blocks;
+	// can call PAR2.setRecoverySlices(0) to clear out recovery data
+	setRecoverySlices: function(slices) {
+		if(Array.isArray(slices))
+			this.recoverySlices = slices;
 		else {
-			if(!blocks) blocks = 0;
-			this.recoveryBlocks = range(0, blocks);
+			if(!slices) slices = 0;
+			this.recoverySlices = range(0, slices);
 		}
 		this._allocRecovery();
 	},
 	
-	// Warning: this never checks if the recovery block is fully generated
+	// Warning: this never checks if the recovery slice is fully generated
 	getPacketRecovery: function(index, keep) {
 		var pkt = this.recoveryPackets[index];
 		
@@ -237,14 +237,14 @@ PAR2.prototype = {
 		
 		var pkt = new Buffer(68);
 		MAGIC.copy(pkt, 0);
-		Buffer_writeUInt64LE(pkt, this.blockSize, 8);
+		Buffer_writeUInt64LE(pkt, this.sliceSize, 8);
 		// skip MD5
 		this.setID.copy(pkt, 32);
 		pkt.write("PAR 2.0\0RecvSlic", 48);
 		pkt.writeUInt32LE(num, 64);
 		
 		var md5 = crypto.createHash('md5').update(pkt.slice(32));
-		var len = this.blockSize;
+		var len = this.sliceSize;
 		
 		chunks.forEach(function(chunk) {
 			md5.update(chunk);
@@ -325,14 +325,14 @@ PAR2.prototype = {
 		return pkt;
 	},
 	
-	processBlock: function(data, blockNum, cb) {
-		if(this.recoveryBlocks.length)
-			bufferedProcess.call(this, data, blockNum, this.blockSize, cb);
+	processSlice: function(data, sliceNum, cb) {
+		if(this.recoverySlices.length)
+			bufferedProcess.call(this, data, sliceNum, this.sliceSize, cb);
 		else
 			process.nextTick(cb);
 	},
 	finalise: function(cb) {
-		if(!this.recoveryBlocks.length)
+		if(!this.recoverySlices.length)
 			return process.nextTick(cb);
 		
 		bufferedFinish.call(this, cb);
@@ -365,7 +365,7 @@ function PAR2File(par2, file) {
 		this._md5ctx = crypto.createHash('md5');
 	}
 	
-	this.numSlices = Math.ceil(file.size / par2.blockSize);
+	this.numSlices = Math.ceil(file.size / par2.sliceSize);
 	this.pktCheck = new Buffer(64 + 16 + 20*this.numSlices);
 	
 	this.slicePos = 0;
@@ -385,24 +385,24 @@ PAR2File.prototype = {
 		var lastPiece = this.slicePos == this.numSlices-1;
 		
 		if(lastPiece) {
-			if(data.length != (this.size % this.par2.blockSize))
+			if(data.length != (this.size % this.par2.sliceSize))
 				throw new Error('Invalid data length');
 		} else {
-			if(data.length != this.par2.blockSize)
+			if(data.length != this.par2.sliceSize)
 				throw new Error('Invalid data length');
 		}
 		
 		// calc slice CRC/MD5
 		var md5 = crypto.createHash('md5').update(data);
 		var crc = y.crc32(data);
-		if(data.length != this.par2.blockSize) {
+		if(data.length != this.par2.sliceSize) {
 			// feed in zero padding
 			var p;
-			for(p = data.length; p < this.par2.blockSize - nulls.length; p += nulls.length) {
+			for(p = data.length; p < this.par2.sliceSize - nulls.length; p += nulls.length) {
 				md5.update(nulls);
 				crc = y.crc32(nulls, crc); // TODO: consider doing a more efficient "crc of zeroes"
 			}
-			var nullsP = nulls.slice(0, this.par2.blockSize - p);
+			var nullsP = nulls.slice(0, this.par2.sliceSize - p);
 			md5.update(nullsP);
 			crc = y.crc32(nullsP, crc);
 		}
@@ -424,7 +424,7 @@ PAR2File.prototype = {
 		}
 		
 		this.slicePos++;
-		this.par2.processBlock(data, this.sliceOffset + this.slicePos-1, cb);
+		this.par2.processSlice(data, this.sliceOffset + this.slicePos-1, cb);
 	},
 	
 	getPacketChecksums: function(keep) {
@@ -485,21 +485,21 @@ PAR2File.prototype = {
 };
 
 
-function PAR2Chunked(recoveryBlocks, packetHeader) {
-	if(Array.isArray(recoveryBlocks))
-		this.recoveryBlocks = recoveryBlocks;
+function PAR2Chunked(recoverySlices, packetHeader) {
+	if(Array.isArray(recoverySlices))
+		this.recoverySlices = recoverySlices;
 	else
-		this.recoveryBlocks = range(0, recoveryBlocks);
-	if(!this.recoveryBlocks || !this.recoveryBlocks.length)
-		throw new Error('Must supply recovery blocks for chunked operation');
+		this.recoverySlices = range(0, recoverySlices);
+	if(!this.recoverySlices || !this.recoverySlices.length)
+		throw new Error('Must supply recovery slices for chunked operation');
 	
-	this.recoveryData = Array(this.recoveryBlocks.length);
-	this.unconsumedHeaders = this.recoveryBlocks.length;
+	this.recoveryData = Array(this.recoverySlices.length);
+	this.unconsumedHeaders = this.recoverySlices.length;
 	
 	if(packetHeader) {
 		var tmp = new Buffer(4);
-		this.recoveryChunkHash = this.recoveryBlocks.map(function(blockNum) {
-			tmp.writeUInt32LE(blockNum, 0);
+		this.recoveryChunkHash = this.recoverySlices.map(function(sliceNum) {
+			tmp.writeUInt32LE(sliceNum, 0);
 			return crypto.createHash('md5')
 				.update(packetHeader.slice(32))
 				.update(tmp);
@@ -514,7 +514,7 @@ PAR2Chunked.prototype = {
 	bufferInputs: 16,
 	recoveryChunkHash: null,
 	bufferedInputs: null,
-	bufferedInBlocks: null,
+	bufferedInSlices: null,
 	bufferedInputPos: 0,
 	
 	// can clear recovery data somewhat with setChunkSize(0)
@@ -524,7 +524,7 @@ PAR2Chunked.prototype = {
 			throw new Error('Chunk size must be a multiple of 2');
 		
 		this.chunkSize = size;
-		for(var i in this.recoveryBlocks)
+		for(var i in this.recoverySlices)
 			this.recoveryData[i] = size ? gf.AlignedBuffer(size) : null;
 		
 		// effective reset
@@ -567,16 +567,16 @@ PAR2Chunked.prototype = {
 			bufferedFinish.call(this, cb);
 	},
 	
-	getHeader: function(block, keep) {
+	getHeader: function(slice, keep) {
 		if(!this.packetHeader) throw new Error('Need MD5 hash to generate header');
-		var index = block; // may eventually make these different?
+		var index = slice; // may eventually make these different?
 		
 		var pkt = new Buffer(68);
 		this.packetHeader.copy(pkt);
 		if(!Buffer.isBuffer(this.recoveryChunkHash[index]))
 			this.recoveryChunkHash[index] = this.recoveryChunkHash[index].digest();
 		this.recoveryChunkHash[index].copy(pkt, 16);
-		pkt.writeUInt32LE(block, 64);
+		pkt.writeUInt32LE(slice, 64);
 		
 		if(!keep) {
 			this.recoveryChunkHash[index] = false;
