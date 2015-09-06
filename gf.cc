@@ -500,7 +500,7 @@ FUNC(MultiplyMulti) {
 	RETURN_UNDEF
 }
 
-FUNC(Finalise) {
+FUNC(Finish) {
 	FUNC_START;
 	
 	if (args.Length() < 1 || !args[0]->IsArray())
@@ -555,7 +555,7 @@ void init(Handle<Object> target) {
 	// Buffer AlignedBuffer(int size)
 	NODE_SET_METHOD(target, "AlignedBuffer", AlignedBuffer);
 	NODE_SET_METHOD(target, "copy", PrepInput);
-	NODE_SET_METHOD(target, "finalise", Finalise);
+	NODE_SET_METHOD(target, "finish", Finish);
 	
 #ifdef _OPENMP
 	// set_max_threads(int num_threads)

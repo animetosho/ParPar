@@ -74,11 +74,11 @@ var bufferedFinish = function(cb) {
 	var recData = this.recoveryData;
 	if(this.bufferedInputPos) {
 		gf.generate(this.bufferedInputs.slice(0, this.bufferedInputPos), this.bufferedInSlices.slice(0, this.bufferedInputPos), recData, this.recoverySlices, this._mergeRecovery, function() {
-			gf.finalise(recData);
+			gf.finish(recData);
 			cb();
 		});
 	} else {
-		gf.finalise(recData);
+		gf.finish(recData);
 		process.nextTick(cb);
 	}
 	this._mergeRecovery = false;
@@ -331,7 +331,7 @@ PAR2.prototype = {
 		else
 			process.nextTick(cb);
 	},
-	finalise: function(cb) {
+	finish: function(cb) {
 		if(!this.recoverySlices.length)
 			return process.nextTick(cb);
 		
@@ -542,7 +542,7 @@ PAR2Chunked.prototype = {
 		bufferedProcess.call(this, data, sliceNum, this.chunkSize, cb);
 	},
 	
-	finalise: function(files, cb) {
+	finish: function(files, cb) {
 		if(!Array.isArray(files)) {
 			cb = files;
 			files = null;
