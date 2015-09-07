@@ -382,8 +382,7 @@ function PAR2File(par2, file) {
 }
 
 // for zero-filling, to avoid constant allocating of new buffers
-var nulls = new Buffer(8192);
-nulls.fill(0);
+var nulls;
 
 PAR2File.prototype = {
 	sliceOffset: 0,
@@ -408,6 +407,10 @@ PAR2File.prototype = {
 			var crc = y.crc32(data);
 			if(data.length != this.par2.sliceSize) {
 				// feed in zero padding
+				if(!nulls) {
+					nulls = new Buffer(8192);
+					nulls.fill(0);
+				}
 				var p;
 				for(p = data.length; p < this.par2.sliceSize - nulls.length; p += nulls.length) {
 					md5.update(nulls);
