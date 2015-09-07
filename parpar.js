@@ -87,6 +87,7 @@ var bufferedClear = function() {
 	this.bufferedInputs = null;
 	this.bufferedInSlices = null;
 	this.bufferedInputPos = 0;
+	this._mergeRecovery = false;
 };
 
 // files needs to be an array of {md5_16k: <Buffer>, size: <int>, name: <string>}
@@ -133,7 +134,6 @@ function PAR2(files, sliceSize) {
 	
 	// -- other init
 	this.recoverySlices = [];
-	this._mergeRecovery = false;
 };
 
 PAR2.prototype = {
@@ -143,6 +143,7 @@ PAR2.prototype = {
 	bufferedInputs: null,
 	bufferedInSlices: null,
 	bufferedInputPos: 0,
+	_mergeRecovery: false,
 	
 	getFiles: function(keep) {
 		if(keep) return this.files;
@@ -190,7 +191,15 @@ PAR2.prototype = {
 		return (this.sliceSize + 68) * numSlices;
 	},
 	
-	_allocRecovery: function() {
+	// can call PAR2.setRecoverySlices(0) to clear out recovery data
+	setRecoverySlices: function(slices) {
+		if(Array.isArray(slices))
+			this.recoverySlices = slices;
+		else {
+			if(!slices) slices = 0;
+			this.recoverySlices = range(0, slices);
+		}
+		
 		if(!this.recoverySlices.length) {
 			this.recoveryPackets = null;
 			this.recoveryData = null;
@@ -198,7 +207,7 @@ PAR2.prototype = {
 		}
 		
 		this.recoveryData = Array(this.recoverySlices.length);
-		this._mergeRecovery = false;
+		bufferedClear.call(this);
 		
 		this.recoveryPackets = Array(this.recoverySlices.length);
 		
@@ -211,25 +220,6 @@ PAR2.prototype = {
 			
 			this.recoveryData[i] = this.recoveryPackets[i].slice(68);
 		}
-	},
-	// can call PAR2.setRecoverySlices(0) to clear out recovery data
-	setRecoverySlices: function(slices) {
-		if(Array.isArray(slices))
-			this.recoverySlices = slices;
-		else {
-			if(!slices) slices = 0;
-			this.recoverySlices = range(0, slices);
-		}
-		this._allocRecovery();
-	},
-	
-	// Warning: this never checks if the recovery slice is fully generated
-	getPacketRecovery: function(index, keep) {
-		var pkt = this.recoveryPackets[index];
-		
-		this._writePktHeader(pkt, "PAR 2.0\0RecvSlic");
-		if(!keep) this.recoveryPackets[index] = null;
-		return pkt;
 	},
 	
 	makeRecoveryHeader: function(chunks, num) {
@@ -331,12 +321,32 @@ PAR2.prototype = {
 		else
 			process.nextTick(cb);
 	},
-	finish: function(cb) {
+	finish: function(files, cb) {
+		if(!Array.isArray(files)) {
+			cb = files;
+			files = null;
+		}
+		
+		if(files) {
+			files.forEach(function(file) {
+				file.slicePos = 0;
+				if(!file.md5)
+					file._md5ctx = crypto.createHash('md5');
+			});
+		}
+		
 		if(!this.recoverySlices.length)
 			return process.nextTick(cb);
 		
-		bufferedFinish.call(this, cb);
-		bufferedClear.call(this);
+		var self = this;
+		bufferedFinish.call(this, function() {
+			// TODO: if a lot of recovery packets are bufferred, calculating MD5 over them might stall the process for a while
+			self.recoveryPackets.forEach(function(pkt) {
+				self._writePktHeader(pkt, "PAR 2.0\0RecvSlic");
+			});
+			cb();
+		});
+		if(!files) bufferedClear.call(this);
 	}
 };
 
@@ -393,26 +403,28 @@ PAR2File.prototype = {
 		}
 		
 		// calc slice CRC/MD5
-		var md5 = crypto.createHash('md5').update(data);
-		var crc = y.crc32(data);
-		if(data.length != this.par2.sliceSize) {
-			// feed in zero padding
-			var p;
-			for(p = data.length; p < this.par2.sliceSize - nulls.length; p += nulls.length) {
-				md5.update(nulls);
-				crc = y.crc32(nulls, crc); // TODO: consider doing a more efficient "crc of zeroes"
+		if(this.pktCheck) {
+			var md5 = crypto.createHash('md5').update(data);
+			var crc = y.crc32(data);
+			if(data.length != this.par2.sliceSize) {
+				// feed in zero padding
+				var p;
+				for(p = data.length; p < this.par2.sliceSize - nulls.length; p += nulls.length) {
+					md5.update(nulls);
+					crc = y.crc32(nulls, crc); // TODO: consider doing a more efficient "crc of zeroes"
+				}
+				var nullsP = nulls.slice(0, this.par2.sliceSize - p);
+				md5.update(nullsP);
+				crc = y.crc32(nullsP, crc);
 			}
-			var nullsP = nulls.slice(0, this.par2.sliceSize - p);
-			md5.update(nullsP);
-			crc = y.crc32(nullsP, crc);
+			var chkAddr = 64 + 16 + 20*this.slicePos;
+			md5.digest().copy(this.pktCheck, chkAddr);
+			// need to reverse the CRC
+			this.pktCheck[chkAddr + 16] = crc[3];
+			this.pktCheck[chkAddr + 17] = crc[2];
+			this.pktCheck[chkAddr + 18] = crc[1];
+			this.pktCheck[chkAddr + 19] = crc[0];
 		}
-		var chkAddr = 64 + 16 + 20*this.slicePos;
-		md5.digest().copy(this.pktCheck, chkAddr);
-		// need to reverse the CRC
-		this.pktCheck[chkAddr + 16] = crc[3];
-		this.pktCheck[chkAddr + 17] = crc[2];
-		this.pktCheck[chkAddr + 18] = crc[1];
-		this.pktCheck[chkAddr + 19] = crc[0];
 		
 		if(!this.md5) {
 			this._md5ctx.update(data);
@@ -528,7 +540,6 @@ PAR2Chunked.prototype = {
 			this.recoveryData[i] = size ? gf.AlignedBuffer(size) : null;
 		
 		// effective reset
-		this._mergeRecovery = false;
 		bufferedClear.call(this);
 	},
 	
@@ -565,6 +576,8 @@ PAR2Chunked.prototype = {
 			});
 		} else
 			bufferedFinish.call(this, cb);
+		
+		if(!files) bufferedClear.call(this);
 	},
 	
 	getHeader: function(slice, keep) {

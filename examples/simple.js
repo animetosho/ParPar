@@ -71,7 +71,7 @@ ParPar.fileInfo(files, function(err, info) {
 				// note that the ordering of PAR2 packets is arbitrary
 				
 				for(var i=0; i<recoverySlices; i++)
-					data.push(par2.getPacketRecovery(i));
+					data.push(par2.recoveryPackets[i]);
 				
 				pFiles.forEach(function(file) {
 					data.push(file.makePacketDescription());
