@@ -612,6 +612,7 @@ module.exports = {
 	RECOVERY_HEADER_SIZE: 68,
 	
 	PAR2: PAR2,
+	setMaxThreads: gf.set_max_threads,
 	AlignedBuffer: gf.AlignedBuffer,
 	fileInfo: function(files, cb) {
 		var buf = new Buffer(16384);
