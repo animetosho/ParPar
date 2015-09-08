@@ -1,6 +1,7 @@
 
 #include <node.h>
 #include <node_buffer.h>
+#include <node_version.h>
 #include <v8.h>
 #include <stdlib.h>
 //#include <inttypes.h>
@@ -148,7 +149,7 @@ static inline void multiply_mat(uint16_t** inputs, uint_fast16_t* iNums, unsigne
 
 /*******************************************/
 
-#ifndef NODE_010
+#if NODE_VERSION_AT_LEAST(0, 11, 0)
 // for node 0.12.x
 #define FUNC(name) static void name(const FunctionCallbackInfo<Value>& args)
 #define FUNC_START \
@@ -191,7 +192,7 @@ FUNC(SetMaxThreads) {
 #endif
 
 void free_buffer(char* data, void* _size) {
-#ifdef NODE_010
+#if !NODE_VERSION_AT_LEAST(0, 11, 0)
 	int size = (int)(size_t)_size;
 	V8::AdjustAmountOfExternalAllocatedMemory(-size);
 #endif
@@ -228,8 +229,12 @@ FUNC(AlignedBuffer) {
 		node::StringBytes::Write(ISOLATE buf, len, args[1]->ToString(), end);
 	*/
 	
-#ifndef NODE_010
+#if NODE_VERSION_AT_LEAST(0, 11, 0)
+	#if NODE_VERSION_AT_LEAST(3, 0, 0) // iojs3
+	RETURN_VAL( node::Buffer::New(ISOLATE (char*)buf, len, free_buffer, (void*)len).ToLocalChecked() );
+	#else
 	RETURN_VAL( node::Buffer::New(ISOLATE (char*)buf, len, free_buffer, (void*)len) );
+	#endif
 #else
 	RETURN_VAL(Local<Object>::New(
 		node::Buffer::New((char*)buf, len, free_buffer, (void*)len)->handle_
@@ -298,7 +303,7 @@ FUNC(AlignmentOffset) {
 // async stuff
 struct MMRequest {
 	~MMRequest() {
-#ifndef NODE_010
+#if NODE_VERSION_AT_LEAST(0, 11, 0)
 		inputBuffers.Reset();
 		outputBuffers.Reset();
 		obj_.Reset();
@@ -311,7 +316,7 @@ struct MMRequest {
 #endif
 		CLEANUP_MM
 	};
-#ifndef NODE_010
+#if NODE_VERSION_AT_LEAST(0, 11, 0)
 	Isolate* isolate;
 #endif
 	Persistent<Object> obj_;
@@ -341,7 +346,7 @@ void MMAfter(uv_work_t* work_req, int status) {
 	assert(status == 0);
 	MMRequest* req = (MMRequest*)work_req->data;
 	
-#ifndef NODE_010
+#if NODE_VERSION_AT_LEAST(0, 11, 0)
 	HandleScope scope(req->isolate);
 	Local<Object> obj = Local<Object>::New(req->isolate, req->obj_);
 	node::MakeCallback(req->isolate, obj, "ondone", 0, NULL);
@@ -443,7 +448,7 @@ FUNC(MultiplyMulti) {
 	if (args.Length() >= 6 && args[5]->IsFunction()) {
 		MMRequest* req = new MMRequest();
 		req->work_req_.data = req;
-#ifndef NODE_010
+#if NODE_VERSION_AT_LEAST(0, 11, 0)
 		// use BaseObject / AsyncWrap instead? meh
 		req->isolate = isolate;
 #endif
@@ -457,7 +462,7 @@ FUNC(MultiplyMulti) {
 		req->numOutputs = numOutputs;
 		req->add = add;
 		
-#ifndef NODE_010
+#if NODE_VERSION_AT_LEAST(0, 11, 0)
 		Local<Object> obj = Object::New(isolate);
 		obj->Set(String::NewFromOneByte(ISOLATE (const uint8_t*)"ondone"), args[4]);
 		req->obj_.Reset(ISOLATE obj);
@@ -479,7 +484,7 @@ FUNC(MultiplyMulti) {
 		
 		mmActiveTasks++;
 		uv_queue_work(
-#ifndef NODE_010
+#if NODE_VERSION_AT_LEAST(0, 11, 0)
 			//env->event_loop(),
 			uv_default_loop(),
 #else
@@ -600,7 +605,7 @@ void init(Handle<Object> target) {
 	}
 	MEM_ALIGN = gf.alignment;
 	
-#ifndef NODE_010
+#if NODE_VERSION_AT_LEAST(0, 11, 0)
 	HandleScope scope(Isolate::GetCurrent());
 	target->Set(String::NewFromUtf8(isolate, "alignment"), Integer::New(MEM_ALIGN));
 #else
