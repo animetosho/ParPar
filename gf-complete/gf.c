@@ -22,7 +22,6 @@ int gf_error_check(int w, int mult_type, int region_type, int divide_type,
   int sse2 = 0;
   int pclmul = 0;
   int rdouble, rquad, rlazy, rsimd, rnosimd, raltmap, rcauchy, tmp;
-  gf_internal_t *sub;
 
   rdouble = (region_type & GF_REGION_DOUBLE_TABLE);
   rquad   = (region_type & GF_REGION_QUAD_TABLE);
