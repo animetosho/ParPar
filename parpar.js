@@ -54,129 +54,145 @@ var CHAR_CONST = {
 
 var PROC_SLICES = 8; // number of slices to process at a time
 
-var doProcess = function(cb) {
-	var inputs = Array(PROC_SLICES);
-	var blankInputs = 0;
-	for(var i = 0; i < PROC_SLICES; i++) {
-		this.qInputReady.take(function(i, input) {
-			if(input)
-				inputs[i] = input;
-			else
-				blankInputs++;
-			
-			if(i == PROC_SLICES-1) {
-				var iSlices = Array(PROC_SLICES - blankInputs),
-				    iNums = Array(PROC_SLICES - blankInputs);
-				for(var j = 0; j < iSlices.length; j++) {
-					iNums[j] = inputs[j][0];
-					iSlices[j] = inputs[j][1];
-				}
-				if(iSlices.length) {
-					gf.generate(iSlices, iNums, this.recoveryData, this.recoverySlices, this._mergeRecovery, function() {
-						for(var j = 0; j < iSlices.length; j++)
-							this.qInputEmpty.add(inputs[j]);
-						
-						if(blankInputs)
-							cb();
-						else
-							doProcess.call(this, cb);
-					}.bind(this));
-					this._mergeRecovery = true;
-				} else
-					cb();
-			}
-		}.bind(this, i));
-	}
-};
-
-var bufferedProcess = function(dataSlice, sliceNum, len, cb) {
-	if(!len) return process.nextTick(cb);
+var GFWrapper = {
+	bufferInputs: 16,
+	qInputEmpty: null,
+	qInputReady: null,
+	qStarted: false,
+	qDone: null,
+	bufferedInputs: null,
+	bufferedInSlices: null,
+	bufferedInputPos: 0,
+	_mergeRecovery: false,
+	fgProc: false,
 	
-	if(this.fgProc) {
-		
-		if(!this.bufferedInputs) {
-			this.bufferedInputs = Array(this.bufferInputs);
-			for(var i=0; i<this.bufferInputs; i++)
-				this.bufferedInputs[i] = gf.AlignedBuffer(len);
-			this.bufferedInSlices = Array(this.bufferInputs);
-			this.bufferedInputPos = 0;
+	// referenced items, already defined by parents
+	//recoveryData: null,
+	//recoverySlices: null,
+	
+	_bgProcess: function(cb) {
+		var inputs = Array(PROC_SLICES);
+		var blankInputs = 0;
+		for(var i = 0; i < PROC_SLICES; i++) {
+			this.qInputReady.take(function(i, input) {
+				if(input)
+					inputs[i] = input;
+				else
+					blankInputs++;
+				
+				if(i == PROC_SLICES-1) {
+					var iSlices = Array(PROC_SLICES - blankInputs),
+						iNums = Array(PROC_SLICES - blankInputs);
+					for(var j = 0; j < iSlices.length; j++) {
+						iNums[j] = inputs[j][0];
+						iSlices[j] = inputs[j][1];
+					}
+					if(iSlices.length) {
+						gf.generate(iSlices, iNums, this.recoveryData, this.recoverySlices, this._mergeRecovery, function() {
+							for(var j = 0; j < iSlices.length; j++)
+								this.qInputEmpty.add(inputs[j]);
+							
+							if(blankInputs)
+								cb();
+							else
+								this._bgProcess(cb);
+						}.bind(this));
+						this._mergeRecovery = true;
+					} else
+						cb();
+				}
+			}.bind(this, i));
 		}
-		gf.copy(dataSlice, this.bufferedInputs[this.bufferedInputPos]);
-		this.bufferedInSlices[this.bufferedInputPos] = sliceNum;
-		this.bufferedInputPos++;
-		if(this.bufferedInputPos >= this.bufferInputs) {
-			gf.generate(this.bufferedInputs, this.bufferedInSlices, this.recoveryData, this.recoverySlices, this._mergeRecovery, cb);
-			this._mergeRecovery = true;
-			this.bufferedInputPos = 0;
-		} else
-			process.nextTick(cb);
+	},
+	bufferedProcess: function(dataSlice, sliceNum, len, cb) {
+		if(!len) return process.nextTick(cb);
 		
-	} else {
-		
-		if(!this.qInputEmpty) {
-			this.qInputEmpty = new Queue();
-			this.qInputReady = new Queue();
-			for(var i = 0; i < this.bufferInputs + PROC_SLICES; i++)
-				this.qInputEmpty.add([0, gf.AlignedBuffer(len)]);
-		}
-		if(!this.qStarted) {
-			doProcess.call(this, function() {
-				this.qStarted = false;
-				this.qDone();
-			}.bind(this));
-			this.qStarted = true;
-		}
-		this.qInputEmpty.take(function(input) {
-			input[0] = sliceNum;
-			gf.copy(dataSlice, input[1]);
-			this.qInputReady.add(input);
-			cb();
-		}.bind(this));
-		
-	}
-};
-var bufferedFinish = function(cb, clear) {
-	if(this.fgProc) {
-		
-		var recData = this.recoveryData;
-		if(this.bufferedInputPos) {
-			gf.generate(this.bufferedInputs.slice(0, this.bufferedInputPos), this.bufferedInSlices.slice(0, this.bufferedInputPos), recData, this.recoverySlices, this._mergeRecovery, function() {
-				gf.finish(recData);
-				cb();
-			});
+		if(this.fgProc) {
+			
+			if(!this.bufferedInputs) {
+				this.bufferedInputs = Array(this.bufferInputs);
+				for(var i=0; i<this.bufferInputs; i++)
+					this.bufferedInputs[i] = gf.AlignedBuffer(len);
+				this.bufferedInSlices = Array(this.bufferInputs);
+				this.bufferedInputPos = 0;
+			}
+			gf.copy(dataSlice, this.bufferedInputs[this.bufferedInputPos]);
+			this.bufferedInSlices[this.bufferedInputPos] = sliceNum;
+			this.bufferedInputPos++;
+			if(this.bufferedInputPos >= this.bufferInputs) {
+				gf.generate(this.bufferedInputs, this.bufferedInSlices, this.recoveryData, this.recoverySlices, this._mergeRecovery, cb);
+				this._mergeRecovery = true;
+				this.bufferedInputPos = 0;
+			} else
+				process.nextTick(cb);
+			
 		} else {
-			gf.finish(recData);
-			process.nextTick(cb);
+			
+			if(!this.qInputEmpty) {
+				this.qInputEmpty = new Queue();
+				this.qInputReady = new Queue();
+				for(var i = 0; i < this.bufferInputs + PROC_SLICES; i++)
+					this.qInputEmpty.add([0, gf.AlignedBuffer(len)]);
+			}
+			if(!this.qStarted) {
+				this._bgProcess(function() {
+					this.qStarted = false;
+					this.qDone();
+				}.bind(this));
+				this.qStarted = true;
+			}
+			this.qInputEmpty.take(function(input) {
+				input[0] = sliceNum;
+				gf.copy(dataSlice, input[1]);
+				this.qInputReady.add(input);
+				cb();
+			}.bind(this));
+			
 		}
-		if(clear)
-			bufferedClear.call(this);
-		else
-			this._mergeRecovery = false;
-		
-	} else {
-		
-		var self = this;
-		this.qDone = function() {
-			gf.finish(self.recoveryData);
+	},
+	bufferedFinish: function(cb, clear) {
+		if(this.fgProc) {
+			
+			var recData = this.recoveryData;
+			if(this.bufferedInputPos) {
+				gf.generate(this.bufferedInputs.slice(0, this.bufferedInputPos), this.bufferedInSlices.slice(0, this.bufferedInputPos), recData, this.recoverySlices, this._mergeRecovery, function() {
+					gf.finish(recData);
+					cb();
+				});
+			} else {
+				gf.finish(recData);
+				process.nextTick(cb);
+			}
 			if(clear)
-				bufferedClear.call(self);
+				this.bufferedClear();
 			else
-				self._mergeRecovery = false;
-			self.qDone = null;
-			cb();
-		};
-		this.qInputReady.finished();
-		
+				this._mergeRecovery = false;
+			
+		} else {
+			
+			var self = this;
+			this.qDone = function() {
+				gf.finish(self.recoveryData);
+				if(clear)
+					self.bufferedClear();
+				else
+					self._mergeRecovery = false;
+				self.qDone = null;
+				cb();
+			};
+			this.qInputReady.finished();
+			
+		}
+	},
+	bufferedClear: function() {
+		if(this.qStarted) throw new Error('Cannot reset recovery buffers whilst processing');
+		this.qInputEmpty = null;
+		this.qInputReady = null;
+		this.bufferedInputs = null;
+		this.bufferedInSlices = null;
+		this.bufferedInputPos = 0;
+		this._mergeRecovery = false;
 	}
-};
-var bufferedClear = function() {
-	if(this.qStarted) throw new Error('Cannot reset recovery buffers whilst processing');
-	this.qInputEmpty = null;
-	this.qInputReady = null;
-	this.bufferedInputs = null;
-	this.bufferedInSlices = null;
-	this.bufferedInputPos = 0;
-	this._mergeRecovery = false;
 };
 
 // files needs to be an array of {md5_16k: <Buffer>, size: <int>, name: <string>}
@@ -228,15 +244,6 @@ function PAR2(files, sliceSize) {
 PAR2.prototype = {
 	recoveryData: null,
 	recoveryPackets: null,
-	bufferInputs: 16,
-	qInputEmpty: null,
-	qInputReady: null,
-	qStarted: false,
-	qDone: null,
-	bufferedInputs: null,
-	bufferedInSlices: null,
-	bufferedInputPos: 0,
-	_mergeRecovery: false,
 	
 	getFiles: function(keep) {
 		if(keep) return this.files;
@@ -302,7 +309,7 @@ PAR2.prototype = {
 		}
 		
 		this.recoveryData = Array(this.recoverySlices.length);
-		bufferedClear.call(this);
+		this.bufferedClear();
 		
 		this.recoveryPackets = Array(this.recoverySlices.length);
 		
@@ -412,7 +419,7 @@ PAR2.prototype = {
 	
 	processSlice: function(data, sliceNum, cb) {
 		if(this.recoverySlices.length)
-			bufferedProcess.call(this, data, sliceNum, this.sliceSize, cb);
+			this.bufferedProcess(data, sliceNum, this.sliceSize, cb);
 		else
 			process.nextTick(cb);
 	},
@@ -434,7 +441,7 @@ PAR2.prototype = {
 			return process.nextTick(cb);
 		
 		var self = this;
-		bufferedFinish.call(this, function() {
+		this.bufferedFinish(function() {
 			// TODO: if a lot of recovery packets are bufferred, calculating MD5 over them might stall the process for a while
 			self.recoveryPackets.forEach(function(pkt) {
 				self._writePktHeader(pkt, "PAR 2.0\0RecvSlic");
@@ -619,16 +626,7 @@ function PAR2Chunked(recoverySlices, packetHeader) {
 
 PAR2Chunked.prototype = {
 	chunkSize: null,
-	bufferInputs: 16,
 	recoveryChunkHash: null,
-	qInputEmpty: null,
-	qInputReady: null,
-	qStarted: false,
-	qDone: null,
-	bufferedInputs: null,
-	bufferedInSlices: null,
-	bufferedInputPos: 0,
-	_mergeRecovery: false,
 	
 	// can clear recovery data somewhat with setChunkSize(0)
 	// I don't know why you'd want to though, as you may as well delete the chunker when you're done with it
@@ -641,7 +639,7 @@ PAR2Chunked.prototype = {
 			this.recoveryData[i] = size ? gf.AlignedBuffer(size) : null;
 		
 		// effective reset
-		bufferedClear.call(this);
+		this.bufferedClear();
 	},
 	
 	process: function(fileOrNum, data, cb) {
@@ -651,7 +649,7 @@ PAR2Chunked.prototype = {
 			fileOrNum.chunkSlicePos++;
 		}
 		
-		bufferedProcess.call(this, data, sliceNum, this.chunkSize, cb);
+		this.bufferedProcess(data, sliceNum, this.chunkSize, cb);
 	},
 	
 	finish: function(files, cb) {
@@ -667,7 +665,7 @@ PAR2Chunked.prototype = {
 		}
 		if(this.recoveryChunkHash && this.chunkSize) {
 			var rch = this.recoveryChunkHash, recData = this.recoveryData;
-			bufferedFinish.call(this, function() {
+			this.bufferedFinish(function() {
 				for(var i in rch) {
 					if(!rch[i])
 						throw new Error('Cannot process data after packet header has been generated');
@@ -676,7 +674,7 @@ PAR2Chunked.prototype = {
 				cb();
 			}, !files);
 		} else
-			bufferedFinish.call(this, cb, !files);
+			this.bufferedFinish(cb, !files);
 		
 	},
 	
@@ -704,7 +702,11 @@ PAR2Chunked.prototype = {
 	}
 };
 
-
+// mixin GFWrapper
+for(var k in GFWrapper) {
+	PAR2.prototype[k] = GFWrapper[k];
+	PAR2Chunked.prototype[k] = GFWrapper[k];
+}
 
 var fs = require('fs'), async = require('async');
 module.exports = {
