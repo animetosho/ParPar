@@ -277,7 +277,9 @@ PAR2.prototype = {
 			pkt.write("PAR 2.0\0RecvSlic", 48);
 		}
 		
-		return new PAR2Chunked(recoverySlices, pkt);
+		var c = new PAR2Chunked(recoverySlices, pkt);
+		c.bufferInputs = this.bufferInputs;
+		return c;
 	},
 	recoverySize: function(numSlices) {
 		if(numSlices === undefined) numSlices = 1;
