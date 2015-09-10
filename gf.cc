@@ -346,6 +346,7 @@ void MMAfter(uv_work_t* work_req, int status) {
 	assert(status == 0);
 	MMRequest* req = (MMRequest*)work_req->data;
 	
+	mmActiveTasks--;
 #if NODE_VERSION_AT_LEAST(0, 11, 0)
 	HandleScope scope(req->isolate);
 	Local<Object> obj = Local<Object>::New(req->isolate, req->obj_);
@@ -355,7 +356,6 @@ void MMAfter(uv_work_t* work_req, int status) {
 	node::MakeCallback(req->obj_, "ondone", 0, NULL);
 #endif
 	
-	mmActiveTasks--;
 	delete req;
 }
 
