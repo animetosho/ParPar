@@ -3,6 +3,7 @@
 var crypto = require('crypto');
 var gf = require('./build/Release/parpar_gf.node');
 var y = require('yencode');
+var Queue = require('./lib/queue');
 
 var SAFE_INT = 0xffffffff; // JS only does 32-bit bit operations
 var SAFE_INT_P1 = SAFE_INT + 1;
@@ -51,39 +52,127 @@ var CHAR_CONST = {
 	UNICODE: 3,
 };
 
+var PROC_SLICES = 8; // number of slices to process at a time
+
+var doProcess = function(cb) {
+	var inputs = Array(PROC_SLICES);
+	var blankInputs = 0;
+	for(var i = 0; i < PROC_SLICES; i++) {
+		this.qInputReady.take(function(i, input) {
+			if(input)
+				inputs[i] = input;
+			else
+				blankInputs++;
+			
+			if(i == PROC_SLICES-1) {
+				var iSlices = Array(PROC_SLICES - blankInputs),
+				    iNums = Array(PROC_SLICES - blankInputs);
+				for(var j = 0; j < iSlices.length; j++) {
+					iNums[j] = inputs[j][0];
+					iSlices[j] = inputs[j][1];
+				}
+				if(iSlices.length) {
+					gf.generate(iSlices, iNums, this.recoveryData, this.recoverySlices, this._mergeRecovery, function() {
+						for(var j = 0; j < iSlices.length; j++)
+							this.qInputEmpty.add(inputs[j]);
+						
+						if(blankInputs)
+							cb();
+						else
+							doProcess.call(this, cb);
+					}.bind(this));
+					this._mergeRecovery = true;
+				} else
+					cb();
+			}
+		}.bind(this, i));
+	}
+};
+
 var bufferedProcess = function(dataSlice, sliceNum, len, cb) {
 	if(!len) return process.nextTick(cb);
-	if(!this.bufferedInputs) {
-		this.bufferedInputs = Array(this.bufferInputs);
-		for(var i=0; i<this.bufferInputs; i++)
-			this.bufferedInputs[i] = gf.AlignedBuffer(len);
-		this.bufferedInSlices = Array(this.bufferInputs);
-		this.bufferedInputPos = 0;
-	}
-	gf.copy(dataSlice, this.bufferedInputs[this.bufferedInputPos]);
-	this.bufferedInSlices[this.bufferedInputPos] = sliceNum;
-	this.bufferedInputPos++;
-	if(this.bufferedInputPos >= this.bufferInputs) {
-		gf.generate(this.bufferedInputs, this.bufferedInSlices, this.recoveryData, this.recoverySlices, this._mergeRecovery, cb);
-		this._mergeRecovery = true;
-		this.bufferedInputPos = 0;
-	} else
-		process.nextTick(cb);
-};
-var bufferedFinish = function(cb) {
-	var recData = this.recoveryData;
-	if(this.bufferedInputPos) {
-		gf.generate(this.bufferedInputs.slice(0, this.bufferedInputPos), this.bufferedInSlices.slice(0, this.bufferedInputPos), recData, this.recoverySlices, this._mergeRecovery, function() {
-			gf.finish(recData);
-			cb();
-		});
+	
+	if(this.fgProc) {
+		
+		if(!this.bufferedInputs) {
+			this.bufferedInputs = Array(this.bufferInputs);
+			for(var i=0; i<this.bufferInputs; i++)
+				this.bufferedInputs[i] = gf.AlignedBuffer(len);
+			this.bufferedInSlices = Array(this.bufferInputs);
+			this.bufferedInputPos = 0;
+		}
+		gf.copy(dataSlice, this.bufferedInputs[this.bufferedInputPos]);
+		this.bufferedInSlices[this.bufferedInputPos] = sliceNum;
+		this.bufferedInputPos++;
+		if(this.bufferedInputPos >= this.bufferInputs) {
+			gf.generate(this.bufferedInputs, this.bufferedInSlices, this.recoveryData, this.recoverySlices, this._mergeRecovery, cb);
+			this._mergeRecovery = true;
+			this.bufferedInputPos = 0;
+		} else
+			process.nextTick(cb);
+		
 	} else {
-		gf.finish(recData);
-		process.nextTick(cb);
+		
+		if(!this.qInputEmpty) {
+			this.qInputEmpty = new Queue();
+			this.qInputReady = new Queue();
+			for(var i = 0; i < this.bufferInputs + PROC_SLICES; i++)
+				this.qInputEmpty.add([0, gf.AlignedBuffer(len)]);
+		}
+		if(!this.qStarted) {
+			doProcess.call(this, function() {
+				this.qStarted = false;
+				this.qDone();
+			}.bind(this));
+			this.qStarted = true;
+		}
+		this.qInputEmpty.take(function(input) {
+			input[0] = sliceNum;
+			gf.copy(dataSlice, input[1]);
+			this.qInputReady.add(input);
+			cb();
+		}.bind(this));
+		
 	}
-	this._mergeRecovery = false;
+};
+var bufferedFinish = function(cb, clear) {
+	if(this.fgProc) {
+		
+		var recData = this.recoveryData;
+		if(this.bufferedInputPos) {
+			gf.generate(this.bufferedInputs.slice(0, this.bufferedInputPos), this.bufferedInSlices.slice(0, this.bufferedInputPos), recData, this.recoverySlices, this._mergeRecovery, function() {
+				gf.finish(recData);
+				cb();
+			});
+		} else {
+			gf.finish(recData);
+			process.nextTick(cb);
+		}
+		if(clear)
+			bufferedClear.call(this);
+		else
+			this._mergeRecovery = false;
+		
+	} else {
+		
+		var self = this;
+		this.qDone = function() {
+			gf.finish(self.recoveryData);
+			if(clear)
+				bufferedClear.call(self);
+			else
+				self._mergeRecovery = false;
+			self.qDone = null;
+			cb();
+		};
+		this.qInputReady.finished();
+		
+	}
 };
 var bufferedClear = function() {
+	if(this.qStarted) throw new Error('Cannot reset recovery buffers whilst processing');
+	this.qInputEmpty = null;
+	this.qInputReady = null;
 	this.bufferedInputs = null;
 	this.bufferedInSlices = null;
 	this.bufferedInputPos = 0;
@@ -140,6 +229,10 @@ PAR2.prototype = {
 	recoveryData: null,
 	recoveryPackets: null,
 	bufferInputs: 16,
+	qInputEmpty: null,
+	qInputReady: null,
+	qStarted: false,
+	qDone: null,
 	bufferedInputs: null,
 	bufferedInSlices: null,
 	bufferedInputPos: 0,
@@ -345,8 +438,7 @@ PAR2.prototype = {
 				self._writePktHeader(pkt, "PAR 2.0\0RecvSlic");
 			});
 			cb();
-		});
-		if(!files) bufferedClear.call(this);
+		}, !files);
 	}
 };
 
@@ -525,12 +617,16 @@ function PAR2Chunked(recoverySlices, packetHeader) {
 
 PAR2Chunked.prototype = {
 	chunkSize: null,
-	_mergeRecovery: false,
 	bufferInputs: 16,
 	recoveryChunkHash: null,
+	qInputEmpty: null,
+	qInputReady: null,
+	qStarted: false,
+	qDone: null,
 	bufferedInputs: null,
 	bufferedInSlices: null,
 	bufferedInputPos: 0,
+	_mergeRecovery: false,
 	
 	// can clear recovery data somewhat with setChunkSize(0)
 	// I don't know why you'd want to though, as you may as well delete the chunker when you're done with it
@@ -576,11 +672,10 @@ PAR2Chunked.prototype = {
 					rch[i].update(recData[i]);
 				}
 				cb();
-			});
+			}, !files);
 		} else
-			bufferedFinish.call(this, cb);
+			bufferedFinish.call(this, cb, !files);
 		
-		if(!files) bufferedClear.call(this);
 	},
 	
 	getHeader: function(slice, keep) {
