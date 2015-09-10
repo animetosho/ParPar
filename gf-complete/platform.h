@@ -70,4 +70,11 @@ typedef unsigned int FAST_U32;
 #endif
 
 
+#ifdef __ARM_NEON__
+	#define ARM_NEON 1
+#endif
+#if defined(__ARM_ARCH) && __ARM_ARCH >= 8
+	#define ARCH_AARCH64 1
+#endif
+
 #endif /* GF_COMPLETE_PLATFORM_H */

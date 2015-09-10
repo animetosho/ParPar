@@ -392,10 +392,10 @@ int gf_w16_shift_init(gf_t *gf)
   return 1;
 }
 
+#ifdef INTEL_SSE4_PCLMUL
 static 
 int gf_w16_cfm_init(gf_t *gf)
 {
-#ifdef INTEL_SSE4_PCLMUL
   gf_internal_t *h;
 
   h = (gf_internal_t *) gf->scratch;
@@ -415,10 +415,10 @@ int gf_w16_cfm_init(gf_t *gf)
     return 0;
   } 
   return 1;
-#endif
 
   return 0;
 }
+#endif
 
 /* KMG: GF_MULT_LOGTABLE: */
 
@@ -851,6 +851,7 @@ gf_w16_split_4_16_lazy_sse_multiply_region(gf_t *gf, void *src, void *dest, gf_v
 #endif
 }
 
+/*
 static
 void
 gf_w16_split_4_16_lazy_sse_altmap_multiply_region(gf_t *gf, void *src, void *dest, gf_val_32_t val, int bytes, int xor)
@@ -959,6 +960,7 @@ gf_w16_split_4_16_lazy_sse_altmap_multiply_region(gf_t *gf, void *src, void *des
 
 #endif
 }
+*/
 
 uint32_t 
 gf_w16_split_8_8_multiply(gf_t *gf, gf_val_32_t a, gf_val_32_t b)
@@ -1058,6 +1060,7 @@ int gf_w16_split_init(gf_t *gf)
         gf->multiply_region.w32 = gf_w16_split_4_16_lazy_nosse_altmap_multiply_region;
       else if(h->region_type & GF_REGION_NOSIMD)
         gf->multiply_region.w32 = gf_w16_split_4_16_lazy_multiply_region;
+#ifdef INTEL_SSSE3
       else if(h->region_type & GF_REGION_ALTMAP && has_ssse3) {
         FUNC_ASSIGN(gf->multiply_region.w32, gf_w16_split_4_16_lazy_altmap_multiply_region)
         FUNC_ASSIGN(gf->multiply_regionX.w16, gf_w16_split_4_16_lazy_altmap_multiply_regionX)
@@ -1065,6 +1068,7 @@ int gf_w16_split_init(gf_t *gf)
         else if(has_avx2) gf->alignment = 32;
         else gf->alignment = 16;
       }
+#endif
     } else {
       if(h->region_type & GF_REGION_SIMD)
         return 0;
@@ -1133,8 +1137,10 @@ int gf_w16_init(gf_t *gf)
     /* !! There's no fallback if SSE not supported !!
      * ParPar never uses ALTMAP if SSSE3 isn't available, but this isn't ideal in gf-complete
      * Also: ALTMAP implementations differ on SSE/AVX support, so it doesn't make too much sense for a fallback */
+#ifdef FUNC_ASSIGN
     FUNC_ASSIGN(gf->altmap_region, gf_w16_split_start)
     FUNC_ASSIGN(gf->unaltmap_region, gf_w16_split_final)
+#endif
   } else {
     gf->altmap_region = gf_w16_split_null;
     gf->unaltmap_region = gf_w16_split_null;

@@ -5,7 +5,7 @@
 #include <v8.h>
 #include <stdlib.h>
 //#include <inttypes.h>
-#include <stdio.h>
+#include <string.h>
 #include <uv.h>
 
 #if defined(_MSC_VER)
@@ -572,8 +572,10 @@ void init(Handle<Object> target) {
 
 
 
+#ifdef __ARM_NEON__
+	using_altmap = true;
 // if SSSE3 supported, use ALTMAP
-#ifdef _MSC_VER
+#elif defined(_MSC_VER)
 	int cpuInfo[4];
 	__cpuid(cpuInfo, 1);
 	#ifdef INTEL_SSSE3

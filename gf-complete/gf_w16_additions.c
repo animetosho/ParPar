@@ -111,6 +111,7 @@ void detect_cpu(void) {
 #endif
 #endif /*INTEL_AVX2*/
 
+#ifdef INTEL_SSSE3
 #define MWORD_SIZE 16
 #define _mword __m128i
 #define _MM(f) _mm_ ## f
@@ -130,7 +131,7 @@ void detect_cpu(void) {
 	v = f ## _sse; \
 }
 #endif
-
+#endif /*INTEL_SSSE3*/
 
 
 static void gf_w16_split_null(void* src, int bytes, void* dest) {}
