@@ -52,7 +52,7 @@ var CHAR_CONST = {
 	UNICODE: 3,
 };
 
-var PROC_SLICES = 8; // number of slices to process at a time
+var PROC_SLICES = 16; // number of slices to process at a time
 
 var GFWrapper = {
 	bufferInputs: 16,
@@ -441,13 +441,13 @@ PAR2.prototype = {
 			return process.nextTick(cb);
 		
 		var self = this;
-		this.bufferedFinish(function() {
-			// TODO: if a lot of recovery packets are bufferred, calculating MD5 over them might stall the process for a while
-			self.recoveryPackets.forEach(function(pkt) {
+		// TODO: replace this with some multi-threaded async MD5 routine?
+		this.bufferedFinish(async.eachSeries.bind(async, this.recoveryPackets, function(pkt, cb) {
+			setImmediate(function() {
 				self._writePktHeader(pkt, "PAR 2.0\0RecvSlic");
+				cb();
 			});
-			cb();
-		}, !files);
+		}, cb), !files);
 	}
 };
 
