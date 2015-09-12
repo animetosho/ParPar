@@ -34,6 +34,9 @@ var Buffer_writeUInt64LE = function(buf, num, offset) {
 var hasUnicode = function(s) {
 	return s.match(/[\u0100-\uffff]/);
 };
+var strToAscii = function(str) {
+	return new Buffer(str, module.exports.asciiCharset);
+};
 // create an array range from (inclusive) to (exclusive)
 var range = function(from, to) {
 	var num = to - from;
@@ -51,6 +54,7 @@ var CHAR_CONST = {
 	ASCII: 2,
 	UNICODE: 3,
 };
+
 
 var PROC_SLICES = 16; // number of slices to process at a time
 
@@ -218,6 +222,7 @@ function PAR2(files, sliceSize) {
 		file.sliceOffset = sliceOffset;
 		sliceOffset += file.numSlices;
 	});
+	this.totalSlices = sliceOffset;
 	
 	// generate main packet
 	var numFiles = files.length, bodyLen = 12 + numFiles * 16;
@@ -292,6 +297,18 @@ PAR2.prototype = {
 		if(numSlices === undefined) numSlices = 1;
 		return (this.sliceSize + 68) * numSlices;
 	},
+	par2Ext: function(numSlices, sliceOffset) {
+		if(!numSlices) return '.par2';
+		if(sliceOffset + numSlices > this.totalSlices)
+			throw new Error('Invalid slice values');
+		var digits = ('' + this.totalSlices).length;
+		var sOffs = '' + sliceOffset, sNum = '' + numSlices;
+		while(sOffs.length < digits)
+			sOffs = '0' + sOffs;
+		while(sNum.length < digits)
+			sNum = '0' + sNum;
+		return '.vol' + sOffs + '+' + sNum + '.par2';
+	},
 	
 	// can call PAR2.setRecoverySlices(0) to clear out recovery data
 	setRecoverySlices: function(slices) {
@@ -359,12 +376,13 @@ PAR2.prototype = {
 		return pkt;
 	},
 	makePacketCreator: function(creator) {
-		var len = creator.length;
+		var _creator = strToAscii(creator);
+		var len = _creator.length;
 		len = Math.ceil(len / 4) * 4;
 		
 		var pkt = new Buffer(64 + len);
-		pkt.fill(0, 64 + creator.length);
-		pkt.write(creator, 64, 'ascii');
+		pkt.fill(0, 64 + _creator.length);
+		_creator.copy(pkt, 64);
 		this._writePktHeader(pkt, "PAR 2.0\0Creator\0");
 		return pkt;
 	},
@@ -378,7 +396,8 @@ PAR2.prototype = {
 		var doAscii = (unicode == CHAR_CONST.BOTH || unicode == CHAR_CONST.ASCII);
 		var doUni = (unicode == CHAR_CONST.BOTH || unicode == CHAR_CONST.UNICODE);
 		
-		var len = comment.length, len2 = comment.length*2;
+		var _comment = strToAscii(comment);
+		var len = _comment.length, len2 = comment.length*2; // Note that JS is UCS2 with surrogate pairs
 		len = Math.ceil(len / 4) * 4;
 		len2 = Math.ceil(len2 / 4) * 4;
 		
@@ -393,8 +412,8 @@ PAR2.prototype = {
 		if(doAscii) {
 			offset = 64 + len;
 			
-			pkt.fill(0, 64 + comment.length, offset);
-			pkt.write(comment, 64, 'ascii');
+			pkt.fill(0, 64 + _comment.length, offset);
+			_comment.copy(pkt, 64);
 			this._writePktHeader(pkt, "PAR 2.0\0CommASCI", 0, len);
 		}
 		if(doUni) {
@@ -402,7 +421,7 @@ PAR2.prototype = {
 			
 			pkt[pktEnd - 2] = 0;
 			pkt[pktEnd - 1] = 0;
-			pkt.write(comment, 64 + 16 + offset, 'ucs2');
+			pkt.write(comment, 64 + 16 + offset, 'utf16le');
 			// fill MD5 link
 			if(doAscii) {
 				pkt.copy(pkt, offset + 64, 16, 32);
@@ -468,7 +487,7 @@ function PAR2File(par2, file) {
 	var id = crypto.createHash('md5')
 		.update(file.md5_16k)
 		.update(size)
-		.update(file.name, 'ascii')
+		.update(file.name, module.exports.asciiCharset)
 		.digest();
 	this.id = id;
 	if(!file.md5) {
@@ -559,7 +578,8 @@ PAR2File.prototype = {
 			throw new Error('Unknown unicode option');
 		}
 		
-		var len = this.name.length, len2 = this.name.length*2;
+		var fileName = strToAscii(this.name);
+		var len = fileName.length, len2 = this.name.length*2;
 		len = Math.ceil(len / 4) * 4;
 		len2 = Math.ceil(len2 / 4) * 4;
 		
@@ -572,8 +592,8 @@ PAR2File.prototype = {
 		this.md5.copy(pkt, 64+16);
 		this.md5_16k.copy(pkt, 64+32);
 		Buffer_writeUInt64LE(pkt, this.size, 64+48);
-		pkt.write(this.name, 64+56, 'ascii');
-		pkt.fill(0, 64 + 56 + this.name.length, pkt1Len);
+		pkt.fill(0, 64 + 56 + fileName.length, pkt1Len);
+		fileName.copy(pkt, 64+56);
 		this.par2._writePktHeader(pkt, "PAR 2.0\0FileDesc", 0, 56 + len);
 		
 		if(unicode == CHAR_CONST.BOTH) {
@@ -587,7 +607,7 @@ PAR2File.prototype = {
 		var pktEnd = offset + 64 + 16 + len;
 		pkt[pktEnd - 2] = 0;
 		pkt[pktEnd - 1] = 0;
-		pkt.write(this.name, offset + 64+16, 'ucs2');
+		pkt.write(this.name, offset + 64+16, 'utf16le');
 		this.par2._writePktHeader(pkt, "PAR 2.0\0UniFileN", offset); // TODO: include length?
 	},
 	makePacketUniName: function() {
@@ -715,6 +735,8 @@ module.exports = {
 	
 	PAR2: PAR2,
 	setMaxThreads: gf.set_max_threads,
+	asciiCharset: 'ascii',
+	
 	AlignedBuffer: gf.AlignedBuffer,
 	fileInfo: function(files, cb) {
 		var buf = new Buffer(16384);
