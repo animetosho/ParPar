@@ -297,18 +297,6 @@ PAR2.prototype = {
 		if(numSlices === undefined) numSlices = 1;
 		return (this.sliceSize + 68) * numSlices;
 	},
-	par2Ext: function(numSlices, sliceOffset) {
-		if(!numSlices) return '.par2';
-		if(sliceOffset + numSlices > this.totalSlices)
-			throw new Error('Invalid slice values');
-		var digits = ('' + this.totalSlices).length;
-		var sOffs = '' + sliceOffset, sNum = '' + numSlices;
-		while(sOffs.length < digits)
-			sOffs = '0' + sOffs;
-		while(sNum.length < digits)
-			sNum = '0' + sNum;
-		return '.vol' + sOffs + '+' + sNum + '.par2';
-	},
 	
 	// can call PAR2.setRecoverySlices(0) to clear out recovery data
 	setRecoverySlices: function(slices) {
@@ -761,5 +749,18 @@ module.exports = {
 				cb(err, info);
 			});
 		}, cb);
+	},
+	par2Ext: function(totalSlices, numSlices, sliceOffset) {
+		if(!numSlices) return '.par2';
+		var sliceEnd = sliceOffset + numSlices;
+		if(sliceEnd > totalSlices)
+			throw new Error('Invalid slice values');
+		var digits = Math.max(2, ('' + totalSlices).length);
+		var sOffs = '' + sliceOffset, sEnd = '' + sliceEnd;
+		while(sOffs.length < digits)
+			sOffs = '0' + sOffs;
+		while(sEnd.length < digits)
+			sEnd = '0' + sEnd;
+		return '.vol' + sOffs + '-' + sEnd + '.par2';
 	}
 };
