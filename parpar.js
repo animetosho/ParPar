@@ -750,13 +750,18 @@ module.exports = {
 			});
 		}, cb);
 	},
-	par2Ext: function(totalSlices, numSlices, sliceOffset) {
+	par2Ext: function(numSlices, sliceOffset, totalSlices) {
 		if(!numSlices) return '.par2';
+		sliceOffset = sliceOffset|0;
 		var sliceEnd = sliceOffset + numSlices;
-		if(sliceEnd > totalSlices)
-			throw new Error('Invalid slice values');
-		var digits = Math.max(2, ('' + totalSlices).length);
+		var digits;
 		var sOffs = '' + sliceOffset, sEnd = '' + sliceEnd;
+		if(totalSlices) {
+			if(sliceEnd > totalSlices)
+				throw new Error('Invalid slice values');
+			digits = Math.max(2, ('' + totalSlices).length);
+		} else
+			digits = Math.max(2, sEnd.length);
 		while(sOffs.length < digits)
 			sOffs = '0' + sOffs;
 		while(sEnd.length < digits)
