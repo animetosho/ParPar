@@ -608,8 +608,9 @@ void init(Handle<Object> target) {
 	MEM_ALIGN = gf.alignment;
 	
 #if NODE_VERSION_AT_LEAST(0, 11, 0)
-	HandleScope scope(Isolate::GetCurrent());
-	target->Set(String::NewFromUtf8(isolate, "alignment"), Integer::New(MEM_ALIGN));
+	Isolate* isolate = Isolate::GetCurrent();
+	HandleScope scope(isolate);
+	target->Set(String::NewFromUtf8(ISOLATE "alignment"), Integer::New(ISOLATE MEM_ALIGN));
 #else
 	HandleScope scope;
 	target->Set(String::New("alignment"), Integer::New(MEM_ALIGN));
