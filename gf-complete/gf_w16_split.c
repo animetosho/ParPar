@@ -19,7 +19,7 @@ static void _FN(gf_w16_split_start)(void* src, int bytes, void* dest) {
 		// unaligned version, note that we go by destination alignment
 		gf_set_region_data(&rd, NULL, dest, dest, bytes, 0, 0, sizeof(_mword), sizeof(_mword)*2);
 		
-		memcpy(rd.d_top, (intptr_t)src + (intptr_t)rd.d_top - (intptr_t)rd.dest, (intptr_t)rd.dest + rd.bytes - (intptr_t)rd.d_top);
+		memcpy(rd.d_top, (void*)((intptr_t)src + (intptr_t)rd.d_top - (intptr_t)rd.dest), (intptr_t)rd.dest + rd.bytes - (intptr_t)rd.d_top);
 		memcpy(rd.dest, src, (intptr_t)rd.d_start - (intptr_t)rd.dest);
 		
 		sW = (_mword*)((intptr_t)src + (intptr_t)rd.d_start - (intptr_t)rd.dest);
@@ -96,7 +96,7 @@ static void _FN(gf_w16_split_final)(void* src, int bytes, void* dest) {
 		// unaligned version, note that we go by src alignment
 		gf_set_region_data(&rd, NULL, src, src, bytes, 0, 0, sizeof(_mword), sizeof(_mword)*2);
 		
-		memcpy((intptr_t)dest + (intptr_t)rd.s_top - (intptr_t)rd.src, rd.s_top, (intptr_t)rd.src + rd.bytes - (intptr_t)rd.s_top);
+		memcpy((void*)((intptr_t)dest + (intptr_t)rd.s_top - (intptr_t)rd.src), rd.s_top, (intptr_t)rd.src + rd.bytes - (intptr_t)rd.s_top);
 		memcpy(dest, rd.src, (intptr_t)rd.s_start - (intptr_t)rd.src);
 		
 		sW = (_mword*)rd.s_start;
