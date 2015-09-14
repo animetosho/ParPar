@@ -182,6 +182,7 @@ var GFWrapper = {
 				else
 					self._mergeRecovery = false;
 				self.qDone = null;
+				self.qInputReady = new Queue();
 				cb();
 			};
 			this.qInputReady.finished();
