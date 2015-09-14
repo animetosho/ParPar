@@ -687,16 +687,15 @@ PAR2Chunked.prototype = {
 		
 	},
 	
-	getHeader: function(slice, keep) {
+	getHeader: function(index, keep) {
 		if(!this.packetHeader) throw new Error('Need MD5 hash to generate header');
-		var index = slice; // may eventually make these different?
 		
 		var pkt = new Buffer(68);
 		this.packetHeader.copy(pkt);
 		if(!Buffer.isBuffer(this.recoveryChunkHash[index]))
 			this.recoveryChunkHash[index] = this.recoveryChunkHash[index].digest();
 		this.recoveryChunkHash[index].copy(pkt, 16);
-		pkt.writeUInt32LE(slice, 64);
+		pkt.writeUInt32LE(this.recoverySlices[index], 64);
 		
 		if(!keep) {
 			this.recoveryChunkHash[index] = false;
