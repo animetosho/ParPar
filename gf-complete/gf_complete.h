@@ -10,7 +10,7 @@
 
 #ifndef _GF_COMPLETE_H_
 #define _GF_COMPLETE_H_
-#if defined(_MSC_VER) && _MSC_VER < 1900
+#if defined(_MSC_VER) && !defined(_STDINT) && _MSC_VER < 1900
 #include "msc_stdint.h"
 #else
 #include <stdint.h>
