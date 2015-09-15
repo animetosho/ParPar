@@ -11,7 +11,7 @@ var recoverySlices = 8;
 
 
 /// Include libraries
-var ParPar = require('../parpar');
+var ParPar = require('../');
 var fs = require('fs');
 var async = require('async');
 

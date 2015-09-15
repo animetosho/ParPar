@@ -4,7 +4,7 @@
   "description": "High performance multi-threaded PAR2 creation library",
   "license": "Public Domain",
   "author": "Anime Tosho",
-  "main": "parpar.js",
+  "main": "lib/parpar.js",
   "dependencies": {
     "async": "*",
     "yencode": "*"
