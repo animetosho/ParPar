@@ -136,6 +136,7 @@ typedef struct gf {
   gf_altmap      unaltmap_region;
   int            using_altmap;
   int            alignment;
+  int            walignment;
   void           *scratch;
 } gf_t;
     

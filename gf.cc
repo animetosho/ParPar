@@ -25,7 +25,7 @@ extern "C" {
 }
 
 // memory alignment to 16-bytes for SSE operations (may grow for AVX operations)
-int MEM_ALIGN = 16;
+int MEM_ALIGN = 16, MEM_WALIGN = 16;
 
 #if defined(__cplusplus) && __cplusplus > 201100
 	// C++11 method
@@ -123,7 +123,7 @@ static inline void multiply_mat(uint16_t** inputs, uint_fast16_t* iNums, unsigne
 	
 	// break the slice into smaller chunks so that we maximise CPU cache usage
 	int numChunks = (len / CHUNK_SIZE) + ((len % CHUNK_SIZE) ? 1 : 0);
-	unsigned int alignMask = (MEM_ALIGN << (using_altmap ? 1:0))-1; // for ALTMAP, width needs to be double the alignment
+	unsigned int alignMask = MEM_WALIGN-1;
 	unsigned int chunkSize = (CEIL_DIV(len, numChunks) + alignMask) & ~alignMask; // we'll assume that input chunks are memory aligned here
 	
 	// avoid nested loop issues by combining chunk & output loop into one
@@ -260,14 +260,14 @@ FUNC(PrepInput) {
 	
 	if(using_altmap) {
 		// ugly hack to deal with zero filling case
-		int lenTail = inputLen & ((MEM_ALIGN << 1)-1);
+		int lenTail = inputLen & (MEM_WALIGN-1);
 		if(inputLen < destLen && lenTail) {
 			int lenMain = inputLen - lenTail;
 			gf.altmap_region(src, lenMain, dest);
 			// copy remaining, with zero fill, then ALTMAP over it
 			memcpy(dest + lenMain, src + lenMain, lenTail);
 			memset(dest + inputLen, 0, destLen - inputLen);
-			gf.altmap_region(dest + lenMain, MEM_ALIGN << 1, dest + lenMain);
+			gf.altmap_region(dest + lenMain, MEM_WALIGN, dest + lenMain);
 			RETURN_UNDEF
 		} else
 			gf.altmap_region(src, inputLen, dest);
@@ -606,14 +606,17 @@ void init(Handle<Object> target) {
 		#undef GF_ARGS
 	}
 	MEM_ALIGN = gf.alignment;
+	MEM_WALIGN = gf.walignment;
 	
 #if NODE_VERSION_AT_LEAST(0, 11, 0)
 	Isolate* isolate = Isolate::GetCurrent();
 	HandleScope scope(isolate);
 	target->Set(String::NewFromUtf8(ISOLATE "alignment"), Integer::New(ISOLATE MEM_ALIGN));
+	target->Set(String::NewFromUtf8(ISOLATE "alignment_width"), Integer::New(ISOLATE MEM_WALIGN));
 #else
 	HandleScope scope;
 	target->Set(String::New("alignment"), Integer::New(MEM_ALIGN));
+	target->Set(String::New("alignment_width"), Integer::New(MEM_WALIGN));
 #endif
 }
 
