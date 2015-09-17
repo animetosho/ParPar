@@ -70,7 +70,6 @@ static inline uint16_t calc_factor(uint_fast16_t inputBlock, uint_fast16_t recov
 }
 
 gf_t gf;
-void* gf_mem;
 bool using_altmap = false;
 
 #ifdef _OPENMP
@@ -596,13 +595,11 @@ void init(Handle<Object> target) {
 
 	if(using_altmap) {
 		#define GF_ARGS 16, GF_MULT_SPLIT_TABLE, GF_REGION_ALTMAP, GF_DIVIDE_DEFAULT
-		gf_mem = malloc(gf_scratch_size(GF_ARGS, 16, 4));
-		gf_init_hard(&gf, GF_ARGS, 0, 16, 4, NULL, gf_mem);
+		gf_init_hard(&gf, GF_ARGS, 0, 16, 4, NULL, NULL);
 		#undef GF_ARGS
 	} else {
 		#define GF_ARGS 16, GF_MULT_DEFAULT, GF_REGION_DEFAULT, GF_DIVIDE_DEFAULT
-		gf_mem = malloc(gf_scratch_size(GF_ARGS, 0, 0));
-		gf_init_hard(&gf, GF_ARGS, 0, 0, 0, NULL, gf_mem);
+		gf_init_hard(&gf, GF_ARGS, 0, 0, 0, NULL, NULL);
 		#undef GF_ARGS
 	}
 	MEM_ALIGN = gf.alignment;
