@@ -16,7 +16,7 @@
 #include <string.h>
 
 typedef struct {
-	int32_t pos;
+	uint8_t* ptr;
 	size_t len;
 	uint8_t* code;
 } jit_t;

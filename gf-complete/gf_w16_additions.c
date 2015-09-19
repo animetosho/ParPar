@@ -377,7 +377,7 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
   gf_region_data rd;
   gf_internal_t *h;
   jit_t* jit;
-  FAST_U8 pos_startloop;
+  uint8_t* pos_startloop;
   
   if (val == 0) { gf_multby_zero(dest, bytes, xor); return; }
   if (val == 1) { gf_multby_one(src, dest, bytes, xor); return; }
@@ -414,14 +414,14 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
     }
     
     
-    jit->pos = 0;
+    jit->ptr = jit->code;
     
     _jit_mov_i(jit, AX, rd.s_start);
     _jit_mov_i(jit, DX, rd.d_start);
     _jit_mov_i(jit, CX, rd.d_top);
     
     _jit_align16(jit);
-    pos_startloop = jit->pos;
+    pos_startloop = jit->ptr;
     
     /*TODO: try interleaving instructions & other tricks*/
     /* generate code */
@@ -432,16 +432,16 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
         for(i=0; i<8; i++) {
           if(depmask[bit] & (1<<i)) {
             //_jit_xorps_m(jit, 0, AX, i<<4);
-            *(int32_t*)(jit->code + jit->pos) = 0x40570F | (i <<28);
-            jit->pos += 4;
+            *(int32_t*)(jit->ptr) = 0x40570F | (i <<28);
+            jit->ptr += 4;
           }
         }
         for(; i<16; i++) {
           if(depmask[bit] & (1<<i)) {
             //_jit_xorps_m(jit, 0, AX, i<<4);
-            *(int32_t*)(jit->code + jit->pos +3) = 0;
-            *(int32_t*)(jit->code + jit->pos) = 0x80570F | (i <<28);
-            jit->pos += 7;
+            *(int32_t*)(jit->ptr +3) = 0;
+            *(int32_t*)(jit->ptr) = 0x80570F | (i <<28);
+            jit->ptr += 7;
           }
         }
         _jit_movaps_store(jit, DX, bit<<4, 0);
@@ -456,8 +456,8 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
               mov = 0;
             } else {
               //_jit_xorps_m(jit, 0, AX, i<<4);
-              *(int32_t*)(jit->code + jit->pos) = 0x40570F | (i <<28);
-              jit->pos += 4;
+              *(int32_t*)(jit->ptr) = 0x40570F | (i <<28);
+              jit->ptr += 4;
             }
           }
         }
@@ -468,9 +468,9 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
               mov = 0;
             } else {
               //_jit_xorps_m(jit, 0, AX, i<<4);
-              *(int32_t*)(jit->code + jit->pos +3) = 0;
-              *(int32_t*)(jit->code + jit->pos) = 0x80570F | (i <<28);
-              jit->pos += 7;
+              *(int32_t*)(jit->ptr +3) = 0;
+              *(int32_t*)(jit->ptr) = 0x80570F | (i <<28);
+              jit->ptr += 7;
             }
           }
         }
