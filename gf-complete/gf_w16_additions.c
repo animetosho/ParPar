@@ -455,7 +455,7 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
   
   pos_loopcnd = jit->pos;
   _jit_cmp_r(jit, DX, CX);
-  _jit_jl(jit, pos_startloop);
+  _jit_jcc(jit, JL, pos_startloop);
   
   /* it's okay to trash eax, ecx and edx
   _jit_pop(jit, CX);

@@ -10,11 +10,9 @@
     defined(_M_AMD64  ) || \
     defined(_WIN64    )
 	#define AMD64 1
-	#define OP_PREF 0x48
-	#define SSE_PREF
+	#define RXX_PREFIX jit->code[jit->pos++] = 0x48;
 #else
-	#define OP_PREF 0x66
-	#define SSE_PREF jit->code[jit->pos++] = 0x67; /* 0x67 doesn't seem to work, but 0x66 does? */
+	#define RXX_PREFIX
 #endif
 
 void _jit__enc_offset(jit_t* jit, int32_t offs) {
@@ -30,7 +28,6 @@ void _jit__enc_offset(jit_t* jit, int32_t offs) {
 }
 
 void _jit_xorps_m(jit_t* jit, uint8_t xreg, uint8_t mreg, int32_t offs) {
-	SSE_PREF
 	jit->code[jit->pos++] = 0x0F;
 	jit->code[jit->pos++] = 0x57;
 	jit->code[jit->pos++] = (xreg << 3) | mreg;
@@ -48,14 +45,12 @@ void _jit_movaps(jit_t* jit, uint8_t xreg, uint8_t xreg2) {
 	jit->code[jit->pos++] = 0xC0 | (xreg << 3) | xreg2;
 }
 void _jit_movaps_load(jit_t* jit, uint8_t xreg, uint8_t mreg, uint8_t offs) {
-	SSE_PREF
 	jit->code[jit->pos++] = 0x0F;
 	jit->code[jit->pos++] = 0x28;
 	jit->code[jit->pos++] = (xreg << 3) | mreg;
 	_jit__enc_offset(jit, offs);
 }
 void _jit_movaps_store(jit_t* jit, uint8_t mreg, uint8_t offs, uint8_t xreg) {
-	SSE_PREF
 	jit->code[jit->pos++] = 0x0F;
 	jit->code[jit->pos++] = 0x29;
 	jit->code[jit->pos++] = (xreg << 3) | mreg;
@@ -75,39 +70,29 @@ void _jit_jmp(jit_t* jit, int32_t addr) {
 		jit->code[jit->pos++] = (int8_t)target;
 	} else {
 		jit->code[jit->pos++] = 0xE9;
-#ifdef AMD64 /* TODO: 32-bit seems to use this path too? */
 		*(int32_t*)(jit->code + jit->pos) = target -3;
 		jit->pos += 4;
-#else
-		*(int16_t*)(jit->code + jit->pos) = target -1;
-		jit->pos += 2;
-#endif
 	}
 }
-void _jit_jl(jit_t* jit, int32_t addr) {
+void _jit_jcc(jit_t* jit, char op, int32_t addr) {
 	int32_t target = addr - jit->pos -2;
 	if(target <= 127 && target >= -128) {
-		jit->code[jit->pos++] = 0x7C;
+		jit->code[jit->pos++] = 0x70 | op;
 		jit->code[jit->pos++] = (int8_t)target;
 	} else {
 		jit->code[jit->pos++] = 0x0F;
-		jit->code[jit->pos++] = 0x8C;
-#ifdef AMD64 /* TODO: 32-bit seems to use this path too? */
+		jit->code[jit->pos++] = 0x80 | op;
 		*(int32_t*)(jit->code + jit->pos) = target -4;
 		jit->pos += 4;
-#else
-		*(int16_t*)(jit->code + jit->pos) = target -2;
-		jit->pos += 2;
-#endif
 	}
 }
 void _jit_cmp_r(jit_t* jit, uint8_t reg, uint8_t reg2) {
-	jit->code[jit->pos++] = OP_PREF;
+	RXX_PREFIX
 	jit->code[jit->pos++] = 0x39;
 	jit->code[jit->pos++] = 0xC0 | (reg2 << 3) | reg;
 }
 void _jit_add_i(jit_t* jit, uint8_t reg, int32_t val) {
-	jit->code[jit->pos++] = OP_PREF;
+	RXX_PREFIX
 	jit->code[jit->pos++] = 0x81;
 	jit->code[jit->pos++] = 0xC0 | reg;
 	*(int32_t*)(jit->code + jit->pos) = val;
@@ -128,7 +113,6 @@ void _jit_mov_i(jit_t* jit, uint8_t reg, long val) {
 		jit->pos += 4;
 	}
 #else
-	/* jit->code[jit->pos++] = OP_PREF; // TODO: why does yasm compile this, but isn't liked? */
 	jit->code[jit->pos++] = 0xB8 | reg;
 	*(int32_t*)(jit->code + jit->pos) = val;
 	jit->pos += 4;
