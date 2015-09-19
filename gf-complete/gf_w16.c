@@ -550,9 +550,7 @@ static
 int gf_w16_split_init(gf_t *gf)
 {
   gf_internal_t *h;
-  int i, j, exp;
   int isneon = 0;
-  uint32_t p, basep;
 
   h = (gf_internal_t *) gf->scratch;
 
