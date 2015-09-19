@@ -304,59 +304,92 @@ static void gf_w16_xor_lazy_sse_altmap_multiply_region(gf_t *gf, void *src, void
   
   if (xor) {
     while (dW != topW) {
-      for(bit=0; bit<16; bit++) {
-        __m128i d = _mm_load_si128(dW);
-        FAST_U32* deps = deptable[bit];
-        switch(counts[bit]) {
-          case 16: d = _mm_xor_si128(d, *(__m128i*)(sP + deps[15]));
-          case 15: d = _mm_xor_si128(d, *(__m128i*)(sP + deps[14]));
-          case 14: d = _mm_xor_si128(d, *(__m128i*)(sP + deps[13]));
-          case 13: d = _mm_xor_si128(d, *(__m128i*)(sP + deps[12]));
-          case 12: d = _mm_xor_si128(d, *(__m128i*)(sP + deps[11]));
-          case 11: d = _mm_xor_si128(d, *(__m128i*)(sP + deps[10]));
-          case 10: d = _mm_xor_si128(d, *(__m128i*)(sP + deps[ 9]));
-          case  9: d = _mm_xor_si128(d, *(__m128i*)(sP + deps[ 8]));
-          case  8: d = _mm_xor_si128(d, *(__m128i*)(sP + deps[ 7]));
-          case  7: d = _mm_xor_si128(d, *(__m128i*)(sP + deps[ 6]));
-          case  6: d = _mm_xor_si128(d, *(__m128i*)(sP + deps[ 5]));
-          case  5: d = _mm_xor_si128(d, *(__m128i*)(sP + deps[ 4]));
-          case  4: d = _mm_xor_si128(d, *(__m128i*)(sP + deps[ 3]));
-          case  3: d = _mm_xor_si128(d, *(__m128i*)(sP + deps[ 2]));
-          case  2: d = _mm_xor_si128(d, *(__m128i*)(sP + deps[ 1]));
-          case  1: d = _mm_xor_si128(d, *(__m128i*)(sP + deps[ 0]));
-        }
-        _mm_store_si128(dW, d);
-        dW++;
+      #define STEP(bit, type, typev) { \
+        typev tmp = _mm_load_ ## type(dW + bit); \
+        FAST_U32* deps = deptable[bit]; \
+        switch(counts[bit]) { \
+          case 16: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[15])); \
+          case 15: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[14])); \
+          case 14: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[13])); \
+          case 13: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[12])); \
+          case 12: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[11])); \
+          case 11: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[10])); \
+          case 10: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 9])); \
+          case  9: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 8])); \
+          case  8: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 7])); \
+          case  7: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 6])); \
+          case  6: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 5])); \
+          case  5: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 4])); \
+          case  4: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 3])); \
+          case  3: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 2])); \
+          case  2: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 1])); \
+          case  1: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 0])); \
+        } \
+        _mm_store_ ## type(dW + bit, tmp); \
       }
+      STEP( 0, ps, __m128)
+      STEP( 1, ps, __m128)
+      STEP( 2, ps, __m128)
+      STEP( 3, ps, __m128)
+      STEP( 4, ps, __m128)
+      STEP( 5, ps, __m128)
+      STEP( 6, ps, __m128)
+      STEP( 7, ps, __m128)
+      STEP( 8, ps, __m128)
+      STEP( 9, ps, __m128)
+      STEP(10, ps, __m128)
+      STEP(11, ps, __m128)
+      STEP(12, ps, __m128)
+      STEP(13, ps, __m128)
+      STEP(14, ps, __m128)
+      STEP(15, ps, __m128)
+      #undef STEP
+      dW += 16;
       sP += 256;
     }
   }
   else
     while (dW != topW) {
-      for(bit=0; bit<16; bit++) {
-        __m128i d = _mm_setzero_si128();
-        FAST_U32* deps = deptable[bit];
-        switch(counts[bit]) {
-          case 16: d = _mm_xor_si128(d, *(__m128i*)(sP + deps[15]));
-          case 15: d = _mm_xor_si128(d, *(__m128i*)(sP + deps[14]));
-          case 14: d = _mm_xor_si128(d, *(__m128i*)(sP + deps[13]));
-          case 13: d = _mm_xor_si128(d, *(__m128i*)(sP + deps[12]));
-          case 12: d = _mm_xor_si128(d, *(__m128i*)(sP + deps[11]));
-          case 11: d = _mm_xor_si128(d, *(__m128i*)(sP + deps[10]));
-          case 10: d = _mm_xor_si128(d, *(__m128i*)(sP + deps[ 9]));
-          case  9: d = _mm_xor_si128(d, *(__m128i*)(sP + deps[ 8]));
-          case  8: d = _mm_xor_si128(d, *(__m128i*)(sP + deps[ 7]));
-          case  7: d = _mm_xor_si128(d, *(__m128i*)(sP + deps[ 6]));
-          case  6: d = _mm_xor_si128(d, *(__m128i*)(sP + deps[ 5]));
-          case  5: d = _mm_xor_si128(d, *(__m128i*)(sP + deps[ 4]));
-          case  4: d = _mm_xor_si128(d, *(__m128i*)(sP + deps[ 3]));
-          case  3: d = _mm_xor_si128(d, *(__m128i*)(sP + deps[ 2]));
-          case  2: d = _mm_xor_si128(d, *(__m128i*)(sP + deps[ 1]));
-          case  1: d = _mm_xor_si128(d, *(__m128i*)(sP + deps[ 0]));
-        }
-        _mm_store_si128(dW, d);
-        dW++;
+      #define STEP(bit, type, typev) { \
+        typev tmp = _mm_setzero_ ## type(); \
+        FAST_U32* deps = deptable[bit]; \
+        switch(counts[bit]) { \
+          case 16: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[15])); \
+          case 15: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[14])); \
+          case 14: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[13])); \
+          case 13: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[12])); \
+          case 12: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[11])); \
+          case 11: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[10])); \
+          case 10: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 9])); \
+          case  9: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 8])); \
+          case  8: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 7])); \
+          case  7: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 6])); \
+          case  6: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 5])); \
+          case  5: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 4])); \
+          case  4: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 3])); \
+          case  3: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 2])); \
+          case  2: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 1])); \
+          case  1: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 0])); \
+        } \
+        _mm_store_ ## type(dW + bit, tmp); \
       }
+      STEP( 0, ps, __m128)
+      STEP( 1, ps, __m128)
+      STEP( 2, ps, __m128)
+      STEP( 3, ps, __m128)
+      STEP( 4, ps, __m128)
+      STEP( 5, ps, __m128)
+      STEP( 6, ps, __m128)
+      STEP( 7, ps, __m128)
+      STEP( 8, ps, __m128)
+      STEP( 9, ps, __m128)
+      STEP(10, ps, __m128)
+      STEP(11, ps, __m128)
+      STEP(12, ps, __m128)
+      STEP(13, ps, __m128)
+      STEP(14, ps, __m128)
+      STEP(15, ps, __m128)
+      dW += 16;
       sP += 256;
     }
   
