@@ -618,7 +618,7 @@ int gf_w16_scratch_size(int mult_type, int region_type, int divide_type, int arg
 
 
 #ifdef INTEL_SSE2
-#include "x86_jit.h"
+#include "x86_jit.c"
 #endif
 
 int gf_w16_init(gf_t *gf)

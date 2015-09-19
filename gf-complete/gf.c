@@ -325,7 +325,7 @@ int gf_init_hard(gf_t *gf, int w, int mult_type,
 }
 
 #ifdef INTEL_SSE2
-#include "x86_jit.h"
+#include "x86_jit.c"
 #endif
 int gf_free(gf_t *gf, int recursive)
 {

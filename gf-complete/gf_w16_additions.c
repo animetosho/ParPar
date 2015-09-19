@@ -366,7 +366,7 @@ static void gf_w16_xor_lazy_sse_altmap_multiply_region(gf_t *gf, void *src, void
 
 
 #ifdef INTEL_SSE2
-#include "x86_jit.h"
+#include "x86_jit.c"
 #endif /* INTEL_SSE2 */
 
 static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, void *dest, gf_val_32_t val, int bytes, int xor)
