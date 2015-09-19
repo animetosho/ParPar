@@ -415,9 +415,6 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
     
     
     jit->pos = 0;
-    /*_jit_push(jit, AX);
-    _jit_push(jit, DX);
-    _jit_push(jit, CX);*/
     
     _jit_mov_i(jit, AX, rd.s_start);
     _jit_mov_i(jit, DX, rd.d_start);
@@ -428,21 +425,57 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
     
     /*TODO: try interleaving instructions & other tricks*/
     /* generate code */
-    for(bit=0; bit<16; bit++) {
-      FAST_U32 cnt = 0;
-      if(xor) _jit_movaps_load(jit, 0, DX, bit<<4);
-      
-      for(i=0; i<16; i++) {
-        if(depmask[bit] & (1<<i)) {
-          if(cnt == 0 && !xor) {
-            _jit_movaps_load(jit, 0, AX, i<<4);
-          } else {
-            _jit_xorps_m(jit, 0, AX, i<<4);
+    if(xor) {
+      for(bit=0; bit<16; bit++) {
+        _jit_movaps_load(jit, 0, DX, bit<<4);
+        
+        for(i=0; i<8; i++) {
+          if(depmask[bit] & (1<<i)) {
+            //_jit_xorps_m(jit, 0, AX, i<<4);
+            *(int32_t*)(jit->code + jit->pos) = 0x40570F | (i <<28);
+            jit->pos += 4;
           }
-          cnt++;
         }
+        for(; i<16; i++) {
+          if(depmask[bit] & (1<<i)) {
+            //_jit_xorps_m(jit, 0, AX, i<<4);
+            *(int32_t*)(jit->code + jit->pos +3) = 0;
+            *(int32_t*)(jit->code + jit->pos) = 0x80570F | (i <<28);
+            jit->pos += 7;
+          }
+        }
+        _jit_movaps_store(jit, DX, bit<<4, 0);
       }
-      _jit_movaps_store(jit, DX, bit<<4, 0);
+    } else {
+      for(bit=0; bit<16; bit++) {
+        FAST_U8 mov = 1;
+        for(i=0; i<8; i++) {
+          if(depmask[bit] & (1<<i)) {
+            if(mov) {
+              _jit_movaps_load(jit, 0, AX, i<<4);
+              mov = 0;
+            } else {
+              //_jit_xorps_m(jit, 0, AX, i<<4);
+              *(int32_t*)(jit->code + jit->pos) = 0x40570F | (i <<28);
+              jit->pos += 4;
+            }
+          }
+        }
+        for(; i<16; i++) {
+          if(depmask[bit] & (1<<i)) {
+            if(mov) {
+              _jit_movaps_load(jit, 0, AX, i<<4);
+              mov = 0;
+            } else {
+              //_jit_xorps_m(jit, 0, AX, i<<4);
+              *(int32_t*)(jit->code + jit->pos +3) = 0;
+              *(int32_t*)(jit->code + jit->pos) = 0x80570F | (i <<28);
+              jit->pos += 7;
+            }
+          }
+        }
+        _jit_movaps_store(jit, DX, bit<<4, 0);
+      }
     }
     
     _jit_add_i(jit, AX, 256);
@@ -450,12 +483,6 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
     
     _jit_cmp_r(jit, DX, CX);
     _jit_jcc(jit, JL, pos_startloop);
-    
-    /* it's okay to trash eax, ecx and edx
-    _jit_pop(jit, CX);
-    _jit_pop(jit, DX);
-    _jit_pop(jit, AX);
-    */
     
     _jit_ret(jit);
     
