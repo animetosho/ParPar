@@ -60,6 +60,7 @@ typedef enum {GF_MULT_DEFAULT,
               GF_MULT_LOG_ZERO,
               GF_MULT_LOG_ZERO_EXT,
               GF_MULT_SPLIT_TABLE,
+              GF_MULT_XOR_DEPENDS,
               GF_MULT_COMPOSITE } gf_mult_type_t;
 
 /* These are the different ways to optimize region 

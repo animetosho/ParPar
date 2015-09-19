@@ -311,6 +311,9 @@ int gf_init_hard(gf_t *gf, int w, int mult_type,
   h->arg2 = arg2;
   h->private = (void *) gf->scratch;
   h->private = (uint8_t *)h->private + (sizeof(gf_internal_t));
+#ifdef INTEL_SSE2
+  h->jit.code = NULL;
+#endif
   gf->extract_word.w32 = NULL;
   gf->altmap_region = NULL;
   gf->unaltmap_region = NULL;
@@ -321,6 +324,9 @@ int gf_init_hard(gf_t *gf, int w, int mult_type,
   return 0;
 }
 
+#ifdef INTEL_SSE2
+#include "x86_jit.h"
+#endif
 int gf_free(gf_t *gf, int recursive)
 {
   gf_internal_t *h;
@@ -330,6 +336,10 @@ int gf_free(gf_t *gf, int recursive)
     gf_free(h->base_gf, 1);
     free(h->base_gf);
   }
+#ifdef INTEL_SSE2
+  if (h->jit.code)
+    jit_free(h->jit.code, h->jit.len);
+#endif
   if (h->free_me) free(h);
   return 0; /* Making compiler happy */
 }

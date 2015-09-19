@@ -365,6 +365,120 @@ static void gf_w16_xor_lazy_sse_altmap_multiply_region(gf_t *gf, void *src, void
 }
 
 
+#ifdef INTEL_SSE2
+#include "x86_jit.h"
+#endif /* INTEL_SSE2 */
+
+static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, void *dest, gf_val_32_t val, int bytes, int xor)
+{
+#ifdef INTEL_SSE2
+  FAST_U32 i, bit, poly;
+  FAST_U16 depmask[16] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+  gf_region_data rd;
+  gf_internal_t *h;
+  jit_t* jit;
+  FAST_U8 pos_startloop, pos_loopcnd, pos_jmptmp;
+  
+  if (val == 0) { gf_multby_zero(dest, bytes, xor); return; }
+  if (val == 1) { gf_multby_one(src, dest, bytes, xor); return; }
+
+  h = (gf_internal_t *) gf->scratch;
+  jit = &(h->jit);
+  gf_set_region_data(&rd, gf, src, dest, bytes, val, xor, 16, 256);
+  gf_do_initial_region_alignment(&rd);
+  
+  /* calculate dependent bits */
+  poly = h->prim_poly & 0xFFFF; /* chop off top bit */
+  for(bit=0; bit<16; bit++) {
+    if(val & (1<<(15-bit))) {
+      /* XOR */
+      for(i=0; i<16; i++)
+        depmask[i] ^= 1<<i;
+    }
+    if(bit != 15) {
+      /* rotate */
+      FAST_U16 last = depmask[0];
+      for(i=1; i<16; i++)
+        depmask[i-1] = depmask[i];
+      depmask[15] = 0;
+      
+      /* XOR poly */
+      for(i=0; i<16; i++) {
+        if(poly & (1<<(15-i))) {
+          depmask[i] ^= last;
+        }
+      }
+    }
+  }
+  
+  
+  jit->pos = 0;
+  /*_jit_push(jit, AX);
+  _jit_push(jit, DX);
+  _jit_push(jit, CX);*/
+  
+  _jit_mov_i(jit, AX, rd.s_start);
+  _jit_mov_i(jit, DX, rd.d_start);
+  _jit_mov_i(jit, CX, rd.d_top);
+  
+  pos_jmptmp = jit->pos;
+  _jit_nop(jit); /* allocate enough space for a jump */
+  _jit_nop(jit);
+  _jit_nop(jit);
+  _jit_nop(jit);
+  _jit_nop(jit);
+  
+  _jit_align16(jit);
+  pos_startloop = jit->pos;
+  
+  /*TODO: try interleaving instructions & other tricks*/
+  /* generate code */
+  for(bit=0; bit<16; bit++) {
+    FAST_U32 cnt = 0;
+    if(xor) _jit_movaps_load(jit, 0, DX, bit<<4);
+    
+    for(i=0; i<16; i++) {
+      if(depmask[bit] & (1<<i)) {
+        if(cnt == 0 && !xor) {
+          _jit_movaps_load(jit, 0, AX, i<<4);
+        } else {
+          _jit_xorps_m(jit, 0, AX, i<<4);
+        }
+        cnt++;
+      }
+    }
+    _jit_movaps_store(jit, DX, bit<<4, 0);
+  }
+  
+  _jit_add_i(jit, AX, 256);
+  _jit_add_i(jit, DX, 256);
+  
+  pos_loopcnd = jit->pos;
+  _jit_cmp_r(jit, DX, CX);
+  _jit_jl(jit, pos_startloop);
+  
+  /* it's okay to trash eax, ecx and edx
+  _jit_pop(jit, CX);
+  _jit_pop(jit, DX);
+  _jit_pop(jit, AX);
+  */
+  
+  _jit_ret(jit);
+  
+  /* fix up earlier jump */
+  jit->pos = pos_jmptmp;
+  _jit_jmp(jit, pos_loopcnd);
+  
+  // exec
+  (*(void(*)(void))jit->code)();
+  
+  gf_do_final_region_alignment(&rd);
+
+#endif
+}
+
+
+
 #ifdef INTEL_AVX512BW
 
 #define MWORD_SIZE 64

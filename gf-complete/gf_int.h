@@ -16,6 +16,12 @@
 #include <string.h>
 
 typedef struct {
+	int32_t pos;
+	size_t len;
+	uint8_t* code;
+} jit_t;
+
+typedef struct {
   int mult_type;
   int region_type;
   int divide_type;
@@ -25,6 +31,9 @@ typedef struct {
   int arg1;
   int arg2;
   gf_t *base_gf;
+#ifdef INTEL_SSE2
+  jit_t jit;
+#endif
   void *private;
 } gf_internal_t;
 

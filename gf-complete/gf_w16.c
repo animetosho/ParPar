@@ -618,6 +618,11 @@ int gf_w16_scratch_size(int mult_type, int region_type, int divide_type, int arg
   return sizeof(gf_internal_t) + sizeof(struct gf_w16_logtable_data) + 64;
 }
 
+
+#ifdef INTEL_SSE2
+#include "x86_jit.h"
+#endif
+
 int gf_w16_init(gf_t *gf)
 {
   gf_internal_t *h;
@@ -647,6 +652,21 @@ int gf_w16_init(gf_t *gf)
   gf->walignment = 16;
 
   if (gf_w16_split_init(gf) == 0) return 0;
+  
+#ifdef INTEL_SSE2
+  if (h->mult_type == GF_MULT_XOR_DEPENDS) {
+    /* alloc JIT region */
+    h->jit.code = jit_alloc(h->jit.len = 2048); /* 2KB should be enough for everyone */
+    gf->multiply_region.w32 = gf_w16_xor_lazy_sse_jit_altmap_multiply_region;
+    gf->alignment = 16;
+    gf->walignment = 256;
+    gf->using_altmap = 1;
+    gf->altmap_region = gf_w16_xor_start;
+    gf->unaltmap_region = gf_w16_xor_final;
+    return 1;
+  }
+#endif
+  
   if (h->region_type & GF_REGION_ALTMAP) {
     /* !! There's no fallback if SSE not supported !!
      * ParPar never uses ALTMAP if SSSE3 isn't available, but this isn't ideal in gf-complete
