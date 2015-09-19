@@ -484,17 +484,23 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
     _jit_align16(jit);
     pos_startloop = jit->ptr;
     
-    /*TODO: try interleaving instructions & other tricks*/
     /* generate code */
     if(xor) {
-      for(bit=0; bit<16; bit++) {
+      for(bit=0; bit<16; bit+=2) {
         _jit_movaps_load(jit, 0, DX, bit<<4);
+        _jit_movdqa_load(jit, 1, DX, (bit+1)<<4);
         
         for(i=0; i<8; i++) {
           if(tmp_depmask[bit] & (1<<i)) {
             //_jit_xorps_m(jit, 0, AX, i<<4);
             *(int32_t*)(jit->ptr) = 0x40570F | (i <<28);
             jit->ptr += 4;
+          }
+          if(tmp_depmask[bit+1] & (1<<i)) {
+            //_jit_pxor_m(jit, 1, AX, i<<4);
+            *(int32_t*)(jit->ptr) = 0x48EF0F66;
+            *(jit->ptr +4) = i << 4;
+            jit->ptr += 5;
           }
         }
         for(; i<16; i++) {
@@ -504,12 +510,19 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
             *(int32_t*)(jit->ptr) = 0x80570F | (i <<28);
             jit->ptr += 7;
           }
+          if(tmp_depmask[bit+1] & (1<<i)) {
+            //_jit_pxor_m(jit, 1, AX, i<<4);
+            *(int32_t*)(jit->ptr) = 0x88EF0F66;
+            *(int32_t*)(jit->ptr +4) = i << 4;
+            jit->ptr += 8;
+          }
         }
         _jit_movaps_store(jit, DX, bit<<4, 0);
+        _jit_movdqa_store(jit, DX, (bit+1)<<4, 1);
       }
     } else {
-      for(bit=0; bit<16; bit++) {
-        FAST_U8 mov = 1;
+      for(bit=0; bit<16; bit+=2) {
+        FAST_U8 mov = 1, mov2 = 1;
         for(i=0; i<8; i++) {
           if(tmp_depmask[bit] & (1<<i)) {
             if(mov) {
@@ -519,6 +532,17 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
               //_jit_xorps_m(jit, 0, AX, i<<4);
               *(int32_t*)(jit->ptr) = 0x40570F | (i <<28);
               jit->ptr += 4;
+            }
+          }
+          if(tmp_depmask[bit+1] & (1<<i)) {
+            if(mov2) {
+              _jit_movdqa_load(jit, 1, AX, i<<4);
+              mov2 = 0;
+            } else {
+              //_jit_pxor_m(jit, 1, AX, i<<4);
+              *(int32_t*)(jit->ptr) = 0x48EF0F66;
+              *(jit->ptr +4) = i << 4;
+              jit->ptr += 5;
             }
           }
         }
@@ -534,8 +558,20 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
               jit->ptr += 7;
             }
           }
+          if(tmp_depmask[bit+1] & (1<<i)) {
+            if(mov2) {
+              _jit_movdqa_load(jit, 1, AX, i<<4);
+              mov2 = 0;
+            } else {
+              //_jit_pxor_m(jit, 1, AX, i<<4);
+              *(int32_t*)(jit->ptr) = 0x88EF0F66;
+              *(int32_t*)(jit->ptr +4) = i << 4;
+              jit->ptr += 8;
+            }
+          }
         }
         _jit_movaps_store(jit, DX, bit<<4, 0);
+        _jit_movdqa_store(jit, DX, (bit+1)<<4, 1);
       }
     }
     
