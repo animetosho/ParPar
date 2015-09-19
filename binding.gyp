@@ -19,7 +19,8 @@
       "type": "static_library",
       "sources": [
         "gf-complete/gf.c",
-        "gf-complete/gf_w16.c"
+        "gf-complete/gf_w16.c",
+        "gf-complete/x86_jit.c"
       ],
       "conditions": [
         ['OS=="win"', {
