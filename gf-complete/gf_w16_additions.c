@@ -249,7 +249,8 @@ static void gf_w16_xor_lazy_sse_altmap_multiply_region(gf_t *gf, void *src, void
 #ifdef INTEL_SSE2
   FAST_U32 i, bit, poly;
   FAST_U32 counts[16], deptable[16][16];
-  FAST_U16 depmask[16] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+  __m128i depmask1, depmask2, polymask1, polymask2, addvals1, addvals2;
+  uint16_t tmp_depmask[16];
   gf_region_data rd;
   gf_internal_t *h;
   __m128i *dW, *topW;
@@ -262,35 +263,48 @@ static void gf_w16_xor_lazy_sse_altmap_multiply_region(gf_t *gf, void *src, void
   gf_set_region_data(&rd, gf, src, dest, bytes, val, xor, 16, 256);
   gf_do_initial_region_alignment(&rd);
   
+  depmask1 = _mm_setzero_si128();
+  depmask2 = _mm_setzero_si128();
+  
   /* calculate dependent bits */
-  poly = h->prim_poly & 0xFFFF; /* chop off top bit */
+  poly = h->prim_poly & 0xFFFF; /* chop off top bit, although not really necessary */
+  #define POLYSET(bit) ((poly & (1<<(15-bit))) ? 0xFFFF : 0)
+  polymask1 = _mm_set_epi16(POLYSET( 7), POLYSET( 6), POLYSET( 5), POLYSET( 4), POLYSET( 3), POLYSET( 2), POLYSET(1), POLYSET(0));
+  polymask2 = _mm_set_epi16(POLYSET(15), POLYSET(14), POLYSET(13), POLYSET(12), POLYSET(11), POLYSET(10), POLYSET(9), POLYSET(8));
+  #undef POLYSET
+  
+  addvals1 = _mm_set_epi16(1<< 7, 1<< 6, 1<< 5, 1<< 4, 1<< 3, 1<< 2, 1<<1, 1<<0);
+  addvals2 = _mm_set_epi16(1<<15, 1<<14, 1<<13, 1<<12, 1<<11, 1<<10, 1<<9, 1<<8);
+  
   for(bit=0; bit<16; bit++) {
     if(val & (1<<(15-bit))) {
       /* XOR */
-      for(i=0; i<16; i++)
-        depmask[i] ^= 1<<i;
+      depmask1 = _mm_xor_si128(depmask1, addvals1);
+      depmask2 = _mm_xor_si128(depmask2, addvals2);
     }
     if(bit != 15) {
       /* rotate */
-      FAST_U16 last = depmask[0];
-      for(i=1; i<16; i++)
-        depmask[i-1] = depmask[i];
-      depmask[15] = 0;
+      __m128i last = _mm_set1_epi16(_mm_extract_epi16(depmask1, 0));
+      depmask1 = _mm_insert_epi16(
+        _mm_srli_si128(depmask1, 2),
+        _mm_extract_epi16(depmask2, 0),
+        7
+      );
+      depmask2 = _mm_srli_si128(depmask2, 2);
       
       /* XOR poly */
-      for(i=0; i<16; i++) {
-        if(poly & (1<<(15-i))) {
-          depmask[i] ^= last;
-        }
-      }
+      depmask1 = _mm_xor_si128(depmask1, _mm_and_si128(last, polymask1));
+      depmask2 = _mm_xor_si128(depmask2, _mm_and_si128(last, polymask2));
     }
   }
   
   /* generate needed tables */
+  _mm_storeu_si128((__m128i*)(tmp_depmask), depmask1);
+  _mm_storeu_si128((__m128i*)(tmp_depmask + 8), depmask2);
   for(bit=0; bit<16; bit++) {
     FAST_U32 cnt = 0;
     for(i=0; i<16; i++) {
-      if(depmask[bit] & (1<<i)) {
+      if(tmp_depmask[bit] & (1<<i)) {
         deptable[bit][cnt++] = i<<4; /* pre-multiply because x86 addressing can't do a x16; this saves a shift operation later */
       }
     }
@@ -406,7 +420,8 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
 {
 #ifdef INTEL_SSE2
   FAST_U32 i, bit, poly;
-  FAST_U16 depmask[16] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+  __m128i depmask1, depmask2, polymask1, polymask2, addvals1, addvals2;
+  uint16_t tmp_depmask[16];
   gf_region_data rd;
   gf_internal_t *h;
   jit_t* jit;
@@ -422,30 +437,43 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
   
   if(rd.d_start != rd.d_top) {
     
+    depmask1 = _mm_setzero_si128();
+    depmask2 = _mm_setzero_si128();
+    
     /* calculate dependent bits */
-    poly = h->prim_poly & 0xFFFF; /* chop off top bit */
+    poly = h->prim_poly & 0xFFFF; /* chop off top bit, although not really necessary */
+    #define POLYSET(bit) ((poly & (1<<(15-bit))) ? 0xFFFF : 0)
+    polymask1 = _mm_set_epi16(POLYSET( 7), POLYSET( 6), POLYSET( 5), POLYSET( 4), POLYSET( 3), POLYSET( 2), POLYSET(1), POLYSET(0));
+    polymask2 = _mm_set_epi16(POLYSET(15), POLYSET(14), POLYSET(13), POLYSET(12), POLYSET(11), POLYSET(10), POLYSET(9), POLYSET(8));
+    #undef POLYSET
+  
+    addvals1 = _mm_set_epi16(1<< 7, 1<< 6, 1<< 5, 1<< 4, 1<< 3, 1<< 2, 1<<1, 1<<0);
+    addvals2 = _mm_set_epi16(1<<15, 1<<14, 1<<13, 1<<12, 1<<11, 1<<10, 1<<9, 1<<8);
+  
     for(bit=0; bit<16; bit++) {
       if(val & (1<<(15-bit))) {
         /* XOR */
-        for(i=0; i<16; i++)
-          depmask[i] ^= 1<<i;
+        depmask1 = _mm_xor_si128(depmask1, addvals1);
+        depmask2 = _mm_xor_si128(depmask2, addvals2);
       }
       if(bit != 15) {
         /* rotate */
-        FAST_U16 last = depmask[0];
-        for(i=1; i<16; i++)
-          depmask[i-1] = depmask[i];
-        depmask[15] = 0;
+        __m128i last = _mm_set1_epi16(_mm_extract_epi16(depmask1, 0));
+        depmask1 = _mm_insert_epi16(
+          _mm_srli_si128(depmask1, 2),
+          _mm_extract_epi16(depmask2, 0),
+          7
+        );
+        depmask2 = _mm_srli_si128(depmask2, 2);
         
         /* XOR poly */
-        for(i=0; i<16; i++) {
-          if(poly & (1<<(15-i))) {
-            depmask[i] ^= last;
-          }
-        }
+        depmask1 = _mm_xor_si128(depmask1, _mm_and_si128(last, polymask1));
+        depmask2 = _mm_xor_si128(depmask2, _mm_and_si128(last, polymask2));
       }
     }
     
+    _mm_storeu_si128((__m128i*)(tmp_depmask), depmask1);
+    _mm_storeu_si128((__m128i*)(tmp_depmask + 8), depmask2);
     
     jit->ptr = jit->code;
     
@@ -463,14 +491,14 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
         _jit_movaps_load(jit, 0, DX, bit<<4);
         
         for(i=0; i<8; i++) {
-          if(depmask[bit] & (1<<i)) {
+          if(tmp_depmask[bit] & (1<<i)) {
             //_jit_xorps_m(jit, 0, AX, i<<4);
             *(int32_t*)(jit->ptr) = 0x40570F | (i <<28);
             jit->ptr += 4;
           }
         }
         for(; i<16; i++) {
-          if(depmask[bit] & (1<<i)) {
+          if(tmp_depmask[bit] & (1<<i)) {
             //_jit_xorps_m(jit, 0, AX, i<<4);
             *(int32_t*)(jit->ptr +3) = 0;
             *(int32_t*)(jit->ptr) = 0x80570F | (i <<28);
@@ -483,7 +511,7 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
       for(bit=0; bit<16; bit++) {
         FAST_U8 mov = 1;
         for(i=0; i<8; i++) {
-          if(depmask[bit] & (1<<i)) {
+          if(tmp_depmask[bit] & (1<<i)) {
             if(mov) {
               _jit_movaps_load(jit, 0, AX, i<<4);
               mov = 0;
@@ -495,7 +523,7 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
           }
         }
         for(; i<16; i++) {
-          if(depmask[bit] & (1<<i)) {
+          if(tmp_depmask[bit] & (1<<i)) {
             if(mov) {
               _jit_movaps_load(jit, 0, AX, i<<4);
               mov = 0;
