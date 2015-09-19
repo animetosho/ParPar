@@ -463,7 +463,7 @@ FUNC(MultiplyMulti) {
 		
 #if NODE_VERSION_AT_LEAST(0, 11, 0)
 		Local<Object> obj = Object::New(isolate);
-		obj->Set(String::NewFromOneByte(ISOLATE (const uint8_t*)"ondone"), args[4]);
+		obj->Set(String::NewFromOneByte(ISOLATE (const uint8_t*)"ondone"), args[5]);
 		req->obj_.Reset(ISOLATE obj);
 		//if (env->in_domain())
 		//	req->obj_->Set(env->domain_string(), env->domain_array()->Get(0));
@@ -593,15 +593,15 @@ void init(Handle<Object> target) {
 	#endif
 #endif
 
-	if(using_altmap) {
-		#define GF_ARGS 16, GF_MULT_SPLIT_TABLE, GF_REGION_ALTMAP, GF_DIVIDE_DEFAULT
+		if(using_altmap) {
+			#define GF_ARGS 16, GF_MULT_SPLIT_TABLE, GF_REGION_ALTMAP, GF_DIVIDE_DEFAULT
 		gf_init_hard(&gf, GF_ARGS, 0, 16, 4, NULL, NULL);
-		#undef GF_ARGS
-	} else {
-		#define GF_ARGS 16, GF_MULT_DEFAULT, GF_REGION_DEFAULT, GF_DIVIDE_DEFAULT
+			#undef GF_ARGS
+		} else {
+			#define GF_ARGS 16, GF_MULT_DEFAULT, GF_REGION_DEFAULT, GF_DIVIDE_DEFAULT
 		gf_init_hard(&gf, GF_ARGS, 0, 0, 0, NULL, NULL);
-		#undef GF_ARGS
-	}
+			#undef GF_ARGS
+		}
 	MEM_ALIGN = gf.alignment;
 	MEM_WALIGN = gf.walignment;
 	
