@@ -728,8 +728,8 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
           _jit_movdqa_store(jit, BP, -((bit+1)<<4) -16, bit+1);
         }
         for(; bit<16; bit+=2) {
-          _jit_movaps_load(jit, bit, DX, (bit&7)<<4);
-          _jit_movdqa_load(jit, bit+1, DX, ((bit&7)+1)<<4);
+          _jit_movaps_load(jit, (bit&7), DX, bit<<4);
+          _jit_movdqa_load(jit, (bit&7)+1, DX, (bit+1)<<4);
         }
 #endif
         for(bit=8; bit<16; bit+=2) {
