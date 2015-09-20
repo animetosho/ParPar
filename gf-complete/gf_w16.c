@@ -611,15 +611,40 @@ int gf_w16_split_init(gf_t *gf)
   return 1;
 }
 
+#ifdef INTEL_SSE2
+#include "x86_jit.c"
+static 
+int gf_w16_xor_init(gf_t *gf)
+{
+  gf_internal_t *h = (gf_internal_t *) gf->scratch;
+  jit_t* jit = &(h->jit);
+  int pos;
+
+  /* We'll be using LOG for multiplication, unless the pp isn't primitive.
+     In that case, we'll be using SHIFT. */
+
+  gf_w16_log_init(gf);
+  
+  /* alloc JIT region */
+  jit->code = jit_alloc(jit->len = 2048); /* 2KB should be enough for everyone */
+  
+  /* if JIT allocation was successful (no W^X issue), use slightly faster JIT version, otherwise fall back to static code version */
+  gf->multiply_region.w32 = jit->code ? gf_w16_xor_lazy_sse_jit_altmap_multiply_region : gf_w16_xor_lazy_sse_altmap_multiply_region;
+  gf->alignment = 16;
+  gf->walignment = 256;
+  gf->using_altmap = 1;
+  gf->altmap_region = gf_w16_xor_start;
+  gf->unaltmap_region = gf_w16_xor_final;
+  return 1;
+}
+#endif
+
 int gf_w16_scratch_size(int mult_type, int region_type, int divide_type, int arg1, int arg2)
 {
   return sizeof(gf_internal_t) + sizeof(struct gf_w16_logtable_data) + 64;
 }
 
 
-#ifdef INTEL_SSE2
-#include "x86_jit.c"
-#endif
 
 int gf_w16_init(gf_t *gf)
 {
@@ -649,21 +674,14 @@ int gf_w16_init(gf_t *gf)
   gf->alignment = 16;
   gf->walignment = 16;
 
-  if (gf_w16_split_init(gf) == 0) return 0;
-  
 #ifdef INTEL_SSE2
   if (h->mult_type == GF_MULT_XOR_DEPENDS) {
-    /* alloc JIT region */
-    h->jit.code = jit_alloc(h->jit.len = 2048); /* 2KB should be enough for everyone */
-    gf->multiply_region.w32 = gf_w16_xor_lazy_sse_jit_altmap_multiply_region;
-    gf->alignment = 16;
-    gf->walignment = 256;
-    gf->using_altmap = 1;
-    gf->altmap_region = gf_w16_xor_start;
-    gf->unaltmap_region = gf_w16_xor_final;
-    return 1;
+    return gf_w16_xor_init(gf);
   }
+  else
 #endif
+  if (gf_w16_split_init(gf) == 0) return 0;
+  
   
   if (h->region_type & GF_REGION_ALTMAP) {
     /* !! There's no fallback if SSE not supported !!
