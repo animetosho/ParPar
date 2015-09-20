@@ -171,6 +171,10 @@ static void gf_w16_xor_final(void* src, int bytes, void* dest) {
 	uint16_t dtmp[128];
 	int i, j;
 	
+	/*shut up compiler warning*/
+	th = _mm_setzero_si128();
+	tl = _mm_setzero_si128();
+	
 	if(((intptr_t)src & 0xF) != ((intptr_t)dest & 0xF)) {
 		// unaligned version, note that we go by src alignment
 		gf_set_region_data(&rd, NULL, src, src, bytes, 0, 0, 16, 256);
@@ -253,7 +257,7 @@ static void gf_w16_xor_lazy_sse_altmap_multiply_region(gf_t *gf, void *src, void
   uint16_t tmp_depmask[16];
   gf_region_data rd;
   gf_internal_t *h;
-  __m128i *dW, *topW;
+  __m128 *dW, *topW;
   intptr_t sP;
 
   if (val == 0) { gf_multby_zero(dest, bytes, xor); return; }
@@ -313,13 +317,13 @@ static void gf_w16_xor_lazy_sse_altmap_multiply_region(gf_t *gf, void *src, void
   
   
   sP = (intptr_t) rd.s_start;
-  dW = (__m128i *) rd.d_start;
-  topW = (__m128i *) rd.d_top;
+  dW = (__m128 *) rd.d_start;
+  topW = (__m128 *) rd.d_top;
   
   if (xor) {
     while (dW != topW) {
-      #define STEP(bit, type, typev) { \
-        typev tmp = _mm_load_ ## type(dW + bit); \
+      #define STEP(bit, type, typev, typed) { \
+        typev tmp = _mm_load_ ## type((typed*)(dW + bit)); \
         FAST_U32* deps = deptable[bit]; \
         switch(counts[bit]) { \
           case 16: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[15])); \
@@ -339,24 +343,24 @@ static void gf_w16_xor_lazy_sse_altmap_multiply_region(gf_t *gf, void *src, void
           case  2: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 1])); \
           case  1: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 0])); \
         } \
-        _mm_store_ ## type(dW + bit, tmp); \
+        _mm_store_ ## type((typed*)(dW + bit), tmp); \
       }
-      STEP( 0, ps, __m128)
-      STEP( 1, ps, __m128)
-      STEP( 2, ps, __m128)
-      STEP( 3, ps, __m128)
-      STEP( 4, ps, __m128)
-      STEP( 5, ps, __m128)
-      STEP( 6, ps, __m128)
-      STEP( 7, ps, __m128)
-      STEP( 8, ps, __m128)
-      STEP( 9, ps, __m128)
-      STEP(10, ps, __m128)
-      STEP(11, ps, __m128)
-      STEP(12, ps, __m128)
-      STEP(13, ps, __m128)
-      STEP(14, ps, __m128)
-      STEP(15, ps, __m128)
+      STEP( 0, ps, __m128, float)
+      STEP( 1, ps, __m128, float)
+      STEP( 2, ps, __m128, float)
+      STEP( 3, ps, __m128, float)
+      STEP( 4, ps, __m128, float)
+      STEP( 5, ps, __m128, float)
+      STEP( 6, ps, __m128, float)
+      STEP( 7, ps, __m128, float)
+      STEP( 8, ps, __m128, float)
+      STEP( 9, ps, __m128, float)
+      STEP(10, ps, __m128, float)
+      STEP(11, ps, __m128, float)
+      STEP(12, ps, __m128, float)
+      STEP(13, ps, __m128, float)
+      STEP(14, ps, __m128, float)
+      STEP(15, ps, __m128, float)
       #undef STEP
       dW += 16;
       sP += 256;
@@ -364,7 +368,7 @@ static void gf_w16_xor_lazy_sse_altmap_multiply_region(gf_t *gf, void *src, void
   }
   else
     while (dW != topW) {
-      #define STEP(bit, type, typev) { \
+      #define STEP(bit, type, typev, typed) { \
         typev tmp = _mm_setzero_ ## type(); \
         FAST_U32* deps = deptable[bit]; \
         switch(counts[bit]) { \
@@ -385,24 +389,24 @@ static void gf_w16_xor_lazy_sse_altmap_multiply_region(gf_t *gf, void *src, void
           case  2: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 1])); \
           case  1: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 0])); \
         } \
-        _mm_store_ ## type(dW + bit, tmp); \
+        _mm_store_ ## type((typed*)(dW + bit), tmp); \
       }
-      STEP( 0, ps, __m128)
-      STEP( 1, ps, __m128)
-      STEP( 2, ps, __m128)
-      STEP( 3, ps, __m128)
-      STEP( 4, ps, __m128)
-      STEP( 5, ps, __m128)
-      STEP( 6, ps, __m128)
-      STEP( 7, ps, __m128)
-      STEP( 8, ps, __m128)
-      STEP( 9, ps, __m128)
-      STEP(10, ps, __m128)
-      STEP(11, ps, __m128)
-      STEP(12, ps, __m128)
-      STEP(13, ps, __m128)
-      STEP(14, ps, __m128)
-      STEP(15, ps, __m128)
+      STEP( 0, ps, __m128, float)
+      STEP( 1, ps, __m128, float)
+      STEP( 2, ps, __m128, float)
+      STEP( 3, ps, __m128, float)
+      STEP( 4, ps, __m128, float)
+      STEP( 5, ps, __m128, float)
+      STEP( 6, ps, __m128, float)
+      STEP( 7, ps, __m128, float)
+      STEP( 8, ps, __m128, float)
+      STEP( 9, ps, __m128, float)
+      STEP(10, ps, __m128, float)
+      STEP(11, ps, __m128, float)
+      STEP(12, ps, __m128, float)
+      STEP(13, ps, __m128, float)
+      STEP(14, ps, __m128, float)
+      STEP(15, ps, __m128, float)
       dW += 16;
       sP += 256;
     }
@@ -477,9 +481,9 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
     
     jit->ptr = jit->code;
     
-    _jit_mov_i(jit, AX, rd.s_start);
-    _jit_mov_i(jit, DX, rd.d_start);
-    _jit_mov_i(jit, CX, rd.d_top);
+    _jit_mov_i(jit, AX, (intptr_t)rd.s_start);
+    _jit_mov_i(jit, DX, (intptr_t)rd.d_start);
+    _jit_mov_i(jit, CX, (intptr_t)rd.d_top);
     
     _jit_align16(jit);
     pos_startloop = jit->ptr;
@@ -499,7 +503,7 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
           if(tmp_depmask[bit+1] & (1<<i)) {
             //_jit_pxor_m(jit, 1, AX, i<<4);
             *(int32_t*)(jit->ptr) = 0x48EF0F66;
-            *(jit->ptr +4) = i << 4;
+            *(jit->ptr +4) = (uint8_t)(i << 4);
             jit->ptr += 5;
           }
         }
@@ -513,7 +517,7 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
           if(tmp_depmask[bit+1] & (1<<i)) {
             //_jit_pxor_m(jit, 1, AX, i<<4);
             *(int32_t*)(jit->ptr) = 0x88EF0F66;
-            *(int32_t*)(jit->ptr +4) = i << 4;
+            *(int32_t*)(jit->ptr +4) = (uint8_t)(i << 4);
             jit->ptr += 8;
           }
         }
@@ -541,7 +545,7 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
             } else {
               //_jit_pxor_m(jit, 1, AX, i<<4);
               *(int32_t*)(jit->ptr) = 0x48EF0F66;
-              *(jit->ptr +4) = i << 4;
+              *(jit->ptr +4) = (uint8_t)(i << 4);
               jit->ptr += 5;
             }
           }
@@ -565,7 +569,7 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
             } else {
               //_jit_pxor_m(jit, 1, AX, i<<4);
               *(int32_t*)(jit->ptr) = 0x88EF0F66;
-              *(int32_t*)(jit->ptr +4) = i << 4;
+              *(int32_t*)(jit->ptr +4) = (uint8_t)(i << 4);
               jit->ptr += 8;
             }
           }

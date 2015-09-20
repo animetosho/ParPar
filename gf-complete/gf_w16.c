@@ -618,7 +618,6 @@ int gf_w16_xor_init(gf_t *gf)
 {
   gf_internal_t *h = (gf_internal_t *) gf->scratch;
   jit_t* jit = &(h->jit);
-  int pos;
 
   /* We'll be using LOG for multiplication, unless the pp isn't primitive.
      In that case, we'll be using SHIFT. */
