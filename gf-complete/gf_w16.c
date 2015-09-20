@@ -231,8 +231,7 @@ gf_w16_split_8_16_lazy_multiply_region(gf_t *gf, void *src, void *dest, gf_val_3
   if (val == 0) { gf_multby_zero(dest, bytes, xor); return; }
   if (val == 1) { gf_multby_one(src, dest, bytes, xor); return; }
 
-  // TODO: do we get a perf improvement if we align properly?
-  gf_set_region_data(&rd, gf, src, dest, bytes, val, xor, 2, sizeof(FAST_U32));
+  gf_set_region_data(&rd, gf, src, dest, bytes, val, xor, sizeof(FAST_U32), sizeof(FAST_U32));
   gf_do_initial_region_alignment(&rd);
   
   h = (gf_internal_t *) gf->scratch;
@@ -573,14 +572,14 @@ int gf_w16_split_init(gf_t *gf)
 #endif
   } else {
     gf->multiply_region.w32 = gf_w16_split_8_16_lazy_multiply_region;
-    gf->alignment = 2;
+    gf->alignment = sizeof(FAST_U32);
     gf->walignment = sizeof(FAST_U32);
   }
 
 
   if ((h->arg1 == 8 && h->arg2 == 16) || (h->arg2 == 8 && h->arg1 == 16)) {
     gf->multiply_region.w32 = gf_w16_split_8_16_lazy_multiply_region;
-    gf->alignment = 2;
+    gf->alignment = sizeof(FAST_U32);
     gf->walignment = sizeof(FAST_U32);
   } else if ((h->arg1 == 4 && h->arg2 == 16) || (h->arg2 == 4 && h->arg1 == 16)) {
     if (has_ssse3 || isneon) {
