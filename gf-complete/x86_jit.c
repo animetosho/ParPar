@@ -39,12 +39,14 @@
 #endif
 
 static inline void _jit_rex_pref(jit_t* jit, uint8_t xreg, uint8_t xreg2) {
+#ifdef AMD64
 	if(xreg > 7 || xreg2 > 7) {
 		*(jit->ptr++) = 0x40 | (xreg2 >>3) | ((xreg >>1)&4);
 	}
+#endif
 }
 
-inline void _jit_xorps_m(jit_t* jit, uint8_t xreg, uint8_t mreg, int32_t offs) {
+static inline void _jit_xorps_m(jit_t* jit, uint8_t xreg, uint8_t mreg, int32_t offs) {
 	_jit_rex_pref(jit, xreg, 0);
 	xreg &= 7;
 	if((offs+128) & ~0xFF) {
@@ -60,7 +62,7 @@ inline void _jit_xorps_m(jit_t* jit, uint8_t xreg, uint8_t mreg, int32_t offs) {
 		jit->ptr += 3;
 	}
 }
-inline void _jit_xorps_r(jit_t* jit, uint8_t xreg2, uint8_t xreg1) {
+static inline void _jit_xorps_r(jit_t* jit, uint8_t xreg2, uint8_t xreg1) {
 	_jit_rex_pref(jit, xreg2, xreg1);
 	xreg1 &= 7;
 	xreg2 &= 7;
@@ -68,7 +70,7 @@ inline void _jit_xorps_r(jit_t* jit, uint8_t xreg2, uint8_t xreg1) {
 	*(int32_t*)(jit->ptr) = 0xC0570F | (xreg2 <<19) | (xreg1 <<16);
 	jit->ptr += 3;
 }
-inline void _jit_pxor_m(jit_t* jit, uint8_t xreg, uint8_t mreg, int32_t offs) {
+static inline void _jit_pxor_m(jit_t* jit, uint8_t xreg, uint8_t mreg, int32_t offs) {
 	*(jit->ptr++) = 0x66;
 	_jit_rex_pref(jit, xreg, 0);
 	xreg &= 7;
@@ -85,7 +87,7 @@ inline void _jit_pxor_m(jit_t* jit, uint8_t xreg, uint8_t mreg, int32_t offs) {
 		jit->ptr += 3;
 	}
 }
-inline void _jit_pxor_r(jit_t* jit, uint8_t xreg2, uint8_t xreg1) {
+static inline void _jit_pxor_r(jit_t* jit, uint8_t xreg2, uint8_t xreg1) {
 	*(jit->ptr++) = 0x66;
 	_jit_rex_pref(jit, xreg2, xreg1);
 	xreg1 &= 7;
@@ -93,7 +95,7 @@ inline void _jit_pxor_r(jit_t* jit, uint8_t xreg2, uint8_t xreg1) {
 	*(int32_t*)(jit->ptr) = 0xC0EF0F | (xreg2 <<19) | (xreg1 <<16);
 	jit->ptr += 3;
 }
-inline void _jit_xorpd_m(jit_t* jit, uint8_t xreg, uint8_t mreg, int32_t offs) {
+static inline void _jit_xorpd_m(jit_t* jit, uint8_t xreg, uint8_t mreg, int32_t offs) {
 	_jit_rex_pref(jit, xreg, 0);
 	xreg &= 7;
 	if((offs+128) & ~0xFF) {
@@ -109,7 +111,7 @@ inline void _jit_xorpd_m(jit_t* jit, uint8_t xreg, uint8_t mreg, int32_t offs) {
 		jit->ptr += 3;
 	}
 }
-inline void _jit_xorpd_r(jit_t* jit, uint8_t xreg2, uint8_t xreg1) {
+static inline void _jit_xorpd_r(jit_t* jit, uint8_t xreg2, uint8_t xreg1) {
 	*(jit->ptr++) = 0x66;
 	_jit_rex_pref(jit, xreg2, xreg1);
 	xreg1 &= 7;
@@ -118,7 +120,7 @@ inline void _jit_xorpd_r(jit_t* jit, uint8_t xreg2, uint8_t xreg1) {
 	jit->ptr += 3;
 }
 
-inline void _jit_movaps(jit_t* jit, uint8_t xreg, uint8_t xreg2) {
+static inline void _jit_movaps(jit_t* jit, uint8_t xreg, uint8_t xreg2) {
 	_jit_rex_pref(jit, xreg, xreg2);
 	xreg &= 7;
 	xreg2 &= 7;
@@ -126,7 +128,7 @@ inline void _jit_movaps(jit_t* jit, uint8_t xreg, uint8_t xreg2) {
 	*(int32_t*)(jit->ptr) = 0xC0280F | (xreg <<19) | (xreg2 <<16);
 	jit->ptr += 3;
 }
-inline void _jit_movaps_load(jit_t* jit, uint8_t xreg, uint8_t mreg, int32_t offs) {
+static inline void _jit_movaps_load(jit_t* jit, uint8_t xreg, uint8_t mreg, int32_t offs) {
 	_jit_rex_pref(jit, xreg, 0);
 	xreg &= 7;
 	if((offs+128) & ~0xFF) {
@@ -142,7 +144,7 @@ inline void _jit_movaps_load(jit_t* jit, uint8_t xreg, uint8_t mreg, int32_t off
 		jit->ptr += 3;
 	}
 }
-inline void _jit_movaps_store(jit_t* jit, uint8_t mreg, int32_t offs, uint8_t xreg) {
+static inline void _jit_movaps_store(jit_t* jit, uint8_t mreg, int32_t offs, uint8_t xreg) {
 	_jit_rex_pref(jit, xreg, 0);
 	xreg &= 7;
 	if((offs+128) & ~0xFF) {
@@ -159,7 +161,7 @@ inline void _jit_movaps_store(jit_t* jit, uint8_t mreg, int32_t offs, uint8_t xr
 	}
 }
 
-inline void _jit_movdqa(jit_t* jit, uint8_t xreg, uint8_t xreg2) {
+static inline void _jit_movdqa(jit_t* jit, uint8_t xreg, uint8_t xreg2) {
 	*(jit->ptr++) = 0x66;
 	_jit_rex_pref(jit, xreg, xreg2);
 	xreg &= 7;
@@ -167,7 +169,7 @@ inline void _jit_movdqa(jit_t* jit, uint8_t xreg, uint8_t xreg2) {
 	*(int32_t*)(jit->ptr) = 0xC06F0F | (xreg <<19) | (xreg2 <<16);
 	jit->ptr += 3;
 }
-inline void _jit_movdqa_load(jit_t* jit, uint8_t xreg, uint8_t mreg, int32_t offs) {
+static inline void _jit_movdqa_load(jit_t* jit, uint8_t xreg, uint8_t mreg, int32_t offs) {
 	*(jit->ptr++) = 0x66;
 	_jit_rex_pref(jit, xreg, 0);
 	xreg &= 7;
@@ -184,7 +186,7 @@ inline void _jit_movdqa_load(jit_t* jit, uint8_t xreg, uint8_t mreg, int32_t off
 		jit->ptr += 3;
 	}
 }
-inline void _jit_movdqa_store(jit_t* jit, uint8_t mreg, int32_t offs, uint8_t xreg) {
+static inline void _jit_movdqa_store(jit_t* jit, uint8_t mreg, int32_t offs, uint8_t xreg) {
 	*(jit->ptr++) = 0x66;
 	_jit_rex_pref(jit, xreg, 0);
 	xreg &= 7;
@@ -202,7 +204,7 @@ inline void _jit_movdqa_store(jit_t* jit, uint8_t mreg, int32_t offs, uint8_t xr
 	}
 }
 
-inline void _jit_movapd(jit_t* jit, uint8_t xreg, uint8_t xreg2) {
+static inline void _jit_movapd(jit_t* jit, uint8_t xreg, uint8_t xreg2) {
 	*(jit->ptr++) = 0x66;
 	_jit_rex_pref(jit, xreg, xreg2);
 	xreg &= 7;
@@ -210,7 +212,7 @@ inline void _jit_movapd(jit_t* jit, uint8_t xreg, uint8_t xreg2) {
 	*(int32_t*)(jit->ptr) = 0xC0280F | (xreg <<19) | (xreg2 <<16);
 	jit->ptr += 3;
 }
-inline void _jit_movapd_load(jit_t* jit, uint8_t xreg, uint8_t mreg, int32_t offs) {
+static inline void _jit_movapd_load(jit_t* jit, uint8_t xreg, uint8_t mreg, int32_t offs) {
 	*(jit->ptr++) = 0x66;
 	_jit_rex_pref(jit, xreg, 0);
 	xreg &= 7;
@@ -227,7 +229,7 @@ inline void _jit_movapd_load(jit_t* jit, uint8_t xreg, uint8_t mreg, int32_t off
 		jit->ptr += 3;
 	}
 }
-inline void _jit_movapd_store(jit_t* jit, uint8_t mreg, int32_t offs, uint8_t xreg) {
+static inline void _jit_movapd_store(jit_t* jit, uint8_t mreg, int32_t offs, uint8_t xreg) {
 	*(jit->ptr++) = 0x66;
 	_jit_rex_pref(jit, xreg, 0);
 	xreg &= 7;
@@ -245,13 +247,13 @@ inline void _jit_movapd_store(jit_t* jit, uint8_t mreg, int32_t offs, uint8_t xr
 	}
 }
 
-inline void _jit_push(jit_t* jit, uint8_t reg) {
+static inline void _jit_push(jit_t* jit, uint8_t reg) {
 	*(jit->ptr++) = 0x50 | reg;
 }
-inline void _jit_pop(jit_t* jit, uint8_t reg) {
+static inline void _jit_pop(jit_t* jit, uint8_t reg) {
 	*(jit->ptr++) = 0x58 | reg;
 }
-inline void _jit_jmp(jit_t* jit, uint8_t* addr) {
+static inline void _jit_jmp(jit_t* jit, uint8_t* addr) {
 	int32_t target = (int32_t)(addr - jit->ptr -2);
 	if((target+128) & ~0xFF) {
 		*(jit->ptr++) = 0xE9;
@@ -262,7 +264,7 @@ inline void _jit_jmp(jit_t* jit, uint8_t* addr) {
 		jit->ptr += 2;
 	}
 }
-inline void _jit_jcc(jit_t* jit, char op, uint8_t* addr) {
+static inline void _jit_jcc(jit_t* jit, char op, uint8_t* addr) {
 	int32_t target = (int32_t)(addr - jit->ptr -2);
 	if((target+128) & ~0xFF) {
 		*(jit->ptr++) = 0x0F;
@@ -274,38 +276,38 @@ inline void _jit_jcc(jit_t* jit, char op, uint8_t* addr) {
 		jit->ptr += 2;
 	}
 }
-inline void _jit_cmp_r(jit_t* jit, uint8_t reg, uint8_t reg2) {
+static inline void _jit_cmp_r(jit_t* jit, uint8_t reg, uint8_t reg2) {
 	RXX_PREFIX
 	*(int16_t*)(jit->ptr) = 0xC039 | (reg2 << 11) | (reg << 8);
 	jit->ptr += 2;
 }
-inline void _jit_add_i(jit_t* jit, uint8_t reg, int32_t val) {
+static inline void _jit_add_i(jit_t* jit, uint8_t reg, int32_t val) {
 	RXX_PREFIX
 	*(int16_t*)(jit->ptr) = 0xC081 | (reg << 8);
 	jit->ptr += 2;
 	*(int32_t*)(jit->ptr) = val;
 	jit->ptr += 4;
 }
-inline void _jit_sub_i(jit_t* jit, uint8_t reg, int32_t val) {
+static inline void _jit_sub_i(jit_t* jit, uint8_t reg, int32_t val) {
 	RXX_PREFIX
 	*(int16_t*)(jit->ptr) = 0xC083 | (reg << 8);
 	jit->ptr += 2;
 	*(int32_t*)(jit->ptr) = val;
 	jit->ptr += 4;
 }
-inline void _jit_sub_r(jit_t* jit, uint8_t reg, uint8_t reg2) {
+static inline void _jit_sub_r(jit_t* jit, uint8_t reg, uint8_t reg2) {
 	RXX_PREFIX
 	*(int16_t*)(jit->ptr) = 0xC029 | (reg2 << 11) | (reg << 8);
 	jit->ptr += 2;
 }
-inline void _jit_and_i(jit_t* jit, uint8_t reg, int32_t val) {
+static inline void _jit_and_i(jit_t* jit, uint8_t reg, int32_t val) {
 	RXX_PREFIX
 	*(int16_t*)(jit->ptr) = 0xE081 | (reg << 11);
 	jit->ptr += 2;
 	*(int32_t*)(jit->ptr) = val;
 	jit->ptr += 4;
 }
-inline void _jit_mov_i(jit_t* jit, uint8_t reg, intptr_t val) {
+static inline void _jit_mov_i(jit_t* jit, uint8_t reg, intptr_t val) {
 #ifdef AMD64
 	if(val > 0x3fffffff || val < 0x40000000) {
 		*(int16_t*)(jit->ptr) = 0xB848 | (reg << 8);
@@ -324,20 +326,20 @@ inline void _jit_mov_i(jit_t* jit, uint8_t reg, intptr_t val) {
 	jit->ptr += 4;
 #endif
 }
-inline void _jit_mov_r(jit_t* jit, uint8_t reg, uint8_t reg2) {
+static inline void _jit_mov_r(jit_t* jit, uint8_t reg, uint8_t reg2) {
 	RXX_PREFIX
 	*(int16_t*)(jit->ptr) = 0xC089 | (reg2 << 11) | (reg << 8);
 	jit->ptr += 2;
 }
-inline void _jit_nop(jit_t* jit) {
+static inline void _jit_nop(jit_t* jit) {
 	*(jit->ptr++) = 0x90;
 }
-inline void _jit_align16(jit_t* jit) {
+static inline void _jit_align16(jit_t* jit) {
 	while((intptr_t)(jit->ptr) & 0xF) {
 		_jit_nop(jit);
 	}
 }
-inline void _jit_ret(jit_t* jit) {
+static inline void _jit_ret(jit_t* jit) {
 	*(jit->ptr++) = 0xC3;
 }
 
