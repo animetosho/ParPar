@@ -246,6 +246,29 @@ static void gf_w16_xor_final(void* src, int bytes, void* dest) {
 #endif
 }
 
+static gf_val_32_t gf_w16_xor_extract_word(gf_t *gf, void *start, int bytes, int index)
+{
+  uint16_t *r16, rv = 0;
+  uint8_t *r8;
+  int i;
+  gf_region_data rd;
+
+  gf_set_region_data(&rd, gf, start, start, bytes, 0, 0, 16, 256);
+  r16 = (uint16_t *) start;
+  if (r16 + index < (uint16_t *) rd.d_start) return r16[index];
+  if (r16 + index >= (uint16_t *) rd.d_top) return r16[index];
+  
+  index -= (((uint16_t *) rd.d_start) - r16);
+  r8 = (uint8_t *) rd.d_start;
+  r8 += (index & ~0x7f)*2; /* advance pointer to correct group */
+  r8 += (index >> 3) & 0xF; /* advance to correct byte */
+  for (i=0; i<16; i++) {
+    rv <<= 1;
+    rv |= (*r8 >> (7-(index & 7)) & 1);
+    r8 += 16;
+  }
+  return rv;
+}
 
 
 static void gf_w16_xor_lazy_sse_altmap_multiply_region(gf_t *gf, void *src, void *dest, gf_val_32_t val, int bytes, int xor)
@@ -320,98 +343,195 @@ static void gf_w16_xor_lazy_sse_altmap_multiply_region(gf_t *gf, void *src, void
   dW = (__m128 *) rd.d_start;
   topW = (__m128 *) rd.d_top;
   
-  if (xor) {
-    while (dW != topW) {
-      #define STEP(bit, type, typev, typed) { \
-        typev tmp = _mm_load_ ## type((typed*)(dW + bit)); \
-        FAST_U32* deps = deptable[bit]; \
-        switch(counts[bit]) { \
-          case 16: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[15])); \
-          case 15: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[14])); \
-          case 14: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[13])); \
-          case 13: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[12])); \
-          case 12: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[11])); \
-          case 11: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[10])); \
-          case 10: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 9])); \
-          case  9: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 8])); \
-          case  8: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 7])); \
-          case  7: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 6])); \
-          case  6: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 5])); \
-          case  5: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 4])); \
-          case  4: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 3])); \
-          case  3: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 2])); \
-          case  2: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 1])); \
-          case  1: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 0])); \
-        } \
-        _mm_store_ ## type((typed*)(dW + bit), tmp); \
+  if ((sP - (intptr_t)dW + 256) < 512) {
+    /* urgh, src and dest are in the same block, so we need to store results to a temp location */
+    __m128 dest[16];
+    if (xor)
+      while (dW != topW) {
+        #define STEP(bit, type, typev, typed) { \
+          FAST_U32* deps = deptable[bit]; \
+          dest[bit] = _mm_load_ ## type((typed*)(dW + bit)); \
+          switch(counts[bit]) { \
+            case 16: dest[bit] = _mm_xor_ ## type(dest[bit], *(typev*)(sP + deps[15])); \
+            case 15: dest[bit] = _mm_xor_ ## type(dest[bit], *(typev*)(sP + deps[14])); \
+            case 14: dest[bit] = _mm_xor_ ## type(dest[bit], *(typev*)(sP + deps[13])); \
+            case 13: dest[bit] = _mm_xor_ ## type(dest[bit], *(typev*)(sP + deps[12])); \
+            case 12: dest[bit] = _mm_xor_ ## type(dest[bit], *(typev*)(sP + deps[11])); \
+            case 11: dest[bit] = _mm_xor_ ## type(dest[bit], *(typev*)(sP + deps[10])); \
+            case 10: dest[bit] = _mm_xor_ ## type(dest[bit], *(typev*)(sP + deps[ 9])); \
+            case  9: dest[bit] = _mm_xor_ ## type(dest[bit], *(typev*)(sP + deps[ 8])); \
+            case  8: dest[bit] = _mm_xor_ ## type(dest[bit], *(typev*)(sP + deps[ 7])); \
+            case  7: dest[bit] = _mm_xor_ ## type(dest[bit], *(typev*)(sP + deps[ 6])); \
+            case  6: dest[bit] = _mm_xor_ ## type(dest[bit], *(typev*)(sP + deps[ 5])); \
+            case  5: dest[bit] = _mm_xor_ ## type(dest[bit], *(typev*)(sP + deps[ 4])); \
+            case  4: dest[bit] = _mm_xor_ ## type(dest[bit], *(typev*)(sP + deps[ 3])); \
+            case  3: dest[bit] = _mm_xor_ ## type(dest[bit], *(typev*)(sP + deps[ 2])); \
+            case  2: dest[bit] = _mm_xor_ ## type(dest[bit], *(typev*)(sP + deps[ 1])); \
+            case  1: dest[bit] = _mm_xor_ ## type(dest[bit], *(typev*)(sP + deps[ 0])); \
+          } \
+        }
+        STEP( 0, ps, __m128, float)
+        STEP( 1, ps, __m128, float)
+        STEP( 2, ps, __m128, float)
+        STEP( 3, ps, __m128, float)
+        STEP( 4, ps, __m128, float)
+        STEP( 5, ps, __m128, float)
+        STEP( 6, ps, __m128, float)
+        STEP( 7, ps, __m128, float)
+        STEP( 8, ps, __m128, float)
+        STEP( 9, ps, __m128, float)
+        STEP(10, ps, __m128, float)
+        STEP(11, ps, __m128, float)
+        STEP(12, ps, __m128, float)
+        STEP(13, ps, __m128, float)
+        STEP(14, ps, __m128, float)
+        STEP(15, ps, __m128, float)
+        #undef STEP
+        /* copy to dest */
+        for(i=0; i<16; i++)
+          _mm_store_ps((float*)(dW+i), dest[i]);
+        dW += 16;
+        sP += 256;
       }
-      STEP( 0, ps, __m128, float)
-      STEP( 1, ps, __m128, float)
-      STEP( 2, ps, __m128, float)
-      STEP( 3, ps, __m128, float)
-      STEP( 4, ps, __m128, float)
-      STEP( 5, ps, __m128, float)
-      STEP( 6, ps, __m128, float)
-      STEP( 7, ps, __m128, float)
-      STEP( 8, ps, __m128, float)
-      STEP( 9, ps, __m128, float)
-      STEP(10, ps, __m128, float)
-      STEP(11, ps, __m128, float)
-      STEP(12, ps, __m128, float)
-      STEP(13, ps, __m128, float)
-      STEP(14, ps, __m128, float)
-      STEP(15, ps, __m128, float)
-      #undef STEP
-      dW += 16;
-      sP += 256;
-    }
+    else
+      while (dW != topW) {
+        /* Note that we assume that all counts are at least 1; I don't think it's possible for that to be false */
+        #define STEP(bit, type, typev, typed) { \
+          FAST_U32* deps = deptable[bit]; \
+          dest[bit] = _mm_load_ ## type((typed*)(sP + deps[ 0])); \
+          switch(counts[bit]) { \
+            case 16: dest[bit] = _mm_xor_ ## type(dest[bit], *(typev*)(sP + deps[15])); \
+            case 15: dest[bit] = _mm_xor_ ## type(dest[bit], *(typev*)(sP + deps[14])); \
+            case 14: dest[bit] = _mm_xor_ ## type(dest[bit], *(typev*)(sP + deps[13])); \
+            case 13: dest[bit] = _mm_xor_ ## type(dest[bit], *(typev*)(sP + deps[12])); \
+            case 12: dest[bit] = _mm_xor_ ## type(dest[bit], *(typev*)(sP + deps[11])); \
+            case 11: dest[bit] = _mm_xor_ ## type(dest[bit], *(typev*)(sP + deps[10])); \
+            case 10: dest[bit] = _mm_xor_ ## type(dest[bit], *(typev*)(sP + deps[ 9])); \
+            case  9: dest[bit] = _mm_xor_ ## type(dest[bit], *(typev*)(sP + deps[ 8])); \
+            case  8: dest[bit] = _mm_xor_ ## type(dest[bit], *(typev*)(sP + deps[ 7])); \
+            case  7: dest[bit] = _mm_xor_ ## type(dest[bit], *(typev*)(sP + deps[ 6])); \
+            case  6: dest[bit] = _mm_xor_ ## type(dest[bit], *(typev*)(sP + deps[ 5])); \
+            case  5: dest[bit] = _mm_xor_ ## type(dest[bit], *(typev*)(sP + deps[ 4])); \
+            case  4: dest[bit] = _mm_xor_ ## type(dest[bit], *(typev*)(sP + deps[ 3])); \
+            case  3: dest[bit] = _mm_xor_ ## type(dest[bit], *(typev*)(sP + deps[ 2])); \
+            case  2: dest[bit] = _mm_xor_ ## type(dest[bit], *(typev*)(sP + deps[ 1])); \
+          } \
+        }
+        STEP( 0, ps, __m128, float)
+        STEP( 1, ps, __m128, float)
+        STEP( 2, ps, __m128, float)
+        STEP( 3, ps, __m128, float)
+        STEP( 4, ps, __m128, float)
+        STEP( 5, ps, __m128, float)
+        STEP( 6, ps, __m128, float)
+        STEP( 7, ps, __m128, float)
+        STEP( 8, ps, __m128, float)
+        STEP( 9, ps, __m128, float)
+        STEP(10, ps, __m128, float)
+        STEP(11, ps, __m128, float)
+        STEP(12, ps, __m128, float)
+        STEP(13, ps, __m128, float)
+        STEP(14, ps, __m128, float)
+        STEP(15, ps, __m128, float)
+        #undef STEP
+        /* copy to dest */
+        for(i=0; i<16; i++)
+          _mm_store_ps((float*)(dW+i), dest[i]);
+        dW += 16;
+        sP += 256;
+      }
+  } else {
+    if (xor)
+      while (dW != topW) {
+        #define STEP(bit, type, typev, typed) { \
+          FAST_U32* deps = deptable[bit]; \
+          typev tmp = _mm_load_ ## type((typed*)(dW + bit)); \
+          switch(counts[bit]) { \
+            case 16: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[15])); \
+            case 15: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[14])); \
+            case 14: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[13])); \
+            case 13: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[12])); \
+            case 12: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[11])); \
+            case 11: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[10])); \
+            case 10: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 9])); \
+            case  9: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 8])); \
+            case  8: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 7])); \
+            case  7: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 6])); \
+            case  6: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 5])); \
+            case  5: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 4])); \
+            case  4: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 3])); \
+            case  3: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 2])); \
+            case  2: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 1])); \
+            case  1: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 0])); \
+          } \
+          _mm_store_ ## type((typed*)(dW + bit), tmp); \
+        }
+        STEP( 0, ps, __m128, float)
+        STEP( 1, ps, __m128, float)
+        STEP( 2, ps, __m128, float)
+        STEP( 3, ps, __m128, float)
+        STEP( 4, ps, __m128, float)
+        STEP( 5, ps, __m128, float)
+        STEP( 6, ps, __m128, float)
+        STEP( 7, ps, __m128, float)
+        STEP( 8, ps, __m128, float)
+        STEP( 9, ps, __m128, float)
+        STEP(10, ps, __m128, float)
+        STEP(11, ps, __m128, float)
+        STEP(12, ps, __m128, float)
+        STEP(13, ps, __m128, float)
+        STEP(14, ps, __m128, float)
+        STEP(15, ps, __m128, float)
+        #undef STEP
+        dW += 16;
+        sP += 256;
+      }
+    else
+      while (dW != topW) {
+        /* Note that we assume that all counts are at least 1; I don't think it's possible for that to be false */
+        #define STEP(bit, type, typev, typed) { \
+          FAST_U32* deps = deptable[bit]; \
+          typev tmp = _mm_load_ ## type((typed*)(sP + deps[ 0])); \
+          switch(counts[bit]) { \
+            case 16: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[15])); \
+            case 15: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[14])); \
+            case 14: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[13])); \
+            case 13: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[12])); \
+            case 12: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[11])); \
+            case 11: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[10])); \
+            case 10: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 9])); \
+            case  9: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 8])); \
+            case  8: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 7])); \
+            case  7: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 6])); \
+            case  6: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 5])); \
+            case  5: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 4])); \
+            case  4: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 3])); \
+            case  3: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 2])); \
+            case  2: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 1])); \
+          } \
+          _mm_store_ ## type((typed*)(dW + bit), tmp); \
+        }
+        STEP( 0, ps, __m128, float)
+        STEP( 1, ps, __m128, float)
+        STEP( 2, ps, __m128, float)
+        STEP( 3, ps, __m128, float)
+        STEP( 4, ps, __m128, float)
+        STEP( 5, ps, __m128, float)
+        STEP( 6, ps, __m128, float)
+        STEP( 7, ps, __m128, float)
+        STEP( 8, ps, __m128, float)
+        STEP( 9, ps, __m128, float)
+        STEP(10, ps, __m128, float)
+        STEP(11, ps, __m128, float)
+        STEP(12, ps, __m128, float)
+        STEP(13, ps, __m128, float)
+        STEP(14, ps, __m128, float)
+        STEP(15, ps, __m128, float)
+        #undef STEP
+        dW += 16;
+        sP += 256;
+      }
   }
-  else
-    while (dW != topW) {
-      /* Note that we assume that all counts are at least 1; I don't think it's possible for that to be false */
-      #define STEP(bit, type, typev, typed) { \
-        typev tmp = _mm_load_ ## type((typev*)(sP + deps[ 0])); \
-        FAST_U32* deps = deptable[bit]; \
-        switch(counts[bit]) { \
-          case 16: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[15])); \
-          case 15: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[14])); \
-          case 14: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[13])); \
-          case 13: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[12])); \
-          case 12: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[11])); \
-          case 11: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[10])); \
-          case 10: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 9])); \
-          case  9: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 8])); \
-          case  8: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 7])); \
-          case  7: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 6])); \
-          case  6: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 5])); \
-          case  5: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 4])); \
-          case  4: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 3])); \
-          case  3: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 2])); \
-          case  2: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 1])); \
-          case  1: \
-        } \
-        _mm_store_ ## type((typed*)(dW + bit), tmp); \
-      }
-      STEP( 0, ps, __m128, float)
-      STEP( 1, ps, __m128, float)
-      STEP( 2, ps, __m128, float)
-      STEP( 3, ps, __m128, float)
-      STEP( 4, ps, __m128, float)
-      STEP( 5, ps, __m128, float)
-      STEP( 6, ps, __m128, float)
-      STEP( 7, ps, __m128, float)
-      STEP( 8, ps, __m128, float)
-      STEP( 9, ps, __m128, float)
-      STEP(10, ps, __m128, float)
-      STEP(11, ps, __m128, float)
-      STEP(12, ps, __m128, float)
-      STEP(13, ps, __m128, float)
-      STEP(14, ps, __m128, float)
-      STEP(15, ps, __m128, float)
-      #undef STEP
-      dW += 16;
-      sP += 256;
-    }
   
   gf_do_final_region_alignment(&rd);
 #endif
@@ -442,7 +562,7 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
   gf_do_initial_region_alignment(&rd);
   
   if(rd.d_start != rd.d_top) {
-    
+    int use_temp = ((intptr_t)rd.s_start - (intptr_t)rd.d_start + 256) < 512;
     depmask1 = _mm_setzero_si128();
     depmask2 = _mm_setzero_si128();
     
@@ -483,6 +603,22 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
     
     jit->ptr = jit->code;
     
+    if (use_temp) {
+      _jit_push(jit, BP);
+      _jit_mov_r(jit, BP, SP);
+      /* align pointer (avoid SP because stuff is encoded differently with it) */
+      _jit_mov_r(jit, AX, SP);
+      _jit_and_i(jit, AX, 0xF);
+      _jit_sub_r(jit, BP, AX);
+      
+#ifdef AMD64
+      /* make Windows happy and save XMM6-15 registers */
+      /* ideally should be done by this function, not JIT code, but MSVC has a convenient policy of no inline ASM */
+      for(i=6; i<16; i++)
+        _jit_movaps_store(jit, BP, -((int32_t)i-5)*16, i);
+#endif
+    }
+    
     _jit_mov_i(jit, AX, (intptr_t)rd.s_start);
     _jit_mov_i(jit, DX, (intptr_t)rd.d_start);
     _jit_mov_i(jit, CX, (intptr_t)rd.d_top);
@@ -490,94 +626,256 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
     _jit_align16(jit);
     pos_startloop = jit->ptr;
     
+    
+    //_jit_xorps_m(jit, reg, AX, i<<4);
+    #define _XORPS_A(reg) \
+        *(int32_t*)(jit->ptr) = 0x40570F | ((reg) << 19) | (i <<28); \
+        jit->ptr += 4
+    #define _XORPS_B(reg) \
+        *(int32_t*)(jit->ptr +3) = 0; \
+        *(int32_t*)(jit->ptr) = 0x80570F | ((reg) << 19) | (i <<28); \
+        jit->ptr += 7
+    #define _XORPS_A64(reg) \
+        *(int64_t*)(jit->ptr) = 0x40570F44 | ((reg) << 27) | (i <<36); \
+        jit->ptr += 5
+    #define _XORPS_B64(reg) \
+        *(int64_t*)(jit->ptr) = 0x80570F44 | ((reg) << 27) | (i <<36); \
+        jit->ptr += 8
+    
+    //_jit_pxor_m(jit, 1, AX, i<<4);
+    #define _PXOR_A(reg) \
+        *(int32_t*)(jit->ptr) = 0x40EF0F66 | ((reg) << 27); \
+        *(jit->ptr +4) = (uint8_t)(i << 4); \
+        jit->ptr += 5
+    #define _PXOR_B(reg) \
+        *(int32_t*)(jit->ptr) = 0x80EF0F66 | ((reg) << 27); \
+        *(int32_t*)(jit->ptr +4) = (uint8_t)(i << 4); \
+        jit->ptr += 8
+    #define _PXOR_A64(reg) \
+        *(int64_t*)(jit->ptr) = 0x40EF0F4466 | ((reg) << 35) | (i << 44); \
+        jit->ptr += 6
+    #define _PXOR_B64(reg) \
+        *(int64_t*)(jit->ptr) = 0x80EF0F4466 | ((reg) << 35) | (i << 44); \
+        jit->ptr += 8; \
+        *(jit->ptr++) = 0
+    
+    #define _MOV_OR_XOR(reg, movop, xorop, flag) \
+        if(flag) { \
+          movop(jit, reg, AX, i<<4); \
+          flag = 0; \
+        } else { \
+          xorop(reg); \
+        }
+    
+#ifdef AMD64
+    #define _HIGHOP(op, bit) op ## 64((bit) &7)
+    #define _MOV_OR_XOR_H(reg, movop, xorop, flag) \
+        if(flag) { \
+          movop(jit, reg, AX, i<<4); \
+          flag = 0; \
+        } else { \
+          xorop ## 64((reg) &7); \
+        }
+#else
+    #define _HIGHOP(op, bit) op((bit) &7)
+    #define _MOV_OR_XOR_H(reg, movop, xorop, flag) \
+        if(flag) { \
+          movop(jit, (reg) &7, AX, i<<4); \
+          flag = 0; \
+        } else { \
+          xorop((reg) &7); \
+        }
+#endif
+    
     /* generate code */
-    if(xor) {
-      for(bit=0; bit<16; bit+=2) {
-        _jit_movaps_load(jit, 0, DX, bit<<4);
-        _jit_movdqa_load(jit, 1, DX, (bit+1)<<4);
-        
-        for(i=0; i<8; i++) {
-          if(tmp_depmask[bit] & (1<<i)) {
-            //_jit_xorps_m(jit, 0, AX, i<<4);
-            *(int32_t*)(jit->ptr) = 0x40570F | (i <<28);
-            jit->ptr += 4;
+    if (use_temp) {
+      if(xor) {
+#ifdef AMD64
+        /* can fit everything in registers, so do just that */
+        for(bit=0; bit<16; bit+=2) {
+          _jit_movaps_load(jit, bit, DX, bit<<4);
+          _jit_movdqa_load(jit, bit+1, DX, (bit+1)<<4);
+        }
+#else
+        /* load half, and will need to save everything to temp */
+        for(bit=0; bit<8; bit+=2) {
+          _jit_movaps_load(jit, bit, DX, bit<<4);
+          _jit_movdqa_load(jit, bit+1, DX, (bit+1)<<4);
+        }
+#endif
+        for(bit=0; bit<8; bit+=2) {
+          for(i=0; i<8; i++) {
+            if(tmp_depmask[bit] & (1<<i)) {
+              _XORPS_A(bit);
+            }
+            if(tmp_depmask[bit+1] & (1<<i)) {
+              _PXOR_A(bit+1);
+            }
           }
-          if(tmp_depmask[bit+1] & (1<<i)) {
-            //_jit_pxor_m(jit, 1, AX, i<<4);
-            *(int32_t*)(jit->ptr) = 0x48EF0F66;
-            *(jit->ptr +4) = (uint8_t)(i << 4);
-            jit->ptr += 5;
+          for(; i<16; i++) {
+            if(tmp_depmask[bit] & (1<<i)) {
+              _XORPS_B(bit);
+            }
+            if(tmp_depmask[bit+1] & (1<<i)) {
+              _PXOR_B(bit+1);
+            }
           }
         }
-        for(; i<16; i++) {
-          if(tmp_depmask[bit] & (1<<i)) {
-            //_jit_xorps_m(jit, 0, AX, i<<4);
-            *(int32_t*)(jit->ptr +3) = 0;
-            *(int32_t*)(jit->ptr) = 0x80570F | (i <<28);
-            jit->ptr += 7;
+#ifndef AMD64
+        /*temp storage*/
+        for(bit=0; bit<8; bit+=2) {
+          _jit_movaps_store(jit, BP, -(bit<<4) -16, bit);
+          _jit_movdqa_store(jit, BP, -((bit+1)<<4) -16, bit+1);
+        }
+        for(; bit<16; bit+=2) {
+          _jit_movaps_load(jit, bit, DX, (bit&7)<<4);
+          _jit_movdqa_load(jit, bit+1, DX, ((bit&7)+1)<<4);
+        }
+#endif
+        for(bit=8; bit<16; bit+=2) {
+          for(i=0; i<8; i++) {
+            if(tmp_depmask[bit] & (1<<i)) {
+              _HIGHOP(_XORPS_A, bit);
+            }
+            if(tmp_depmask[bit+1] & (1<<i)) {
+              _HIGHOP(_PXOR_A, bit+1);
+            }
           }
-          if(tmp_depmask[bit+1] & (1<<i)) {
-            //_jit_pxor_m(jit, 1, AX, i<<4);
-            *(int32_t*)(jit->ptr) = 0x88EF0F66;
-            *(int32_t*)(jit->ptr +4) = (uint8_t)(i << 4);
-            jit->ptr += 8;
+          for(; i<16; i++) {
+            if(tmp_depmask[bit] & (1<<i)) {
+              _HIGHOP(_XORPS_B, bit);
+            }
+            if(tmp_depmask[bit+1] & (1<<i)) {
+              _HIGHOP(_PXOR_B, bit+1);
+            }
           }
         }
-        _jit_movaps_store(jit, DX, bit<<4, 0);
-        _jit_movdqa_store(jit, DX, (bit+1)<<4, 1);
+#ifdef AMD64
+        for(bit=0; bit<16; bit+=2) {
+          _jit_movaps_store(jit, DX, bit<<4, bit);
+          _jit_movdqa_store(jit, DX, (bit+1)<<4, bit+1);
+        }
+#else
+        for(bit=8; bit<16; bit+=2) {
+          _jit_movaps_store(jit, DX, bit<<4, bit -8);
+          _jit_movdqa_store(jit, DX, (bit+1)<<4, bit -7);
+        }
+        /* copy temp */
+        for(bit=0; bit<8; bit++) {
+          _jit_movaps_load(jit, 0, BP, -(bit<<4) -16);
+          _jit_movaps_store(jit, DX, bit<<4, 0);
+        }
+#endif
+      } else {
+        for(bit=0; bit<8; bit+=2) {
+          FAST_U8 mov = 1, mov2 = 1;
+          for(i=0; i<8; i++) {
+            if(tmp_depmask[bit] & (1<<i)) {
+              _MOV_OR_XOR(bit, _jit_movaps_load, _XORPS_A, mov)
+            }
+            if(tmp_depmask[bit+1] & (1<<i)) {
+              _MOV_OR_XOR(bit+1, _jit_movdqa_load, _PXOR_A, mov2)
+            }
+          }
+          for(; i<16; i++) {
+            if(tmp_depmask[bit] & (1<<i)) {
+              _MOV_OR_XOR(bit, _jit_movaps_load, _XORPS_B, mov)
+            }
+            if(tmp_depmask[bit+1] & (1<<i)) {
+              _MOV_OR_XOR(bit+1, _jit_movdqa_load, _PXOR_B, mov2)
+            }
+          }
+        }
+#ifndef AMD64
+        /*temp storage*/
+        for(bit=0; bit<8; bit+=2) {
+          _jit_movaps_store(jit, BP, -((int32_t)bit<<4) -16, bit);
+          _jit_movdqa_store(jit, BP, -(((int32_t)bit+1)<<4) -16, bit+1);
+        }
+#endif
+        for(bit=8; bit<16; bit+=2) {
+          FAST_U8 mov = 1, mov2 = 1;
+          for(i=0; i<8; i++) {
+            if(tmp_depmask[bit] & (1<<i)) {
+              _MOV_OR_XOR_H(bit, _jit_movaps_load, _XORPS_A, mov)
+            }
+            if(tmp_depmask[bit+1] & (1<<i)) {
+              _MOV_OR_XOR_H(bit+1, _jit_movdqa_load, _PXOR_A, mov2)
+            }
+          }
+          for(; i<16; i++) {
+            if(tmp_depmask[bit] & (1<<i)) {
+              _MOV_OR_XOR_H(bit, _jit_movaps_load, _XORPS_B, mov)
+            }
+            if(tmp_depmask[bit+1] & (1<<i)) {
+              _MOV_OR_XOR_H(bit+1, _jit_movdqa_load, _PXOR_B, mov2)
+            }
+          }
+        }
+#ifdef AMD64
+        for(bit=0; bit<16; bit+=2) {
+          _jit_movaps_store(jit, DX, bit<<4, bit);
+          _jit_movdqa_store(jit, DX, (bit+1)<<4, bit+1);
+        }
+#else
+        for(bit=8; bit<16; bit+=2) {
+          _jit_movaps_store(jit, DX, bit<<4, bit -8);
+          _jit_movdqa_store(jit, DX, (bit+1)<<4, bit -7);
+        }
+        /* copy temp */
+        for(bit=0; bit<8; bit++) {
+          _jit_movaps_load(jit, 0, BP, -((int32_t)bit<<4) -16);
+          _jit_movaps_store(jit, DX, bit<<4, 0);
+        }
+#endif
       }
     } else {
-      for(bit=0; bit<16; bit+=2) {
-        FAST_U8 mov = 1, mov2 = 1;
-        for(i=0; i<8; i++) {
-          if(tmp_depmask[bit] & (1<<i)) {
-            if(mov) {
-              _jit_movaps_load(jit, 0, AX, i<<4);
-              mov = 0;
-            } else {
-              //_jit_xorps_m(jit, 0, AX, i<<4);
-              *(int32_t*)(jit->ptr) = 0x40570F | (i <<28);
-              jit->ptr += 4;
+      if(xor) {
+        for(bit=0; bit<16; bit+=2) {
+          _jit_movaps_load(jit, 0, DX, bit<<4);
+          _jit_movdqa_load(jit, 1, DX, (bit+1)<<4);
+          
+          for(i=0; i<8; i++) {
+            if(tmp_depmask[bit] & (1<<i)) {
+              _XORPS_A(0);
+            }
+            if(tmp_depmask[bit+1] & (1<<i)) {
+              _PXOR_A(1);
             }
           }
-          if(tmp_depmask[bit+1] & (1<<i)) {
-            if(mov2) {
-              _jit_movdqa_load(jit, 1, AX, i<<4);
-              mov2 = 0;
-            } else {
-              //_jit_pxor_m(jit, 1, AX, i<<4);
-              *(int32_t*)(jit->ptr) = 0x48EF0F66;
-              *(jit->ptr +4) = (uint8_t)(i << 4);
-              jit->ptr += 5;
+          for(; i<16; i++) {
+            if(tmp_depmask[bit] & (1<<i)) {
+              _XORPS_B(0);
+            }
+            if(tmp_depmask[bit+1] & (1<<i)) {
+              _PXOR_B(1);
             }
           }
+          _jit_movaps_store(jit, DX, bit<<4, 0);
+          _jit_movdqa_store(jit, DX, (bit+1)<<4, 1);
         }
-        for(; i<16; i++) {
-          if(tmp_depmask[bit] & (1<<i)) {
-            if(mov) {
-              _jit_movaps_load(jit, 0, AX, i<<4);
-              mov = 0;
-            } else {
-              //_jit_xorps_m(jit, 0, AX, i<<4);
-              *(int32_t*)(jit->ptr +3) = 0;
-              *(int32_t*)(jit->ptr) = 0x80570F | (i <<28);
-              jit->ptr += 7;
+      } else {
+        for(bit=0; bit<16; bit+=2) {
+          FAST_U8 mov = 1, mov2 = 1;
+          for(i=0; i<8; i++) {
+            if(tmp_depmask[bit] & (1<<i)) {
+              _MOV_OR_XOR(0, _jit_movaps_load, _XORPS_A, mov)
+            }
+            if(tmp_depmask[bit+1] & (1<<i)) {
+              _MOV_OR_XOR(1, _jit_movdqa_load, _PXOR_A, mov2)
             }
           }
-          if(tmp_depmask[bit+1] & (1<<i)) {
-            if(mov2) {
-              _jit_movdqa_load(jit, 1, AX, i<<4);
-              mov2 = 0;
-            } else {
-              //_jit_pxor_m(jit, 1, AX, i<<4);
-              *(int32_t*)(jit->ptr) = 0x88EF0F66;
-              *(int32_t*)(jit->ptr +4) = (uint8_t)(i << 4);
-              jit->ptr += 8;
+          for(; i<16; i++) {
+            if(tmp_depmask[bit] & (1<<i)) {
+              _MOV_OR_XOR(0, _jit_movaps_load, _XORPS_B, mov)
+            }
+            if(tmp_depmask[bit+1] & (1<<i)) {
+              _MOV_OR_XOR(1, _jit_movdqa_load, _PXOR_B, mov2)
             }
           }
+          _jit_movaps_store(jit, DX, bit<<4, 0);
+          _jit_movdqa_store(jit, DX, (bit+1)<<4, 1);
         }
-        _jit_movaps_store(jit, DX, bit<<4, 0);
-        _jit_movdqa_store(jit, DX, (bit+1)<<4, 1);
       }
     }
     
@@ -586,6 +884,15 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
     
     _jit_cmp_r(jit, DX, CX);
     _jit_jcc(jit, JL, pos_startloop);
+    
+    
+    if (use_temp) {
+#ifdef AMD64
+      for(i=6; i<16; i++)
+        _jit_movaps_load(jit, i, BP, -((int32_t)i-5)*16);
+#endif
+      _jit_pop(jit, BP);
+    }
     
     _jit_ret(jit);
     
