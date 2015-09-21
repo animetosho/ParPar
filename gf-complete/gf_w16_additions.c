@@ -199,8 +199,8 @@ static void gf_w16_xor_final(void* src, int bytes, void* dest) {
 	
 	lmask = _mm_set1_epi16(0xff);
 	s16 = (uint16_t*)rd.s_start;
-	top16 = (uint16_t*)rd.d_top;
-	while(d16 != top16) {
+	top16 = (uint16_t*)rd.s_top;
+	while(s16 != top16) {
 		for(j=0; j<8; j++) {
 			/* load in pattern: [0011223344556677] [8899AABBCCDDEEFF] */
 			/* MSVC _requires_ a constant so we have to manually unroll this loop */
