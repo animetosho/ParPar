@@ -368,8 +368,9 @@ static void gf_w16_xor_lazy_sse_altmap_multiply_region(gf_t *gf, void *src, void
   }
   else
     while (dW != topW) {
+      /* Note that we assume that all counts are at least 1; I don't think it's possible for that to be false */
       #define STEP(bit, type, typev, typed) { \
-        typev tmp = _mm_setzero_ ## type(); \
+        typev tmp = _mm_load_ ## type((typev*)(sP + deps[ 0])); \
         FAST_U32* deps = deptable[bit]; \
         switch(counts[bit]) { \
           case 16: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[15])); \
@@ -387,7 +388,7 @@ static void gf_w16_xor_lazy_sse_altmap_multiply_region(gf_t *gf, void *src, void
           case  4: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 3])); \
           case  3: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 2])); \
           case  2: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 1])); \
-          case  1: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 0])); \
+          case  1: \
         } \
         _mm_store_ ## type((typed*)(dW + bit), tmp); \
       }
@@ -407,6 +408,7 @@ static void gf_w16_xor_lazy_sse_altmap_multiply_region(gf_t *gf, void *src, void
       STEP(13, ps, __m128, float)
       STEP(14, ps, __m128, float)
       STEP(15, ps, __m128, float)
+      #undef STEP
       dW += 16;
       sP += 256;
     }
