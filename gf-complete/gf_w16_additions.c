@@ -4,57 +4,40 @@ int has_pclmul = 0;
 int has_avx2 = 0;
 int has_avx512bw = 0;
 
+#if !defined(_MSC_VER) && defined(INTEL_SSE2)
+#include <cpuid.h>
+#endif
 void detect_cpu(void) {
-#ifdef _MSC_VER
+#ifdef INTEL_SSE2 /* if we can't compile SSE, there's not much point in checking CPU capabilities; we use this to eliminate ARM :P */
 	int cpuInfo[4];
+#ifdef _MSC_VER
 	__cpuid(cpuInfo, 1);
+#else
+	/* GCC seems to support this, I assume everyone else does too? */
+	__cpuid(1, cpuInfo[0], cpuInfo[1], cpuInfo[2], cpuInfo[3]);
+#endif
 	#ifdef INTEL_SSSE3
 	has_ssse3 = (cpuInfo[2] & 0x200);
 	#endif
 	#ifdef INTEL_SSE4_PCLMUL
 	has_pclmul = (cpuInfo[2] & 0x2);
 	#endif
-	
-	#if _MSC_VER >= 1600
-		__cpuidex(cpuInfo, 7, 0);
-		#ifdef INTEL_AVX2
-		has_avx2 = (cpuInfo[1] & 0x20);
-		#endif
-		#ifdef INTEL_AVX512BW
-		has_avx512bw = (cpuInfo[1] & 0x40010000) == 0x40010000;
-		#endif
-	#endif
-	
-#elif defined(__x86_64__) || defined(__i386__)
-	uint32_t flags;
 
-	__asm__ (
-		"cpuid"
-	: "=c" (flags)
-	: "a" (1)
-	: "%edx", "%ebx"
-	);
-	#ifdef INTEL_SSSE3
-	has_ssse3 = (flags & 0x200);
-	#endif
-	#ifdef INTEL_SSE4_PCLMUL
-	has_pclmul = (flags & 0x2);
+#if !defined(_MSC_VER) || _MSC_VER >= 1600
+	#ifdef _MSC_VER
+		__cpuidex(cpuInfo, 7, 0);
+	#else
+		__cpuid_count(7, 0, cpuInfo[0], cpuInfo[1], cpuInfo[2], cpuInfo[3]);
 	#endif
 	
-	__asm__ (
-		"cpuid"
-	: "=b" (flags)
-	: "a" (7), "c" (0)
-	: "%edx"
-	);
 	#ifdef INTEL_AVX2
-	has_avx2 = (flags & 0x20);
+	has_avx2 = (cpuInfo[1] & 0x20);
 	#endif
 	#ifdef INTEL_AVX512BW
-	has_avx512bw = (flags & 0x40010000) == 0x40010000;
+	has_avx512bw = (cpuInfo[1] & 0x40010000) == 0x40010000;
 	#endif
-	
 #endif
+#endif /* INTEL_SSE2 */
 }
 
 
