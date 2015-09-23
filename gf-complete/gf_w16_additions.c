@@ -10,6 +10,7 @@ int has_avx512bw = 0;
 void detect_cpu(void) {
 #ifdef INTEL_SSE2 /* if we can't compile SSE, there's not much point in checking CPU capabilities; we use this to eliminate ARM :P */
 	int cpuInfo[4];
+	int family, model;
 #ifdef _MSC_VER
 	__cpuid(cpuInfo, 1);
 #else
@@ -22,6 +23,18 @@ void detect_cpu(void) {
 	#ifdef INTEL_SSE4_PCLMUL
 	has_pclmul = (cpuInfo[2] & 0x2);
 	#endif
+	
+	family = ((cpuInfo[0]>>8) & 0xf) + ((cpuInfo[0]>>20) & 0xff);
+	model = ((cpuInfo[0]>>4) & 0xf) + ((cpuInfo[0]>>12) & 0xf0);
+	
+	if(family == 6) {
+		/* from handy table at http://a4lg.com/tech/x86/database/x86-families-and-models.en.html */
+		if(model == 0x1C || model == 0x26 || model == 0x27 || model == 0x35 || model == 0x36 || model == 0x37 || model == 0x4A || model == 0x4D) {
+			/* we have a Bonnell/Silvermont CPU with a really slow pshufb instruction; pretend SSSE3 doesn't exist, as XOR_DEPENDS is much faster */
+			/* TODO: we'll need to remove the CPU detection code from ParPar's side for this auto-detection to work properly */
+			/* has_ssse3 = 0; */
+		}
+	}
 
 #if !defined(_MSC_VER) || _MSC_VER >= 1600
 	#ifdef _MSC_VER
