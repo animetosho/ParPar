@@ -543,7 +543,8 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
 #ifdef INTEL_SSE2
   FAST_U32 i, bit, poly;
   __m128i depmask1, depmask2, polymask1, polymask2, addvals1, addvals2;
-  uint16_t tmp_depmask[16];
+  __m128i common_mask;
+  uint16_t tmp_depmask[16], common_depmask[8];
   gf_region_data rd;
   gf_internal_t *h;
   jit_t* jit;
@@ -592,6 +593,56 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
         depmask1 = _mm_xor_si128(depmask1, _mm_and_si128(last, polymask1));
         depmask2 = _mm_xor_si128(depmask2, _mm_and_si128(last, polymask2));
       }
+    }
+    
+    
+    /* attempt to remove some redundant XOR ops with a simple heuristic */
+    /* heuristic: we just find common XOR elements between bit pairs */
+    
+    if (!use_temp) {
+      __m128i common_maskexcl, tmp1, tmp2;
+      /* first, we need to re-arrange words so that we can perform bitwise AND on neighbouring pairs */
+      /* unfortunately, PACKUSDW is SSE4.1 only, so emulate it with shuffles */
+      /* 01234567 -> 02461357 */
+      tmp1 = _mm_shuffle_epi32(
+        _mm_shufflelo_epi16(
+          _mm_shufflehi_epi16(depmask1, 0xD8), /* 0xD8 == 0b11011000 */
+          0xD8
+        ),
+        0xD8
+      );
+      tmp2 = _mm_shuffle_epi32(
+        _mm_shufflelo_epi16(
+          _mm_shufflehi_epi16(depmask2, 0xD8),
+          0xD8
+        ),
+        0xD8
+      );
+      common_mask = _mm_and_si128(
+        /* [02461357, 8ACE9BDF] -> [02468ACE, 13579BDF]*/
+        _mm_unpacklo_epi64(tmp1, tmp2),
+        _mm_unpackhi_epi64(tmp1, tmp2)
+      );
+      /* we have the common elements between pairs, but it doesn't make sense to process a separate queue if there's only one common element (0 XORs), so eliminate those */
+      common_maskexcl = _mm_xor_si128(
+        _mm_cmpeq_epi16(
+          _mm_setzero_si128(),
+          /* "(v & (v-1)) == 0" is true if only zero/one bit is set in each word */
+          _mm_and_si128(common_mask, _mm_sub_epi16(common_mask, _mm_set1_epi16(1)))
+        ),
+        _mm_set1_epi8(0xFF)
+      );
+      common_mask = _mm_and_si128(common_mask, common_maskexcl);
+      /* we now have a common elements mask without 1-bit words, just simply merge stuff in */
+      depmask1 = _mm_xor_si128(depmask1, _mm_unpacklo_epi16(common_mask, common_mask));
+      depmask2 = _mm_xor_si128(depmask2, _mm_unpackhi_epi16(common_mask, common_mask));
+      _mm_storeu_si128((__m128i*)common_depmask, common_mask);
+    } else {
+      /* for now, don't bother with element elimination if we're using temp storage, as it's a little finnicky to implement */
+      /*
+      for(i=0; i<8; i++)
+        common_depmask[i] = 0;
+      */
     }
     
     _mm_storeu_si128((__m128i*)(tmp_depmask), depmask1);
@@ -828,6 +879,7 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
     } else {
       if(xor) {
         for(bit=0; bit<16; bit+=2) {
+          FAST_U8 movC = 1;
           _jit_movaps_load(jit, 0, DX, bit<<4);
           _jit_movdqa_load(jit, 1, DX, (bit+1)<<4);
           
@@ -838,6 +890,9 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
             if(tmp_depmask[bit+1] & (1<<i)) {
               _PXOR_A(1);
             }
+            if(common_depmask[bit>>1] & (1<<i)) {
+              _MOV_OR_XOR(2, _jit_movaps_load, _XORPS_A, movC)
+            }
           }
           for(; i<16; i++) {
             if(tmp_depmask[bit] & (1<<i)) {
@@ -846,19 +901,29 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
             if(tmp_depmask[bit+1] & (1<<i)) {
               _PXOR_B(1);
             }
+            if(common_depmask[bit>>1] & (1<<i)) {
+              _MOV_OR_XOR(2, _jit_movaps_load, _XORPS_B, movC)
+            }
+          }
+          if(common_depmask[bit>>1]) {
+            _jit_xorps_r(jit, 0, 2);
+            _jit_pxor_r(jit, 1, 2); /*penalty?*/
           }
           _jit_movaps_store(jit, DX, bit<<4, 0);
           _jit_movdqa_store(jit, DX, (bit+1)<<4, 1);
         }
       } else {
         for(bit=0; bit<16; bit+=2) {
-          FAST_U8 mov = 1, mov2 = 1;
+          FAST_U8 mov = 1, mov2 = 1, movC = 1;
           for(i=0; i<8; i++) {
             if(tmp_depmask[bit] & (1<<i)) {
               _MOV_OR_XOR(0, _jit_movaps_load, _XORPS_A, mov)
             }
             if(tmp_depmask[bit+1] & (1<<i)) {
               _MOV_OR_XOR(1, _jit_movdqa_load, _PXOR_A, mov2)
+            }
+            if(common_depmask[bit>>1] & (1<<i)) {
+              _MOV_OR_XOR(2, _jit_movaps_load, _XORPS_A, movC);
             }
           }
           for(; i<16; i++) {
@@ -868,9 +933,24 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
             if(tmp_depmask[bit+1] & (1<<i)) {
               _MOV_OR_XOR(1, _jit_movdqa_load, _PXOR_B, mov2)
             }
+            if(common_depmask[bit>>1] & (1<<i)) {
+              _MOV_OR_XOR(2, _jit_movaps_load, _XORPS_B, movC);
+            }
           }
-          _jit_movaps_store(jit, DX, bit<<4, 0);
-          _jit_movdqa_store(jit, DX, (bit+1)<<4, 1);
+          if(common_depmask[bit>>1]) {
+            if(mov) /* no additional XORs were made? */
+              _jit_movaps_store(jit, DX, bit<<4, 2);
+            else
+              _jit_xorps_r(jit, 0, 2);
+            if(mov2)
+              _jit_movaps_store(jit, DX, (bit+1)<<4, 2);
+            else
+              _jit_pxor_r(jit, 1, 2); /*penalty?*/
+          }
+          if(!mov)
+            _jit_movaps_store(jit, DX, bit<<4, 0);
+          if(!mov2)
+            _jit_movdqa_store(jit, DX, (bit+1)<<4, 1);
         }
       }
     }
