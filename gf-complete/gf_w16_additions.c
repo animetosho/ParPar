@@ -884,25 +884,27 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
           _jit_movdqa_load(jit, 1, DX, (bit+1)<<4);
           
           for(i=0; i<8; i++) {
-            if(tmp_depmask[bit] & (1<<i)) {
-              _XORPS_A(0);
-            }
-            if(tmp_depmask[bit+1] & (1<<i)) {
-              _PXOR_A(1);
-            }
             if(common_depmask[bit>>1] & (1<<i)) {
               _MOV_OR_XOR(2, _jit_movaps_load, _XORPS_A, movC)
+            } else {
+              if(tmp_depmask[bit] & (1<<i)) {
+                _XORPS_A(0);
+              }
+              if(tmp_depmask[bit+1] & (1<<i)) {
+                _PXOR_A(1);
+              }
             }
           }
           for(; i<16; i++) {
-            if(tmp_depmask[bit] & (1<<i)) {
-              _XORPS_B(0);
-            }
-            if(tmp_depmask[bit+1] & (1<<i)) {
-              _PXOR_B(1);
-            }
             if(common_depmask[bit>>1] & (1<<i)) {
               _MOV_OR_XOR(2, _jit_movaps_load, _XORPS_B, movC)
+            } else {
+              if(tmp_depmask[bit] & (1<<i)) {
+                _XORPS_B(0);
+              }
+              if(tmp_depmask[bit+1] & (1<<i)) {
+                _PXOR_B(1);
+              }
             }
           }
           if(common_depmask[bit>>1]) {
@@ -916,25 +918,27 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
         for(bit=0; bit<16; bit+=2) {
           FAST_U8 mov = 1, mov2 = 1, movC = 1;
           for(i=0; i<8; i++) {
-            if(tmp_depmask[bit] & (1<<i)) {
-              _MOV_OR_XOR(0, _jit_movaps_load, _XORPS_A, mov)
-            }
-            if(tmp_depmask[bit+1] & (1<<i)) {
-              _MOV_OR_XOR(1, _jit_movdqa_load, _PXOR_A, mov2)
-            }
             if(common_depmask[bit>>1] & (1<<i)) {
               _MOV_OR_XOR(2, _jit_movaps_load, _XORPS_A, movC);
+            } else {
+              if(tmp_depmask[bit] & (1<<i)) {
+                _MOV_OR_XOR(0, _jit_movaps_load, _XORPS_A, mov)
+              }
+              if(tmp_depmask[bit+1] & (1<<i)) {
+                _MOV_OR_XOR(1, _jit_movdqa_load, _PXOR_A, mov2)
+              }
             }
           }
           for(; i<16; i++) {
-            if(tmp_depmask[bit] & (1<<i)) {
-              _MOV_OR_XOR(0, _jit_movaps_load, _XORPS_B, mov)
-            }
-            if(tmp_depmask[bit+1] & (1<<i)) {
-              _MOV_OR_XOR(1, _jit_movdqa_load, _PXOR_B, mov2)
-            }
             if(common_depmask[bit>>1] & (1<<i)) {
               _MOV_OR_XOR(2, _jit_movaps_load, _XORPS_B, movC);
+            } else {
+              if(tmp_depmask[bit] & (1<<i)) {
+                _MOV_OR_XOR(0, _jit_movaps_load, _XORPS_B, mov)
+              }
+              if(tmp_depmask[bit+1] & (1<<i)) {
+                _MOV_OR_XOR(1, _jit_movdqa_load, _PXOR_B, mov2)
+              }
             }
           }
           if(common_depmask[bit>>1]) {
