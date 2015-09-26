@@ -63,6 +63,16 @@ typedef enum {GF_MULT_DEFAULT,
               GF_MULT_XOR_DEPENDS,
               GF_MULT_COMPOSITE } gf_mult_type_t;
 
+typedef enum {
+	GF_SPLIT8,
+	GF_SPLIT4,
+	GF_SPLIT4_SSSE3,
+	GF_SPLIT4_AVX2,
+	GF_SPLIT4_AVX512,
+	GF_XOR_SSE2,
+	GF_XOR_JIT_SSE2
+} gf_mult_method_used;
+
 /* These are the different ways to optimize region 
    operations.  They are bits because you can compose them.
    Certain optimizations only apply to certain gf_mult_type_t's.  
@@ -138,6 +148,7 @@ typedef struct gf {
   int            using_altmap;
   int            alignment;
   int            walignment;
+  gf_mult_method_used mult_method;
   void           *scratch;
 } gf_t;
     

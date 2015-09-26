@@ -85,7 +85,7 @@ static void alloc_gf() {
 	} else {
 		// free stuff
 		for(int i=gfCount; i>maxNumThreads; i--) {
-			gf_free(gf[i]);
+			gf_free(&gf[i], 1);
 		}
 		gf = (gf_t*)realloc(gf, sizeof(gf_t) * maxNumThreads);
 	}
@@ -597,15 +597,29 @@ void init(Handle<Object> target) {
 	MEM_WALIGN = gf[0].walignment;
 	using_altmap = gf[0].using_altmap;
 	
+	char mult_method[20];
+	switch(gf[0].mult_method) {
+		case GF_SPLIT8:        strcpy(mult_method, "SPLIT8"); break;
+		case GF_SPLIT4:        strcpy(mult_method, "SPLIT4"); break;
+		case GF_SPLIT4_SSSE3:  strcpy(mult_method, "SPLIT4 (SSSE3)"); break;
+		case GF_SPLIT4_AVX2:   strcpy(mult_method, "SPLIT4 (AVX2)"); break;
+		case GF_SPLIT4_AVX512: strcpy(mult_method, "SPLIT4 (AVX512)"); break;
+		case GF_XOR_SSE2:      strcpy(mult_method, "XOR (SSE2)"); break;
+		case GF_XOR_JIT_SSE2:  strcpy(mult_method, "XOR JIT (SSE2)"); break;
+		default:               strcpy(mult_method, "Unknown");
+	}
+	
 #if NODE_VERSION_AT_LEAST(0, 11, 0)
 	Isolate* isolate = Isolate::GetCurrent();
 	HandleScope scope(isolate);
 	target->Set(String::NewFromUtf8(ISOLATE "alignment"), Integer::New(ISOLATE MEM_ALIGN));
 	target->Set(String::NewFromUtf8(ISOLATE "alignment_width"), Integer::New(ISOLATE MEM_WALIGN));
+	target->Set(String::NewFromUtf8(ISOLATE "gf_method"), String::NewFromUtf8(ISOLATE mult_method));
 #else
 	HandleScope scope;
 	target->Set(String::New("alignment"), Integer::New(MEM_ALIGN));
 	target->Set(String::New("alignment_width"), Integer::New(MEM_WALIGN));
+	target->Set(String::New("gf_method"), String::New(mult_method));
 #endif
 }
 

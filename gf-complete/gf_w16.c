@@ -566,12 +566,14 @@ int gf_w16_split_init(gf_t *gf)
 
   if (has_ssse3) {
     gf->multiply_region.w32 = gf_w16_split_4_16_lazy_sse_multiply_region;
+    gf->mult_method = GF_SPLIT4_SSSE3;
   } else if (isneon) {
 #ifdef ARM_NEON
     gf_w16_neon_split_init(gf);
 #endif
   } else {
     gf->multiply_region.w32 = gf_w16_split_8_16_lazy_multiply_region;
+    gf->mult_method = GF_SPLIT8;
     gf->alignment = sizeof(FAST_U32);
     gf->walignment = sizeof(FAST_U32);
   }
@@ -579,9 +581,11 @@ int gf_w16_split_init(gf_t *gf)
 
   if ((h->arg1 == 8 && h->arg2 == 16) || (h->arg2 == 8 && h->arg1 == 16)) {
     gf->multiply_region.w32 = gf_w16_split_8_16_lazy_multiply_region;
+    gf->mult_method = GF_SPLIT8;
     gf->alignment = sizeof(FAST_U32);
     gf->walignment = sizeof(FAST_U32);
   } else if ((h->arg1 == 4 && h->arg2 == 16) || (h->arg2 == 4 && h->arg1 == 16)) {
+    gf->mult_method = GF_SPLIT4;
     if (has_ssse3 || isneon) {
       if(h->region_type & GF_REGION_ALTMAP && h->region_type & GF_REGION_NOSIMD)
         gf->multiply_region.w32 = gf_w16_split_4_16_lazy_nosse_altmap_multiply_region;
@@ -591,9 +595,16 @@ int gf_w16_split_init(gf_t *gf)
       else if(h->region_type & GF_REGION_ALTMAP && has_ssse3) {
         FUNC_ASSIGN(gf->multiply_region.w32, gf_w16_split_4_16_lazy_altmap_multiply_region)
         FUNC_ASSIGN(gf->multiply_regionX.w16, gf_w16_split_4_16_lazy_altmap_multiply_regionX)
-        if(has_avx512bw) gf->alignment = 64;
-        else if(has_avx2) gf->alignment = 32;
-        else gf->alignment = 16;
+        if(has_avx512bw) {
+          gf->alignment = 64;
+          gf->mult_method = GF_SPLIT4_AVX512;
+        } else if(has_avx2) {
+          gf->alignment = 32;
+          gf->mult_method = GF_SPLIT4_AVX2;
+        } else {
+          gf->alignment = 16;
+          gf->mult_method = GF_SPLIT4_SSSE3;
+        }
         gf->walignment = gf->alignment << 1;
       }
 #endif
@@ -642,6 +653,7 @@ int gf_w16_xor_init(gf_t *gf)
   
   /* if JIT allocation was successful (no W^X issue), use slightly faster JIT version, otherwise fall back to static code version */
   gf->multiply_region.w32 = jit->code ? gf_w16_xor_lazy_sse_jit_altmap_multiply_region : gf_w16_xor_lazy_sse_altmap_multiply_region;
+  gf->mult_method = jit->code ? GF_XOR_JIT_SSE2 : GF_XOR_SSE2;
   gf->alignment = 16;
   gf->walignment = 256;
   gf->using_altmap = 1;
