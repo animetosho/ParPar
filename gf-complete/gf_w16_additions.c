@@ -31,8 +31,7 @@ void detect_cpu(void) {
 		/* from handy table at http://a4lg.com/tech/x86/database/x86-families-and-models.en.html */
 		if(model == 0x1C || model == 0x26 || model == 0x27 || model == 0x35 || model == 0x36 || model == 0x37 || model == 0x4A || model == 0x4D) {
 			/* we have a Bonnell/Silvermont CPU with a really slow pshufb instruction; pretend SSSE3 doesn't exist, as XOR_DEPENDS is much faster */
-			/* TODO: we'll need to remove the CPU detection code from ParPar's side for this auto-detection to work properly */
-			/* has_ssse3 = 0; */
+			has_ssse3 = 0;
 		}
 	}
 

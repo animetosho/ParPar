@@ -607,6 +607,20 @@ int gf_w16_split_init(gf_t *gf)
     }
   }
 
+  if (h->region_type & GF_REGION_ALTMAP) {
+    /* !! There's no fallback if SSE not supported !!
+     * ParPar never uses ALTMAP if SSSE3 isn't available, but this isn't ideal in gf-complete
+     * Also: ALTMAP implementations differ on SSE/AVX support, so it doesn't make too much sense for a fallback */
+#ifdef FUNC_ASSIGN
+    FUNC_ASSIGN(gf->altmap_region, gf_w16_split_start)
+    FUNC_ASSIGN(gf->unaltmap_region, gf_w16_split_final)
+#endif
+  } else {
+    gf->altmap_region = gf_w16_split_null;
+    gf->unaltmap_region = gf_w16_split_null;
+  }
+  gf->using_altmap = (h->region_type & GF_REGION_ALTMAP);
+
   return 1;
 }
 
@@ -672,27 +686,12 @@ int gf_w16_init(gf_t *gf)
   gf->alignment = 16;
   gf->walignment = 16;
 
+  /* select an appropriate default - always use some variant of SPLIT unless SSSE3 is unavailable but SSE2 is */
 #ifdef INTEL_SSE2
-  if (h->mult_type == GF_MULT_XOR_DEPENDS) {
+  if((h->mult_type == GF_MULT_DEFAULT && !has_ssse3) || h->mult_type == GF_MULT_XOR_DEPENDS) {
     return gf_w16_xor_init(gf);
   }
   else
 #endif
-  if (gf_w16_split_init(gf) == 0) return 0;
-  
-  
-  if (h->region_type & GF_REGION_ALTMAP) {
-    /* !! There's no fallback if SSE not supported !!
-     * ParPar never uses ALTMAP if SSSE3 isn't available, but this isn't ideal in gf-complete
-     * Also: ALTMAP implementations differ on SSE/AVX support, so it doesn't make too much sense for a fallback */
-#ifdef FUNC_ASSIGN
-    FUNC_ASSIGN(gf->altmap_region, gf_w16_split_start)
-    FUNC_ASSIGN(gf->unaltmap_region, gf_w16_split_final)
-#endif
-  } else {
-    gf->altmap_region = gf_w16_split_null;
-    gf->unaltmap_region = gf_w16_split_null;
-  }
-  gf->using_altmap = (h->region_type & GF_REGION_ALTMAP);
-  return 1;
+    return gf_w16_split_init(gf);
 }
