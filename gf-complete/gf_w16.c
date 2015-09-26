@@ -570,6 +570,7 @@ int gf_w16_split_init(gf_t *gf)
   } else if (isneon) {
 #ifdef ARM_NEON
     gf_w16_neon_split_init(gf);
+    gf->mult_method = GF_SPLIT4_NEON;
 #endif
   } else {
     gf->multiply_region.w32 = gf_w16_split_8_16_lazy_multiply_region;
@@ -618,19 +619,21 @@ int gf_w16_split_init(gf_t *gf)
     }
   }
 
-  if (h->region_type & GF_REGION_ALTMAP) {
+  if ((h->region_type & GF_REGION_ALTMAP) && gf->multiply_region.w32 != gf_w16_split_8_16_lazy_multiply_region) {
     /* !! There's no fallback if SSE not supported !!
      * ParPar never uses ALTMAP if SSSE3 isn't available, but this isn't ideal in gf-complete
      * Also: ALTMAP implementations differ on SSE/AVX support, so it doesn't make too much sense for a fallback */
+    // TODO: may need NEON version of this
 #ifdef FUNC_ASSIGN
     FUNC_ASSIGN(gf->altmap_region, gf_w16_split_start)
     FUNC_ASSIGN(gf->unaltmap_region, gf_w16_split_final)
 #endif
+    gf->using_altmap = true;
   } else {
     gf->altmap_region = gf_w16_split_null;
     gf->unaltmap_region = gf_w16_split_null;
+    gf->using_altmap = false;
   }
-  gf->using_altmap = (h->region_type & GF_REGION_ALTMAP);
 
   return 1;
 }

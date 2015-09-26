@@ -194,7 +194,6 @@ int gf_error_check(int w, int mult_type, int region_type, int divide_type,
       if ((arg1 == 8 && arg2 == 8) ||
           (arg1 == 8 && arg2 == 16)) {
         if (rsimd || rnosimd)                   { _gf_errno = GF_E_SP_16_S; return 0; }
-        if (raltmap)                            { _gf_errno = GF_E_SP_16_A; return 0; }
       } else if (arg1 == 4 && arg2 == 16) {
         if (rsimd && !sse3)                     { _gf_errno = GF_E_SP_SSE3; return 0; }
       } else                                    { _gf_errno = GF_E_SP_16AR; return 0; }

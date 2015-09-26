@@ -81,7 +81,7 @@ static void alloc_gf() {
 		// allocate more
 		gf = (gf_t*)realloc(gf, sizeof(gf_t) * maxNumThreads);
 		for(int i=gfCount; i<maxNumThreads; i++) {
-			gf_init_hard(&gf[i], 16, GF_MULT_DEFAULT, GF_REGION_DEFAULT, GF_DIVIDE_DEFAULT, 0, 0, 0, NULL, NULL);
+			gf_init_hard(&gf[i], 16, GF_MULT_DEFAULT, GF_REGION_ALTMAP, GF_DIVIDE_DEFAULT, 0, 0, 0, NULL, NULL);
 		}
 	} else {
 		// free stuff
@@ -599,6 +599,7 @@ void init(Handle<Object> target) {
 	switch(gf[0].mult_method) {
 		case GF_SPLIT8:        strcpy(mult_method, "SPLIT8"); break;
 		case GF_SPLIT4:        strcpy(mult_method, "SPLIT4"); break;
+		case GF_SPLIT4_NEON:   strcpy(mult_method, "SPLIT4 (NEON)"); break;
 		case GF_SPLIT4_SSSE3:  strcpy(mult_method, "SPLIT4 (SSSE3)"); break;
 		case GF_SPLIT4_AVX2:   strcpy(mult_method, "SPLIT4 (AVX2)"); break;
 		case GF_SPLIT4_AVX512: strcpy(mult_method, "SPLIT4 (AVX512)"); break;
