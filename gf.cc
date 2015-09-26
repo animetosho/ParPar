@@ -25,6 +25,7 @@ extern "C" {
 
 // memory alignment to 16-bytes for SSE operations (may grow for AVX operations)
 int MEM_ALIGN = 16, MEM_WALIGN = 16;
+int CHUNK_SIZE = 32768;
 
 #if defined(__cplusplus) && __cplusplus > 201100
 	// C++11 method
@@ -95,9 +96,6 @@ static void alloc_gf() {
 const int maxNumThreads = 1;
 #endif
 
-// TODO: this needs to be variable depending on the CPU
-// TODO: if using XOR_DEPENDS + JIT, should make chunk size larger as JIT is a little expensive
-#define CHUNK_SIZE (32768)
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 #define CEIL_DIV(a, b) (((a) + (b)-1) / (b))
 
@@ -608,6 +606,23 @@ void init(Handle<Object> target) {
 		case GF_XOR_JIT_SSE2:  strcpy(mult_method, "XOR JIT (SSE2)"); break;
 		default:               strcpy(mult_method, "Unknown");
 	}
+	
+	// select a good chunk size
+	// TODO: this needs to be variable depending on the CPU cache size
+	// although these defaults are pretty good across most CPUs
+	switch(gf[0].mult_method) {
+		case GF_XOR_JIT_SSE2: /* JIT is a little slow, so larger blocks make things faster */
+			CHUNK_SIZE = 128*1024; // maybe 256K is better
+			break;
+		case GF_SPLIT8:
+		case GF_XOR_SSE2:
+			CHUNK_SIZE = 32*1024; // 2* L1 data cache size ?
+			break;
+		default:
+			CHUNK_SIZE = 32*1024; // =L1 data cache size seems to be efficient
+			break;
+	}
+	
 	
 #if NODE_VERSION_AT_LEAST(0, 11, 0)
 	Isolate* isolate = Isolate::GetCurrent();
