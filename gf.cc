@@ -10,7 +10,6 @@
 
 #if defined(_MSC_VER)
 #include <malloc.h>
-#include <intrin.h>
 #endif
 
 #if defined(__x86_64__) || defined(__i386__) || defined(_MSC_VER)
@@ -69,16 +68,35 @@ static inline uint16_t calc_factor(uint_fast16_t inputBlock, uint_fast16_t recov
 	return gf_exp[result];
 }
 
-gf_t gf;
+gf_t* gf = NULL;
+int gfCount = 0;
 bool using_altmap = false;
 
 #ifdef _OPENMP
 int maxNumThreads = 1, defaultNumThreads = 1;
+static void alloc_gf() {
+	if(gfCount == maxNumThreads) return;
+	if(gfCount < maxNumThreads) {
+		// allocate more
+		gf = (gf_t*)realloc(gf, sizeof(gf_t) * maxNumThreads);
+		for(int i=gfCount; i<maxNumThreads; i++) {
+			gf_init_hard(&gf[i], 16, GF_MULT_DEFAULT, GF_REGION_DEFAULT, GF_DIVIDE_DEFAULT, 0, 0, 0, NULL, NULL);
+		}
+	} else {
+		// free stuff
+		for(int i=gfCount; i>maxNumThreads; i--) {
+			gf_free(gf[i]);
+		}
+		gf = (gf_t*)realloc(gf, sizeof(gf_t) * maxNumThreads);
+	}
+	gfCount = maxNumThreads;
+}
 #else
 const int maxNumThreads = 1;
 #endif
 
 // TODO: this needs to be variable depending on the CPU
+// TODO: if using XOR_DEPENDS + JIT, should make chunk size larger as JIT is a little expensive
 #define CHUNK_SIZE (32768)
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 #define CEIL_DIV(a, b) (((a) + (b)-1) / (b))
@@ -133,10 +151,11 @@ static inline void multiply_mat(uint16_t** inputs, uint_fast16_t* iNums, unsigne
 		unsigned int out = loop % numOutputs;
 		int procSize = MIN(len-offset, chunkSize);
 		offset /= sizeof(**outputs);
+		gf_t* _gf = &(gf[omp_get_thread_num()]);
 		
-		gf.multiply_region.w32(&gf, inputs[0] + offset, outputs[out] + offset, calc_factor(iNums[0], oNums[out]), procSize, add);
+		_gf->multiply_region.w32(_gf, inputs[0] + offset, outputs[out] + offset, calc_factor(iNums[0], oNums[out]), procSize, add);
 		for(unsigned int in = 1; in < numInputs; in++) {
-			gf.multiply_region.w32(&gf, inputs[in] + offset, outputs[out] + offset, calc_factor(iNums[in], oNums[out]), procSize, true);
+			_gf->multiply_region.w32(_gf, inputs[in] + offset, outputs[out] + offset, calc_factor(iNums[in], oNums[out]), procSize, true);
 		}
 	}
 	
@@ -182,9 +201,13 @@ FUNC(SetMaxThreads) {
 	
 	if (args.Length() < 1)
 		RETURN_ERROR("Argument required");
+	if (mmActiveTasks)
+		RETURN_ERROR("Calculation already in progress");
 	
 	maxNumThreads = args[0]->ToInt32()->Value();
 	if(maxNumThreads < 1) maxNumThreads = defaultNumThreads;
+	
+	alloc_gf();
 	
 	RETURN_UNDEF
 }
@@ -262,14 +285,14 @@ FUNC(PrepInput) {
 		int lenTail = inputLen & (MEM_WALIGN-1);
 		if(inputLen < destLen && lenTail) {
 			int lenMain = inputLen - lenTail;
-			gf.altmap_region(src, lenMain, dest);
+			gf[0].altmap_region(src, lenMain, dest);
 			// copy remaining, with zero fill, then ALTMAP over it
 			memcpy(dest + lenMain, src + lenMain, lenTail);
 			memset(dest + inputLen, 0, destLen - inputLen);
-			gf.altmap_region(dest + lenMain, MEM_WALIGN, dest + lenMain);
+			gf[0].altmap_region(dest + lenMain, MEM_WALIGN, dest + lenMain);
 			RETURN_UNDEF
 		} else
-			gf.altmap_region(src, inputLen, dest);
+			gf[0].altmap_region(src, inputLen, dest);
 	} else
 		memcpy(dest, src, inputLen);
 	
@@ -540,7 +563,7 @@ FUNC(Finish) {
 	if(using_altmap) {
 		// TODO: multi-thread this?
 		for(int in = 0; in < (int)numInputs; in++)
-			gf.unaltmap_region(inputs[in], len, inputs[in]);
+			gf[0].unaltmap_region(inputs[in], len, inputs[in]);
 	}
 	
 	delete[] inputs;
@@ -568,42 +591,11 @@ void init(Handle<Object> target) {
 	maxNumThreads = omp_get_num_procs();
 	defaultNumThreads = maxNumThreads;
 #endif
-
-
-
-#ifdef __ARM_NEON__
-	using_altmap = true;
-// if SSSE3 supported, use ALTMAP
-#elif defined(_MSC_VER)
-	int cpuInfo[4];
-	__cpuid(cpuInfo, 1);
-	#ifdef INTEL_SSSE3
-	using_altmap = (cpuInfo[2] & 0x200) != 0;
-	#endif
-#elif defined(_IS_X86)
-	uint32_t flags;
-	__asm__ (
-		"cpuid"
-	: "=c" (flags)
-	: "a" (1)
-	: "%edx", "%ebx"
-	);
-	#ifdef INTEL_SSSE3
-	using_altmap = (flags & 0x200) != 0;
-	#endif
-#endif
-
-		if(using_altmap) {
-			#define GF_ARGS 16, GF_MULT_SPLIT_TABLE, GF_REGION_ALTMAP, GF_DIVIDE_DEFAULT
-		gf_init_hard(&gf, GF_ARGS, 0, 16, 4, NULL, NULL);
-			#undef GF_ARGS
-		} else {
-			#define GF_ARGS 16, GF_MULT_DEFAULT, GF_REGION_DEFAULT, GF_DIVIDE_DEFAULT
-		gf_init_hard(&gf, GF_ARGS, 0, 0, 0, NULL, NULL);
-			#undef GF_ARGS
-		}
-	MEM_ALIGN = gf.alignment;
-	MEM_WALIGN = gf.walignment;
+	
+	alloc_gf();
+	MEM_ALIGN = gf[0].alignment;
+	MEM_WALIGN = gf[0].walignment;
+	using_altmap = gf[0].using_altmap;
 	
 #if NODE_VERSION_AT_LEAST(0, 11, 0)
 	Isolate* isolate = Isolate::GetCurrent();
