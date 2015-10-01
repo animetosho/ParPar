@@ -9,8 +9,8 @@
         ['OS=="win"', {
           "msvs_settings": {"VCCLCompilerTool": {"OpenMP": "true"}}
         }, {
-          "cflags": ["-march=native", "-fopenmp", "-flto"],
-          "ldflags": ["-fopenmp", "-flto"]
+          "cflags": ["-march=native", "-fopenmp"],
+          "ldflags": ["-fopenmp"]
         }]
       ]
     },
@@ -25,8 +25,8 @@
         ['OS=="win"', {
           "msvs_settings": {"VCCLCompilerTool": {"EnableEnhancedInstructionSet": "2"}}
         }, {
-          "cflags": ["-march=native","-Wall","-Wpointer-arith","-O3","-flto"],
-          "ldflags": ["-flto"]
+          "cflags": ["-march=native","-Wall","-Wpointer-arith","-O3"],
+          "ldflags": []
         }]
       ]
     }

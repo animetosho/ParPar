@@ -628,11 +628,11 @@ int gf_w16_split_init(gf_t *gf)
     FUNC_ASSIGN(gf->altmap_region, gf_w16_split_start)
     FUNC_ASSIGN(gf->unaltmap_region, gf_w16_split_final)
 #endif
-    gf->using_altmap = true;
+    gf->using_altmap = 1;
   } else {
     gf->altmap_region = gf_w16_split_null;
     gf->unaltmap_region = gf_w16_split_null;
-    gf->using_altmap = false;
+    gf->using_altmap = 0;
   }
 
   return 1;
