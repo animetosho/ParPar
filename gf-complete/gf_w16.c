@@ -564,6 +564,8 @@ int gf_w16_split_init(gf_t *gf)
 
   /* Defaults */
 
+  gf->alignment = 16;
+  gf->walignment = 32;
   if (has_ssse3) {
     gf->multiply_region.w32 = gf_w16_split_4_16_lazy_sse_multiply_region;
     gf->mult_method = GF_SPLIT4_SSSE3;

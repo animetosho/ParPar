@@ -28,7 +28,7 @@ int gf_error_check(int w, int mult_type, int region_type, int divide_type,
   rlazy   = (region_type & GF_REGION_LAZY);
   rsimd   = (region_type & GF_REGION_SIMD);
   rnosimd = (region_type & GF_REGION_NOSIMD);
-  raltmap = (region_type & GF_REGION_ALTMAP);
+  raltmap = 0; /*(region_type & GF_REGION_ALTMAP);*/
   rcauchy = (region_type & GF_REGION_CAUCHY);
 
   if (divide_type != GF_DIVIDE_DEFAULT &&
@@ -69,7 +69,7 @@ int gf_error_check(int w, int mult_type, int region_type, int divide_type,
 
   if (mult_type == GF_MULT_DEFAULT) {
     if (divide_type != GF_DIVIDE_DEFAULT) { _gf_errno = GF_E_MDEFDIV; return 0; }
-    if (region_type != GF_REGION_DEFAULT) { _gf_errno = GF_E_MDEFREG; return 0; }
+    /*if (region_type != GF_REGION_DEFAULT) { _gf_errno = GF_E_MDEFREG; return 0; }*/
     if (arg1 != 0 || arg2 != 0)           { _gf_errno = GF_E_MDEFARG; return 0; }
     return 1;
   }

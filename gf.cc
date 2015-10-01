@@ -587,6 +587,7 @@ void init(Handle<Object> target) {
 	NODE_SET_METHOD(target, "set_max_threads", SetMaxThreads);
 	
 	maxNumThreads = omp_get_num_procs();
+	if(maxNumThreads < 1) maxNumThreads = 1;
 	defaultNumThreads = maxNumThreads;
 #endif
 	
