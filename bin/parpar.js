@@ -32,6 +32,7 @@ var argv = require('yargs')
  .version(function() {
 	return ParPar.version;
  })
+ .wrap(Math.max(80, require('yargs').terminalWidth()))
  .options({
 	o: {
 		alias: 'output',
