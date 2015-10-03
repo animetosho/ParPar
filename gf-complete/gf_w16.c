@@ -549,38 +549,33 @@ static
 int gf_w16_split_init(gf_t *gf)
 {
   gf_internal_t *h;
-  int isneon = 0;
 
   h = (gf_internal_t *) gf->scratch;
-
-#ifdef ARM_NEON
-  isneon = 1;
-#endif
 
   /* We'll be using LOG for multiplication, unless the pp isn't primitive.
      In that case, we'll be using SHIFT. */
 
   gf_w16_log_init(gf);
 
-  /* Defaults */
-
+#ifdef ARM_NEON
+  gf_w16_neon_split_init(gf);
+  gf->mult_method = GF_SPLIT4_NEON;
+  
+  /* TODO: altmap stuff */
+  gf->altmap_region = gf_w16_split_null;
+  gf->unaltmap_region = gf_w16_split_null;
+  
   gf->alignment = 16;
   gf->walignment = 32;
-  if (has_ssse3) {
-    gf->multiply_region.w32 = gf_w16_split_4_16_lazy_sse_multiply_region;
-    gf->mult_method = GF_SPLIT4_SSSE3;
-  } else if (isneon) {
-#ifdef ARM_NEON
-    gf_w16_neon_split_init(gf);
-    gf->mult_method = GF_SPLIT4_NEON;
-#endif
-  } else {
-    gf->multiply_region.w32 = gf_w16_split_8_16_lazy_multiply_region;
-    gf->mult_method = GF_SPLIT8;
-    gf->alignment = sizeof(FAST_U32);
-    gf->walignment = sizeof(FAST_U32);
+  gf->using_altmap = (h->region_type & GF_REGION_ALTMAP);
+  
+#else
+  
+  /* Defaults */
+  if (!h->arg1 || !h->arg2) {
+    h->arg1 = has_ssse3 ? 4 : 8;
+    h->arg2 = 16;
   }
-
 
   if ((h->arg1 == 8 && h->arg2 == 16) || (h->arg2 == 8 && h->arg1 == 16)) {
     gf->multiply_region.w32 = gf_w16_split_8_16_lazy_multiply_region;
@@ -589,7 +584,8 @@ int gf_w16_split_init(gf_t *gf)
     gf->walignment = sizeof(FAST_U32);
   } else if ((h->arg1 == 4 && h->arg2 == 16) || (h->arg2 == 4 && h->arg1 == 16)) {
     gf->mult_method = GF_SPLIT4;
-    if (has_ssse3 || isneon) {
+    gf->alignment = 16;
+    if (has_ssse3) {
       if(h->region_type & GF_REGION_ALTMAP && h->region_type & GF_REGION_NOSIMD)
         gf->multiply_region.w32 = gf_w16_split_4_16_lazy_nosse_altmap_multiply_region;
       else if(h->region_type & GF_REGION_NOSIMD)
@@ -608,7 +604,6 @@ int gf_w16_split_init(gf_t *gf)
           gf->alignment = 16;
           gf->mult_method = GF_SPLIT4_SSSE3;
         }
-        gf->walignment = gf->alignment << 1;
       }
 #endif
     } else {
@@ -619,13 +614,13 @@ int gf_w16_split_init(gf_t *gf)
       else
         gf->multiply_region.w32 = gf_w16_split_4_16_lazy_multiply_region;
     }
+    gf->walignment = gf->alignment << 1;
   }
 
   if ((h->region_type & GF_REGION_ALTMAP) && gf->multiply_region.w32 != gf_w16_split_8_16_lazy_multiply_region) {
     /* !! There's no fallback if SSE not supported !!
      * ParPar never uses ALTMAP if SSSE3 isn't available, but this isn't ideal in gf-complete
      * Also: ALTMAP implementations differ on SSE/AVX support, so it doesn't make too much sense for a fallback */
-    // TODO: may need NEON version of this
 #ifdef FUNC_ASSIGN
     FUNC_ASSIGN(gf->altmap_region, gf_w16_split_start)
     FUNC_ASSIGN(gf->unaltmap_region, gf_w16_split_final)
@@ -636,6 +631,8 @@ int gf_w16_split_init(gf_t *gf)
     gf->unaltmap_region = gf_w16_split_null;
     gf->using_altmap = 0;
   }
+  
+#endif /* ARM_NEON */
 
   return 1;
 }
@@ -702,6 +699,7 @@ int gf_w16_init(gf_t *gf)
   gf->multiply_regionX.w16 = NULL;
   gf->alignment = 16;
   gf->walignment = 16;
+  gf->using_altmap = 0;
 
   /* select an appropriate default - always use some variant of SPLIT unless SSSE3 is unavailable but SSE2 is */
 #ifdef INTEL_SSE2
