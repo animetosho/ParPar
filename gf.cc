@@ -92,8 +92,6 @@ static void alloc_gf() {
 	}
 	gfCount = maxNumThreads;
 }
-#else
-const int maxNumThreads = 1;
 #endif
 
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
@@ -149,7 +147,11 @@ static inline void multiply_mat(uint16_t** inputs, uint_fast16_t* iNums, unsigne
 		unsigned int out = loop % numOutputs;
 		int procSize = MIN(len-offset, chunkSize);
 		offset /= sizeof(**outputs);
+#ifdef _OPENMP
 		gf_t* _gf = &(gf[omp_get_thread_num()]);
+#else
+		gf_t* _gf = gf;
+#endif
 		
 		_gf->multiply_region.w32(_gf, inputs[0] + offset, outputs[out] + offset, calc_factor(iNums[0], oNums[out]), procSize, add);
 		for(unsigned int in = 1; in < numInputs; in++) {
@@ -589,9 +591,13 @@ void init(Handle<Object> target) {
 	maxNumThreads = omp_get_num_procs();
 	if(maxNumThreads < 1) maxNumThreads = 1;
 	defaultNumThreads = maxNumThreads;
-#endif
 	
 	alloc_gf();
+#else
+	gf = (gf_t*)malloc(sizeof(gf_t));
+	gf_init_hard(gf, 16, GF_MULT_DEFAULT, GF_REGION_ALTMAP, GF_DIVIDE_DEFAULT, 0, 0, 0, NULL, NULL);
+#endif
+	
 	MEM_ALIGN = gf[0].alignment;
 	MEM_WALIGN = gf[0].walignment;
 	using_altmap = gf[0].using_altmap;
