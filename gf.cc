@@ -12,10 +12,6 @@
 #include <malloc.h>
 #endif
 
-#if defined(__x86_64__) || defined(__i386__) || defined(_MSC_VER)
-#define _IS_X86 1
-#endif
-
 extern "C" {
 #ifdef _OPENMP
 #include <omp.h>
