@@ -1,48 +1,98 @@
-ParPar is a high performance, multi-threaded PAR2 creation library for node.js.
-It provides a high degree of control over the PAR2 creation process.
+ParPar is a high performance, multi-threaded PAR2 creation library/tool for
+node.js. ParPar does not verify or repair files, only creates redundancy. ParPar
+has only been tested on x86 32/64 bit based CPUs.
 
-ParPar does not verify or repair files, only creates redundancy. ParPar has only
-been tested on x86 32/64 bit based CPUs.
+ParPar provides three main things:
 
-Features:
----------
+-   Command line tool for creating PAR2 files, like what par2cmdline does
+
+-   High level JS API, with a similar interface to the command line tool
+
+-   Low level JS API, providing a high degree of control over the creation
+    process
+
+**ParPar is currently still very much a work in progress, is not fully
+implemented and various issues still need to be solved. I strongly do not
+recommend you use it for anything other than experimentation at this stage.**
+
+Features
+--------
 
 -   all main packets from the [PAR2
     specification](<http://parchive.sourceforge.net/docs/specifications/parity-volume-spec/article-spec.html>)
 
 -   unicode filename/comment support
 
--   calculations can be run in both async and sync mode
+-   asychronous calculations
 
 -   multi-threading via OpenMP
 
--   fast calculation routine with SSSE3, AVX2 and AVX512 variants when available
+-   fast calculation routine with SSE2, SSSE3 and AVX2 optimised algorithms when
+    available
 
 -   chunking support for memory constrained situations
 
--   low level library provides a high degree of control over the creation
-    process
+-   minimum chunk size restrictions to avoid heavy I/O seeking when memory is
+    limited
 
-A higher level JS API and command-line tool is planned.
+Planned Features
+----------------
+
+As mentioned above, ParPar is still under development. Some features currently
+not implemented include:
+
+-   power of 2 file sizing scheme
+
+-   repetition of critical packets
+
+-   improve CLI handling, i.e. better interface, proper filename
+    normalisation/cleanup etc
+
+-   better memory management
+
+-   ability to force a GF multiply method, bypassing CPU auto-detection (useful
+    for experimentation and bypassing VMs which meddle with the CPUID)
+
+-   better handling of input buffering and processing chunks based on CPU cache
+    size
+
+-   more efficient MD5 handling, perhaps via multi-threading and/or stitching
+    with the ALTMAP transformation functions
+
+-   investigate AVX version of [XOR\_DEPENDS](<xor_depends/info.md#avx>)
+    algorithm
+
+-   various other tweaks
 
 Motivation
 ----------
 
 I needed a flexible library for creating PAR2 files, in particular, one which
 isn’t tied to the notion of on-disk files. ParPar allows generating PAR2 from
-immaterial files, and the output doesn’t have to be written to disk.
+“immaterial files”, and the output doesn’t have to be written to disk.
 
 Also, all the fast PAR2 implementations seem to be Windows only; ParPar provides
-a solution for high performance PAR2 creation on Linux systems (without Wine).
+a solution for high performance PAR2 creation on Linux (and probably other)
+systems (without Wine) and it also works on Windows.
+
+See [benchmark comparisons](<benchmarks/info.md>).
 
  
 
 Installation / Building
 =======================
 
+Pre-packaged Windows builds (with NodeJS v0.10.40) can be found on the Releases
+page.
+
+For building you’ll need NodeJS, node-gyp (can be obtained via `npm install -g
+node-gyp` command) and relevant build tools (i.e. MS Visual C++ for Windows,
+GCC/Clang family otherwise). After you have the dependencies, the following
+commands can be used to build:
+
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-npm install -g node-gyp # if you don't have it already
 node-gyp rebuild
+npm install
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Note, Windows builds are always compiled with SSE2 support. If you can’t have
@@ -51,7 +101,13 @@ this, delete all instances of `"msvs_settings": {"VCCLCompilerTool":
 
 Relatively recent compilers are needed for AVX2 support.
 
- 
+GCC/Clang build issues
+----------------------
+
+Some versions of GCC/Clang don't like the `-march=native` switch. If you're
+having build issues with these compilers, try removing all instances of
+`"-march=native",` from *binding.gyp* and recompiling. Note that some CPU
+specific optimisations may not be enabled if the flag is removed.  
 
 API
 ===
@@ -79,18 +135,18 @@ unnecessary memory copying.
 Examples
 ========
 
-Examples can be found in the *examples* folder.
+Examples for the low level JS API can be found in the *examples* folder.
 
  
 
-gf-complete
+GF-Complete
 ===========
 
 ParPar relies on the excellent
-[gf-complete](<http://jerasure.org/jerasure/gf-complete>) library for the heavy
-lifting. A somewhat stripped-down and slightly modified version (from the [v2
+[GF-Complete](<http://jerasure.org/jerasure/gf-complete>) library for the heavy
+lifting. A somewhat stripped-down and modified version (from the [v2
 branch](<http://jerasure.org/jerasure/gf-complete/tree/v2>)) is included with
-ParPar to make installation easier. Code from gf-complete can be found in the
+ParPar to make installation easier. Code from GF-Complete can be found in the
 *gf-complete* folder.
 
 Modifications (beyond removing unused components) to the library include:
@@ -98,17 +154,25 @@ Modifications (beyond removing unused components) to the library include:
 -   [MSVC compatibility
     fixes](<http://jerasure.org/jerasure/gf-complete/issues/6>)
 
--   Runtime CPU detection
+-   Runtime CPU detection and automatic algorithm selection
 
 -   [Optimisation for 32-bit
     builds](<http://jerasure.org/jerasure/gf-complete/issues/7>)
 
--   Some optimisations for CPUs without SSSE3 support
+-   Some optimisations for CPUs without SSE support (SPLIT\_TABLE(16,8)
+    implementation)
 
--   AVX2 and AVX512 versions of the SSSE3 implementation
+-   Added a Cauchy-like [XOR based region multiply
+    technique](<xor_depends/info.md>) for faster processing on Atom CPUs, as
+    well as SSE2 CPUs without SSSE3 support
+
+-   AVX2 and AVX512BW variants of the SSSE3 implementation
 
 -   [Region transform to/from ALTMAP memory
     arrangement](<http://jerasure.org/jerasure/gf-complete/issues/9>)
+
+-   Some tweaks to make ParPar integration easier, such as exposing alignment
+    requirements
 
  
 
@@ -117,5 +181,5 @@ License
 
 This module is Public Domain.
 
-gf-complete’s license can be found
+GF-Complete’s license can be found
 [here](<http://jerasure.org/jerasure/gf-complete/blob/master/License.txt>).
