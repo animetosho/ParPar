@@ -169,7 +169,7 @@ The technique is very similar to the Cauchy method that GF-Complete implements.
 Differences include:
 
 -   instead of partitioning the whole region into *w* sub-regions, we partition
-    *b\*w* byte blocks into *w* sub-regions, where *b* = 16 bytes (SSE word
+    *b \* w* byte blocks into *w* sub-regions, where *b* = 16 bytes (SSE word
     size)
 
 -   calculate a dependency mask *before* performing XOR-based multiplication
@@ -254,7 +254,7 @@ source == destination.
 Intel Core 2 (65nm)
 -------------------
 
--   CPU: Intel Pentium Dual Core T2310 \@1.46GHz
+-   CPU: Intel Pentium Dual Core T2310 @1.46GHz
 
     -   32KB L1 cache, 1MB shared L2 cache, SSE2 and SSSE3 supported
 
@@ -273,7 +273,7 @@ instruction, hence XOR\_DEPENDS is actually comparable to SPLIT\_TABLE(16,4)  
 Intel Silvermont
 ----------------
 
--   CPU: Intel Atom C2750 \@2.4GHz
+-   CPU: Intel Atom C2750 @2.4GHz
 
     -   24KB L1 cache, 4MB shared L2 cache, SSE2, SSSE3 and CLMUL supported
 
@@ -293,7 +293,7 @@ Silvermont](<http://www.agner.org/optimize/instruction_tables.pdf>)
 AMD K10
 -------
 
--   CPU: AMD Phenom 9950 \@2.6GHz
+-   CPU: AMD Phenom 9950 @2.6GHz
 
     -   64KB L1 cache, 512KB L2 cache, SSE2 supported
 
