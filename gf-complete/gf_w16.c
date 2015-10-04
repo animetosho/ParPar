@@ -703,7 +703,7 @@ int gf_w16_init(gf_t *gf)
 
   /* select an appropriate default - always use some variant of SPLIT unless SSSE3 is unavailable but SSE2 is */
 #ifdef INTEL_SSE2
-  if((h->mult_type == GF_MULT_DEFAULT && !has_ssse3) || h->mult_type == GF_MULT_XOR_DEPENDS) {
+  if((h->mult_type == GF_MULT_DEFAULT && !has_ssse3 && (h->region_type & GF_REGION_ALTMAP)) || h->mult_type == GF_MULT_XOR_DEPENDS) {
     return gf_w16_xor_init(gf);
   }
   else
