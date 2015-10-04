@@ -24,10 +24,12 @@ var parseSize = function(s) {
 	return false;
 };
 
+var exe = 'parpar'; // '$0'
+
 var argv = require('yargs')
- .usage('ParPar, a high performance PAR2 creation tool\nUsage: $0 -s <blocksize> -r <blocks> -o <output> [options] [--] <input1> [<input2>...]')
+ .usage('ParPar, a high performance PAR2 creation tool\nUsage: '+exe+' -s <blocksize> -r <blocks> -o <output> [options] [--] <input1> [<input2>...]')
  .help('h')
- .example('$0 -s 1M -r 64 -o my_recovery.par2 file1 file2', 'Generate 64MB of PAR2 recovery files from file1 and file2, named "my_recovery"')
+ .example(exe+' -s 1M -r 64 -o my_recovery.par2 file1 file2', 'Generate 64MB of PAR2 recovery files from file1 and file2, named "my_recovery"')
  .demand(1, 'No input files supplied')
  .version(function() {
 	return ParPar.version;
