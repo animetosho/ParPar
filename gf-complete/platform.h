@@ -50,14 +50,19 @@ typedef unsigned __int32 FAST_U32;
 /*#define ARM_NEON 1*/
 
 #if __WORDSIZE == 64
-typedef unsigned long int FAST_U8;
-typedef unsigned long int FAST_U16;
-typedef unsigned long int FAST_U32;
+typedef uint64_t FAST_U8;
+typedef uint64_t FAST_U16;
+typedef uint64_t FAST_U32;
+#elif __WORDSIZE == 32
+typedef uint32_t FAST_U8;
+typedef uint32_t FAST_U16;
+typedef uint32_t FAST_U32;
 #else
-typedef unsigned int FAST_U8;
-typedef unsigned int FAST_U16;
-typedef unsigned int FAST_U32;
+typedef uint_fast8_t FAST_U8;
+typedef uint_fast16_t FAST_U16;
+typedef uint_fast32_t FAST_U32;
 #endif
+/* not ideal if wordsize is not 32/64... */
 #define FAST_U8_SIZE (__WORDSIZE / 8)
 #define FAST_U16_SIZE (__WORDSIZE / 8)
 #define FAST_U32_SIZE (__WORDSIZE / 8)
