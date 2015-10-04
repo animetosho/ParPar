@@ -141,7 +141,7 @@ different routines, assuming we only need to the consider the default
 polynomial, the code size would be rather large, so I have not bothered
 exploring this option.
 
-AVX
+<a name="avx"></a>AVX
 ---
 
 We use 128 bit operations only because it’s the optimal size for SSE
