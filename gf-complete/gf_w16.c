@@ -545,6 +545,10 @@ gf_w16_split_4_16_lazy_sse_altmap_multiply_region(gf_t *gf, void *src, void *des
 }
 */
 
+#ifdef ARM_NEON
+#include "gf_w16_neon.c"
+#endif
+
 static 
 int gf_w16_split_init(gf_t *gf)
 {

@@ -28,6 +28,4 @@ struct gf_w16_logtable_data {
     uint16_t      *d_antilog;
 };
 
-void gf_w16_neon_split_init(gf_t *gf);
-
 #endif /* GF_COMPLETE_GF_W16_H */
