@@ -1,6 +1,8 @@
 
 var proc = require('child_process');
 var isWindows = require('os').platform() == 'win32';
+var arch = require('os').arch();
+var isX86 = (arch == 'ia32' || arch == 'x64');
 
 var engines = {
 	par2j: {
@@ -172,7 +174,7 @@ var results = {};
 // grab versions (this also checks existence)
 async.eachSeries(Object.keys(benchmarks), function(prog, cb) {
 	var b = benchmarks[prog], e = engines[b.engine];
-	if(isWindows || !b.winOnly || b.wine) {
+	if(isWindows || !b.winOnly || (b.wine && isX86)) {
 		e.version(b.exe, function(err, ver) {
 			if(!err && ver)
 				results[prog] = {version: benchmarks[prog].version || ver, times: []};
