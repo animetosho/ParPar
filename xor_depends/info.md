@@ -12,35 +12,34 @@ slow `pshufb` instruction (i.e. Intel Atom).
 Theory
 ======
 
-For modular multiplication in $GF(2 <pow> w)$, each bit of the product can be
+For modular multiplication in *GF(2 \<pow\> w)*, each bit of the product can be
 derived by taking specific bits from the multiplicand and XORing (performing
 exclusive or) them.
 
-For example, suppose we wish to multiply the 4-bit number “$[a][b][c][d]$”
-(where $a$ is the first bit, $b$ the second and so on) by 2 in $GF(16)$, with
-polynomial 0x13. Multiplying by 2 is simply a left shift by 1 bit, after which,
-we need to keep the product in the field via modular reduction. If $a$ is $1$,
-we need to XOR the polynomial after the shift, otherwise, nothing else needs to
-be performed.
+For example, suppose we wish to multiply the 4-bit number “[a][b][c][d]” (where
+*a* is the first bit, *b* the second and so on) by 2 in GF(16), with polynomial
+0x13. Multiplying by 2 is simply a left shift by 1 bit, after which, we need to
+keep the product in the field via modular reduction. If a is 1, we need to XOR
+the polynomial after the shift, otherwise, nothing else needs to be performed.
 
 In other words (where \^ denotes XOR and \* denotes modular multiplication),
-$[a][b][c][d]$ \* 2 equals:
+[a][b][c][d] \* 2 equals:
 
--   if $a = 1$: $[a][b][c][d][0] ^ 10011 = [b][c][d^1][1]$
+-   if a = 1: [a][b][c][d][0] \^ 10011 = [b][c][d\^1][1]
 
--   if $a = 0$: $[a][b][c][d][0] = [b][c][d][0]$
+-   if a = 0: [a][b][c][d][0] = [b][c][d][0]
 
 Or more concisely:
 
-$[a][b][c][d] * 2 = [b][c][d^a][a]$
+[a][b][c][d] \* 2 = [b][c][d\^a][a]
 
  
 
 We can recursively apply the above definition for any multiplier, eg:
 
-$[a][b][c][d] * 3 = [a^b][b^c][a^c^d][a^d]$
+[a][b][c][d] \* 3 = [a\^b][b\^c][a\^c\^d][a\^d]
 
-$[a][b][c][d] * 4 = [c][a^d][a^b][b]$
+[a][b][c][d] \* 4 = [c][a\^d][a\^b][b]
 
 This is similar to how the BYTWO method in GF-Complete operates.
 
@@ -57,7 +56,7 @@ SSE supports 128 bit operations, therefore, we should rearrange our data so that
 the most significant bit for 128 words are stored together, followed by the next
 significant bit of these 128 words, and so on.
 
-PAR2 uses $GF(65536)$, so we operate on 16 \* 128 bit = 256 byte blocks. The
+PAR2 uses GF(65536), so we operate on 16 \* 128 bit = 256 byte blocks. The
 algorithm simply generates the most significant bits of 128 products by
 selectively XORing various bits of the 128 muliplicands. This is repeated for
 all 16 bits in the word.
@@ -107,26 +106,26 @@ product).
 
 Many of these XOR sequences have common sub-sequences, and hence, we can further
 optimise by avoiding these duplicate XOR operations. To illustrate, suppose we
-wish to multiple the 4 bit number $[a][b][c][d]$ by 7 in $GF(16)$ with
-polynomial 0x13. The result, $[w][x][y][z]$, can be determined by:
+wish to multiple the 4 bit number [a][b][c][d] by 7 in GF(16) with polynomial
+0x13. The result, [w][x][y][z], can be determined by:
 
-$$
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 w = a^b^c
 x = a^b^c^d
 y = b^c^d
 z = a^b^d
-$$
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 You may notice that there are “duplicate” XOR operations above, which can be
 eliminated, reducing 9 XOR operations to 6, for example:
 
-$$
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 w = a^b^c
 x = w^d
 temp = b^d
 y = temp^c
 z = temp^a
-$$
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Unfortunately, I don’t know what’s a good fast way to determine these common
 sub-sequences, and trying to perform exhaustive searches would make the JIT code
@@ -287,7 +286,7 @@ Intel Silvermont
 **Comment**: It seems like SPLIT\_TABLE(16,4) is *really* slow on the Atom, only
 slightly faster than SPLIT\_TABLE(16,8), probably due to the `pshufb`
 instruction taking [5 cycles to execute on
-Silvermont](\<<http://www.agner.org/optimize/instruction_tables.pdf>\>)
+Silvermont](<http://www.agner.org/optimize/instruction_tables.pdf>)
 
  
 
