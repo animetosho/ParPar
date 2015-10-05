@@ -162,6 +162,8 @@ _FN(gf_w16_split_4_16_lazy_altmap_multiply_region)(gf_t *gf, void *src, void *de
   ALIGN(MWORD_SIZE, _FN(gf_mm) high[4]);
   gf_region_data rd;
   _mword  mask, ta, tb, ti, tpl, tph;
+  struct gf_w16_logtable_data *ltd = (struct gf_w16_logtable_data *) ((gf_internal_t *) gf->scratch)->private;
+  int log_val;
 
   if (val == 0) { gf_multby_zero(dest, bytes, xor); return; }
   if (val == 1) { gf_multby_one(src, dest, bytes, xor); return; }
@@ -169,9 +171,10 @@ _FN(gf_w16_split_4_16_lazy_altmap_multiply_region)(gf_t *gf, void *src, void *de
   gf_set_region_data(&rd, gf, src, dest, bytes, val, xor, sizeof(_mword), sizeof(_mword)*2);
   gf_do_initial_region_alignment(&rd);
 
+  log_val = ltd->log_tbl[val];
   for (j = 0; j < 16; j++) {
     for (i = 0; i < 4; i++) {
-      prod = gf->multiply.w32(gf, (j << (i*4)), val);
+      prod = (j == 0) ? 0 : ltd->antilog_tbl[(int) ltd->log_tbl[(j << (i*4))] + log_val];
       for (k = 0; k < MWORD_SIZE; k += 16) {
         low[i].u8[j + k] = (uint8_t)prod;
         high[i].u8[j + k] = (uint8_t)(prod >> 8);
@@ -264,6 +267,8 @@ _FN(gf_w16_split_4_16_lazy_altmap_multiply_regionX)(gf_t *gf, uint16_t **src, vo
   _mword *dW, *topW;
   gf_region_data rd;
   _mword  mask, ta, tb, ti, tpl, tph;
+  struct gf_w16_logtable_data *ltd = (struct gf_w16_logtable_data *) ((gf_internal_t *) gf->scratch)->private;
+  int log_val;
   ALIGN(MWORD_SIZE, _FN(gf_mm) low[MUL_REGIONS][4]);
   ALIGN(MWORD_SIZE, _FN(gf_mm) high[MUL_REGIONS][4]);
 
@@ -280,12 +285,14 @@ _FN(gf_w16_split_4_16_lazy_altmap_multiply_regionX)(gf_t *gf, uint16_t **src, vo
     gf_do_initial_region_alignment(&rd);
     gf_do_final_region_alignment(&rd);
     
+    
+    log_val = ltd->log_tbl[val[r]];
     for (j = 0; j < 16; j++) {
       for (i = 0; i < 4; i++) {
-        prod = gf->multiply.w32(gf, (j << (i*4)), val[r]);
+        prod = (j == 0) ? 0 : ltd->antilog_tbl[(int) ltd->log_tbl[(j << (i*4))] + log_val];
         for (k = 0; k < MWORD_SIZE; k += 16) {
-          low[r][i].u8[j + k] = (prod & 0xff);
-          high[r][i].u8[j + k] = (prod >> 8);
+          low[r][i].u8[j + k] = (uint8_t)prod;
+          high[r][i].u8[j + k] = (uint8_t)(prod >> 8);
         }
       }
     }
