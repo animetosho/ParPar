@@ -163,15 +163,13 @@ _FN(gf_w16_split_4_16_lazy_altmap_multiply_region)(gf_t *gf, void *src, void *de
   gf_region_data rd;
   _mword  mask, ta, tb, ti, tpl, tph;
   struct gf_w16_logtable_data *ltd = (struct gf_w16_logtable_data *) ((gf_internal_t *) gf->scratch)->private;
-  int log_val;
+  int log_val = ltd->log_tbl[val];
 
   if (val == 0) { gf_multby_zero(dest, bytes, xor); return; }
   if (val == 1) { gf_multby_one(src, dest, bytes, xor); return; }
 
-  gf_set_region_data(&rd, gf, src, dest, bytes, val, xor, sizeof(_mword), sizeof(_mword)*2);
-  gf_do_initial_region_alignment(&rd);
+  gf_w16_log_region_alignment(&rd, gf, src, dest, bytes, val, xor, sizeof(_mword), sizeof(_mword)*2);
 
-  log_val = ltd->log_tbl[val];
   for (j = 0; j < 16; j++) {
     for (i = 0; i < 4; i++) {
       prod = (j == 0) ? 0 : ltd->antilog_tbl[(int) ltd->log_tbl[(j << (i*4))] + log_val];
@@ -248,7 +246,6 @@ _FN(gf_w16_split_4_16_lazy_altmap_multiply_region)(gf_t *gf, void *src, void *de
       
     }
   }
-  gf_do_final_region_alignment(&rd);
 
 #endif
 }
@@ -281,10 +278,7 @@ _FN(gf_w16_split_4_16_lazy_altmap_multiply_regionX)(gf_t *gf, uint16_t **src, vo
     _mm_prefetch(src[r] + 24, _MM_HINT_T0);
 */
 
-    gf_set_region_data(&rd, gf, src[r], dest, bytes, val[r], xor, sizeof(_mword), sizeof(_mword)*2);
-    gf_do_initial_region_alignment(&rd);
-    gf_do_final_region_alignment(&rd);
-    
+    gf_w16_log_region_alignment(&rd, gf, src[r], dest, bytes, val[r], xor, sizeof(_mword), sizeof(_mword)*2);
     
     log_val = ltd->log_tbl[val[r]];
     for (j = 0; j < 16; j++) {

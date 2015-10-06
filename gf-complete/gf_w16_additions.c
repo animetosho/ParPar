@@ -4,6 +4,8 @@ int has_pclmul = 0;
 int has_avx2 = 0;
 int has_avx512bw = 0;
 
+#include <assert.h>
+
 #if !defined(_MSC_VER) && defined(INTEL_SSE2)
 #include <cpuid.h>
 #endif
@@ -51,6 +53,83 @@ void detect_cpu(void) {
 #endif
 #endif /* INTEL_SSE2 */
 }
+
+
+static inline
+void gf_w16_log_region_alignment(gf_region_data *rd,
+  gf_t *gf,
+  void *src,
+  void *dest,
+  int bytes,
+  uint64_t val,
+  int xor,
+  int align,
+  int walign)
+{
+  gf_internal_t *h = NULL;
+  unsigned long uls;
+  struct gf_w16_logtable_data *ltd = (struct gf_w16_logtable_data *) ((gf_internal_t *) gf->scratch)->private;
+  int log_val = ltd->log_tbl[val];
+  uint16_t *sEnd = (uint16_t*)src + (bytes>>1);
+  
+/* never used, so don't bother setting them
+  rd->gf = gf;
+  rd->src = src;
+  rd->dest = dest;
+  rd->bytes = bytes;
+  rd->val = val;
+  rd->xor = xor;
+*/
+
+  uls = ((unsigned long) src) & (align-1);
+
+  if (uls != (((unsigned long) dest) & (align-1)))
+    assert(0);
+  if ((bytes & 1) != 0)
+    assert(0);
+
+  if (uls != 0) uls = (align-uls);
+  rd->s_start = (uint8_t *)src + uls;
+  rd->d_start = (uint8_t *)dest + uls;
+  bytes -= uls;
+  bytes -= (bytes & (walign-1));
+  rd->s_top = (uint8_t *)rd->s_start + bytes;
+  rd->d_top = (uint8_t *)rd->d_start + bytes;
+
+  /* slow multiply for init/end area */
+  #define MUL_LOOP(op, src, dest, srcto) { \
+    uint16_t *s16 = (uint16_t *)src, *d16 = (uint16_t *)dest; \
+    while (s16 < (uint16_t *)(srcto)) { \
+      *d16 op (*s16 == 0) ? 0 : ltd->antilog_tbl[(int) ltd->log_tbl[*s16] + log_val]; \
+      s16++; \
+      d16++; \
+    } \
+  }
+  if (xor) {
+    MUL_LOOP(^=, src, dest, rd->s_start)
+    MUL_LOOP(^=, rd->s_top, rd->d_top, sEnd)
+  } else {
+    MUL_LOOP(=, src, dest, rd->s_start)
+    MUL_LOOP(=,rd->s_top, rd->d_top,  sEnd)
+  }
+  #undef MUL_LOOP
+}
+
+
+/* refers to log_val, ltd and xor */
+/* TODO: are we going to make use of these? */
+#define _GF_W16_LOG_MULTIPLY_REGION(op, src, dest, srcto) { \
+  uint16_t *s16 = (uint16_t *)src, *d16 = (uint16_t *)dest; \
+  while (s16 < (uint16_t *)(srcto)) { \
+    *d16 op (*s16 == 0) ? 0 : ltd->antilog_tbl[(int) ltd->log_tbl[*s16] + log_val]; \
+    s16++; \
+    d16++; \
+  } \
+}
+#define GF_W16_LOG_MULTIPLY_REGION(src, dest, srcto) \
+  if(xor) _GF_W16_LOG_MULTIPLY_REGION(^=, src, dest, srcto) \
+  else _GF_W16_LOG_MULTIPLY_REGION(=, src, dest, srcto)
+
 
 
 static void gf_w16_xor_start(void* src, int bytes, void* dest) {
@@ -282,8 +361,7 @@ static void gf_w16_xor_lazy_sse_altmap_multiply_region(gf_t *gf, void *src, void
   if (val == 1) { gf_multby_one(src, dest, bytes, xor); return; }
 
   h = (gf_internal_t *) gf->scratch;
-  gf_set_region_data(&rd, gf, src, dest, bytes, val, xor, 16, 256);
-  gf_do_initial_region_alignment(&rd);
+  gf_w16_log_region_alignment(&rd, gf, src, dest, bytes, val, xor, 16, 256);
   
   depmask1 = _mm_setzero_si128();
   depmask2 = _mm_setzero_si128();
@@ -528,7 +606,6 @@ static void gf_w16_xor_lazy_sse_altmap_multiply_region(gf_t *gf, void *src, void
       }
   }
   
-  gf_do_final_region_alignment(&rd);
 #endif
 }
 
@@ -554,8 +631,7 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
 
   h = (gf_internal_t *) gf->scratch;
   jit = &(h->jit);
-  gf_set_region_data(&rd, gf, src, dest, bytes, val, xor, 16, 256);
-  gf_do_initial_region_alignment(&rd);
+  gf_w16_log_region_alignment(&rd, gf, src, dest, bytes, val, xor, 16, 256);
   
   if(rd.d_start != rd.d_top) {
     int use_temp = ((intptr_t)rd.s_start - (intptr_t)rd.d_start + 256) < 512;
@@ -980,8 +1056,6 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
     
   }
   
-  gf_do_final_region_alignment(&rd);
-
 #endif
 }
 
