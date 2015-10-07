@@ -1032,6 +1032,65 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
             _jit_movdqa_store(jit, DX, (bit+1)<<4, 1);
         }
       }
+      
+/*** experimental code for JIT on scalar units ***
+Turns out not to be useful, but kept if it ever becomes so
+If using this, don't forget to save BX,DI,SI registers!
+      #define _MOV_OR_XOR_SCALAR(reg, flag) \
+        if(flag) { \
+          _jit_mov_load(jit, reg, AX, srcSel); \
+          flag = 0; \
+        } else \
+          _jit_xor_m(jit, reg, AX, srcSel)
+      for(; bit<16; bit+=2) {
+        FAST_U8 bitPart;
+        for(bitPart = 0; bitPart < 16; bitPart += FAST_U32_SIZE) {
+          FAST_U8 mov = 1, mov2 = 1, movC = 1;
+          for(i=0; i<16; i++) {
+            FAST_U8 srcSel = (i<<4) + bitPart;
+            if(common_depmask[bit>>1] & (1<<i)) {
+              _MOV_OR_XOR_SCALAR(BX, movC);
+            } else {
+              if(tmp_depmask[bit] & (1<<i)) {
+                _MOV_OR_XOR_SCALAR(SI, mov);
+              }
+              if(tmp_depmask[bit+1] & (1<<i)) {
+                _MOV_OR_XOR_SCALAR(DI, mov2);
+              }
+            }
+          }
+          if(common_depmask[bit>>1]) {
+            if(mov) {
+              if(xor)
+                _jit_xor_rm(jit, DX, (bit<<4) + bitPart, BX);
+              else
+                _jit_mov_store(jit, DX, (bit<<4) + bitPart, BX);
+            } else {
+              _jit_xor_r(jit, SI, BX);
+            }
+            if(mov2) {
+              if(xor)
+                _jit_xor_rm(jit, DX, ((bit+1)<<4) + bitPart, BX);
+              else
+                _jit_mov_store(jit, DX, ((bit+1)<<4) + bitPart, BX);
+            } else {
+              _jit_xor_r(jit, DI, BX);
+            }
+          }
+          if(xor) {
+            if(!mov)
+              _jit_xor_rm(jit, DX, (bit<<4) + bitPart, SI);
+            if(!mov2)
+              _jit_xor_rm(jit, DX, ((bit+1)<<4) + bitPart, DI);
+          } else {
+            if(!mov)
+              _jit_mov_store(jit, DX, (bit<<4) + bitPart, SI);
+            if(!mov2)
+              _jit_mov_store(jit, DX, ((bit+1)<<4) + bitPart, DI);
+          }
+        }
+      }
+***/
     }
     
     _jit_add_i(jit, AX, 256);

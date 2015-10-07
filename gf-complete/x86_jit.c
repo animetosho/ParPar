@@ -307,6 +307,41 @@ static inline void _jit_and_i(jit_t* jit, uint8_t reg, int32_t val) {
 	*(int32_t*)(jit->ptr) = val;
 	jit->ptr += 4;
 }
+static inline void _jit_xor_r(jit_t* jit, uint8_t reg, uint8_t reg2) {
+	RXX_PREFIX
+	*(int16_t*)(jit->ptr) = 0xC031 | (reg2 << 11) | (reg << 8);
+	jit->ptr += 2;
+}
+static inline void _jit_xor_m(jit_t* jit, uint8_t reg, uint8_t mreg, int32_t offs) {
+	RXX_PREFIX
+	if((offs+128) & ~0xFF) {
+		*(int32_t*)(jit->ptr) = 0x8033 | (reg <<11) | (mreg << 8);
+		*(int32_t*)(jit->ptr +2) = offs;
+		jit->ptr += 6;
+	} else if(offs) {
+		*(int32_t*)(jit->ptr) = 0x4033 | (reg <<11) | (mreg << 8);
+		jit->ptr += 2;
+		*(jit->ptr++) = (uint8_t)offs;
+	} else {
+		*(int32_t*)(jit->ptr) = 0x0033 | (reg <<11) | (mreg << 8);
+		jit->ptr += 2;
+	}
+}
+static inline void _jit_xor_rm(jit_t* jit, uint8_t mreg, int32_t offs, uint8_t reg) {
+	RXX_PREFIX
+	if((offs+128) & ~0xFF) {
+		*(int32_t*)(jit->ptr) = 0x8031 | (reg <<11) | (mreg << 8);
+		*(int32_t*)(jit->ptr +2) = offs;
+		jit->ptr += 6;
+	} else if(offs) {
+		*(int32_t*)(jit->ptr) = 0x4031 | (reg <<11) | (mreg << 8);
+		jit->ptr += 2;
+		*(jit->ptr++) = (uint8_t)offs;
+	} else {
+		*(int32_t*)(jit->ptr) = 0x0031 | (reg <<11) | (mreg << 8);
+		jit->ptr += 2;
+	}
+}
 static inline void _jit_mov_i(jit_t* jit, uint8_t reg, intptr_t val) {
 #ifdef AMD64
 	if(val > 0x3fffffff || val < 0x40000000) {
@@ -330,6 +365,36 @@ static inline void _jit_mov_r(jit_t* jit, uint8_t reg, uint8_t reg2) {
 	RXX_PREFIX
 	*(int16_t*)(jit->ptr) = 0xC089 | (reg2 << 11) | (reg << 8);
 	jit->ptr += 2;
+}
+static inline void _jit_mov_load(jit_t* jit, uint8_t reg, uint8_t mreg, int32_t offs) {
+	RXX_PREFIX
+	if((offs+128) & ~0xFF) {
+		*(int32_t*)(jit->ptr) = 0x808B | (reg <<11) | (mreg << 8);
+		*(int32_t*)(jit->ptr +2) = offs;
+		jit->ptr += 6;
+	} else if(offs) {
+		*(int32_t*)(jit->ptr) = 0x408B | (reg <<11) | (mreg << 8);
+		jit->ptr += 2;
+		*(jit->ptr++) = (uint8_t)offs;
+	} else {
+		*(int32_t*)(jit->ptr) = 0x008B | (reg <<11) | (mreg << 8);
+		jit->ptr += 2;
+	}
+}
+static inline void _jit_mov_store(jit_t* jit, uint8_t mreg, int32_t offs, uint8_t reg) {
+	RXX_PREFIX
+	if((offs+128) & ~0xFF) {
+		*(int32_t*)(jit->ptr) = 0x8089 | (reg <<11) | (mreg << 8);
+		*(int32_t*)(jit->ptr +2) = offs;
+		jit->ptr += 6;
+	} else if(offs) {
+		*(int32_t*)(jit->ptr) = 0x4089 | (reg <<11) | (mreg << 8);
+		jit->ptr += 2;
+		*(jit->ptr++) = (uint8_t)offs;
+	} else {
+		*(int32_t*)(jit->ptr) = 0x0089 | (reg <<11) | (mreg << 8);
+		jit->ptr += 2;
+	}
 }
 static inline void _jit_nop(jit_t* jit) {
 	*(jit->ptr++) = 0x90;
