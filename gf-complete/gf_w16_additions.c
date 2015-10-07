@@ -143,14 +143,14 @@ static void gf_w16_xor_start(void* src, int bytes, void* dest) {
 	
 	lmask = _mm_set1_epi16(0xff);
 	
-	if(((intptr_t)src & 0xF) != ((intptr_t)dest & 0xF)) {
+	if(((uintptr_t)src & 0xF) != ((uintptr_t)dest & 0xF)) {
 		// unaligned version, note that we go by destination alignment
 		gf_set_region_data(&rd, NULL, dest, dest, bytes, 0, 0, 16, 256);
 		
-		memcpy(rd.d_top, (void*)((intptr_t)src + (intptr_t)rd.d_top - (intptr_t)rd.dest), (intptr_t)rd.dest + rd.bytes - (intptr_t)rd.d_top);
-		memcpy(rd.dest, src, (intptr_t)rd.d_start - (intptr_t)rd.dest);
+		memcpy(rd.d_top, (void*)((uintptr_t)src + (uintptr_t)rd.d_top - (uintptr_t)rd.dest), (uintptr_t)rd.dest + rd.bytes - (uintptr_t)rd.d_top);
+		memcpy(rd.dest, src, (uintptr_t)rd.d_start - (uintptr_t)rd.dest);
 		
-		sW = (__m128i*)((intptr_t)src + (intptr_t)rd.d_start - (intptr_t)rd.dest);
+		sW = (__m128i*)((uintptr_t)src + (uintptr_t)rd.d_start - (uintptr_t)rd.dest);
 		d16 = (uint16_t*)rd.d_start;
 		top16 = (uint16_t*)rd.d_top;
 		
@@ -192,8 +192,8 @@ static void gf_w16_xor_start(void* src, int bytes, void* dest) {
 		
 		if(src != dest) {
 			/* copy end and initial parts */
-			memcpy(rd.d_top, rd.s_top, (intptr_t)rd.src + rd.bytes - (intptr_t)rd.s_top);
-			memcpy(rd.dest, rd.src, (intptr_t)rd.s_start - (intptr_t)rd.src);
+			memcpy(rd.d_top, rd.s_top, (uintptr_t)rd.src + rd.bytes - (uintptr_t)rd.s_top);
+			memcpy(rd.dest, rd.src, (uintptr_t)rd.s_start - (uintptr_t)rd.src);
 		}
 		
 		sW = (__m128i*)rd.s_start;
@@ -249,14 +249,14 @@ static void gf_w16_xor_final(void* src, int bytes, void* dest) {
 	th = _mm_setzero_si128();
 	tl = _mm_setzero_si128();
 	
-	if(((intptr_t)src & 0xF) != ((intptr_t)dest & 0xF)) {
+	if(((uintptr_t)src & 0xF) != ((uintptr_t)dest & 0xF)) {
 		// unaligned version, note that we go by src alignment
 		gf_set_region_data(&rd, NULL, src, src, bytes, 0, 0, 16, 256);
 		
-		memcpy((void*)((intptr_t)dest + (intptr_t)rd.s_top - (intptr_t)rd.src), rd.s_top, (intptr_t)rd.src + rd.bytes - (intptr_t)rd.s_top);
-		memcpy(dest, rd.src, (intptr_t)rd.s_start - (intptr_t)rd.src);
+		memcpy((void*)((uintptr_t)dest + (uintptr_t)rd.s_top - (uintptr_t)rd.src), rd.s_top, (uintptr_t)rd.src + rd.bytes - (uintptr_t)rd.s_top);
+		memcpy(dest, rd.src, (uintptr_t)rd.s_start - (uintptr_t)rd.src);
 		
-		d16 = (uint16_t*)((intptr_t)dest + (intptr_t)rd.s_start - (intptr_t)rd.src);
+		d16 = (uint16_t*)((uintptr_t)dest + (uintptr_t)rd.s_start - (uintptr_t)rd.src);
 	} else {
 		// standard, aligned version
 		gf_set_region_data(&rd, NULL, src, dest, bytes, 0, 0, 16, 256);
@@ -264,8 +264,8 @@ static void gf_w16_xor_final(void* src, int bytes, void* dest) {
 		
 		if(src != dest) {
 			/* copy end and initial parts */
-			memcpy(rd.d_top, rd.s_top, (intptr_t)rd.src + rd.bytes - (intptr_t)rd.s_top);
-			memcpy(rd.dest, rd.src, (intptr_t)rd.s_start - (intptr_t)rd.src);
+			memcpy(rd.d_top, rd.s_top, (uintptr_t)rd.src + rd.bytes - (uintptr_t)rd.s_top);
+			memcpy(rd.dest, rd.src, (uintptr_t)rd.s_start - (uintptr_t)rd.src);
 		}
 		
 		d16 = (uint16_t*)rd.d_start;
@@ -355,7 +355,7 @@ static void gf_w16_xor_lazy_sse_altmap_multiply_region(gf_t *gf, void *src, void
   gf_region_data rd;
   gf_internal_t *h;
   __m128 *dW, *topW;
-  intptr_t sP;
+  uintptr_t sP;
 
   if (val == 0) { gf_multby_zero(dest, bytes, xor); return; }
   if (val == 1) { gf_multby_one(src, dest, bytes, xor); return; }
@@ -412,11 +412,11 @@ static void gf_w16_xor_lazy_sse_altmap_multiply_region(gf_t *gf, void *src, void
   }
   
   
-  sP = (intptr_t) rd.s_start;
+  sP = (uintptr_t) rd.s_start;
   dW = (__m128 *) rd.d_start;
   topW = (__m128 *) rd.d_top;
   
-  if ((sP - (intptr_t)dW + 256) < 512) {
+  if ((sP - (uintptr_t)dW + 256) < 512) {
     /* urgh, src and dest are in the same block, so we need to store results to a temp location */
     __m128 dest[16];
     if (xor)
@@ -634,7 +634,7 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
   gf_w16_log_region_alignment(&rd, gf, src, dest, bytes, val, xor, 16, 256);
   
   if(rd.d_start != rd.d_top) {
-    int use_temp = ((intptr_t)rd.s_start - (intptr_t)rd.d_start + 256) < 512;
+    int use_temp = ((uintptr_t)rd.s_start - (uintptr_t)rd.d_start + 256) < 512;
     depmask1 = _mm_setzero_si128();
     depmask2 = _mm_setzero_si128();
     

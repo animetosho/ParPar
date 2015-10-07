@@ -15,14 +15,14 @@ static void _FN(gf_w16_split_start)(void* src, int bytes, void* dest) {
 	
 	lmask = _MM(set1_epi16) (0xff);
 	
-	if((intptr_t)src % sizeof(_mword) != (intptr_t)dest % sizeof(_mword)) {
+	if((uintptr_t)src % sizeof(_mword) != (uintptr_t)dest % sizeof(_mword)) {
 		// unaligned version, note that we go by destination alignment
 		gf_set_region_data(&rd, NULL, dest, dest, bytes, 0, 0, sizeof(_mword), sizeof(_mword)*2);
 		
-		memcpy(rd.d_top, (void*)((intptr_t)src + (intptr_t)rd.d_top - (intptr_t)rd.dest), (intptr_t)rd.dest + rd.bytes - (intptr_t)rd.d_top);
-		memcpy(rd.dest, src, (intptr_t)rd.d_start - (intptr_t)rd.dest);
+		memcpy(rd.d_top, (void*)((uintptr_t)src + (uintptr_t)rd.d_top - (uintptr_t)rd.dest), (uintptr_t)rd.dest + rd.bytes - (uintptr_t)rd.d_top);
+		memcpy(rd.dest, src, (uintptr_t)rd.d_start - (uintptr_t)rd.dest);
 		
-		sW = (_mword*)((intptr_t)src + (intptr_t)rd.d_start - (intptr_t)rd.dest);
+		sW = (_mword*)((uintptr_t)src + (uintptr_t)rd.d_start - (uintptr_t)rd.dest);
 		dW = (_mword*)rd.d_start;
 		topW = (_mword*)rd.d_top;
 		
@@ -53,8 +53,8 @@ static void _FN(gf_w16_split_start)(void* src, int bytes, void* dest) {
 		
 		if(src != dest) {
 			/* copy end and initial parts */
-			memcpy(rd.d_top, rd.s_top, (intptr_t)rd.src + rd.bytes - (intptr_t)rd.s_top);
-			memcpy(rd.dest, rd.src, (intptr_t)rd.s_start - (intptr_t)rd.src);
+			memcpy(rd.d_top, rd.s_top, (uintptr_t)rd.src + rd.bytes - (uintptr_t)rd.s_top);
+			memcpy(rd.dest, rd.src, (uintptr_t)rd.s_start - (uintptr_t)rd.src);
 		}
 		
 		sW = (_mword*)rd.s_start;
@@ -92,15 +92,15 @@ static void _FN(gf_w16_split_final)(void* src, int bytes, void* dest) {
 	_mword *sW, *dW, *topW;
 	_mword tpl, tph;
 	
-	if((intptr_t)src % sizeof(_mword) != (intptr_t)dest % sizeof(_mword)) {
+	if((uintptr_t)src % sizeof(_mword) != (uintptr_t)dest % sizeof(_mword)) {
 		// unaligned version, note that we go by src alignment
 		gf_set_region_data(&rd, NULL, src, src, bytes, 0, 0, sizeof(_mword), sizeof(_mword)*2);
 		
-		memcpy((void*)((intptr_t)dest + (intptr_t)rd.s_top - (intptr_t)rd.src), rd.s_top, (intptr_t)rd.src + rd.bytes - (intptr_t)rd.s_top);
-		memcpy(dest, rd.src, (intptr_t)rd.s_start - (intptr_t)rd.src);
+		memcpy((void*)((uintptr_t)dest + (uintptr_t)rd.s_top - (uintptr_t)rd.src), rd.s_top, (uintptr_t)rd.src + rd.bytes - (uintptr_t)rd.s_top);
+		memcpy(dest, rd.src, (uintptr_t)rd.s_start - (uintptr_t)rd.src);
 		
 		sW = (_mword*)rd.s_start;
-		dW = (_mword*)((intptr_t)dest + (intptr_t)rd.s_start - (intptr_t)rd.src);
+		dW = (_mword*)((uintptr_t)dest + (uintptr_t)rd.s_start - (uintptr_t)rd.src);
 		topW = (_mword*)rd.d_top;
 		
 		while(dW != topW) {
@@ -119,8 +119,8 @@ static void _FN(gf_w16_split_final)(void* src, int bytes, void* dest) {
 		
 		if(src != dest) {
 			/* copy end and initial parts */
-			memcpy(rd.d_top, rd.s_top, (intptr_t)rd.src + rd.bytes - (intptr_t)rd.s_top);
-			memcpy(rd.dest, rd.src, (intptr_t)rd.s_start - (intptr_t)rd.src);
+			memcpy(rd.d_top, rd.s_top, (uintptr_t)rd.src + rd.bytes - (uintptr_t)rd.s_top);
+			memcpy(rd.dest, rd.src, (uintptr_t)rd.s_start - (uintptr_t)rd.src);
 		}
 		
 		sW = (_mword*)rd.s_start;

@@ -271,7 +271,7 @@ FUNC(PrepInput) {
 	char* dest = node::Buffer::Data(args[1]);
 	char* src = node::Buffer::Data(args[0]);
 	
-	if((intptr_t)dest & (MEM_ALIGN-1))
+	if((uintptr_t)dest & (MEM_ALIGN-1))
 		RETURN_ERROR("Destination not aligned");
 	if(inputLen > destLen)
 		RETURN_ERROR("Destination not large enough to hold input");
@@ -420,7 +420,7 @@ FUNC(MultiplyMulti) {
 			RTN_ERROR("All inputs must be Buffers");
 		
 		inputs[i] = (uint16_t*)node::Buffer::Data(input);
-		intptr_t inputAddr = (intptr_t)inputs[i];
+		uintptr_t inputAddr = (uintptr_t)inputs[i];
 		if (inputAddr & (MEM_ALIGN-1))
 			RTN_ERROR("All input buffers must be address aligned");
 		
@@ -448,7 +448,7 @@ FUNC(MultiplyMulti) {
 			RTN_ERROR("All outputs' length must equal or greater than the input's length");
 		// the length of output buffers should all be equal, but I'm too lazy to check for that :P
 		outputs[i] = (uint16_t*)node::Buffer::Data(output);
-		if ((intptr_t)outputs[i] & (MEM_ALIGN-1))
+		if ((uintptr_t)outputs[i] & (MEM_ALIGN-1))
 			RTN_ERROR("All output buffers must be address aligned");
 		int rbNum = oRBNums->Get(i)->ToInt32()->Value();
 		if (rbNum < 0 || rbNum > 32767)

@@ -364,7 +364,7 @@
 +  gf_region_data rd;
 +  gf_internal_t *h;
 +  __m128 *dW, *topW;
-+  intptr_t sP;
++  uintptr_t sP;
 +
 +  if (val == 0) { gf_multby_zero(dest, bytes, xor); return; }
 +  if (val == 1) { gf_multby_one(src, dest, bytes, xor); return; }
@@ -422,11 +422,11 @@
 +  }
 +  
 +  
-+  sP = (intptr_t) rd.s_start;
++  sP = (uintptr_t) rd.s_start;
 +  dW = (__m128 *) rd.d_start;
 +  topW = (__m128 *) rd.d_top;
 +  
-+  if ((sP - (intptr_t)dW + 256) < 512) {
++  if ((sP - (uintptr_t)dW + 256) < 512) {
 +    /* urgh, src and dest are in the same block, so we need to store results to a temp location */
 +    __m128 dest[16];
 +    if (xor)
@@ -646,7 +646,7 @@
 +  gf_do_initial_region_alignment(&rd);
 +  
 +  if(rd.d_start != rd.d_top) {
-+    int use_temp = ((intptr_t)rd.s_start - (intptr_t)rd.d_start + 256) < 512;
++    int use_temp = ((uintptr_t)rd.s_start - (uintptr_t)rd.d_start + 256) < 512;
 +    depmask1 = _mm_setzero_si128();
 +    depmask2 = _mm_setzero_si128();
 +    
@@ -1559,7 +1559,7 @@
 +	*(jit->ptr++) = 0x90;
 +}
 +static inline void _jit_align16(jit_t* jit) {
-+	while((intptr_t)(jit->ptr) & 0xF) {
++	while((uintptr_t)(jit->ptr) & 0xF) {
 +		_jit_nop(jit);
 +	}
 +}
