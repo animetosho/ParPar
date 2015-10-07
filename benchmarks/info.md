@@ -23,6 +23,10 @@ Sample Benchmark Results
 
 ![](<Xeon2650.png>)
 
+![](<A7750.png>)
+
+![](<T2310.png>)
+
  
 
 Benchmark Details
@@ -66,6 +70,9 @@ Applications Tested (and commands given)
         package](<https://sourceforge.net/projects/sabnzbdplus/files/>), and
         source code [can be found
         here](<https://github.com/jcfp/par2tbb-chuchusoft-sources/releases/>)
+
+    -   [TBB won't work on non-x86 CPUs, or older versions of
+        Windows](<https://www.threadingbuildingblocks.org/system-requirements>)
 
 ### Notes
 
