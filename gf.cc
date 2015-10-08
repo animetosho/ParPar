@@ -575,8 +575,13 @@ void init(Handle<Object> target) {
 	NODE_SET_METHOD(target, "generate", MultiplyMulti);
 	// int alignment_offset(Buffer buffer)
 	NODE_SET_METHOD(target, "alignment_offset", AlignmentOffset);
+	
+	// for some reason, creating our own Buffers is unreliable on node >=3, so fall back to emulation
+	// TODO: see reason why
+#if !NODE_VERSION_AT_LEAST(3, 0, 0)
 	// Buffer AlignedBuffer(int size)
 	NODE_SET_METHOD(target, "AlignedBuffer", AlignedBuffer);
+#endif
 	NODE_SET_METHOD(target, "copy", PrepInput);
 	NODE_SET_METHOD(target, "finish", Finish);
 	
