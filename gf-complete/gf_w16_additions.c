@@ -70,7 +70,7 @@ void gf_w16_log_region_alignment(gf_region_data *rd,
   unsigned long uls;
   struct gf_w16_logtable_data *ltd = (struct gf_w16_logtable_data *) ((gf_internal_t *) gf->scratch)->private;
   int log_val = ltd->log_tbl[val];
-  uint16_t *sEnd = (uint16_t*)src + (bytes>>1);
+  uint16_t *sEnd = ((uint16_t*)src) + (bytes>>1);
   
 /* never used, so don't bother setting them
   rd->gf = gf;
@@ -110,7 +110,7 @@ void gf_w16_log_region_alignment(gf_region_data *rd,
     MUL_LOOP(^=, rd->s_top, rd->d_top, sEnd)
   } else {
     MUL_LOOP(=, src, dest, rd->s_start)
-    MUL_LOOP(=,rd->s_top, rd->d_top,  sEnd)
+    MUL_LOOP(=,rd->s_top, rd->d_top, sEnd)
   }
   #undef MUL_LOOP
 }
