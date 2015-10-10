@@ -12,7 +12,8 @@ static void _FN(gf_w16_split_start)(void* src, int bytes, void* dest) {
 	gf_region_data rd;
 	_mword *sW, *dW, *topW;
 	_mword ta, tb, lmask;
-	
+
+	_MM_START
 	lmask = _MM(set1_epi16) (0xff);
 	
 	if((uintptr_t)src % sizeof(_mword) != (uintptr_t)dest % sizeof(_mword)) {
@@ -82,6 +83,7 @@ static void _FN(gf_w16_split_start)(void* src, int bytes, void* dest) {
 			dW += 2;
 		}
 	}
+	_MM_END
 #endif
 }
 
@@ -91,6 +93,8 @@ static void _FN(gf_w16_split_final)(void* src, int bytes, void* dest) {
 	gf_region_data rd;
 	_mword *sW, *dW, *topW;
 	_mword tpl, tph;
+	
+	_MM_START
 	
 	if((uintptr_t)src % sizeof(_mword) != (uintptr_t)dest % sizeof(_mword)) {
 		// unaligned version, note that we go by src alignment
@@ -138,6 +142,7 @@ static void _FN(gf_w16_split_final)(void* src, int bytes, void* dest) {
 			dW += 2;
 		}
 	}
+	_MM_END
 #endif
 }
 
@@ -184,6 +189,7 @@ _FN(gf_w16_split_4_16_lazy_altmap_multiply_region)(gf_t *gf, void *src, void *de
   dW = (_mword *) rd.d_start;
   topW = (_mword *) rd.d_top;
 
+  _MM_START
   mask = _MM(set1_epi8) (0x0f);
 
   if (xor) {
@@ -246,7 +252,7 @@ _FN(gf_w16_split_4_16_lazy_altmap_multiply_region)(gf_t *gf, void *src, void *de
       
     }
   }
-
+  _MM_END
 #endif
 }
 
@@ -295,7 +301,8 @@ _FN(gf_w16_split_4_16_lazy_altmap_multiply_regionX)(gf_t *gf, uint16_t **src, vo
   pos = 0;
   dW = (_mword *) rd.d_start;
   topW = (_mword *) rd.d_top;
-
+  
+  _MM_START
   mask = _MM(set1_epi8) (0x0f);
   if (xor) {
     while (dW != topW) {
@@ -384,6 +391,8 @@ _FN(gf_w16_split_4_16_lazy_altmap_multiply_regionX)(gf_t *gf, uint16_t **src, vo
       pos += 2;
     }
   }
+  
+  _MM_END
 
 #endif
 }

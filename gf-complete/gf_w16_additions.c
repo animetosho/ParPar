@@ -1127,6 +1127,9 @@ If using this, don't forget to save BX,DI,SI registers!
 #define _MM(f) _mm512_ ## f
 #define _MMI(f) _mm512_ ## f ## i512
 #define _FN(f) f ## _avx512
+/* still called "mm256" even in AVX512? */
+#define _MM_START _mm256_zeroupper();
+#define _MM_END _mm256_zeroupper();
 
 #include "gf_w16_split.c"
 
@@ -1135,6 +1138,8 @@ If using this, don't forget to save BX,DI,SI registers!
 #undef _MM
 #undef _MMI
 #undef _FN
+#undef _MM_START
+#undef _MM_END
 
 #define FUNC_ASSIGN(v, f) { \
 	if(has_avx512bw) { \
@@ -1153,6 +1158,8 @@ If using this, don't forget to save BX,DI,SI registers!
 #define _MM(f) _mm256_ ## f
 #define _MMI(f) _mm256_ ## f ## i256
 #define _FN(f) f ## _avx2
+#define _MM_START _mm256_zeroupper();
+#define _MM_END _mm256_zeroupper();
 
 #include "gf_w16_split.c"
 
@@ -1161,6 +1168,8 @@ If using this, don't forget to save BX,DI,SI registers!
 #undef _MM
 #undef _MMI
 #undef _FN
+#undef _MM_START
+#undef _MM_END
 
 #ifndef FUNC_ASSIGN
 #define FUNC_ASSIGN(v, f) { \
@@ -1179,6 +1188,8 @@ If using this, don't forget to save BX,DI,SI registers!
 #define _MM(f) _mm_ ## f
 #define _MMI(f) _mm_ ## f ## i128
 #define _FN(f) f ## _sse
+#define _MM_START
+#define _MM_END
 
 #include "gf_w16_split.c"
 
@@ -1187,6 +1198,8 @@ If using this, don't forget to save BX,DI,SI registers!
 #undef _MM
 #undef _MMI
 #undef _FN
+#undef _MM_START
+#undef _MM_END
 
 #ifndef FUNC_ASSIGN
 #define FUNC_ASSIGN(v, f) { \
