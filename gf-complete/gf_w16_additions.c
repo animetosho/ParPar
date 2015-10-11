@@ -958,12 +958,12 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
       }
     } else {
 #ifdef AMD64
-      /* preload upper 12 inputs into registers */
-      for(i=4; i<16; i++)
+      /* preload upper 13 inputs into registers */
+      for(i=3; i<16; i++)
         _jit_movaps_load(jit, i, AX, i<<4);
 #else
-      /* can only fit 4 in 32-bit mode :( (actually 5, but we'll leave 4 for general processing) */
-      for(i=12; i<16; i++)
+      /* can only fit 5 in 32-bit mode :( */
+      for(i=11; i<16; i++)
         _jit_movaps_load(jit, i-8, AX, i<<4);
 #endif
       if(xor) {
@@ -972,7 +972,7 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
           _jit_movaps_load(jit, 0, DX, bit<<4);
           _jit_movdqa_load(jit, 1, DX, (bit+1)<<4);
           
-          for(i=0; i<(32/FAST_U32_SIZE); i++) { /* (32/FAST_U32_SIZE) is a hack to process 4 iters on 64-bit, 8 on 32-bit */
+          for(i=0; i<(FAST_U32_SIZE==8 ? 3:8); i++) {
             if(common_depmask[bit>>1] & (1<<i)) {
               _MOV_OR_XOR(2, _jit_movaps_load, _XORPS_A, movC)
             } else {
@@ -985,7 +985,7 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
             }
           }
 #ifdef AMD64
-          /* upper 12 XORs can be done from registers */
+          /* upper 13 XORs can be done from registers */
           for(; i<16; i++) {
             if(common_depmask[bit>>1] & (1<<i)) {
               _MOV_OR_XOR_R(2, i, _jit_movaps, _jit_xorps_r, movC)
@@ -999,8 +999,8 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
             }
           }
 #else
-          /* 4 from mem, 4 from regs */
-          for(; i<12; i++) {
+          /* 3 from mem, 5 from regs */
+          for(; i<11; i++) {
             if(common_depmask[bit>>1] & (1<<i)) {
               _MOV_OR_XOR(2, _jit_movaps_load, _XORPS_B, movC)
             } else {
@@ -1035,7 +1035,7 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
       } else {
         for(bit=0; bit<16; bit+=2) {
           FAST_U8 mov = 1, mov2 = 1, movC = 1;
-          for(i=0; i<(32/FAST_U32_SIZE); i++) {
+          for(i=0; i<(FAST_U32_SIZE==8 ? 3:8); i++) {
             if(common_depmask[bit>>1] & (1<<i)) {
               _MOV_OR_XOR(2, _jit_movaps_load, _XORPS_A, movC);
             } else {
@@ -1048,7 +1048,7 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
             }
           }
 #ifdef AMD64
-          /* upper 12 from regs */
+          /* upper 13 from regs */
           for(; i<16; i++) {
             if(common_depmask[bit>>1] & (1<<i)) {
               _MOV_OR_XOR_R(2, i, _jit_movaps, _jit_xorps_r, movC)
@@ -1062,7 +1062,7 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
             }
           }
 #else
-          for(; i<12; i++) {
+          for(; i<11; i++) {
             if(common_depmask[bit>>1] & (1<<i)) {
               _MOV_OR_XOR(2, _jit_movaps_load, _XORPS_B, movC);
             } else {
