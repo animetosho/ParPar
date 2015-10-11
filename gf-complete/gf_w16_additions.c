@@ -725,21 +725,19 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
     
     jit->ptr = jit->code;
     
-    if (use_temp) {
-      _jit_push(jit, BP);
-      _jit_mov_r(jit, BP, SP);
-      /* align pointer (avoid SP because stuff is encoded differently with it) */
-      _jit_mov_r(jit, AX, SP);
-      _jit_and_i(jit, AX, 0xF);
-      _jit_sub_r(jit, BP, AX);
-      
+    _jit_push(jit, BP);
+    _jit_mov_r(jit, BP, SP);
+    /* align pointer (avoid SP because stuff is encoded differently with it) */
+    _jit_mov_r(jit, AX, SP);
+    _jit_and_i(jit, AX, 0xF);
+    _jit_sub_r(jit, BP, AX);
+    
 #ifdef AMD64
-      /* make Windows happy and save XMM6-15 registers */
-      /* ideally should be done by this function, not JIT code, but MSVC has a convenient policy of no inline ASM */
-      for(i=6; i<16; i++)
-        _jit_movaps_store(jit, BP, -((int32_t)i-5)*16, i);
+    /* make Windows happy and save XMM6-15 registers */
+    /* ideally should be done by this function, not JIT code, but MSVC has a convenient policy of no inline ASM */
+    for(i=6; i<16; i++)
+      _jit_movaps_store(jit, BP, -((int32_t)i-5)*16, i);
 #endif
-    }
     
     _jit_mov_i(jit, AX, (intptr_t)rd.s_start);
     _jit_mov_i(jit, DX, (intptr_t)rd.d_start);
@@ -787,6 +785,13 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
           flag = 0; \
         } else { \
           xorop(reg); \
+        }
+    #define _MOV_OR_XOR_R(reg, srcreg, movop, xorop, flag) \
+        if(flag) { \
+          movop(jit, reg, srcreg); \
+          flag = 0; \
+        } else { \
+          xorop(jit, reg, srcreg); \
         }
     
 #ifdef AMD64
@@ -952,13 +957,22 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
 #endif
       }
     } else {
+#ifdef AMD64
+      /* preload upper 12 inputs into registers */
+      for(i=4; i<16; i++)
+        _jit_movaps_load(jit, i, AX, i<<4);
+#else
+      /* can only fit 4 in 32-bit mode :( (actually 5, but we'll leave 4 for general processing) */
+      for(i=12; i<16; i++)
+        _jit_movaps_load(jit, i-8, AX, i<<4);
+#endif
       if(xor) {
         for(bit=0; bit<16; bit+=2) {
           FAST_U8 movC = 1;
           _jit_movaps_load(jit, 0, DX, bit<<4);
           _jit_movdqa_load(jit, 1, DX, (bit+1)<<4);
           
-          for(i=0; i<8; i++) {
+          for(i=0; i<(32/FAST_U32_SIZE); i++) { /* (32/FAST_U32_SIZE) is a hack to process 4 iters on 64-bit, 8 on 32-bit */
             if(common_depmask[bit>>1] & (1<<i)) {
               _MOV_OR_XOR(2, _jit_movaps_load, _XORPS_A, movC)
             } else {
@@ -970,7 +984,23 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
               }
             }
           }
+#ifdef AMD64
+          /* upper 12 XORs can be done from registers */
           for(; i<16; i++) {
+            if(common_depmask[bit>>1] & (1<<i)) {
+              _MOV_OR_XOR_R(2, i, _jit_movaps, _jit_xorps_r, movC)
+            } else {
+              if(tmp_depmask[bit] & (1<<i)) {
+                _jit_xorps_r(jit, 0, i);
+              }
+              if(tmp_depmask[bit+1] & (1<<i)) {
+                _jit_pxor_r(jit, 1, i);
+              }
+            }
+          }
+#else
+          /* 4 from mem, 4 from regs */
+          for(; i<12; i++) {
             if(common_depmask[bit>>1] & (1<<i)) {
               _MOV_OR_XOR(2, _jit_movaps_load, _XORPS_B, movC)
             } else {
@@ -982,6 +1012,19 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
               }
             }
           }
+          for(; i<16; i++) {
+            if(common_depmask[bit>>1] & (1<<i)) {
+              _MOV_OR_XOR_R(2, i-8, _jit_movaps, _jit_xorps_r, movC)
+            } else {
+              if(tmp_depmask[bit] & (1<<i)) {
+                _jit_xorps_r(jit, 0, i-8);
+              }
+              if(tmp_depmask[bit+1] & (1<<i)) {
+                _jit_pxor_r(jit, 1, i-8);
+              }
+            }
+          }
+#endif
           if(common_depmask[bit>>1]) {
             _jit_xorps_r(jit, 0, 2);
             _jit_pxor_r(jit, 1, 2); /*penalty?*/
@@ -992,7 +1035,7 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
       } else {
         for(bit=0; bit<16; bit+=2) {
           FAST_U8 mov = 1, mov2 = 1, movC = 1;
-          for(i=0; i<8; i++) {
+          for(i=0; i<(32/FAST_U32_SIZE); i++) {
             if(common_depmask[bit>>1] & (1<<i)) {
               _MOV_OR_XOR(2, _jit_movaps_load, _XORPS_A, movC);
             } else {
@@ -1004,7 +1047,22 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
               }
             }
           }
+#ifdef AMD64
+          /* upper 12 from regs */
           for(; i<16; i++) {
+            if(common_depmask[bit>>1] & (1<<i)) {
+              _MOV_OR_XOR_R(2, i, _jit_movaps, _jit_xorps_r, movC)
+            } else {
+              if(tmp_depmask[bit] & (1<<i)) {
+                _MOV_OR_XOR_R(0, i, _jit_movaps, _jit_xorps_r, mov)
+              }
+              if(tmp_depmask[bit+1] & (1<<i)) {
+                _MOV_OR_XOR_R(1, i, _jit_movdqa, _jit_pxor_r, mov2)
+              }
+            }
+          }
+#else
+          for(; i<12; i++) {
             if(common_depmask[bit>>1] & (1<<i)) {
               _MOV_OR_XOR(2, _jit_movaps_load, _XORPS_B, movC);
             } else {
@@ -1016,6 +1074,19 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
               }
             }
           }
+          for(; i<16; i++) {
+            if(common_depmask[bit>>1] & (1<<i)) {
+              _MOV_OR_XOR_R(2, i-8, _jit_movaps, _jit_xorps_r, movC)
+            } else {
+              if(tmp_depmask[bit] & (1<<i)) {
+                _MOV_OR_XOR_R(0, i-8, _jit_movaps, _jit_xorps_r, mov)
+              }
+              if(tmp_depmask[bit+1] & (1<<i)) {
+                _MOV_OR_XOR_R(1, i-8, _jit_movdqa, _jit_pxor_r, mov2)
+              }
+            }
+          }
+#endif
           if(common_depmask[bit>>1]) {
             if(mov) /* no additional XORs were made? */
               _jit_movaps_store(jit, DX, bit<<4, 2);
@@ -1099,14 +1170,11 @@ If using this, don't forget to save BX,DI,SI registers!
     _jit_cmp_r(jit, DX, CX);
     _jit_jcc(jit, JL, pos_startloop);
     
-    
-    if (use_temp) {
 #ifdef AMD64
-      for(i=6; i<16; i++)
-        _jit_movaps_load(jit, i, BP, -((int32_t)i-5)*16);
+    for(i=6; i<16; i++)
+      _jit_movaps_load(jit, i, BP, -((int32_t)i-5)*16);
 #endif
-      _jit_pop(jit, BP);
-    }
+    _jit_pop(jit, BP);
     
     _jit_ret(jit);
     
