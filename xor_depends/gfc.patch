@@ -324,7 +324,161 @@
    }
 --- src/gf_w16.c
 +++ src/gf_w16.c
-@@ -2284,6 +2284,777 @@
+@@ -30,6 +30,20 @@
+ #define GF_FIRST_BIT (1 << 15)
+ #define GF_MULTBY_TWO(p) (((p) & GF_FIRST_BIT) ? (((p) << 1) ^ h->prim_poly) : (p) << 1)
+ 
++/* refers to log_val, ltd and xor (i.e. these need to be defined in the function) */
++#define _GF_W16_LOG_MULTIPLY_REGION(op, src, dest, srcto) { \
++  uint16_t *s16 = (uint16_t *)src, *d16 = (uint16_t *)dest; \
++  while (s16 < (uint16_t *)(srcto)) { \
++    *d16 op (*s16 == 0) ? 0 : ltd->antilog_tbl[(int) ltd->log_tbl[*s16] + log_val]; \
++    s16++; \
++    d16++; \
++  } \
++}
++#define GF_W16_LOG_MULTIPLY_REGION(src, dest, srcto) \
++  if(xor) _GF_W16_LOG_MULTIPLY_REGION(^=, src, dest, srcto) \
++  else _GF_W16_LOG_MULTIPLY_REGION(=, src, dest, srcto)
++
++
+ static
+ inline
+ gf_val_32_t gf_w16_inverse_from_divide (gf_t *gf, gf_val_32_t a)
+@@ -820,6 +834,42 @@
+   }
+ }
+ 
++#ifdef TEST_SSE2_SPLIT8
++/* Peter Cordes' amd64 SSE2 implementation of SPLIT(16,8) */
++/* Note that xor=1 is always assumed */
++void SYSV_ABI rs_process_pinsrw128(void* dst, const void* src, size_t size, const uint32_t* LH);
++static
++void
++gf_w16_split_8_16_lazy_multiply_region(gf_t *gf, void *src, void *dest, gf_val_32_t val, int bytes, int xor)
++{
++  uint64_t j, k, v, a, prod, *s64, *d64, *top64;
++  gf_internal_t *h;
++  uint32_t lhtable[512];
++  gf_region_data rd;
++
++  if (val == 0) { gf_multby_zero(dest, bytes, xor); return; }
++  if (val == 1) { gf_multby_one(src, dest, bytes, xor); return; }
++
++  gf_set_region_data(&rd, gf, src, dest, bytes, val, xor, 16);
++  GF_W16_LOG_MULTIPLY_REGION(rd.src, rd.dest, rd.s_start);
++  
++  h = (gf_internal_t *) gf->scratch;
++
++  v = val;
++  lhtable[0] = lhtable[256] = 0;
++  for (j = 1; j < 256; j <<= 1) {
++    for (k = 0; k < j; k++) lhtable[k^j] = (v ^ lhtable[k]);
++    v = GF_MULTBY_TWO(v);
++  }
++  for (j = 1; j < 256; j <<= 1) {
++    for (k = 0; k < j; k++) lhtable[256 + k^j] = (v ^ lhtable[256 + k]);
++    v = GF_MULTBY_TWO(v);
++  }
++
++  rs_process_pinsrw128(rd.d_start, rd.s_start, rd.bytes, lhtable);
++  GF_W16_LOG_MULTIPLY_REGION(rd.s_top, rd.d_top, (uint8_t *)rd.src+rd.bytes);
++}
++#else
+ static
+ void
+ gf_w16_split_8_16_lazy_multiply_region(gf_t *gf, void *src, void *dest, gf_val_32_t val, int bytes, int xor)
+@@ -906,6 +956,7 @@
+   }
+   gf_do_final_region_alignment(&rd);
+ }
++#endif
+ 
+ static void
+ gf_w16_table_lazy_multiply_region(gf_t *gf, void *src, void *dest, gf_val_32_t val, int bytes, int xor)
+@@ -954,9 +1005,11 @@
+ {
+ #ifdef INTEL_SSSE3
+   uint64_t i, j, *s64, *d64, *top64;;
+-  uint64_t c, prod;
++  uint64_t prod;
+   uint8_t low[4][16];
+   uint8_t high[4][16];
++  struct gf_w16_logtable_data *ltd = (struct gf_w16_logtable_data *) ((gf_internal_t *) gf->scratch)->private;
++  int log_val = ltd->log_tbl[val];
+   gf_region_data rd;
+ 
+   __m128i  mask, ta, tb, ti, tpl, tph, tlow[4], thigh[4], tta, ttb, lmask;
+@@ -965,14 +1018,13 @@
+   if (val == 1) { gf_multby_one(src, dest, bytes, xor); return; }
+ 
+   gf_set_region_data(&rd, gf, src, dest, bytes, val, xor, 32);
+-  gf_do_initial_region_alignment(&rd);
++  GF_W16_LOG_MULTIPLY_REGION(rd.src, rd.dest, rd.s_start);
+ 
+   for (j = 0; j < 16; j++) {
+     for (i = 0; i < 4; i++) {
+-      c = (j << (i*4));
+-      prod = gf->multiply.w32(gf, c, val);
+-      low[i][j] = (prod & 0xff);
+-      high[i][j] = (prod >> 8);
++      prod = (j == 0) ? 0 : ltd->antilog_tbl[(int) ltd->log_tbl[(j << (i*4))] + log_val];
++      low[i][j] = (uint8_t)prod;
++      high[i][j] = (uint8_t)(prod >> 8);
+     }
+   }
+ 
+@@ -1077,7 +1129,7 @@
+     }
+   }
+ 
+-  gf_do_final_region_alignment(&rd);
++  GF_W16_LOG_MULTIPLY_REGION(rd.s_top, rd.d_top, (uint8_t *)rd.src+rd.bytes);
+ #endif
+ }
+ 
+@@ -1087,9 +1139,11 @@
+ {
+ #ifdef INTEL_SSSE3
+   uint64_t i, j, *s64, *d64, *top64;;
+-  uint64_t c, prod;
++  uint64_t prod;
+   uint8_t low[4][16];
+   uint8_t high[4][16];
++  struct gf_w16_logtable_data *ltd = (struct gf_w16_logtable_data *) ((gf_internal_t *) gf->scratch)->private;
++  int log_val = ltd->log_tbl[val];
+   gf_region_data rd;
+   __m128i  mask, ta, tb, ti, tpl, tph, tlow[4], thigh[4];
+ 
+@@ -1097,14 +1151,13 @@
+   if (val == 1) { gf_multby_one(src, dest, bytes, xor); return; }
+ 
+   gf_set_region_data(&rd, gf, src, dest, bytes, val, xor, 32);
+-  gf_do_initial_region_alignment(&rd);
++  GF_W16_LOG_MULTIPLY_REGION(rd.src, rd.dest, rd.s_start);
+ 
+   for (j = 0; j < 16; j++) {
+     for (i = 0; i < 4; i++) {
+-      c = (j << (i*4));
+-      prod = gf->multiply.w32(gf, c, val);
+-      low[i][j] = (prod & 0xff);
+-      high[i][j] = (prod >> 8);
++      prod = (j == 0) ? 0 : ltd->antilog_tbl[(int) ltd->log_tbl[(j << (i*4))] + log_val];
++      low[i][j] = (uint8_t)prod;
++      high[i][j] = (uint8_t)(prod >> 8);
+     }
+   }
+ 
+@@ -1185,7 +1238,7 @@
+       
+     }
+   }
+-  gf_do_final_region_alignment(&rd);
++  GF_W16_LOG_MULTIPLY_REGION(rd.s_top, rd.d_top, (uint8_t *)rd.src+rd.bytes);
+ 
+ #endif
+ }
+@@ -2284,6 +2337,851 @@
    return 1;
  }
  
@@ -362,16 +516,17 @@
 +  __m128i depmask1, depmask2, polymask1, polymask2, addvals1, addvals2;
 +  uint16_t tmp_depmask[16];
 +  gf_region_data rd;
-+  gf_internal_t *h;
++  gf_internal_t *h = (gf_internal_t *) gf->scratch;
++  struct gf_w16_logtable_data *ltd = (struct gf_w16_logtable_data *) h->private;
++  int log_val = ltd->log_tbl[val];
 +  __m128 *dW, *topW;
 +  uintptr_t sP;
 +
 +  if (val == 0) { gf_multby_zero(dest, bytes, xor); return; }
 +  if (val == 1) { gf_multby_one(src, dest, bytes, xor); return; }
 +
-+  h = (gf_internal_t *) gf->scratch;
 +  gf_set_region_data(&rd, gf, src, dest, bytes, val, xor, 256);
-+  gf_do_initial_region_alignment(&rd);
++  GF_W16_LOG_MULTIPLY_REGION(rd.src, rd.dest, rd.s_start);
 +  
 +  depmask1 = _mm_setzero_si128();
 +  depmask2 = _mm_setzero_si128();
@@ -616,7 +771,7 @@
 +      }
 +  }
 +  
-+  gf_do_final_region_alignment(&rd);
++  GF_W16_LOG_MULTIPLY_REGION(rd.s_top, rd.d_top, (uint8_t *)rd.src+rd.bytes);
 +#endif
 +}
 +
@@ -633,17 +788,18 @@
 +  __m128i common_mask;
 +  uint16_t tmp_depmask[16], common_depmask[8];
 +  gf_region_data rd;
-+  gf_internal_t *h;
++  gf_internal_t *h = (gf_internal_t *) gf->scratch;
++  struct gf_w16_logtable_data *ltd = (struct gf_w16_logtable_data *) h->private;
++  int log_val = ltd->log_tbl[val];
 +  jit_t* jit;
 +  uint8_t* pos_startloop;
 +  
 +  if (val == 0) { gf_multby_zero(dest, bytes, xor); return; }
 +  if (val == 1) { gf_multby_one(src, dest, bytes, xor); return; }
 +
-+  h = (gf_internal_t *) gf->scratch;
 +  jit = &(h->jit);
 +  gf_set_region_data(&rd, gf, src, dest, bytes, val, xor, 256);
-+  gf_do_initial_region_alignment(&rd);
++  GF_W16_LOG_MULTIPLY_REGION(rd.src, rd.dest, rd.s_start);
 +  
 +  if(rd.d_start != rd.d_top) {
 +    int use_temp = ((uintptr_t)rd.s_start - (uintptr_t)rd.d_start + 256) < 512;
@@ -739,21 +895,19 @@
 +    
 +    jit->ptr = jit->code;
 +    
-+    if (use_temp) {
-+      _jit_push(jit, BP);
-+      _jit_mov_r(jit, BP, SP);
-+      /* align pointer (avoid SP because stuff is encoded differently with it) */
-+      _jit_mov_r(jit, AX, SP);
-+      _jit_and_i(jit, AX, 0xF);
-+      _jit_sub_r(jit, BP, AX);
-+      
++    _jit_push(jit, BP);
++    _jit_mov_r(jit, BP, SP);
++    /* align pointer (avoid SP because stuff is encoded differently with it) */
++    _jit_mov_r(jit, AX, SP);
++    _jit_and_i(jit, AX, 0xF);
++    _jit_sub_r(jit, BP, AX);
++    
 +#ifdef AMD64
-+      /* make Windows happy and save XMM6-15 registers */
-+      /* ideally should be done by this function, not JIT code, but MSVC has a convenient policy of no inline ASM */
-+      for(i=6; i<16; i++)
-+        _jit_movaps_store(jit, BP, -((int32_t)i-5)*16, i);
++    /* make Windows happy and save XMM6-15 registers */
++    /* ideally should be done by this function, not JIT code, but MSVC has a convenient policy of no inline ASM */
++    for(i=6; i<16; i++)
++      _jit_movaps_store(jit, BP, -((int32_t)i-5)*16, i);
 +#endif
-+    }
 +    
 +    _jit_mov_i(jit, AX, (intptr_t)rd.s_start);
 +    _jit_mov_i(jit, DX, (intptr_t)rd.d_start);
@@ -802,6 +956,13 @@
 +        } else { \
 +          xorop(reg); \
 +        }
++    #define _MOV_OR_XOR_R(reg, srcreg, movop, xorop, flag) \
++        if(flag) { \
++          movop(jit, reg, srcreg); \
++          flag = 0; \
++        } else { \
++          xorop(jit, reg, srcreg); \
++        }    
 +    
 +#ifdef AMD64
 +    #define _HIGHOP(op, bit) op ## 64((bit) &7)
@@ -966,15 +1127,26 @@
 +#endif
 +      }
 +    } else {
++#ifdef AMD64
++      /* preload upper 13 inputs into registers */
++      for(i=3; i<16; i++)
++        _jit_movaps_load(jit, i, AX, i<<4);
++      #define MEM_XORS_A 3
++#else
++      /* can only fit 5 in 32-bit mode :( */
++      for(i=11; i<16; i++)
++        _jit_movaps_load(jit, i-8, AX, i<<4);
++      #define MEM_XORS_A 8
++#endif
 +      if(xor) {
 +        for(bit=0; bit<16; bit+=2) {
 +          int movC = 1;
 +          _jit_movaps_load(jit, 0, DX, bit<<4);
 +          _jit_movdqa_load(jit, 1, DX, (bit+1)<<4);
 +          
-+          for(i=0; i<8; i++) {
++          for(i=0; i<MEM_XORS_A; i++) {
 +            if(common_depmask[bit>>1] & (1<<i)) {
-+              _MOV_OR_XOR(2, _jit_movaps_load, _XORPS_A, movC);
++              _MOV_OR_XOR(2, _jit_movaps_load, _XORPS_A, movC)
 +            } else {
 +              if(tmp_depmask[bit] & (1<<i)) {
 +                _XORPS_A(0);
@@ -984,9 +1156,25 @@
 +              }
 +            }
 +          }
++#ifdef AMD64
++          /* upper 13 XORs can be done from registers */
 +          for(; i<16; i++) {
 +            if(common_depmask[bit>>1] & (1<<i)) {
-+              _MOV_OR_XOR(2, _jit_movaps_load, _XORPS_B, movC);
++              _MOV_OR_XOR_R(2, i, _jit_movaps, _jit_xorps_r, movC)
++            } else {
++              if(tmp_depmask[bit] & (1<<i)) {
++                _jit_xorps_r(jit, 0, i);
++              }
++              if(tmp_depmask[bit+1] & (1<<i)) {
++                _jit_pxor_r(jit, 1, i);
++              }
++            }
++          }
++#else
++          /* 3 from mem, 5 from regs */
++          for(; i<11; i++) {
++            if(common_depmask[bit>>1] & (1<<i)) {
++              _MOV_OR_XOR(2, _jit_movaps_load, _XORPS_B, movC)
 +            } else {
 +              if(tmp_depmask[bit] & (1<<i)) {
 +                _XORPS_B(0);
@@ -996,6 +1184,19 @@
 +              }
 +            }
 +          }
++          for(; i<16; i++) {
++            if(common_depmask[bit>>1] & (1<<i)) {
++              _MOV_OR_XOR_R(2, i-8, _jit_movaps, _jit_xorps_r, movC)
++            } else {
++              if(tmp_depmask[bit] & (1<<i)) {
++                _jit_xorps_r(jit, 0, i-8);
++              }
++              if(tmp_depmask[bit+1] & (1<<i)) {
++                _jit_pxor_r(jit, 1, i-8);
++              }
++            }
++          }
++#endif
 +          if(common_depmask[bit>>1]) {
 +            _jit_xorps_r(jit, 0, 2);
 +            _jit_pxor_r(jit, 1, 2); /*penalty?*/
@@ -1006,9 +1207,9 @@
 +      } else {
 +        for(bit=0; bit<16; bit+=2) {
 +          int mov = 1, mov2 = 1, movC = 1;
-+          for(i=0; i<8; i++) {
++          for(i=0; i<MEM_XORS_A; i++) {
 +            if(common_depmask[bit>>1] & (1<<i)) {
-+              _MOV_OR_XOR(2, _jit_movaps_load, _XORPS_A, movC);
++              _MOV_OR_XOR(2, _jit_movaps_load, _XORPS_A, movC)
 +            } else {
 +              if(tmp_depmask[bit] & (1<<i)) {
 +                _MOV_OR_XOR(0, _jit_movaps_load, _XORPS_A, mov)
@@ -1018,9 +1219,24 @@
 +              }
 +            }
 +          }
++#ifdef AMD64
++          /* upper 13 from regs */
 +          for(; i<16; i++) {
 +            if(common_depmask[bit>>1] & (1<<i)) {
-+              _MOV_OR_XOR(2, _jit_movaps_load, _XORPS_B, movC);
++              _MOV_OR_XOR_R(2, i, _jit_movaps, _jit_xorps_r, movC)
++            } else {
++              if(tmp_depmask[bit] & (1<<i)) {
++                _MOV_OR_XOR_R(0, i, _jit_movaps, _jit_xorps_r, mov)
++              }
++              if(tmp_depmask[bit+1] & (1<<i)) {
++                _MOV_OR_XOR_R(1, i, _jit_movdqa, _jit_pxor_r, mov2)
++              }
++            }
++          }
++#else
++          for(; i<11; i++) {
++            if(common_depmask[bit>>1] & (1<<i)) {
++              _MOV_OR_XOR(2, _jit_movaps_load, _XORPS_B, movC)
 +            } else {
 +              if(tmp_depmask[bit] & (1<<i)) {
 +                _MOV_OR_XOR(0, _jit_movaps_load, _XORPS_B, mov)
@@ -1030,6 +1246,19 @@
 +              }
 +            }
 +          }
++          for(; i<16; i++) {
++            if(common_depmask[bit>>1] & (1<<i)) {
++              _MOV_OR_XOR_R(2, i-8, _jit_movaps, _jit_xorps_r, movC)
++            } else {
++              if(tmp_depmask[bit] & (1<<i)) {
++                _MOV_OR_XOR_R(0, i-8, _jit_movaps, _jit_xorps_r, mov)
++              }
++              if(tmp_depmask[bit+1] & (1<<i)) {
++                _MOV_OR_XOR_R(1, i-8, _jit_movdqa, _jit_pxor_r, mov2)
++              }
++            }
++          }
++#endif
 +          if(common_depmask[bit>>1]) {
 +            if(mov) /* no additional XORs were made? */
 +              _jit_movaps_store(jit, DX, bit<<4, 2);
@@ -1046,6 +1275,7 @@
 +            _jit_movdqa_store(jit, DX, (bit+1)<<4, 1);
 +        }
 +      }
++      #undef MEM_XORS_A
 +    }
 +    
 +    _jit_add_i(jit, AX, 256);
@@ -1055,13 +1285,11 @@
 +    _jit_jcc(jit, JL, pos_startloop);
 +    
 +    
-+    if (use_temp) {
 +#ifdef AMD64
-+      for(i=6; i<16; i++)
-+        _jit_movaps_load(jit, i, BP, -((int32_t)i-5)*16);
++    for(i=6; i<16; i++)
++      _jit_movaps_load(jit, i, BP, -((int32_t)i-5)*16);
 +#endif
-+      _jit_pop(jit, BP);
-+    }
++    _jit_pop(jit, BP);
 +    
 +    _jit_ret(jit);
 +    
@@ -1070,7 +1298,7 @@
 +    
 +  }
 +  
-+  gf_do_final_region_alignment(&rd);
++  GF_W16_LOG_MULTIPLY_REGION(rd.s_top, rd.d_top, (uint8_t *)rd.src+rd.bytes);
 +
 +#endif
 +}
@@ -1102,7 +1330,7 @@
  int gf_w16_scratch_size(int mult_type, int region_type, int divide_type, int arg1, int arg2)
  {
    switch(mult_type)
-@@ -2299,6 +3070,7 @@
+@@ -2299,6 +3197,7 @@
        return sizeof(gf_internal_t) + sizeof(struct gf_w16_zero_logtable_data) + 64;
        break;
      case GF_MULT_LOG_TABLE:
@@ -1110,7 +1338,7 @@
        return sizeof(gf_internal_t) + sizeof(struct gf_w16_logtable_data) + 64;
        break;
      case GF_MULT_DEFAULT:
-@@ -2376,6 +3148,7 @@
+@@ -2376,6 +3275,7 @@
      case GF_MULT_BYTWO_p: 
      case GF_MULT_BYTWO_b:     if (gf_w16_bytwo_init(gf) == 0) return 0; break;
      case GF_MULT_GROUP:       if (gf_w16_group_init(gf) == 0) return 0; break;
@@ -1118,7 +1346,7 @@
      default: return 0;
    }
    if (h->divide_type == GF_DIVIDE_EUCLID) {
-@@ -2393,7 +3166,9 @@
+@@ -2393,7 +3293,9 @@
  
    if (gf->inverse.w32 == NULL)  gf->inverse.w32 = gf_w16_inverse_from_divide;
  

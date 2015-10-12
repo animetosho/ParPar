@@ -7,6 +7,13 @@ named “XOR\_DEPENDS”, suitable for CPUs with SSE2 support but not SSSE3, suc
 the AMD K10. The technique is also a viable alternative for SSSE3 CPUs with a
 slow `pshufb` instruction (i.e. Intel Atom).
 
+**Update:** Yutaka Sawada has pointed out that faster implementations of
+SPLIT\_TABLE(16,8)
+[exist](<https://github.com/pcordes/par2-asm-experiments/blob/master/asm-pinsrw.s>)
+(some of which may use some SIMD, though the core lookup operations of the
+algorithm don’t). As these implementations aren’t a part of GF-Complete, I’ll
+pretend they don’t exist on this page.
+
  
 
 Theory
@@ -140,7 +147,7 @@ different routines, assuming we only need to the consider the default
 polynomial, the code size would be rather large, so I have not bothered
 exploring this option.
 
-<a name="avx"></a>AVX
+AVX
 ---
 
 We use 128 bit operations only because it’s the optimal size for SSE
@@ -150,13 +157,16 @@ below 128 bit) and only needs load, store and XOR operations to function.
 
 Using 256 bit AVX operations may improve performance over 128 bit SSE
 operations. Also, the 3 operand XOR operations could be useful for eliminating
-MOV instructions if optimal sequences (above) are to be used (ignoring
-architectures that transparently perform register-register move elimination).
+MOV instructions if optimal sequences (above) are to be used. AVX512’s 32
+registers may also give a very minor boost by allowing all 16 inputs to be
+cached, and provide ample temporary storage to handle the case when the source
+and destination buffers are the same.
 
 The downside is that 256 bit operations would require processing to be performed
-on rather large 512 byte blocks. Also, it’s only really useful for CPUs with AVX
-but no AVX2 support (Intel Sandy/Ivy Bridge; unsure about the benefit for AMD
-Bulldozer based CPUs).
+on rather large 512 byte blocks. Various parts of the current implementation
+would need to be rewritten for AVX to implement 3 operand support (including the
+JIT routines). I’m also unsure about the benefit for AMD Bulldozer based CPUs,
+especially when using multiple threads.
 
 I haven’t yet explored using an AVX implementation.
 
@@ -208,6 +218,15 @@ Drawbacks
     time), so an implementation which doesn't require alternative mappings (i.e.
     does the re-arrange automatically per block) is unlikely to be practical.
 
+-   Some of the speed is reliant on availability of XMM registers. Basically
+    this means that performance on 32-bit won’t be good as 64-bit due to less
+    registers being available.
+
+-   The general algorithm is just very complicated. I really like the
+    SPLIT(16,4) algorithm for its aesthetic simplicity and efficiency.
+
+ 
+
 Usage in ParPar
 ===============
 
@@ -222,6 +241,10 @@ back to XOR\_DEPENDS with alternative mapping, if SSE2 is available (or CPU is
 Intel Atom). If a memory region with read, write and execute permissions can be
 mapped, the JIT version is used, otherwise the static code version is used,
 which is faster than or as fast as SPLIT\_TABLE(16,8).
+
+As the current implementation of XOR\_DEPENDS seems to be faster than
+SPLIT\_TABLE(16,4) in a number of cases, I may decide to favour it in ParPar
+more.
 
  
 
@@ -239,17 +262,23 @@ penalised](<http://jerasure.org/jerasure/gf-complete/issues/7>) as GF-Complete
 appears to be designed for amd64 platforms (and it [doesn’t build without
 changes](<http://lab.jerasure.org/jerasure/gf-complete/issues/6>)).
 
-Note that ALTMAP is implied for XOR\_DEPENDS since the data is arranged
-differently. ALTMAP implementations require conversion to/from the normal
-layout, the overhead of which is not shown in these benchmarks (for PAR2
-purposes, the overhead is likely negligible if large number of recovery slices
-are being generated).
+Notes:
 
-Note that the benchmark uses different memory locations for source and
-destination, and hence, does not incur the XOR\_DEPENDS speed penalty where
-source == destination.
+-   ALTMAP is implied for XOR\_DEPENDS since the data is arranged differently.
+    ALTMAP implementations require conversion to/from the normal layout, the
+    overhead of which is not shown in these benchmarks (for PAR2 purposes, the
+    overhead is likely negligible if large number of recovery slices are being
+    generated).
 
- 
+-   the benchmark uses different memory locations for source and destination,
+    and hence, does not incur the XOR\_DEPENDS speed penalty where source ==
+    destination.
+
+-   XOR\_DEPENDS (JIT) does not perform as well on 32 bit builds as it does
+    here, due to fewer XMM registers being available for caching
+
+-   the LUT generation speed of SPLIT\_TABLE(16,4) implementations have been
+    slightly improved by removing some duplicate log table lookups
 
 Intel Core 2 (65nm)
 -------------------
@@ -266,7 +295,7 @@ Intel Core 2 (65nm)
 
 **Comment**: The Conroe CPU has a [relatively
 slow](<http://forum.doom9.org/showthread.php?p=1668136#post1668136>) `pshufb`
-instruction, hence XOR\_DEPENDS is actually comparable to SPLIT\_TABLE(16,4)  
+instruction, hence XOR\_DEPENDS usually comes out on top  
 
  
 
@@ -275,7 +304,7 @@ Intel Silvermont
 
 -   CPU: Intel Atom C2750 @2.4GHz
 
-    -   24KB L1 cache, 4MB shared L2 cache, SSE2, SSSE3 and CLMUL supported
+    -   24KB L1 cache, 4MB shared L2 cache, SSE2 and SSSE3 supported
 
 -   RAM: 8GB DDR3 1600MHz dual channel
 
@@ -309,18 +338,23 @@ although the non-JIT version is about the same.
 
  
 
-AMD Bulldozer
--------------
+Intel Sandy Bridge
+------------------
 
-I wanted to test this on a CPU with a fast shuffle unit, but don't have one
-properly set up. The following test was done on a virtual server, so results may
-be less accurate, but should at least provide some idea of performance. Compiler
-is GCC 4.9.2
+-   CPU: Intel Core i5 2400 @3.1GHz
 
-![](<Opteron4280.png>)
+    -   32KB L1 cache, 256KB L2 cache, 6MB shared L3 cache, SSE2, SSSE3 and AVX
+        supported
 
-**Comment**: As expected, SPLIT\_TABLE(16,4) easily beats everything else
-although XOR\_DEPENDS performs surprisingly well.
+-   RAM: 4GB DDR3 1333MHz dual channel
+
+-   Compiler: GCC 4.8.2
+
+![](<CoreI2400.png>)
+
+**Comment**: XOR\_DEPENDS can actually beat SPLIT\_TABLE(16,4) here, despite
+Sandy Bridge having a fast shuffle unit. At smaller buffer sizes, the high
+overhead of JIT rears its head though.
 
  
 
@@ -348,3 +382,7 @@ Other things I included because I found useful, but you mightn’t:
 -   intentionally breaking code for w=32,64,128 to enable compilation on i386
     platforms (basically instances of `_mm_insert_epi64` and `_mm_extract_epi64`
     have been deleted with no appropriate replacement)
+
+-   slightly improved speed of LUT generation for SPLIT\_TABLE(16,4) SSSE3
+    versions by removing duplicate log table lookups
+
