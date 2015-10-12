@@ -55,7 +55,7 @@ void detect_cpu(void) {
 }
 
 
-static inline
+static
 void gf_w16_log_region_alignment(gf_region_data *rd,
   gf_t *gf,
   void *src,
