@@ -974,7 +974,11 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
           
           for(i=0; i<(FAST_U32_SIZE==8 ? 3:8); i++) {
             if(common_depmask[bit>>1] & (1<<i)) {
-              _MOV_OR_XOR(2, _jit_movaps_load, _XORPS_A, movC)
+              if((bit>>1) & 1) {
+                _MOV_OR_XOR(2, _jit_movaps_load, _XORPS_A, movC)
+              } else {
+                _MOV_OR_XOR(2, _jit_movdqa_load, _PXOR_A, movC)
+              }
             } else {
               if(tmp_depmask[bit] & (1<<i)) {
                 _XORPS_A(0);
@@ -988,7 +992,11 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
           /* upper 13 XORs can be done from registers */
           for(; i<16; i++) {
             if(common_depmask[bit>>1] & (1<<i)) {
-              _MOV_OR_XOR_R(2, i, _jit_movaps, _jit_xorps_r, movC)
+              if((bit>>1) & 1) {
+                _MOV_OR_XOR_R(2, i, _jit_movaps, _jit_xorps_r, movC)
+              } else {
+                _MOV_OR_XOR_R(2, i, _jit_movdqa, _jit_pxor_r, movC)
+              }
             } else {
               if(tmp_depmask[bit] & (1<<i)) {
                 _jit_xorps_r(jit, 0, i);
@@ -1002,7 +1010,11 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
           /* 3 from mem, 5 from regs */
           for(; i<11; i++) {
             if(common_depmask[bit>>1] & (1<<i)) {
-              _MOV_OR_XOR(2, _jit_movaps_load, _XORPS_B, movC)
+              if((bit>>1) & 1) {
+                _MOV_OR_XOR(2, _jit_movaps_load, _XORPS_B, movC)
+              } else {
+                _MOV_OR_XOR(2, _jit_movdqa_load, _PXOR_B, movC)
+              }
             } else {
               if(tmp_depmask[bit] & (1<<i)) {
                 _XORPS_B(0);
@@ -1014,7 +1026,11 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
           }
           for(; i<16; i++) {
             if(common_depmask[bit>>1] & (1<<i)) {
-              _MOV_OR_XOR_R(2, i-8, _jit_movaps, _jit_xorps_r, movC)
+              if((bit>>1) & 1) {
+                _MOV_OR_XOR_R(2, i-8, _jit_movaps, _jit_xorps_r, movC)
+              } else {
+                _MOV_OR_XOR_R(2, i-8, _jit_movdqa, _jit_pxor_r, movC)
+              }
             } else {
               if(tmp_depmask[bit] & (1<<i)) {
                 _jit_xorps_r(jit, 0, i-8);
@@ -1037,7 +1053,11 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
           FAST_U8 mov = 1, mov2 = 1, movC = 1;
           for(i=0; i<(FAST_U32_SIZE==8 ? 3:8); i++) {
             if(common_depmask[bit>>1] & (1<<i)) {
-              _MOV_OR_XOR(2, _jit_movaps_load, _XORPS_A, movC);
+              if((bit>>1) & 1) {
+                _MOV_OR_XOR(2, _jit_movaps_load, _XORPS_A, movC)
+              } else {
+                _MOV_OR_XOR(2, _jit_movdqa_load, _PXOR_A, movC)
+              }
             } else {
               if(tmp_depmask[bit] & (1<<i)) {
                 _MOV_OR_XOR(0, _jit_movaps_load, _XORPS_A, mov)
@@ -1051,7 +1071,11 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
           /* upper 13 from regs */
           for(; i<16; i++) {
             if(common_depmask[bit>>1] & (1<<i)) {
-              _MOV_OR_XOR_R(2, i, _jit_movaps, _jit_xorps_r, movC)
+              if((bit>>1) & 1) {
+                _MOV_OR_XOR_R(2, i, _jit_movaps, _jit_xorps_r, movC)
+              } else {
+                _MOV_OR_XOR_R(2, i, _jit_movdqa, _jit_pxor_r, movC)
+              }
             } else {
               if(tmp_depmask[bit] & (1<<i)) {
                 _MOV_OR_XOR_R(0, i, _jit_movaps, _jit_xorps_r, mov)
@@ -1064,7 +1088,11 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
 #else
           for(; i<11; i++) {
             if(common_depmask[bit>>1] & (1<<i)) {
-              _MOV_OR_XOR(2, _jit_movaps_load, _XORPS_B, movC);
+              if((bit>>1) & 1) {
+                _MOV_OR_XOR(2, _jit_movaps_load, _XORPS_B, movC)
+              } else {
+                _MOV_OR_XOR(2, _jit_movdqa_load, _PXOR_B, movC)
+              }
             } else {
               if(tmp_depmask[bit] & (1<<i)) {
                 _MOV_OR_XOR(0, _jit_movaps_load, _XORPS_B, mov)
@@ -1076,7 +1104,11 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
           }
           for(; i<16; i++) {
             if(common_depmask[bit>>1] & (1<<i)) {
-              _MOV_OR_XOR_R(2, i-8, _jit_movaps, _jit_xorps_r, movC)
+              if((bit>>1) & 1) {
+                _MOV_OR_XOR_R(2, i-8, _jit_movaps, _jit_xorps_r, movC)
+              } else {
+                _MOV_OR_XOR_R(2, i-8, _jit_movdqa, _jit_pxor_r, movC)
+              }
             } else {
               if(tmp_depmask[bit] & (1<<i)) {
                 _MOV_OR_XOR_R(0, i-8, _jit_movaps, _jit_xorps_r, mov)
