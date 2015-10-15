@@ -348,7 +348,7 @@ static gf_val_32_t gf_w16_xor_extract_word(gf_t *gf, void *start, int bytes, int
 static void gf_w16_xor_lazy_sse_altmap_multiply_region(gf_t *gf, void *src, void *dest, gf_val_32_t val, int bytes, int xor)
 {
 #ifdef INTEL_SSE2
-  FAST_U32 i, bit, poly;
+  FAST_U32 i, bit;
   FAST_U32 counts[16], deptable[16][16];
   __m128i depmask1, depmask2, polymask1, polymask2, addvals1, addvals2;
   uint16_t tmp_depmask[16];
@@ -367,34 +367,45 @@ static void gf_w16_xor_lazy_sse_altmap_multiply_region(gf_t *gf, void *src, void
   depmask2 = _mm_setzero_si128();
   
   /* calculate dependent bits */
-  poly = h->prim_poly & 0xFFFF; /* chop off top bit, although not really necessary */
-  #define POLYSET(bit) ((poly & (1<<(15-bit))) ? 0xFFFF : 0)
-  polymask1 = _mm_set_epi16(POLYSET( 7), POLYSET( 6), POLYSET( 5), POLYSET( 4), POLYSET( 3), POLYSET( 2), POLYSET(1), POLYSET(0));
-  polymask2 = _mm_set_epi16(POLYSET(15), POLYSET(14), POLYSET(13), POLYSET(12), POLYSET(11), POLYSET(10), POLYSET(9), POLYSET(8));
-  #undef POLYSET
-  
   addvals1 = _mm_set_epi16(1<< 7, 1<< 6, 1<< 5, 1<< 4, 1<< 3, 1<< 2, 1<<1, 1<<0);
   addvals2 = _mm_set_epi16(1<<15, 1<<14, 1<<13, 1<<12, 1<<11, 1<<10, 1<<9, 1<<8);
   
-  for(bit=0; bit<16; bit++) {
-    if(val & (1<<(15-bit))) {
+  /* duplicate each bit in the polynomial 16 times */
+  polymask2 = _mm_set1_epi16(h->prim_poly & 0xFFFF); /* chop off top bit, although not really necessary */
+  polymask1 = _mm_and_si128(polymask2, _mm_set_epi16(1<< 8, 1<< 9, 1<<10, 1<<11, 1<<12, 1<<13, 1<<14, 1<<15));
+  polymask2 = _mm_and_si128(polymask2, _mm_set_epi16(1<< 0, 1<< 1, 1<< 2, 1<< 3, 1<< 4, 1<< 5, 1<< 6, 1<< 7));
+  polymask1 = _mm_xor_si128(
+    _mm_cmpeq_epi16(_mm_setzero_si128(), polymask1),
+    _mm_set1_epi8(0xFF)
+  );
+  polymask2 = _mm_xor_si128(
+    _mm_cmpeq_epi16(_mm_setzero_si128(), polymask2),
+    _mm_set1_epi8(0xFF)
+  );
+  
+  if(val & (1<<15)) {
+    /* XOR */
+    depmask1 = _mm_xor_si128(depmask1, addvals1);
+    depmask2 = _mm_xor_si128(depmask2, addvals2);
+  }
+  for(i=(1<<14); i; i>>=1) {
+    /* rotate */
+    __m128i last = _mm_set1_epi16(_mm_extract_epi16(depmask1, 0));
+    depmask1 = _mm_insert_epi16(
+      _mm_srli_si128(depmask1, 2),
+      _mm_extract_epi16(depmask2, 0),
+      7
+    );
+    depmask2 = _mm_srli_si128(depmask2, 2);
+    
+    /* XOR poly */
+    depmask1 = _mm_xor_si128(depmask1, _mm_and_si128(last, polymask1));
+    depmask2 = _mm_xor_si128(depmask2, _mm_and_si128(last, polymask2));
+    
+    if(val & i) {
       /* XOR */
       depmask1 = _mm_xor_si128(depmask1, addvals1);
       depmask2 = _mm_xor_si128(depmask2, addvals2);
-    }
-    if(bit != 15) {
-      /* rotate */
-      __m128i last = _mm_set1_epi16(_mm_extract_epi16(depmask1, 0));
-      depmask1 = _mm_insert_epi16(
-        _mm_srli_si128(depmask1, 2),
-        _mm_extract_epi16(depmask2, 0),
-        7
-      );
-      depmask2 = _mm_srli_si128(depmask2, 2);
-      
-      /* XOR poly */
-      depmask1 = _mm_xor_si128(depmask1, _mm_and_si128(last, polymask1));
-      depmask2 = _mm_xor_si128(depmask2, _mm_and_si128(last, polymask2));
     }
   }
   
@@ -617,7 +628,7 @@ static void gf_w16_xor_lazy_sse_altmap_multiply_region(gf_t *gf, void *src, void
 static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, void *dest, gf_val_32_t val, int bytes, int xor)
 {
 #ifdef INTEL_SSE2
-  FAST_U32 i, bit, poly;
+  FAST_U32 i, bit;
   __m128i depmask1, depmask2, polymask1, polymask2, addvals1, addvals2;
   __m128i common_mask;
   uint16_t tmp_depmask[16], common_depmask[8];
@@ -639,34 +650,45 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
     depmask2 = _mm_setzero_si128();
     
     /* calculate dependent bits */
-    poly = h->prim_poly & 0xFFFF; /* chop off top bit, although not really necessary */
-    #define POLYSET(bit) ((poly & (1<<(15-bit))) ? 0xFFFF : 0)
-    polymask1 = _mm_set_epi16(POLYSET( 7), POLYSET( 6), POLYSET( 5), POLYSET( 4), POLYSET( 3), POLYSET( 2), POLYSET(1), POLYSET(0));
-    polymask2 = _mm_set_epi16(POLYSET(15), POLYSET(14), POLYSET(13), POLYSET(12), POLYSET(11), POLYSET(10), POLYSET(9), POLYSET(8));
-    #undef POLYSET
-  
     addvals1 = _mm_set_epi16(1<< 7, 1<< 6, 1<< 5, 1<< 4, 1<< 3, 1<< 2, 1<<1, 1<<0);
     addvals2 = _mm_set_epi16(1<<15, 1<<14, 1<<13, 1<<12, 1<<11, 1<<10, 1<<9, 1<<8);
-  
-    for(bit=0; bit<16; bit++) {
-      if(val & (1<<(15-bit))) {
+    
+    /* duplicate each bit in the polynomial 16 times */
+    polymask2 = _mm_set1_epi16(h->prim_poly & 0xFFFF); /* chop off top bit, although not really necessary */
+    polymask1 = _mm_and_si128(polymask2, _mm_set_epi16(1<< 8, 1<< 9, 1<<10, 1<<11, 1<<12, 1<<13, 1<<14, 1<<15));
+    polymask2 = _mm_and_si128(polymask2, _mm_set_epi16(1<< 0, 1<< 1, 1<< 2, 1<< 3, 1<< 4, 1<< 5, 1<< 6, 1<< 7));
+    polymask1 = _mm_xor_si128(
+      _mm_cmpeq_epi16(_mm_setzero_si128(), polymask1),
+      _mm_set1_epi8(0xFF)
+    );
+    polymask2 = _mm_xor_si128(
+      _mm_cmpeq_epi16(_mm_setzero_si128(), polymask2),
+      _mm_set1_epi8(0xFF)
+    );
+    
+    if(val & (1<<15)) {
+      /* XOR */
+      depmask1 = _mm_xor_si128(depmask1, addvals1);
+      depmask2 = _mm_xor_si128(depmask2, addvals2);
+    }
+    for(i=(1<<14); i; i>>=1) {
+      /* rotate */
+      __m128i last = _mm_set1_epi16(_mm_extract_epi16(depmask1, 0));
+      depmask1 = _mm_insert_epi16(
+        _mm_srli_si128(depmask1, 2),
+        _mm_extract_epi16(depmask2, 0),
+        7
+      );
+      depmask2 = _mm_srli_si128(depmask2, 2);
+      
+      /* XOR poly */
+      depmask1 = _mm_xor_si128(depmask1, _mm_and_si128(last, polymask1));
+      depmask2 = _mm_xor_si128(depmask2, _mm_and_si128(last, polymask2));
+      
+      if(val & i) {
         /* XOR */
         depmask1 = _mm_xor_si128(depmask1, addvals1);
         depmask2 = _mm_xor_si128(depmask2, addvals2);
-      }
-      if(bit != 15) {
-        /* rotate */
-        __m128i last = _mm_set1_epi16(_mm_extract_epi16(depmask1, 0));
-        depmask1 = _mm_insert_epi16(
-          _mm_srli_si128(depmask1, 2),
-          _mm_extract_epi16(depmask2, 0),
-          7
-        );
-        depmask2 = _mm_srli_si128(depmask2, 2);
-        
-        /* XOR poly */
-        depmask1 = _mm_xor_si128(depmask1, _mm_and_si128(last, polymask1));
-        depmask2 = _mm_xor_si128(depmask2, _mm_and_si128(last, polymask2));
       }
     }
     
