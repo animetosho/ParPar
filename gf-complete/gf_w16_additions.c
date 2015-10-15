@@ -354,7 +354,7 @@ static void gf_w16_xor_lazy_sse_altmap_multiply_region(gf_t *gf, void *src, void
   uint16_t tmp_depmask[16];
   gf_region_data rd;
   gf_internal_t *h;
-  __m128 *dW, *topW;
+  __m128i *dW, *topW;
   uintptr_t sP;
 
   if (val == 0) { gf_multby_zero(dest, bytes, xor); return; }
@@ -424,12 +424,12 @@ static void gf_w16_xor_lazy_sse_altmap_multiply_region(gf_t *gf, void *src, void
   
   
   sP = (uintptr_t) rd.s_start;
-  dW = (__m128 *) rd.d_start;
-  topW = (__m128 *) rd.d_top;
+  dW = (__m128i *) rd.d_start;
+  topW = (__m128i *) rd.d_top;
   
   if ((sP - (uintptr_t)dW + 256) < 512) {
     /* urgh, src and dest are in the same block, so we need to store results to a temp location */
-    __m128 dest[16];
+    __m128i dest[16];
     if (xor)
       while (dW != topW) {
         #define STEP(bit, type, typev, typed) { \
@@ -454,26 +454,26 @@ static void gf_w16_xor_lazy_sse_altmap_multiply_region(gf_t *gf, void *src, void
             case  1: dest[bit] = _mm_xor_ ## type(dest[bit], *(typev*)(sP + deps[ 0])); \
           } \
         }
-        STEP( 0, ps, __m128, float)
-        STEP( 1, ps, __m128, float)
-        STEP( 2, ps, __m128, float)
-        STEP( 3, ps, __m128, float)
-        STEP( 4, ps, __m128, float)
-        STEP( 5, ps, __m128, float)
-        STEP( 6, ps, __m128, float)
-        STEP( 7, ps, __m128, float)
-        STEP( 8, ps, __m128, float)
-        STEP( 9, ps, __m128, float)
-        STEP(10, ps, __m128, float)
-        STEP(11, ps, __m128, float)
-        STEP(12, ps, __m128, float)
-        STEP(13, ps, __m128, float)
-        STEP(14, ps, __m128, float)
-        STEP(15, ps, __m128, float)
+        STEP( 0, si128, __m128i, __m128i)
+        STEP( 1, si128, __m128i, __m128i)
+        STEP( 2, si128, __m128i, __m128i)
+        STEP( 3, si128, __m128i, __m128i)
+        STEP( 4, si128, __m128i, __m128i)
+        STEP( 5, si128, __m128i, __m128i)
+        STEP( 6, si128, __m128i, __m128i)
+        STEP( 7, si128, __m128i, __m128i)
+        STEP( 8, si128, __m128i, __m128i)
+        STEP( 9, si128, __m128i, __m128i)
+        STEP(10, si128, __m128i, __m128i)
+        STEP(11, si128, __m128i, __m128i)
+        STEP(12, si128, __m128i, __m128i)
+        STEP(13, si128, __m128i, __m128i)
+        STEP(14, si128, __m128i, __m128i)
+        STEP(15, si128, __m128i, __m128i)
         #undef STEP
         /* copy to dest */
         for(i=0; i<16; i++)
-          _mm_store_ps((float*)(dW+i), dest[i]);
+          _mm_store_si128(dW+i, dest[i]);
         dW += 16;
         sP += 256;
       }
@@ -501,26 +501,26 @@ static void gf_w16_xor_lazy_sse_altmap_multiply_region(gf_t *gf, void *src, void
             case  2: dest[bit] = _mm_xor_ ## type(dest[bit], *(typev*)(sP + deps[ 1])); \
           } \
         }
-        STEP( 0, ps, __m128, float)
-        STEP( 1, ps, __m128, float)
-        STEP( 2, ps, __m128, float)
-        STEP( 3, ps, __m128, float)
-        STEP( 4, ps, __m128, float)
-        STEP( 5, ps, __m128, float)
-        STEP( 6, ps, __m128, float)
-        STEP( 7, ps, __m128, float)
-        STEP( 8, ps, __m128, float)
-        STEP( 9, ps, __m128, float)
-        STEP(10, ps, __m128, float)
-        STEP(11, ps, __m128, float)
-        STEP(12, ps, __m128, float)
-        STEP(13, ps, __m128, float)
-        STEP(14, ps, __m128, float)
-        STEP(15, ps, __m128, float)
+        STEP( 0, si128, __m128i, __m128i)
+        STEP( 1, si128, __m128i, __m128i)
+        STEP( 2, si128, __m128i, __m128i)
+        STEP( 3, si128, __m128i, __m128i)
+        STEP( 4, si128, __m128i, __m128i)
+        STEP( 5, si128, __m128i, __m128i)
+        STEP( 6, si128, __m128i, __m128i)
+        STEP( 7, si128, __m128i, __m128i)
+        STEP( 8, si128, __m128i, __m128i)
+        STEP( 9, si128, __m128i, __m128i)
+        STEP(10, si128, __m128i, __m128i)
+        STEP(11, si128, __m128i, __m128i)
+        STEP(12, si128, __m128i, __m128i)
+        STEP(13, si128, __m128i, __m128i)
+        STEP(14, si128, __m128i, __m128i)
+        STEP(15, si128, __m128i, __m128i)
         #undef STEP
         /* copy to dest */
         for(i=0; i<16; i++)
-          _mm_store_ps((float*)(dW+i), dest[i]);
+          _mm_store_si128(dW+i, dest[i]);
         dW += 16;
         sP += 256;
       }
@@ -550,22 +550,22 @@ static void gf_w16_xor_lazy_sse_altmap_multiply_region(gf_t *gf, void *src, void
           } \
           _mm_store_ ## type((typed*)(dW + bit), tmp); \
         }
-        STEP( 0, ps, __m128, float)
-        STEP( 1, ps, __m128, float)
-        STEP( 2, ps, __m128, float)
-        STEP( 3, ps, __m128, float)
-        STEP( 4, ps, __m128, float)
-        STEP( 5, ps, __m128, float)
-        STEP( 6, ps, __m128, float)
-        STEP( 7, ps, __m128, float)
-        STEP( 8, ps, __m128, float)
-        STEP( 9, ps, __m128, float)
-        STEP(10, ps, __m128, float)
-        STEP(11, ps, __m128, float)
-        STEP(12, ps, __m128, float)
-        STEP(13, ps, __m128, float)
-        STEP(14, ps, __m128, float)
-        STEP(15, ps, __m128, float)
+        STEP( 0, si128, __m128i, __m128i)
+        STEP( 1, si128, __m128i, __m128i)
+        STEP( 2, si128, __m128i, __m128i)
+        STEP( 3, si128, __m128i, __m128i)
+        STEP( 4, si128, __m128i, __m128i)
+        STEP( 5, si128, __m128i, __m128i)
+        STEP( 6, si128, __m128i, __m128i)
+        STEP( 7, si128, __m128i, __m128i)
+        STEP( 8, si128, __m128i, __m128i)
+        STEP( 9, si128, __m128i, __m128i)
+        STEP(10, si128, __m128i, __m128i)
+        STEP(11, si128, __m128i, __m128i)
+        STEP(12, si128, __m128i, __m128i)
+        STEP(13, si128, __m128i, __m128i)
+        STEP(14, si128, __m128i, __m128i)
+        STEP(15, si128, __m128i, __m128i)
         #undef STEP
         dW += 16;
         sP += 256;
@@ -595,22 +595,22 @@ static void gf_w16_xor_lazy_sse_altmap_multiply_region(gf_t *gf, void *src, void
           } \
           _mm_store_ ## type((typed*)(dW + bit), tmp); \
         }
-        STEP( 0, ps, __m128, float)
-        STEP( 1, ps, __m128, float)
-        STEP( 2, ps, __m128, float)
-        STEP( 3, ps, __m128, float)
-        STEP( 4, ps, __m128, float)
-        STEP( 5, ps, __m128, float)
-        STEP( 6, ps, __m128, float)
-        STEP( 7, ps, __m128, float)
-        STEP( 8, ps, __m128, float)
-        STEP( 9, ps, __m128, float)
-        STEP(10, ps, __m128, float)
-        STEP(11, ps, __m128, float)
-        STEP(12, ps, __m128, float)
-        STEP(13, ps, __m128, float)
-        STEP(14, ps, __m128, float)
-        STEP(15, ps, __m128, float)
+        STEP( 0, si128, __m128i, __m128i)
+        STEP( 1, si128, __m128i, __m128i)
+        STEP( 2, si128, __m128i, __m128i)
+        STEP( 3, si128, __m128i, __m128i)
+        STEP( 4, si128, __m128i, __m128i)
+        STEP( 5, si128, __m128i, __m128i)
+        STEP( 6, si128, __m128i, __m128i)
+        STEP( 7, si128, __m128i, __m128i)
+        STEP( 8, si128, __m128i, __m128i)
+        STEP( 9, si128, __m128i, __m128i)
+        STEP(10, si128, __m128i, __m128i)
+        STEP(11, si128, __m128i, __m128i)
+        STEP(12, si128, __m128i, __m128i)
+        STEP(13, si128, __m128i, __m128i)
+        STEP(14, si128, __m128i, __m128i)
+        STEP(15, si128, __m128i, __m128i)
         #undef STEP
         dW += 16;
         sP += 256;
