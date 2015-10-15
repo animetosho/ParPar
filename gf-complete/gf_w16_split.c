@@ -149,12 +149,6 @@ static void _FN(gf_w16_split_final)(void* src, int bytes, void* dest) {
 
 
 
-typedef union {
-	uint8_t u8[MWORD_SIZE];
-	uint16_t u16[MWORD_SIZE/2];
-	_mword uW;
-} _FN(gf_mm);
-
 static
 void
 _FN(gf_w16_split_4_16_lazy_altmap_multiply_region)(gf_t *gf, void *src, void *dest, gf_val_32_t val, int bytes, int xor)
@@ -163,8 +157,7 @@ _FN(gf_w16_split_4_16_lazy_altmap_multiply_region)(gf_t *gf, void *src, void *de
   FAST_U32 i, j, k;
   FAST_U32 prod;
   _mword *sW, *dW, *topW;
-  ALIGN(MWORD_SIZE, _FN(gf_mm) low[4]);
-  ALIGN(MWORD_SIZE, _FN(gf_mm) high[4]);
+  _mword low0, low1, low2, low3, high0, high1, high2, high3;
   gf_region_data rd;
   _mword  mask, ta, tb, ti, tpl, tph;
   struct gf_w16_logtable_data *ltd = (struct gf_w16_logtable_data *) ((gf_internal_t *) gf->scratch)->private;
@@ -175,16 +168,55 @@ _FN(gf_w16_split_4_16_lazy_altmap_multiply_region)(gf_t *gf, void *src, void *de
 
   gf_w16_log_region_alignment(&rd, gf, src, dest, bytes, val, xor, sizeof(_mword), sizeof(_mword)*2);
 
-  for (j = 0; j < 16; j++) {
-    for (i = 0; i < 4; i++) {
-      prod = (j == 0) ? 0 : ltd->antilog_tbl[(int) ltd->log_tbl[(j << (i*4))] + log_val];
-      for (k = 0; k < MWORD_SIZE; k += 16) {
-        low[i].u8[j + k] = (uint8_t)prod;
-        high[i].u8[j + k] = (uint8_t)(prod >> 8);
-      }
+  
+  {
+    _mword lmask = _MM(set1_epi16) (0xff);
+    ALIGN(MWORD_SIZE, uint16_t tlow[4][8]);
+    ALIGN(MWORD_SIZE, uint16_t thigh[4][8]);
+    _mword ta, tb;
+    for (i=0; i<4; i++) {
+      tlow[i][0] = 0;
+      for (j=1; j<8; j++)
+        tlow[i][j] = ltd->antilog_tbl[(int) ltd->log_tbl[j << (i*4)] + log_val];
+      for (; j<16; j++)
+        thigh[i][j-8] = ltd->antilog_tbl[(int) ltd->log_tbl[j << (i*4)] + log_val];
     }
+
+#if MWORD_SIZE == 16
+    #define LOAD(i) \
+      ta = _mm_load_si128((__m128i*)tlow[i]); \
+      tb = _mm_load_si128((__m128i*)thigh[i])
+#endif
+#if MWORD_SIZE == 32
+    #define LOAD(i) \
+      ta = _mm256_loadu2_m128i((__m128i*)tlow[i], (__m128i*)tlow[i]); \
+      tb = _mm256_loadu2_m128i((__m128i*)thigh[i], (__m128i*)thigh[i])
+#endif
+#if MWORD_SIZE == 64
+    #define LOAD(i) \
+      ta = _mm512_broadcast_i32x4((__m128i*)tlow[i]); \
+      tb = _mm512_broadcast_i32x4((__m128i*)thigh[i])
+#endif
+    
+    #define SWIZZLE(i) \
+      low  ##i = _MM(packus_epi16)(_MMI(and_s)(ta, lmask), _MMI(and_s)(tb, lmask)); \
+      high ##i = _MM(packus_epi16)(_MM(srli_epi16)(ta, 8), _MM(srli_epi16)(tb, 8)) \
+    
+    LOAD(0);
+    SWIZZLE(0);
+    LOAD(1);
+    SWIZZLE(1);
+    LOAD(2);
+    SWIZZLE(2);
+    LOAD(3);
+    SWIZZLE(3);
+    
+    #undef LOAD
+    #undef SWIZZLE
   }
 
+  
+  
   sW = (_mword *) rd.s_start;
   dW = (_mword *) rd.d_start;
   topW = (_mword *) rd.d_top;
@@ -199,20 +231,20 @@ _FN(gf_w16_split_4_16_lazy_altmap_multiply_region)(gf_t *gf, void *src, void *de
       tb = _MMI(load_s)(sW+1);
 
       ti = _MMI(and_s) (mask, tb);
-      tph = _MM(shuffle_epi8) (high[0].uW, ti);
-      tpl = _MM(shuffle_epi8) (low[0].uW, ti);
+      tph = _MM(shuffle_epi8) (high0, ti);
+      tpl = _MM(shuffle_epi8) (low0, ti);
   
       ti = _MMI(and_s) (mask, _MM(srli_epi16)(tb, 4));
-      tpl = _MMI(xor_s)(_MM(shuffle_epi8) (low[1].uW, ti), tpl);
-      tph = _MMI(xor_s)(_MM(shuffle_epi8) (high[1].uW, ti), tph);
+      tpl = _MMI(xor_s)(_MM(shuffle_epi8) (low1, ti), tpl);
+      tph = _MMI(xor_s)(_MM(shuffle_epi8) (high1, ti), tph);
 
       ti = _MMI(and_s) (mask, ta);
-      tpl = _MMI(xor_s)(_MM(shuffle_epi8) (low[2].uW, ti), tpl);
-      tph = _MMI(xor_s)(_MM(shuffle_epi8) (high[2].uW, ti), tph);
+      tpl = _MMI(xor_s)(_MM(shuffle_epi8) (low2, ti), tpl);
+      tph = _MMI(xor_s)(_MM(shuffle_epi8) (high2, ti), tph);
   
       ti = _MMI(and_s) (mask, _MM(srli_epi16)(ta, 4));
-      tpl = _MMI(xor_s)(_MM(shuffle_epi8) (low[3].uW, ti), tpl);
-      tph = _MMI(xor_s)(_MM(shuffle_epi8) (high[3].uW, ti), tph);
+      tpl = _MMI(xor_s)(_MM(shuffle_epi8) (low3, ti), tpl);
+      tph = _MMI(xor_s)(_MM(shuffle_epi8) (high3, ti), tph);
 
       tph = _MMI(xor_s)(tph, _MMI(load_s)(dW));
       tpl = _MMI(xor_s)(tpl, _MMI(load_s)(dW+1));
@@ -229,20 +261,20 @@ _FN(gf_w16_split_4_16_lazy_altmap_multiply_region)(gf_t *gf, void *src, void *de
       tb = _MMI(load_s)(sW+1);
 
       ti = _MMI(and_s) (mask, tb);
-      tph = _MM(shuffle_epi8) (high[0].uW, ti);
-      tpl = _MM(shuffle_epi8) (low[0].uW, ti);
+      tph = _MM(shuffle_epi8) (high0, ti);
+      tpl = _MM(shuffle_epi8) (low0, ti);
   
       ti = _MMI(and_s) (mask, _MM(srli_epi16)(tb, 4));
-      tpl = _MMI(xor_s)(_MM(shuffle_epi8) (low[1].uW, ti), tpl);
-      tph = _MMI(xor_s)(_MM(shuffle_epi8) (high[1].uW, ti), tph);
+      tpl = _MMI(xor_s)(_MM(shuffle_epi8) (low1, ti), tpl);
+      tph = _MMI(xor_s)(_MM(shuffle_epi8) (high1, ti), tph);
 
       ti = _MMI(and_s) (mask, ta);
-      tpl = _MMI(xor_s)(_MM(shuffle_epi8) (low[2].uW, ti), tpl);
-      tph = _MMI(xor_s)(_MM(shuffle_epi8) (high[2].uW, ti), tph);
+      tpl = _MMI(xor_s)(_MM(shuffle_epi8) (low2, ti), tpl);
+      tph = _MMI(xor_s)(_MM(shuffle_epi8) (high2, ti), tph);
   
       ti = _MMI(and_s) (mask, _MM(srli_epi16)(ta, 4));
-      tpl = _MMI(xor_s)(_MM(shuffle_epi8) (low[3].uW, ti), tpl);
-      tph = _MMI(xor_s)(_MM(shuffle_epi8) (high[3].uW, ti), tph);
+      tpl = _MMI(xor_s)(_MM(shuffle_epi8) (low3, ti), tpl);
+      tph = _MMI(xor_s)(_MM(shuffle_epi8) (high3, ti), tph);
 
       _MMI(store_s) (dW, tph);
       _MMI(store_s) (dW+1, tpl);
@@ -257,6 +289,12 @@ _FN(gf_w16_split_4_16_lazy_altmap_multiply_region)(gf_t *gf, void *src, void *de
 }
 
 
+
+typedef union {
+	uint8_t u8[MWORD_SIZE];
+	uint16_t u16[MWORD_SIZE/2];
+	_mword uW;
+} _FN(gf_mm);
 
 #define MUL_REGIONS 4
 
