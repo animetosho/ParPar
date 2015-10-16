@@ -35,6 +35,11 @@ void detect_cpu(void) {
 			/* we have a Bonnell/Silvermont CPU with a really slow pshufb instruction; pretend SSSE3 doesn't exist, as XOR_DEPENDS is much faster */
 			has_ssse3 = 0;
 		}
+		if(model == 0x0F || model == 0x16) {
+			/* Conroe CPU with relatively slow pshufb; pretend SSSE3 doesn't exist, as XOR_DEPENDS is generally faster */
+			/* TODO: SPLIT4 is still faster for small blocksizes, so should prefer it then */
+			has_ssse3 = 0;
+		}
 	}
 
 #if !defined(_MSC_VER) || _MSC_VER >= 1600
