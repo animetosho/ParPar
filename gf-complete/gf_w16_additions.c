@@ -1116,6 +1116,11 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
           _jit_movdqa_load(jit, 1, DX, (bit+1)<<4);
           
           for(i=0; i<(FAST_U32_SIZE==8 ? 3:8); i++) {
+#ifdef XOR_DEPENDS_BRANCHLESS
+            _MOV_OR_XOR_INT_A(2, movC, (common_depmask[bit>>1] & ib) >> i);
+            _C_XORPS_A(0, (tmp_depmask[bit] & ib) >> i);
+            _C_PXOR_A(1, (tmp_depmask[bit+1] & ib) >> i);
+#else
             if(common_depmask[bit>>1] & ib) {
               _MOV_OR_XOR_INT_A(2, movC, 1);
             } else {
@@ -1126,11 +1131,17 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
                 _PXOR_A(1);
               }
             }
+#endif
             ib <<= 1;
           }
 #ifdef AMD64
           /* upper 13 XORs can be done from registers */
           for(; i<8; i++) {
+#ifdef XOR_DEPENDS_BRANCHLESS
+            _MOV_OR_XOR_R_INT(2, i, movC, (common_depmask[bit>>1] & ib) >> i);
+            _C_XORPS_R(0, i, (tmp_depmask[bit] & ib) >> i);
+            _C_PXOR_R(1, i, (tmp_depmask[bit+1] & ib) >> i);
+#else
             if(common_depmask[bit>>1] & ib) {
               _MOV_OR_XOR_R_INT(2, i, movC, 1);
             } else {
@@ -1141,9 +1152,15 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
                 _PXOR_R(1, i);
               }
             }
+#endif
             ib <<= 1;
           }
           for(; i<16; i++) {
+#ifdef XOR_DEPENDS_BRANCHLESS
+            _MOV_OR_XOR_R64_INT(2, i, movC, (common_depmask[bit>>1] & ib) >> i);
+            _C_XORPS_R64(0, i, (tmp_depmask[bit] & ib) >> i);
+            _C_PXOR_R64(1, i, (tmp_depmask[bit+1] & ib) >> i);
+#else
             if(common_depmask[bit>>1] & ib) {
               _MOV_OR_XOR_R64_INT(2, i, movC, 1);
             } else {
@@ -1154,11 +1171,17 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
                 _PXOR_R64(1, i);
               }
             }
+#endif
             ib <<= 1;
           }
 #else
           /* 3 from mem, 5 from regs */
           for(; i<11; i++) {
+#ifdef XOR_DEPENDS_BRANCHLESS
+            _MOV_OR_XOR_INT_B(2, movC, (common_depmask[bit>>1] & ib) >> i);
+            _C_XORPS_B(0, (tmp_depmask[bit] & ib) >> i);
+            _C_PXOR_B(1, (tmp_depmask[bit+1] & ib) >> i);
+#else
             if(common_depmask[bit>>1] & ib) {
               _MOV_OR_XOR_INT_B(2, movC, 1);
             } else {
@@ -1169,9 +1192,15 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
                 _PXOR_B(1);
               }
             }
+#endif
             ib <<= 1;
           }
           for(; i<16; i++) {
+#ifdef XOR_DEPENDS_BRANCHLESS
+            _MOV_OR_XOR_R_INT(2, i-8, movC, (common_depmask[bit>>1] & ib) >> i);
+            _C_XORPS_R(0, i-8, (tmp_depmask[bit] & ib) >> i);
+            _C_PXOR_R(1, i-8, (tmp_depmask[bit+1] & ib) >> i);
+#else
             if(common_depmask[bit>>1] & ib) {
               _MOV_OR_XOR_R_INT(2, i-8, movC, 1);
             } else {
@@ -1182,6 +1211,7 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
                 _PXOR_R(jit, 1, i-8);
               }
             }
+#endif
             ib <<= 1;
           }
 #endif
@@ -1198,6 +1228,11 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
                    movC = _MOV_OR_XOR_INT_INIT;
           FAST_U32 ib = 1;
           for(i=0; i<(FAST_U32_SIZE==8 ? 3:8); i++) {
+#ifdef XOR_DEPENDS_BRANCHLESS
+            _MOV_OR_XOR_INT_A(2, movC, (common_depmask[bit>>1] & ib) >> i);
+            _MOV_OR_XOR_FP_A(0, mov, (tmp_depmask[bit] & ib) >> i);
+            _MOV_OR_XOR_INT_A(1, mov2, (tmp_depmask[bit+1] & ib) >> i);
+#else
             if(common_depmask[bit>>1] & ib) {
               _MOV_OR_XOR_INT_A(2, movC, 1);
             } else {
@@ -1208,11 +1243,17 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
                 _MOV_OR_XOR_INT_A(1, mov2, 1);
               }
             }
+#endif
             ib <<= 1;
           }
 #ifdef AMD64
           /* upper 13 from regs */
           for(; i<8; i++) {
+#ifdef XOR_DEPENDS_BRANCHLESS
+            _MOV_OR_XOR_R_INT(2, i, movC, (common_depmask[bit>>1] & ib) >> i);
+            _MOV_OR_XOR_R_FP(0, i, mov, (tmp_depmask[bit] & ib) >> i);
+            _MOV_OR_XOR_R_INT(1, i, mov2, (tmp_depmask[bit+1] & ib) >> i);
+#else
             if(common_depmask[bit>>1] & ib) {
               _MOV_OR_XOR_R_INT(2, i, movC, 1);
             } else {
@@ -1223,9 +1264,15 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
                 _MOV_OR_XOR_R_INT(1, i, mov2, 1);
               }
             }
+#endif
             ib <<= 1;
           }
           for(; i<16; i++) {
+#ifdef XOR_DEPENDS_BRANCHLESS
+            _MOV_OR_XOR_R64_INT(2, i, movC, (common_depmask[bit>>1] & ib) >> i);
+            _MOV_OR_XOR_R64_FP(0, i, mov, (tmp_depmask[bit] & ib) >> i);
+            _MOV_OR_XOR_R64_INT(1, i, mov2, (tmp_depmask[bit+1] & ib) >> i);
+#else
             if(common_depmask[bit>>1] & ib) {
               _MOV_OR_XOR_R64_INT(2, i, movC, 1);
             } else {
@@ -1236,10 +1283,16 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
                 _MOV_OR_XOR_R64_INT(1, i, mov2, 1);
               }
             }
+#endif
             ib <<= 1;
           }
 #else
           for(; i<11; i++) {
+#ifdef XOR_DEPENDS_BRANCHLESS
+            _MOV_OR_XOR_INT_B(2, movC, (common_depmask[bit>>1] & ib) >> i);
+            _MOV_OR_XOR_FP_B(0, mov, (tmp_depmask[bit] & ib) >> i);
+            _MOV_OR_XOR_INT_B(1, mov2, (tmp_depmask[bit+1] & ib) >> i);
+#else
             if(common_depmask[bit>>1] & ib) {
               _MOV_OR_XOR_INT_B(2, movC, 1);
             } else {
@@ -1250,9 +1303,15 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
                 _MOV_OR_XOR_INT_B(1, mov2, 1);
               }
             }
+#endif
             ib <<= 1;
           }
           for(; i<16; i++) {
+#ifdef XOR_DEPENDS_BRANCHLESS
+            _MOV_OR_XOR_R_INT(2, i-8, movC, (common_depmask[bit>>1] & ib) >> i);
+            _MOV_OR_XOR_R_FP(0, i-8, mov, (tmp_depmask[bit] & ib) >> i);
+            _MOV_OR_XOR_R_INT(1, i-8, mov2, (tmp_depmask[bit+1] & ib) >> i);
+#else
             if(common_depmask[bit>>1] & ib) {
               _MOV_OR_XOR_R_INT(2, i-8, movC, 1);
             } else {
@@ -1263,6 +1322,7 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
                 _MOV_OR_XOR_R_INT(1, i-8, mov2, 1);
               }
             }
+#endif
             ib <<= 1;
           }
 #endif
