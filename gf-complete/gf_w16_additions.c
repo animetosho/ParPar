@@ -646,6 +646,7 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
   
   if(rd.d_start != rd.d_top) {
     int use_temp = ((uintptr_t)rd.s_start - (uintptr_t)rd.d_start + 256) < 512;
+    int setup_stack = 0;
     depmask1 = _mm_setzero_si128();
     depmask2 = _mm_setzero_si128();
     
@@ -747,19 +748,28 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
     
     jit->ptr = jit->code;
     
-    _jit_push(jit, BP);
-    _jit_mov_r(jit, BP, SP);
-    /* align pointer (avoid SP because stuff is encoded differently with it) */
-    _jit_mov_r(jit, AX, SP);
-    _jit_and_i(jit, AX, 0xF);
-    _jit_sub_r(jit, BP, AX);
-    
-#ifdef AMD64
-    /* make Windows happy and save XMM6-15 registers */
-    /* ideally should be done by this function, not JIT code, but MSVC has a convenient policy of no inline ASM */
-    for(i=6; i<16; i++)
-      _jit_movaps_store(jit, BP, -((int32_t)i-5)*16, i);
+#if defined(AMD64) && defined(_WINDOWS) || defined(__WINDOWS__) || defined(_WIN32) || defined(_WIN64)
+    #define SAVE_XMM 1
+    setup_stack = 1;
+#elif !defined(AMD64)
+    setup_stack = use_temp;
 #endif
+
+    if(setup_stack) {
+      _jit_push(jit, BP);
+      _jit_mov_r(jit, BP, SP);
+      /* align pointer (avoid SP because stuff is encoded differently with it) */
+      _jit_mov_r(jit, AX, SP);
+      _jit_and_i(jit, AX, 0xF);
+      _jit_sub_r(jit, BP, AX);
+      
+#ifdef SAVE_XMM
+      /* make Windows happy and save XMM6-15 registers */
+      /* ideally should be done by this function, not JIT code, but MSVC has a convenient policy of no inline ASM */
+      for(i=6; i<16; i++)
+        _jit_movaps_store(jit, BP, -((int32_t)i-5)*16, i);
+#endif
+    }
     
     _jit_mov_i(jit, AX, (intptr_t)rd.s_start);
     _jit_mov_i(jit, DX, (intptr_t)rd.d_start);
@@ -1308,11 +1318,13 @@ If using this, don't forget to save BX,DI,SI registers!
     _jit_cmp_r(jit, DX, CX);
     _jit_jcc(jit, JL, pos_startloop);
     
-#ifdef AMD64
+#ifdef SAVE_XMM
     for(i=6; i<16; i++)
       _jit_movaps_load(jit, i, BP, -((int32_t)i-5)*16);
 #endif
-    _jit_pop(jit, BP);
+#undef SAVE_XMM
+    if(setup_stack)
+      _jit_pop(jit, BP);
     
     _jit_ret(jit);
     
