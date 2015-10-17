@@ -71,7 +71,6 @@ void gf_w16_log_region_alignment(gf_region_data *rd,
   int align,
   int walign)
 {
-  gf_internal_t *h = NULL;
   unsigned long uls;
   struct gf_w16_logtable_data *ltd = (struct gf_w16_logtable_data *) ((gf_internal_t *) gf->scratch)->private;
   int log_val = ltd->log_tbl[val];

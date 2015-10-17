@@ -154,15 +154,11 @@ void
 _FN(gf_w16_split_4_16_lazy_altmap_multiply_region)(gf_t *gf, void *src, void *dest, gf_val_32_t val, int bytes, int xor)
 {
 #ifdef INTEL_SSSE3
-  FAST_U32 i, j, k;
-  FAST_U32 prod;
   _mword *sW, *dW, *topW;
   _mword low0, low1, low2, low3, high0, high1, high2, high3;
   gf_region_data rd;
   _mword  mask, ta, tb, ti, tpl, tph;
   gf_internal_t *h = (gf_internal_t *) gf->scratch;
-  struct gf_w16_logtable_data *ltd = (struct gf_w16_logtable_data *) h->private;
-  int log_val = ltd->log_tbl[val];
 
   if (val == 0) { gf_multby_zero(dest, bytes, xor); return; }
   if (val == 1) { gf_multby_one(src, dest, bytes, xor); return; }
@@ -200,12 +196,12 @@ _FN(gf_w16_split_4_16_lazy_altmap_multiply_region)(gf_t *gf, void *src, void *de
     tb = _mm_load_si128((__m128i*)thigh);
 #endif
 #if MWORD_SIZE == 32
-    ta = _mm256_loadu2_m128i((__m128i*)tlow, (__m128i*)tlow);
-    tb = _mm256_loadu2_m128i((__m128i*)thigh, (__m128i*)thigh);
+    ta = _mm256_broadcastsi128_si256(*(__m128i*)tlow);
+    tb = _mm256_broadcastsi128_si256(*(__m128i*)thigh);
 #endif
 #if MWORD_SIZE == 64
-    ta = _mm512_broadcast_i32x4((__m128i*)tlow);
-    tb = _mm512_broadcast_i32x4((__m128i*)thigh);
+    ta = _mm512_broadcast_i32x4(*(__m128i*)tlow);
+    tb = _mm512_broadcast_i32x4(*(__m128i*)thigh);
 #endif
     
     #define SWIZZLE_STORE(i, a, b) \
@@ -215,6 +211,16 @@ _FN(gf_w16_split_4_16_lazy_altmap_multiply_region)(gf_t *gf, void *src, void *de
     SWIZZLE_STORE(0, ta, tb);
     
     /* multiply by 16 */
+#if MWORD_SIZE == 64
+    /* _mm512_mask_xor_epi16 doesn't exist, neither does _mm512_cmpeq_epi16 :( */
+    #define MUL2(x) _mm512_xor_si512( \
+      _mm512_slli_epi16(x, 1), \
+      _mm512_and_si512(poly, _mm512_sub_epi16( \
+        _mm512_setzero_si512(), \
+        _mm512_srli_epi16(_mm512_and_si512(x, highbit), 15) \
+      )) \
+    )
+#else
     #define MUL2(x) _MMI(xor_s)( \
       _MM(slli_epi16)(x, 1), \
       _MMI(and_s)(poly, _MM(cmpeq_epi16)( \
@@ -222,6 +228,7 @@ _FN(gf_w16_split_4_16_lazy_altmap_multiply_region)(gf_t *gf, void *src, void *de
         highbit \
       )) \
     )
+#endif
     #define MUL16(x) \
       x = MUL2(x); \
       x = MUL2(x); \

@@ -36,7 +36,8 @@
 #endif
 
 #ifdef INTEL_AVX512BW
-  #include <zmmintrin.h>
+  /* #include <zmmintrin.h> */
+  /* immintrin seems to include this fine */
 #endif
 
 #ifdef ARM_NEON
