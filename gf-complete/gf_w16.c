@@ -13,7 +13,6 @@
 #include <stdlib.h>
 #include "gf_w16.h"
 #include "platform.h"
-#include "gf_w16_additions.c"
 
 #ifdef _MSC_VER
 #define inline __inline
@@ -22,6 +21,8 @@
 /* #define GF_FIRST_BIT (1 << 15)
 #define GF_MULTBY_TWO(p) (((p) & GF_FIRST_BIT) ? (((p) << 1) ^ h->prim_poly) : (p) << 1) */
 #define GF_MULTBY_TWO(p) (((p) << 1) ^ (h->prim_poly & -((p) >> 15)))
+
+#include "gf_w16_additions.c"
 
 
 /* KMG: GF_MULT_LOGTABLE: */
