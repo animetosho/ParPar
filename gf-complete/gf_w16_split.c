@@ -167,42 +167,32 @@ _FN(gf_w16_split_4_16_lazy_altmap_multiply_region)(gf_t *gf, void *src, void *de
 
   
   {
-    ALIGN(MWORD_SIZE, uint16_t tlow[8]);
-    ALIGN(MWORD_SIZE, uint16_t thigh[8]);
+    ALIGN(MWORD_SIZE, uint16_t tmp[8]);
     _mword ta, tb;
     _mword lmask = _MM(set1_epi16) (0xff);
     _mword highbit = _MM(set1_epi16) (0x8000);
     _mword poly = _MM(set1_epi16) (h->prim_poly);
     
-    tlow[ 0] = 0;
-    tlow[ 1] = val;
-    tlow[ 2] = GF_MULTBY_TWO(val);
-    tlow[ 3] = tlow[2] ^ val;
-    tlow[ 4] = GF_MULTBY_TWO(tlow[2]);
-    tlow[ 5] = tlow[4] ^ val;
-    tlow[ 6] = tlow[4] ^ tlow[2];
-    tlow[ 7] = tlow[4] ^ tlow[3];
-    thigh[0] = GF_MULTBY_TWO(tlow[4]);
-    thigh[1] = thigh[0] ^ val;
-    thigh[2] = thigh[0] ^ tlow[2];
-    thigh[3] = thigh[0] ^ tlow[3];
-    thigh[4] = thigh[0] ^ tlow[4];
-    thigh[5] = thigh[0] ^ tlow[5];
-    thigh[6] = thigh[0] ^ tlow[6];
-    thigh[7] = thigh[0] ^ tlow[7];
+    tmp[0] = 0;
+    tmp[1] = val;
+    tmp[2] = GF_MULTBY_TWO(val);
+    tmp[3] = tmp[2] ^ val;
+    tmp[4] = GF_MULTBY_TWO(tmp[2]);
+    tmp[5] = tmp[4] ^ val;
+    tmp[6] = tmp[4] ^ tmp[2];
+    tmp[7] = tmp[4] ^ tmp[3];
     
 #if MWORD_SIZE == 16
-    ta = _mm_load_si128((__m128i*)tlow);
-    tb = _mm_load_si128((__m128i*)thigh);
+    ta = _mm_load_si128((__m128i*)tmp);
 #endif
 #if MWORD_SIZE == 32
-    ta = _mm256_broadcastsi128_si256(*(__m128i*)tlow);
-    tb = _mm256_broadcastsi128_si256(*(__m128i*)thigh);
+    ta = _mm256_broadcastsi128_si256(*(__m128i*)tmp);
 #endif
 #if MWORD_SIZE == 64
-    ta = _mm512_broadcast_i32x4(*(__m128i*)tlow);
-    tb = _mm512_broadcast_i32x4(*(__m128i*)thigh);
+    ta = _mm512_broadcast_i32x4(*(__m128i*)tmp);
 #endif
+    
+    tb = _MMI(xor_s)(ta, _MM(set1_epi16)( GF_MULTBY_TWO(tmp[4]) ));
     
     #define SWIZZLE_STORE(i, a, b) \
       low  ##i = _MM(packus_epi16)(_MMI(and_s)(a, lmask), _MMI(and_s)(b, lmask)); \
