@@ -160,7 +160,8 @@ _FN(gf_w16_split_4_16_lazy_altmap_multiply_region)(gf_t *gf, void *src, void *de
   _mword low0, low1, low2, low3, high0, high1, high2, high3;
   gf_region_data rd;
   _mword  mask, ta, tb, ti, tpl, tph;
-  struct gf_w16_logtable_data *ltd = (struct gf_w16_logtable_data *) ((gf_internal_t *) gf->scratch)->private;
+  gf_internal_t *h = (gf_internal_t *) gf->scratch;
+  struct gf_w16_logtable_data *ltd = (struct gf_w16_logtable_data *) h->private;
   int log_val = ltd->log_tbl[val];
 
   if (val == 0) { gf_multby_zero(dest, bytes, xor); return; }
@@ -170,52 +171,75 @@ _FN(gf_w16_split_4_16_lazy_altmap_multiply_region)(gf_t *gf, void *src, void *de
 
   
   {
-    _mword lmask = _MM(set1_epi16) (0xff);
-    ALIGN(MWORD_SIZE, uint16_t tlow[4][8]);
-    ALIGN(MWORD_SIZE, uint16_t thigh[4][8]);
+    ALIGN(MWORD_SIZE, uint16_t tlow[8]);
+    ALIGN(MWORD_SIZE, uint16_t thigh[8]);
     _mword ta, tb;
-    for (i=0; i<4; i++) {
-      tlow[i][0] = 0;
-      for (j=1; j<8; j++)
-        tlow[i][j] = ltd->antilog_tbl[(int) ltd->log_tbl[j << (i*4)] + log_val];
-      for (; j<16; j++)
-        thigh[i][j-8] = ltd->antilog_tbl[(int) ltd->log_tbl[j << (i*4)] + log_val];
-    }
-
+    _mword lmask = _MM(set1_epi16) (0xff);
+    _mword highbit = _MM(set1_epi16) (0x8000);
+    _mword poly = _MM(set1_epi16) (h->prim_poly);
+    
+    tlow[ 0] = 0;
+    tlow[ 1] = val;
+    tlow[ 2] = GF_MULTBY_TWO(val);
+    tlow[ 3] = tlow[2] ^ val;
+    tlow[ 4] = GF_MULTBY_TWO(tlow[2]);
+    tlow[ 5] = tlow[4] ^ val;
+    tlow[ 6] = tlow[4] ^ tlow[2];
+    tlow[ 7] = tlow[4] ^ tlow[3];
+    thigh[0] = GF_MULTBY_TWO(tlow[4]);
+    thigh[1] = thigh[0] ^ val;
+    thigh[2] = thigh[0] ^ tlow[2];
+    thigh[3] = thigh[0] ^ tlow[3];
+    thigh[4] = thigh[0] ^ tlow[4];
+    thigh[5] = thigh[0] ^ tlow[5];
+    thigh[6] = thigh[0] ^ tlow[6];
+    thigh[7] = thigh[0] ^ tlow[7];
+    
 #if MWORD_SIZE == 16
-    #define LOAD(i) \
-      ta = _mm_load_si128((__m128i*)tlow[i]); \
-      tb = _mm_load_si128((__m128i*)thigh[i])
+    ta = _mm_load_si128((__m128i*)tlow);
+    tb = _mm_load_si128((__m128i*)thigh);
 #endif
 #if MWORD_SIZE == 32
-    #define LOAD(i) \
-      ta = _mm256_loadu2_m128i((__m128i*)tlow[i], (__m128i*)tlow[i]); \
-      tb = _mm256_loadu2_m128i((__m128i*)thigh[i], (__m128i*)thigh[i])
+    ta = _mm256_loadu2_m128i((__m128i*)tlow, (__m128i*)tlow);
+    tb = _mm256_loadu2_m128i((__m128i*)thigh, (__m128i*)thigh);
 #endif
 #if MWORD_SIZE == 64
-    #define LOAD(i) \
-      ta = _mm512_broadcast_i32x4((__m128i*)tlow[i]); \
-      tb = _mm512_broadcast_i32x4((__m128i*)thigh[i])
+    ta = _mm512_broadcast_i32x4((__m128i*)tlow);
+    tb = _mm512_broadcast_i32x4((__m128i*)thigh);
 #endif
     
-    #define SWIZZLE(i) \
-      low  ##i = _MM(packus_epi16)(_MMI(and_s)(ta, lmask), _MMI(and_s)(tb, lmask)); \
-      high ##i = _MM(packus_epi16)(_MM(srli_epi16)(ta, 8), _MM(srli_epi16)(tb, 8)) \
+    #define SWIZZLE_STORE(i, a, b) \
+      low  ##i = _MM(packus_epi16)(_MMI(and_s)(a, lmask), _MMI(and_s)(b, lmask)); \
+      high ##i = _MM(packus_epi16)(_MM(srli_epi16)(a, 8), _MM(srli_epi16)(b, 8))
     
-    LOAD(0);
-    SWIZZLE(0);
-    LOAD(1);
-    SWIZZLE(1);
-    LOAD(2);
-    SWIZZLE(2);
-    LOAD(3);
-    SWIZZLE(3);
+    SWIZZLE_STORE(0, ta, tb);
     
-    #undef LOAD
-    #undef SWIZZLE
+    /* multiply by 16 */
+    #define MUL2(x) _MMI(xor_s)( \
+      _MM(slli_epi16)(x, 1), \
+      _MMI(and_s)(poly, _MM(cmpeq_epi16)( \
+        _MMI(and_s)(x, highbit), \
+        highbit \
+      )) \
+    )
+    #define MUL16(x) \
+      x = MUL2(x); \
+      x = MUL2(x); \
+      x = MUL2(x); \
+      x = MUL2(x)
+    MUL16(ta);
+    MUL16(tb);
+    SWIZZLE_STORE(1, ta, tb);
+    MUL16(ta);
+    MUL16(tb);
+    SWIZZLE_STORE(2, ta, tb);
+    MUL16(ta);
+    MUL16(tb);
+    SWIZZLE_STORE(3, ta, tb);
+    #undef MUL2
+    #undef MUL16
+    #undef SWIZZLE_STORE
   }
-
-  
   
   sW = (_mword *) rd.s_start;
   dW = (_mword *) rd.d_start;
