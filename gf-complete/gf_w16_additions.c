@@ -354,7 +354,8 @@ static void gf_w16_xor_lazy_sse_altmap_multiply_region(gf_t *gf, void *src, void
 {
 #ifdef INTEL_SSE2
   FAST_U32 i, bit;
-  FAST_U32 counts[16], deptable[16][16];
+  FAST_U32 counts[16];
+  uintptr_t deptable[16][16];
   __m128i depmask1, depmask2, polymask1, polymask2, addvals1, addvals2;
   uint16_t tmp_depmask[16];
   gf_region_data rd;
@@ -438,7 +439,7 @@ static void gf_w16_xor_lazy_sse_altmap_multiply_region(gf_t *gf, void *src, void
     if (xor)
       while (dW != topW) {
         #define STEP(bit, type, typev, typed) { \
-          FAST_U32* deps = deptable[bit]; \
+          uintptr_t* deps = deptable[bit]; \
           dest[bit] = _mm_load_ ## type((typed*)(dW + bit)); \
           switch(counts[bit]) { \
             case 16: dest[bit] = _mm_xor_ ## type(dest[bit], *(typev*)(sP + deps[15])); \
@@ -486,7 +487,7 @@ static void gf_w16_xor_lazy_sse_altmap_multiply_region(gf_t *gf, void *src, void
       while (dW != topW) {
         /* Note that we assume that all counts are at least 1; I don't think it's possible for that to be false */
         #define STEP(bit, type, typev, typed) { \
-          FAST_U32* deps = deptable[bit]; \
+          uintptr_t* deps = deptable[bit]; \
           dest[bit] = _mm_load_ ## type((typed*)(sP + deps[ 0])); \
           switch(counts[bit]) { \
             case 16: dest[bit] = _mm_xor_ ## type(dest[bit], *(typev*)(sP + deps[15])); \
@@ -533,7 +534,7 @@ static void gf_w16_xor_lazy_sse_altmap_multiply_region(gf_t *gf, void *src, void
     if (xor)
       while (dW != topW) {
         #define STEP(bit, type, typev, typed) { \
-          FAST_U32* deps = deptable[bit]; \
+          uintptr_t* deps = deptable[bit]; \
           typev tmp = _mm_load_ ## type((typed*)(dW + bit)); \
           switch(counts[bit]) { \
             case 16: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[15])); \
@@ -579,7 +580,7 @@ static void gf_w16_xor_lazy_sse_altmap_multiply_region(gf_t *gf, void *src, void
       while (dW != topW) {
         /* Note that we assume that all counts are at least 1; I don't think it's possible for that to be false */
         #define STEP(bit, type, typev, typed) { \
-          FAST_U32* deps = deptable[bit]; \
+          uintptr_t* deps = deptable[bit]; \
           typev tmp = _mm_load_ ## type((typed*)(sP + deps[ 0])); \
           switch(counts[bit]) { \
             case 16: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[15])); \
