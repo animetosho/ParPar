@@ -1448,7 +1448,7 @@ If using this, don't forget to save BX,DI,SI registers!
 #define MWORD_SIZE 64
 #define _mword __m512i
 #define _MM(f) _mm512_ ## f
-#define _MMI(f) _mm512_ ## f ## i512
+#define _MMI(f) _mm512_ ## f ## _si512
 #define _FN(f) f ## _avx512
 /* still called "mm256" even in AVX512? */
 #define _MM_START
@@ -1479,7 +1479,7 @@ If using this, don't forget to save BX,DI,SI registers!
 #define MWORD_SIZE 32
 #define _mword __m256i
 #define _MM(f) _mm256_ ## f
-#define _MMI(f) _mm256_ ## f ## i256
+#define _MMI(f) _mm256_ ## f ## _si256
 #define _FN(f) f ## _avx2
 #define _MM_START
 #define _MM_END _mm256_zeroupper();
@@ -1509,7 +1509,7 @@ If using this, don't forget to save BX,DI,SI registers!
 #define MWORD_SIZE 16
 #define _mword __m128i
 #define _MM(f) _mm_ ## f
-#define _MMI(f) _mm_ ## f ## i128
+#define _MMI(f) _mm_ ## f ## _si128
 #define _FN(f) f ## _sse
 #define _MM_START
 #define _MM_END
