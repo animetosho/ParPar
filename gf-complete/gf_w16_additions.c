@@ -379,14 +379,8 @@ static void gf_w16_xor_lazy_sse_altmap_multiply_region(gf_t *gf, void *src, void
   polymask2 = _mm_set1_epi16(h->prim_poly & 0xFFFF); /* chop off top bit, although not really necessary */
   polymask1 = _mm_and_si128(polymask2, _mm_set_epi16(1<< 8, 1<< 9, 1<<10, 1<<11, 1<<12, 1<<13, 1<<14, 1<<15));
   polymask2 = _mm_and_si128(polymask2, _mm_set_epi16(1<< 0, 1<< 1, 1<< 2, 1<< 3, 1<< 4, 1<< 5, 1<< 6, 1<< 7));
-  polymask1 = _mm_xor_si128(
-    _mm_cmpeq_epi16(_mm_setzero_si128(), polymask1),
-    _mm_set1_epi8(0xFF)
-  );
-  polymask2 = _mm_xor_si128(
-    _mm_cmpeq_epi16(_mm_setzero_si128(), polymask2),
-    _mm_set1_epi8(0xFF)
-  );
+  polymask1 = _mm_cmpeq_epi16(_mm_setzero_si128(), polymask1);
+  polymask2 = _mm_cmpeq_epi16(_mm_setzero_si128(), polymask2);
   
   if(val & (1<<15)) {
     /* XOR */
@@ -404,8 +398,8 @@ static void gf_w16_xor_lazy_sse_altmap_multiply_region(gf_t *gf, void *src, void
     depmask2 = _mm_srli_si128(depmask2, 2);
     
     /* XOR poly */
-    depmask1 = _mm_xor_si128(depmask1, _mm_and_si128(last, polymask1));
-    depmask2 = _mm_xor_si128(depmask2, _mm_and_si128(last, polymask2));
+    depmask1 = _mm_xor_si128(depmask1, _mm_andnot_si128(polymask1, last));
+    depmask2 = _mm_xor_si128(depmask2, _mm_andnot_si128(polymask2, last));
     
     if(val & i) {
       /* XOR */
@@ -663,14 +657,8 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
     polymask2 = _mm_set1_epi16(h->prim_poly & 0xFFFF); /* chop off top bit, although not really necessary */
     polymask1 = _mm_and_si128(polymask2, _mm_set_epi16(1<< 8, 1<< 9, 1<<10, 1<<11, 1<<12, 1<<13, 1<<14, 1<<15));
     polymask2 = _mm_and_si128(polymask2, _mm_set_epi16(1<< 0, 1<< 1, 1<< 2, 1<< 3, 1<< 4, 1<< 5, 1<< 6, 1<< 7));
-    polymask1 = _mm_xor_si128(
-      _mm_cmpeq_epi16(_mm_setzero_si128(), polymask1),
-      _mm_set1_epi8(0xFF)
-    );
-    polymask2 = _mm_xor_si128(
-      _mm_cmpeq_epi16(_mm_setzero_si128(), polymask2),
-      _mm_set1_epi8(0xFF)
-    );
+    polymask1 = _mm_cmpeq_epi16(_mm_setzero_si128(), polymask1);
+    polymask2 = _mm_cmpeq_epi16(_mm_setzero_si128(), polymask2);
     
     if(val & (1<<15)) {
       /* XOR */
@@ -688,8 +676,8 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
       depmask2 = _mm_srli_si128(depmask2, 2);
       
       /* XOR poly */
-      depmask1 = _mm_xor_si128(depmask1, _mm_and_si128(last, polymask1));
-      depmask2 = _mm_xor_si128(depmask2, _mm_and_si128(last, polymask2));
+      depmask1 = _mm_xor_si128(depmask1, _mm_andnot_si128(polymask1, last));
+      depmask2 = _mm_xor_si128(depmask2, _mm_andnot_si128(polymask2, last));
       
       if(val & i) {
         /* XOR */
@@ -703,7 +691,7 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
     /* heuristic: we just find common XOR elements between bit pairs */
     
     if (!use_temp) {
-      __m128i common_maskexcl, tmp1, tmp2;
+      __m128i tmp1, tmp2;
       /* first, we need to re-arrange words so that we can perform bitwise AND on neighbouring pairs */
       /* unfortunately, PACKUSDW is SSE4.1 only, so emulate it with shuffles */
       /* 01234567 -> 02461357 */
@@ -727,15 +715,11 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
         _mm_unpackhi_epi64(tmp1, tmp2)
       );
       /* we have the common elements between pairs, but it doesn't make sense to process a separate queue if there's only one common element (0 XORs), so eliminate those */
-      common_maskexcl = _mm_xor_si128(
-        _mm_cmpeq_epi16(
-          _mm_setzero_si128(),
-          /* "(v & (v-1)) == 0" is true if only zero/one bit is set in each word */
-          _mm_and_si128(common_mask, _mm_sub_epi16(common_mask, _mm_set1_epi16(1)))
-        ),
-        _mm_set1_epi8(0xFF)
-      );
-      common_mask = _mm_and_si128(common_mask, common_maskexcl);
+      common_mask = _mm_andnot_si128(_mm_cmpeq_epi16(
+        _mm_setzero_si128(),
+        /* "(v & (v-1)) == 0" is true if only zero/one bit is set in each word */
+        _mm_and_si128(common_mask, _mm_sub_epi16(common_mask, _mm_set1_epi16(1)))
+      ), common_mask);
       /* we now have a common elements mask without 1-bit words, just simply merge stuff in */
       depmask1 = _mm_xor_si128(depmask1, _mm_unpacklo_epi16(common_mask, common_mask));
       depmask2 = _mm_xor_si128(depmask2, _mm_unpackhi_epi16(common_mask, common_mask));
