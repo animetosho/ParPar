@@ -1087,8 +1087,6 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
 #endif
       }
     } else {
-      /* faster on some CPUs, slower on others, needs more investigation */
-      #define XOR_DEPENDS_BRANCHLESS 1
 #ifdef AMD64
       /* preload upper 13 inputs into registers */
       for(i=3; i<16; i++)
@@ -1107,22 +1105,9 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
           _jit_movdqa_load(jit, 1, DX, (bit+1)<<4);
           
           for(i=0; i<(FAST_U32_SIZE==8 ? 3:8); i++) {
-#ifdef XOR_DEPENDS_BRANCHLESS
             _MOV_OR_XOR_INT_A(2, movC, maskC & 1);
             _C_XORPS_A(0, mask1 & 1);
             _C_PXOR_A(1, mask2 & 1);
-#else
-            if(maskC & 1) {
-              _MOV_OR_XOR_INT_A(2, movC, 1);
-            } else {
-              if(mask1 & 1) {
-                _XORPS_A(0);
-              }
-              if(mask2 & 1) {
-                _PXOR_A(1);
-              }
-            }
-#endif
             mask1 >>= 1;
             mask2 >>= 1;
             maskC >>= 1;
@@ -1130,43 +1115,17 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
 #ifdef AMD64
           /* upper 13 XORs can be done from registers */
           for(; i<8; i++) {
-#ifdef XOR_DEPENDS_BRANCHLESS
             _MOV_OR_XOR_R_INT(2, i, movC, maskC & 1);
             _C_XORPS_R(0, i, mask1 & 1);
             _C_PXOR_R(1, i, mask2 & 1);
-#else
-            if(maskC & 1) {
-              _MOV_OR_XOR_R_INT(2, i, movC, 1);
-            } else {
-              if(mask1 & 1) {
-                _XORPS_R(0, i);
-              }
-              if(mask2 & 1) {
-                _PXOR_R(1, i);
-              }
-            }
-#endif
             mask1 >>= 1;
             mask2 >>= 1;
             maskC >>= 1;
           }
           for(i=0; i<8; i++) {
-#ifdef XOR_DEPENDS_BRANCHLESS
             _MOV_OR_XOR_R64_INT(2, i, movC, maskC & 1);
             _C_XORPS_R64(0, i, mask1 & 1);
             _C_PXOR_R64(1, i, mask2 & 1);
-#else
-            if(maskC & 1) {
-              _MOV_OR_XOR_R64_INT(2, i, movC, 1);
-            } else {
-              if(mask1 & 1) {
-                _XORPS_R64(0, i);
-              }
-              if(mask2 & 1) {
-                _PXOR_R64(1, i);
-              }
-            }
-#endif
             mask1 >>= 1;
             mask2 >>= 1;
             maskC >>= 1;
@@ -1174,43 +1133,17 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
 #else
           /* 3 from mem, 5 from regs */
           for(; i<11; i++) {
-#ifdef XOR_DEPENDS_BRANCHLESS
             _MOV_OR_XOR_INT_B(2, movC, maskC & 1);
             _C_XORPS_B(0, mask1 & 1);
             _C_PXOR_B(1, mask2 & 1);
-#else
-            if(maskC & 1) {
-              _MOV_OR_XOR_INT_B(2, movC, 1);
-            } else {
-              if(mask1 & 1) {
-                _XORPS_B(0);
-              }
-              if(mask2 & 1) {
-                _PXOR_B(1);
-              }
-            }
-#endif
             mask1 >>= 1;
             mask2 >>= 1;
             maskC >>= 1;
           }
           for(i=3; i<8; i++) {
-#ifdef XOR_DEPENDS_BRANCHLESS
             _MOV_OR_XOR_R_INT(2, i, movC, maskC & 1);
             _C_XORPS_R(0, i, mask1 & 1);
             _C_PXOR_R(1, i, mask2 & 1);
-#else
-            if(maskC & 1) {
-              _MOV_OR_XOR_R_INT(2, i, movC, 1);
-            } else {
-              if(mask1 & 1) {
-                _XORPS_R(jit, 0, i);
-              }
-              if(mask2 & 1) {
-                _PXOR_R(jit, 1, i);
-              }
-            }
-#endif
             mask1 >>= 1;
             mask2 >>= 1;
             maskC >>= 1;
@@ -1230,22 +1163,9 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
           FAST_U16 mask1 = tmp_depmask[bit], mask2 = tmp_depmask[bit+1],
                    maskC = common_depmask[bit>>1];
           for(i=0; i<(FAST_U32_SIZE==8 ? 3:8); i++) {
-#ifdef XOR_DEPENDS_BRANCHLESS
             _MOV_OR_XOR_INT_A(2, movC, maskC & 1);
             _MOV_OR_XOR_FP_A(0, mov1, mask1 & 1);
             _MOV_OR_XOR_INT_A(1, mov2, mask2 & 1);
-#else
-            if(maskC & 1) {
-              _MOV_OR_XOR_INT_A(2, movC, 1);
-            } else {
-              if(mask1 & 1) {
-                _MOV_OR_XOR_FP_A(0, mov1, 1);
-              }
-              if(mask2 & 1) {
-                _MOV_OR_XOR_INT_A(1, mov2, 1);
-              }
-            }
-#endif
             mask1 >>= 1;
             mask2 >>= 1;
             maskC >>= 1;
@@ -1253,86 +1173,34 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
 #ifdef AMD64
           /* upper 13 from regs */
           for(; i<8; i++) {
-#ifdef XOR_DEPENDS_BRANCHLESS
             _MOV_OR_XOR_R_INT(2, i, movC, maskC & 1);
             _MOV_OR_XOR_R_FP(0, i, mov1, mask1 & 1);
             _MOV_OR_XOR_R_INT(1, i, mov2, mask2 & 1);
-#else
-            if(maskC & 1) {
-              _MOV_OR_XOR_R_INT(2, i, movC, 1);
-            } else {
-              if(mask1 & 1) {
-                _MOV_OR_XOR_R_FP(0, i, mov1, 1);
-              }
-              if(mask2 & 1) {
-                _MOV_OR_XOR_R_INT(1, i, mov2, 1);
-              }
-            }
-#endif
             mask1 >>= 1;
             mask2 >>= 1;
             maskC >>= 1;
           }
           for(i=0; i<8; i++) {
-#ifdef XOR_DEPENDS_BRANCHLESS
             _MOV_OR_XOR_R64_INT(2, i, movC, maskC & 1);
             _MOV_OR_XOR_R64_FP(0, i, mov1, mask1 & 1);
             _MOV_OR_XOR_R64_INT(1, i, mov2, mask2 & 1);
-#else
-            if(maskC & 1) {
-              _MOV_OR_XOR_R64_INT(2, i, movC, 1);
-            } else {
-              if(mask1 & 1) {
-                _MOV_OR_XOR_R64_FP(0, i, mov1, 1);
-              }
-              if(mask2 & 1) {
-                _MOV_OR_XOR_R64_INT(1, i, mov2, 1);
-              }
-            }
-#endif
             mask1 >>= 1;
             mask2 >>= 1;
             maskC >>= 1;
           }
 #else
           for(; i<11; i++) {
-#ifdef XOR_DEPENDS_BRANCHLESS
             _MOV_OR_XOR_INT_B(2, movC, maskC & 1);
             _MOV_OR_XOR_FP_B(0, mov1, mask1 & 1);
             _MOV_OR_XOR_INT_B(1, mov2, mask2 & 1);
-#else
-            if(maskC & 1) {
-              _MOV_OR_XOR_INT_B(2, movC, 1);
-            } else {
-              if(mask1 & 1) {
-                _MOV_OR_XOR_FP_B(0, mov1, 1);
-              }
-              if(mask2 & 1) {
-                _MOV_OR_XOR_INT_B(1, mov2, 1);
-              }
-            }
-#endif
             mask1 >>= 1;
             mask2 >>= 1;
             maskC >>= 1;
           }
           for(i=3; i<8; i++) {
-#ifdef XOR_DEPENDS_BRANCHLESS
             _MOV_OR_XOR_R_INT(2, i, movC, maskC & 1);
             _MOV_OR_XOR_R_FP(0, i, mov1, mask1 & 1);
             _MOV_OR_XOR_R_INT(1, i, mov2, mask2 & 1);
-#else
-            if(maskC & 1) {
-              _MOV_OR_XOR_R_INT(2, i, movC, 1);
-            } else {
-              if(mask1 & 1) {
-                _MOV_OR_XOR_R_FP(0, i, mov1, 1);
-              }
-              if(mask2 & 1) {
-                _MOV_OR_XOR_R_INT(1, i, mov2, 1);
-              }
-            }
-#endif
             mask1 >>= 1;
             mask2 >>= 1;
             maskC >>= 1;
