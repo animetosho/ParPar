@@ -621,7 +621,7 @@ void init(Handle<Object> target) {
 	// although these defaults are pretty good across most CPUs
 	switch(gf[0].mult_method) {
 		case GF_XOR_JIT_SSE2: /* JIT is a little slow, so larger blocks make things faster */
-			CHUNK_SIZE = 128*1024; // maybe 256K is better
+			CHUNK_SIZE = 128*1024;
 			break;
 		case GF_SPLIT8:
 		case GF_XOR_SSE2:

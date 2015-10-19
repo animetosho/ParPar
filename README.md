@@ -59,9 +59,6 @@ not implemented include:
 -   more efficient MD5 handling, perhaps via multi-threading and/or stitching
     with the ALTMAP transformation functions
 
--   investigate AVX version of [XOR\_DEPENDS](<xor_depends/info.md#avx>)
-    algorithm
-
 -   various other tweaks
 
 Motivation
