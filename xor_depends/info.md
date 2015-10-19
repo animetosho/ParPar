@@ -7,12 +7,14 @@ named “XOR\_DEPENDS”, suitable for CPUs with SSE2 support but not SSSE3, suc
 the AMD K10. The technique is also a viable alternative for SSSE3 CPUs with a
 slow `pshufb` instruction (i.e. Intel Atom).
 
-**Update:** Yutaka Sawada has pointed out that faster implementations of
-SPLIT\_TABLE(16,8)
+**Update:** Yutaka Sawada has pointed out that faster, hand-tuned x86 assembly
+implementations of SPLIT\_TABLE(16,8)
 [exist](<https://github.com/pcordes/par2-asm-experiments/blob/master/asm-pinsrw.s>)
 (some of which may use some SIMD, though the core lookup operations of the
-algorithm don’t). As these implementations aren’t a part of GF-Complete, I’ll
-pretend they don’t exist on this page.
+algorithm don’t). Rough tests I’ve performed seem to show that they’re roughly
+up to 50% faster than GF-Complete’s implementation (likely dependent on CPU). As
+these implementations aren’t a part of GF-Complete, I’ll pretend they don’t
+exist on this page.
 
  
 
@@ -165,10 +167,17 @@ and destination buffers are the same.
 The downside is that 256 bit operations would require processing to be performed
 on rather large 512 byte blocks. Various parts of the current implementation
 would need to be rewritten for AVX to implement 3 operand support (including the
-JIT routines). I’m also unsure about the benefit for AMD Bulldozer based CPUs,
-especially when using multiple threads.
+JIT routines).
 
-I haven’t yet explored using an AVX implementation.
+I haven’t yet explored using an AVX implementation. Initial tests with AVX
+(floating point operations) seem to show minimal benefit\* on Intel CPUs due to
+limited FP concurrency. I expect AMD Bulldozer based CPUs not to yield any
+benefit when multi-threading when AVX operations are used. Hence, it seems like
+AVX2 capable CPUs are necessary for better performance.
+
+\* it may be possible to mix 128 bit integer and 256 bit FP operations to
+improve throughput, but, despite the complexity, would only matter to Intel
+Sandy/Ivy Bridge CPUs
 
  
 
@@ -238,9 +247,9 @@ available.
 If SSSE3 is unavailable, GF-Complete falls back to SPLIT\_TABLE(16,8), which is
 roughly 5 times slower than SPLIT(16,4) with ALTMAP. ParPar, instead, will fall
 back to XOR\_DEPENDS with alternative mapping, if SSE2 is available (or CPU is
-Intel Atom). If a memory region with read, write and execute permissions can be
-mapped, the JIT version is used, otherwise the static code version is used,
-which is faster than or as fast as SPLIT\_TABLE(16,8).
+Intel Atom/Conroe). If a memory region with read, write and execute permissions
+can be mapped, the JIT version is used, otherwise the static code version is
+used, which is faster than or as fast as SPLIT\_TABLE(16,8).
 
 As the current implementation of XOR\_DEPENDS seems to be faster than
 SPLIT\_TABLE(16,4) in a number of cases, I may decide to favour it in ParPar
@@ -254,7 +263,8 @@ Benchmarks
 Non-scientific benchmark using a modified version of the *time\_tool.sh* (to
 generate CSV output and try 4KB - 16MB blocks) provided with GF-Complete. Tests
 were ran with `sh time_tool.sh R 16 {method}` for "interesting" methods. This
-was repeated 3 times and the averages are shown here, for a few different CPUs.
+was repeated 3 times and the highest values (maximums) are shown here, for a few
+different CPUs.
 
 All tests were ran on Linux amd64. Results from MSYS/Windows appear to be
 inaccurate (have not investigated why) and i386 builds are likely [unfairly

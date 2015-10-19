@@ -97,6 +97,17 @@
    gf_general_t oa, ot, ft, sb;
    char sa[50], soa[50], sot[50], sft[50], ssb[50];
  
+@@ -300,8 +300,8 @@
+     if (!gf_general_are_equal(&ft, &sb, w)) {
+       
+       fprintf(stderr,"Problem with region multiply (all values in hex):\n");
+-      fprintf(stderr,"   Target address base: 0x%lx.  Word 0x%x of 0x%x.  Xor: %d\n", 
+-                 (unsigned long) final_target, i, words, xor);
++      fprintf(stderr,"   Source address base: 0x%lx, target address base: 0x%lx.  Word 0x%x of 0x%x.  Xor: %d\n", 
++                 (unsigned long) orig_a, (unsigned long) final_target, i, words, xor);
+       gf_general_val_to_s(a, w, sa, 1);
+       gf_general_val_to_s(&oa, w, soa, 1);
+       gf_general_val_to_s(&ot, w, sot, 1);
 @@ -312,6 +312,29 @@
        if (xor) fprintf(stderr,"   XOR with target word: %s\n", sot);
        fprintf(stderr,"   Product word: %s\n", sft);
@@ -324,10 +335,24 @@
    }
 --- src/gf_w16.c
 +++ src/gf_w16.c
-@@ -30,6 +30,20 @@
- #define GF_FIRST_BIT (1 << 15)
- #define GF_MULTBY_TWO(p) (((p) & GF_FIRST_BIT) ? (((p) << 1) ^ h->prim_poly) : (p) << 1)
+@@ -25,10 +25,30 @@
+           t2 = _mm_sub_epi64 (_mm_slli_epi64(t2, 1), _mm_srli_epi64(t2, (GF_FIELD_WIDTH-1))); \
+           va = _mm_xor_si128(t1, _mm_and_si128(t2, pp)); }
  
+-#define MM_PRINT(s, r) { uint8_t blah[16], ii; printf("%-12s", s); _mm_storeu_si128((__m128i *)blah, r); for (ii = 0; ii < 16; ii += 2) printf("  %02x %02x", blah[15-ii], blah[14-ii]); printf("\n"); }
+-
+ #define GF_FIRST_BIT (1 << 15)
+-#define GF_MULTBY_TWO(p) (((p) & GF_FIRST_BIT) ? (((p) << 1) ^ h->prim_poly) : (p) << 1)
++#define GF_MULTBY_TWO(p) (((p) << 1) ^ (h->prim_poly & -((p) >> 15)))
++#define SSE_GF_MULTBY_TWO(va) \
++          _mm_xor_si128( \
++            _mm_slli_epi16((va), 1), \
++            _mm_and_si128(_mm_set1_epi16(h->prim_poly), _mm_cmpeq_epi16( \
++              _mm_and_si128((va), _mm_set1_epi16(GF_FIRST_BIT)), \
++              _mm_set1_epi16(GF_FIRST_BIT) \
++            )) \
++          )
++
 +/* refers to log_val, ltd and xor (i.e. these need to be defined in the function) */
 +#define _GF_W16_LOG_MULTIPLY_REGION(op, src, dest, srcto) { \
 +  uint16_t *s16 = (uint16_t *)src, *d16 = (uint16_t *)dest; \
@@ -341,26 +366,27 @@
 +  if(xor) _GF_W16_LOG_MULTIPLY_REGION(^=, src, dest, srcto) \
 +  else _GF_W16_LOG_MULTIPLY_REGION(=, src, dest, srcto)
 +
-+
+ 
  static
  inline
- gf_val_32_t gf_w16_inverse_from_divide (gf_t *gf, gf_val_32_t a)
-@@ -820,6 +834,42 @@
+@@ -820,6 +840,44 @@
    }
  }
  
 +#ifdef TEST_SSE2_SPLIT8
 +/* Peter Cordes' amd64 SSE2 implementation of SPLIT(16,8) */
 +/* Note that xor=1 is always assumed */
-+void SYSV_ABI rs_process_pinsrw128(void* dst, const void* src, size_t size, const uint32_t* LH);
++void __attribute__((sysv_abi)) rs_process_pinsrw128(void* dst, const void* src, size_t size, const uint32_t* LH);
 +static
 +void
 +gf_w16_split_8_16_lazy_multiply_region(gf_t *gf, void *src, void *dest, gf_val_32_t val, int bytes, int xor)
 +{
-+  uint64_t j, k, v, a, prod, *s64, *d64, *top64;
++  uint64_t j, k, v;
 +  gf_internal_t *h;
 +  uint32_t lhtable[512];
 +  gf_region_data rd;
++  struct gf_w16_logtable_data *ltd = (struct gf_w16_logtable_data *) ((gf_internal_t *) gf->scratch)->private;
++  int log_val = ltd->log_tbl[val];
 +
 +  if (val == 0) { gf_multby_zero(dest, bytes, xor); return; }
 +  if (val == 1) { gf_multby_one(src, dest, bytes, xor); return; }
@@ -377,7 +403,7 @@
 +    v = GF_MULTBY_TWO(v);
 +  }
 +  for (j = 1; j < 256; j <<= 1) {
-+    for (k = 0; k < j; k++) lhtable[256 + k^j] = (v ^ lhtable[256 + k]);
++    for (k = 0; k < j; k++) lhtable[256 + (k^j)] = (v ^ lhtable[256 + k]);
 +    v = GF_MULTBY_TWO(v);
 +  }
 +
@@ -388,7 +414,7 @@
  static
  void
  gf_w16_split_8_16_lazy_multiply_region(gf_t *gf, void *src, void *dest, gf_val_32_t val, int bytes, int xor)
-@@ -906,6 +956,7 @@
+@@ -906,6 +964,7 @@
    }
    gf_do_final_region_alignment(&rd);
  }
@@ -396,39 +422,160 @@
  
  static void
  gf_w16_table_lazy_multiply_region(gf_t *gf, void *src, void *dest, gf_val_32_t val, int bytes, int xor)
-@@ -954,9 +1005,11 @@
+@@ -948,45 +1007,69 @@
+   gf_do_final_region_alignment(&rd);
+ }
+ 
++#define SSE_GF_MULTBY_16(x) \
++    x = SSE_GF_MULTBY_TWO(x); \
++    x = SSE_GF_MULTBY_TWO(x); \
++    x = SSE_GF_MULTBY_TWO(x); \
++    x = SSE_GF_MULTBY_TWO(x)
++
+ static
+ void
+ gf_w16_split_4_16_lazy_sse_multiply_region(gf_t *gf, void *src, void *dest, gf_val_32_t val, int bytes, int xor)
  {
  #ifdef INTEL_SSSE3
-   uint64_t i, j, *s64, *d64, *top64;;
+-  uint64_t i, j, *s64, *d64, *top64;;
 -  uint64_t c, prod;
-+  uint64_t prod;
-   uint8_t low[4][16];
-   uint8_t high[4][16];
-+  struct gf_w16_logtable_data *ltd = (struct gf_w16_logtable_data *) ((gf_internal_t *) gf->scratch)->private;
+-  uint8_t low[4][16];
+-  uint8_t high[4][16];
++  uint64_t *s64, *d64, *top64;;
++  gf_internal_t* h = (gf_internal_t *) gf->scratch;
++  struct gf_w16_logtable_data *ltd = (struct gf_w16_logtable_data *) h->private;
 +  int log_val = ltd->log_tbl[val];
    gf_region_data rd;
  
-   __m128i  mask, ta, tb, ti, tpl, tph, tlow[4], thigh[4], tta, ttb, lmask;
-@@ -965,14 +1018,13 @@
+-  __m128i  mask, ta, tb, ti, tpl, tph, tlow[4], thigh[4], tta, ttb, lmask;
++  __m128i  mask, ta, tb, ti, tpl, tph, tta, ttb, lmask;
++  __m128i  tlow0, tlow1, tlow2, tlow3, thigh0, thigh1, thigh2, thigh3;
++  uint16_t tmp[8];
+ 
+   if (val == 0) { gf_multby_zero(dest, bytes, xor); return; }
    if (val == 1) { gf_multby_one(src, dest, bytes, xor); return; }
  
    gf_set_region_data(&rd, gf, src, dest, bytes, val, xor, 32);
 -  gf_do_initial_region_alignment(&rd);
-+  GF_W16_LOG_MULTIPLY_REGION(rd.src, rd.dest, rd.s_start);
- 
-   for (j = 0; j < 16; j++) {
-     for (i = 0; i < 4; i++) {
+-
+-  for (j = 0; j < 16; j++) {
+-    for (i = 0; i < 4; i++) {
 -      c = (j << (i*4));
 -      prod = gf->multiply.w32(gf, c, val);
 -      low[i][j] = (prod & 0xff);
 -      high[i][j] = (prod >> 8);
-+      prod = (j == 0) ? 0 : ltd->antilog_tbl[(int) ltd->log_tbl[(j << (i*4))] + log_val];
-+      low[i][j] = (uint8_t)prod;
-+      high[i][j] = (uint8_t)(prod >> 8);
-     }
-   }
+-    }
+-  }
+-
+-  for (i = 0; i < 4; i++) {
+-    tlow[i] = _mm_loadu_si128((__m128i *)low[i]);
+-    thigh[i] = _mm_loadu_si128((__m128i *)high[i]);
+-  }
++  GF_W16_LOG_MULTIPLY_REGION(rd.src, rd.dest, rd.s_start);
  
-@@ -1077,7 +1129,7 @@
++  lmask = _mm_set1_epi16 (0xff);
++  
++  tmp[0] = 0;
++  tmp[1] = val;
++  tmp[2] = GF_MULTBY_TWO(val);
++  tmp[3] = tmp[2] ^ val;
++  tmp[4] = GF_MULTBY_TWO(tmp[2]);
++  tmp[5] = tmp[4] ^ val;
++  tmp[6] = tmp[4] ^ tmp[2];
++  tmp[7] = tmp[4] ^ tmp[3];
++  
++  #define SWIZZLE_STORE(i, a, b) \
++    tlow  ##i = _mm_packus_epi16(_mm_and_si128(a, lmask), _mm_and_si128(b, lmask)); \
++    thigh ##i = _mm_packus_epi16(_mm_srli_epi16(a, 8), _mm_srli_epi16(b, 8))
++  
++  ta = _mm_loadu_si128((__m128i*)tmp);
++  tb = _mm_xor_si128(ta, _mm_set1_epi16( GF_MULTBY_TWO(tmp[4]) ));
++  SWIZZLE_STORE(0, ta, tb);
++  /* multiply by 16 */
++  SSE_GF_MULTBY_16(ta);
++  SSE_GF_MULTBY_16(tb);
++  SWIZZLE_STORE(1, ta, tb);
++  SSE_GF_MULTBY_16(ta);
++  SSE_GF_MULTBY_16(tb);
++  SWIZZLE_STORE(2, ta, tb);
++  SSE_GF_MULTBY_16(ta);
++  SSE_GF_MULTBY_16(tb);
++  SWIZZLE_STORE(3, ta, tb);
++  
++  #undef SWIZZLE_STORE
++  
+   s64 = (uint64_t *) rd.s_start;
+   d64 = (uint64_t *) rd.d_start;
+   top64 = (uint64_t *) rd.d_top;
+ 
+   mask = _mm_set1_epi8 (0x0f);
+-  lmask = _mm_set1_epi16 (0xff);
+ 
+   if (xor) {
+     while (d64 != top64) {
+@@ -1003,22 +1086,22 @@
+       ta = _mm_packus_epi16(ttb, tta);
+ 
+       ti = _mm_and_si128 (mask, tb);
+-      tph = _mm_shuffle_epi8 (thigh[0], ti);
+-      tpl = _mm_shuffle_epi8 (tlow[0], ti);
++      tph = _mm_shuffle_epi8 (thigh0, ti);
++      tpl = _mm_shuffle_epi8 (tlow0, ti);
+   
+       tb = _mm_srli_epi16(tb, 4);
+       ti = _mm_and_si128 (mask, tb);
+-      tpl = _mm_xor_si128(_mm_shuffle_epi8 (tlow[1], ti), tpl);
+-      tph = _mm_xor_si128(_mm_shuffle_epi8 (thigh[1], ti), tph);
++      tpl = _mm_xor_si128(_mm_shuffle_epi8 (tlow1, ti), tpl);
++      tph = _mm_xor_si128(_mm_shuffle_epi8 (thigh1, ti), tph);
+ 
+       ti = _mm_and_si128 (mask, ta);
+-      tpl = _mm_xor_si128(_mm_shuffle_epi8 (tlow[2], ti), tpl);
+-      tph = _mm_xor_si128(_mm_shuffle_epi8 (thigh[2], ti), tph);
++      tpl = _mm_xor_si128(_mm_shuffle_epi8 (tlow2, ti), tpl);
++      tph = _mm_xor_si128(_mm_shuffle_epi8 (thigh2, ti), tph);
+   
+       ta = _mm_srli_epi16(ta, 4);
+       ti = _mm_and_si128 (mask, ta);
+-      tpl = _mm_xor_si128(_mm_shuffle_epi8 (tlow[3], ti), tpl);
+-      tph = _mm_xor_si128(_mm_shuffle_epi8 (thigh[3], ti), tph);
++      tpl = _mm_xor_si128(_mm_shuffle_epi8 (tlow3, ti), tpl);
++      tph = _mm_xor_si128(_mm_shuffle_epi8 (thigh3, ti), tph);
+ 
+       ta = _mm_unpackhi_epi8(tpl, tph);
+       tb = _mm_unpacklo_epi8(tpl, tph);
+@@ -1049,22 +1132,22 @@
+       ta = _mm_packus_epi16(ttb, tta);
+ 
+       ti = _mm_and_si128 (mask, tb);
+-      tph = _mm_shuffle_epi8 (thigh[0], ti);
+-      tpl = _mm_shuffle_epi8 (tlow[0], ti);
++      tph = _mm_shuffle_epi8 (thigh0, ti);
++      tpl = _mm_shuffle_epi8 (tlow0, ti);
+   
+       tb = _mm_srli_epi16(tb, 4);
+       ti = _mm_and_si128 (mask, tb);
+-      tpl = _mm_xor_si128(_mm_shuffle_epi8 (tlow[1], ti), tpl);
+-      tph = _mm_xor_si128(_mm_shuffle_epi8 (thigh[1], ti), tph);
++      tpl = _mm_xor_si128(_mm_shuffle_epi8 (tlow1, ti), tpl);
++      tph = _mm_xor_si128(_mm_shuffle_epi8 (thigh1, ti), tph);
+ 
+       ti = _mm_and_si128 (mask, ta);
+-      tpl = _mm_xor_si128(_mm_shuffle_epi8 (tlow[2], ti), tpl);
+-      tph = _mm_xor_si128(_mm_shuffle_epi8 (thigh[2], ti), tph);
++      tpl = _mm_xor_si128(_mm_shuffle_epi8 (tlow2, ti), tpl);
++      tph = _mm_xor_si128(_mm_shuffle_epi8 (thigh2, ti), tph);
+   
+       ta = _mm_srli_epi16(ta, 4);
+       ti = _mm_and_si128 (mask, ta);
+-      tpl = _mm_xor_si128(_mm_shuffle_epi8 (tlow[3], ti), tpl);
+-      tph = _mm_xor_si128(_mm_shuffle_epi8 (thigh[3], ti), tph);
++      tpl = _mm_xor_si128(_mm_shuffle_epi8 (tlow3, ti), tpl);
++      tph = _mm_xor_si128(_mm_shuffle_epi8 (thigh3, ti), tph);
+ 
+       ta = _mm_unpackhi_epi8(tpl, tph);
+       tb = _mm_unpacklo_epi8(tpl, tph);
+@@ -1077,7 +1160,7 @@
      }
    }
  
@@ -437,39 +584,141 @@
  #endif
  }
  
-@@ -1087,9 +1139,11 @@
+@@ -1086,32 +1169,51 @@
+ gf_w16_split_4_16_lazy_sse_altmap_multiply_region(gf_t *gf, void *src, void *dest, gf_val_32_t val, int bytes, int xor)
  {
  #ifdef INTEL_SSSE3
-   uint64_t i, j, *s64, *d64, *top64;;
+-  uint64_t i, j, *s64, *d64, *top64;;
 -  uint64_t c, prod;
-+  uint64_t prod;
-   uint8_t low[4][16];
-   uint8_t high[4][16];
-+  struct gf_w16_logtable_data *ltd = (struct gf_w16_logtable_data *) ((gf_internal_t *) gf->scratch)->private;
+-  uint8_t low[4][16];
+-  uint8_t high[4][16];
+-  gf_region_data rd;
+-  __m128i  mask, ta, tb, ti, tpl, tph, tlow[4], thigh[4];
++  uint64_t *s64, *d64, *top64;;
++  gf_internal_t* h = (gf_internal_t *) gf->scratch;
++  struct gf_w16_logtable_data *ltd = (struct gf_w16_logtable_data *) h->private;
 +  int log_val = ltd->log_tbl[val];
-   gf_region_data rd;
-   __m128i  mask, ta, tb, ti, tpl, tph, tlow[4], thigh[4];
++  gf_region_data rd;
++  __m128i  mask, ta, tb, ti, tpl, tph;
++  __m128i  tlow0, tlow1, tlow2, tlow3, thigh0, thigh1, thigh2, thigh3;
++  uint16_t tmp[8];
  
-@@ -1097,14 +1151,13 @@
+   if (val == 0) { gf_multby_zero(dest, bytes, xor); return; }
    if (val == 1) { gf_multby_one(src, dest, bytes, xor); return; }
  
    gf_set_region_data(&rd, gf, src, dest, bytes, val, xor, 32);
 -  gf_do_initial_region_alignment(&rd);
-+  GF_W16_LOG_MULTIPLY_REGION(rd.src, rd.dest, rd.s_start);
- 
-   for (j = 0; j < 16; j++) {
-     for (i = 0; i < 4; i++) {
+-
+-  for (j = 0; j < 16; j++) {
+-    for (i = 0; i < 4; i++) {
 -      c = (j << (i*4));
 -      prod = gf->multiply.w32(gf, c, val);
 -      low[i][j] = (prod & 0xff);
 -      high[i][j] = (prod >> 8);
-+      prod = (j == 0) ? 0 : ltd->antilog_tbl[(int) ltd->log_tbl[(j << (i*4))] + log_val];
-+      low[i][j] = (uint8_t)prod;
-+      high[i][j] = (uint8_t)(prod >> 8);
-     }
-   }
+-    }
+-  }
++  GF_W16_LOG_MULTIPLY_REGION(rd.src, rd.dest, rd.s_start);
  
-@@ -1185,7 +1238,7 @@
+-  for (i = 0; i < 4; i++) {
+-    tlow[i] = _mm_loadu_si128((__m128i *)low[i]);
+-    thigh[i] = _mm_loadu_si128((__m128i *)high[i]);
+-  }
++  mask = _mm_set1_epi16 (0xff);
++  
++  tmp[0] = 0;
++  tmp[1] = val;
++  tmp[2] = GF_MULTBY_TWO(val);
++  tmp[3] = tmp[2] ^ val;
++  tmp[4] = GF_MULTBY_TWO(tmp[2]);
++  tmp[5] = tmp[4] ^ val;
++  tmp[6] = tmp[4] ^ tmp[2];
++  tmp[7] = tmp[4] ^ tmp[3];
++  
++  #define SWIZZLE_STORE(i, a, b) \
++    tlow  ##i = _mm_packus_epi16(_mm_and_si128(a, mask), _mm_and_si128(b, mask)); \
++    thigh ##i = _mm_packus_epi16(_mm_srli_epi16(a, 8), _mm_srli_epi16(b, 8))
++  
++  ta = _mm_loadu_si128((__m128i*)tmp);
++  tb = _mm_xor_si128(ta, _mm_set1_epi16( GF_MULTBY_TWO(tmp[4]) ));
++  SWIZZLE_STORE(0, ta, tb);
++  /* multiply by 16 */
++  SSE_GF_MULTBY_16(ta);
++  SSE_GF_MULTBY_16(tb);
++  SWIZZLE_STORE(1, ta, tb);
++  SSE_GF_MULTBY_16(ta);
++  SSE_GF_MULTBY_16(tb);
++  SWIZZLE_STORE(2, ta, tb);
++  SSE_GF_MULTBY_16(ta);
++  SSE_GF_MULTBY_16(tb);
++  SWIZZLE_STORE(3, ta, tb);
++  
++  #undef SWIZZLE_STORE
+ 
+   s64 = (uint64_t *) rd.s_start;
+   d64 = (uint64_t *) rd.d_start;
+@@ -1126,22 +1228,22 @@
+       tb = _mm_load_si128((__m128i *) (s64+2));
+ 
+       ti = _mm_and_si128 (mask, tb);
+-      tph = _mm_shuffle_epi8 (thigh[0], ti);
+-      tpl = _mm_shuffle_epi8 (tlow[0], ti);
++      tph = _mm_shuffle_epi8 (thigh0, ti);
++      tpl = _mm_shuffle_epi8 (tlow0, ti);
+   
+       tb = _mm_srli_epi16(tb, 4);
+       ti = _mm_and_si128 (mask, tb);
+-      tpl = _mm_xor_si128(_mm_shuffle_epi8 (tlow[1], ti), tpl);
+-      tph = _mm_xor_si128(_mm_shuffle_epi8 (thigh[1], ti), tph);
++      tpl = _mm_xor_si128(_mm_shuffle_epi8 (tlow1, ti), tpl);
++      tph = _mm_xor_si128(_mm_shuffle_epi8 (thigh1, ti), tph);
+ 
+       ti = _mm_and_si128 (mask, ta);
+-      tpl = _mm_xor_si128(_mm_shuffle_epi8 (tlow[2], ti), tpl);
+-      tph = _mm_xor_si128(_mm_shuffle_epi8 (thigh[2], ti), tph);
++      tpl = _mm_xor_si128(_mm_shuffle_epi8 (tlow2, ti), tpl);
++      tph = _mm_xor_si128(_mm_shuffle_epi8 (thigh2, ti), tph);
+   
+       ta = _mm_srli_epi16(ta, 4);
+       ti = _mm_and_si128 (mask, ta);
+-      tpl = _mm_xor_si128(_mm_shuffle_epi8 (tlow[3], ti), tpl);
+-      tph = _mm_xor_si128(_mm_shuffle_epi8 (thigh[3], ti), tph);
++      tpl = _mm_xor_si128(_mm_shuffle_epi8 (tlow3, ti), tpl);
++      tph = _mm_xor_si128(_mm_shuffle_epi8 (thigh3, ti), tph);
+ 
+       ta = _mm_load_si128((__m128i *) d64);
+       tph = _mm_xor_si128(tph, ta);
+@@ -1160,22 +1262,22 @@
+       tb = _mm_load_si128((__m128i *) (s64+2));
+ 
+       ti = _mm_and_si128 (mask, tb);
+-      tph = _mm_shuffle_epi8 (thigh[0], ti);
+-      tpl = _mm_shuffle_epi8 (tlow[0], ti);
++      tph = _mm_shuffle_epi8 (thigh0, ti);
++      tpl = _mm_shuffle_epi8 (tlow0, ti);
+   
+       tb = _mm_srli_epi16(tb, 4);
+       ti = _mm_and_si128 (mask, tb);
+-      tpl = _mm_xor_si128(_mm_shuffle_epi8 (tlow[1], ti), tpl);
+-      tph = _mm_xor_si128(_mm_shuffle_epi8 (thigh[1], ti), tph);
++      tpl = _mm_xor_si128(_mm_shuffle_epi8 (tlow1, ti), tpl);
++      tph = _mm_xor_si128(_mm_shuffle_epi8 (thigh1, ti), tph);
+ 
+       ti = _mm_and_si128 (mask, ta);
+-      tpl = _mm_xor_si128(_mm_shuffle_epi8 (tlow[2], ti), tpl);
+-      tph = _mm_xor_si128(_mm_shuffle_epi8 (thigh[2], ti), tph);
++      tpl = _mm_xor_si128(_mm_shuffle_epi8 (tlow2, ti), tpl);
++      tph = _mm_xor_si128(_mm_shuffle_epi8 (thigh2, ti), tph);
+   
+       ta = _mm_srli_epi16(ta, 4);
+       ti = _mm_and_si128 (mask, ta);
+-      tpl = _mm_xor_si128(_mm_shuffle_epi8 (tlow[3], ti), tpl);
+-      tph = _mm_xor_si128(_mm_shuffle_epi8 (thigh[3], ti), tph);
++      tpl = _mm_xor_si128(_mm_shuffle_epi8 (tlow3, ti), tpl);
++      tph = _mm_xor_si128(_mm_shuffle_epi8 (thigh3, ti), tph);
+ 
+       _mm_store_si128 ((__m128i *)d64, tph);
+       _mm_store_si128 ((__m128i *)(d64+2), tpl);
+@@ -1185,7 +1287,7 @@
        
      }
    }
@@ -478,7 +727,7 @@
  
  #endif
  }
-@@ -2284,6 +2337,851 @@
+@@ -2284,6 +2386,970 @@
    return 1;
  }
  
@@ -511,15 +760,16 @@
 +static void gf_w16_xor_lazy_sse_altmap_multiply_region(gf_t *gf, void *src, void *dest, gf_val_32_t val, int bytes, int xor)
 +{
 +#ifdef INTEL_SSE2
-+  uint64_t i, bit, poly;
-+  uint64_t counts[16], deptable[16][16];
++  uint64_t i, bit;
++  uint64_t counts[16];
++  uintptr_t deptable[16][16];
 +  __m128i depmask1, depmask2, polymask1, polymask2, addvals1, addvals2;
 +  uint16_t tmp_depmask[16];
 +  gf_region_data rd;
 +  gf_internal_t *h = (gf_internal_t *) gf->scratch;
 +  struct gf_w16_logtable_data *ltd = (struct gf_w16_logtable_data *) h->private;
 +  int log_val = ltd->log_tbl[val];
-+  __m128 *dW, *topW;
++  __m128i *dW, *topW;
 +  uintptr_t sP;
 +
 +  if (val == 0) { gf_multby_zero(dest, bytes, xor); return; }
@@ -532,34 +782,39 @@
 +  depmask2 = _mm_setzero_si128();
 +  
 +  /* calculate dependent bits */
-+  poly = h->prim_poly & 0xFFFF; /* chop off top bit, although not really necessary */
-+  #define POLYSET(bit) ((poly & (1<<(15-bit))) ? 0xFFFF : 0)
-+  polymask1 = _mm_set_epi16(POLYSET( 7), POLYSET( 6), POLYSET( 5), POLYSET( 4), POLYSET( 3), POLYSET( 2), POLYSET(1), POLYSET(0));
-+  polymask2 = _mm_set_epi16(POLYSET(15), POLYSET(14), POLYSET(13), POLYSET(12), POLYSET(11), POLYSET(10), POLYSET(9), POLYSET(8));
-+  #undef POLYSET
-+  
 +  addvals1 = _mm_set_epi16(1<< 7, 1<< 6, 1<< 5, 1<< 4, 1<< 3, 1<< 2, 1<<1, 1<<0);
 +  addvals2 = _mm_set_epi16(1<<15, 1<<14, 1<<13, 1<<12, 1<<11, 1<<10, 1<<9, 1<<8);
 +  
-+  for(bit=0; bit<16; bit++) {
-+    if(val & (1<<(15-bit))) {
++  /* duplicate each bit in the polynomial 16 times */
++  polymask2 = _mm_set1_epi16(h->prim_poly & 0xFFFF); /* chop off top bit, although not really necessary */
++  polymask1 = _mm_and_si128(polymask2, _mm_set_epi16(1<< 8, 1<< 9, 1<<10, 1<<11, 1<<12, 1<<13, 1<<14, 1<<15));
++  polymask2 = _mm_and_si128(polymask2, _mm_set_epi16(1<< 0, 1<< 1, 1<< 2, 1<< 3, 1<< 4, 1<< 5, 1<< 6, 1<< 7));
++  polymask1 = _mm_cmpeq_epi16(_mm_setzero_si128(), polymask1);
++  polymask2 = _mm_cmpeq_epi16(_mm_setzero_si128(), polymask2);
++  
++  if(val & (1<<15)) {
++    /* XOR */
++    depmask1 = _mm_xor_si128(depmask1, addvals1);
++    depmask2 = _mm_xor_si128(depmask2, addvals2);
++  }
++  for(i=(1<<14); i; i>>=1) {
++    /* rotate */
++    __m128i last = _mm_set1_epi16(_mm_extract_epi16(depmask1, 0));
++    depmask1 = _mm_insert_epi16(
++      _mm_srli_si128(depmask1, 2),
++      _mm_extract_epi16(depmask2, 0),
++      7
++    );
++    depmask2 = _mm_srli_si128(depmask2, 2);
++    
++    /* XOR poly */
++    depmask1 = _mm_xor_si128(depmask1, _mm_andnot_si128(polymask1, last));
++    depmask2 = _mm_xor_si128(depmask2, _mm_andnot_si128(polymask2, last));
++    
++    if(val & i) {
 +      /* XOR */
 +      depmask1 = _mm_xor_si128(depmask1, addvals1);
 +      depmask2 = _mm_xor_si128(depmask2, addvals2);
-+    }
-+    if(bit != 15) {
-+      /* rotate */
-+      __m128i last = _mm_set1_epi16(_mm_extract_epi16(depmask1, 0));
-+      depmask1 = _mm_insert_epi16(
-+        _mm_srli_si128(depmask1, 2),
-+        _mm_extract_epi16(depmask2, 0),
-+        7
-+      );
-+      depmask2 = _mm_srli_si128(depmask2, 2);
-+      
-+      /* XOR poly */
-+      depmask1 = _mm_xor_si128(depmask1, _mm_and_si128(last, polymask1));
-+      depmask2 = _mm_xor_si128(depmask2, _mm_and_si128(last, polymask2));
 +    }
 +  }
 +  
@@ -578,16 +833,16 @@
 +  
 +  
 +  sP = (uintptr_t) rd.s_start;
-+  dW = (__m128 *) rd.d_start;
-+  topW = (__m128 *) rd.d_top;
++  dW = (__m128i *) rd.d_start;
++  topW = (__m128i *) rd.d_top;
 +  
 +  if ((sP - (uintptr_t)dW + 256) < 512) {
 +    /* urgh, src and dest are in the same block, so we need to store results to a temp location */
-+    __m128 dest[16];
++    __m128i dest[16];
 +    if (xor)
 +      while (dW != topW) {
 +        #define STEP(bit, type, typev, typed) { \
-+          uint64_t* deps = deptable[bit]; \
++          uintptr_t* deps = deptable[bit]; \
 +          dest[bit] = _mm_load_ ## type((typed*)(dW + bit)); \
 +          switch(counts[bit]) { \
 +            case 16: dest[bit] = _mm_xor_ ## type(dest[bit], *(typev*)(sP + deps[15])); \
@@ -608,26 +863,26 @@
 +            case  1: dest[bit] = _mm_xor_ ## type(dest[bit], *(typev*)(sP + deps[ 0])); \
 +          } \
 +        }
-+        STEP( 0, ps, __m128, float)
-+        STEP( 1, ps, __m128, float)
-+        STEP( 2, ps, __m128, float)
-+        STEP( 3, ps, __m128, float)
-+        STEP( 4, ps, __m128, float)
-+        STEP( 5, ps, __m128, float)
-+        STEP( 6, ps, __m128, float)
-+        STEP( 7, ps, __m128, float)
-+        STEP( 8, ps, __m128, float)
-+        STEP( 9, ps, __m128, float)
-+        STEP(10, ps, __m128, float)
-+        STEP(11, ps, __m128, float)
-+        STEP(12, ps, __m128, float)
-+        STEP(13, ps, __m128, float)
-+        STEP(14, ps, __m128, float)
-+        STEP(15, ps, __m128, float)
++        STEP( 0, si128, __m128i, __m128i)
++        STEP( 1, si128, __m128i, __m128i)
++        STEP( 2, si128, __m128i, __m128i)
++        STEP( 3, si128, __m128i, __m128i)
++        STEP( 4, si128, __m128i, __m128i)
++        STEP( 5, si128, __m128i, __m128i)
++        STEP( 6, si128, __m128i, __m128i)
++        STEP( 7, si128, __m128i, __m128i)
++        STEP( 8, si128, __m128i, __m128i)
++        STEP( 9, si128, __m128i, __m128i)
++        STEP(10, si128, __m128i, __m128i)
++        STEP(11, si128, __m128i, __m128i)
++        STEP(12, si128, __m128i, __m128i)
++        STEP(13, si128, __m128i, __m128i)
++        STEP(14, si128, __m128i, __m128i)
++        STEP(15, si128, __m128i, __m128i)
 +        #undef STEP
 +        /* copy to dest */
 +        for(i=0; i<16; i++)
-+          _mm_store_ps((float*)(dW+i), dest[i]);
++          _mm_store_si128(dW+i, dest[i]);
 +        dW += 16;
 +        sP += 256;
 +      }
@@ -635,7 +890,7 @@
 +      while (dW != topW) {
 +        /* Note that we assume that all counts are at least 1; I don't think it's possible for that to be false */
 +        #define STEP(bit, type, typev, typed) { \
-+          uint64_t* deps = deptable[bit]; \
++          uintptr_t* deps = deptable[bit]; \
 +          dest[bit] = _mm_load_ ## type((typed*)(sP + deps[ 0])); \
 +          switch(counts[bit]) { \
 +            case 16: dest[bit] = _mm_xor_ ## type(dest[bit], *(typev*)(sP + deps[15])); \
@@ -655,26 +910,26 @@
 +            case  2: dest[bit] = _mm_xor_ ## type(dest[bit], *(typev*)(sP + deps[ 1])); \
 +          } \
 +        }
-+        STEP( 0, ps, __m128, float)
-+        STEP( 1, ps, __m128, float)
-+        STEP( 2, ps, __m128, float)
-+        STEP( 3, ps, __m128, float)
-+        STEP( 4, ps, __m128, float)
-+        STEP( 5, ps, __m128, float)
-+        STEP( 6, ps, __m128, float)
-+        STEP( 7, ps, __m128, float)
-+        STEP( 8, ps, __m128, float)
-+        STEP( 9, ps, __m128, float)
-+        STEP(10, ps, __m128, float)
-+        STEP(11, ps, __m128, float)
-+        STEP(12, ps, __m128, float)
-+        STEP(13, ps, __m128, float)
-+        STEP(14, ps, __m128, float)
-+        STEP(15, ps, __m128, float)
++        STEP( 0, si128, __m128i, __m128i)
++        STEP( 1, si128, __m128i, __m128i)
++        STEP( 2, si128, __m128i, __m128i)
++        STEP( 3, si128, __m128i, __m128i)
++        STEP( 4, si128, __m128i, __m128i)
++        STEP( 5, si128, __m128i, __m128i)
++        STEP( 6, si128, __m128i, __m128i)
++        STEP( 7, si128, __m128i, __m128i)
++        STEP( 8, si128, __m128i, __m128i)
++        STEP( 9, si128, __m128i, __m128i)
++        STEP(10, si128, __m128i, __m128i)
++        STEP(11, si128, __m128i, __m128i)
++        STEP(12, si128, __m128i, __m128i)
++        STEP(13, si128, __m128i, __m128i)
++        STEP(14, si128, __m128i, __m128i)
++        STEP(15, si128, __m128i, __m128i)
 +        #undef STEP
 +        /* copy to dest */
 +        for(i=0; i<16; i++)
-+          _mm_store_ps((float*)(dW+i), dest[i]);
++          _mm_store_si128(dW+i, dest[i]);
 +        dW += 16;
 +        sP += 256;
 +      }
@@ -682,7 +937,7 @@
 +    if (xor)
 +      while (dW != topW) {
 +        #define STEP(bit, type, typev, typed) { \
-+          uint64_t* deps = deptable[bit]; \
++          uintptr_t* deps = deptable[bit]; \
 +          typev tmp = _mm_load_ ## type((typed*)(dW + bit)); \
 +          switch(counts[bit]) { \
 +            case 16: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[15])); \
@@ -704,22 +959,22 @@
 +          } \
 +          _mm_store_ ## type((typed*)(dW + bit), tmp); \
 +        }
-+        STEP( 0, ps, __m128, float)
-+        STEP( 1, ps, __m128, float)
-+        STEP( 2, ps, __m128, float)
-+        STEP( 3, ps, __m128, float)
-+        STEP( 4, ps, __m128, float)
-+        STEP( 5, ps, __m128, float)
-+        STEP( 6, ps, __m128, float)
-+        STEP( 7, ps, __m128, float)
-+        STEP( 8, ps, __m128, float)
-+        STEP( 9, ps, __m128, float)
-+        STEP(10, ps, __m128, float)
-+        STEP(11, ps, __m128, float)
-+        STEP(12, ps, __m128, float)
-+        STEP(13, ps, __m128, float)
-+        STEP(14, ps, __m128, float)
-+        STEP(15, ps, __m128, float)
++        STEP( 0, si128, __m128i, __m128i)
++        STEP( 1, si128, __m128i, __m128i)
++        STEP( 2, si128, __m128i, __m128i)
++        STEP( 3, si128, __m128i, __m128i)
++        STEP( 4, si128, __m128i, __m128i)
++        STEP( 5, si128, __m128i, __m128i)
++        STEP( 6, si128, __m128i, __m128i)
++        STEP( 7, si128, __m128i, __m128i)
++        STEP( 8, si128, __m128i, __m128i)
++        STEP( 9, si128, __m128i, __m128i)
++        STEP(10, si128, __m128i, __m128i)
++        STEP(11, si128, __m128i, __m128i)
++        STEP(12, si128, __m128i, __m128i)
++        STEP(13, si128, __m128i, __m128i)
++        STEP(14, si128, __m128i, __m128i)
++        STEP(15, si128, __m128i, __m128i)
 +        #undef STEP
 +        dW += 16;
 +        sP += 256;
@@ -728,7 +983,7 @@
 +      while (dW != topW) {
 +        /* Note that we assume that all counts are at least 1; I don't think it's possible for that to be false */
 +        #define STEP(bit, type, typev, typed) { \
-+          uint64_t* deps = deptable[bit]; \
++          uintptr_t* deps = deptable[bit]; \
 +          typev tmp = _mm_load_ ## type((typed*)(sP + deps[ 0])); \
 +          switch(counts[bit]) { \
 +            case 16: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[15])); \
@@ -749,28 +1004,28 @@
 +          } \
 +          _mm_store_ ## type((typed*)(dW + bit), tmp); \
 +        }
-+        STEP( 0, ps, __m128, float)
-+        STEP( 1, ps, __m128, float)
-+        STEP( 2, ps, __m128, float)
-+        STEP( 3, ps, __m128, float)
-+        STEP( 4, ps, __m128, float)
-+        STEP( 5, ps, __m128, float)
-+        STEP( 6, ps, __m128, float)
-+        STEP( 7, ps, __m128, float)
-+        STEP( 8, ps, __m128, float)
-+        STEP( 9, ps, __m128, float)
-+        STEP(10, ps, __m128, float)
-+        STEP(11, ps, __m128, float)
-+        STEP(12, ps, __m128, float)
-+        STEP(13, ps, __m128, float)
-+        STEP(14, ps, __m128, float)
-+        STEP(15, ps, __m128, float)
++        STEP( 0, si128, __m128i, __m128i)
++        STEP( 1, si128, __m128i, __m128i)
++        STEP( 2, si128, __m128i, __m128i)
++        STEP( 3, si128, __m128i, __m128i)
++        STEP( 4, si128, __m128i, __m128i)
++        STEP( 5, si128, __m128i, __m128i)
++        STEP( 6, si128, __m128i, __m128i)
++        STEP( 7, si128, __m128i, __m128i)
++        STEP( 8, si128, __m128i, __m128i)
++        STEP( 9, si128, __m128i, __m128i)
++        STEP(10, si128, __m128i, __m128i)
++        STEP(11, si128, __m128i, __m128i)
++        STEP(12, si128, __m128i, __m128i)
++        STEP(13, si128, __m128i, __m128i)
++        STEP(14, si128, __m128i, __m128i)
++        STEP(15, si128, __m128i, __m128i)
 +        #undef STEP
 +        dW += 16;
 +        sP += 256;
 +      }
 +  }
-+  
++    
 +  GF_W16_LOG_MULTIPLY_REGION(rd.s_top, rd.d_top, (uint8_t *)rd.src+rd.bytes);
 +#endif
 +}
@@ -783,7 +1038,7 @@
 +static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, void *dest, gf_val_32_t val, int bytes, int xor)
 +{
 +#ifdef INTEL_SSE2
-+  uint64_t i, bit, poly;
++  uint64_t i, bit;
 +  __m128i depmask1, depmask2, polymask1, polymask2, addvals1, addvals2;
 +  __m128i common_mask;
 +  uint16_t tmp_depmask[16], common_depmask[8];
@@ -803,38 +1058,44 @@
 +  
 +  if(rd.d_start != rd.d_top) {
 +    int use_temp = ((uintptr_t)rd.s_start - (uintptr_t)rd.d_start + 256) < 512;
++    int setup_stack = 0;
 +    depmask1 = _mm_setzero_si128();
 +    depmask2 = _mm_setzero_si128();
 +    
 +    /* calculate dependent bits */
-+    poly = h->prim_poly & 0xFFFF; /* chop off top bit, although not really necessary */
-+    #define POLYSET(bit) ((poly & (1<<(15-bit))) ? 0xFFFF : 0)
-+    polymask1 = _mm_set_epi16(POLYSET( 7), POLYSET( 6), POLYSET( 5), POLYSET( 4), POLYSET( 3), POLYSET( 2), POLYSET(1), POLYSET(0));
-+    polymask2 = _mm_set_epi16(POLYSET(15), POLYSET(14), POLYSET(13), POLYSET(12), POLYSET(11), POLYSET(10), POLYSET(9), POLYSET(8));
-+    #undef POLYSET
-+  
 +    addvals1 = _mm_set_epi16(1<< 7, 1<< 6, 1<< 5, 1<< 4, 1<< 3, 1<< 2, 1<<1, 1<<0);
 +    addvals2 = _mm_set_epi16(1<<15, 1<<14, 1<<13, 1<<12, 1<<11, 1<<10, 1<<9, 1<<8);
-+  
-+    for(bit=0; bit<16; bit++) {
-+      if(val & (1<<(15-bit))) {
++    
++    /* duplicate each bit in the polynomial 16 times */
++    polymask2 = _mm_set1_epi16(h->prim_poly & 0xFFFF); /* chop off top bit, although not really necessary */
++    polymask1 = _mm_and_si128(polymask2, _mm_set_epi16(1<< 8, 1<< 9, 1<<10, 1<<11, 1<<12, 1<<13, 1<<14, 1<<15));
++    polymask2 = _mm_and_si128(polymask2, _mm_set_epi16(1<< 0, 1<< 1, 1<< 2, 1<< 3, 1<< 4, 1<< 5, 1<< 6, 1<< 7));
++    polymask1 = _mm_cmpeq_epi16(_mm_setzero_si128(), polymask1);
++    polymask2 = _mm_cmpeq_epi16(_mm_setzero_si128(), polymask2);
++    
++    if(val & (1<<15)) {
++      /* XOR */
++      depmask1 = _mm_xor_si128(depmask1, addvals1);
++      depmask2 = _mm_xor_si128(depmask2, addvals2);
++    }
++    for(i=(1<<14); i; i>>=1) {
++      /* rotate */
++      __m128i last = _mm_set1_epi16(_mm_extract_epi16(depmask1, 0));
++      depmask1 = _mm_insert_epi16(
++        _mm_srli_si128(depmask1, 2),
++        _mm_extract_epi16(depmask2, 0),
++        7
++      );
++      depmask2 = _mm_srli_si128(depmask2, 2);
++      
++      /* XOR poly */
++      depmask1 = _mm_xor_si128(depmask1, _mm_andnot_si128(polymask1, last));
++      depmask2 = _mm_xor_si128(depmask2, _mm_andnot_si128(polymask2, last));
++      
++      if(val & i) {
 +        /* XOR */
 +        depmask1 = _mm_xor_si128(depmask1, addvals1);
 +        depmask2 = _mm_xor_si128(depmask2, addvals2);
-+      }
-+      if(bit != 15) {
-+        /* rotate */
-+        __m128i last = _mm_set1_epi16(_mm_extract_epi16(depmask1, 0));
-+        depmask1 = _mm_insert_epi16(
-+          _mm_srli_si128(depmask1, 2),
-+          _mm_extract_epi16(depmask2, 0),
-+          7
-+        );
-+        depmask2 = _mm_srli_si128(depmask2, 2);
-+        
-+        /* XOR poly */
-+        depmask1 = _mm_xor_si128(depmask1, _mm_and_si128(last, polymask1));
-+        depmask2 = _mm_xor_si128(depmask2, _mm_and_si128(last, polymask2));
 +      }
 +    }
 +    
@@ -843,7 +1104,7 @@
 +    /* heuristic: we just find common XOR elements between bit pairs */
 +    
 +    if (!use_temp) {
-+      __m128i common_maskexcl, tmp1, tmp2;
++      __m128i tmp1, tmp2;
 +      /* first, we need to re-arrange words so that we can perform bitwise AND on neighbouring pairs */
 +      /* unfortunately, PACKUSDW is SSE4.1 only, so emulate it with shuffles */
 +      /* 01234567 -> 02461357 */
@@ -867,15 +1128,11 @@
 +        _mm_unpackhi_epi64(tmp1, tmp2)
 +      );
 +      /* we have the common elements between pairs, but it doesn't make sense to process a separate queue if there's only one common element (0 XORs), so eliminate those */
-+      common_maskexcl = _mm_xor_si128(
-+        _mm_cmpeq_epi16(
-+          _mm_setzero_si128(),
-+          /* "(v & (v-1)) == 0" is true if only zero/one bit is set in each word */
-+          _mm_and_si128(common_mask, _mm_sub_epi16(common_mask, _mm_set1_epi16(1)))
-+        ),
-+        _mm_set1_epi8(0xFF)
-+      );
-+      common_mask = _mm_and_si128(common_mask, common_maskexcl);
++      common_mask = _mm_andnot_si128(_mm_cmpeq_epi16(
++        _mm_setzero_si128(),
++        /* "(v & (v-1)) == 0" is true if only zero/one bit is set in each word */
++        _mm_and_si128(common_mask, _mm_sub_epi16(common_mask, _mm_set1_epi16(1)))
++      ), common_mask);
 +      /* we now have a common elements mask without 1-bit words, just simply merge stuff in */
 +      depmask1 = _mm_xor_si128(depmask1, _mm_unpacklo_epi16(common_mask, common_mask));
 +      depmask2 = _mm_xor_si128(depmask2, _mm_unpackhi_epi16(common_mask, common_mask));
@@ -895,19 +1152,28 @@
 +    
 +    jit->ptr = jit->code;
 +    
-+    _jit_push(jit, BP);
-+    _jit_mov_r(jit, BP, SP);
-+    /* align pointer (avoid SP because stuff is encoded differently with it) */
-+    _jit_mov_r(jit, AX, SP);
-+    _jit_and_i(jit, AX, 0xF);
-+    _jit_sub_r(jit, BP, AX);
-+    
-+#ifdef AMD64
-+    /* make Windows happy and save XMM6-15 registers */
-+    /* ideally should be done by this function, not JIT code, but MSVC has a convenient policy of no inline ASM */
-+    for(i=6; i<16; i++)
-+      _jit_movaps_store(jit, BP, -((int32_t)i-5)*16, i);
++#if defined(AMD64) && defined(_WINDOWS) || defined(__WINDOWS__) || defined(_WIN32) || defined(_WIN64)
++    #define SAVE_XMM 1
++    setup_stack = 1;
++#elif !defined(AMD64)
++    setup_stack = use_temp;
 +#endif
++
++    if(setup_stack) {
++      _jit_push(jit, BP);
++      _jit_mov_r(jit, BP, SP);
++      /* align pointer (avoid SP because stuff is encoded differently with it) */
++      _jit_mov_r(jit, AX, SP);
++      _jit_and_i(jit, AX, 0xF);
++      _jit_sub_r(jit, BP, AX);
++      
++#ifdef SAVE_XMM
++      /* make Windows happy and save XMM6-15 registers */
++      /* ideally should be done by this function, not JIT code, but MSVC has a convenient policy of no inline ASM */
++      for(i=6; i<16; i++)
++        _jit_movaps_store(jit, BP, -((int32_t)i-5)*16, i);
++#endif
++    }
 +    
 +    _jit_mov_i(jit, AX, (intptr_t)rd.s_start);
 +    _jit_mov_i(jit, DX, (intptr_t)rd.d_start);
@@ -918,51 +1184,144 @@
 +    
 +    
 +    //_jit_xorps_m(jit, reg, AX, i<<4);
++    #define _XORPS_A_(reg, tr) \
++        *(int32_t*)(jit->ptr) = (0x40570F + ((reg) << 19) + (i <<28)) ^ (tr)
 +    #define _XORPS_A(reg) \
-+        *(int32_t*)(jit->ptr) = 0x40570F | ((reg) << 19) | (i <<28); \
++        _XORPS_A_(reg, 0); \
 +        jit->ptr += 4
-+    #define _XORPS_B(reg) \
++    #define _C_XORPS_A(reg, c) \
++        _XORPS_A_(reg, 0); \
++        jit->ptr += (c)<<2
++#ifdef AMD64
++    #define _XORPS_B_(reg, tr) \
++        *(int64_t*)(jit->ptr) = (0x80570F + ((reg) << 19) + (i <<28)) ^ (tr)
++#else
++    #define _XORPS_B_(reg, tr) \
 +        *(int32_t*)(jit->ptr +3) = 0; \
-+        *(int32_t*)(jit->ptr) = 0x80570F | ((reg) << 19) | (i <<28); \
++        *(int32_t*)(jit->ptr) = (0x80570F + ((reg) << 19) + (i <<28)) ^ (tr)
++#endif
++    #define _XORPS_B(reg) \
++        _XORPS_B_(reg, 0); \
 +        jit->ptr += 7
++    #define _C_XORPS_B(reg, c) \
++        _XORPS_B_(reg, 0); \
++        jit->ptr += ((c)<<3)-(c)
 +    #define _XORPS_A64(reg) \
-+        *(int64_t*)(jit->ptr) = 0x40570F44 | ((reg) << 27) | (i <<36); \
++        *(int64_t*)(jit->ptr) = 0x40570F44 + ((reg) << 27) + (i <<36); \
 +        jit->ptr += 5
 +    #define _XORPS_B64(reg) \
-+        *(int64_t*)(jit->ptr) = 0x80570F44 | ((reg) << 27) | (i <<36); \
++        *(int64_t*)(jit->ptr) = 0x80570F44 + ((reg) << 27) + (i <<36); \
 +        jit->ptr += 8
 +    
 +    //_jit_pxor_m(jit, 1, AX, i<<4);
++#ifdef AMD64
++    #define _PXOR_A_(reg, tr) \
++        *(int64_t*)(jit->ptr) = (0x40EF0F66 + ((reg) << 27) + ((int64_t)i << 36)) ^ (tr)
++    #define _PXOR_B_(reg, tr) \
++        *(int64_t*)(jit->ptr) = (0x80EF0F66 + ((reg) << 27) + ((int64_t)i << 36)) ^ (tr)
++#else
++    #define _PXOR_A_(reg, tr) \
++        *(int32_t*)(jit->ptr) = (0x40EF0F66 + ((reg) << 27)) ^ (tr); \
++        *(jit->ptr +4) = (uint8_t)(i << 4)
++    #define _PXOR_B_(reg, tr) \
++        *(int32_t*)(jit->ptr) = (0x80EF0F66 + ((reg) << 27)) ^ (tr); \
++        *(int32_t*)(jit->ptr +4) = (uint8_t)(i << 4)
++#endif
 +    #define _PXOR_A(reg) \
-+        *(int32_t*)(jit->ptr) = 0x40EF0F66 | ((reg) << 27); \
-+        *(jit->ptr +4) = (uint8_t)(i << 4); \
++        _PXOR_A_(reg, 0); \
 +        jit->ptr += 5
++    #define _C_PXOR_A(reg, c) \
++        _PXOR_A_(reg, 0); \
++        jit->ptr += ((c)<<2)+(c)
 +    #define _PXOR_B(reg) \
-+        *(int32_t*)(jit->ptr) = 0x80EF0F66 | ((reg) << 27); \
-+        *(int32_t*)(jit->ptr +4) = (uint8_t)(i << 4); \
++        _PXOR_B_(reg, 0); \
 +        jit->ptr += 8
++    #define _C_PXOR_B(reg, c) \
++        _PXOR_B_(reg, 0); \
++        jit->ptr += (c)<<3
 +    #define _PXOR_A64(reg) \
-+        *(int64_t*)(jit->ptr) = 0x40EF0F4466 | ((reg) << 35) | (i << 44); \
++        *(int64_t*)(jit->ptr) = 0x40EF0F4466 + ((reg) << 35) + (i << 44); \
 +        jit->ptr += 6
 +    #define _PXOR_B64(reg) \
-+        *(int64_t*)(jit->ptr) = 0x80EF0F4466 | ((reg) << 35) | (i << 44); \
++        *(int64_t*)(jit->ptr) = 0x80EF0F4466 + ((reg) << 35) + (i << 44); \
 +        jit->ptr += 8; \
 +        *(jit->ptr++) = 0
 +    
-+    #define _MOV_OR_XOR(reg, movop, xorop, flag) \
-+        if(flag) { \
-+          movop(jit, reg, AX, i<<4); \
-+          flag = 0; \
-+        } else { \
-+          xorop(reg); \
-+        }
-+    #define _MOV_OR_XOR_R(reg, srcreg, movop, xorop, flag) \
-+        if(flag) { \
-+          movop(jit, reg, srcreg); \
-+          flag = 0; \
-+        } else { \
-+          xorop(jit, reg, srcreg); \
-+        }    
++    //_jit_xorps_r(jit, r2, r1)
++    #define _XORPS_R_(r2, r1, tr) \
++        *(int32_t*)(jit->ptr) = (0xC0570F + ((r2) <<19) + ((r1) <<16)) ^ (tr)
++    #define _XORPS_R(r2, r1) \
++        _XORPS_R_(r2, r1, 0); \
++        jit->ptr += 3
++    #define _C_XORPS_R(r2, r1, c) \
++        _XORPS_R_(r2, r1, 0); \
++        jit->ptr += ((c)<<1)+(c)
++    // r2 is always < 8, r1 here is >= 8
++    #define _XORPS_R64_(r2, r1, tr) \
++        *(int32_t*)(jit->ptr) = (0xC0570F41 + ((r2) <<27) + ((r1) <<24)) ^ ((tr)<<8)
++    #define _XORPS_R64(r2, r1) \
++        _XORPS_R64_(r2, r1, 0); \
++        jit->ptr += 4
++    #define _C_XORPS_R64(r2, r1, c) \
++        _XORPS_R64_(r2, r1, 0); \
++        jit->ptr += (c)<<2
++    
++    //_jit_pxor_r(jit, r2, r1)
++    #define _PXOR_R_(r2, r1, tr) \
++        *(int32_t*)(jit->ptr) = (0xC0EF0F66 + ((r2) <<27) + ((r1) <<24)) ^ (tr)
++    #define _PXOR_R(r2, r1) \
++        _PXOR_R_(r2, r1, 0); \
++        jit->ptr += 4
++    #define _C_PXOR_R(r2, r1, c) \
++        _PXOR_R_(r2, r1, 0); \
++        jit->ptr += (c)<<2
++    #define _PXOR_R64_(r2, r1, tr) \
++        *(int64_t*)(jit->ptr) = (0xC0EF0F4166 + ((int64_t)(r2) <<35) + ((int64_t)(r1) <<32)) ^ (((int64_t)tr)<<8)
++    #define _PXOR_R64(r2, r1) \
++        _PXOR_R64_(r2, r1, 0); \
++        jit->ptr += 5
++    #define _C_PXOR_R64(r2, r1, c) \
++        _PXOR_R64_(r2, r1, 0); \
++        jit->ptr += ((c)<<2)+(c)
++    
++    /* optimised mix of xor/mov operations */
++    #define _MOV_OR_XOR_FP_A(reg, flag, c) \
++        _XORPS_A_(reg, flag); \
++        flag &= (c)-1; \
++        jit->ptr += (c)<<2
++    #define _MOV_OR_XOR_FP_B(reg, flag, c) \
++        _XORPS_B_(reg, flag); \
++        flag &= (c)-1; \
++        jit->ptr += ((c)<<3)-(c)
++    #define _MOV_OR_XOR_FP_INIT (0x570F ^ 0x280F)
++    
++    #define _MOV_OR_XOR_INT_A(reg, flag, c) \
++        _PXOR_A_(reg, flag); \
++        flag &= (c)-1; \
++        jit->ptr += ((c)<<2)+(c)
++    #define _MOV_OR_XOR_INT_B(reg, flag, c) \
++        _PXOR_B_(reg, flag); \
++        flag &= (c)-1; \
++        jit->ptr += (c)<<3
++    #define _MOV_OR_XOR_INT_INIT (0xEF0F00 ^ 0x6F0F00)
++    
++    #define _MOV_OR_XOR_R_FP(r2, r1, flag, c) \
++        _XORPS_R_(r2, r1, flag); \
++        flag &= (c)-1; \
++        jit->ptr += ((c)<<1)+(c)
++    #define _MOV_OR_XOR_R64_FP(r2, r1, flag, c) \
++        _XORPS_R64_(r2, r1, flag); \
++        flag &= (c)-1; \
++        jit->ptr += (c)<<2
++    
++    #define _MOV_OR_XOR_R_INT(r2, r1, flag, c) \
++        _PXOR_R_(r2, r1, flag); \
++        flag &= (c)-1; \
++        jit->ptr += (c)<<2
++    #define _MOV_OR_XOR_R64_INT(r2, r1, flag, c) \
++        _PXOR_R64_(r2, r1, flag); \
++        flag &= (c)-1; \
++        jit->ptr += ((c)<<2)+(c)
 +    
 +#ifdef AMD64
 +    #define _HIGHOP(op, bit) op ## 64((bit) &7)
@@ -1001,21 +1360,26 @@
 +        }
 +#endif
 +        for(bit=0; bit<8; bit+=2) {
++          uint64_t mask1 = tmp_depmask[bit], mask2 = tmp_depmask[bit+1];
 +          for(i=0; i<8; i++) {
-+            if(tmp_depmask[bit] & (1<<i)) {
++            if(mask1 & 1) {
 +              _XORPS_A(bit);
 +            }
-+            if(tmp_depmask[bit+1] & (1<<i)) {
++            if(mask2 & 1) {
 +              _PXOR_A(bit+1);
 +            }
++            mask1 >>= 1;
++            mask2 >>= 1;
 +          }
 +          for(; i<16; i++) {
-+            if(tmp_depmask[bit] & (1<<i)) {
++            if(mask1 & 1) {
 +              _XORPS_B(bit);
 +            }
-+            if(tmp_depmask[bit+1] & (1<<i)) {
++            if(mask2 & 1) {
 +              _PXOR_B(bit+1);
 +            }
++            mask1 >>= 1;
++            mask2 >>= 1;
 +          }
 +        }
 +#ifndef AMD64
@@ -1030,21 +1394,24 @@
 +        }
 +#endif
 +        for(bit=8; bit<16; bit+=2) {
++          uint64_t ib = 1;
 +          for(i=0; i<8; i++) {
-+            if(tmp_depmask[bit] & (1<<i)) {
++            if(tmp_depmask[bit] & ib) {
 +              _HIGHOP(_XORPS_A, bit);
 +            }
-+            if(tmp_depmask[bit+1] & (1<<i)) {
++            if(tmp_depmask[bit+1] & ib) {
 +              _HIGHOP(_PXOR_A, bit+1);
 +            }
++            ib <<= 1;
 +          }
 +          for(; i<16; i++) {
-+            if(tmp_depmask[bit] & (1<<i)) {
++            if(tmp_depmask[bit] & ib) {
 +              _HIGHOP(_XORPS_B, bit);
 +            }
-+            if(tmp_depmask[bit+1] & (1<<i)) {
++            if(tmp_depmask[bit+1] & ib) {
 +              _HIGHOP(_PXOR_B, bit+1);
 +            }
++            ib <<= 1;
 +          }
 +        }
 +#ifdef AMD64
@@ -1065,22 +1432,27 @@
 +#endif
 +      } else {
 +        for(bit=0; bit<8; bit+=2) {
-+          int mov = 1, mov2 = 1;
++          uint64_t mov1 = _MOV_OR_XOR_FP_INIT, mov2 = _MOV_OR_XOR_INT_INIT;
++          uint64_t mask1 = tmp_depmask[bit], mask2 = tmp_depmask[bit+1];
 +          for(i=0; i<8; i++) {
-+            if(tmp_depmask[bit] & (1<<i)) {
-+              _MOV_OR_XOR(bit, _jit_movaps_load, _XORPS_A, mov)
++            if(mask1 & 1) {
++              _MOV_OR_XOR_FP_A(bit, mov1, 1);
 +            }
-+            if(tmp_depmask[bit+1] & (1<<i)) {
-+              _MOV_OR_XOR(bit+1, _jit_movdqa_load, _PXOR_A, mov2)
++            if(mask2 & 1) {
++              _MOV_OR_XOR_INT_A(bit+1, mov2, 1);
 +            }
++            mask1 >>= 1;
++            mask2 >>= 1;
 +          }
 +          for(; i<16; i++) {
-+            if(tmp_depmask[bit] & (1<<i)) {
-+              _MOV_OR_XOR(bit, _jit_movaps_load, _XORPS_B, mov)
++            if(mask1 & 1) {
++              _MOV_OR_XOR_FP_B(bit, mov1, 1);
 +            }
-+            if(tmp_depmask[bit+1] & (1<<i)) {
-+              _MOV_OR_XOR(bit+1, _jit_movdqa_load, _PXOR_B, mov2)
++            if(mask2 & 1) {
++              _MOV_OR_XOR_INT_B(bit+1, mov2, 1);
 +            }
++            mask1 >>= 1;
++            mask2 >>= 1;
 +          }
 +        }
 +#ifndef AMD64
@@ -1091,22 +1463,25 @@
 +        }
 +#endif
 +        for(bit=8; bit<16; bit+=2) {
-+          int mov = 1, mov2 = 1;
++          uint64_t mov1 = 1, mov2 = 1;
++          uint64_t ib = 1;
 +          for(i=0; i<8; i++) {
-+            if(tmp_depmask[bit] & (1<<i)) {
-+              _MOV_OR_XOR_H(bit, _jit_movaps_load, _XORPS_A, mov)
++            if(tmp_depmask[bit] & ib) {
++              _MOV_OR_XOR_H(bit, _jit_movaps_load, _XORPS_A, mov1)
 +            }
-+            if(tmp_depmask[bit+1] & (1<<i)) {
++            if(tmp_depmask[bit+1] & ib) {
 +              _MOV_OR_XOR_H(bit+1, _jit_movdqa_load, _PXOR_A, mov2)
 +            }
++            ib <<= 1;
 +          }
 +          for(; i<16; i++) {
-+            if(tmp_depmask[bit] & (1<<i)) {
-+              _MOV_OR_XOR_H(bit, _jit_movaps_load, _XORPS_B, mov)
++            if(tmp_depmask[bit] & ib) {
++              _MOV_OR_XOR_H(bit, _jit_movaps_load, _XORPS_B, mov1)
 +            }
-+            if(tmp_depmask[bit+1] & (1<<i)) {
++            if(tmp_depmask[bit+1] & ib) {
 +              _MOV_OR_XOR_H(bit+1, _jit_movdqa_load, _PXOR_B, mov2)
 +            }
++            ib <<= 1;
 +          }
 +        }
 +#ifdef AMD64
@@ -1128,148 +1503,139 @@
 +      }
 +    } else {
 +#ifdef AMD64
++      #define MEM_XORS_A 3
 +      /* preload upper 13 inputs into registers */
 +      for(i=3; i<16; i++)
 +        _jit_movaps_load(jit, i, AX, i<<4);
-+      #define MEM_XORS_A 3
 +#else
++      #define MEM_XORS_A 8
 +      /* can only fit 5 in 32-bit mode :( */
 +      for(i=11; i<16; i++)
 +        _jit_movaps_load(jit, i-8, AX, i<<4);
-+      #define MEM_XORS_A 8
 +#endif
 +      if(xor) {
 +        for(bit=0; bit<16; bit+=2) {
-+          int movC = 1;
++          uint64_t movC = _MOV_OR_XOR_INT_INIT;
++          uint64_t mask1 = tmp_depmask[bit], mask2 = tmp_depmask[bit+1],
++                   maskC = common_depmask[bit>>1];
 +          _jit_movaps_load(jit, 0, DX, bit<<4);
 +          _jit_movdqa_load(jit, 1, DX, (bit+1)<<4);
 +          
 +          for(i=0; i<MEM_XORS_A; i++) {
-+            if(common_depmask[bit>>1] & (1<<i)) {
-+              _MOV_OR_XOR(2, _jit_movaps_load, _XORPS_A, movC)
-+            } else {
-+              if(tmp_depmask[bit] & (1<<i)) {
-+                _XORPS_A(0);
-+              }
-+              if(tmp_depmask[bit+1] & (1<<i)) {
-+                _PXOR_A(1);
-+              }
-+            }
++            _MOV_OR_XOR_INT_A(2, movC, maskC & 1);
++            _C_XORPS_A(0, mask1 & 1);
++            _C_PXOR_A(1, mask2 & 1);
++            mask1 >>= 1;
++            mask2 >>= 1;
++            maskC >>= 1;
 +          }
 +#ifdef AMD64
 +          /* upper 13 XORs can be done from registers */
-+          for(; i<16; i++) {
-+            if(common_depmask[bit>>1] & (1<<i)) {
-+              _MOV_OR_XOR_R(2, i, _jit_movaps, _jit_xorps_r, movC)
-+            } else {
-+              if(tmp_depmask[bit] & (1<<i)) {
-+                _jit_xorps_r(jit, 0, i);
-+              }
-+              if(tmp_depmask[bit+1] & (1<<i)) {
-+                _jit_pxor_r(jit, 1, i);
-+              }
-+            }
++          for(; i<8; i++) {
++            _MOV_OR_XOR_R_INT(2, i, movC, maskC & 1);
++            _C_XORPS_R(0, i, mask1 & 1);
++            _C_PXOR_R(1, i, mask2 & 1);
++            mask1 >>= 1;
++            mask2 >>= 1;
++            maskC >>= 1;
++          }
++          for(i=0; i<8; i++) {
++            _MOV_OR_XOR_R64_INT(2, i, movC, maskC & 1);
++            _C_XORPS_R64(0, i, mask1 & 1);
++            _C_PXOR_R64(1, i, mask2 & 1);
++            mask1 >>= 1;
++            mask2 >>= 1;
++            maskC >>= 1;
 +          }
 +#else
 +          /* 3 from mem, 5 from regs */
 +          for(; i<11; i++) {
-+            if(common_depmask[bit>>1] & (1<<i)) {
-+              _MOV_OR_XOR(2, _jit_movaps_load, _XORPS_B, movC)
-+            } else {
-+              if(tmp_depmask[bit] & (1<<i)) {
-+                _XORPS_B(0);
-+              }
-+              if(tmp_depmask[bit+1] & (1<<i)) {
-+                _PXOR_B(1);
-+              }
-+            }
++            _MOV_OR_XOR_INT_B(2, movC, maskC & 1);
++            _C_XORPS_B(0, mask1 & 1);
++            _C_PXOR_B(1, mask2 & 1);
++            mask1 >>= 1;
++            mask2 >>= 1;
++            maskC >>= 1;
 +          }
-+          for(; i<16; i++) {
-+            if(common_depmask[bit>>1] & (1<<i)) {
-+              _MOV_OR_XOR_R(2, i-8, _jit_movaps, _jit_xorps_r, movC)
-+            } else {
-+              if(tmp_depmask[bit] & (1<<i)) {
-+                _jit_xorps_r(jit, 0, i-8);
-+              }
-+              if(tmp_depmask[bit+1] & (1<<i)) {
-+                _jit_pxor_r(jit, 1, i-8);
-+              }
-+            }
++          for(i=3; i<8; i++) {
++            _MOV_OR_XOR_R_INT(2, i, movC, maskC & 1);
++            _C_XORPS_R(0, i, mask1 & 1);
++            _C_PXOR_R(1, i, mask2 & 1);
++            mask1 >>= 1;
++            mask2 >>= 1;
++            maskC >>= 1;
 +          }
 +#endif
 +          if(common_depmask[bit>>1]) {
-+            _jit_xorps_r(jit, 0, 2);
-+            _jit_pxor_r(jit, 1, 2); /*penalty?*/
++            _XORPS_R(0, 2);
++            _PXOR_R(1, 2); /*penalty?*/
 +          }
 +          _jit_movaps_store(jit, DX, bit<<4, 0);
 +          _jit_movdqa_store(jit, DX, (bit+1)<<4, 1);
 +        }
 +      } else {
 +        for(bit=0; bit<16; bit+=2) {
-+          int mov = 1, mov2 = 1, movC = 1;
++          uint64_t mov1 = _MOV_OR_XOR_FP_INIT, mov2 = _MOV_OR_XOR_INT_INIT,
++                   movC = _MOV_OR_XOR_INT_INIT;
++          uint64_t mask1 = tmp_depmask[bit], mask2 = tmp_depmask[bit+1],
++                   maskC = common_depmask[bit>>1];
 +          for(i=0; i<MEM_XORS_A; i++) {
-+            if(common_depmask[bit>>1] & (1<<i)) {
-+              _MOV_OR_XOR(2, _jit_movaps_load, _XORPS_A, movC)
-+            } else {
-+              if(tmp_depmask[bit] & (1<<i)) {
-+                _MOV_OR_XOR(0, _jit_movaps_load, _XORPS_A, mov)
-+              }
-+              if(tmp_depmask[bit+1] & (1<<i)) {
-+                _MOV_OR_XOR(1, _jit_movdqa_load, _PXOR_A, mov2)
-+              }
-+            }
++            _MOV_OR_XOR_INT_A(2, movC, maskC & 1);
++            _MOV_OR_XOR_FP_A(0, mov1, mask1 & 1);
++            _MOV_OR_XOR_INT_A(1, mov2, mask2 & 1);
++            mask1 >>= 1;
++            mask2 >>= 1;
++            maskC >>= 1;
 +          }
 +#ifdef AMD64
 +          /* upper 13 from regs */
-+          for(; i<16; i++) {
-+            if(common_depmask[bit>>1] & (1<<i)) {
-+              _MOV_OR_XOR_R(2, i, _jit_movaps, _jit_xorps_r, movC)
-+            } else {
-+              if(tmp_depmask[bit] & (1<<i)) {
-+                _MOV_OR_XOR_R(0, i, _jit_movaps, _jit_xorps_r, mov)
-+              }
-+              if(tmp_depmask[bit+1] & (1<<i)) {
-+                _MOV_OR_XOR_R(1, i, _jit_movdqa, _jit_pxor_r, mov2)
-+              }
-+            }
++          for(; i<8; i++) {
++            _MOV_OR_XOR_R_INT(2, i, movC, maskC & 1);
++            _MOV_OR_XOR_R_FP(0, i, mov1, mask1 & 1);
++            _MOV_OR_XOR_R_INT(1, i, mov2, mask2 & 1);
++            mask1 >>= 1;
++            mask2 >>= 1;
++            maskC >>= 1;
++          }
++          for(i=0; i<8; i++) {
++            _MOV_OR_XOR_R64_INT(2, i, movC, maskC & 1);
++            _MOV_OR_XOR_R64_FP(0, i, mov1, mask1 & 1);
++            _MOV_OR_XOR_R64_INT(1, i, mov2, mask2 & 1);
++            mask1 >>= 1;
++            mask2 >>= 1;
++            maskC >>= 1;
 +          }
 +#else
 +          for(; i<11; i++) {
-+            if(common_depmask[bit>>1] & (1<<i)) {
-+              _MOV_OR_XOR(2, _jit_movaps_load, _XORPS_B, movC)
-+            } else {
-+              if(tmp_depmask[bit] & (1<<i)) {
-+                _MOV_OR_XOR(0, _jit_movaps_load, _XORPS_B, mov)
-+              }
-+              if(tmp_depmask[bit+1] & (1<<i)) {
-+                _MOV_OR_XOR(1, _jit_movdqa_load, _PXOR_B, mov2)
-+              }
-+            }
++            _MOV_OR_XOR_INT_B(2, movC, maskC & 1);
++            _MOV_OR_XOR_FP_B(0, mov1, mask1 & 1);
++            _MOV_OR_XOR_INT_B(1, mov2, mask2 & 1);
++            mask1 >>= 1;
++            mask2 >>= 1;
++            maskC >>= 1;
 +          }
-+          for(; i<16; i++) {
-+            if(common_depmask[bit>>1] & (1<<i)) {
-+              _MOV_OR_XOR_R(2, i-8, _jit_movaps, _jit_xorps_r, movC)
-+            } else {
-+              if(tmp_depmask[bit] & (1<<i)) {
-+                _MOV_OR_XOR_R(0, i-8, _jit_movaps, _jit_xorps_r, mov)
-+              }
-+              if(tmp_depmask[bit+1] & (1<<i)) {
-+                _MOV_OR_XOR_R(1, i-8, _jit_movdqa, _jit_pxor_r, mov2)
-+              }
-+            }
++          for(i=3; i<8; i++) {
++            _MOV_OR_XOR_R_INT(2, i, movC, maskC & 1);
++            _MOV_OR_XOR_R_FP(0, i, mov1, mask1 & 1);
++            _MOV_OR_XOR_R_INT(1, i, mov2, mask2 & 1);
++            mask1 >>= 1;
++            mask2 >>= 1;
++            maskC >>= 1;
 +          }
 +#endif
 +          if(common_depmask[bit>>1]) {
-+            if(mov) /* no additional XORs were made? */
-+              _jit_movaps_store(jit, DX, bit<<4, 2);
-+            else
-+              _jit_xorps_r(jit, 0, 2);
++            if(mov1) /* no additional XORs were made? */
++              _jit_movdqa_store(jit, DX, bit<<4, 2);
++            else {
++              _XORPS_R(0, 2);
++            }
 +            if(mov2)
-+              _jit_movaps_store(jit, DX, (bit+1)<<4, 2);
-+            else
-+              _jit_pxor_r(jit, 1, 2); /*penalty?*/
++              _jit_movdqa_store(jit, DX, (bit+1)<<4, 2);
++            else {
++              _PXOR_R(1, 2); /*penalty?*/
++            }
 +          }
-+          if(!mov)
++          if(!mov1)
 +            _jit_movaps_store(jit, DX, bit<<4, 0);
 +          if(!mov2)
 +            _jit_movdqa_store(jit, DX, (bit+1)<<4, 1);
@@ -1285,11 +1651,13 @@
 +    _jit_jcc(jit, JL, pos_startloop);
 +    
 +    
-+#ifdef AMD64
++#ifdef SAVE_XMM
 +    for(i=6; i<16; i++)
 +      _jit_movaps_load(jit, i, BP, -((int32_t)i-5)*16);
 +#endif
-+    _jit_pop(jit, BP);
++#undef SAVE_XMM
++    if(setup_stack)
++      _jit_pop(jit, BP);
 +    
 +    _jit_ret(jit);
 +    
@@ -1330,7 +1698,7 @@
  int gf_w16_scratch_size(int mult_type, int region_type, int divide_type, int arg1, int arg2)
  {
    switch(mult_type)
-@@ -2299,6 +3197,7 @@
+@@ -2299,6 +3365,7 @@
        return sizeof(gf_internal_t) + sizeof(struct gf_w16_zero_logtable_data) + 64;
        break;
      case GF_MULT_LOG_TABLE:
@@ -1338,7 +1706,7 @@
        return sizeof(gf_internal_t) + sizeof(struct gf_w16_logtable_data) + 64;
        break;
      case GF_MULT_DEFAULT:
-@@ -2376,6 +3275,7 @@
+@@ -2376,6 +3443,7 @@
      case GF_MULT_BYTWO_p: 
      case GF_MULT_BYTWO_b:     if (gf_w16_bytwo_init(gf) == 0) return 0; break;
      case GF_MULT_GROUP:       if (gf_w16_group_init(gf) == 0) return 0; break;
@@ -1346,7 +1714,7 @@
      default: return 0;
    }
    if (h->divide_type == GF_DIVIDE_EUCLID) {
-@@ -2393,7 +3293,9 @@
+@@ -2393,7 +3461,9 @@
  
    if (gf->inverse.w32 == NULL)  gf->inverse.w32 = gf_w16_inverse_from_divide;
  
