@@ -3,7 +3,7 @@
 #define MD5_BLOCKSIZE 64
 
 typedef struct {
-	uint32_t A,B,C,D; 
+	uint32_t h[4]; 
 	uint64_t length;
 	int8_t dataLen;
 	uint32_t data[MD5_BLOCKSIZE/4];

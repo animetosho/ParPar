@@ -89,10 +89,7 @@
 
 /* TODO: inline this? */
 static void md5_update_block(
-	uint32_t* a,
-	uint32_t* b,
-	uint32_t* c,
-	uint32_t* d,
+	uint32_t* h,
 	const void *data)
 {
 #ifdef BIG_ENDIAN
@@ -104,10 +101,10 @@ static void md5_update_block(
         const uint32_t* XX = data;
         register uint32_t A,B,C,D;
 
-        A=*a;
-        B=*b;
-        C=*c;
-        D=*d;
+        A=h[0];
+        B=h[1];
+        C=h[2];
+        D=h[3];
 
         /* Round 0 */
         Rx(F,A,B,C,D, 7,X( 0)+0xd76aa478L);
@@ -178,17 +175,17 @@ static void md5_update_block(
         Rx(I,C,D,A,B,15,X( 2)+0x2ad7d2bbL);
         Rx(I,B,C,D,A,21,X( 9)+0xeb86d391L);
 
-        *a += A;
-        *b += B;
-        *c += C;
-        *d += D;
+        h[0] += A;
+        h[1] += B;
+        h[2] += C;
+        h[3] += D;
     #undef X
 }
 
 void md5_update_single(uint32_t *vals, const void** data_, size_t num) {
 	const unsigned char* data = *data_;
 	while(num--) {
-		md5_update_block(vals + 0, vals + 1, vals + 2, vals + 3, data);
+		md5_update_block(vals, data);
 		data += MD5_BLOCKSIZE;
 	}
 }
@@ -197,10 +194,10 @@ void md5_update_single(uint32_t *vals, const void** data_, size_t num) {
 void md5_init(MD5_CTX *c)
 {
 	memset(c, 0, sizeof(*c));
-	c->A = 0x67452301L;
-	c->B = 0xefcdab89L;
-	c->C = 0x98badcfeL;
-	c->D = 0x10325476L;
+	c->h[0] = 0x67452301L;
+	c->h[1] = 0xefcdab89L;
+	c->h[2] = 0x98badcfeL;
+	c->h[3] = 0x10325476L;
 }
 
 /* TODO: do we care about runtime CPU detection here? */
@@ -229,7 +226,7 @@ void md5_multi_update(MD5_CTX **c, const void **data_, size_t len)
             memcpy((char*)c[i]->data + c[i]->dataLen, data[i], MD5_BLOCKSIZE - c[i]->dataLen);
             data[i] += MD5_BLOCKSIZE - c[i]->dataLen;
             c[i]->dataLen = 0;
-            md5_update_block(&c[i]->A, &c[i]->B, &c[i]->C, &c[i]->D, c[i]->data);
+            md5_update_block(c[i]->h, c[i]->data);
             
             leftOver -= MD5_BLOCKSIZE;
         }
@@ -241,10 +238,10 @@ void md5_multi_update(MD5_CTX **c, const void **data_, size_t len)
         c[i]->length += len << 3;
         /* re-arrange ABCD from contexts to easy to use SIMD form */
         if(n) {
-            md5vals[0*MD5_SIMD_NUM + i] = c[i]->A;
-            md5vals[1*MD5_SIMD_NUM + i] = c[i]->B;
-            md5vals[2*MD5_SIMD_NUM + i] = c[i]->C;
-            md5vals[3*MD5_SIMD_NUM + i] = c[i]->D;
+            md5vals[0*MD5_SIMD_NUM + i] = c[i]->h[0];
+            md5vals[1*MD5_SIMD_NUM + i] = c[i]->h[1];
+            md5vals[2*MD5_SIMD_NUM + i] = c[i]->h[2];
+            md5vals[3*MD5_SIMD_NUM + i] = c[i]->h[3];
         }
     }
 
@@ -253,10 +250,10 @@ void md5_multi_update(MD5_CTX **c, const void **data_, size_t len)
         n *= MD5_BLOCKSIZE;
         for(i=0; i<MD5_SIMD_NUM; i++) {
             data[i] += n;
-            c[i]->A = md5vals[0*MD5_SIMD_NUM + i];
-            c[i]->B = md5vals[1*MD5_SIMD_NUM + i];
-            c[i]->C = md5vals[2*MD5_SIMD_NUM + i];
-            c[i]->D = md5vals[3*MD5_SIMD_NUM + i];
+            c[i]->h[0] = md5vals[0*MD5_SIMD_NUM + i];
+            c[i]->h[1] = md5vals[1*MD5_SIMD_NUM + i];
+            c[i]->h[2] = md5vals[2*MD5_SIMD_NUM + i];
+            c[i]->h[3] = md5vals[3*MD5_SIMD_NUM + i];
         }
     }
 }
@@ -274,7 +271,7 @@ void md5_final(unsigned char md[16], MD5_CTX *c)
     if (n > (MD5_BLOCKSIZE - 8)) {
         memset(p + n, 0, MD5_BLOCKSIZE - n);
         n = 0;
-        md5_update_block(&c->A, &c->B, &c->C, &c->D, p);
+        md5_update_block(c->h, p);
     }
     memset(p + n, 0, MD5_BLOCKSIZE - 8 - n);
 #ifdef BIG_ENDIAN
@@ -283,10 +280,10 @@ void md5_final(unsigned char md[16], MD5_CTX *c)
 #else
     *(uint64_t*)(p + MD5_BLOCKSIZE - 8) = c->length;
 #endif
-    md5_update_block(&c->A, &c->B, &c->C, &c->D, p);
+    md5_update_block(c->h, p);
 
-    _md[0] = bswap32(c->A);
-    _md[1] = bswap32(c->B);
-    _md[2] = bswap32(c->C);
-    _md[3] = bswap32(c->D);
+    _md[0] = bswap32(c->h[0]);
+    _md[1] = bswap32(c->h[1]);
+    _md[2] = bswap32(c->h[2]);
+    _md[3] = bswap32(c->h[3]);
 }
