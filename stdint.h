@@ -29,9 +29,9 @@
 // 
 ///////////////////////////////////////////////////////////////////////////////
 
-#ifndef _MSC_VER // [
-#error "Use this header only with Microsoft Visual C++ compilers!"
-#endif // _MSC_VER ]
+#if !defined(_MSC_VER) || defined(_STDINT) || _MSC_VER >= 1900
+#include <stdint.h>
+#else
 
 #ifndef _MSC_STDINT_H_ // [
 #define _MSC_STDINT_H_
@@ -245,3 +245,5 @@ typedef uint64_t  uintmax_t;
 
 
 #endif // _MSC_STDINT_H_ ]
+
+#endif // MSVC stuff

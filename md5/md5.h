@@ -1,4 +1,4 @@
-#include <stdint.h>
+#include "../stdint.h"
 
 #define MD5_BLOCKSIZE 64
 
