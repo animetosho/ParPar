@@ -199,15 +199,8 @@ static inline void multiply_mat(uint16_t** inputs, uint_fast16_t* iNums, unsigne
 
 #if NODE_VERSION_AT_LEAST(3, 0, 0) // iojs3
 #define BUFFER_NEW(...) node::Buffer::New(ISOLATE __VA_ARGS__).ToLocalChecked()
-// for whatever reason, iojs 3 gives buffer corruption if you pass in a pointer without a free function
-#define RETURN_BUFFER_COPY(s, l) { \
-	Local<Object> buff = BUFFER_NEW(l); \
-	memcpy(node::Buffer::Data(buff), s, l); \
-	RETURN_VAL(buff); \
-} while(0)
 #else
 #define BUFFER_NEW(...) node::Buffer::New(ISOLATE __VA_ARGS__)
-#define RETURN_BUFFER_COPY(s, l) RETURN_VAL(BUFFER_NEW(s, l))
 #endif
 
 
@@ -636,8 +629,11 @@ FUNC(Finish) {
 
 FUNC(MD5Start) {
 	FUNC_START;
-	MD5_CTX ctx;
-	md5_init(&ctx);
+	MD5_CTX* ctx;
+	Local<Object> buff = BUFFER_NEW(sizeof(MD5_CTX));
+	
+	ctx = (MD5_CTX*)node::Buffer::Data(buff);
+	md5_init(ctx);
 	
 	// in some cases, we want to pre-populate some data
 	if (args.Length() > 0) {
@@ -648,12 +644,12 @@ FUNC(MD5Start) {
 		if (len > MD5_BLOCKSIZE)
 			RETURN_ERROR("Init data too long");
 		
-		memcpy(ctx.data, node::Buffer::Data(args[0]), len);
-		ctx.dataLen = (uint8_t)len;
-		ctx.length = len << 3;
+		memcpy(ctx->data, node::Buffer::Data(args[0]), len);
+		ctx->dataLen = (uint8_t)len;
+		ctx->length = len << 3;
 	}
 	
-	RETURN_BUFFER_COPY((char*)&ctx, sizeof(ctx));
+	RETURN_VAL(buff);
 }
 
 // finish single MD5
@@ -681,10 +677,10 @@ FUNC(MD5Finish) {
 	*/
 	
 	
-	unsigned char md5[16];
-	md5_final(md5, (MD5_CTX*)node::Buffer::Data(args[0]));
+	Local<Object> md5 = BUFFER_NEW(16);
+	md5_final((unsigned char*)node::Buffer::Data(md5), (MD5_CTX*)node::Buffer::Data(args[0]));
 	
-	RETURN_BUFFER_COPY((char*)md5, 16);
+	RETURN_VAL(md5);
 }
 
 // update two MD5 contexts with one input
