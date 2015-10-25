@@ -3,7 +3,7 @@
     {
       "target_name": "parpar_gf",
       "dependencies": ["gf-complete"],
-      "sources": ["gf.cc"],
+      "sources": ["gf.cc", "md5/md5.c", "md5/md5-simd.c"],
       "include_dirs": ["gf-complete"],
       "conditions": [
         ['OS=="win"', {

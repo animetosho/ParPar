@@ -17,6 +17,7 @@ extern "C" {
 #include <omp.h>
 #endif
 #include <gf_complete.h>
+#include "md5/md5.h"
 }
 
 // memory alignment to 16-bytes for SSE operations (may grow for AVX operations)
@@ -90,6 +91,15 @@ static void alloc_gf() {
 }
 #endif
 
+static inline void omp_check_num_threads() {
+#ifdef _OPENMP
+	int max_threads = omp_get_max_threads();
+	if(max_threads != maxNumThreads)
+		// handle the possibility that some other module changes this
+		omp_set_num_threads(maxNumThreads);
+#endif
+}
+
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 #define CEIL_DIV(a, b) (((a) + (b)-1) / (b))
 
@@ -102,12 +112,7 @@ static void alloc_gf() {
    - number of outputs and scales is same and == numOutputs
 */
 static inline void multiply_mat(uint16_t** inputs, uint_fast16_t* iNums, unsigned int numInputs, size_t len, uint16_t** outputs, uint_fast16_t* oNums, unsigned int numOutputs, bool add) {
-#ifdef _OPENMP
-	int max_threads = omp_get_max_threads();
-	if(max_threads != maxNumThreads)
-		// handle the possibility that some other module changes this
-		omp_set_num_threads(maxNumThreads);
-#endif
+	omp_check_num_threads();
 	
 	/*
 	if(using_altmap) {
@@ -170,6 +175,8 @@ static inline void multiply_mat(uint16_t** inputs, uint_fast16_t* iNums, unsigne
 	Isolate* isolate = args.GetIsolate(); \
 	HandleScope scope(isolate)
 
+#define NEW_STRING(s) String::NewFromOneByte(isolate, (const uint8_t*)s)
+
 #define RETURN_ERROR(e) { isolate->ThrowException(Exception::Error(String::NewFromOneByte(isolate, (const uint8_t*)e))); return; }
 #define RETURN_VAL(v) args.GetReturnValue().Set(v)
 #define RETURN_UNDEF return;
@@ -179,6 +186,7 @@ static inline void multiply_mat(uint16_t** inputs, uint_fast16_t* iNums, unsigne
 // for node 0.10.x
 #define FUNC(name) static Handle<Value> name(const Arguments& args)
 #define FUNC_START HandleScope scope
+#define NEW_STRING(s) String::New
 #define RETURN_ERROR(e) \
 	return ThrowException(Exception::Error( \
 		String::New(e)) \
@@ -188,6 +196,21 @@ static inline void multiply_mat(uint16_t** inputs, uint_fast16_t* iNums, unsigne
 #define ISOLATE
 
 #endif
+
+#if NODE_VERSION_AT_LEAST(3, 0, 0) // iojs3
+#define BUFFER_NEW(...) node::Buffer::New(ISOLATE __VA_ARGS__).ToLocalChecked()
+// for whatever reason, iojs 3 gives buffer corruption if you pass in a pointer without a free function
+#define RETURN_BUFFER_COPY(s, l) { \
+	Local<Object> buff = BUFFER_NEW(l); \
+	memcpy(node::Buffer::Data(buff), s, l); \
+	RETURN_VAL(buff); \
+} while(0)
+#else
+#define BUFFER_NEW(...) node::Buffer::New(ISOLATE __VA_ARGS__)
+#define RETURN_BUFFER_COPY(s, l) RETURN_VAL(BUFFER_NEW(s, l))
+#endif
+
+
 
 int mmActiveTasks = 0;
 
@@ -248,11 +271,7 @@ FUNC(AlignedBuffer) {
 	*/
 	
 #if NODE_VERSION_AT_LEAST(0, 11, 0)
-	#if NODE_VERSION_AT_LEAST(3, 0, 0) // iojs3
-	RETURN_VAL( node::Buffer::New(ISOLATE (char*)buf, len, free_buffer, (void*)len).ToLocalChecked() );
-	#else
-	RETURN_VAL( node::Buffer::New(ISOLATE (char*)buf, len, free_buffer, (void*)len) );
-	#endif
+	RETURN_VAL( BUFFER_NEW((char*)buf, len, free_buffer, (void*)len) );
 #else
 	RETURN_VAL(Local<Object>::New(
 		node::Buffer::New((char*)buf, len, free_buffer, (void*)len)->handle_
@@ -482,7 +501,7 @@ FUNC(MultiplyMulti) {
 		
 #if NODE_VERSION_AT_LEAST(0, 11, 0)
 		Local<Object> obj = Object::New(isolate);
-		obj->Set(String::NewFromOneByte(ISOLATE (const uint8_t*)"ondone"), args[5]);
+		obj->Set(NEW_STRING("ondone"), args[5]);
 		req->obj_.Reset(ISOLATE obj);
 		//if (env->in_domain())
 		//	req->obj_->Set(env->domain_string(), env->domain_array()->Get(0));
@@ -492,7 +511,7 @@ FUNC(MultiplyMulti) {
 		req->outputBuffers.Reset(ISOLATE Local<Array>::Cast(args[2]));
 #else
 		req->obj_ = Persistent<Object>::New(ISOLATE Object::New());
-		req->obj_->Set(String::New(ISOLATE "ondone"), args[5]);
+		req->obj_->Set(NEW_STRING("ondone"), args[5]);
 		//SetActiveDomain(req->obj_); // never set in node_zlib.cc - perhaps domains aren't that important?
 		
 		// keep a copy of the buffers so that they don't get GC'd whilst being written to
@@ -530,9 +549,23 @@ FUNC(Finish) {
 		RETURN_ERROR("First argument must be an array");
 	
 	unsigned int numInputs = Local<Array>::Cast(args[0])->Length();
+	unsigned int allocArrSize = numInputs;
+	if(numInputs < 1) RETURN_UNDEF
 	
 	Local<Object> oInputs = args[0]->ToObject();
-	uint16_t** inputs = new uint16_t*[numInputs];
+	bool calcMd5 = false;
+	if (args.Length() >= 2) {
+		if (!args[1]->IsArray())
+			RETURN_ERROR("MD5 contexts not an array");
+		if (Local<Array>::Cast(args[1])->Length() != numInputs)
+			RETURN_ERROR("Number of MD5 contexts doesn't equal number of inputs");
+		calcMd5 = true;
+		
+		if(numInputs % MD5_SIMD_NUM)
+			// if calculating MD5, allocate some more space to make parallel processing easier
+			allocArrSize += MD5_SIMD_NUM - (numInputs % MD5_SIMD_NUM);
+	}
+	uint16_t** inputs = new uint16_t*[allocArrSize];
 	
 	#define RTN_ERROR(m) { \
 		delete[] inputs; \
@@ -555,20 +588,152 @@ FUNC(Finish) {
 				RTN_ERROR("Length of input must be a multiple of 2");
 		}
 	}
+	#undef RTN_ERROR
 	
+	MD5_CTX** md5;
+	MD5_CTX dummyMd5;
+	if(calcMd5) {
+		Local<Object> oMd5 = args[1]->ToObject();
+		md5 = new MD5_CTX*[allocArrSize];
+		
+		unsigned int i = 0;
+		for(; i < numInputs; i++) {
+			Local<Value> md5Ctx = oMd5->Get(i);
+			if (!node::Buffer::HasInstance(md5Ctx) || node::Buffer::Length(md5Ctx) != sizeof(MD5_CTX)) {
+				delete[] inputs;
+				delete[] md5;
+				RETURN_ERROR("Invalid MD5 contexts provided");
+			}
+			md5[i] = (MD5_CTX*)node::Buffer::Data(md5Ctx);
+		}
+		// for padding, fill with dummy pointers
+		for(; i < allocArrSize; i++) {
+			md5[i] = &dummyMd5;
+			inputs[i] = inputs[0];
+		}
+		dummyMd5.dataLen = md5[0]->dataLen;
+	}
+	
+	// TODO: make this stuff async
 	if(using_altmap) {
 		// TODO: multi-thread this?
 		for(int in = 0; in < (int)numInputs; in++)
 			gf[0].unaltmap_region(inputs[in], len, inputs[in]);
+	}
+	if(calcMd5) {
+		omp_check_num_threads();
+		int i;
+		#pragma omp parallel for
+		for(i=0; i<(int)numInputs; i+=MD5_SIMD_NUM) {
+			md5_multi_update(md5 + i, (const void**)(inputs + i), len);
+		}
+		delete[] md5;
 	}
 	
 	delete[] inputs;
 	RETURN_UNDEF
 }
 
+FUNC(MD5Start) {
+	FUNC_START;
+	MD5_CTX ctx;
+	md5_init(&ctx);
+	
+	// in some cases, we want to pre-populate some data
+	if (args.Length() > 0) {
+		if (!node::Buffer::HasInstance(args[0]))
+			RETURN_ERROR("First argument must be a Buffer");
+		
+		size_t len = node::Buffer::Length(args[0]);
+		if (len > MD5_BLOCKSIZE)
+			RETURN_ERROR("Init data too long");
+		
+		memcpy(ctx.data, node::Buffer::Data(args[0]), len);
+		ctx.dataLen = (uint8_t)len;
+		ctx.length = len << 3;
+	}
+	
+	RETURN_BUFFER_COPY((char*)&ctx, sizeof(ctx));
+}
+
+// finish single MD5
+FUNC(MD5Finish) {
+	FUNC_START;
+	
+	if (args.Length() < 1 || !node::Buffer::HasInstance(args[0]))
+		RETURN_ERROR("First argument must be a Buffer");
+	
+	if(node::Buffer::Length(args[0]) != sizeof(MD5_CTX))
+		RETURN_ERROR("Invalid MD5 context length");
+	
+	/*
+	Local<Object> o = args[0]->ToObject();
+	// TODO: check object validity
+	
+	// copy to MD5 ctx
+	MD5_CTX ctx;
+	ctx.A = o.Get(NEW_STRING("A"))->ToUint32().Value();
+	ctx.B = o.Get(NEW_STRING("B"))->ToUint32().Value();
+	ctx.C = o.Get(NEW_STRING("C"))->ToUint32().Value();
+	ctx.D = o.Get(NEW_STRING("D"))->ToUint32().Value();
+	ctx.length = o.Get(NEW_STRING("length"))->ToInteger().Value();
+	ctx.dataLen = o.Get
+	*/
+	
+	
+	unsigned char md5[16];
+	md5_final(md5, (MD5_CTX*)node::Buffer::Data(args[0]));
+	
+	RETURN_BUFFER_COPY((char*)md5, 16);
+}
+
+// update two MD5 contexts with one input
+FUNC(MD5Update2) {
+	FUNC_START;
+	
+	if (args.Length() < 3)
+		RETURN_ERROR("3 arguments required");
+	if (!node::Buffer::HasInstance(args[0]) || !node::Buffer::HasInstance(args[1]) || !node::Buffer::HasInstance(args[2]))
+		RETURN_ERROR("All arguments must be Buffers");
+	
+	if(node::Buffer::Length(args[0]) != sizeof(MD5_CTX) || node::Buffer::Length(args[1]) != sizeof(MD5_CTX))
+		RETURN_ERROR("Invalid MD5 context length");
+	
+	// TODO: test 2 buffer update methods
+	
+	MD5_CTX *md5[MD5_SIMD_NUM];
+	char* inputs[MD5_SIMD_NUM];
+	
+#if MD5_SIMD_NUM == 1
+	inputs[0] = node::Buffer::Data(args[2]);
+	size_t len = node::Buffer::Length(args[2]);
+	md5[0] = (MD5_CTX*)node::Buffer::Data(args[0]);
+	md5_multi_update(md5, (const void**)inputs, len);
+	
+	md5[0] = (MD5_CTX*)node::Buffer::Data(args[1]);
+	md5_multi_update(md5, (const void**)inputs, len);
+#else
+	MD5_CTX dummyMd5;
+	for(unsigned int i=0; i<MD5_SIMD_NUM; i++) {
+		md5[i] = &dummyMd5;
+		inputs[i] = node::Buffer::Data(args[2]);
+	}
+	md5[0] = (MD5_CTX*)node::Buffer::Data(args[0]);
+	md5[1] = (MD5_CTX*)node::Buffer::Data(args[1]);
+	dummyMd5.dataLen = md5[0]->dataLen;
+	
+	md5_multi_update(md5, (const void**)inputs, node::Buffer::Length(args[2]));
+#endif
+	
+	RETURN_UNDEF
+}
 
 void init(Handle<Object> target) {
 	init_constants();
+	
+	NODE_SET_METHOD(target, "md5_init", MD5Start);
+	NODE_SET_METHOD(target, "md5_final", MD5Finish);
+	NODE_SET_METHOD(target, "md5_update2", MD5Update2);
 	
 	// generate(Buffer input, int inputBlockNum, Array<Buffer> outputs, Array<int> recoveryBlockNums [, bool add [, Function callback]])
 	// ** DON'T modify buffers whilst function is running! **
@@ -636,15 +801,12 @@ void init(Handle<Object> target) {
 #if NODE_VERSION_AT_LEAST(0, 11, 0)
 	Isolate* isolate = Isolate::GetCurrent();
 	HandleScope scope(isolate);
-	target->Set(String::NewFromUtf8(ISOLATE "alignment"), Integer::New(ISOLATE MEM_ALIGN));
-	target->Set(String::NewFromUtf8(ISOLATE "alignment_width"), Integer::New(ISOLATE MEM_WALIGN));
-	target->Set(String::NewFromUtf8(ISOLATE "gf_method"), String::NewFromUtf8(ISOLATE mult_method));
 #else
 	HandleScope scope;
-	target->Set(String::New("alignment"), Integer::New(MEM_ALIGN));
-	target->Set(String::New("alignment_width"), Integer::New(MEM_WALIGN));
-	target->Set(String::New("gf_method"), String::New(mult_method));
 #endif
+	target->Set(NEW_STRING("alignment"), Integer::New(ISOLATE MEM_ALIGN));
+	target->Set(NEW_STRING("alignment_width"), Integer::New(ISOLATE MEM_WALIGN));
+	target->Set(NEW_STRING("gf_method"), String::NewFromUtf8(ISOLATE mult_method));
 }
 
 NODE_MODULE(parpar_gf, init);
