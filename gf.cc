@@ -186,7 +186,7 @@ static inline void multiply_mat(uint16_t** inputs, uint_fast16_t* iNums, unsigne
 // for node 0.10.x
 #define FUNC(name) static Handle<Value> name(const Arguments& args)
 #define FUNC_START HandleScope scope
-#define NEW_STRING(s) String::New
+#define NEW_STRING String::New
 #define RETURN_ERROR(e) \
 	return ThrowException(Exception::Error( \
 		String::New(e)) \
@@ -630,7 +630,11 @@ FUNC(Finish) {
 FUNC(MD5Start) {
 	FUNC_START;
 	MD5_CTX* ctx;
+#if NODE_VERSION_AT_LEAST(0, 11, 0)
 	Local<Object> buff = BUFFER_NEW(sizeof(MD5_CTX));
+#else
+	node::Buffer* buff = BUFFER_NEW(sizeof(MD5_CTX));
+#endif
 	
 	ctx = (MD5_CTX*)node::Buffer::Data(buff);
 	md5_init(ctx);
@@ -649,7 +653,11 @@ FUNC(MD5Start) {
 		ctx->length = len << 3;
 	}
 	
+#if NODE_VERSION_AT_LEAST(0, 11, 0)
 	RETURN_VAL(buff);
+#else
+	RETURN_VAL(buff->handle_);
+#endif
 }
 
 // finish single MD5
@@ -677,10 +685,15 @@ FUNC(MD5Finish) {
 	*/
 	
 	
+#if NODE_VERSION_AT_LEAST(0, 11, 0)
 	Local<Object> md5 = BUFFER_NEW(16);
 	md5_final((unsigned char*)node::Buffer::Data(md5), (MD5_CTX*)node::Buffer::Data(args[0]));
-	
 	RETURN_VAL(md5);
+#else
+	node::Buffer* md5 = BUFFER_NEW(16);
+	md5_final((unsigned char*)node::Buffer::Data(md5), (MD5_CTX*)node::Buffer::Data(args[0]));
+	RETURN_VAL(md5->handle_);
+#endif
 }
 
 // update two MD5 contexts with one input
@@ -762,7 +775,7 @@ void init(Handle<Object> target) {
 	
 	MEM_ALIGN = gf[0].alignment;
 	MEM_WALIGN = gf[0].walignment;
-	using_altmap = gf[0].using_altmap;
+	using_altmap = gf[0].using_altmap ? true : false;
 	
 	char mult_method[20];
 	switch(gf[0].mult_method) {
@@ -802,7 +815,7 @@ void init(Handle<Object> target) {
 #endif
 	target->Set(NEW_STRING("alignment"), Integer::New(ISOLATE MEM_ALIGN));
 	target->Set(NEW_STRING("alignment_width"), Integer::New(ISOLATE MEM_WALIGN));
-	target->Set(NEW_STRING("gf_method"), String::NewFromUtf8(ISOLATE mult_method));
+	target->Set(NEW_STRING("gf_method"), NEW_STRING(mult_method));
 }
 
 NODE_MODULE(parpar_gf, init);
