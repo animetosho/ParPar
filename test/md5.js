@@ -32,6 +32,9 @@ gf.md5_update2(m, n, randS1);
 check(m, randS1, 'short str');
 check(n, randS1, 'short str');
 
+var m = gf.md5_init(randS1);
+check(m, randS1, 'short str (init)');
+
 var m = gf.md5_init(), n = gf.md5_init();
 gf.md5_update2(m, n, randS1);
 gf.md5_update2(m, n, randS2);
