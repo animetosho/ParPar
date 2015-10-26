@@ -749,12 +749,32 @@ FUNC(MD5Update2) {
 	RETURN_UNDEF
 }
 
+FUNC(MD5UpdateZeroes) {
+	FUNC_START;
+	
+	if (args.Length() < 2)
+		RETURN_ERROR("2 arguments required");
+	if (!node::Buffer::HasInstance(args[0]))
+		RETURN_ERROR("First argument must be a Buffer");
+	
+	if(node::Buffer::Length(args[0]) != sizeof(MD5_CTX))
+		RETURN_ERROR("Invalid MD5 context length");
+	if(((MD5_CTX*)node::Buffer::Data(args[0]))->dataLen > MD5_BLOCKSIZE)
+		RETURN_ERROR("Invalid MD5 context data");
+	
+	size_t len = (size_t)args[1]->ToInteger()->Value();
+	md5_update_zeroes((MD5_CTX*)node::Buffer::Data(args[0]), len);
+	
+	RETURN_UNDEF
+}
+
 void init(Handle<Object> target) {
 	init_constants();
 	
 	NODE_SET_METHOD(target, "md5_init", MD5Start);
 	NODE_SET_METHOD(target, "md5_final", MD5Finish);
 	NODE_SET_METHOD(target, "md5_update2", MD5Update2);
+	NODE_SET_METHOD(target, "md5_update_zeroes", MD5UpdateZeroes);
 	
 	// generate(Buffer input, int inputBlockNum, Array<Buffer> outputs, Array<int> recoveryBlockNums [, bool add [, Function callback]])
 	// ** DON'T modify buffers whilst function is running! **
