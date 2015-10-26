@@ -10,11 +10,12 @@ var randM1 = crypto.pseudoRandomBytes(80);
 var randM2 = crypto.pseudoRandomBytes(80);
 var randL1 = crypto.pseudoRandomBytes(129);
 var randL2 = crypto.pseudoRandomBytes(129);
-
+var zeroes = new Buffer(256);
+zeroes.fill(0);
 
 var check = function(ctx, str, msg) {
 	if(Array.isArray(str)) str = Buffer.concat(str);
-	assert(!Buffer.compare(gf.md5_final(ctx), crypto.createHash('md5').update(str).digest()), msg);
+	assert.equal(gf.md5_final(ctx).toString('hex'), crypto.createHash('md5').update(str).digest('hex'), msg);
 }
 
 var m = gf.md5_init(), n = gf.md5_init();
@@ -114,6 +115,41 @@ n = gf.md5_init();
 gf.md5_update2(m, n, randM1);
 check(m, [randS2, randS2, randS2, randM1], 'bound-cross (med)');
 check(n, randM1, 'bound-cross (med)');
+
+var m = gf.md5_init();
+gf.md5_update_zeroes(m, 20);
+check(m, zeroes.slice(0, 20), 'zeroes (small)');
+
+var m = gf.md5_init();
+gf.md5_update_zeroes(m, 80);
+check(m, zeroes.slice(0, 80), 'zeroes (med)');
+
+var m = gf.md5_init();
+gf.md5_update_zeroes(m, 129);
+check(m, zeroes.slice(0, 129), 'zeroes (large)');
+
+var m = gf.md5_init();
+gf.md5_update_zeroes(m, 20);
+gf.md5_update_zeroes(m, 80);
+check(m, zeroes.slice(0, 100), 'zeroes (mix1)');
+
+var m = gf.md5_init();
+gf.md5_update_zeroes(m, 129);
+gf.md5_update_zeroes(m, 20);
+gf.md5_update_zeroes(m, 80);
+check(m, zeroes.slice(0, 229), 'zeroes (mix2)');
+
+var m = gf.md5_init(), n = gf.md5_init();
+gf.md5_update2(m, n, randS2);
+gf.md5_update_zeroes(m, 80);
+gf.md5_update2(m, n, randM1);
+check(n, [randS2, randM1], 'zero-bound-mix');
+n = gf.md5_init();
+gf.md5_update_zeroes(n, 20);
+gf.md5_update2(m, n, randM2);
+check(m, [randS2, zeroes.slice(0, 80), randM1, randM2], 'zero-bound-mix');
+check(n, [zeroes.slice(0, 20), randM2], 'zero-bound-mix');
+
 
 
 console.log('All tests passed');

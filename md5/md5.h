@@ -12,7 +12,7 @@ typedef struct {
 void md5_final(unsigned char md[16], MD5_CTX *c);
 void md5_init(MD5_CTX *c);
 void md5_multi_update(MD5_CTX **c, const void **data_, size_t len);
-
+void md5_update_zeroes(MD5_CTX *c, size_t len);
 
 
 #if defined(__SSE2__) || (defined(_M_IX86_FP) && _M_IX86_FP == 2) || defined(_M_X64)
