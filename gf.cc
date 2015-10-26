@@ -598,6 +598,11 @@ FUNC(Finish) {
 				RETURN_ERROR("Invalid MD5 contexts provided");
 			}
 			md5[i] = (MD5_CTX*)node::Buffer::Data(md5Ctx);
+			if(md5[i]->dataLen > MD5_BLOCKSIZE) {
+				delete[] inputs;
+				delete[] md5;
+				RETURN_ERROR("Invalid MD5 contexts provided");
+			}
 		}
 		// for padding, fill with dummy pointers
 		for(; i < allocArrSize; i++) {
@@ -684,14 +689,17 @@ FUNC(MD5Finish) {
 	ctx.dataLen = o.Get
 	*/
 	
+	MD5_CTX* ctx = (MD5_CTX*)node::Buffer::Data(args[0]);
+	if(ctx->dataLen > MD5_BLOCKSIZE)
+		RETURN_ERROR("Invalid MD5 context data");
 	
 #if NODE_VERSION_AT_LEAST(0, 11, 0)
 	Local<Object> md5 = BUFFER_NEW(16);
-	md5_final((unsigned char*)node::Buffer::Data(md5), (MD5_CTX*)node::Buffer::Data(args[0]));
+	md5_final((unsigned char*)node::Buffer::Data(md5), ctx);
 	RETURN_VAL(md5);
 #else
 	node::Buffer* md5 = BUFFER_NEW(16);
-	md5_final((unsigned char*)node::Buffer::Data(md5), (MD5_CTX*)node::Buffer::Data(args[0]));
+	md5_final((unsigned char*)node::Buffer::Data(md5), ctx);
 	RETURN_VAL(md5->handle_);
 #endif
 }
@@ -707,6 +715,10 @@ FUNC(MD5Update2) {
 	
 	if(node::Buffer::Length(args[0]) != sizeof(MD5_CTX) || node::Buffer::Length(args[1]) != sizeof(MD5_CTX))
 		RETURN_ERROR("Invalid MD5 context length");
+	if(((MD5_CTX*)node::Buffer::Data(args[0]))->dataLen > MD5_BLOCKSIZE
+	|| ((MD5_CTX*)node::Buffer::Data(args[1]))->dataLen > MD5_BLOCKSIZE)
+		RETURN_ERROR("Invalid MD5 context data");
+	
 	
 	// TODO: test 2 buffer update methods
 	
