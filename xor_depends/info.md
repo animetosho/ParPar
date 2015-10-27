@@ -231,8 +231,9 @@ Drawbacks
     this means that performance on 32-bit won’t be good as 64-bit due to less
     registers being available.
 
--   The general algorithm is just very complicated. I really like the
-    SPLIT(16,4) algorithm for its aesthetic simplicity and efficiency.
+-   Whilst the idea is simple, an optimised implementation is just very
+    complicated. I really like the SPLIT(16,4) algorithm for its aesthetic
+    simplicity and efficiency.
 
  
 
@@ -368,6 +369,21 @@ overhead of JIT rears its head though.
 
  
 
+Multi-Threaded Benchmarks
+-------------------------
+
+A small, rough alteration to the *gf\_time* tool to run tests in 4 threads.
+Region data is no longer randomised to try to keep cores maximally loaded with
+calculations we wish to benchmark.
+
+![](<AtomC2750mt.png>)
+
+![](<Phenom9950mt.png>)
+
+![](<CoreI2400mt.png>)
+
+ 
+
 Patch
 =====
 
@@ -395,4 +411,3 @@ Other things I included because I found useful, but you mightn’t:
 
 -   slightly improved speed of LUT generation for SPLIT\_TABLE(16,4) SSSE3
     versions by removing duplicate log table lookups
-
