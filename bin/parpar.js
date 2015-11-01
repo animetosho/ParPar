@@ -41,6 +41,11 @@ var argv = require('yargs')
 		demand: 'PAR2 output file name must be supplied',
 		describe: 'Base PAR2 file name. A .par2 extension will be appended if not supplied.'
 	},
+	'filepath-format': {
+		describe: 'How to format input file paths',
+		choices: ['basename', 'keep', 'common'],
+		default: 'common'
+	},
 	s: {
 		alias: 'slice-size',
 		demand: 'Slice/block size not supplied',
@@ -72,7 +77,7 @@ var argv = require('yargs')
 		array: true,
 		default: []
 	},
-	i: {
+	i: { // TODO: change to no-index?
 		alias: 'index',
 		describe: 'Output an index file (file with no recovery blocks)',
 		default: true
@@ -113,6 +118,7 @@ if(argv.o.match(/\.par2$/i))
 
 var g = new ParPar.PAR2Gen(argv._, parseSize(argv.s), argv.r|0, {
 	outputBase: argv.o,
+	displayNameFormat: argv['filepath-format'],
 	recoveryOffset: argv.e,
 	memoryLimit: parseSize(argv.m),
 	minChunkSize: 16384,
