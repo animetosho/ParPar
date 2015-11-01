@@ -88,6 +88,11 @@ var argv = require('yargs')
 		describe: 'Specify the maximum number of slices each file should contain',
 		default: 32768
 	},
+	n: {
+		alias: 'alt-naming-scheme',
+		describe: 'Use alternative naming scheme for recovery files (xxx.vol12+10.par2 instead of xxx.vol12-22.par2)',
+		boolean: true
+	},
 	v: {
 		alias: 'verbose',
 		boolean: true
@@ -115,6 +120,7 @@ var g = new ParPar.PAR2Gen(argv._, parseSize(argv.s), argv.r|0, {
 	creator: 'ParPar v' + ParPar.version + ' [https://github.com/animetosho/parpar]',
 	unicode: null,
 	outputIndex: argv.i,
+	outputAltNamingScheme: argv.n,
 	outputSizeScheme: argv.d,
 	outputFileMaxSlices: argv.p,
 });
