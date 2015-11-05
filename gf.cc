@@ -233,6 +233,7 @@ void free_buffer(char* data, void* _size) {
 	ALIGN_FREE(data);
 }
 
+#if !NODE_VERSION_AT_LEAST(3, 0, 0)
 FUNC(AlignedBuffer) {
 	FUNC_START;
 	
@@ -271,6 +272,7 @@ FUNC(AlignedBuffer) {
 	));
 #endif
 }
+#endif
 
 FUNC(PrepInput) {
 	FUNC_START;

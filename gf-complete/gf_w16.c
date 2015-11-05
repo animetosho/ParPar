@@ -620,7 +620,7 @@ int gf_w16_split_init(gf_t *gf)
       else if(h->region_type & GF_REGION_NOSIMD)
         gf->multiply_region.w32 = gf_w16_split_4_16_lazy_multiply_region;
 #ifdef INTEL_SSSE3
-      else if(h->region_type & GF_REGION_ALTMAP && has_ssse3) {
+      else if(h->region_type & GF_REGION_ALTMAP) {
         FUNC_ASSIGN(gf->multiply_region.w32, gf_w16_split_4_16_lazy_altmap_multiply_region)
         FUNC_ASSIGN(gf->multiply_regionX.w16, gf_w16_split_4_16_lazy_altmap_multiply_regionX)
         if(has_avx512bw) {
@@ -633,6 +633,10 @@ int gf_w16_split_init(gf_t *gf)
           gf->alignment = 16;
           gf->mult_method = GF_SPLIT4_SSSE3;
         }
+      }
+      else {
+        gf->multiply_region.w32 = gf_w16_split_4_16_lazy_sse_multiply_region;
+        gf->mult_method = GF_SPLIT4_SSSE3;
       }
 #endif
     } else {

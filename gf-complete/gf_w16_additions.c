@@ -324,7 +324,11 @@ static void gf_w16_xor_final(void* src, int bytes, void* dest) {
 #endif
 }
 
-static gf_val_32_t gf_w16_xor_extract_word(gf_t *gf, void *start, int bytes, int index)
+static gf_val_32_t
+#ifdef __GNUC__
+__attribute__ ((unused))
+#endif
+gf_w16_xor_extract_word(gf_t *gf, void *start, int bytes, int index)
 {
   uint16_t *r16, rv = 0;
   uint8_t *r8;

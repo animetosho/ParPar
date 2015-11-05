@@ -346,11 +346,6 @@ void md5_multi_update(MD5_CTX **c, const void **data_, size_t len)
 
 void md5_update_zeroes(MD5_CTX *c, size_t len)
 {
-    const unsigned char *data[MD5_SIMD_NUM];
-    uint32_t md5vals[MD5_SIMD_NUM*4];
-    size_t n = len / MD5_BLOCKSIZE;
-    int i;
-
     if (len == 0)
         return;
 
