@@ -63,7 +63,7 @@
 
 
 #if defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
-# define BIG_ENDIAN 1
+# define _IS_BIG_ENDIAN_ 1
 #endif
 
 
@@ -79,7 +79,7 @@
         a+=b; };\
 
 
-#ifdef BIG_ENDIAN
+#ifdef _IS_BIG_ENDIAN_
 // TODO: consider machine specific asm
 # define bswap32(x) ((((x) & 0xFF) << 24) + (((x) & 0xFF00) << 8) + (((x) & 0xFF0000) >> 8) + (((x) & 0xFF000000) >> 24))
 #else
@@ -92,7 +92,7 @@ static void md5_update_block(
 	uint32_t* h,
 	const void *data)
 {
-#ifdef BIG_ENDIAN
+#ifdef _IS_BIG_ENDIAN_
 /* TODO: this is very inefficient, but then, how many archs are big endian, that I care about? */
 # define X(n) bswap32(XX[n])
 #else
@@ -387,7 +387,7 @@ void md5_final(unsigned char md[16], MD5_CTX *c)
         md5_update_block(c->h, p);
     }
     memset(p + n, 0, MD5_BLOCKSIZE - 8 - n);
-#ifdef BIG_ENDIAN
+#ifdef _IS_BIG_ENDIAN_
     *(uint32_t*)(p + MD5_BLOCKSIZE - 8) = bswap32(c->length & 0xFFFFFFFF);
     *(uint32_t*)(p + MD5_BLOCKSIZE - 4) = bswap32(c->length >> 32);
 #else
