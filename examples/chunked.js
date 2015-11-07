@@ -68,7 +68,7 @@ async.waterfall([
 	},
 	function(fd, cb) {
 		// this is the size of the recovery data we'll allocate for
-		var pos = par2.recoverySize(recoverySlices);
+		var pos = par2.packetRecoverySize() * recoverySlices;
 		
 		fs.ftruncate(fd, pos, function(err) {
 			if(err) return cb(err);
@@ -157,7 +157,7 @@ async.waterfall([
 					// write recovery chunks out to file
 					fs.open.bind(fs, par2output, 'r+'),
 					function(fd, cb) {
-						var packetSize = par2.recoverySize(1);
+						var packetSize = par2.packetRecoverySize();
 						// loop through all recovery slices
 						async.timesSeries(recoverySlices, function(chunk, cb) {
 							// calculate where to write recovery data to
@@ -184,7 +184,7 @@ async.waterfall([
 			fs.open(par2output, 'r+', function(err, fd) {
 				if(err) return cb(err);
 				
-				var packetSize = par2.recoverySize(1);
+				var packetSize = par2.packetRecoverySize();
 				// go through each recovery slice
 				async.timesSeries(recoverySlices, function(chunk, cb) {
 					var data = chunker.getHeader(chunk);
