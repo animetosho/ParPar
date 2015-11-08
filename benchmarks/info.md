@@ -39,7 +39,7 @@ Applications Tested (and commands given)
 
     -   `parpar -s [blocksize] -r [rblocks] -m 2000M -o [output] [input]`
 
--   [par2j from MultiPar 1.2.8.4](<http://multipar.eu/>) [2015-09-19]
+-   [par2j from MultiPar 1.2.8.4](<http://hp.vector.co.jp/authors/VA021385/>) [2015-09-19]
 
     -   `par2j c -ss [blocksize] -rn [rblocks] -rf1 -in -m7 [output] [input]`
 

@@ -111,7 +111,7 @@ var argv = require('yargs')
 	}
 }).argv;
 
-// TODO: normalize input filenames (i.e. don't include directory)
+// TODO: handle input directories and auto recurse
 
 if(argv.o.match(/\.par2$/i))
 	argv.o = argv.o.substr(0, argv.o.length-4);
@@ -152,7 +152,7 @@ g.init(function() {
 			process.stderr.write('Processing file ' + file.name + '\n');
 		});
 		*/
-		var totalSlices = g.chunks * g.inputSlices, currentSlice = 0;
+		var totalSlices = g.chunks * g.passes * g.inputSlices, currentSlice = 0;
 		g.on('processing_slice', function(file, sliceNum) {
 			currentSlice++;
 		});
