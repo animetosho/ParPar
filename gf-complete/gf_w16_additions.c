@@ -370,9 +370,6 @@ static void gf_w16_xor_lazy_sse_altmap_multiply_region(gf_t *gf, void *src, void
   h = (gf_internal_t *) gf->scratch;
   gf_w16_log_region_alignment(&rd, gf, src, dest, bytes, val, xor, 16, 256);
   
-  depmask1 = _mm_setzero_si128();
-  depmask2 = _mm_setzero_si128();
-  
   /* calculate dependent bits */
   addvals1 = _mm_set_epi16(1<< 7, 1<< 6, 1<< 5, 1<< 4, 1<< 3, 1<< 2, 1<<1, 1<<0);
   addvals2 = _mm_set_epi16(1<<15, 1<<14, 1<<13, 1<<12, 1<<11, 1<<10, 1<<9, 1<<8);
@@ -386,8 +383,11 @@ static void gf_w16_xor_lazy_sse_altmap_multiply_region(gf_t *gf, void *src, void
   
   if(val & (1<<15)) {
     /* XOR */
-    depmask1 = _mm_xor_si128(depmask1, addvals1);
-    depmask2 = _mm_xor_si128(depmask2, addvals2);
+    depmask1 = addvals1;
+    depmask2 = addvals2;
+  } else {
+    depmask1 = _mm_setzero_si128();
+    depmask2 = _mm_setzero_si128();
   }
   for(i=(1<<14); i; i>>=1) {
     /* rotate */
@@ -643,8 +643,6 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
   if(rd.d_start != rd.d_top) {
     int use_temp = ((uintptr_t)rd.s_start - (uintptr_t)rd.d_start + 256) < 512;
     int setup_stack = 0;
-    depmask1 = _mm_setzero_si128();
-    depmask2 = _mm_setzero_si128();
     
     /* calculate dependent bits */
     addvals1 = _mm_set_epi16(1<< 7, 1<< 6, 1<< 5, 1<< 4, 1<< 3, 1<< 2, 1<<1, 1<<0);
@@ -659,8 +657,11 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
     
     if(val & (1<<15)) {
       /* XOR */
-      depmask1 = _mm_xor_si128(depmask1, addvals1);
-      depmask2 = _mm_xor_si128(depmask2, addvals2);
+      depmask1 = addvals1;
+      depmask2 = addvals2;
+    } else {
+      depmask1 = _mm_setzero_si128();
+      depmask2 = _mm_setzero_si128();
     }
     for(i=(1<<14); i; i>>=1) {
       /* rotate */
@@ -1303,6 +1304,7 @@ If using this, don't forget to save BX,DI,SI registers!
     
   }
   
+}
 #endif
 }
 #endif
