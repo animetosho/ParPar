@@ -299,11 +299,11 @@ gf_w16_split_8_16_lazy_multiply_region(gf_t *gf, void *src, void *dest, gf_val_3
     }
 }
 
+#ifdef INTEL_SSSE3
 static
 void
 gf_w16_split_4_16_lazy_sse_multiply_region(gf_t *gf, void *src, void *dest, gf_val_32_t val, int bytes, int xor)
 {
-#ifdef INTEL_SSSE3
   uint64_t i, j, *s64, *d64, *top64;
   uint64_t c, prod;
   uint8_t low[4][16];
@@ -456,8 +456,8 @@ gf_w16_split_4_16_lazy_sse_multiply_region(gf_t *gf, void *src, void *dest, gf_v
   }
 
   gf_do_final_region_alignment(&rd);
-#endif
 }
+#endif
 
 /*
 static

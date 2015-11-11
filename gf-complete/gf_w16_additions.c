@@ -136,8 +136,8 @@ void gf_w16_log_region_alignment(gf_region_data *rd,
 
 
 
-static void gf_w16_xor_start(void* src, int bytes, void* dest) {
 #ifdef INTEL_SSE2
+static void gf_w16_xor_start(void* src, int bytes, void* dest) {
 	gf_region_data rd;
 	__m128i *sW;
 	uint16_t *d16, *top16;
@@ -237,12 +237,10 @@ static void gf_w16_xor_start(void* src, int bytes, void* dest) {
 			d16 += 128;
 		}
 	}
-#endif
 }
 
 
 static void gf_w16_xor_final(void* src, int bytes, void* dest) {
-#ifdef INTEL_SSE2
 	gf_region_data rd;
 	uint16_t *s16, *d16, *top16;
 	__m128i ta, tb, lmask, th, tl;
@@ -321,8 +319,8 @@ static void gf_w16_xor_final(void* src, int bytes, void* dest) {
 		d16 += 128;
 		s16 += 128 - 8; /*==15*8*/
 	}
-#endif
 }
+#endif
 
 static gf_val_32_t
 #ifdef __GNUC__
@@ -353,9 +351,9 @@ gf_w16_xor_extract_word(gf_t *gf, void *start, int bytes, int index)
 }
 
 
+#ifdef INTEL_SSE2
 static void gf_w16_xor_lazy_sse_altmap_multiply_region(gf_t *gf, void *src, void *dest, gf_val_32_t val, int bytes, int xor)
 {
-#ifdef INTEL_SSE2
   FAST_U32 i, bit;
   FAST_U32 counts[16];
   uintptr_t deptable[16][16];
@@ -620,17 +618,12 @@ static void gf_w16_xor_lazy_sse_altmap_multiply_region(gf_t *gf, void *src, void
       }
   }
   
-#endif
 }
 
-
-#ifdef INTEL_SSE2
 #include "x86_jit.c"
-#endif /* INTEL_SSE2 */
 
 static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, void *dest, gf_val_32_t val, int bytes, int xor)
 {
-#ifdef INTEL_SSE2
   FAST_U32 i, bit;
   __m128i depmask1, depmask2, polymask1, polymask2, addvals1, addvals2;
   __m128i common_mask;
@@ -1312,6 +1305,8 @@ If using this, don't forget to save BX,DI,SI registers!
   
 #endif
 }
+#endif
+
 
 
 
