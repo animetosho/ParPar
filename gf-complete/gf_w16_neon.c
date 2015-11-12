@@ -105,58 +105,6 @@ neon_w16_split_4_multiply_region(gf_t *gf, uint16_t *src, uint16_t *dst,
   }
 }
 
-static
-inline
-void
-neon_w16_split_4_altmap_multiply_region(gf_t *gf, uint8_t *src,
-                                        uint8_t *dst, uint8_t *d_end,
-                                        uint8_t *tbl, gf_val_32_t val,
-                                        int xor)
-{
-  unsigned i;
-  uint8_t *high = tbl + 4 * 16;
-  uint8x16_t vh, vl, rh, rl;
-  uint8x16_t loset;
-
-  uint8x16_t tbl_h[4], tbl_l[4];
-  for (i = 0; i < 4; i++) {
-      tbl_l[i] = vld1q_u8(tbl + i*16);
-      tbl_h[i] = vld1q_u8(high + i*16);
-  }
-
-  loset = vdupq_n_u8(0xf);
-
-  while (dst < d_end) {
-      vh = vld1q_u8(src);
-      vl = vld1q_u8(src + 16);
-
-      rl = vqtbl1q_u8(tbl_l[0], vandq_u8(vl, loset));
-      rh = vqtbl1q_u8(tbl_h[0], vandq_u8(vl, loset));
-      rl = veorq_u8(rl, vqtbl1q_u8(tbl_l[2], vandq_u8(vh, loset)));
-      rh = veorq_u8(rh, vqtbl1q_u8(tbl_h[2], vandq_u8(vh, loset)));
-
-      vl = vshrq_n_u8(vl, 4);
-      vh = vshrq_n_u8(vh, 4);
-
-      rl = veorq_u8(rl, vqtbl1q_u8(tbl_l[1], vl));
-      rh = veorq_u8(rh, vqtbl1q_u8(tbl_h[1], vl));
-      rl = veorq_u8(rl, vqtbl1q_u8(tbl_l[3], vh));
-      rh = veorq_u8(rh, vqtbl1q_u8(tbl_h[3], vh));
-
-      if (xor) {
-          vh = vld1q_u8(dst);
-          vl = vld1q_u8(dst + 16);
-          rh = veorq_u8(rh, vh);
-          rl = veorq_u8(rl, vl);
-      }
-      vst1q_u8(dst, rh);
-      vst1q_u8(dst + 16, rl);
-
-      src += 32;
-      dst += 32;
-  }
-}
-
 #else /* ARCH_AARCH64 */
 
 static
@@ -211,6 +159,12 @@ neon_w16_split_4_multiply_region(gf_t *gf, uint16_t *src, uint16_t *dst,
       dst += 8;
   }
 }
+#endif /* ARCH_AARCH64 */
+
+#ifndef ARCH_AARCH64
+#define vqtbl1q_u8(tbl, v) vcombine_u8(vtbl2_u8(tbl, vget_low_u8(v)),   \
+                                       vtbl2_u8(tbl, vget_high_u8(v)))
+#endif
 
 static
 inline
@@ -222,60 +176,59 @@ neon_w16_split_4_altmap_multiply_region(gf_t *gf, uint8_t *src,
 {
   unsigned i;
   uint8_t *high = tbl + 4 * 16;
-  uint8x8_t vh0, vh1, vl0, vl1, r0, r1, r2, r3;
-  uint8x8_t loset;
+  uint8x16_t vh, vl, rh, rl;
+  uint8x16_t loset;
 
+#ifdef ARCH_AARCH64
+  uint8x16_t tbl_h[4], tbl_l[4];
+#else
   uint8x8x2_t tbl_h[4], tbl_l[4];
+#endif
   for (i = 0; i < 4; i++) {
+#ifdef ARCH_AARCH64
+      tbl_l[i] = vld1q_u8(tbl + i*16);
+      tbl_h[i] = vld1q_u8(high + i*16);
+#else
       tbl_l[i].val[0] = vld1_u8(tbl + i*16);
       tbl_l[i].val[1] = vld1_u8(tbl + i*16 + 8);
       tbl_h[i].val[0] = vld1_u8(high + i*16);
       tbl_h[i].val[1] = vld1_u8(high + i*16 + 8);
+#endif
   }
 
-  loset = vdup_n_u8(0xf);
+  loset = vdupq_n_u8(0xf);
 
   while (dst < d_end) {
-      vh0 = vld1_u8(src);
-      vh1 = vld1_u8(src + 8);
-      vl0 = vld1_u8(src + 16);
-      vl1 = vld1_u8(src + 24);
+      vh = vld1q_u8(src);
+      vl = vld1q_u8(src + 16);
 
-      r0 = vtbl2_u8(tbl_l[0], vand_u8(vh0, loset));
-      r1 = vtbl2_u8(tbl_h[0], vand_u8(vh1, loset));
-      r2 = vtbl2_u8(tbl_l[2], vand_u8(vl0, loset));
-      r3 = vtbl2_u8(tbl_h[2], vand_u8(vl1, loset));
+      rl = vqtbl1q_u8(tbl_l[0], vandq_u8(vl, loset));
+      rh = vqtbl1q_u8(tbl_h[0], vandq_u8(vl, loset));
+      rl = veorq_u8(rl, vqtbl1q_u8(tbl_l[2], vandq_u8(vh, loset)));
+      rh = veorq_u8(rh, vqtbl1q_u8(tbl_h[2], vandq_u8(vh, loset)));
 
-      vh0 = vshr_n_u8(vh0, 4);
-      vh1 = vshr_n_u8(vh1, 4);
-      vl0 = vshr_n_u8(vl0, 4);
-      vl1 = vshr_n_u8(vl1, 4);
+      vl = vshrq_n_u8(vl, 4);
+      vh = vshrq_n_u8(vh, 4);
 
-      r0 = veor_u8(r0, vtbl2_u8(tbl_l[1], vh0));
-      r1 = veor_u8(r1, vtbl2_u8(tbl_h[1], vh1));
-      r2 = veor_u8(r2, vtbl2_u8(tbl_l[3], vl0));
-      r3 = veor_u8(r3, vtbl2_u8(tbl_h[3], vl1));
+      rl = veorq_u8(rl, vqtbl1q_u8(tbl_l[1], vl));
+      rh = veorq_u8(rh, vqtbl1q_u8(tbl_h[1], vl));
+      rl = veorq_u8(rl, vqtbl1q_u8(tbl_l[3], vh));
+      rh = veorq_u8(rh, vqtbl1q_u8(tbl_h[3], vh));
 
       if (xor) {
-          vh0 = vld1_u8(dst);
-          vh1 = vld1_u8(dst + 8);
-          vl0 = vld1_u8(dst + 16);
-          vl1 = vld1_u8(dst + 24);
-          r0  = veor_u8(r0, vh0);
-          r1  = veor_u8(r1, vh1);
-          r2  = veor_u8(r2, vl0);
-          r3  = veor_u8(r3, vl1);
+          vh = vld1q_u8(dst);
+          vl = vld1q_u8(dst + 16);
+          rh = veorq_u8(rh, vh);
+          rl = veorq_u8(rl, vl);
       }
-      vst1_u8(dst,      r0);
-      vst1_u8(dst +  8, r1);
-      vst1_u8(dst + 16, r2);
-      vst1_u8(dst + 24, r3);
+      vst1q_u8(dst, rh);
+      vst1q_u8(dst + 16, rl);
 
       src += 32;
       dst += 32;
   }
 }
-#endif /* ARCH_AARCH64 */
+
 
 static
 inline
