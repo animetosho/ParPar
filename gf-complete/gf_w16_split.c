@@ -348,7 +348,7 @@ _FN(gf_w16_split_4_16_lazy_altmap_multiply_regionX)(gf_t *gf, uint16_t **src, vo
     log_val = ltd->log_tbl[val[r]];
     for (j = 0; j < 16; j++) {
       for (i = 0; i < 4; i++) {
-        prod = (j == 0) ? 0 : ltd->antilog_tbl[(int) ltd->log_tbl[(j << (i*4))] + log_val];
+        prod = (j == 0) ? 0 : GF_ANTILOG((int) ltd->log_tbl[(j << (i*4))] + log_val);
         for (k = 0; k < MWORD_SIZE; k += 16) {
           low[r][i].u8[j + k] = (uint8_t)prod;
           high[r][i].u8[j + k] = (uint8_t)(prod >> 8);

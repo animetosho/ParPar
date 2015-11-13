@@ -104,7 +104,7 @@ void gf_w16_log_region_alignment(gf_region_data *rd,
   #define MUL_LOOP(op, src, dest, srcto) { \
     uint16_t *s16 = (uint16_t *)src, *d16 = (uint16_t *)dest; \
     while (s16 < (uint16_t *)(srcto)) { \
-      *d16 op (*s16 == 0) ? 0 : ltd->antilog_tbl[(int) ltd->log_tbl[*s16] + log_val]; \
+      *d16 op (*s16 == 0) ? 0 : GF_ANTILOG((int) ltd->log_tbl[*s16] + log_val); \
       s16++; \
       d16++; \
     } \
@@ -125,7 +125,7 @@ void gf_w16_log_region_alignment(gf_region_data *rd,
 #define _GF_W16_LOG_MULTIPLY_REGION(op, src, dest, srcto) { \
   uint16_t *s16 = (uint16_t *)src, *d16 = (uint16_t *)dest; \
   while (s16 < (uint16_t *)(srcto)) { \
-    *d16 op (*s16 == 0) ? 0 : ltd->antilog_tbl[(int) ltd->log_tbl[*s16] + log_val]; \
+    *d16 op (*s16 == 0) ? 0 : GF_ANTILOG((int) ltd->log_tbl[*s16] + log_val); \
     s16++; \
     d16++; \
   } \
@@ -320,7 +320,7 @@ static void gf_w16_xor_final(void* src, int bytes, void* dest) {
 		s16 += 128 - 8; /*==15*8*/
 	}
 }
-#endif
+#endif /*INTEL_SSE2*/
 
 static gf_val_32_t
 #ifdef __GNUC__
@@ -1305,9 +1305,7 @@ If using this, don't forget to save BX,DI,SI registers!
   }
   
 }
-#endif
-}
-#endif
+#endif /* INTEL_SSE2 */
 
 
 

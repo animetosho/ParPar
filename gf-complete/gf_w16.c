@@ -50,13 +50,13 @@ gf_w16_log_multiply_region(gf_t *gf, void *src, void *dest, gf_val_32_t val, int
 
   if (xor) {
     while (d16 < (uint16_t *) rd.d_top) {
-      *d16 ^= (*s16 == 0 ? 0 : ltd->antilog_tbl[lv + ltd->log_tbl[*s16]]);
+      *d16 ^= (*s16 == 0 ? 0 : GF_ANTILOG(lv + ltd->log_tbl[*s16]));
       d16++;
       s16++;
     }
   } else {
     while (d16 < (uint16_t *) rd.d_top) {
-      *d16 = (*s16 == 0 ? 0 : ltd->antilog_tbl[lv + ltd->log_tbl[*s16]]);
+      *d16 = (*s16 == 0 ? 0 : GF_ANTILOG(lv + ltd->log_tbl[*s16]));
       d16++;
       s16++;
     }
@@ -72,7 +72,7 @@ gf_w16_log_multiply(gf_t *gf, gf_val_32_t a, gf_val_32_t b)
   struct gf_w16_logtable_data *ltd;
 
   ltd = (struct gf_w16_logtable_data *) ((gf_internal_t *) gf->scratch)->private;
-  return (a == 0 || b == 0) ? 0 : ltd->antilog_tbl[(int) ltd->log_tbl[a] + (int) ltd->log_tbl[b]];
+  return (a == 0 || b == 0) ? 0 : GF_ANTILOG((int) ltd->log_tbl[a] + (int) ltd->log_tbl[b]);
 }
 
 static
@@ -92,12 +92,12 @@ int gf_w16_log_init(gf_t *gf)
   for (i = 0; i < GF_MULT_GROUP_SIZE; i++) {
       ltd->log_tbl[b] = i;
       ltd->antilog_tbl[i] = b;
-      ltd->antilog_tbl[i+GF_MULT_GROUP_SIZE] = b;
       b <<= 1;
       if (b & GF_FIELD_SIZE) {
           b = b ^ h->prim_poly;
       }
   }
+  ltd->antilog_tbl[GF_MULT_GROUP_SIZE] = ltd->antilog_tbl[0];
 
   gf->multiply.w32 = gf_w16_log_multiply;
   gf->multiply_region.w32 = gf_w16_log_multiply_region;
@@ -325,33 +325,6 @@ gf_w16_split_4_16_lazy_sse_multiply_region(gf_t *gf, void *src, void *dest, gf_v
   gf_set_region_data(&rd, gf, src, dest, bytes, val, xor, 16, 32);
   gf_do_initial_region_alignment(&rd);
 
-/*
-  lmask = _mm_set1_epi16 (0xff);
-  for (i = 0; i < 16; i+=4) {
-    ta = _mm_set_epi16(
-      ltd->antilog_tbl[(int) ltd->log_tbl[7 << i] + log_val],
-      ltd->antilog_tbl[(int) ltd->log_tbl[6 << i] + log_val],
-      ltd->antilog_tbl[(int) ltd->log_tbl[5 << i] + log_val],
-      ltd->antilog_tbl[(int) ltd->log_tbl[4 << i] + log_val],
-      ltd->antilog_tbl[(int) ltd->log_tbl[3 << i] + log_val],
-      ltd->antilog_tbl[(int) ltd->log_tbl[2 << i] + log_val],
-      ltd->antilog_tbl[(int) ltd->log_tbl[1 << i] + log_val],
-      0
-    );
-    tb = _mm_set_epi16(
-      ltd->antilog_tbl[(int) ltd->log_tbl[15 << i] + log_val],
-      ltd->antilog_tbl[(int) ltd->log_tbl[14 << i] + log_val],
-      ltd->antilog_tbl[(int) ltd->log_tbl[13 << i] + log_val],
-      ltd->antilog_tbl[(int) ltd->log_tbl[12 << i] + log_val],
-      ltd->antilog_tbl[(int) ltd->log_tbl[11 << i] + log_val],
-      ltd->antilog_tbl[(int) ltd->log_tbl[10 << i] + log_val],
-      ltd->antilog_tbl[(int) ltd->log_tbl[ 9 << i] + log_val],
-      ltd->antilog_tbl[(int) ltd->log_tbl[ 8 << i] + log_val]
-    );
-    tlow[i>>2] = _mm_packus_epi16(_mm_and_si128(ta, lmask), _mm_and_si128(tb, lmask));
-    thigh[i>>2] = _mm_packus_epi16(_mm_srli_epi16(ta, 8), _mm_srli_epi16(tb, 8));
-  }
-*/
   for (j = 0; j < 16; j++) {
     for (i = 0; i < 4; i++) {
       c = (j << (i*4));
