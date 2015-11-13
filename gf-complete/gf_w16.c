@@ -116,6 +116,20 @@ int gf_w16_log_init(gf_t *gf)
 */
 
 
+#ifdef ARM_NEON
+# include "gf_w16_neon.c"
+
+static 
+int gf_w16_split_init(gf_t *gf)
+{
+  gf_w16_log_init(gf);
+  gf_w16_neon_split_init(gf);
+  gf->mult_method = GF_SPLIT4_NEON;
+  return 1;
+}
+
+#else
+
 /* Ben: Does alternate mapping multiplication using a split table in the
  lazy method without sse instructions*/
 
@@ -570,10 +584,6 @@ gf_w16_split_4_16_lazy_sse_altmap_multiply_region(gf_t *gf, void *src, void *des
 }
 */
 
-#ifdef ARM_NEON
-#include "gf_w16_neon.c"
-#endif
-
 static 
 int gf_w16_split_init(gf_t *gf)
 {
@@ -585,12 +595,6 @@ int gf_w16_split_init(gf_t *gf)
      In that case, we'll be using SHIFT. */
 
   gf_w16_log_init(gf);
-
-#ifdef ARM_NEON
-  gf_w16_neon_split_init(gf);
-  gf->mult_method = GF_SPLIT4_NEON;
-  
-#else
   
   /* Defaults */
   if (!h->arg1 || !h->arg2) {
@@ -657,10 +661,11 @@ int gf_w16_split_init(gf_t *gf)
     gf->using_altmap = 0;
   }
   
-#endif /* ARM_NEON */
-
   return 1;
 }
+
+#endif /*ARM_NEON*/
+
 
 #ifdef INTEL_SSE2
 #include "x86_jit.c"

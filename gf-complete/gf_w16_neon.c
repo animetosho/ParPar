@@ -134,8 +134,6 @@ gf_w16_split_4_16_lazy_multiply_region_neon(gf_t *gf, void *src, void *dest,
 
 void gf_w16_neon_split_init(gf_t *gf)
 {
-  gf_internal_t *h = (gf_internal_t *) gf->scratch;
-
   gf->multiply_region.w32 = gf_w16_split_4_16_lazy_multiply_region_neon;
   gf->altmap_region = gf_w16_split_null;
   gf->unaltmap_region = gf_w16_split_null;
