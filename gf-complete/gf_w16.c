@@ -590,14 +590,6 @@ int gf_w16_split_init(gf_t *gf)
   gf_w16_neon_split_init(gf);
   gf->mult_method = GF_SPLIT4_NEON;
   
-  /* TODO: altmap stuff */
-  gf->altmap_region = gf_w16_split_null;
-  gf->unaltmap_region = gf_w16_split_null;
-  
-  gf->alignment = 16;
-  gf->walignment = 32;
-  gf->using_altmap = (h->region_type & GF_REGION_ALTMAP);
-  
 #else
   
   /* Defaults */
