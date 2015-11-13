@@ -114,7 +114,7 @@ void gf_w16_log_region_alignment(gf_region_data *rd,
     MUL_LOOP(^=, rd->s_top, rd->d_top, sEnd)
   } else {
     MUL_LOOP(=, src, dest, rd->s_start)
-    MUL_LOOP(=,rd->s_top, rd->d_top, sEnd)
+    MUL_LOOP(=, rd->s_top, rd->d_top, sEnd)
   }
   #undef MUL_LOOP
 }

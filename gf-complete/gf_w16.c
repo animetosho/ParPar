@@ -87,7 +87,6 @@ int gf_w16_log_init(gf_t *gf)
   
   for (i = 0; i < GF_MULT_GROUP_SIZE+1; i++)
     ltd->log_tbl[i] = 0;
-  ltd->d_antilog = ltd->antilog_tbl + GF_MULT_GROUP_SIZE;
 
   b = 1;
   for (i = 0; i < GF_MULT_GROUP_SIZE; i++) {
@@ -98,12 +97,6 @@ int gf_w16_log_init(gf_t *gf)
       if (b & GF_FIELD_SIZE) {
           b = b ^ h->prim_poly;
       }
-  }
-
-  ltd->inv_tbl[0] = 0;  /* Not really, but we need to fill it with something  */
-  ltd->inv_tbl[1] = 1;
-  for (i = 2; i < GF_FIELD_SIZE; i++) {
-    ltd->inv_tbl[i] = ltd->antilog_tbl[GF_MULT_GROUP_SIZE-ltd->log_tbl[i]];
   }
 
   gf->multiply.w32 = gf_w16_log_multiply;
