@@ -156,18 +156,20 @@ g.init(function() {
 		g.on('processing_slice', function(file, sliceNum) {
 			currentSlice++;
 		});
-		var interval = setInterval(function() {
-			var perc = Math.floor(currentSlice / totalSlices *10000)/100;
-			// add formatting for aesthetics
-			var parts = perc.toLocaleString().match(/^([0-9]+)([.,][0-9]+)?$/);
-			while(parts[1].length < 3)
-				parts[1] = ' ' + parts[1];
-			if(parts[2]) while(parts[2].length < 3)
-				parts[2] += '0';
-			else
-				parts[2] = decimalPoint + '00';
-			process.stderr.write('Calculating: ' + (parts[1] + parts[2]) + '%\x1b[0G');
-		}, 200);
+		if(totalSlices) {
+			var interval = setInterval(function() {
+				var perc = Math.floor(currentSlice / totalSlices *10000)/100;
+				// add formatting for aesthetics
+				var parts = perc.toLocaleString().match(/^([0-9]+)([.,][0-9]+)?$/);
+				while(parts[1].length < 3)
+					parts[1] = ' ' + parts[1];
+				if(parts[2]) while(parts[2].length < 3)
+					parts[2] += '0';
+				else
+					parts[2] = decimalPoint + '00';
+				process.stderr.write('Calculating: ' + (parts[1] + parts[2]) + '%\x1b[0G');
+			}, 200);
+		}
 		g.on('complete', function() {
 			var endTime = Date.now();
 			if(interval) clearInterval(interval);
