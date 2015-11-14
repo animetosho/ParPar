@@ -90,8 +90,7 @@ gf_w16_split_4_16_lazy_multiply_region_neon(gf_t *gf, void *src, void *dest,
   }
 #endif
 
-  gf_set_region_data(&rd, gf, src, dest, bytes, val, xor, 16, 32);
-  gf_do_initial_region_alignment(&rd);
+  gf_w16_log_region_alignment(&rd, gf, src, dest, bytes, val, xor, 16, 32);
 
   uint16_t *s16   = rd.s_start;
   uint16_t *d16   = rd.d_start;
@@ -102,7 +101,34 @@ gf_w16_split_4_16_lazy_multiply_region_neon(gf_t *gf, void *src, void *dest,
   uint8x16x2_t va;
   loset = vdupq_n_u8(0xf);
 
-  while (d16 < end16) {
+  if (xor) {
+    uint8x16x2_t vb;
+    while (d16 < end16) {
+      va = vld2q_u8((uint8_t*)s16);
+      vb = vld2q_u8((uint8_t*)d16);
+
+      rl = vqtbl1q_u8(tbl_l[0], vandq_u8(va.val[0], loset));
+      rh = vqtbl1q_u8(tbl_h[0], vandq_u8(va.val[0], loset));
+      rl = veorq_u8(rl, vqtbl1q_u8(tbl_l[2], vandq_u8(va.val[1], loset)));
+      rh = veorq_u8(rh, vqtbl1q_u8(tbl_h[2], vandq_u8(va.val[1], loset)));
+
+      va.val[0] = vshrq_n_u8(va.val[0], 4);
+      va.val[1] = vshrq_n_u8(va.val[1], 4);
+
+      rl = veorq_u8(rl, vqtbl1q_u8(tbl_l[1], va.val[0]));
+      rh = veorq_u8(rh, vqtbl1q_u8(tbl_h[1], va.val[0]));
+      va.val[0] = veorq_u8(rl, vqtbl1q_u8(tbl_l[3], va.val[1]));
+      va.val[1] = veorq_u8(rh, vqtbl1q_u8(tbl_h[3], va.val[1]));
+
+      va.val[0] = veorq_u8(va.val[0], vb.val[0]);
+      va.val[1] = veorq_u8(va.val[1], vb.val[1]);
+      vst2q_u8((uint8_t*)d16, va);
+
+      s16 += 16;
+      d16 += 16;
+    }
+  } else {
+    while (d16 < end16) {
       va = vld2q_u8((uint8_t*)s16);
 
       rl = vqtbl1q_u8(tbl_l[0], vandq_u8(va.val[0], loset));
@@ -118,18 +144,12 @@ gf_w16_split_4_16_lazy_multiply_region_neon(gf_t *gf, void *src, void *dest,
       va.val[0] = veorq_u8(rl, vqtbl1q_u8(tbl_l[3], va.val[1]));
       va.val[1] = veorq_u8(rh, vqtbl1q_u8(tbl_h[3], va.val[1]));
 
-      if (xor) {
-          uint8x16x2_t vb = vld2q_u8((uint8_t*)d16);
-          va.val[0] = veorq_u8(va.val[0], vb.val[0]);
-          va.val[1] = veorq_u8(va.val[1], vb.val[1]);
-      }
       vst2q_u8((uint8_t*)d16, va);
 
       s16 += 16;
       d16 += 16;
+    }
   }
-
-  gf_do_final_region_alignment(&rd);
 }
 
 void gf_w16_neon_split_init(gf_t *gf)
