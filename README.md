@@ -183,3 +183,6 @@ This module is Public Domain.
 
 GF-Complete’s license can be found
 [here](<http://jerasure.org/jerasure/gf-complete/blob/master/License.txt>).
+
+MD5 implementation is based off implementation from
+[OpenSSL](<https://www.openssl.org/>).
