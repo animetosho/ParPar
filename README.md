@@ -1,6 +1,5 @@
-ParPar is a high performance, multi-threaded PAR2 creation library/tool for
-node.js. ParPar does not verify or repair files, only creates redundancy. ParPar
-has only been tested on x86 32/64 bit based CPUs.
+ParPar is a high performance, multi-threaded PAR2 creation tool and library for
+node.js. ParPar does not verify or repair files, only creates redundancy.
 
 ParPar provides three main things:
 
@@ -27,13 +26,17 @@ Features
 
 -   multi-threading via OpenMP
 
--   fast calculation routine with SSE2, SSSE3 and AVX2 optimised algorithms when
-    available
+-   fast calculation routines (see [benchmark comparisons]) using x86 and ARM
+    SIMD capabilities when available
 
 -   chunking support for memory constrained situations
 
 -   minimum chunk size restrictions to avoid heavy I/O seeking when memory is
     limited
+
+-   multi-platform support
+
+-   completely different implementation to all the par2cmdline forks :)
 
 Planned Features
 ----------------
@@ -41,23 +44,12 @@ Planned Features
 As mentioned above, ParPar is still under development. Some features currently
 not implemented include:
 
--   power of 2 file sizing scheme
+-   improve CLI handling, i.e. better interface
 
--   repetition of critical packets
-
--   improve CLI handling, i.e. better interface, proper filename
-    normalisation/cleanup etc
-
--   better memory management
-
--   ability to force a GF multiply method, bypassing CPU auto-detection (useful
-    for experimentation and bypassing VMs which meddle with the CPUID)
+-   improve library interface, plus documentation
 
 -   better handling of input buffering and processing chunks based on CPU cache
     size
-
--   more efficient MD5 handling, perhaps via multi-threading and/or stitching
-    with the ALTMAP transformation functions
 
 -   various other tweaks
 
@@ -65,14 +57,13 @@ Motivation
 ----------
 
 I needed a flexible library for creating PAR2 files, in particular, one which
-isn’t tied to the notion of on-disk files. ParPar allows generating PAR2 from
-“immaterial files”, and the output doesn’t have to be written to disk.
+isn’t tied to the notion of on-disk files. ParPar library allows generating PAR2
+from “immaterial files”, and the output doesn’t have to be written to disk.
 
 Also, all the fast PAR2 implementations seem to be Windows only; ParPar provides
 a solution for high performance PAR2 creation on Linux (and probably other)
-systems (without Wine) and it also works on Windows.
-
-See [benchmark comparisons](<benchmarks/info.md>).
+systems (without Wine) and it also works on Windows, as well as non-x86
+platforms (i.e. ARM).
 
  
 
@@ -96,7 +87,7 @@ Note, Windows builds are always compiled with SSE2 support. If you can’t have
 this, delete all instances of `"msvs_settings": {"VCCLCompilerTool":
 {"EnableEnhancedInstructionSet": "2"}},` in *binding.gyp* before compiling.
 
-Relatively recent compilers are needed for AVX2 support.
+Relatively recent compilers are needed for AVX support.
 
 GCC/Clang build issues
 ----------------------
@@ -105,6 +96,18 @@ Some versions of GCC/Clang don't like the `-march=native` switch. If you're
 having build issues with these compilers, try removing all instances of
 `"-march=native",` from *binding.gyp* and recompiling. Note that some CPU
 specific optimisations may not be enabled if the flag is removed.  
+
+ARM NEON Support
+----------------
+
+If compiling for ARM CPUs, you may need to pass the `-mfpu=neon` flag to GCC to
+enable NEON compilation, as GCC doesn’t always auto-detect this, e.g.:
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+CFLAGS=-mfpu=neon node-gyp rebuild
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+ 
 
 API
 ===
