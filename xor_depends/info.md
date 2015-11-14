@@ -142,13 +142,6 @@ generator rather slow. The current implementation just uses a simple heuristic
 of finding common elements between pairs (bitwise AND of dependency masks),
 which seems to improve performance by about 15-20%.
 
-An alternative possibility may be to statically generate instructions for every
-possible multiplier, making exhaustive searches viable (which also gets around
-the downsides of JIT). Whilst it is somewhat feasible to generate 65536
-different routines, assuming we only need to the consider the default
-polynomial, the code size would be rather large, so I have not bothered
-exploring this option.
-
 AVX
 ---
 
@@ -178,6 +171,35 @@ AVX2 capable CPUs are necessary for better performance.
 \* it may be possible to mix 128 bit integer and 256 bit FP operations to
 improve throughput, but, despite the complexity, would only matter to Intel
 Sandy/Ivy Bridge CPUs
+
+Static Pre-generation
+---------------------
+
+An alternative to JIT may be to statically generate kernels for every possible
+multiplier. Not only does this avoid issues of JIT (memory protection and slow
+code generation), it enables more exhaustive searches for optimal sequences and
+further code optimisation techniques, and also makes it easier to generate code
+for other platforms (e.g. AVX2 or ARM NEON). Whilst it is somewhat feasible to
+generate 65536 different routines, assuming we only need to the consider the
+default polynomial, the resulting code size would be rather large.
+
+From some initial testing, it seems like GCC does a fairly good job of
+optimising the code (significantly better than my JIT routine), so I’ve just
+given it the raw sequences without trying to do any deduplication. On x86-64,
+for w=16 polynomial 0x1100B, with xor=1 (i.e. adding the results), I get a
+resulting \~60MB binary, for a dispatcher and all 65534 kernels (note that
+GF-Complete handles multiply by 0 and 1 for us).
+
+Unfortunately the performance from this is very poor. Whilst fetching code from
+memory (60MB is guaranteed to cache miss) should still be much faster than JIT,
+I suspect that the overhead of the pagefault generated, whenever a kernel is
+executed, to be the main cause of slowdown.
+
+It may be worthwhile exploring the use of large memory pages and/or compacting
+the code (which is dynamically unpacked with JIT) to mitigate the performance
+issues. However, due to the significant drawbacks of using pre-generated code
+(large code size and need for large page support), I have not explored these
+options.
 
  
 
