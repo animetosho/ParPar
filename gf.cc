@@ -43,17 +43,20 @@ using namespace v8;
 // these lookup tables consume a hefty 192KB... oh well
 uint16_t input_lookup[32768]; // logarithms of input constants
 uint16_t gf_exp[65536]; // pre-calculated exponents in GF(2^16)
+// TODO: consider using GF-Complete's antilog table instead of gf_exp
 static void init_constants() {
 	int exp = 0, n = 1;
 	for (int i = 0; i < 32768; i++) {
 		do {
 			gf_exp[exp] = n;
-			exp++; // exp will reach 65536 by the end of the loop
+			exp++; // exp will reach 65534 by the end of the loop
 			n <<= 1;
 			if(n > 65535) n ^= 0x1100B;
 		} while( !(exp%3) || !(exp%5) || !(exp%17) || !(exp%257) );
 		input_lookup[i] = exp;
 	}
+	gf_exp[exp] = n;
+	gf_exp[65535] = gf_exp[0];
 }
 
 static inline uint16_t calc_factor(uint_fast16_t inputBlock, uint_fast16_t recoveryBlock) {
