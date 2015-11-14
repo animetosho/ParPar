@@ -1,6 +1,6 @@
 #include "md5.h"
 
-#if MD5_SIMD_UPDATE_BLOCK == md5_update_sse
+#ifdef MD5_SIMD_USE_SSE
 
 #define MWORD __m128i
 #define MWORD_SIZE 16

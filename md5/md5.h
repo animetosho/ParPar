@@ -20,6 +20,7 @@ void md5_update_zeroes(MD5_CTX *c, size_t len);
 /* SSE2 support */
 #define MD5_SIMD_NUM 4
 #define MD5_SIMD_UPDATE_BLOCK md5_update_sse
+#define MD5_SIMD_USE_SSE
 #endif
 
 
