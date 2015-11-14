@@ -362,7 +362,7 @@ void md5_update_zeroes(MD5_CTX *c, size_t len)
             return;
         }
     }
-    while(len > MD5_BLOCKSIZE) {
+    while(len >= MD5_BLOCKSIZE) {
         md5_update_block_zeroes(c->h);
         len -= MD5_BLOCKSIZE;
     }
