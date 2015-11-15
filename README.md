@@ -26,8 +26,9 @@ Features
 
 -   multi-threading via OpenMP
 
--   fast calculation routines (see [benchmark comparisons]) using x86 and ARM
-    SIMD capabilities when available
+-   fast calculation routines (see [benchmark
+    comparisons](<https://github.com/animetosho/ParPar/blob/master/benchmarks/info.md>))
+    using x86 and ARM SIMD capabilities when available
 
 -   chunking support for memory constrained situations
 
