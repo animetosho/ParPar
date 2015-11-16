@@ -21,11 +21,13 @@ Sample Benchmark Results
 
 ![](<i5-3570.png>)
 
-![](<Xeon2650.png>)
-
 ![](<A7750.png>)
 
 ![](<T2310.png>)
+
+![](<i3-4160.png>)
+
+![](<AllwinnerH3.png>)
 
  
 
@@ -35,11 +37,12 @@ Benchmark Details
 Applications Tested (and commands given)
 ----------------------------------------
 
--   ParPar 0.1.0 (incomplete) [2015-10-04]
+-   [ParPar 0.2.0](<https://github.com/animetosho/parpar>) [2015-11-15]
 
     -   `parpar -s [blocksize] -r [rblocks] -m 2000M -o [output] [input]`
 
--   [par2j from MultiPar 1.2.8.4](<http://hp.vector.co.jp/authors/VA021385/>) [2015-09-19]
+-   [par2j from MultiPar 1.2.8.7](<http://hp.vector.co.jp/authors/VA021385>)
+    [2015-10-17]
 
     -   `par2j c -ss [blocksize] -rn [rblocks] -rf1 -in -m7 [output] [input]`
 
@@ -76,23 +79,33 @@ Applications Tested (and commands given)
 
 ### Notes
 
--   as it is still under a lot of development, ParPar’s benchmark result should
-    only be considered as very rough and just a general indicator of likely
-    performance. The result may change as ParPar becomes a fully featured PAR2
-    client.
-
 -   stock par2cmdline does not implement multi-threading, whereas all other
-    applications tested here do
+    applications tested here do. In some of the graphs above, par2cmdline’s
+    result has been cut off (but the number is accurate) so that interesting
+    results are highlighted
 
--   I believe that all applications use the SPLIT(16,8) algorithm for
-    calculation; par2j will use SPLIT(16,4) if SSSE3 is available; ParPar will
-    select one of SPLIT(16,4), XOR and SPLIT(16,8) depending on CPU
+-   I believe that all applications use the “SPLIT8” algorithm (8-bit LH lookup
+    table) for calculation; par2j will use “SPLIT4” if SSSE3 is available,
+    falling back to SPLIT8 otherwise; ParPar will select one of SPLIT4, XOR and
+    SPLIT8 depending on CPU capabilities. Algorithm selection should have the
+    following effect on performance:
+
+    -   SPLIT4 is signficantly faster than SPLIT8, but requires a vector byte
+        lookup instruction (available in SSSE3 (x86) or NEON (ARM))
+
+    -   XOR is significantly faster than SPLIT8 and slightly slower than SPLIT4,
+        for CPUs with fast SSE2. It is faster than SPLIT4 on CPUs with a slow
+        vector byte lookup implementation (Intel Atom or first gen Core 2)
+
+    -   ParPar supports 256-bit SPLIT4 implementation, so should be
+        significantly faster than par2j’s 128-bit implementation on CPUs that
+        support AVX2 (Intel Haswell, AMD Zen, VIA Eden X4 or later)
 
 -   par2j and phpar2 are Windows only, all other applications are cross platform
 
--   on Linux, par2j and phpar2 are run under Wine. All other applications are
-    built natively using standard build tools (GCC etc). *libtbb-dev* is needed
-    for par2cmdline-tbb to build.
+-   on x86 Linux, par2j and phpar2 are run under Wine. All other applications
+    are built natively using standard build tools (GCC etc). *libtbb-dev* is
+    needed for par2cmdline-tbb to build.
 
 -   GPU based tools aren’t investigated here as they are currently of no
     interest to me. Benchmarks here are CPU only
@@ -101,6 +114,9 @@ Applications Tested (and commands given)
     factor. Whilst this would be nice to test, how applications decide to use
     memory can vary, and par2j uses a different scheme to other applications,
     which makes it difficult to do a fair comparison
+
+    -   My ARM board only has 1GB RAM, so I’ve adjusted the memory limit down to
+        800MB
 
  
 
@@ -141,4 +157,7 @@ aware of for it to work:
     CSV file
 
 -   as memory limits have been set quite high for most tests, ensure your system
-    has enough free RAM for a fair comparison
+    has enough free RAM for a fair comparison (if you need to change this,
+    search for “2000” in the code and change to something else)
+
+-   the *async* library is required (`npm install async` will get what you need)
