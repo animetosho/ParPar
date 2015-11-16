@@ -71,8 +71,8 @@ platforms (i.e. ARM).
 Installation / Building
 =======================
 
-Pre-packaged Windows builds (with NodeJS v0.10.40) can be found on the Releases
-page.
+Pre-packaged Windows builds (with NodeJS v0.10.40) can be found [on the Releases
+page](<https://github.com/animetosho/ParPar/releases>).
 
 For building you’ll need NodeJS, node-gyp (can be obtained via `npm install -g
 node-gyp` command) and relevant build tools (i.e. MS Visual C++ for Windows,
@@ -136,7 +136,8 @@ unnecessary memory copying.
 Examples
 ========
 
-Examples for the low level JS API can be found in the *examples* folder.
+Examples for the low level JS API can be found in [the examples
+folder](<https://github.com/animetosho/ParPar/tree/master/examples>).
 
  
 

@@ -184,8 +184,10 @@ function compare_files(file1, file2) {
 		if(k == 'creator' || k.substr(0, 5) == 'unifn') continue;
 		
 		if(!packet_eq(file1[k], file2[k])) {
-			console.log('Packet mismatch for ' + k, file1[k], file2[k]);
-			//throw new Error('Packet mismatch for ' + k);
+			//console.log('Packet mismatch for ' + k, file1[k], file2[k]);
+			var err = new Error('Packet mismatch for ' + k);
+			err.pkts = [file1[k], file2[k]];
+			throw err;
 		}
 	}
 	return true;
@@ -340,5 +342,6 @@ async.eachSeries([
 	fs.unlinkSync(tmpDir + 'test1b.bin');
 	fs.unlinkSync(tmpDir + 'test8b.bin');
 	
-	console.log('All tests passed');
+	if(!err)
+		console.log('All tests passed');
 });
