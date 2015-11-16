@@ -178,6 +178,21 @@ Modifications (beyond removing unused components) to the library include:
 
  
 
+Alternatives
+============
+
+For a list of command-line PAR2 tools, [see
+here](<https://github.com/animetosho/ParPar/blob/master/benchmarks/info.md#applications-tested-and-commands-given>).
+
+For a nodejs module, there’s [node-par2](<https://github.com/andykant/par2>)
+which is not an implementation of PAR2, rather a wrapper around par2cmdline.
+
+For a C++ library implementation, there’s
+[libpar2](<https://launchpad.net/libpar2>), which I believe is based off
+par2cmdline.
+
+ 
+
 License
 =======
 
