@@ -263,7 +263,10 @@ for(var i=0; i<4096; i++) {
 fsWriteSync(fd, rand.final());
 fs.closeSync(fd);
 
-fs.writeFileSync(tmpDir + 'test0b.bin', '');
+// we don't test 0 byte files - different implementations seem to treat it differently:
+// - par2cmdline: skips all 0 byte files
+// - par2j: includes them, but they aren't considered part of the recovery set (and if it's the only file, slice size is set to 0)
+// - parpar: includes them, part of recovery set, but no recovery data associated with them, and no IFSC packet
 fs.writeFileSync(tmpDir + 'test1b.bin', 'x');
 fs.writeFileSync(tmpDir + 'test8b.bin', '01234567');
 
@@ -282,7 +285,7 @@ async.eachSeries([
 		singleFile: true
 	},
 	{
-		in: [tmpDir + 'test0b.bin', tmpDir + 'test8b.bin', tmpDir + 'test64m.bin'],
+		in: [tmpDir + 'test1b.bin', tmpDir + 'test8b.bin', tmpDir + 'test64m.bin'],
 		blockSize: 12224,
 		blocks: 99,
 		singleFile: true
@@ -338,7 +341,6 @@ async.eachSeries([
 }, function(err) {
 	delOutput();
 	fs.unlinkSync(tmpDir + 'test64m.bin');
-	fs.unlinkSync(tmpDir + 'test0b.bin');
 	fs.unlinkSync(tmpDir + 'test1b.bin');
 	fs.unlinkSync(tmpDir + 'test8b.bin');
 	
