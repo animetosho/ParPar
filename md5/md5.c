@@ -318,7 +318,7 @@ void md5_multi_update(MD5_CTX **c, const void **data_, size_t len)
         leftOver -= c[i]->dataLen;
         if (leftOver) {
             memcpy((char*)c[i]->data + c[i]->dataLen, data[i] + (n*MD5_BLOCKSIZE), leftOver);
-            c[i]->dataLen += (unsigned int)leftOver;
+            c[i]->dataLen += (int8_t)leftOver;
         }
         c[i]->length += len << 3;
         /* re-arrange ABCD from contexts to easy to use SIMD form */
@@ -358,7 +358,7 @@ void md5_update_zeroes(MD5_CTX *c, size_t len)
             c->dataLen = 0;
         } else {
             memset((char*)c->data + c->dataLen, 0, MD5_BLOCKSIZE - c->dataLen);
-            c->dataLen += (unsigned int)len;
+            c->dataLen += (int8_t)len;
             return;
         }
     }
@@ -368,7 +368,7 @@ void md5_update_zeroes(MD5_CTX *c, size_t len)
     }
     if(len) {
         memset(c->data, 0, len);
-        c->dataLen = len;
+        c->dataLen = (int8_t)len;
     }
 }
 
