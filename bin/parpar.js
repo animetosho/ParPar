@@ -140,8 +140,11 @@ if(argv.t) ParPar.setMaxThreads(argv.t | 0);
 
 // TODO: sigint not respected?
 
-g.init(function() {
-	
+g.init(function(err) {
+	if(err) {
+		process.stderr.write(err + '\n');
+		process.exit(1);
+	}
 	g.on('error', function(err) {
 		process.stderr.write(err + '\n');
 	});
