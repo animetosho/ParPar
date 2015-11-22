@@ -302,7 +302,8 @@ FUNC(PrepInput) {
 			// copy remaining, with zero fill, then ALTMAP over it
 			memcpy(dest + lenMain, src + lenMain, lenTail);
 			memset(dest + inputLen, 0, destLen - inputLen);
-			gf[0].altmap_region(dest + lenMain, MEM_WALIGN, dest + lenMain);
+			if(lenMain + MEM_WALIGN <= destLen)
+				gf[0].altmap_region(dest + lenMain, MEM_WALIGN, dest + lenMain);
 			RETURN_UNDEF
 		} else
 			gf[0].altmap_region(src, inputLen, dest);
