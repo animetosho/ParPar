@@ -759,8 +759,10 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
     }
     
     _jit_mov_i(jit, AX, (intptr_t)rd.s_start);
-    _jit_mov_i(jit, DX, (intptr_t)rd.d_start);
-    _jit_mov_i(jit, CX, (intptr_t)rd.d_top);
+    /* adding 128 to the destination pointer allows the register offset to be coded in 1 byte
+     * eg: 'movdqa xmm0, [rdx+0x90]' is 8 bytes, whilst 'movdqa xmm0, [rdx-0x60]' is 5 bytes */
+    _jit_mov_i(jit, DX, (intptr_t)rd.d_start + 128);
+    _jit_mov_i(jit, CX, (intptr_t)rd.d_top + 128);
     
     _jit_align32(jit);
     pos_startloop = jit->ptr;
@@ -932,14 +934,16 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
 #ifdef AMD64
         /* can fit everything in registers, so do just that */
         for(bit=0; bit<16; bit+=2) {
-          _jit_movaps_load(jit, bit, DX, bit<<4);
-          _jit_movdqa_load(jit, bit+1, DX, (bit+1)<<4);
+          int destOffs = (bit<<4)-128;
+          _jit_movaps_load(jit, bit, DX, destOffs);
+          _jit_movdqa_load(jit, bit+1, DX, destOffs+16);
         }
 #else
         /* load half, and will need to save everything to temp */
         for(bit=0; bit<8; bit+=2) {
-          _jit_movaps_load(jit, bit, DX, bit<<4);
-          _jit_movdqa_load(jit, bit+1, DX, (bit+1)<<4);
+          int destOffs = (bit<<4)-128;
+          _jit_movaps_load(jit, bit, DX, destOffs);
+          _jit_movdqa_load(jit, bit+1, DX, destOffs+16);
         }
 #endif
         for(bit=0; bit<8; bit+=2) {
@@ -972,8 +976,9 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
           _jit_movdqa_store(jit, BP, -((bit+1)<<4) -16, bit+1);
         }
         for(; bit<16; bit+=2) {
-          _jit_movaps_load(jit, (bit&7), DX, bit<<4);
-          _jit_movdqa_load(jit, (bit&7)+1, DX, (bit+1)<<4);
+          int destOffs = (bit<<4)-128;
+          _jit_movaps_load(jit, (bit&7), DX, destOffs);
+          _jit_movdqa_load(jit, (bit&7)+1, DX, destOffs+16);
         }
 #endif
         for(bit=8; bit<16; bit+=2) {
@@ -999,18 +1004,20 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
         }
 #ifdef AMD64
         for(bit=0; bit<16; bit+=2) {
-          _jit_movaps_store(jit, DX, bit<<4, bit);
-          _jit_movdqa_store(jit, DX, (bit+1)<<4, bit+1);
+          int destOffs = (bit<<4)-128;
+          _jit_movaps_store(jit, DX, destOffs, bit);
+          _jit_movdqa_store(jit, DX, destOffs+16, bit+1);
         }
 #else
         for(bit=8; bit<16; bit+=2) {
-          _jit_movaps_store(jit, DX, bit<<4, bit -8);
-          _jit_movdqa_store(jit, DX, (bit+1)<<4, bit -7);
+          int destOffs = (bit<<4)-128;
+          _jit_movaps_store(jit, DX, destOffs, bit -8);
+          _jit_movdqa_store(jit, DX, destOffs+16, bit -7);
         }
         /* copy temp */
         for(bit=0; bit<8; bit++) {
           _jit_movaps_load(jit, 0, BP, -(bit<<4) -16);
-          _jit_movaps_store(jit, DX, bit<<4, 0);
+          _jit_movaps_store(jit, DX, (bit<<4)-128, 0);
         }
 #endif
       } else {
@@ -1069,18 +1076,20 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
         }
 #ifdef AMD64
         for(bit=0; bit<16; bit+=2) {
-          _jit_movaps_store(jit, DX, bit<<4, bit);
-          _jit_movdqa_store(jit, DX, (bit+1)<<4, bit+1);
+          int destOffs = (bit<<4)-128;
+          _jit_movaps_store(jit, DX, destOffs, bit);
+          _jit_movdqa_store(jit, DX, destOffs+16, bit+1);
         }
 #else
         for(bit=8; bit<16; bit+=2) {
-          _jit_movaps_store(jit, DX, bit<<4, bit -8);
-          _jit_movdqa_store(jit, DX, (bit+1)<<4, bit -7);
+          int destOffs = (bit<<4)-128;
+          _jit_movaps_store(jit, DX, destOffs, bit -8);
+          _jit_movdqa_store(jit, DX, destOffs+16, bit -7);
         }
         /* copy temp */
         for(bit=0; bit<8; bit++) {
           _jit_movaps_load(jit, 0, BP, -((int32_t)bit<<4) -16);
-          _jit_movaps_store(jit, DX, bit<<4, 0);
+          _jit_movaps_store(jit, DX, (bit<<4)-128, 0);
         }
 #endif
       }
@@ -1096,11 +1105,12 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
 #endif
       if(xor) {
         for(bit=0; bit<16; bit+=2) {
+          int destOffs = (bit<<4)-128;
           FAST_U32 movC = _MOV_OR_XOR_INT_INIT;
           FAST_U16 mask1 = tmp_depmask[bit], mask2 = tmp_depmask[bit+1],
                    maskC = common_depmask[bit>>1];
-          _jit_movaps_load(jit, 0, DX, bit<<4);
-          _jit_movdqa_load(jit, 1, DX, (bit+1)<<4);
+          _jit_movaps_load(jit, 0, DX, destOffs);
+          _jit_movdqa_load(jit, 1, DX, destOffs+16);
           
           for(i=0; i<(FAST_U32_SIZE==8 ? 3:8); i++) {
             _MOV_OR_XOR_INT_A(2, movC, maskC & 1);
@@ -1151,11 +1161,12 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
             _XORPS_R(0, 2);
             _PXOR_R(1, 2); /*penalty?*/
           }
-          _jit_movaps_store(jit, DX, bit<<4, 0);
-          _jit_movdqa_store(jit, DX, (bit+1)<<4, 1);
+          _jit_movaps_store(jit, DX, destOffs, 0);
+          _jit_movdqa_store(jit, DX, destOffs+16, 1);
         }
       } else {
         for(bit=0; bit<16; bit+=2) {
+          int destOffs = (bit<<4)-128;
           FAST_U32 mov1 = _MOV_OR_XOR_FP_INIT, mov2 = _MOV_OR_XOR_INT_INIT,
                    movC = _MOV_OR_XOR_INT_INIT;
           FAST_U16 mask1 = tmp_depmask[bit], mask2 = tmp_depmask[bit+1],
@@ -1206,81 +1217,22 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
 #endif
           if(common_depmask[bit>>1]) {
             if(mov1) /* no additional XORs were made? */
-              _jit_movdqa_store(jit, DX, bit<<4, 2);
+              _jit_movdqa_store(jit, DX, destOffs, 2);
             else {
               _XORPS_R(0, 2);
             }
             if(mov2)
-              _jit_movdqa_store(jit, DX, (bit+1)<<4, 2);
+              _jit_movdqa_store(jit, DX, destOffs+16, 2);
             else {
               _PXOR_R(1, 2); /*penalty?*/
             }
           }
           if(!mov1)
-            _jit_movaps_store(jit, DX, bit<<4, 0);
+            _jit_movaps_store(jit, DX, destOffs, 0);
           if(!mov2)
-            _jit_movdqa_store(jit, DX, (bit+1)<<4, 1);
+            _jit_movdqa_store(jit, DX, destOffs+16, 1);
         }
       }
-      
-/*** experimental code for JIT on scalar units ***
-Turns out not to be useful, but kept if it ever becomes so
-If using this, don't forget to save BX,DI,SI registers!
-      #define _MOV_OR_XOR_SCALAR(reg, flag) \
-        if(flag) { \
-          _jit_mov_load(jit, reg, AX, srcSel); \
-          flag = 0; \
-        } else \
-          _jit_xor_m(jit, reg, AX, srcSel)
-      for(; bit<16; bit+=2) {
-        FAST_U8 bitPart;
-        for(bitPart = 0; bitPart < 16; bitPart += FAST_U32_SIZE) {
-          FAST_U8 mov1 = 1, mov2 = 1, movC = 1;
-          for(i=0; i<16; i++) {
-            FAST_U8 srcSel = (i<<4) + bitPart;
-            if(common_depmask[bit>>1] & (1<<i)) {
-              _MOV_OR_XOR_SCALAR(BX, movC);
-            } else {
-              if(tmp_depmask[bit] & (1<<i)) {
-                _MOV_OR_XOR_SCALAR(SI, mov1);
-              }
-              if(tmp_depmask[bit+1] & (1<<i)) {
-                _MOV_OR_XOR_SCALAR(DI, mov2);
-              }
-            }
-          }
-          if(common_depmask[bit>>1]) {
-            if(mov1) {
-              if(xor)
-                _jit_xor_rm(jit, DX, (bit<<4) + bitPart, BX);
-              else
-                _jit_mov_store(jit, DX, (bit<<4) + bitPart, BX);
-            } else {
-              _jit_xor_r(jit, SI, BX);
-            }
-            if(mov2) {
-              if(xor)
-                _jit_xor_rm(jit, DX, ((bit+1)<<4) + bitPart, BX);
-              else
-                _jit_mov_store(jit, DX, ((bit+1)<<4) + bitPart, BX);
-            } else {
-              _jit_xor_r(jit, DI, BX);
-            }
-          }
-          if(xor) {
-            if(!mov1)
-              _jit_xor_rm(jit, DX, (bit<<4) + bitPart, SI);
-            if(!mov2)
-              _jit_xor_rm(jit, DX, ((bit+1)<<4) + bitPart, DI);
-          } else {
-            if(!mov1)
-              _jit_mov_store(jit, DX, (bit<<4) + bitPart, SI);
-            if(!mov2)
-              _jit_mov_store(jit, DX, ((bit+1)<<4) + bitPart, DI);
-          }
-        }
-      }
-***/
     }
     
     _jit_add_i(jit, AX, 256);
