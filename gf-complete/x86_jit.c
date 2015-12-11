@@ -399,8 +399,8 @@ static inline void _jit_mov_store(jit_t* jit, uint8_t mreg, int32_t offs, uint8_
 static inline void _jit_nop(jit_t* jit) {
 	*(jit->ptr++) = 0x90;
 }
-static inline void _jit_align16(jit_t* jit) {
-	while((intptr_t)(jit->ptr) & 0xF) {
+static inline void _jit_align32(jit_t* jit) {
+	while((intptr_t)(jit->ptr) & 0x1F) {
 		_jit_nop(jit);
 	}
 }

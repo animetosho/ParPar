@@ -762,7 +762,7 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
     _jit_mov_i(jit, DX, (intptr_t)rd.d_start);
     _jit_mov_i(jit, CX, (intptr_t)rd.d_top);
     
-    _jit_align16(jit);
+    _jit_align32(jit);
     pos_startloop = jit->ptr;
     
     
