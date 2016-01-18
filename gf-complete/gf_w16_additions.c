@@ -625,6 +625,7 @@ static void gf_w16_xor_lazy_sse_altmap_multiply_region(gf_t *gf, void *src, void
 static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, void *dest, gf_val_32_t val, int bytes, int xor)
 {
   FAST_U32 i, bit;
+  long inBit;
   __m128i depmask1, depmask2, polymask1, polymask2, addvals1, addvals2;
   __m128i common_mask;
   uint16_t tmp_depmask[16], common_depmask[8];
@@ -758,9 +759,9 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
 #endif
     }
     
-    _jit_mov_i(jit, AX, (intptr_t)rd.s_start);
     /* adding 128 to the destination pointer allows the register offset to be coded in 1 byte
      * eg: 'movdqa xmm0, [rdx+0x90]' is 8 bytes, whilst 'movdqa xmm0, [rdx-0x60]' is 5 bytes */
+    _jit_mov_i(jit, AX, (intptr_t)rd.s_start + 128);
     _jit_mov_i(jit, DX, (intptr_t)rd.d_start + 128);
     _jit_mov_i(jit, CX, (intptr_t)rd.d_top + 128);
     
@@ -768,69 +769,78 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
     pos_startloop = jit->ptr;
     
     
-    //_jit_xorps_m(jit, reg, AX, i<<4);
-    #define _XORPS_A_(reg, tr) \
-        *(int32_t*)(jit->ptr) = (0x40570F + ((reg) << 19) + (i <<28)) ^ (tr)
-    #define _XORPS_A(reg) \
-        _XORPS_A_(reg, 0); \
+    //_jit_movaps_load(jit, reg, xreg, offs)
+    // (we just save a conditional by hardcoding this)
+    #define _LD_APS(xreg, mreg, offs) \
+        *(int32_t*)(jit->ptr) = 0x40280F + ((xreg) <<19) + ((mreg) <<16) + (((offs)&0xFF) <<24); \
         jit->ptr += 4
-    #define _C_XORPS_A(reg, c) \
-        _XORPS_A_(reg, 0); \
-        jit->ptr += (c)<<2
-#ifdef AMD64
-    #define _XORPS_B_(reg, tr) \
-        *(int64_t*)(jit->ptr) = (0x80570F + ((reg) << 19) + (i <<28)) ^ (tr)
-#else
-    #define _XORPS_B_(reg, tr) \
-        *(int32_t*)(jit->ptr +3) = 0; \
-        *(int32_t*)(jit->ptr) = (0x80570F + ((reg) << 19) + (i <<28)) ^ (tr)
-#endif
-    #define _XORPS_B(reg) \
-        _XORPS_B_(reg, 0); \
-        jit->ptr += 7
-    #define _C_XORPS_B(reg, c) \
-        _XORPS_B_(reg, 0); \
-        jit->ptr += ((c)<<3)-(c)
-    #define _XORPS_A64(reg) \
-        *(int64_t*)(jit->ptr) = 0x40570F44 + ((reg) << 27) + (i <<36); \
+    #define _ST_APS(mreg, offs, xreg) \
+        *(int32_t*)(jit->ptr) = 0x40290F + ((xreg) <<19) + ((mreg) <<16) + (((offs)&0xFF) <<24); \
+        jit->ptr += 4
+    #define _LD_APS64(xreg, mreg, offs) \
+        *(int64_t*)(jit->ptr) = 0x40280F44 + ((xreg-8) <<27) + ((mreg) <<24) + ((int64_t)((offs)&0xFF) <<32); \
         jit->ptr += 5
-    #define _XORPS_B64(reg) \
-        *(int64_t*)(jit->ptr) = 0x80570F44 + ((reg) << 27) + (i <<36); \
-        jit->ptr += 8
-    
-    //_jit_pxor_m(jit, 1, AX, i<<4);
-#ifdef AMD64
-    #define _PXOR_A_(reg, tr) \
-        *(int64_t*)(jit->ptr) = (0x40EF0F66 + ((reg) << 27) + ((int64_t)i << 36)) ^ (tr)
-    #define _PXOR_B_(reg, tr) \
-        *(int64_t*)(jit->ptr) = (0x80EF0F66 + ((reg) << 27) + ((int64_t)i << 36)) ^ (tr)
-#else
-    #define _PXOR_A_(reg, tr) \
-        *(int32_t*)(jit->ptr) = (0x40EF0F66 + ((reg) << 27)) ^ (tr); \
-        *(jit->ptr +4) = (uint8_t)(i << 4)
-    #define _PXOR_B_(reg, tr) \
-        *(int32_t*)(jit->ptr) = (0x80EF0F66 + ((reg) << 27)) ^ (tr); \
-        *(int32_t*)(jit->ptr +4) = (uint8_t)(i << 4)
-#endif
-    #define _PXOR_A(reg) \
-        _PXOR_A_(reg, 0); \
+    #define _ST_APS64(mreg, offs, xreg) \
+        *(int64_t*)(jit->ptr) = 0x40290F44 + ((xreg-8) <<27) + ((mreg) <<24) + ((int64_t)((offs)&0xFF) <<32); \
         jit->ptr += 5
-    #define _C_PXOR_A(reg, c) \
-        _PXOR_A_(reg, 0); \
-        jit->ptr += ((c)<<2)+(c)
-    #define _PXOR_B(reg) \
-        _PXOR_B_(reg, 0); \
-        jit->ptr += 8
-    #define _C_PXOR_B(reg, c) \
-        _PXOR_B_(reg, 0); \
-        jit->ptr += (c)<<3
-    #define _PXOR_A64(reg) \
-        *(int64_t*)(jit->ptr) = 0x40EF0F4466 + ((reg) << 35) + (i << 44); \
+
+#ifdef AMD64
+    #define _LD_DQA(xreg, mreg, offs) \
+        *(int64_t*)(jit->ptr) = 0x406F0F66 + ((xreg) <<27) + ((mreg) <<24) + ((int64_t)((offs)&0xFF) <<32); \
+        jit->ptr += 5
+    #define _ST_DQA(mreg, offs, xreg) \
+        *(int64_t*)(jit->ptr) = 0x407F0F66 + ((xreg) <<27) + ((mreg) <<24) + ((int64_t)((offs)&0xFF) <<32); \
+        jit->ptr += 5
+#else
+    #define _LD_DQA(xreg, mreg, offs) \
+        *(int32_t*)(jit->ptr) = 0x406F0F66 + ((xreg) <<27) + ((mreg) <<24); \
+        *(jit->ptr +4) = (uint8_t)((offs)&0xFF); \
+        jit->ptr += 5
+    #define _ST_DQA(mreg, offs, xreg) \
+        *(int32_t*)(jit->ptr) = 0x407F0F66 + ((xreg) <<27) + ((mreg) <<24); \
+        *(jit->ptr +4) = (uint8_t)((offs)&0xFF); \
+        jit->ptr += 5
+#endif
+    #define _LD_DQA64(xreg, mreg, offs) \
+        *(int64_t*)(jit->ptr) = 0x406F0F4466 + ((int64_t)(xreg-8) <<35) + ((int64_t)(mreg) <<32) + ((int64_t)((offs)&0xFF) <<40); \
         jit->ptr += 6
-    #define _PXOR_B64(reg) \
-        *(int64_t*)(jit->ptr) = 0x80EF0F4466 + ((reg) << 35) + (i << 44); \
-        jit->ptr += 8; \
-        *(jit->ptr++) = 0
+    #define _ST_DQA64(mreg, offs, xreg) \
+        *(int64_t*)(jit->ptr) = 0x407F0F4466 + ((int64_t)(xreg-8) <<35) + ((int64_t)(mreg) <<32) + ((int64_t)((offs)&0xFF) <<40); \
+        jit->ptr += 6
+    
+    
+    //_jit_xorps_m(jit, reg, AX, offs<<4);
+    #define _XORPS_M_(reg, offs, tr) \
+        *(int32_t*)(jit->ptr) = (0x40570F + ((reg) << 19) + (((offs)&0xFF) <<28)) ^ (tr)
+    #define _C_XORPS_M(reg, offs, c) \
+        _XORPS_M_(reg, offs, 0); \
+        jit->ptr += (c)<<2
+    #define _XORPS_M64_(reg, offs, tr) \
+        *(int64_t*)(jit->ptr) = (0x40570F44 + (((reg)-8) << 27) + ((int64_t)((offs)&0xFF) <<36)) ^ ((tr)<<8)
+    #define _C_XORPS_M64(reg, offs, c) \
+        _XORPS_M64_(reg, offs, 0); \
+        jit->ptr += ((c)<<2)+(c)
+    
+    //_jit_pxor_m(jit, 1, AX, offs<<4);
+#ifdef AMD64
+    #define _PXOR_M_(reg, offs, tr) \
+        *(int64_t*)(jit->ptr) = (0x40EF0F66 + ((reg) << 27) + ((int64_t)((offs)&0xFF) << 36)) ^ (tr)
+#else
+    #define _PXOR_M_(reg, offs, tr) \
+        *(int32_t*)(jit->ptr) = (0x40EF0F66 + ((reg) << 27)) ^ (tr); \
+        *(jit->ptr +4) = (uint8_t)(((offs)&0xFF) << 4)
+#endif
+    #define _PXOR_M(reg, offs) \
+        _PXOR_M_(reg, offs, 0); \
+        jit->ptr += 5
+    #define _C_PXOR_M(reg, offs, c) \
+        _PXOR_M_(reg, offs, 0); \
+        jit->ptr += ((c)<<2)+(c)
+    #define _PXOR_M64_(reg, offs, tr) \
+        *(int64_t*)(jit->ptr) = (0x40EF0F4466 + ((int64_t)((reg)-8) << 35) + ((int64_t)((offs)&0xFF) << 44)) ^ ((tr)<<8)
+    #define _C_PXOR_M64(reg, offs, c) \
+        _PXOR_M64_(reg, offs, 0); \
+        jit->ptr += ((c)<<2)+((c)<<1)
     
     //_jit_xorps_r(jit, r2, r1)
     #define _XORPS_R_(r2, r1, tr) \
@@ -844,9 +854,6 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
     // r2 is always < 8, r1 here is >= 8
     #define _XORPS_R64_(r2, r1, tr) \
         *(int32_t*)(jit->ptr) = (0xC0570F41 + ((r2) <<27) + ((r1) <<24)) ^ ((tr)<<8)
-    #define _XORPS_R64(r2, r1) \
-        _XORPS_R64_(r2, r1, 0); \
-        jit->ptr += 4
     #define _C_XORPS_R64(r2, r1, c) \
         _XORPS_R64_(r2, r1, 0); \
         jit->ptr += (c)<<2
@@ -862,32 +869,29 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
         jit->ptr += (c)<<2
     #define _PXOR_R64_(r2, r1, tr) \
         *(int64_t*)(jit->ptr) = (0xC0EF0F4166 + ((int64_t)(r2) <<35) + ((int64_t)(r1) <<32)) ^ (((int64_t)tr)<<8)
-    #define _PXOR_R64(r2, r1) \
-        _PXOR_R64_(r2, r1, 0); \
-        jit->ptr += 5
     #define _C_PXOR_R64(r2, r1, c) \
         _PXOR_R64_(r2, r1, 0); \
         jit->ptr += ((c)<<2)+(c)
     
     /* optimised mix of xor/mov operations */
-    #define _MOV_OR_XOR_FP_A(reg, flag, c) \
-        _XORPS_A_(reg, flag); \
+    #define _MOV_OR_XOR_FP_M(reg, offs, flag, c) \
+        _XORPS_M_(reg, offs, flag); \
         flag &= (c)-1; \
         jit->ptr += (c)<<2
-    #define _MOV_OR_XOR_FP_B(reg, flag, c) \
-        _XORPS_B_(reg, flag); \
-        flag &= (c)-1; \
-        jit->ptr += ((c)<<3)-(c)
-    #define _MOV_OR_XOR_FP_INIT (0x570F ^ 0x280F)
-    
-    #define _MOV_OR_XOR_INT_A(reg, flag, c) \
-        _PXOR_A_(reg, flag); \
+    #define _MOV_OR_XOR_FP_M64(reg, offs, flag, c) \
+        _XORPS_M64_(reg, offs, flag); \
         flag &= (c)-1; \
         jit->ptr += ((c)<<2)+(c)
-    #define _MOV_OR_XOR_INT_B(reg, flag, c) \
-        _PXOR_B_(reg, flag); \
+    #define _MOV_OR_XOR_FP_INIT (0x570F ^ 0x280F)
+    
+    #define _MOV_OR_XOR_INT_M(reg, offs, flag, c) \
+        _PXOR_M_(reg, offs, flag); \
         flag &= (c)-1; \
-        jit->ptr += (c)<<3
+        jit->ptr += ((c)<<2)+(c)
+    #define _MOV_OR_XOR_INT_M64(reg, offs, flag, c) \
+        _PXOR_M64_(reg, offs, flag); \
+        flag &= (c)-1; \
+        jit->ptr += ((c)<<2)+((c)<<1)
     #define _MOV_OR_XOR_INT_INIT (0xEF0F00 ^ 0x6F0F00)
     
     #define _MOV_OR_XOR_R_FP(r2, r1, flag, c) \
@@ -908,63 +912,27 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
         flag &= (c)-1; \
         jit->ptr += ((c)<<2)+(c)
     
-#ifdef AMD64
-    #define _HIGHOP(op, bit) op ## 64((bit) &7)
-    #define _MOV_OR_XOR_H(reg, movop, xorop, flag) \
-        if(flag) { \
-          movop(jit, reg, AX, i<<4); \
-          flag = 0; \
-        } else { \
-          xorop ## 64((reg) &7); \
-        }
-#else
-    #define _HIGHOP(op, bit) op((bit) &7)
-    #define _MOV_OR_XOR_H(reg, movop, xorop, flag) \
-        if(flag) { \
-          movop(jit, (reg) &7, AX, i<<4); \
-          flag = 0; \
-        } else { \
-          xorop((reg) &7); \
-        }
-#endif
-    
     /* generate code */
     if (use_temp) {
       if(xor) {
-#ifdef AMD64
-        /* can fit everything in registers, so do just that */
-        for(bit=0; bit<16; bit+=2) {
-          int destOffs = (bit<<4)-128;
-          _jit_movaps_load(jit, bit, DX, destOffs);
-          _jit_movdqa_load(jit, bit+1, DX, destOffs+16);
-        }
-#else
-        /* load half, and will need to save everything to temp */
+        /* can fit everything in registers on 64-bit, otherwise, load half */
         for(bit=0; bit<8; bit+=2) {
           int destOffs = (bit<<4)-128;
-          _jit_movaps_load(jit, bit, DX, destOffs);
-          _jit_movdqa_load(jit, bit+1, DX, destOffs+16);
+          _LD_APS(bit, DX, destOffs);
+          _LD_DQA(bit+1, DX, destOffs+16);
+        }
+#ifdef AMD64
+        for(; bit<16; bit+=2) {
+          int destOffs = (bit<<4)-128;
+          _LD_APS64(bit, DX, destOffs);
+          _LD_DQA64(bit+1, DX, destOffs+16);
         }
 #endif
         for(bit=0; bit<8; bit+=2) {
           FAST_U16 mask1 = tmp_depmask[bit], mask2 = tmp_depmask[bit+1];
-          for(i=0; i<8; i++) {
-            if(mask1 & 1) {
-              _XORPS_A(bit);
-            }
-            if(mask2 & 1) {
-              _PXOR_A(bit+1);
-            }
-            mask1 >>= 1;
-            mask2 >>= 1;
-          }
-          for(; i<16; i++) {
-            if(mask1 & 1) {
-              _XORPS_B(bit);
-            }
-            if(mask2 & 1) {
-              _PXOR_B(bit+1);
-            }
+          for(inBit=-8; inBit<8; inBit++) {
+            _C_XORPS_M(bit, inBit, mask1 & 1);
+            _C_PXOR_M(bit+1, inBit, mask2 & 1);
             mask1 >>= 1;
             mask2 >>= 1;
           }
@@ -977,70 +945,31 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
         }
         for(; bit<16; bit+=2) {
           int destOffs = (bit<<4)-128;
-          _jit_movaps_load(jit, (bit&7), DX, destOffs);
-          _jit_movdqa_load(jit, (bit&7)+1, DX, destOffs+16);
+          _LD_APS(bit-8, DX, destOffs);
+          _LD_DQA(bit-7, DX, destOffs+16);
         }
 #endif
         for(bit=8; bit<16; bit+=2) {
-          FAST_U32 ib = 1;
-          for(i=0; i<8; i++) {
-            if(tmp_depmask[bit] & ib) {
-              _HIGHOP(_XORPS_A, bit);
-            }
-            if(tmp_depmask[bit+1] & ib) {
-              _HIGHOP(_PXOR_A, bit+1);
-            }
-            ib <<= 1;
-          }
-          for(; i<16; i++) {
-            if(tmp_depmask[bit] & ib) {
-              _HIGHOP(_XORPS_B, bit);
-            }
-            if(tmp_depmask[bit+1] & ib) {
-              _HIGHOP(_PXOR_B, bit+1);
-            }
-            ib <<= 1;
-          }
-        }
+          FAST_U16 mask1 = tmp_depmask[bit], mask2 = tmp_depmask[bit+1];
+          for(inBit=-8; inBit<8; inBit++) {
 #ifdef AMD64
-        for(bit=0; bit<16; bit+=2) {
-          int destOffs = (bit<<4)-128;
-          _jit_movaps_store(jit, DX, destOffs, bit);
-          _jit_movdqa_store(jit, DX, destOffs+16, bit+1);
-        }
+            _C_XORPS_M64(bit, inBit, mask1 & 1);
+            _C_PXOR_M64(bit+1, inBit, mask2 & 1);
 #else
-        for(bit=8; bit<16; bit+=2) {
-          int destOffs = (bit<<4)-128;
-          _jit_movaps_store(jit, DX, destOffs, bit -8);
-          _jit_movdqa_store(jit, DX, destOffs+16, bit -7);
-        }
-        /* copy temp */
-        for(bit=0; bit<8; bit++) {
-          _jit_movaps_load(jit, 0, BP, -(bit<<4) -16);
-          _jit_movaps_store(jit, DX, (bit<<4)-128, 0);
-        }
+            _C_XORPS_M(bit-8, inBit, mask1 & 1);
+            _C_PXOR_M(bit-7, inBit, mask2 & 1);
 #endif
+            mask1 >>= 1;
+            mask2 >>= 1;
+          }
+        }
       } else {
         for(bit=0; bit<8; bit+=2) {
           FAST_U32 mov1 = _MOV_OR_XOR_FP_INIT, mov2 = _MOV_OR_XOR_INT_INIT;
           FAST_U16 mask1 = tmp_depmask[bit], mask2 = tmp_depmask[bit+1];
-          for(i=0; i<8; i++) {
-            if(mask1 & 1) {
-              _MOV_OR_XOR_FP_A(bit, mov1, 1);
-            }
-            if(mask2 & 1) {
-              _MOV_OR_XOR_INT_A(bit+1, mov2, 1);
-            }
-            mask1 >>= 1;
-            mask2 >>= 1;
-          }
-          for(; i<16; i++) {
-            if(mask1 & 1) {
-              _MOV_OR_XOR_FP_B(bit, mov1, 1);
-            }
-            if(mask2 & 1) {
-              _MOV_OR_XOR_INT_B(bit+1, mov2, 1);
-            }
+          for(inBit=-8; inBit<8; inBit++) {
+            _MOV_OR_XOR_FP_M(bit, inBit, mov1, mask1 & 1);
+            _MOV_OR_XOR_INT_M(bit+1, inBit, mov2, mask2 & 1);
             mask1 >>= 1;
             mask2 >>= 1;
           }
@@ -1053,55 +982,62 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
         }
 #endif
         for(bit=8; bit<16; bit+=2) {
-          FAST_U8 mov1 = 1, mov2 = 1;
-          FAST_U32 ib = 1;
-          for(i=0; i<8; i++) {
-            if(tmp_depmask[bit] & ib) {
-              _MOV_OR_XOR_H(bit, _jit_movaps_load, _XORPS_A, mov1)
-            }
-            if(tmp_depmask[bit+1] & ib) {
-              _MOV_OR_XOR_H(bit+1, _jit_movdqa_load, _PXOR_A, mov2)
-            }
-            ib <<= 1;
-          }
-          for(; i<16; i++) {
-            if(tmp_depmask[bit] & ib) {
-              _MOV_OR_XOR_H(bit, _jit_movaps_load, _XORPS_B, mov1)
-            }
-            if(tmp_depmask[bit+1] & ib) {
-              _MOV_OR_XOR_H(bit+1, _jit_movdqa_load, _PXOR_B, mov2)
-            }
-            ib <<= 1;
-          }
-        }
+          FAST_U32 mov1 = _MOV_OR_XOR_FP_INIT, mov2 = _MOV_OR_XOR_INT_INIT;
+          FAST_U16 mask1 = tmp_depmask[bit], mask2 = tmp_depmask[bit+1];
+          for(inBit=-8; inBit<8; inBit++) {
 #ifdef AMD64
-        for(bit=0; bit<16; bit+=2) {
-          int destOffs = (bit<<4)-128;
-          _jit_movaps_store(jit, DX, destOffs, bit);
-          _jit_movdqa_store(jit, DX, destOffs+16, bit+1);
-        }
+            _MOV_OR_XOR_FP_M64(bit, inBit, mov1, mask1 & 1);
+            _MOV_OR_XOR_INT_M64(bit+1, inBit, mov2, mask2 & 1);
 #else
-        for(bit=8; bit<16; bit+=2) {
-          int destOffs = (bit<<4)-128;
-          _jit_movaps_store(jit, DX, destOffs, bit -8);
-          _jit_movdqa_store(jit, DX, destOffs+16, bit -7);
-        }
-        /* copy temp */
-        for(bit=0; bit<8; bit++) {
-          _jit_movaps_load(jit, 0, BP, -((int32_t)bit<<4) -16);
-          _jit_movaps_store(jit, DX, (bit<<4)-128, 0);
-        }
+            _MOV_OR_XOR_FP_M(bit-8, inBit, mov1, mask1 & 1);
+            _MOV_OR_XOR_INT_M(bit-7, inBit, mov2, mask2 & 1);
 #endif
+            mask1 >>= 1;
+            mask2 >>= 1;
+          }
+        }
       }
+      
+#ifdef AMD64
+      for(bit=0; bit<8; bit+=2) {
+        int destOffs = (bit<<4)-128;
+        _ST_APS(DX, destOffs, bit);
+        _ST_DQA(DX, destOffs+16, bit+1);
+      }
+      for(; bit<16; bit+=2) {
+        int destOffs = (bit<<4)-128;
+        _ST_APS64(DX, destOffs, bit);
+        _ST_DQA64(DX, destOffs+16, bit+1);
+      }
+#else
+      for(bit=8; bit<16; bit+=2) {
+        int destOffs = (bit<<4)-128;
+        _ST_APS(DX, destOffs, bit -8);
+        _ST_DQA(DX, destOffs+16, bit -7);
+      }
+      /* copy temp */
+      for(bit=0; bit<8; bit++) {
+        _jit_movaps_load(jit, 0, BP, -((int32_t)bit<<4) -16);
+        _ST_APS(DX, (bit<<4)-128, 0);
+      }
+#endif
+      
     } else {
 #ifdef AMD64
       /* preload upper 13 inputs into registers */
-      for(i=3; i<16; i++)
-        _jit_movaps_load(jit, i, AX, i<<4);
+      #define _XORS_FROM_MEMORY 3
+      for(inBit=3; inBit<8; inBit++) {
+        _LD_APS(inBit, AX, (inBit-8)<<4);
+      }
+      for(; inBit<16; inBit++) {
+        _LD_APS64(inBit, AX, (inBit-8)<<4);
+      }
 #else
       /* can only fit 5 in 32-bit mode :( */
-      for(i=11; i<16; i++)
-        _jit_movaps_load(jit, i-8, AX, i<<4);
+      #define _XORS_FROM_MEMORY 11
+      for(inBit=3; inBit<8; inBit++) { /* despite appearances, we're actually loading the top 5, not mid 5 */
+        _LD_APS(inBit, AX, inBit<<4);
+      }
 #endif
       if(xor) {
         for(bit=0; bit<16; bit+=2) {
@@ -1109,49 +1045,32 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
           FAST_U32 movC = _MOV_OR_XOR_INT_INIT;
           FAST_U16 mask1 = tmp_depmask[bit], mask2 = tmp_depmask[bit+1],
                    maskC = common_depmask[bit>>1];
-          _jit_movaps_load(jit, 0, DX, destOffs);
-          _jit_movdqa_load(jit, 1, DX, destOffs+16);
+          _LD_APS(0, DX, destOffs);
+          _LD_DQA(1, DX, destOffs+16);
           
-          for(i=0; i<(FAST_U32_SIZE==8 ? 3:8); i++) {
-            _MOV_OR_XOR_INT_A(2, movC, maskC & 1);
-            _C_XORPS_A(0, mask1 & 1);
-            _C_PXOR_A(1, mask2 & 1);
+          for(inBit=-8; inBit<(_XORS_FROM_MEMORY-8); inBit++) {
+            _MOV_OR_XOR_INT_M(2, inBit, movC, maskC & 1);
+            _C_XORPS_M(0, inBit, mask1 & 1);
+            _C_PXOR_M(1, inBit, mask2 & 1);
+            mask1 >>= 1;
+            mask2 >>= 1;
+            maskC >>= 1;
+          }
+          /* at least 5 can come from registers */
+          for(inBit=3; inBit<8; inBit++) {
+            _MOV_OR_XOR_R_INT(2, inBit, movC, maskC & 1);
+            _C_XORPS_R(0, inBit, mask1 & 1);
+            _C_PXOR_R(1, inBit, mask2 & 1);
             mask1 >>= 1;
             mask2 >>= 1;
             maskC >>= 1;
           }
 #ifdef AMD64
-          /* upper 13 XORs can be done from registers */
-          for(; i<8; i++) {
-            _MOV_OR_XOR_R_INT(2, i, movC, maskC & 1);
-            _C_XORPS_R(0, i, mask1 & 1);
-            _C_PXOR_R(1, i, mask2 & 1);
-            mask1 >>= 1;
-            mask2 >>= 1;
-            maskC >>= 1;
-          }
-          for(i=0; i<8; i++) {
-            _MOV_OR_XOR_R64_INT(2, i, movC, maskC & 1);
-            _C_XORPS_R64(0, i, mask1 & 1);
-            _C_PXOR_R64(1, i, mask2 & 1);
-            mask1 >>= 1;
-            mask2 >>= 1;
-            maskC >>= 1;
-          }
-#else
-          /* 3 from mem, 5 from regs */
-          for(; i<11; i++) {
-            _MOV_OR_XOR_INT_B(2, movC, maskC & 1);
-            _C_XORPS_B(0, mask1 & 1);
-            _C_PXOR_B(1, mask2 & 1);
-            mask1 >>= 1;
-            mask2 >>= 1;
-            maskC >>= 1;
-          }
-          for(i=3; i<8; i++) {
-            _MOV_OR_XOR_R_INT(2, i, movC, maskC & 1);
-            _C_XORPS_R(0, i, mask1 & 1);
-            _C_PXOR_R(1, i, mask2 & 1);
+          /* more XORs can come from 64-bit registers */
+          for(inBit=0; inBit<8; inBit++) {
+            _MOV_OR_XOR_R64_INT(2, inBit, movC, maskC & 1);
+            _C_XORPS_R64(0, inBit, mask1 & 1);
+            _C_PXOR_R64(1, inBit, mask2 & 1);
             mask1 >>= 1;
             mask2 >>= 1;
             maskC >>= 1;
@@ -1161,8 +1080,8 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
             _XORPS_R(0, 2);
             _PXOR_R(1, 2); /*penalty?*/
           }
-          _jit_movaps_store(jit, DX, destOffs, 0);
-          _jit_movdqa_store(jit, DX, destOffs+16, 1);
+          _ST_APS(DX, destOffs, 0);
+          _ST_DQA(DX, destOffs+16, 1);
         }
       } else {
         for(bit=0; bit<16; bit+=2) {
@@ -1171,68 +1090,53 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
                    movC = _MOV_OR_XOR_INT_INIT;
           FAST_U16 mask1 = tmp_depmask[bit], mask2 = tmp_depmask[bit+1],
                    maskC = common_depmask[bit>>1];
-          for(i=0; i<(FAST_U32_SIZE==8 ? 3:8); i++) {
-            _MOV_OR_XOR_INT_A(2, movC, maskC & 1);
-            _MOV_OR_XOR_FP_A(0, mov1, mask1 & 1);
-            _MOV_OR_XOR_INT_A(1, mov2, mask2 & 1);
+          for(inBit=-8; inBit<(_XORS_FROM_MEMORY-8); inBit++) {
+            _MOV_OR_XOR_INT_M(2, inBit, movC, maskC & 1);
+            _MOV_OR_XOR_FP_M(0, inBit, mov1, mask1 & 1);
+            _MOV_OR_XOR_INT_M(1, inBit, mov2, mask2 & 1);
+            mask1 >>= 1;
+            mask2 >>= 1;
+            maskC >>= 1;
+          }
+          for(inBit=3; inBit<8; inBit++) {
+            _MOV_OR_XOR_R_INT(2, inBit, movC, maskC & 1);
+            _MOV_OR_XOR_R_FP(0, inBit, mov1, mask1 & 1);
+            _MOV_OR_XOR_R_INT(1, inBit, mov2, mask2 & 1);
             mask1 >>= 1;
             mask2 >>= 1;
             maskC >>= 1;
           }
 #ifdef AMD64
-          /* upper 13 from regs */
-          for(; i<8; i++) {
-            _MOV_OR_XOR_R_INT(2, i, movC, maskC & 1);
-            _MOV_OR_XOR_R_FP(0, i, mov1, mask1 & 1);
-            _MOV_OR_XOR_R_INT(1, i, mov2, mask2 & 1);
-            mask1 >>= 1;
-            mask2 >>= 1;
-            maskC >>= 1;
-          }
-          for(i=0; i<8; i++) {
-            _MOV_OR_XOR_R64_INT(2, i, movC, maskC & 1);
-            _MOV_OR_XOR_R64_FP(0, i, mov1, mask1 & 1);
-            _MOV_OR_XOR_R64_INT(1, i, mov2, mask2 & 1);
-            mask1 >>= 1;
-            mask2 >>= 1;
-            maskC >>= 1;
-          }
-#else
-          for(; i<11; i++) {
-            _MOV_OR_XOR_INT_B(2, movC, maskC & 1);
-            _MOV_OR_XOR_FP_B(0, mov1, mask1 & 1);
-            _MOV_OR_XOR_INT_B(1, mov2, mask2 & 1);
-            mask1 >>= 1;
-            mask2 >>= 1;
-            maskC >>= 1;
-          }
-          for(i=3; i<8; i++) {
-            _MOV_OR_XOR_R_INT(2, i, movC, maskC & 1);
-            _MOV_OR_XOR_R_FP(0, i, mov1, mask1 & 1);
-            _MOV_OR_XOR_R_INT(1, i, mov2, mask2 & 1);
+          for(inBit=0; inBit<8; inBit++) {
+            _MOV_OR_XOR_R64_INT(2, inBit, movC, maskC & 1);
+            _MOV_OR_XOR_R64_FP(0, inBit, mov1, mask1 & 1);
+            _MOV_OR_XOR_R64_INT(1, inBit, mov2, mask2 & 1);
             mask1 >>= 1;
             mask2 >>= 1;
             maskC >>= 1;
           }
 #endif
           if(common_depmask[bit>>1]) {
-            if(mov1) /* no additional XORs were made? */
-              _jit_movdqa_store(jit, DX, destOffs, 2);
-            else {
+            if(mov1) { /* no additional XORs were made? */
+              _ST_DQA(DX, destOffs, 2);
+            } else {
               _XORPS_R(0, 2);
             }
-            if(mov2)
-              _jit_movdqa_store(jit, DX, destOffs+16, 2);
-            else {
+            if(mov2) {
+              _ST_DQA(DX, destOffs+16, 2);
+            } else {
               _PXOR_R(1, 2); /*penalty?*/
             }
           }
-          if(!mov1)
-            _jit_movaps_store(jit, DX, destOffs, 0);
-          if(!mov2)
-            _jit_movdqa_store(jit, DX, destOffs+16, 1);
+          if(!mov1) {
+            _ST_APS(DX, destOffs, 0);
+          }
+          if(!mov2) {
+            _ST_DQA(DX, destOffs+16, 1);
+          }
         }
       }
+      #undef _XORS_FROM_MEMORY
     }
     
     _jit_add_i(jit, AX, 256);
