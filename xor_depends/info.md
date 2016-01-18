@@ -147,8 +147,8 @@ AVX
 
 We use 128 bit operations only because it’s the optimal size for SSE
 instructions. The algorithm can trivially be adopted for any number of bits
-(including non-SIMD sizes, though there seems to be little benefit in sizes
-below 128 bit) and only needs load, store and XOR operations to function.
+(including non-SIMD sizes) and only needs load, store and XOR operations to
+function.
 
 Using 256 bit AVX operations may improve performance over 128 bit SSE
 operations. Also, the 3 operand XOR operations could be useful for eliminating
@@ -172,6 +172,42 @@ AVX2 capable CPUs are necessary for better performance.
 improve throughput, but, despite the complexity, would only matter to Intel
 Sandy/Ivy Bridge CPUs
 
+x86 Micro-optimisations (JIT)
+-----------------------------
+
+-   To minimise the effects of L1 cache latency, preload as many inputs as can
+    fit in registers. Since the algorithm needs 3 registers to operate, 13 of
+    the 16 inputs can be preloaded, whilst the remaining 3 need to be
+    referenced. For 32-bit mode, where only 8 XMM registers are available, we
+    can only preload 5 inputs.
+
+-   Both `XORPS` and `PXOR` instructions can be used for XOR operations. `XORPS`
+    has the advantage of being 1 byte shorter than `PXOR`, however doesn't seem
+    be as performant (limited concurrency on Intel CPUs). As such, we prefer
+    using `PXOR`, but mix in some `XORPS` instructions, which seems to improve
+    overall performance slightly.  
+    Note that `XORPD` is a largely useless instruction, and not considered here.
+
+-   Memory offsets between -128 and 127 can be encoded in 1 byte, otherwise 4
+    byte offsets are necessary. Since we operate on 256 byte blocks, we can
+    exploit this by pre-incrementing pointers by 128. For example, instead of
+    referring to:  
+    `out[0], out[16], out[32] ... out[224], out[240]`  
+    we can +128 to the 'out' pointer and write:  
+    `out[-128], out[-112], out[-96] ... out[96], out[112]`  
+    This trick allows all the memory offsets to be encoded in 1 byte, which can
+    help if instruction fetch is a bottleneck.
+
+    -   It follows that larger block sizes (i.e. AVX2 implementation) will cause
+        some instructions to exceed this one byte range, but offsetting is still
+        beneficial since -256 to 255 has fewer long instructions than 0 to 511
+
+-   The JIT routine uses a number of speed tricks, which may make the code
+    difficult to read. The main loop is almost entirely branchless, relying on
+    some tricks, such as incrementing the write pointer based on a flag, and
+    using an XOR to conditionally transform a `PXOR`/`XORPS`into a
+    `MOVDQA`/`MOVAPS`instruction.
+
 Static Pre-generation
 ---------------------
 
@@ -179,7 +215,8 @@ An alternative to JIT may be to statically generate kernels for every possible
 multiplier. Not only does this avoid issues of JIT (memory protection and slow
 code generation), it enables more exhaustive searches for optimal sequences and
 further code optimisation techniques, and also makes it easier to generate code
-for other platforms (e.g. AVX2 or ARM NEON). Whilst it is somewhat feasible to
+for other platforms (e.g. AVX2 or ARM NEON) as we can rely on compilers for
+support without writing our own JIT routines. Whilst it is somewhat feasible to
 generate 65536 different routines, assuming we only need to the consider the
 default polynomial, the resulting code size would be rather large.
 
@@ -200,6 +237,26 @@ the code (which is dynamically unpacked with JIT) to mitigate the performance
 issues. However, due to the significant drawbacks of using pre-generated code
 (large code size and need for large page support), I have not explored these
 options.
+
+Split Multiplication
+--------------------
+
+Instead of trying to pre-generate 65534 different kernels, perhaps we could
+exploit the distributive property of multiplication and divide the problem into
+2x 8-bit multiplies (similar to how SPLIT\_TABLE(16,8) works). This reduces the
+number of kernels required to 511, a much more feasible number.
+
+Whilst this has all the advantages of static pre-generation, one serious
+downside is that it doubles the amount of work required, as we are performing 2
+multiplies instead of 1. In theory, it should be more than half as fast as a JIT
+implementation, since we can exploit some synergies such as caching some inputs
+to registers, or reducing loop overhead, but it's likely to still be
+significantly slower than a JIT implementation of the full 16-bit multiply.
+
+This may be a viable approach if JIT cannot be performed, as long as one doesn't
+mind compiling 511 kernels (which is still quite a significant number). A C
+implementation may also not be able to exploit certain optimal strategies, due
+to the lack of variable goto support.
 
  
 
