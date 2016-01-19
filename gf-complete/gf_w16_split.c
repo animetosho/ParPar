@@ -259,6 +259,9 @@ _FN(gf_w16_split_4_16_lazy_altmap_multiply_region)(gf_t *gf, void *src, void *de
       tpl = _MMI(xor)(_MM(shuffle_epi8) (low1, ti), tpl);
       tph = _MMI(xor)(_MM(shuffle_epi8) (high1, ti), tph);
 
+      tph = _MMI(xor)(tph, _MMI(load)(dW));
+      tpl = _MMI(xor)(tpl, _MMI(load)(dW+1));
+
       ti = _MMI(and) (mask, ta);
       tpl = _MMI(xor)(_MM(shuffle_epi8) (low2, ti), tpl);
       tph = _MMI(xor)(_MM(shuffle_epi8) (high2, ti), tph);
@@ -267,8 +270,6 @@ _FN(gf_w16_split_4_16_lazy_altmap_multiply_region)(gf_t *gf, void *src, void *de
       tpl = _MMI(xor)(_MM(shuffle_epi8) (low3, ti), tpl);
       tph = _MMI(xor)(_MM(shuffle_epi8) (high3, ti), tph);
 
-      tph = _MMI(xor)(tph, _MMI(load)(dW));
-      tpl = _MMI(xor)(tpl, _MMI(load)(dW+1));
       _MMI(store) (dW, tph);
       _MMI(store) (dW+1, tpl);
 
