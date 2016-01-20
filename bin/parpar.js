@@ -71,6 +71,11 @@ var argv = require('yargs')
 		describe: 'limit number of threads to use; by default, equals number of CPU cores',
 		default: null // TODO: override text
 	},
+	method: {
+		describe: 'Algorithm for performing GF multiplies. Process can crash if CPU does not support selected method.',
+		choices: ['auto', 'lh_lookup', 'xor', 'shuffle'],
+		default: 'auto'
+	},
 	c: {
 		alias: 'comment',
 		describe: 'Add PAR2 comment. Can be specified multiple times.',
@@ -137,6 +142,7 @@ var startTime = Date.now();
 var decimalPoint = (1.1).toLocaleString().substr(1, 1);
 
 if(argv.t) ParPar.setMaxThreads(argv.t | 0);
+if(argv.method != 'auto') ParPar.setMethod(argv.method);
 
 // TODO: sigint not respected?
 
@@ -150,6 +156,9 @@ g.init(function(err) {
 	});
 	
 	if(!argv.q) {
+		var method_used = ParPar.getMethod();
+		process.stderr.write('Method used: ' + method_used.description + ' (' + method_used.wordBits + ' bit)\n');
+		
 		/*
 		g.on('processing_file', function(file) {
 			process.stderr.write('Processing file ' + file.name + '\n');

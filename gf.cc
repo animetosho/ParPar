@@ -22,7 +22,8 @@ extern "C" {
 
 // memory alignment to 16-bytes for SSE operations (may grow for AVX operations)
 int MEM_ALIGN = 16, MEM_WALIGN = 16;
-int CHUNK_SIZE = 32768;
+int GF_METHOD = 0, GF_METHOD_ARG1 = 0, GF_METHOD_ARG2 = 0;
+int CHUNK_SIZE = 0;
 
 #if defined(__cplusplus) && __cplusplus > 201100
 	// C++11 method
@@ -73,6 +74,10 @@ gf_t* gf = NULL;
 int gfCount = 0;
 bool using_altmap = false;
 
+static inline void init_gf(gf_t* gf) {
+	gf_init_hard(gf, 16, GF_METHOD, GF_REGION_ALTMAP, GF_DIVIDE_DEFAULT, 0, GF_METHOD_ARG1, GF_METHOD_ARG2, NULL, NULL);
+}
+
 #ifdef _OPENMP
 int maxNumThreads = 1, defaultNumThreads = 1;
 static void alloc_gf() {
@@ -81,7 +86,7 @@ static void alloc_gf() {
 		// allocate more
 		gf = (gf_t*)realloc(gf, sizeof(gf_t) * maxNumThreads);
 		for(int i=gfCount; i<maxNumThreads; i++) {
-			gf_init_hard(&gf[i], 16, GF_MULT_DEFAULT, GF_REGION_ALTMAP, GF_DIVIDE_DEFAULT, 0, 0, 0, NULL, NULL);
+			init_gf(&gf[i]);
 		}
 	} else {
 		// free stuff
@@ -102,6 +107,53 @@ static inline void omp_check_num_threads() {
 		omp_set_num_threads(maxNumThreads);
 #endif
 }
+
+static void setup_gf() {
+#ifdef _OPENMP
+	// firstly, deallocate
+	if(gf) {
+		for(int i=0; i<gfCount; i++) {
+			gf_free(&gf[i], 1);
+		}
+		free(gf);
+		gfCount = 0;
+		gf = NULL;
+	}
+	
+	// then realloc
+	alloc_gf();
+#else
+	if(gf) {
+		gf_free(gf, 1);
+	} else {
+		gf = (gf_t*)malloc(sizeof(gf_t));
+	}
+	init_gf(gf);
+#endif
+	
+	MEM_ALIGN = gf[0].alignment;
+	MEM_WALIGN = gf[0].walignment;
+	using_altmap = gf[0].using_altmap ? true : false;
+	
+	// select a good chunk size
+	// TODO: this needs to be variable depending on the CPU cache size
+	// although these defaults are pretty good across most CPUs
+	if(!CHUNK_SIZE) {
+		switch(gf[0].mult_method) {
+			case GF_XOR_JIT_SSE2: /* JIT is a little slow, so larger blocks make things faster */
+				CHUNK_SIZE = 128*1024;
+				break;
+			case GF_SPLIT8:
+			case GF_XOR_SSE2:
+				CHUNK_SIZE = 32*1024; // 2* L1 data cache size ?
+				break;
+			default:
+				CHUNK_SIZE = 32*1024; // =L1 data cache size seems to be efficient
+				break;
+		}
+	}
+}
+
 
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 #define CEIL_DIV(a, b) (((a) + (b)-1) / (b))
@@ -222,6 +274,7 @@ FUNC(SetMaxThreads) {
 	maxNumThreads = args[0]->ToInt32()->Value();
 	if(maxNumThreads < 1) maxNumThreads = defaultNumThreads;
 	
+	if(!gf) setup_gf();
 	alloc_gf();
 	
 	RETURN_UNDEF
@@ -292,6 +345,8 @@ FUNC(PrepInput) {
 		RETURN_ERROR("Destination not aligned");
 	if(inputLen > destLen)
 		RETURN_ERROR("Destination not large enough to hold input");
+	
+	if(!gf) setup_gf();
 	
 	if(using_altmap) {
 		// ugly hack to deal with zero filling case
@@ -481,6 +536,8 @@ FUNC(MultiplyMulti) {
 		add = args[4]->ToBoolean()->Value();
 	}
 	
+	if(!gf) setup_gf();
+	
 	if (args.Length() >= 6 && args[5]->IsFunction()) {
 		MMRequest* req = new MMRequest();
 		req->work_req_.data = req;
@@ -620,6 +677,7 @@ FUNC(Finish) {
 	
 	// TODO: make this stuff async
 	if(using_altmap) {
+		if(!gf) setup_gf();
 		// TODO: multi-thread this?
 		for(int in = 0; in < (int)numInputs; in++)
 			gf[0].unaltmap_region(inputs[in], len, inputs[in]);
@@ -774,6 +832,123 @@ FUNC(MD5UpdateZeroes) {
 	RETURN_UNDEF
 }
 
+enum {
+	GF_METHOD_DEFAULT,
+	GF_METHOD_LH_LOOKUP,
+	GF_METHOD_XOR,
+	GF_METHOD_SHUFFLE
+};
+FUNC(SetMethod) {
+	FUNC_START;
+	
+	if (mmActiveTasks)
+		RETURN_ERROR("Calculation already in progress");
+	
+	GF_METHOD_ARG1 = 0;
+	GF_METHOD_ARG2 = 0;
+	if (args.Length() >= 1) {
+		switch(args[0]->ToInt32()->Value()) {
+			case GF_METHOD_DEFAULT:
+				GF_METHOD = GF_MULT_DEFAULT;
+			break;
+			case GF_METHOD_LH_LOOKUP:
+				GF_METHOD = GF_MULT_SPLIT_TABLE;
+				GF_METHOD_ARG1 = 16;
+				GF_METHOD_ARG2 = 8;
+			break;
+			case GF_METHOD_XOR:
+				GF_METHOD = GF_MULT_XOR_DEPENDS;
+			break;
+			case GF_METHOD_SHUFFLE:
+				GF_METHOD = GF_MULT_SPLIT_TABLE;
+				GF_METHOD_ARG1 = 16;
+				GF_METHOD_ARG2 = 4;
+			break;
+			default:
+				RETURN_ERROR("Unknown method specified");
+		}
+	} else
+		GF_METHOD = GF_MULT_DEFAULT;
+	
+	if (args.Length() >= 2)
+		CHUNK_SIZE = args[1]->ToInt32()->Value();
+	else
+		CHUNK_SIZE = 0;
+	
+	setup_gf();
+	
+	
+	// return method info
+#if NODE_VERSION_AT_LEAST(0, 11, 0)
+	Local<Object> ret = Object::New(isolate);
+#else
+	Local<Object> ret = Object::New();
+#endif
+	
+	ret->Set(NEW_STRING("alignment"), Integer::New(ISOLATE MEM_ALIGN));
+	ret->Set(NEW_STRING("alignment_width"), Integer::New(ISOLATE MEM_WALIGN));
+	
+	int rMethod, rWord;
+	char* rMethLong;
+	switch(gf[0].mult_method) {
+		case GF_SPLIT8:
+			rMethod = GF_METHOD_LH_LOOKUP;
+			rWord = FAST_U32_SIZE * 8;
+			rMethLong = "LH Lookup";
+		break;
+		case GF_SPLIT4:
+			rMethod = GF_METHOD_SHUFFLE;
+			rWord = 64;
+			rMethLong = "Split4 Lookup";
+		break;
+		case GF_SPLIT4_NEON:
+			rMethod = GF_METHOD_SHUFFLE;
+			#ifdef ARCH_AARCH64
+				rWord = 128;
+			#else
+				rWord = 64;
+			#endif
+			rMethLong = "Shuffle";
+		break;
+		case GF_SPLIT4_SSSE3:
+			rMethod = GF_METHOD_SHUFFLE;
+			rWord = 128;
+			rMethLong = "Shuffle";
+		break;
+		case GF_SPLIT4_AVX2:
+			rMethod = GF_METHOD_SHUFFLE;
+			rWord = 256;
+			rMethLong = "Shuffle";
+		break;
+		case GF_SPLIT4_AVX512:
+			rMethod = GF_METHOD_SHUFFLE;
+			rWord = 512;
+			rMethLong = "Shuffle";
+		break;
+		case GF_XOR_SSE2:
+			rMethod = GF_METHOD_XOR;
+			rWord = 128;
+			rMethLong = "XOR";
+		break;
+		case GF_XOR_JIT_SSE2:
+			rMethod = GF_METHOD_XOR;
+			rWord = 128;
+			rMethLong = "XOR JIT";
+		break;
+		default:
+			rMethod = 0;
+			rWord = 0;
+			rMethLong = "???";
+	}
+	ret->Set(NEW_STRING("method"), Integer::New(ISOLATE rMethod));
+	ret->Set(NEW_STRING("word_bits"), Integer::New(ISOLATE rWord));
+	ret->Set(NEW_STRING("method_desc"), NEW_STRING(rMethLong));
+	
+	
+	RETURN_VAL(ret);
+}
+
+
 void init(Handle<Object> target) {
 	init_constants();
 	
@@ -804,56 +979,13 @@ void init(Handle<Object> target) {
 	maxNumThreads = omp_get_num_procs();
 	if(maxNumThreads < 1) maxNumThreads = 1;
 	defaultNumThreads = maxNumThreads;
-	
-	alloc_gf();
-#else
-	gf = (gf_t*)malloc(sizeof(gf_t));
-	gf_init_hard(gf, 16, GF_MULT_DEFAULT, GF_REGION_ALTMAP, GF_DIVIDE_DEFAULT, 0, 0, 0, NULL, NULL);
 #endif
 	
-	MEM_ALIGN = gf[0].alignment;
-	MEM_WALIGN = gf[0].walignment;
-	using_altmap = gf[0].using_altmap ? true : false;
-	
-	char mult_method[20];
-	switch(gf[0].mult_method) {
-		case GF_SPLIT8:        strcpy(mult_method, "SPLIT8"); break;
-		case GF_SPLIT4:        strcpy(mult_method, "SPLIT4"); break;
-		case GF_SPLIT4_NEON:   strcpy(mult_method, "SPLIT4 (NEON)"); break;
-		case GF_SPLIT4_SSSE3:  strcpy(mult_method, "SPLIT4 (SSSE3)"); break;
-		case GF_SPLIT4_AVX2:   strcpy(mult_method, "SPLIT4 (AVX2)"); break;
-		case GF_SPLIT4_AVX512: strcpy(mult_method, "SPLIT4 (AVX512)"); break;
-		case GF_XOR_SSE2:      strcpy(mult_method, "XOR (SSE2)"); break;
-		case GF_XOR_JIT_SSE2:  strcpy(mult_method, "XOR JIT (SSE2)"); break;
-		default:               strcpy(mult_method, "Unknown");
-	}
-	
-	// select a good chunk size
-	// TODO: this needs to be variable depending on the CPU cache size
-	// although these defaults are pretty good across most CPUs
-	switch(gf[0].mult_method) {
-		case GF_XOR_JIT_SSE2: /* JIT is a little slow, so larger blocks make things faster */
-			CHUNK_SIZE = 128*1024;
-			break;
-		case GF_SPLIT8:
-		case GF_XOR_SSE2:
-			CHUNK_SIZE = 32*1024; // 2* L1 data cache size ?
-			break;
-		default:
-			CHUNK_SIZE = 32*1024; // =L1 data cache size seems to be efficient
-			break;
-	}
-	
-	
-#if NODE_VERSION_AT_LEAST(0, 11, 0)
-	Isolate* isolate = Isolate::GetCurrent();
-	HandleScope scope(isolate);
-#else
-	HandleScope scope;
-#endif
-	target->Set(NEW_STRING("alignment"), Integer::New(ISOLATE MEM_ALIGN));
-	target->Set(NEW_STRING("alignment_width"), Integer::New(ISOLATE MEM_WALIGN));
-	target->Set(NEW_STRING("gf_method"), NEW_STRING(mult_method));
+	NODE_SET_METHOD(target, "set_method", SetMethod);
+	GF_METHOD = GF_MULT_DEFAULT;
+	GF_METHOD_ARG1 = 0;
+	GF_METHOD_ARG2 = 0;
+	CHUNK_SIZE = 0;
 }
 
 NODE_MODULE(parpar_gf, init);
