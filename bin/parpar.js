@@ -171,6 +171,7 @@ g.init(function(err) {
 		if(totalSlices) {
 			var interval = setInterval(function() {
 				var perc = Math.floor(currentSlice / totalSlices *10000)/100;
+				perc = Math.min(perc, 99.99);
 				// add formatting for aesthetics
 				var parts = perc.toLocaleString().match(/^([0-9]+)([.,][0-9]+)?$/);
 				while(parts[1].length < 3)
@@ -185,6 +186,7 @@ g.init(function(err) {
 		g.on('complete', function() {
 			var endTime = Date.now();
 			if(interval) clearInterval(interval);
+			process.stderr.write('Calculating: 100.00%\x1b[0G');
 			process.stderr.write('\nPAR2 created. Time taken: ' + ((endTime - startTime)/1000) + ' second(s)\n');
 		});
 	}
