@@ -157,7 +157,9 @@ g.init(function(err) {
 	
 	if(!argv.q) {
 		var method_used = ParPar.getMethod();
-		process.stderr.write('Method used: ' + method_used.description + ' (' + method_used.wordBits + ' bit)\n');
+		var num_threads = ParPar.getNumThreads();
+		var thread_str = num_threads + ' thread' + (num_threads==1 ? '':'s');
+		process.stderr.write('Method used: ' + method_used.description + ' (' + method_used.wordBits + ' bit), ' + thread_str + '\n');
 		
 		/*
 		g.on('processing_file', function(file) {

@@ -91,7 +91,7 @@ static void alloc_gf() {
 	} else {
 		// free stuff
 		for(int i=gfCount; i>maxNumThreads; i--) {
-			gf_free(&gf[i], 1);
+			gf_free(&gf[i-1], 1);
 		}
 		gf = (gf_t*)realloc(gf, sizeof(gf_t) * maxNumThreads);
 	}
@@ -280,6 +280,19 @@ FUNC(SetMaxThreads) {
 	RETURN_UNDEF
 }
 #endif
+
+FUNC(GetNumThreads) {
+	FUNC_START;
+	
+#ifdef _OPENMP
+	if(gf)
+		RETURN_VAL(Integer::New(ISOLATE gfCount));
+	else
+		RETURN_VAL(Integer::New(ISOLATE maxNumThreads));
+#else
+	RETURN_VAL(Integer::New(ISOLATE 1));
+#endif
+}
 
 void free_buffer(char* data, void* _size) {
 #if !NODE_VERSION_AT_LEAST(0, 11, 0)
@@ -980,6 +993,7 @@ void init(Handle<Object> target) {
 	if(maxNumThreads < 1) maxNumThreads = 1;
 	defaultNumThreads = maxNumThreads;
 #endif
+	NODE_SET_METHOD(target, "get_num_threads", GetNumThreads);
 	
 	NODE_SET_METHOD(target, "set_method", SetMethod);
 	GF_METHOD = GF_MULT_DEFAULT;
