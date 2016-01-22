@@ -363,9 +363,9 @@ FUNC(PrepInput) {
 	
 	if(using_altmap) {
 		// ugly hack to deal with zero filling case
-		int lenTail = inputLen & (MEM_WALIGN-1);
+		size_t lenTail = inputLen & (MEM_WALIGN-1);
 		if(inputLen < destLen && lenTail) {
-			int lenMain = inputLen - lenTail;
+			size_t lenMain = inputLen - lenTail;
 			gf[0].altmap_region(src, lenMain, dest);
 			// copy remaining, with zero fill, then ALTMAP over it
 			memcpy(dest + lenMain, src + lenMain, lenTail);
@@ -659,7 +659,7 @@ FUNC(Finish) {
 	}
 	#undef RTN_ERROR
 	
-	MD5_CTX** md5;
+	MD5_CTX** md5 = NULL;
 	MD5_CTX dummyMd5;
 	if(calcMd5) {
 		Local<Object> oMd5 = args[1]->ToObject();
@@ -902,7 +902,7 @@ FUNC(SetMethod) {
 	ret->Set(NEW_STRING("alignment_width"), Integer::New(ISOLATE MEM_WALIGN));
 	
 	int rMethod, rWord;
-	char* rMethLong;
+	const char* rMethLong;
 	switch(gf[0].mult_method) {
 		case GF_SPLIT8:
 			rMethod = GF_METHOD_LH_LOOKUP;
