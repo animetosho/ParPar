@@ -93,9 +93,9 @@ Applications Tested (and commands given)
     -   SPLIT4 is signficantly faster than SPLIT8, but requires a vector byte
         lookup instruction (available in SSSE3 (x86) or NEON (ARM))
 
-    -   XOR is significantly faster than SPLIT8 and slightly slower than SPLIT4,
-        for CPUs with fast SSE2. It is faster than SPLIT4 on CPUs with a slow
-        vector byte lookup implementation (Intel Atom or first gen Core 2)
+    -   XOR is significantly faster than SPLIT8 and comparable to SPLIT4, for
+        CPUs with fast SSE2. It is faster than SPLIT4 on CPUs with a slow vector
+        byte lookup implementation (Intel Atom or first gen Core 2)
 
     -   ParPar supports 256-bit SPLIT4 implementation, so should be
         significantly faster than par2j’s 128-bit implementation on CPUs that

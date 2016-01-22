@@ -443,8 +443,8 @@ Intel Sandy Bridge
 ![](<CoreI2400.png>)
 
 **Comment**: XOR\_DEPENDS can actually beat SPLIT\_TABLE(16,4) here, despite
-Sandy Bridge having a fast shuffle unit. At smaller buffer sizes, the high
-overhead of JIT rears its head though.
+Sandy Bridge having a fast shuffle unit, and the SPLIT method taking advantage
+of AVX. At smaller buffer sizes, the high overhead of JIT rears its head though.
 
  
 
