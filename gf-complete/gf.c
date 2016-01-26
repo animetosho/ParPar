@@ -82,6 +82,8 @@ int gf_init_hard(gf_t *gf, int w, int mult_type,
   h->arg2 = arg2;
   h->private = (void *) gf->scratch;
   h->private = (uint8_t *)h->private + (sizeof(gf_internal_t));
+  h->base_gf = NULL;
+  h->divide_type = 0;
 #ifdef INTEL_SSE2
   h->jit.code = NULL;
 #endif
