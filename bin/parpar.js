@@ -119,7 +119,7 @@ var argv = require('yargs')
 // TODO: handle input directories and auto recurse
 
 if(argv.o.match(/\.par2$/i))
-	argv.o = argv.o.substr(0, argv.o.length-4);
+	argv.o = argv.o.substr(0, argv.o.length-5);
 
 var g = new ParPar.PAR2Gen(argv._, parseSize(argv.s), argv.r|0, {
 	outputBase: argv.o,
