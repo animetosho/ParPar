@@ -10,6 +10,10 @@
   ],
   "license": "CC0-1.0",
   "author": "Anime Tosho",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/animetosho/parpar.git"
+  },
   "main": "lib/parpar.js",
   "bin": "bin/parpar.js",
   "engines": {
@@ -23,5 +27,9 @@
     "async": "*",
     "yargs": "*",
     "yencode": ">=1.0.4"
-  }
+  },
+  "bugs": {
+    "url": "https://github.com/animetosho/parpar/issues"
+  },
+  "homepage": "https://github.com/animetosho/parpar#readme"
 }
