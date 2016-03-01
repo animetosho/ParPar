@@ -37,7 +37,7 @@ Benchmark Details
 Applications Tested (and commands given)
 ----------------------------------------
 
--   [ParPar 0.2.0](<https://github.com/animetosho/parpar>) [2015-11-15]
+-   [ParPar 0.2.0](<https://animetosho.org/app/parpar>) [2015-11-15]
 
     -   `parpar -s [blocksize] -r [rblocks] -m 2000M -o [output] [input]`
 

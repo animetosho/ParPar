@@ -27,7 +27,7 @@ Features
 -   multi-threading via OpenMP
 
 -   fast calculation routines (see [benchmark
-    comparisons](<https://github.com/animetosho/ParPar/blob/master/benchmarks/info.md>))
+    comparisons](<benchmarks/info.md>))
     using x86 and ARM SIMD capabilities when available
 
 -   chunking support for memory constrained situations
@@ -137,7 +137,7 @@ Examples
 ========
 
 Examples for the low level JS API can be found in [the examples
-folder](<https://github.com/animetosho/ParPar/tree/master/examples>).
+folder](<examples/>).
 
  
 
@@ -182,7 +182,7 @@ Alternatives
 ============
 
 For a list of command-line PAR2 tools, [see
-here](<https://github.com/animetosho/ParPar/blob/master/benchmarks/info.md#applications-tested-and-commands-given>).
+here](<benchmarks/info.md#applications-tested-and-commands-given>).
 
 For a nodejs module, there’s [node-par2](<https://github.com/andykant/par2>)
 which is not an implementation of PAR2, rather a wrapper around par2cmdline.

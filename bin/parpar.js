@@ -128,7 +128,7 @@ var g = new ParPar.PAR2Gen(argv._, parseSize(argv.s), argv.r|0, {
 	memoryLimit: parseSize(argv.m),
 	minChunkSize: 16384,
 	comments: argv.c,
-	creator: 'ParPar v' + ParPar.version + ' [https://github.com/animetosho/parpar]',
+	creator: 'ParPar v' + ParPar.version + ' [https://animetosho.org/app/parpar]',
 	unicode: null,
 	outputIndex: argv.i,
 	outputAltNamingScheme: argv.n,
