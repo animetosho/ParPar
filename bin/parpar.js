@@ -116,12 +116,24 @@ var argv = require('yargs')
 	}
 }).argv;
 
-// TODO: handle input directories and auto recurse
+// handle input directories
+// TODO: recursion control; consider recursion in fileInfo
+var files = [];
+var fs = require('fs'), path = require('path');
+argv._.forEach(function addFile(file) {
+	if(fs.statSync(file).isDirectory()) {
+		fs.readdirSync(file).forEach(function(subfile) {
+			addFile(file + path.sep + subfile);
+		});
+	} else {
+		files.push(file);
+	}
+});
 
 if(argv.o.match(/\.par2$/i))
 	argv.o = argv.o.substr(0, argv.o.length-5);
 
-var g = new ParPar.PAR2Gen(argv._, parseSize(argv.s), argv.r|0, {
+var g = new ParPar.PAR2Gen(files, parseSize(argv.s), argv.r|0, {
 	outputBase: argv.o,
 	displayNameFormat: argv['filepath-format'],
 	recoveryOffset: argv.e,
