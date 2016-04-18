@@ -1042,11 +1042,12 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
       if(xor) {
         for(bit=0; bit<16; bit+=2) {
           int destOffs = (bit<<4)-128;
+          int destOffs2 = destOffs+16;
           FAST_U32 movC = _MOV_OR_XOR_INT_INIT;
           FAST_U16 mask1 = tmp_depmask[bit], mask2 = tmp_depmask[bit+1],
                    maskC = common_depmask[bit>>1];
           _LD_APS(0, DX, destOffs);
-          _LD_DQA(1, DX, destOffs+16);
+          _LD_DQA(1, DX, destOffs2);
           
           for(inBit=-8; inBit<(_XORS_FROM_MEMORY-8); inBit++) {
             _MOV_OR_XOR_INT_M(2, inBit, movC, maskC & 1);
@@ -1076,16 +1077,17 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
             maskC >>= 1;
           }
 #endif
-          if(common_depmask[bit>>1]) {
+          if(!movC) {
             _XORPS_R(0, 2);
             _PXOR_R(1, 2); /*penalty?*/
           }
           _ST_APS(DX, destOffs, 0);
-          _ST_DQA(DX, destOffs+16, 1);
+          _ST_DQA(DX, destOffs2, 1);
         }
       } else {
         for(bit=0; bit<16; bit+=2) {
           int destOffs = (bit<<4)-128;
+          int destOffs2 = destOffs+16;
           FAST_U32 mov1 = _MOV_OR_XOR_FP_INIT, mov2 = _MOV_OR_XOR_INT_INIT,
                    movC = _MOV_OR_XOR_INT_INIT;
           FAST_U16 mask1 = tmp_depmask[bit], mask2 = tmp_depmask[bit+1],
@@ -1116,14 +1118,14 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
             maskC >>= 1;
           }
 #endif
-          if(common_depmask[bit>>1]) {
+          if(!movC) {
             if(mov1) { /* no additional XORs were made? */
               _ST_DQA(DX, destOffs, 2);
             } else {
               _XORPS_R(0, 2);
             }
             if(mov2) {
-              _ST_DQA(DX, destOffs+16, 2);
+              _ST_DQA(DX, destOffs2, 2);
             } else {
               _PXOR_R(1, 2); /*penalty?*/
             }
@@ -1132,7 +1134,7 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
             _ST_APS(DX, destOffs, 0);
           }
           if(!mov2) {
-            _ST_DQA(DX, destOffs+16, 1);
+            _ST_DQA(DX, destOffs2, 1);
           }
         }
       }
