@@ -170,7 +170,6 @@ _FN(gf_w16_split_4_16_lazy_altmap_multiply_region)(gf_t *gf, void *src, void *de
     ALIGN(MWORD_SIZE, uint16_t tmp[8]);
     _mword ta, tb;
     _mword lmask = _MM(set1_epi16) (0xff);
-    _mword highbit = _MM(set1_epi16) (0x8000);
     _mword poly = _MM(set1_epi16) (h->prim_poly);
     
     tmp[0] = 0;
@@ -202,20 +201,20 @@ _FN(gf_w16_split_4_16_lazy_altmap_multiply_region)(gf_t *gf, void *src, void *de
     
     /* multiply by 16 */
 #if MWORD_SIZE == 64
-    /* _mm512_mask_xor_epi16 doesn't exist, neither does _mm512_cmpeq_epi16 :( */
+    /* _mm512_mask_xor_epi16 doesn't exist, neither does _mm512_cmpgt_epi16 :( */
+    /* may be more efficient to widen to 32-bit, I dunno, but probably doesn't matter much */
     #define MUL2(x) _mm512_xor_si512( \
       _mm512_slli_epi16(x, 1), \
       _mm512_and_si512(poly, _mm512_sub_epi16( \
         _mm512_setzero_si512(), \
-        _mm512_srli_epi16(_mm512_and_si512(x, highbit), 15) \
+        _mm512_srli_epi16(x, 15) \
       )) \
     )
 #else
     #define MUL2(x) _MMI(xor)( \
       _MM(slli_epi16)(x, 1), \
-      _MMI(and)(poly, _MM(cmpeq_epi16)( \
-        _MMI(and)(x, highbit), \
-        highbit \
+      _MMI(and)(poly, _MM(cmpgt_epi16)( \
+        _MMI(setzero)(), x \
       )) \
     )
 #endif
