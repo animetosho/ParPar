@@ -1176,7 +1176,6 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
 #define _MMI(f) _mm512_ ## f ## _si512
 #define _FN(f) f ## _avx512
 /* still called "mm256" even in AVX512? */
-#define _MM_START
 #define _MM_END _mm256_zeroupper();
 
 #include "gf_w16_split.c"
@@ -1186,7 +1185,6 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
 #undef _MM
 #undef _MMI
 #undef _FN
-#undef _MM_START
 #undef _MM_END
 
 #define FUNC_ASSIGN(v, f) { \
@@ -1206,7 +1204,6 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
 #define _MM(f) _mm256_ ## f
 #define _MMI(f) _mm256_ ## f ## _si256
 #define _FN(f) f ## _avx2
-#define _MM_START
 #define _MM_END _mm256_zeroupper();
 
 #include "gf_w16_split.c"
@@ -1216,7 +1213,6 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
 #undef _MM
 #undef _MMI
 #undef _FN
-#undef _MM_START
 #undef _MM_END
 
 #ifndef FUNC_ASSIGN
@@ -1236,7 +1232,6 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
 #define _MM(f) _mm_ ## f
 #define _MMI(f) _mm_ ## f ## _si128
 #define _FN(f) f ## _sse
-#define _MM_START
 #define _MM_END
 
 #include "gf_w16_split.c"
@@ -1246,7 +1241,6 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
 #undef _MM
 #undef _MMI
 #undef _FN
-#undef _MM_START
 #undef _MM_END
 
 #ifndef FUNC_ASSIGN
