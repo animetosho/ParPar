@@ -19,7 +19,7 @@
 /* since f() is (hopefully) cheap in AVX512, we re-arrange the adds a bit to shorten dependency chain */
 # define RX(f,a,b,c,d,k,s,t) { \
         a=_mm(add_epi32)( \
-          _mm(add_epi32)((k),_mm(set1_epi32)(t)) \
+          _mm(add_epi32)((k),_mm(set1_epi32)(t)), \
           _mm(add_epi32)(a, f((b),(c),(d))) \
         ); \
         a=_mm(rol_epi32)(a, s); \
