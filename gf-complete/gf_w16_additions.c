@@ -643,7 +643,8 @@ ALIGN(64, uint16_t xor_jit_clut_info_reg[64]);
 int xor_jit_created = 0;
 
 void gf_w16_xor_create_jit_lut() {
-	FAST_U32 i, j;
+	FAST_U32 i;
+	int j;
 	__m128i zero = _mm_setzero_si128();
 	
 	if(xor_jit_created) return;
@@ -675,37 +676,37 @@ void gf_w16_xor_create_jit_lut() {
 			if((m & 3) == 3) {
 				// use common queue (PXOR)
 				*(int32_t*)pCM = 0x40EF0F66 + ((2) << 27);
-				pCM[4] = j << 4;
+				pCM[4] = (j-8) << 4; // -8 is initial memory offset; this saves a paddb later on
 #ifdef AMD64
 				*(int32_t*)pCR64 = 0xEF0F4166;
 				pCR64[4] = 0xC0 + (2 <<3) + j;
 #endif
 				// for registers
-				*(int32_t*)pCR = 0xC0EF0F66 + ((2) <<27) + (j <<24);
+				*(int32_t*)pCR = 0xC0EF0F66 + ((2) <<27) + ((j+3) <<24); // +3 is because our first use uses an offset of 3 (and this saves a paddb later on)
 				// transformations (PXOR -> MOVDQA)
 				if(posMC == 0xF) posMC = posM +2;
 				if(posRC == 0xF) posRC = posR +2;
 			} else if(m & 1) {
 				// (XORPS)
-				*(int32_t*)pCM = 0x40570F + ((0) << 19) + (j <<28);
+				*(int32_t*)pCM = 0x40570F + ((0) << 19) + ((j-8) <<28);
 #ifdef AMD64
 				*(int32_t*)pCR64 = 0xC0570F41 + ((0) <<27) + (j <<24);
 #endif
 				// for registers
-				*(int32_t*)pCR = 0xC0570F + ((0) <<19) + (j <<16);
+				*(int32_t*)pCR = 0xC0570F + ((0) <<19) + ((j+3) <<16);
 				// transformations (XORPS -> MOVAPS)
 				if(posM1 == 0xF) posM1 = posM +1;
 				if(posR1 == 0xF) posR1 = posR +1;
 			} else if(m & 2) {
 				// (PXOR)
 				*(int32_t*)pCM = 0x40EF0F66 + ((1) << 27);
-				pCM[4] = j << 4;
+				pCM[4] = (j-8) << 4;
 #ifdef AMD64
 				*(int32_t*)pCR64 = 0xEF0F4166;
 				pCR64[4] = 0xC0 + (1 <<3) + j;
 #endif
 				// for registers
-				*(int32_t*)pCR = 0xC0EF0F66 + ((1) <<27) + (j <<24);
+				*(int32_t*)pCR = 0xC0EF0F66 + ((1) <<27) + ((j+3) <<24);
 				// transformations (PXOR -> MOVDQA)
 				if(posM2 == 0xF) posM2 = posM +2;
 				if(posR2 == 0xF) posR2 = posR +2;
@@ -742,13 +743,14 @@ void gf_w16_xor_create_jit_lut() {
 	}
 }
 
-static uint16_t inline xor_jit_bitpair3(uint8_t* dest, FAST_U32 mask, __m128i bitpos, __m128i* tCode, __m128i* tMask, uint16_t* tInfo, FAST_U8* movC, int isR64) {
+static FAST_U16 inline xor_jit_bitpair3(uint8_t* dest, FAST_U32 mask, __m128i bitpos, __m128i* tCode, __m128i* tMask, uint16_t* tInfo, FAST_U8* movC, FAST_U8 isR64) {
     __m128i code = _mm_load_si128(tCode + mask);
-    uint16_t info = tInfo[mask];
-    int posC = info >> 12;
+    FAST_U16 info = tInfo[mask];
+    FAST_U8 posC = info >> 12;
     
     // blend in position code
     // TODO: may be ways to optimise this
+    // TODO: skip this if 0 (GCC does it for us, but maybe not rely on this?)
     __m128i codeMask = _mm_load_si128(tMask + mask);
     /* it's convenient that all our targets are byte aligned :) */
     code = _mm_add_epi8(code, _mm_and_si128(codeMask, bitpos));
@@ -758,18 +760,18 @@ static uint16_t inline xor_jit_bitpair3(uint8_t* dest, FAST_U32 mask, __m128i bi
     
     // handle conditional move for common mask (since it's always done)
     dest[posC+isR64] ^= *movC;
-    *movC &= (posC != 0xF) -1;
+    *movC &= -(posC == 0xF);
     
     return info;
 }
-static int inline xor_jit_bitpair3_noxor(uint8_t* dest, FAST_U32 mask, __m128i bitpos, __m128i* tCode, __m128i* tMask, uint16_t* tInfo, FAST_U8* movC, FAST_U8* mov1, FAST_U8* mov2, int isR64) {
-    uint16_t info = xor_jit_bitpair3(dest, mask, bitpos, tCode, tMask, tInfo, movC, isR64);
-    int p1 = (info >> 4) & 0xF;
-    int p2 = (info >> 8) & 0xF;
+static FAST_U16 inline xor_jit_bitpair3_noxor(uint8_t* dest, FAST_U32 mask, __m128i bitpos, __m128i* tCode, __m128i* tMask, uint16_t* tInfo, FAST_U8* movC, FAST_U8* mov1, FAST_U8* mov2, int isR64) {
+    FAST_U16 info = xor_jit_bitpair3(dest, mask, bitpos, tCode, tMask, tInfo, movC, isR64);
+    FAST_U8 p1 = (info >> 4) & 0xF;
+    FAST_U8 p2 = (info >> 8) & 0xF;
     dest[p1 + isR64] ^= *mov1;
     dest[p2 + isR64] ^= *mov2;
-    *mov1 &= (p1 != 0xF) -1;
-    *mov2 &= (p2 != 0xF) -1;
+    *mov1 &= -(p1 == 0xF);
+    *mov2 &= -(p2 == 0xF);
     return info & 0xF;
 }
 
@@ -1176,7 +1178,7 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
 #endif
       
     } else {
-      uint16_t info;
+      __m128i three = _mm_set1_epi8(3);
 #ifdef AMD64
       /* preload upper 13 inputs into registers */
       for(inBit=3; inBit<8; inBit++) {
@@ -1193,16 +1195,17 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
 #endif
       if(xor) {
         for(bit=0; bit<16; bit+=2) {
+          FAST_U16 info;
           int destOffs = (bit<<4)-128;
           int destOffs2 = destOffs+16;
           FAST_U8 movC = 0x80; // PXOR transform mask
           FAST_U32 mask = lumask[bit>>1];
-          __m128i bitpos = _mm_set1_epi8(-8 << 4);
+          __m128i bitpos = _mm_setzero_si128();
           _LD_APS(0, DX, destOffs);
           _LD_DQA(1, DX, destOffs2);
           
 #ifdef AMD64
-          info = xor_jit_bitpair3(jit->ptr, mask & 0x3F, _mm_set1_epi8(-8 << 4), xor_jit_clut_code_mem, xor_jit_clut_mask_mem, xor_jit_clut_info_mem, &movC, 0);
+          info = xor_jit_bitpair3(jit->ptr, mask & 0x3F, bitpos, xor_jit_clut_code_mem, xor_jit_clut_mask_mem, xor_jit_clut_info_mem, &movC, 0);
           jit->ptr += info & 0xF;
           mask >>= 6;
 #else
@@ -1218,22 +1221,23 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
           mask >>= 4;
 #endif
           /* at least 5 can come from registers */
-          info = xor_jit_bitpair3(jit->ptr, mask & 0x3F, _mm_set1_epi8(3), xor_jit_clut_code_reg, xor_jit_clut_mask_reg, xor_jit_clut_info_reg, &movC, 0);
+          info = xor_jit_bitpair3(jit->ptr, mask & 0x3F, _mm_setzero_si128(), xor_jit_clut_code_reg, xor_jit_clut_mask_reg, xor_jit_clut_info_reg, &movC, 0);
           jit->ptr += info & 0xF;
           mask >>= 6;
-          info = xor_jit_bitpair3(jit->ptr, mask & 0xF, _mm_set1_epi8(6), xor_jit_clut_code_reg, xor_jit_clut_mask_reg, xor_jit_clut_info_reg, &movC, 0);
+          info = xor_jit_bitpair3(jit->ptr, mask & 0xF, three, xor_jit_clut_code_reg, xor_jit_clut_mask_reg, xor_jit_clut_info_reg, &movC, 0);
           jit->ptr += info & 0xF;
           mask >>= 4;
           
 #ifdef AMD64
           /* more XORs can come from 64-bit registers */
           for(inBit=0; inBit<6; inBit+=3) {
-            info = xor_jit_bitpair3(jit->ptr, mask & 0x3F, _mm_set1_epi8(inBit), xor_jit_clut_code_r64, xor_jit_clut_mask_mem, xor_jit_clut_info_mem, &movC, 1);
+            info = xor_jit_bitpair3(jit->ptr, mask & 0x3F, bitpos, xor_jit_clut_code_r64, xor_jit_clut_mask_mem, xor_jit_clut_info_mem, &movC, 1);
             jit->ptr += info & 0xF;
+            bitpos = _mm_add_epi8(bitpos, three);
             mask >>= 6;
           }
           /* tail case */
-          info = xor_jit_bitpair3(jit->ptr, mask & 0xF, _mm_set1_epi8(6), xor_jit_clut_code_r64, xor_jit_clut_mask_mem, xor_jit_clut_info_mem, &movC, 1);
+          info = xor_jit_bitpair3(jit->ptr, mask & 0xF, bitpos, xor_jit_clut_code_r64, xor_jit_clut_mask_mem, xor_jit_clut_info_mem, &movC, 1);
           jit->ptr += info & 0xF;
           mask >>= 4;
 #endif
@@ -1251,9 +1255,10 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
           FAST_U8 mov1 = 0x7F, mov2 = 0x80,
                   movC = 0x80;
           FAST_U32 mask = lumask[bit>>1];
+          __m128i bitpos = _mm_setzero_si128();
           
 #ifdef AMD64
-          jit->ptr += xor_jit_bitpair3_noxor(jit->ptr, mask & 0x3F, _mm_set1_epi8(-8 << 4), xor_jit_clut_code_mem, xor_jit_clut_mask_mem, xor_jit_clut_info_mem, &movC, &mov1, &mov2, 0);
+          jit->ptr += xor_jit_bitpair3_noxor(jit->ptr, mask & 0x3F, bitpos, xor_jit_clut_code_mem, xor_jit_clut_mask_mem, xor_jit_clut_info_mem, &movC, &mov1, &mov2, 0);
           mask >>= 6;
 #else
           for(inBit=-8; inBit<1; inBit+=3) {
@@ -1266,18 +1271,19 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
           mask >>= 4;
 #endif
           /* at least 5 can come from registers */
-          jit->ptr += xor_jit_bitpair3_noxor(jit->ptr, mask & 0x3F, _mm_set1_epi8(3), xor_jit_clut_code_reg, xor_jit_clut_mask_reg, xor_jit_clut_info_reg, &movC, &mov1, &mov2, 0);
+          jit->ptr += xor_jit_bitpair3_noxor(jit->ptr, mask & 0x3F, _mm_setzero_si128(), xor_jit_clut_code_reg, xor_jit_clut_mask_reg, xor_jit_clut_info_reg, &movC, &mov1, &mov2, 0);
           mask >>= 6;
-          jit->ptr += xor_jit_bitpair3_noxor(jit->ptr, mask & 0xF, _mm_set1_epi8(6), xor_jit_clut_code_reg, xor_jit_clut_mask_reg, xor_jit_clut_info_reg, &movC, &mov1, &mov2, 0);
+          jit->ptr += xor_jit_bitpair3_noxor(jit->ptr, mask & 0xF, three, xor_jit_clut_code_reg, xor_jit_clut_mask_reg, xor_jit_clut_info_reg, &movC, &mov1, &mov2, 0);
           mask >>= 4;
 #ifdef AMD64
           /* more XORs can come from 64-bit registers */
           for(inBit=0; inBit<6; inBit+=3) {
-            jit->ptr += xor_jit_bitpair3_noxor(jit->ptr, mask & 0x3F, _mm_set1_epi8(inBit), xor_jit_clut_code_r64, xor_jit_clut_mask_mem, xor_jit_clut_info_mem, &movC, &mov1, &mov2, 1);
+            jit->ptr += xor_jit_bitpair3_noxor(jit->ptr, mask & 0x3F, bitpos, xor_jit_clut_code_r64, xor_jit_clut_mask_mem, xor_jit_clut_info_mem, &movC, &mov1, &mov2, 1);
+            bitpos = _mm_add_epi8(bitpos, three);
             mask >>= 6;
           }
           /* tail case */
-          jit->ptr += xor_jit_bitpair3_noxor(jit->ptr, mask & 0xF, _mm_set1_epi8(6), xor_jit_clut_code_r64, xor_jit_clut_mask_mem, xor_jit_clut_info_mem, &movC, &mov1, &mov2, 1);
+          jit->ptr += xor_jit_bitpair3_noxor(jit->ptr, mask & 0xF, bitpos, xor_jit_clut_code_r64, xor_jit_clut_mask_mem, xor_jit_clut_info_mem, &movC, &mov1, &mov2, 1);
           mask >>= 4;
 #endif
           
