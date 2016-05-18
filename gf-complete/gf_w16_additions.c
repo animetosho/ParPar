@@ -1194,12 +1194,12 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
       }
 #endif
       if(xor) {
-        for(bit=0; bit<16; bit+=2) {
+        for(bit=0; bit<8; bit++) {
           FAST_U16 info;
-          int destOffs = (bit<<4)-128;
+          int destOffs = (bit<<5)-128;
           int destOffs2 = destOffs+16;
           FAST_U8 movC = 0x80; // PXOR transform mask
-          FAST_U32 mask = lumask[bit>>1];
+          FAST_U32 mask = lumask[bit];
           __m128i bitpos = _mm_setzero_si128();
           _LD_APS(0, DX, destOffs);
           _LD_DQA(1, DX, destOffs2);
@@ -1239,22 +1239,19 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
           /* tail case */
           info = xor_jit_bitpair3(jit->ptr, mask & 0xF, bitpos, xor_jit_clut_code_r64, xor_jit_clut_mask_mem, xor_jit_clut_info_mem, &movC, 1);
           jit->ptr += info & 0xF;
-          mask >>= 4;
 #endif
-          if(!movC) {
-            _XORPS_R(0, 2);
-            _PXOR_R(1, 2); /*penalty?*/
-          }
+          _C_XORPS_R(0, 2, movC==0);
+          _C_PXOR_R(1, 2, movC==0); /*penalty?*/
           _ST_APS(DX, destOffs, 0);
           _ST_DQA(DX, destOffs2, 1);
         }
       } else {
-        for(bit=0; bit<16; bit+=2) {
-          int destOffs = (bit<<4)-128;
+        for(bit=0; bit<8; bit++) {
+          int destOffs = (bit<<5)-128;
           int destOffs2 = destOffs+16;
           FAST_U8 mov1 = 0x7F, mov2 = 0x80,
                   movC = 0x80;
-          FAST_U32 mask = lumask[bit>>1];
+          FAST_U32 mask = lumask[bit];
           __m128i bitpos = _mm_setzero_si128();
           
 #ifdef AMD64
@@ -1284,7 +1281,6 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
           }
           /* tail case */
           jit->ptr += xor_jit_bitpair3_noxor(jit->ptr, mask & 0xF, bitpos, xor_jit_clut_code_r64, xor_jit_clut_mask_mem, xor_jit_clut_info_mem, &movC, &mov1, &mov2, 1);
-          mask >>= 4;
 #endif
           
           if(!movC) {
