@@ -643,6 +643,12 @@ ALIGN(64, __m128i xor_jit_clut_code5[64]);
 ALIGN(64, __m128i xor_jit_clut_code6[16]);
 ALIGN(64, uint16_t xor_jit_clut_info_mem[64]);
 ALIGN(64, uint16_t xor_jit_clut_info_reg[64]);
+
+ALIGN(64, __m128i xor_jit_clut_nocomm[8*16]);
+ALIGN(16, uint16_t xor_jit_clut_ncinfo_mem[15]);
+ALIGN(16, uint16_t xor_jit_clut_ncinfo_rm[15]);
+ALIGN(16, uint16_t xor_jit_clut_ncinfo_reg[15]);
+
 int xor_jit_created = 0;
 
 void gf_w16_xor_create_jit_lut() {
@@ -658,6 +664,7 @@ void gf_w16_xor_create_jit_lut() {
 	memset(xor_jit_clut_code4, 0, sizeof(xor_jit_clut_code4));
 	memset(xor_jit_clut_code5, 0, sizeof(xor_jit_clut_code5));
 	memset(xor_jit_clut_code6, 0, sizeof(xor_jit_clut_code6));
+	memset(xor_jit_clut_nocomm, 0, sizeof(xor_jit_clut_code6));
 	
 	for(i=0; i<64; i++) {
 		int m = i;
@@ -687,10 +694,10 @@ void gf_w16_xor_create_jit_lut() {
 				if(i < 16)
 					*(int32_t*)pC6 = 0xC0570F41 + ((0) <<27) + ((j+6) <<24);
 #else
-				*(int32_t*)pCM = 0x40570F + ((0) << 19) + ((j-5) <<28);
-				*(int32_t*)pCM = 0x40570F + ((0) << 19) + ((j-2) <<28);
+				*(int32_t*)pC2 = 0x40570F + ((0) << 19) + ((j-5) <<28);
+				*(int32_t*)pC3 = 0x40570F + ((0) << 19) + ((j-2) <<28);
 				if(i < 16)
-					*(int32_t*)pCM = 0x40570F + ((0) << 19) + ((j+1) <<28);
+					*(int32_t*)pC4 = 0x40570F + ((0) << 19) + ((j+1) <<28);
 				
 				// for registers
 				*(int32_t*)pC5 = 0xC0570F + ((0) <<19) + ((j+3) <<16);
@@ -771,6 +778,108 @@ void gf_w16_xor_create_jit_lut() {
 		xor_jit_clut_info_mem[i] = posM[0] | (posM[1] << 4) | (posM[2] << 8) | (posM[3] << 12);
 		xor_jit_clut_info_reg[i] = posR[0] | (posR[1] << 4) | (posR[2] << 8) | (posR[3] << 12);
 	}
+	
+	// handle cases of no common-mask optimisation
+	for(i=0; i<15 /* not 16 */; i++) {
+		// since we can only fit 2 pairs in an XMM register, cannot do 6 bit lookups
+		int m = i;
+		int k;
+		FAST_U8 posM[4] = {0, 0xF, 0xF, 0xF};
+		FAST_U8 posR[4] = {0, 0xF, 0xF, 0xF};
+		FAST_U8 posRM[4] = {0, 0xF, 0xF, 0xF};
+		char* pC[8];
+		for(k=0; k<8; k++) {
+			pC[k] = (char*)(xor_jit_clut_nocomm + i + k*16);
+		}
+		
+		/* XOR pairs from memory */
+#ifdef AMD64
+		#define MEM_XP 1
+#else
+		#define MEM_XP 5
+#endif
+		
+		for(j=0; j<2; j++) {
+			if(m & 1) {
+				// (XORPS)
+				for(k=0; k<MEM_XP; k++) {
+					*(int32_t*)pC[k] = 0x40570F + ((0) << 19) + ((j-8+k*2) <<28);
+					pC[k] += 4;
+				}
+				if(j==0) {
+					*(int32_t*)pC[MEM_XP] = 0x40570F + ((0) << 19) + ((-8+MEM_XP*2) <<28);
+					pC[MEM_XP] += 4;
+				} else {
+					*(int32_t*)pC[MEM_XP] = 0xC0570F + ((0) <<19) + ((3) <<16);
+					pC[MEM_XP] += 3;
+				}
+
+				for(k=0; k<2; k++) {
+					*(int32_t*)pC[k+MEM_XP+1] = 0xC0570F + ((0) <<19) + ((j+4+k*2) <<16);
+					pC[k+MEM_XP+1] += 3;
+				}
+#ifdef AMD64
+				// registers64
+				for(k=0; k<4; k++) {
+					*(int32_t*)pC[k+4] = 0xC0570F41 + ((0) <<27) + ((j+k*2) <<24);
+					pC[k+4] += 4;
+				}
+#endif
+				// transformations (XORPS -> MOVAPS)
+				if(posM[1] == 0xF) posM[1] = posM[0] +1;
+				if(posR[1] == 0xF) posR[1] = posR[0] +1;
+				if(posRM[1] == 0xF) posRM[1] = posRM[0] +1;
+				posM[0] += 4;
+				posR[0] += 3;
+				posRM[0] += 3 + (j==0);
+			}
+			if(m & 2) {
+				// (PXOR)
+				for(k=0; k<MEM_XP; k++) {
+					*(int32_t*)pC[k] = 0x40EF0F66 + (1 << 27);
+					pC[k][4] = (j-8+k*2) << 4;
+					pC[k] += 5;
+				}
+				if(j==0) {
+					*(int32_t*)pC[MEM_XP] = 0x40EF0F66 + (1 << 27);
+					pC[MEM_XP][4] = (-8+MEM_XP*2) << 4;
+					pC[MEM_XP] += 5;
+				} else {
+					*(int32_t*)pC[MEM_XP] = 0xC0EF0F66 + (1 <<27) + ((3) <<24);
+					pC[MEM_XP] += 4;
+				}
+				
+				for(k=0; k<2; k++) {
+					*(int32_t*)pC[k+MEM_XP+1] = 0xC0EF0F66 + (1 <<27) + ((j+4+k*2) <<24);
+					pC[k+MEM_XP+1] += 4;
+				}
+#ifdef AMD64
+				// registers64
+				for(k=0; k<4; k++) {
+					*(int32_t*)pC[k+4] = 0xEF0F4166;
+					pC[k+4][4] = 0xC0 + (1 <<3) + j+k*2;
+					pC[k+4] += 5;
+				}
+#endif
+				
+				// transformations (PXOR -> MOVDQA)
+				if(posM[2] == 0xF) posM[2] = posM[0] +2;
+				if(posR[2] == 0xF) posR[2] = posR[0] +2;
+				if(posRM[2] == 0xF) posRM[2] = posRM[0] +2;
+				posM[0] += 5;
+				posR[0] += 4;
+				posRM[0] += 4 + (j==0);
+			}
+			
+			m >>= 2;
+		}
+		#undef MEM_XP
+		
+		xor_jit_clut_ncinfo_mem[i] = posM[0] | (posM[1] << 4) | (posM[2] << 8) | (posM[3] << 12);
+		xor_jit_clut_ncinfo_reg[i] = posR[0] | (posR[1] << 4) | (posR[2] << 8) | (posR[3] << 12);
+		xor_jit_clut_ncinfo_rm[i] = posRM[0] | (posRM[1] << 4) | (posRM[2] << 8) | (posRM[3] << 12);
+		
+	}
 }
 
 static FAST_U16 inline xor_jit_bitpair3(uint8_t* dest, FAST_U32 mask, __m128i* tCode, uint16_t* tInfo, FAST_U8* movC, FAST_U8 isR64) {
@@ -786,8 +895,8 @@ static FAST_U16 inline xor_jit_bitpair3(uint8_t* dest, FAST_U32 mask, __m128i* t
     
     return info;
 }
-static FAST_U16 inline xor_jit_bitpair3_noxor(uint8_t* dest, FAST_U32 mask, __m128i* tCode, uint16_t* tInfo, FAST_U8* movC, FAST_U8* mov1, FAST_U8* mov2, int isR64) {
-    FAST_U16 info = xor_jit_bitpair3(dest, mask, tCode, tInfo, movC, isR64);
+
+static FAST_U16 inline xor_jit_bitpair3_noxor(uint8_t* dest, FAST_U16 info, FAST_U8* mov1, FAST_U8* mov2, int isR64) {
     FAST_U8 p1 = (info >> 4) & 0xF;
     FAST_U8 p2 = (info >> 8) & 0xF;
     dest[p1 + isR64] ^= *mov1;
@@ -820,6 +929,7 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
   if(rd.d_start != rd.d_top) {
     int use_temp = ((uintptr_t)rd.s_start - (uintptr_t)rd.d_start + 256) < 512;
     int setup_stack = 0;
+    int no_common_mask;
     
     /* calculate dependent bits */
     addvals1 = _mm_set_epi16(1<< 7, 1<< 6, 1<< 5, 1<< 4, 1<< 3, 1<< 2, 1<<1, 1<<0);
@@ -868,6 +978,7 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
       // up-convert to 32-bit, whilst alternating 16-bit ints
       __m128i tmp2 = _mm_srli_epi32(depmask1, 16);
       __m128i tmp1 = _mm_and_si128(depmask1, _mm_set1_epi32(0x0000FFFF));
+      __m128i common_mask;
       
       // expand bits: https://graphics.stanford.edu/~seander/bithacks.html#InterleaveBMN
       #define INTERLEAVE_ROUND(src, shift, mask) _mm_and_si128( \
@@ -900,6 +1011,41 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
       #undef INTERLEAVE_ROUND
       /* TODO: consider not needing to interleave so much */
       
+      
+      /* find cases where we don't wish to create the common queue - this is an optimisation to remove a single move operation when the common queue only contains one element */
+      /* first, we need to re-arrange words so that we can perform bitwise AND on neighbouring pairs */
+      /* unfortunately, PACKUSDW is SSE4.1 only, so emulate it with shuffles */
+      /* 01234567 -> 02461357 */
+      tmp1 = _mm_shuffle_epi32(
+        _mm_shufflelo_epi16(
+          _mm_shufflehi_epi16(depmask1, 0xD8), /* 0xD8 == 0b11011000 */
+          0xD8
+        ),
+        0xD8
+      );
+      tmp2 = _mm_shuffle_epi32(
+        _mm_shufflelo_epi16(
+          _mm_shufflehi_epi16(depmask2, 0xD8),
+          0xD8
+        ),
+        0xD8
+      );
+      common_mask = _mm_and_si128(
+        /* [02461357, 8ACE9BDF] -> [02468ACE, 13579BDF]*/
+        _mm_unpacklo_epi64(tmp1, tmp2),
+        _mm_unpackhi_epi64(tmp1, tmp2)
+      );
+      /* we have the common elements between pairs, but it doesn't make sense to process a separate queue if there's only one common element (0 XORs), so find those */
+      common_mask = _mm_andnot_si128(
+        _mm_cmpeq_epi16(_mm_setzero_si128(), common_mask),
+        _mm_cmpeq_epi16(
+          _mm_setzero_si128(),
+          /* "(v & (v-1)) == 0" is true if only zero/one bit is set in each word */
+          _mm_and_si128(common_mask, _mm_sub_epi16(common_mask, _mm_set1_epi16(1)))
+        )
+      );
+      /* now we have a 8x16 mask of one-bit common masks we wish to remove; pack into an int for easy dealing with */
+      no_common_mask = _mm_movemask_epi8(common_mask);
     } else {
       /* for now, don't bother with element elimination if we're using temp storage, as it's a little finnicky to implement */
       /*
@@ -1223,27 +1369,55 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
           _LD_APS(0, DX, destOffs);
           _LD_DQA(1, DX, destOffs2);
           
-          #define PROC_BITPAIR(n, bits, inf, r64) \
-            jit->ptr += xor_jit_bitpair3(jit->ptr, mask & ((1<<bits)-1), xor_jit_clut_code ##n, xor_jit_clut_info_ ##inf, &movC, r64) & 0xF; \
-            mask >>= bits
-          PROC_BITPAIR(1, 6, mem, 0);
+          if(no_common_mask & 1) {
+            #define PROC_BITPAIR(n, inf) \
+              _mm_storeu_si128((__m128i*)(jit->ptr), _mm_load_si128(xor_jit_clut_nocomm + (n<<4) + (mask & 0xF))); \
+              jit->ptr += xor_jit_clut_ncinfo_ ##inf[mask & 0xF] & 0xF; \
+              mask >>= 4
+            PROC_BITPAIR(0, mem);
 #ifdef AMD64
-          PROC_BITPAIR(2, 6, reg, 0);
-          PROC_BITPAIR(3, 4, reg, 0);
-          PROC_BITPAIR(4, 6, mem, 1);
-          PROC_BITPAIR(5, 6, mem, 1);
-          PROC_BITPAIR(6, 4, mem, 1);
+            PROC_BITPAIR(1, rm);
+            PROC_BITPAIR(2, reg);
+            PROC_BITPAIR(3, reg);
+            PROC_BITPAIR(4, mem);
+            PROC_BITPAIR(5, mem);
+            PROC_BITPAIR(6, mem);
+            PROC_BITPAIR(7, mem);
 #else
-          PROC_BITPAIR(2, 6, mem, 0);
-          PROC_BITPAIR(3, 6, mem, 0);
-          PROC_BITPAIR(4, 4, mem, 0);
-          PROC_BITPAIR(5, 6, reg, 0);
-          PROC_BITPAIR(6, 4, reg, 0);
+            PROC_BITPAIR(1, mem);
+            PROC_BITPAIR(2, mem);
+            PROC_BITPAIR(3, mem);
+            PROC_BITPAIR(4, mem);
+            PROC_BITPAIR(5, rm);
+            PROC_BITPAIR(6, reg);
+            PROC_BITPAIR(7, reg);
 #endif
-          #undef PROC_BITPAIR
+            #undef PROC_BITPAIR
+          } else {
+            #define PROC_BITPAIR(n, bits, inf, r64) \
+              jit->ptr += xor_jit_bitpair3(jit->ptr, mask & ((1<<bits)-1), xor_jit_clut_code ##n, xor_jit_clut_info_ ##inf, &movC, r64) & 0xF; \
+              mask >>= bits
+            PROC_BITPAIR(1, 6, mem, 0);
+#ifdef AMD64
+            PROC_BITPAIR(2, 6, reg, 0);
+            PROC_BITPAIR(3, 4, reg, 0);
+            PROC_BITPAIR(4, 6, mem, 1);
+            PROC_BITPAIR(5, 6, mem, 1);
+            PROC_BITPAIR(6, 4, mem, 1);
+#else
+            PROC_BITPAIR(2, 6, mem, 0);
+            PROC_BITPAIR(3, 6, mem, 0);
+            PROC_BITPAIR(4, 4, mem, 0);
+            PROC_BITPAIR(5, 6, reg, 0);
+            PROC_BITPAIR(6, 4, reg, 0);
+#endif
+            #undef PROC_BITPAIR
+            
+            _C_XORPS_R(0, 2, movC==0);
+            _C_PXOR_R(1, 2, movC==0); /*penalty?*/
+          }
+          no_common_mask >>= 2;
           
-          _C_XORPS_R(0, 2, movC==0);
-          _C_PXOR_R(1, 2, movC==0); /*penalty?*/
           _ST_APS(DX, destOffs, 0);
           _ST_DQA(DX, destOffs2, 1);
         }
@@ -1255,37 +1429,65 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
                   movC = 0x80;
           FAST_U32 mask = lumask[bit];
           
-          #define PROC_BITPAIR(n, bits, inf, r64) \
-            jit->ptr += xor_jit_bitpair3_noxor(jit->ptr, mask & ((1<<bits)-1), xor_jit_clut_code ##n, xor_jit_clut_info_ ##inf, &movC, &mov1, &mov2, r64); \
-            mask >>= bits
-          PROC_BITPAIR(1, 6, mem, 0);
+          if(no_common_mask & 1) {
+            #define PROC_BITPAIR(n, inf, r64) \
+              _mm_storeu_si128((__m128i*)(jit->ptr), _mm_load_si128(xor_jit_clut_nocomm + (n<<4) + (mask & 0xF))); \
+              jit->ptr += xor_jit_bitpair3_noxor(jit->ptr, xor_jit_clut_ncinfo_ ##inf[mask & 0xF], &mov1, &mov2, r64); \
+              mask >>= 4
+            PROC_BITPAIR(0, mem, 0);
 #ifdef AMD64
-          PROC_BITPAIR(2, 6, reg, 0);
-          PROC_BITPAIR(3, 4, reg, 0);
-          PROC_BITPAIR(4, 6, mem, 1);
-          PROC_BITPAIR(5, 6, mem, 1);
-          PROC_BITPAIR(6, 4, mem, 1);
+            PROC_BITPAIR(1, rm, 0);
+            PROC_BITPAIR(2, reg, 0);
+            PROC_BITPAIR(3, reg, 0);
+            PROC_BITPAIR(4, mem, 1);
+            PROC_BITPAIR(5, mem, 1);
+            PROC_BITPAIR(6, mem, 1);
+            PROC_BITPAIR(7, mem, 1);
 #else
-          PROC_BITPAIR(2, 6, mem, 0);
-          PROC_BITPAIR(3, 6, mem, 0);
-          PROC_BITPAIR(4, 4, mem, 0);
-          PROC_BITPAIR(5, 6, reg, 0);
-          PROC_BITPAIR(6, 4, reg, 0);
+            PROC_BITPAIR(1, mem, 0);
+            PROC_BITPAIR(2, mem, 0);
+            PROC_BITPAIR(3, mem, 0);
+            PROC_BITPAIR(4, mem, 0);
+            PROC_BITPAIR(5, rm, 0);
+            PROC_BITPAIR(6, reg, 0);
+            PROC_BITPAIR(7, reg, 0);
 #endif
-          #undef PROC_BITPAIR
+            #undef PROC_BITPAIR
+          } else {
+            #define PROC_BITPAIR(n, bits, inf, r64) \
+              jit->ptr += xor_jit_bitpair3_noxor(jit->ptr, xor_jit_bitpair3(jit->ptr, mask & ((1<<bits)-1), xor_jit_clut_code ##n, xor_jit_clut_info_ ##inf, &movC, r64), &mov1, &mov2, r64); \
+              mask >>= bits
+            PROC_BITPAIR(1, 6, mem, 0);
+#ifdef AMD64
+            PROC_BITPAIR(2, 6, reg, 0);
+            PROC_BITPAIR(3, 4, reg, 0);
+            PROC_BITPAIR(4, 6, mem, 1);
+            PROC_BITPAIR(5, 6, mem, 1);
+            PROC_BITPAIR(6, 4, mem, 1);
+#else
+            PROC_BITPAIR(2, 6, mem, 0);
+            PROC_BITPAIR(3, 6, mem, 0);
+            PROC_BITPAIR(4, 4, mem, 0);
+            PROC_BITPAIR(5, 6, reg, 0);
+            PROC_BITPAIR(6, 4, reg, 0);
+#endif
+            #undef PROC_BITPAIR
           
-          if(!movC) {
-            if(mov1) { /* no additional XORs were made? */
-              _ST_DQA(DX, destOffs, 2);
-            } else {
-              _XORPS_R(0, 2);
-            }
-            if(mov2) {
-              _ST_DQA(DX, destOffs2, 2);
-            } else {
-              _PXOR_R(1, 2); /*penalty?*/
+            if(!movC) {
+              if(mov1) { /* no additional XORs were made? */
+                _ST_DQA(DX, destOffs, 2);
+              } else {
+                _XORPS_R(0, 2);
+              }
+              if(mov2) {
+                _ST_DQA(DX, destOffs2, 2);
+              } else {
+                _PXOR_R(1, 2); /*penalty?*/
+              }
             }
           }
+          no_common_mask >>= 2;
+          
           if(!mov1) {
             _ST_APS(DX, destOffs, 0);
           }
