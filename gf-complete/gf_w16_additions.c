@@ -784,9 +784,9 @@ void gf_w16_xor_create_jit_lut() {
 		// since we can only fit 2 pairs in an XMM register, cannot do 6 bit lookups
 		int m = i;
 		int k;
-		FAST_U8 posM[4] = {0, 0xF, 0xF, 0xF};
-		FAST_U8 posR[4] = {0, 0xF, 0xF, 0xF};
-		FAST_U8 posRM[4] = {0, 0xF, 0xF, 0xF};
+		FAST_U8 posM[3] = {0, 0xF, 0xF};
+		FAST_U8 posR[3] = {0, 0xF, 0xF};
+		FAST_U8 posRM[3] = {0, 0xF, 0xF};
 		char* pC[8];
 		for(k=0; k<8; k++) {
 			pC[k] = (char*)(xor_jit_clut_nocomm + i + k*16);
@@ -875,9 +875,9 @@ void gf_w16_xor_create_jit_lut() {
 		}
 		#undef MEM_XP
 		
-		xor_jit_clut_ncinfo_mem[i] = posM[0] | (posM[1] << 4) | (posM[2] << 8) | (posM[3] << 12);
-		xor_jit_clut_ncinfo_reg[i] = posR[0] | (posR[1] << 4) | (posR[2] << 8) | (posR[3] << 12);
-		xor_jit_clut_ncinfo_rm[i] = posRM[0] | (posRM[1] << 4) | (posRM[2] << 8) | (posRM[3] << 12);
+		xor_jit_clut_ncinfo_mem[i] = posM[0] | (posM[1] << 8) | (posM[2] << 12);
+		xor_jit_clut_ncinfo_reg[i] = posR[0] | (posR[1] << 8) | (posR[2] << 12);
+		xor_jit_clut_ncinfo_rm[i] = posRM[0] | (posRM[1] << 8) | (posRM[2] << 12);
 		
 	}
 }
@@ -899,6 +899,16 @@ static FAST_U16 inline xor_jit_bitpair3(uint8_t* dest, FAST_U32 mask, __m128i* t
 static FAST_U16 inline xor_jit_bitpair3_noxor(uint8_t* dest, FAST_U16 info, FAST_U8* mov1, FAST_U8* mov2, int isR64) {
     FAST_U8 p1 = (info >> 4) & 0xF;
     FAST_U8 p2 = (info >> 8) & 0xF;
+    dest[p1 + isR64] ^= *mov1;
+    dest[p2 + isR64] ^= *mov2;
+    *mov1 &= -(p1 == 0xF);
+    *mov2 &= -(p2 == 0xF);
+    return info & 0xF;
+}
+
+static FAST_U16 inline xor_jit_bitpair3_nc_noxor(uint8_t* dest, FAST_U16 info, FAST_U8* mov1, FAST_U8* mov2, int isR64) {
+    FAST_U8 p1 = (info >> 8) & 0xF;
+    FAST_U8 p2 = (info >> 12);
     dest[p1 + isR64] ^= *mov1;
     dest[p2 + isR64] ^= *mov2;
     *mov1 &= -(p1 == 0xF);
@@ -1372,7 +1382,7 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
           if(no_common_mask & 1) {
             #define PROC_BITPAIR(n, inf) \
               _mm_storeu_si128((__m128i*)(jit->ptr), _mm_load_si128(xor_jit_clut_nocomm + (n<<4) + (mask & 0xF))); \
-              jit->ptr += xor_jit_clut_ncinfo_ ##inf[mask & 0xF] & 0xF; \
+              jit->ptr += ((uint8_t*)(xor_jit_clut_ncinfo_ ##inf))[(mask & 0xF) << 1]; \
               mask >>= 4
             PROC_BITPAIR(0, mem);
 #ifdef AMD64
@@ -1432,7 +1442,7 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
           if(no_common_mask & 1) {
             #define PROC_BITPAIR(n, inf, r64) \
               _mm_storeu_si128((__m128i*)(jit->ptr), _mm_load_si128(xor_jit_clut_nocomm + (n<<4) + (mask & 0xF))); \
-              jit->ptr += xor_jit_bitpair3_noxor(jit->ptr, xor_jit_clut_ncinfo_ ##inf[mask & 0xF], &mov1, &mov2, r64); \
+              jit->ptr += xor_jit_bitpair3_nc_noxor(jit->ptr, xor_jit_clut_ncinfo_ ##inf[mask & 0xF], &mov1, &mov2, r64); \
               mask >>= 4
             PROC_BITPAIR(0, mem, 0);
 #ifdef AMD64
