@@ -895,11 +895,11 @@ static inline void STOREU_XMM(void* dest, __m128i xmm) {
 #endif
 
 static FAST_U16 inline xor_jit_bitpair3(uint8_t* dest, FAST_U32 mask, __m128i* tCode, uint16_t* tInfo, FAST_U8* movC, FAST_U8 isR64) {
-    FAST_U16 info = tInfo[mask];
+    FAST_U16 info = tInfo[mask>>1];
     FAST_U8 posC = info >> 12;
     
     // copy code segment
-    STOREU_XMM(dest, _mm_load_si128(tCode + mask));
+    STOREU_XMM(dest, _mm_load_si128((__m128i*)((uint64_t*)tCode + mask)));
     
     // handle conditional move for common mask (since it's always done)
     dest[posC+isR64] ^= *movC;
@@ -1386,46 +1386,49 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
           _LD_DQA(1, DX, destOffs2);
           
           if(no_common_mask & 1) {
-            #define PROC_BITPAIR(n, inf) \
-              STOREU_XMM(jit->ptr, _mm_load_si128(xor_jit_clut_nocomm + (n<<4) + (mask & 0xF))); \
-              jit->ptr += ((uint8_t*)(xor_jit_clut_ncinfo_ ##inf))[(mask & 0xF) << 1]; \
+            #define PROC_BITPAIR(n, inf, m) \
+              STOREU_XMM(jit->ptr, _mm_load_si128((__m128i*)((uint64_t*)xor_jit_clut_nocomm + (n<<5) + ((m) & (0xF<<1))))); \
+              jit->ptr += ((uint8_t*)(xor_jit_clut_ncinfo_ ##inf))[(m) & (0xF<<1)]; \
               mask >>= 4
-            PROC_BITPAIR(0, mem);
+            
+            PROC_BITPAIR(0, mem, mask<<1);
+            mask <<= 1;
 #ifdef AMD64
-            PROC_BITPAIR(1, rm);
-            PROC_BITPAIR(2, reg);
-            PROC_BITPAIR(3, reg);
-            PROC_BITPAIR(4, mem);
-            PROC_BITPAIR(5, mem);
-            PROC_BITPAIR(6, mem);
-            PROC_BITPAIR(7, mem);
+            PROC_BITPAIR(1, rm, mask);
+            PROC_BITPAIR(2, reg, mask);
+            PROC_BITPAIR(3, reg, mask);
+            PROC_BITPAIR(4, mem, mask);
+            PROC_BITPAIR(5, mem, mask);
+            PROC_BITPAIR(6, mem, mask);
+            PROC_BITPAIR(7, mem, mask);
 #else
-            PROC_BITPAIR(1, mem);
-            PROC_BITPAIR(2, mem);
-            PROC_BITPAIR(3, mem);
-            PROC_BITPAIR(4, mem);
-            PROC_BITPAIR(5, rm);
-            PROC_BITPAIR(6, reg);
-            PROC_BITPAIR(7, reg);
+            PROC_BITPAIR(1, mem, mask);
+            PROC_BITPAIR(2, mem, mask);
+            PROC_BITPAIR(3, mem, mask);
+            PROC_BITPAIR(4, mem, mask);
+            PROC_BITPAIR(5, rm, mask);
+            PROC_BITPAIR(6, reg, mask);
+            PROC_BITPAIR(7, reg, mask);
 #endif
             #undef PROC_BITPAIR
           } else {
-            #define PROC_BITPAIR(n, bits, inf, r64) \
-              jit->ptr += xor_jit_bitpair3(jit->ptr, mask & ((1<<bits)-1), xor_jit_clut_code ##n, xor_jit_clut_info_ ##inf, &movC, r64) & 0xF; \
+            #define PROC_BITPAIR(n, bits, inf, m, r64) \
+              jit->ptr += xor_jit_bitpair3(jit->ptr, (m) & ((2<<bits)-2), xor_jit_clut_code ##n, xor_jit_clut_info_ ##inf, &movC, r64) & 0xF; \
               mask >>= bits
-            PROC_BITPAIR(1, 6, mem, 0);
+            PROC_BITPAIR(1, 6, mem, mask<<1, 0);
+            mask <<= 1;
 #ifdef AMD64
-            PROC_BITPAIR(2, 6, reg, 0);
-            PROC_BITPAIR(3, 4, reg, 0);
-            PROC_BITPAIR(4, 6, mem, 1);
-            PROC_BITPAIR(5, 6, mem, 1);
-            PROC_BITPAIR(6, 4, mem, 1);
+            PROC_BITPAIR(2, 6, reg, mask, 0);
+            PROC_BITPAIR(3, 4, reg, mask, 0);
+            PROC_BITPAIR(4, 6, mem, mask, 1);
+            PROC_BITPAIR(5, 6, mem, mask, 1);
+            PROC_BITPAIR(6, 4, mem, mask, 1);
 #else
-            PROC_BITPAIR(2, 6, mem, 0);
-            PROC_BITPAIR(3, 6, mem, 0);
-            PROC_BITPAIR(4, 4, mem, 0);
-            PROC_BITPAIR(5, 6, reg, 0);
-            PROC_BITPAIR(6, 4, reg, 0);
+            PROC_BITPAIR(2, 6, mem, mask, 0);
+            PROC_BITPAIR(3, 6, mem, mask, 0);
+            PROC_BITPAIR(4, 4, mem, mask, 0);
+            PROC_BITPAIR(5, 6, reg, mask, 0);
+            PROC_BITPAIR(6, 4, reg, mask, 0);
 #endif
             #undef PROC_BITPAIR
             
@@ -1446,46 +1449,49 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
           FAST_U32 mask = lumask[bit];
           
           if(no_common_mask & 1) {
-            #define PROC_BITPAIR(n, inf, r64) \
-              STOREU_XMM(jit->ptr, _mm_load_si128(xor_jit_clut_nocomm + (n<<4) + (mask & 0xF))); \
-              jit->ptr += xor_jit_bitpair3_nc_noxor(jit->ptr, xor_jit_clut_ncinfo_ ##inf[mask & 0xF], &mov1, &mov2, r64); \
+            #define PROC_BITPAIR(n, inf, m, r64) \
+              STOREU_XMM(jit->ptr, _mm_load_si128((__m128i*)((uint64_t*)xor_jit_clut_nocomm + (n<<5) + ((m) & (0xF<<1))))); \
+              jit->ptr += xor_jit_bitpair3_nc_noxor(jit->ptr, xor_jit_clut_ncinfo_ ##inf[((m) & (0xF<<1))>>1], &mov1, &mov2, r64); \
               mask >>= 4
-            PROC_BITPAIR(0, mem, 0);
+
+            PROC_BITPAIR(0, mem, mask<<1, 0);
+            mask <<= 1;
 #ifdef AMD64
-            PROC_BITPAIR(1, rm, 0);
-            PROC_BITPAIR(2, reg, 0);
-            PROC_BITPAIR(3, reg, 0);
-            PROC_BITPAIR(4, mem, 1);
-            PROC_BITPAIR(5, mem, 1);
-            PROC_BITPAIR(6, mem, 1);
-            PROC_BITPAIR(7, mem, 1);
+            PROC_BITPAIR(1, rm, mask, 0);
+            PROC_BITPAIR(2, reg, mask, 0);
+            PROC_BITPAIR(3, reg, mask, 0);
+            PROC_BITPAIR(4, mem, mask, 1);
+            PROC_BITPAIR(5, mem, mask, 1);
+            PROC_BITPAIR(6, mem, mask, 1);
+            PROC_BITPAIR(7, mem, mask, 1);
 #else
-            PROC_BITPAIR(1, mem, 0);
-            PROC_BITPAIR(2, mem, 0);
-            PROC_BITPAIR(3, mem, 0);
-            PROC_BITPAIR(4, mem, 0);
-            PROC_BITPAIR(5, rm, 0);
-            PROC_BITPAIR(6, reg, 0);
-            PROC_BITPAIR(7, reg, 0);
+            PROC_BITPAIR(1, mem, mask, 0);
+            PROC_BITPAIR(2, mem, mask, 0);
+            PROC_BITPAIR(3, mem, mask, 0);
+            PROC_BITPAIR(4, mem, mask, 0);
+            PROC_BITPAIR(5, rm, mask, 0);
+            PROC_BITPAIR(6, reg, mask, 0);
+            PROC_BITPAIR(7, reg, mask, 0);
 #endif
             #undef PROC_BITPAIR
           } else {
-            #define PROC_BITPAIR(n, bits, inf, r64) \
-              jit->ptr += xor_jit_bitpair3_noxor(jit->ptr, xor_jit_bitpair3(jit->ptr, mask & ((1<<bits)-1), xor_jit_clut_code ##n, xor_jit_clut_info_ ##inf, &movC, r64), &mov1, &mov2, r64); \
+            #define PROC_BITPAIR(n, bits, inf, m, r64) \
+              jit->ptr += xor_jit_bitpair3_noxor(jit->ptr, xor_jit_bitpair3(jit->ptr, (m) & ((2<<bits)-2), xor_jit_clut_code ##n, xor_jit_clut_info_ ##inf, &movC, r64), &mov1, &mov2, r64); \
               mask >>= bits
-            PROC_BITPAIR(1, 6, mem, 0);
+            PROC_BITPAIR(1, 6, mem, mask<<1, 0);
+            mask <<= 1;
 #ifdef AMD64
-            PROC_BITPAIR(2, 6, reg, 0);
-            PROC_BITPAIR(3, 4, reg, 0);
-            PROC_BITPAIR(4, 6, mem, 1);
-            PROC_BITPAIR(5, 6, mem, 1);
-            PROC_BITPAIR(6, 4, mem, 1);
+            PROC_BITPAIR(2, 6, reg, mask, 0);
+            PROC_BITPAIR(3, 4, reg, mask, 0);
+            PROC_BITPAIR(4, 6, mem, mask, 1);
+            PROC_BITPAIR(5, 6, mem, mask, 1);
+            PROC_BITPAIR(6, 4, mem, mask, 1);
 #else
-            PROC_BITPAIR(2, 6, mem, 0);
-            PROC_BITPAIR(3, 6, mem, 0);
-            PROC_BITPAIR(4, 4, mem, 0);
-            PROC_BITPAIR(5, 6, reg, 0);
-            PROC_BITPAIR(6, 4, reg, 0);
+            PROC_BITPAIR(2, 6, mem, mask, 0);
+            PROC_BITPAIR(3, 6, mem, mask, 0);
+            PROC_BITPAIR(4, 4, mem, mask, 0);
+            PROC_BITPAIR(5, 6, reg, mask, 0);
+            PROC_BITPAIR(6, 4, reg, mask, 0);
 #endif
             #undef PROC_BITPAIR
           
