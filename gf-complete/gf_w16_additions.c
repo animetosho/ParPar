@@ -882,12 +882,24 @@ void gf_w16_xor_create_jit_lut() {
 	}
 }
 
+/* tune flags set by GCC; not ideal, but good enough I guess (note, I don't care about anything older than Core2) */
+#if defined(__tune_core2__) || defined(__tune_atom__)
+/* on pre-Nehalem Intel CPUs, it is faster to store unaligned XMM registers in halves */
+static inline void STOREU_XMM(void* dest, __m128i xmm) {
+	_mm_storel_epi64((__m128i*)(dest), xmm);
+	_mm_storeh_pi(((__m64*)(dest) +1), _mm_castsi128_ps(xmm));
+}
+#else
+# define STOREU_XMM(dest, xmm) \
+  _mm_storeu_si128((__m128i*)(dest), xmm)
+#endif
+
 static FAST_U16 inline xor_jit_bitpair3(uint8_t* dest, FAST_U32 mask, __m128i* tCode, uint16_t* tInfo, FAST_U8* movC, FAST_U8 isR64) {
     FAST_U16 info = tInfo[mask];
     FAST_U8 posC = info >> 12;
     
     // copy code segment
-    _mm_storeu_si128((__m128i*)dest, _mm_load_si128(tCode + mask));
+    STOREU_XMM(dest, _mm_load_si128(tCode + mask));
     
     // handle conditional move for common mask (since it's always done)
     dest[posC+isR64] ^= *movC;
@@ -1375,7 +1387,7 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
           
           if(no_common_mask & 1) {
             #define PROC_BITPAIR(n, inf) \
-              _mm_storeu_si128((__m128i*)(jit->ptr), _mm_load_si128(xor_jit_clut_nocomm + (n<<4) + (mask & 0xF))); \
+              STOREU_XMM(jit->ptr, _mm_load_si128(xor_jit_clut_nocomm + (n<<4) + (mask & 0xF))); \
               jit->ptr += ((uint8_t*)(xor_jit_clut_ncinfo_ ##inf))[(mask & 0xF) << 1]; \
               mask >>= 4
             PROC_BITPAIR(0, mem);
@@ -1435,7 +1447,7 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
           
           if(no_common_mask & 1) {
             #define PROC_BITPAIR(n, inf, r64) \
-              _mm_storeu_si128((__m128i*)(jit->ptr), _mm_load_si128(xor_jit_clut_nocomm + (n<<4) + (mask & 0xF))); \
+              STOREU_XMM(jit->ptr, _mm_load_si128(xor_jit_clut_nocomm + (n<<4) + (mask & 0xF))); \
               jit->ptr += xor_jit_bitpair3_nc_noxor(jit->ptr, xor_jit_clut_ncinfo_ ##inf[mask & 0xF], &mov1, &mov2, r64); \
               mask >>= 4
             PROC_BITPAIR(0, mem, 0);
