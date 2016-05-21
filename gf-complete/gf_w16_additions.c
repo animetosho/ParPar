@@ -983,48 +983,10 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
     
     
     if (!use_temp) {
-      /* interleave bits for faster lookups */
-      /* TODO: consider more efficient method via byte packing etc */
-      // up-convert to 32-bit, whilst alternating 16-bit ints
-      __m128i tmp2 = _mm_srli_epi32(depmask1, 16);
-      __m128i tmp1 = _mm_and_si128(depmask1, _mm_set1_epi32(0x0000FFFF));
-      __m128i common_mask;
+      __m128i common_mask, tmp1, tmp2, tmp3, tmp4, tmp3l, tmp3h, tmp4l, tmp4h;
+      __m128i lmask = _mm_set1_epi8(0xF);
       
-      // expand bits: https://graphics.stanford.edu/~seander/bithacks.html#InterleaveBMN
-      #define INTERLEAVE_ROUND(src, shift, mask) _mm_and_si128( \
-        _mm_or_si128(src, _mm_slli_epi32(src, shift)), \
-        _mm_set1_epi32(mask) \
-      )
-      tmp1 = INTERLEAVE_ROUND(tmp1, 8, 0x00FF00FF);
-      tmp2 = INTERLEAVE_ROUND(tmp2, 8, 0x00FF00FF);
-      tmp1 = INTERLEAVE_ROUND(tmp1, 4, 0x0F0F0F0F);
-      tmp2 = INTERLEAVE_ROUND(tmp2, 4, 0x0F0F0F0F);
-      tmp1 = INTERLEAVE_ROUND(tmp1, 2, 0x33333333);
-      tmp2 = INTERLEAVE_ROUND(tmp2, 2, 0x33333333);
-      tmp1 = INTERLEAVE_ROUND(tmp1, 1, 0x55555555);
-      tmp2 = INTERLEAVE_ROUND(tmp2, 1, 0x55555555);
-      _mm_storeu_si128((__m128i*)(lumask), _mm_or_si128(tmp1, _mm_slli_epi32(tmp2, 1)));
-      
-      tmp2 = _mm_srli_epi32(depmask2, 16);
-      tmp1 = _mm_and_si128(depmask2, _mm_set1_epi32(0x0000FFFF));
-      
-      tmp1 = INTERLEAVE_ROUND(tmp1, 8, 0x00FF00FF);
-      tmp2 = INTERLEAVE_ROUND(tmp2, 8, 0x00FF00FF);
-      tmp1 = INTERLEAVE_ROUND(tmp1, 4, 0x0F0F0F0F);
-      tmp2 = INTERLEAVE_ROUND(tmp2, 4, 0x0F0F0F0F);
-      tmp1 = INTERLEAVE_ROUND(tmp1, 2, 0x33333333);
-      tmp2 = INTERLEAVE_ROUND(tmp2, 2, 0x33333333);
-      tmp1 = INTERLEAVE_ROUND(tmp1, 1, 0x55555555);
-      tmp2 = INTERLEAVE_ROUND(tmp2, 1, 0x55555555);
-      _mm_storeu_si128((__m128i*)(lumask + 4), _mm_or_si128(tmp1, _mm_slli_epi32(tmp2, 1)));
-      
-      #undef INTERLEAVE_ROUND
-      /* TODO: consider not needing to interleave so much */
-      
-      
-      /* find cases where we don't wish to create the common queue - this is an optimisation to remove a single move operation when the common queue only contains one element */
-      /* first, we need to re-arrange words so that we can perform bitwise AND on neighbouring pairs */
-      /* unfortunately, PACKUSDW is SSE4.1 only, so emulate it with shuffles */
+      /* emulate PACKUSDW (SSE4.1 only) with SSE2 shuffles */
       /* 01234567 -> 02461357 */
       tmp1 = _mm_shuffle_epi32(
         _mm_shufflelo_epi16(
@@ -1040,12 +1002,44 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
         ),
         0xD8
       );
-      common_mask = _mm_and_si128(
-        /* [02461357, 8ACE9BDF] -> [02468ACE, 13579BDF]*/
-        _mm_unpacklo_epi64(tmp1, tmp2),
-        _mm_unpackhi_epi64(tmp1, tmp2)
-      );
+      /* [02461357, 8ACE9BDF] -> [02468ACE, 13579BDF]*/
+      tmp3 = _mm_unpacklo_epi64(tmp1, tmp2);
+      tmp4 = _mm_unpackhi_epi64(tmp1, tmp2);
+      
+      
+      /* interleave bits for faster lookups */
+      tmp3l = _mm_and_si128(tmp3, lmask);
+      tmp3h = _mm_and_si128(_mm_srli_epi16(tmp3, 4), lmask);
+      tmp4l = _mm_and_si128(tmp4, lmask);
+      tmp4h = _mm_and_si128(_mm_srli_epi16(tmp4, 4), lmask);
+      /* expand bits: idea from https://graphics.stanford.edu/~seander/bithacks.html#InterleaveBMN */
+      #define EXPAND_ROUND(src, shift, mask) _mm_and_si128( \
+        _mm_or_si128(src, _mm_slli_epi16(src, shift)), \
+        _mm_set1_epi16(mask) \
+      )
+      /* 8-bit -> 16-bit convert, with 4-bit interleave */
+      tmp1 = _mm_unpacklo_epi8(tmp3l, tmp3h);
+      tmp2 = _mm_unpacklo_epi8(tmp4l, tmp4h);
+      tmp1 = EXPAND_ROUND(tmp1, 2, 0x3333);
+      tmp2 = EXPAND_ROUND(tmp2, 2, 0x3333);
+      tmp1 = EXPAND_ROUND(tmp1, 1, 0x5555);
+      tmp2 = EXPAND_ROUND(tmp2, 1, 0x5555);
+      _mm_storeu_si128((__m128i*)(lumask), _mm_or_si128(tmp1, _mm_slli_epi16(tmp2, 1)));
+      
+      tmp1 = _mm_unpackhi_epi8(tmp3l, tmp3h);
+      tmp2 = _mm_unpackhi_epi8(tmp4l, tmp4h);
+      tmp1 = EXPAND_ROUND(tmp1, 2, 0x3333);
+      tmp2 = EXPAND_ROUND(tmp2, 2, 0x3333);
+      tmp1 = EXPAND_ROUND(tmp1, 1, 0x5555);
+      tmp2 = EXPAND_ROUND(tmp2, 1, 0x5555);
+      _mm_storeu_si128((__m128i*)(lumask + 4), _mm_or_si128(tmp1, _mm_slli_epi16(tmp2, 1)));
+      
+      #undef EXPAND_ROUND
+      
+      
+      /* find cases where we don't wish to create the common queue - this is an optimisation to remove a single move operation when the common queue only contains one element */
       /* we have the common elements between pairs, but it doesn't make sense to process a separate queue if there's only one common element (0 XORs), so find those */
+      common_mask = _mm_and_si128(tmp3, tmp4);
       common_mask = _mm_andnot_si128(
         _mm_cmpeq_epi16(_mm_setzero_si128(), common_mask),
         _mm_cmpeq_epi16(
