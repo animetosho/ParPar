@@ -365,7 +365,7 @@ static void gf_w16_xor_lazy_sse_altmap_multiply_region(gf_t *gf, void *src, void
   FAST_U32 counts[16];
   uintptr_t deptable[16][16];
   __m128i depmask1, depmask2, polymask1, polymask2, addvals1, addvals2;
-  uint16_t tmp_depmask[16];
+  ALIGN(16, uint16_t tmp_depmask[16]);
   gf_region_data rd;
   gf_internal_t *h;
   __m128i *dW, *topW;
@@ -418,8 +418,8 @@ static void gf_w16_xor_lazy_sse_altmap_multiply_region(gf_t *gf, void *src, void
   }
   
   /* generate needed tables */
-  _mm_storeu_si128((__m128i*)(tmp_depmask), depmask1);
-  _mm_storeu_si128((__m128i*)(tmp_depmask + 8), depmask2);
+  _mm_store_si128((__m128i*)(tmp_depmask), depmask1);
+  _mm_store_si128((__m128i*)(tmp_depmask + 8), depmask2);
   for(bit=0; bit<16; bit++) {
     FAST_U32 cnt = 0;
     for(i=0; i<16; i++) {
@@ -934,8 +934,8 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
   FAST_U32 i, bit;
   long inBit;
   __m128i depmask1, depmask2, polymask1, polymask2, addvals1, addvals2;
-  uint16_t tmp_depmask[16];
-  uint32_t lumask[8];
+  ALIGN(16, uint16_t tmp_depmask[16]);
+  ALIGN(16, uint32_t lumask[8]);
   gf_region_data rd;
   gf_internal_t *h;
   jit_t* jit;
@@ -1036,7 +1036,7 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
       tmp2 = EXPAND_ROUND(tmp2, 2, 0x3333);
       tmp1 = EXPAND_ROUND(tmp1, 1, 0x5555);
       tmp2 = EXPAND_ROUND(tmp2, 1, 0x5555);
-      _mm_storeu_si128((__m128i*)(lumask), _mm_or_si128(tmp1, _mm_slli_epi16(tmp2, 1)));
+      _mm_store_si128((__m128i*)(lumask), _mm_or_si128(tmp1, _mm_slli_epi16(tmp2, 1)));
       
       tmp1 = _mm_unpackhi_epi8(tmp3l, tmp3h);
       tmp2 = _mm_unpackhi_epi8(tmp4l, tmp4h);
@@ -1044,7 +1044,7 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
       tmp2 = EXPAND_ROUND(tmp2, 2, 0x3333);
       tmp1 = EXPAND_ROUND(tmp1, 1, 0x5555);
       tmp2 = EXPAND_ROUND(tmp2, 1, 0x5555);
-      _mm_storeu_si128((__m128i*)(lumask + 4), _mm_or_si128(tmp1, _mm_slli_epi16(tmp2, 1)));
+      _mm_store_si128((__m128i*)(lumask + 4), _mm_or_si128(tmp1, _mm_slli_epi16(tmp2, 1)));
       
       #undef EXPAND_ROUND
       
@@ -1068,8 +1068,8 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
       for(i=0; i<8; i++)
         common_depmask[i] = 0;
       */
-      _mm_storeu_si128((__m128i*)(tmp_depmask), depmask1);
-      _mm_storeu_si128((__m128i*)(tmp_depmask + 8), depmask2);
+      _mm_store_si128((__m128i*)(tmp_depmask), depmask1);
+      _mm_store_si128((__m128i*)(tmp_depmask + 8), depmask2);
     }
     
     
