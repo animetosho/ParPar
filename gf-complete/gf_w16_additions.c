@@ -668,8 +668,8 @@ void gf_w16_xor_create_jit_lut() {
 	
 	for(i=0; i<64; i++) {
 		int m = i;
-		FAST_U8 posM[4] = {0, 0xF, 0xF, 0xF};
-		FAST_U8 posR[4] = {0, 0xF, 0xF, 0xF};
+		FAST_U8 posM[4] = {0, 0, 0, 0};
+		FAST_U8 posR[4] = {0, 0, 0, 0};
 		char* pC1 = (char*)(xor_jit_clut_code1 + i);
 		char* pC2 = (char*)(xor_jit_clut_code2 + i);
 		char* pC3 = (char*)(xor_jit_clut_code3 + i);
@@ -705,8 +705,8 @@ void gf_w16_xor_create_jit_lut() {
 					*(int32_t*)pC6 = 0xC0570F + ((0) <<19) + ((j+6) <<16);
 #endif
 				// transformations (XORPS -> MOVAPS)
-				if(posM[1] == 0xF) posM[1] = posM[0] +1;
-				if(posR[1] == 0xF) posR[1] = posR[0] +1;
+				if(posM[1] == 0) posM[1] = posM[0] +1;
+				if(posR[1] == 0) posR[1] = posR[0] +1;
 			} else if(msk) {
 				int isCommon = msk == 3;
 				int reg = 1 + isCommon;
@@ -746,8 +746,8 @@ void gf_w16_xor_create_jit_lut() {
 #endif
 				
 				// transformations (PXOR -> MOVDQA)
-				if(posM[reg+1] == 0xF) posM[reg+1] = posM[0] +2;
-				if(posR[reg+1] == 0xF) posR[reg+1] = posR[0] +2;
+				if(posM[reg+1] == 0) posM[reg+1] = posM[0] +2;
+				if(posR[reg+1] == 0) posR[reg+1] = posR[0] +2;
 			}
 			
 			if(msk) { // bit1 || bit2
@@ -784,9 +784,9 @@ void gf_w16_xor_create_jit_lut() {
 		// since we can only fit 2 pairs in an XMM register, cannot do 6 bit lookups
 		int m = i;
 		int k;
-		FAST_U8 posM[3] = {0, 0xF, 0xF};
-		FAST_U8 posR[3] = {0, 0xF, 0xF};
-		FAST_U8 posRM[3] = {0, 0xF, 0xF};
+		FAST_U8 posM[3] = {0, 0, 0};
+		FAST_U8 posR[3] = {0, 0, 0};
+		FAST_U8 posRM[3] = {0, 0, 0};
 		char* pC[8];
 		for(k=0; k<8; k++) {
 			pC[k] = (char*)(xor_jit_clut_nocomm + i + k*16);
@@ -826,9 +826,9 @@ void gf_w16_xor_create_jit_lut() {
 				}
 #endif
 				// transformations (XORPS -> MOVAPS)
-				if(posM[1] == 0xF) posM[1] = posM[0] +1;
-				if(posR[1] == 0xF) posR[1] = posR[0] +1;
-				if(posRM[1] == 0xF) posRM[1] = posRM[0] +1;
+				if(posM[1] == 0) posM[1] = posM[0] +1;
+				if(posR[1] == 0) posR[1] = posR[0] +1;
+				if(posRM[1] == 0) posRM[1] = posRM[0] +1;
 				posM[0] += 4;
 				posR[0] += 3;
 				posRM[0] += 3 + (j==0);
@@ -863,9 +863,9 @@ void gf_w16_xor_create_jit_lut() {
 #endif
 				
 				// transformations (PXOR -> MOVDQA)
-				if(posM[2] == 0xF) posM[2] = posM[0] +2;
-				if(posR[2] == 0xF) posR[2] = posR[0] +2;
-				if(posRM[2] == 0xF) posRM[2] = posRM[0] +2;
+				if(posM[2] == 0) posM[2] = posM[0] +2;
+				if(posR[2] == 0) posR[2] = posR[0] +2;
+				if(posRM[2] == 0) posRM[2] = posRM[0] +2;
 				posM[0] += 5;
 				posR[0] += 4;
 				posRM[0] += 4 + (j==0);
@@ -894,54 +894,57 @@ static inline void STOREU_XMM(void* dest, __m128i xmm) {
   _mm_storeu_si128((__m128i*)(dest), xmm)
 #endif
 
+/* conditional move, because, for whatever reason, no-one thought of making a CMOVcc intrinsic */
+#ifdef __GNUC__
+	#define CMOV(cond, dst, src) asm(".intel_syntax noprefix\n" \
+		"test %[c], %[c]\n" \
+		"cmovnz %[d], %[s]\n" \
+		".att_syntax prefix\n" \
+		: [d]"+r"(dst): [c]"r"(cond), [s]"r"(src))
+#else
+	//#define CMOV(c,d,s) (d) = ((c) & (s)) | (~(c) & (d));
+	#define CMOV(c, d, s) if(c) (d) = (s)
+#endif
+
 static FAST_U16 inline xor_jit_bitpair3(uint8_t* dest, FAST_U32 mask, __m128i* tCode, uint16_t* tInfo, long* posC, FAST_U8* movC, FAST_U8 isR64) {
     FAST_U16 info = tInfo[mask>>1];
-    FAST_U8 pC = (info >> 12)+isR64;
+    FAST_U8 pC = info >> 12;
     
     // copy code segment
     STOREU_XMM(dest, _mm_load_si128((__m128i*)((uint64_t*)tCode + mask)));
     
     // handle conditional move for common mask (since it's always done)
-    /* this would be nicer if I could get the compiler to use CMOVcc... (why in the hell is there no such intrinsic??!)
-    if(*movC) *posC = pC;
+    CMOV(*movC, *posC, pC+isR64);
     *posC -= info & 0xF;
-    */
-    //*posC = (*movC & pC) | (~(*movC) & *posC);
-    if(*movC) *posC = pC;
-    *posC -= info & 0xF;
-    *movC &= -(pC == (0xF+isR64));
+    *movC &= -(pC == 0);
     
     return info;
 }
 
 static FAST_U16 inline xor_jit_bitpair3_noxor(uint8_t* dest, FAST_U16 info, long* pos1, FAST_U8* mov1, long* pos2, FAST_U8* mov2, int isR64) {
-    FAST_U8 p1 = ((info >> 4) & 0xF)+isR64;
-    FAST_U8 p2 = ((info >> 8) & 0xF)+isR64;
-    //*pos1 = (*mov1 & p1) | (~(*mov1) & *pos1);
-    if(*mov1) *pos1 = p1;
-    //*pos2 = (*mov2 & p2) | (~(*mov2) & *pos2);
-    if(*mov2) *pos2 = p2;
+    FAST_U8 p1 = (info >> 4) & 0xF;
+    FAST_U8 p2 = (info >> 8) & 0xF;
+    CMOV(*mov1, *pos1, p1+isR64);
+    CMOV(*mov2, *pos2, p2+isR64);
     *pos1 -= info & 0xF;
     *pos2 -= info & 0xF;
-    *mov1 &= -(p1 == (0xF+isR64));
-    *mov2 &= -(p2 == (0xF+isR64));
+    *mov1 &= -(p1 == 0);
+    *mov2 &= -(p2 == 0);
     return info & 0xF;
 }
 
 static FAST_U16 inline xor_jit_bitpair3_nc_noxor(uint8_t* dest, FAST_U16 info, long* pos1, FAST_U8* mov1, long* pos2, FAST_U8* mov2, int isR64) {
-    FAST_U8 p1 = ((info >> 8) & 0xF)+isR64;
-    FAST_U8 p2 = (info >> 12)+isR64;
-    //*pos1 = (*mov1 & p1) | (~(*mov1) & *pos1);
-    if(*mov1) *pos1 = p1;
-    //*pos2 = (*mov2 & p2) | (~(*mov2) & *pos2);
-    if(*mov2) *pos2 = p2;
+    FAST_U8 p1 = (info >> 8) & 0xF;
+    FAST_U8 p2 = info >> 12;
+    CMOV(*mov1, *pos1, p1+isR64);
+    CMOV(*mov2, *pos2, p2+isR64);
     *pos1 -= info & 0xF;
     *pos2 -= info & 0xF;
-    *mov1 &= -(p1 == (0xF+isR64));
-    *mov2 &= -(p2 == (0xF+isR64));
+    *mov1 &= -(p1 == 0);
+    *mov2 &= -(p2 == 0);
     return info & 0xF;
 }
-
+#undef CMOV
 
 static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, void *dest, gf_val_32_t val, int bytes, int xor)
 {
