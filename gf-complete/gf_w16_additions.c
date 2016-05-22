@@ -894,37 +894,51 @@ static inline void STOREU_XMM(void* dest, __m128i xmm) {
   _mm_storeu_si128((__m128i*)(dest), xmm)
 #endif
 
-static FAST_U16 inline xor_jit_bitpair3(uint8_t* dest, FAST_U32 mask, __m128i* tCode, uint16_t* tInfo, FAST_U8* movC, FAST_U8 isR64) {
+static FAST_U16 inline xor_jit_bitpair3(uint8_t* dest, FAST_U32 mask, __m128i* tCode, uint16_t* tInfo, long* posC, FAST_U8* movC, FAST_U8 isR64) {
     FAST_U16 info = tInfo[mask>>1];
-    FAST_U8 posC = info >> 12;
+    FAST_U8 pC = (info >> 12)+isR64;
     
     // copy code segment
     STOREU_XMM(dest, _mm_load_si128((__m128i*)((uint64_t*)tCode + mask)));
     
     // handle conditional move for common mask (since it's always done)
-    dest[posC+isR64] ^= *movC;
-    *movC &= -(posC == 0xF);
+    /* this would be nicer if I could get the compiler to use CMOVcc... (why in the hell is there no such intrinsic??!)
+    if(*movC) *posC = pC;
+    *posC -= info & 0xF;
+    */
+    //*posC = (*movC & pC) | (~(*movC) & *posC);
+    if(*movC) *posC = pC;
+    *posC -= info & 0xF;
+    *movC &= -(pC == (0xF+isR64));
     
     return info;
 }
 
-static FAST_U16 inline xor_jit_bitpair3_noxor(uint8_t* dest, FAST_U16 info, FAST_U8* mov1, FAST_U8* mov2, int isR64) {
-    FAST_U8 p1 = (info >> 4) & 0xF;
-    FAST_U8 p2 = (info >> 8) & 0xF;
-    dest[p1 + isR64] ^= *mov1;
-    dest[p2 + isR64] ^= *mov2;
-    *mov1 &= -(p1 == 0xF);
-    *mov2 &= -(p2 == 0xF);
+static FAST_U16 inline xor_jit_bitpair3_noxor(uint8_t* dest, FAST_U16 info, long* pos1, FAST_U8* mov1, long* pos2, FAST_U8* mov2, int isR64) {
+    FAST_U8 p1 = ((info >> 4) & 0xF)+isR64;
+    FAST_U8 p2 = ((info >> 8) & 0xF)+isR64;
+    //*pos1 = (*mov1 & p1) | (~(*mov1) & *pos1);
+    if(*mov1) *pos1 = p1;
+    //*pos2 = (*mov2 & p2) | (~(*mov2) & *pos2);
+    if(*mov2) *pos2 = p2;
+    *pos1 -= info & 0xF;
+    *pos2 -= info & 0xF;
+    *mov1 &= -(p1 == (0xF+isR64));
+    *mov2 &= -(p2 == (0xF+isR64));
     return info & 0xF;
 }
 
-static FAST_U16 inline xor_jit_bitpair3_nc_noxor(uint8_t* dest, FAST_U16 info, FAST_U8* mov1, FAST_U8* mov2, int isR64) {
-    FAST_U8 p1 = (info >> 8) & 0xF;
-    FAST_U8 p2 = (info >> 12);
-    dest[p1 + isR64] ^= *mov1;
-    dest[p2 + isR64] ^= *mov2;
-    *mov1 &= -(p1 == 0xF);
-    *mov2 &= -(p2 == 0xF);
+static FAST_U16 inline xor_jit_bitpair3_nc_noxor(uint8_t* dest, FAST_U16 info, long* pos1, FAST_U8* mov1, long* pos2, FAST_U8* mov2, int isR64) {
+    FAST_U8 p1 = ((info >> 8) & 0xF)+isR64;
+    FAST_U8 p2 = (info >> 12)+isR64;
+    //*pos1 = (*mov1 & p1) | (~(*mov1) & *pos1);
+    if(*mov1) *pos1 = p1;
+    //*pos2 = (*mov2 & p2) | (~(*mov2) & *pos2);
+    if(*mov2) *pos2 = p2;
+    *pos1 -= info & 0xF;
+    *pos2 -= info & 0xF;
+    *mov1 &= -(p1 == (0xF+isR64));
+    *mov2 &= -(p2 == (0xF+isR64));
     return info & 0xF;
 }
 
@@ -1380,7 +1394,8 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
         for(bit=0; bit<8; bit++) {
           int destOffs = (bit<<5)-128;
           int destOffs2 = destOffs+16;
-          FAST_U8 movC = 0x80; // PXOR transform mask
+          FAST_U8 movC = 0xFF;
+          long posC = 0;
           FAST_U32 mask = lumask[bit];
           _LD_APS(0, DX, destOffs);
           _LD_DQA(1, DX, destOffs2);
@@ -1413,7 +1428,7 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
             #undef PROC_BITPAIR
           } else {
             #define PROC_BITPAIR(n, bits, inf, m, r64) \
-              jit->ptr += xor_jit_bitpair3(jit->ptr, (m) & ((2<<bits)-2), xor_jit_clut_code ##n, xor_jit_clut_info_ ##inf, &movC, r64) & 0xF; \
+              jit->ptr += xor_jit_bitpair3(jit->ptr, (m) & ((2<<bits)-2), xor_jit_clut_code ##n, xor_jit_clut_info_ ##inf, &posC, &movC, r64) & 0xF; \
               mask >>= bits
             PROC_BITPAIR(1, 6, mem, mask<<1, 0);
             mask <<= 1;
@@ -1432,6 +1447,7 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
 #endif
             #undef PROC_BITPAIR
             
+            if(!movC) jit->ptr[posC] = 0x6F; // PXOR -> MOVDQA
             _C_XORPS_R(0, 2, movC==0);
             _C_PXOR_R(1, 2, movC==0); /*penalty?*/
           }
@@ -1444,14 +1460,15 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
         for(bit=0; bit<8; bit++) {
           int destOffs = (bit<<5)-128;
           int destOffs2 = destOffs+16;
-          FAST_U8 mov1 = 0x7F, mov2 = 0x80,
-                  movC = 0x80;
+          FAST_U8 mov1 = 0xFF, mov2 = 0xFF,
+                  movC = 0xFF;
+          long pos1 = 0, pos2 = 0, posC = 0;
           FAST_U32 mask = lumask[bit];
           
           if(no_common_mask & 1) {
             #define PROC_BITPAIR(n, inf, m, r64) \
               STOREU_XMM(jit->ptr, _mm_load_si128((__m128i*)((uint64_t*)xor_jit_clut_nocomm + (n<<5) + ((m) & (0xF<<1))))); \
-              jit->ptr += xor_jit_bitpair3_nc_noxor(jit->ptr, xor_jit_clut_ncinfo_ ##inf[((m) & (0xF<<1))>>1], &mov1, &mov2, r64); \
+              jit->ptr += xor_jit_bitpair3_nc_noxor(jit->ptr, xor_jit_clut_ncinfo_ ##inf[((m) & (0xF<<1))>>1], &pos1, &mov1, &pos2, &mov2, r64); \
               mask >>= 4
 
             PROC_BITPAIR(0, mem, mask<<1, 0);
@@ -1474,9 +1491,11 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
             PROC_BITPAIR(7, reg, mask, 0);
 #endif
             #undef PROC_BITPAIR
+            if(!mov1) jit->ptr[pos1] = 0x28; // XORPS -> MOVAPS
+            if(!mov2) jit->ptr[pos2] = 0x6F; // PXOR -> MOVDQA
           } else {
             #define PROC_BITPAIR(n, bits, inf, m, r64) \
-              jit->ptr += xor_jit_bitpair3_noxor(jit->ptr, xor_jit_bitpair3(jit->ptr, (m) & ((2<<bits)-2), xor_jit_clut_code ##n, xor_jit_clut_info_ ##inf, &movC, r64), &mov1, &mov2, r64); \
+              jit->ptr += xor_jit_bitpair3_noxor(jit->ptr, xor_jit_bitpair3(jit->ptr, (m) & ((2<<bits)-2), xor_jit_clut_code ##n, xor_jit_clut_info_ ##inf, &posC, &movC, r64), &pos1, &mov1, &pos2, &mov2, r64); \
               mask >>= bits
             PROC_BITPAIR(1, 6, mem, mask<<1, 0);
             mask <<= 1;
@@ -1495,7 +1514,10 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
 #endif
             #undef PROC_BITPAIR
           
+            if(!mov1) jit->ptr[pos1] = 0x28; // XORPS -> MOVAPS
+            if(!mov2) jit->ptr[pos2] = 0x6F; // PXOR -> MOVDQA
             if(!movC) {
+              jit->ptr[posC] = 0x6F; // PXOR -> MOVDQA
               if(mov1) { /* no additional XORs were made? */
                 _ST_DQA(DX, destOffs, 2);
               } else {
