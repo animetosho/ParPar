@@ -644,6 +644,8 @@ ALIGN(64, __m128i xor_jit_clut_code6[16]);
 ALIGN(64, uint16_t xor_jit_clut_info_mem[64]);
 ALIGN(64, uint16_t xor_jit_clut_info_reg[64]);
 
+// seems like the no-common optimisation isn't worth it, so disable it by default
+#define XORDEP_DISABLE_NO_COMMON 1
 ALIGN(64, __m128i xor_jit_clut_nocomm[8*16]);
 ALIGN(16, uint16_t xor_jit_clut_ncinfo_mem[15]);
 ALIGN(16, uint16_t xor_jit_clut_ncinfo_rm[15]);
@@ -664,7 +666,6 @@ void gf_w16_xor_create_jit_lut() {
 	memset(xor_jit_clut_code4, 0, sizeof(xor_jit_clut_code4));
 	memset(xor_jit_clut_code5, 0, sizeof(xor_jit_clut_code5));
 	memset(xor_jit_clut_code6, 0, sizeof(xor_jit_clut_code6));
-	memset(xor_jit_clut_nocomm, 0, sizeof(xor_jit_clut_code6));
 	
 	for(i=0; i<64; i++) {
 		int m = i;
@@ -779,6 +780,8 @@ void gf_w16_xor_create_jit_lut() {
 		xor_jit_clut_info_reg[i] = posR[0] | (posR[1] << 4) | (posR[2] << 8) | (posR[3] << 12);
 	}
 	
+#ifndef XORDEP_DISABLE_NO_COMMON
+	memset(xor_jit_clut_nocomm, 0, sizeof(xor_jit_clut_code6));
 	// handle cases of no common-mask optimisation
 	for(i=0; i<15 /* not 16 */; i++) {
 		// since we can only fit 2 pairs in an XMM register, cannot do 6 bit lookups
@@ -880,6 +883,7 @@ void gf_w16_xor_create_jit_lut() {
 		xor_jit_clut_ncinfo_rm[i] = posRM[0] | (posRM[1] << 8) | (posRM[2] << 12);
 		
 	}
+#endif
 }
 
 /* tune flags set by GCC; not ideal, but good enough I guess (note, I don't care about anything older than Core2) */
@@ -968,7 +972,11 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
   if(rd.d_start != rd.d_top) {
     int use_temp = ((uintptr_t)rd.s_start - (uintptr_t)rd.d_start + 256) < 512;
     int setup_stack = 0;
+#ifdef XORDEP_DISABLE_NO_COMMON
+    #define no_common_mask 0
+#else
     int no_common_mask;
+#endif
     
     /* calculate dependent bits */
     addvals1 = _mm_set_epi16(1<< 7, 1<< 6, 1<< 5, 1<< 4, 1<< 3, 1<< 2, 1<<1, 1<<0);
@@ -1065,7 +1073,7 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
       
       #undef EXPAND_ROUND
       
-      
+#ifndef XORDEP_DISABLE_NO_COMMON
       /* find cases where we don't wish to create the common queue - this is an optimisation to remove a single move operation when the common queue only contains one element */
       /* we have the common elements between pairs, but it doesn't make sense to process a separate queue if there's only one common element (0 XORs), so find those */
       common_mask = _mm_and_si128(tmp3, tmp4);
@@ -1079,6 +1087,7 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
       );
       /* now we have a 8x16 mask of one-bit common masks we wish to remove; pack into an int for easy dealing with */
       no_common_mask = _mm_movemask_epi8(common_mask);
+#endif
     } else {
       /* for now, don't bother with element elimination if we're using temp storage, as it's a little finnicky to implement */
       /*
@@ -1454,7 +1463,9 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
             _C_XORPS_R(0, 2, movC==0);
             _C_PXOR_R(1, 2, movC==0); /*penalty?*/
           }
+#ifndef XORDEP_DISABLE_NO_COMMON
           no_common_mask >>= 2;
+#endif
           
           _ST_APS(DX, destOffs, 0);
           _ST_DQA(DX, destOffs2, 1);
@@ -1533,7 +1544,11 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
               }
             }
           }
+#ifndef XORDEP_DISABLE_NO_COMMON
           no_common_mask >>= 2;
+#else
+          #undef no_common_mask
+#endif
           
           if(!mov1) {
             _ST_APS(DX, destOffs, 0);
