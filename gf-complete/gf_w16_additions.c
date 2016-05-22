@@ -391,7 +391,7 @@ static void gf_w16_xor_lazy_sse_altmap_multiply_region(gf_t *gf, void *src, void
   }
   for(i=(1<<14); i; i>>=1) {
     /* rotate */
-    __m128i last = _mm_set1_epi16(_mm_extract_epi16(depmask1, 0));
+    __m128i last = _mm_shuffle_epi32(_mm_shufflelo_epi16(depmask1, 0), 0);
     depmask1 = _mm_insert_epi16(
       _mm_srli_si128(depmask1, 2),
       _mm_extract_epi16(depmask2, 0),
@@ -666,7 +666,7 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
     }
     for(i=(1<<14); i; i>>=1) {
       /* rotate */
-      __m128i last = _mm_set1_epi16(_mm_extract_epi16(depmask1, 0));
+      __m128i last = _mm_shuffle_epi32(_mm_shufflelo_epi16(depmask1, 0), 0);
       depmask1 = _mm_insert_epi16(
         _mm_srli_si128(depmask1, 2),
         _mm_extract_epi16(depmask2, 0),
