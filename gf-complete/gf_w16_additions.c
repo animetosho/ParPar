@@ -1459,7 +1459,7 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
 #endif
             #undef PROC_BITPAIR
             
-            if(!movC) jit->ptr[posC] = 0x6F; // PXOR -> MOVDQA
+            jit->ptr[posC + movC] = 0x6F; // PXOR -> MOVDQA
             _C_XORPS_R(0, 2, movC==0);
             _C_PXOR_R(1, 2, movC==0); /*penalty?*/
           }
@@ -1505,8 +1505,8 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
             PROC_BITPAIR(7, reg, mask, 0);
 #endif
             #undef PROC_BITPAIR
-            if(!mov1) jit->ptr[pos1] = 0x28; // XORPS -> MOVAPS
-            if(!mov2) jit->ptr[pos2] = 0x6F; // PXOR -> MOVDQA
+            jit->ptr[pos1 + mov1] = 0x28; // XORPS -> MOVAPS
+            jit->ptr[pos2 + mov2] = 0x6F; // PXOR -> MOVDQA
           } else {
             #define PROC_BITPAIR(n, bits, inf, m, r64) \
               jit->ptr += xor_jit_bitpair3_noxor(jit->ptr, xor_jit_bitpair3(jit->ptr, (m) & ((2<<bits)-2), xor_jit_clut_code ##n, xor_jit_clut_info_ ##inf, &posC, &movC, r64), &pos1, &mov1, &pos2, &mov2, r64); \
@@ -1528,8 +1528,8 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
 #endif
             #undef PROC_BITPAIR
           
-            if(!mov1) jit->ptr[pos1] = 0x28; // XORPS -> MOVAPS
-            if(!mov2) jit->ptr[pos2] = 0x6F; // PXOR -> MOVDQA
+            jit->ptr[pos1 + mov1] = 0x28; // XORPS -> MOVAPS
+            jit->ptr[pos2 + mov2] = 0x6F; // PXOR -> MOVDQA
             if(!movC) {
               jit->ptr[posC] = 0x6F; // PXOR -> MOVDQA
               if(mov1) { /* no additional XORs were made? */
