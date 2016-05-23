@@ -24,7 +24,7 @@
   },
   "gypfile": true,
   "dependencies": {
-    "async": "*",
+    "async": "1.*",
     "yargs": "*",
     "yencode": ">=1.0.4"
   },
