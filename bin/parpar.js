@@ -133,7 +133,9 @@ argv._.forEach(function addFile(file) {
 if(argv.o.match(/\.par2$/i))
 	argv.o = argv.o.substr(0, argv.o.length-5);
 
-var g = new ParPar.PAR2Gen(files, parseSize(argv.s), argv.r|0, {
+// TODO: expose minChunkSize etc
+var sliceSize = parseSize(argv.s);
+var g = new ParPar.PAR2Gen(files, sliceSize, argv.r|0, {
 	outputBase: argv.o,
 	displayNameFormat: argv['filepath-format'],
 	recoveryOffset: argv.e,
@@ -154,7 +156,8 @@ var startTime = Date.now();
 var decimalPoint = (1.1).toLocaleString().substr(1, 1);
 
 if(argv.t) ParPar.setMaxThreads(argv.t | 0);
-if(argv.method != 'auto') ParPar.setMethod(argv.method);
+if(argv.method == 'auto') argv.method = '';
+ParPar.setMethod(argv.method, sliceSize);
 
 // TODO: sigint not respected?
 

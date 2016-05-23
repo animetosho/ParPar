@@ -3,22 +3,30 @@ int has_ssse3 = 0;
 int has_pclmul = 0;
 int has_avx2 = 0;
 int has_avx512bw = 0;
+int has_htt = 0;
 
 #include <assert.h>
 
 #if !defined(_MSC_VER) && defined(INTEL_SSE2)
 #include <cpuid.h>
 #endif
+
+#ifdef _MSC_VER
+	#define _cpuid __cpuid
+	#define _cpuidX __cpuidex
+#else
+	/* GCC seems to support this, I assume everyone else does too? */
+	#define _cpuid(ar, eax) __cpuid(eax, ar[0], ar[1], ar[2], ar[3])
+	#define _cpuidX(ar, eax, ecx) __cpuid_count(eax, ecx, ar[0], ar[1], ar[2], ar[3])
+#endif
+
+
 void detect_cpu(void) {
 #ifdef INTEL_SSE2 /* if we can't compile SSE, there's not much point in checking CPU capabilities; we use this to eliminate ARM :P */
 	int cpuInfo[4];
-	int family, model;
-#ifdef _MSC_VER
-	__cpuid(cpuInfo, 1);
-#else
-	/* GCC seems to support this, I assume everyone else does too? */
-	__cpuid(1, cpuInfo[0], cpuInfo[1], cpuInfo[2], cpuInfo[3]);
-#endif
+	int family, model, hasMulticore;
+	_cpuid(cpuInfo, 1);
+	hasMulticore = (cpuInfo[3] & (1<<28));
 	#ifdef INTEL_SSSE3
 	has_ssse3 = (cpuInfo[2] & 0x200);
 	#endif
@@ -43,11 +51,7 @@ void detect_cpu(void) {
 	}
 
 #if !defined(_MSC_VER) || _MSC_VER >= 1600
-	#ifdef _MSC_VER
-		__cpuidex(cpuInfo, 7, 0);
-	#else
-		__cpuid_count(7, 0, cpuInfo[0], cpuInfo[1], cpuInfo[2], cpuInfo[3]);
-	#endif
+	_cpuidX(cpuInfo, 7, 0);
 	
 	#ifdef INTEL_AVX2
 	has_avx2 = (cpuInfo[1] & 0x20);
@@ -57,6 +61,20 @@ void detect_cpu(void) {
 	#endif
 #endif
 #endif /* INTEL_SSE2 */
+
+	/* try to detect hyper-threading */
+	has_htt = 0;
+	if(hasMulticore) {
+		/* only Intel CPUs have HT (VMs which obscure CPUID -> too bad) */
+		_cpuid(cpuInfo, 0);
+		if(cpuInfo[1] == 0x756E6547 && cpuInfo[2] == 0x6C65746E && cpuInfo[3] == 0x49656E69 && cpuInfo[0] >= 11) {
+			_cpuidX(cpuInfo, 11, 0);
+			if((cpuInfo[2] >> 8) & 0xFF == 1 // SMT level
+			&& cpuInfo[1] & 0xFFFF > 1) // multiple threads per core
+				has_htt = 1;
+		}
+	}
+	
 }
 
 

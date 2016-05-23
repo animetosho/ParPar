@@ -71,11 +71,12 @@ static inline uint16_t calc_factor(uint_fast16_t inputBlock, uint_fast16_t recov
 }
 
 gf_t* gf = NULL;
+size_t size_hint = 0;
 int gfCount = 0;
 bool using_altmap = false;
 
 static inline void init_gf(gf_t* gf) {
-	gf_init_hard(gf, 16, GF_METHOD, GF_REGION_ALTMAP, GF_DIVIDE_DEFAULT, 0, GF_METHOD_ARG1, GF_METHOD_ARG2, NULL, NULL);
+	gf_init_hard(gf, 16, GF_METHOD, GF_REGION_ALTMAP, GF_DIVIDE_DEFAULT, 0, GF_METHOD_ARG1, GF_METHOD_ARG2, size_hint, 0, NULL, NULL);
 }
 
 #ifdef _OPENMP
@@ -141,14 +142,23 @@ static void setup_gf() {
 	if(!CHUNK_SIZE) {
 		switch(gf[0].mult_method) {
 			case GF_XOR_JIT_SSE2: /* JIT is a little slow, so larger blocks make things faster */
-				CHUNK_SIZE = 128*1024;
+				if(size_hint) {
+					/* try to keep in range 112-224KB */
+					CHUNK_SIZE = 128*1024;
+					int numChunks = (size_hint / CHUNK_SIZE) + ((size_hint % CHUNK_SIZE) ? 1 : 0);
+					if(size_hint / numChunks < 112*1024) {
+						CHUNK_SIZE = size_hint / (numChunks-1) + 1;
+					}
+				} else {
+					CHUNK_SIZE = 128*1024;
+				}
 				break;
 			case GF_SPLIT8:
 			case GF_XOR_SSE2:
-				CHUNK_SIZE = 32*1024; // 2* L1 data cache size ?
+				CHUNK_SIZE = 64*1024; // 2* L1 data cache size ?
 				break;
 			default:
-				CHUNK_SIZE = 32*1024; // =L1 data cache size seems to be efficient
+				CHUNK_SIZE = 48*1024; // ~=L1 data cache size seems to be efficient
 				break;
 		}
 	}
@@ -884,9 +894,9 @@ FUNC(SetMethod) {
 		GF_METHOD = GF_MULT_DEFAULT;
 	
 	if (args.Length() >= 2)
-		CHUNK_SIZE = args[1]->ToInt32()->Value();
+		size_hint = args[1]->ToInt32()->Value();
 	else
-		CHUNK_SIZE = 0;
+		size_hint = 0;
 	
 	setup_gf();
 	

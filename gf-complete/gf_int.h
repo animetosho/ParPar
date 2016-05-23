@@ -30,6 +30,8 @@ typedef struct {
   int free_me;
   int arg1;
   int arg2;
+  size_t size_hint;
+  unsigned int thCount_hint;
   gf_t *base_gf;
 #ifdef INTEL_SSE2
   jit_t jit;

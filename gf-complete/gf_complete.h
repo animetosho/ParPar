@@ -173,6 +173,8 @@ extern int gf_init_hard(GFP gf,
                         uint64_t prim_poly,
                         int arg1, 
                         int arg2,
+                        size_t size_hint,
+                        unsigned int thCount_hint,
                         GFP base_gf,
                         void *scratch_memory);
 

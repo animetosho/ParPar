@@ -42,7 +42,7 @@ extern int gf_size(gf_t *gf)
 int gf_init_easy(gf_t *gf, int w)
 {
   return gf_init_hard(gf, w, GF_MULT_DEFAULT, GF_REGION_DEFAULT, GF_DIVIDE_DEFAULT, 
-                      0, 0, 0, NULL, NULL);
+                      0, 0, 0, 0, 0, NULL, NULL);
 }
 
 /* Allen: What's going on here is this function is putting info into the
@@ -56,6 +56,8 @@ int gf_init_hard(gf_t *gf, int w, int mult_type,
                         int divide_type,
                         uint64_t prim_poly,
                         int arg1, int arg2,
+                        size_t size_hint,
+                        unsigned int thCount_hint,
                         gf_t *base_gf,
                         void *scratch_memory) 
 {
@@ -80,6 +82,8 @@ int gf_init_hard(gf_t *gf, int w, int mult_type,
   h->prim_poly = prim_poly;
   h->arg1 = arg1;
   h->arg2 = arg2;
+  h->size_hint = size_hint;
+  h->thCount_hint = thCount_hint;
   h->private = (void *) gf->scratch;
   h->private = (uint8_t *)h->private + (sizeof(gf_internal_t));
   h->base_gf = NULL;

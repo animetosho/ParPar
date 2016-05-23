@@ -699,7 +699,15 @@ int gf_w16_init(gf_t *gf)
 
   /* select an appropriate default - always use some variant of SPLIT unless SSSE3 is unavailable but SSE2 is */
 #ifdef INTEL_SSE2
-  if((h->mult_type == GF_MULT_DEFAULT && !has_ssse3 && (h->region_type & GF_REGION_ALTMAP)) || h->mult_type == GF_MULT_XOR_DEPENDS) {
+  if(h->mult_type == GF_MULT_XOR_DEPENDS || (h->mult_type == GF_MULT_DEFAULT && (h->region_type & GF_REGION_ALTMAP) && (
+    /* XOR_JIT is generally faster for ~128KB blocks */
+    !has_ssse3 || (
+      /*h->size_hint && h->size_hint >= 112*1024*/ 0 // TODO: test ideal conditions for this
+      && !has_avx2 && !has_avx512bw
+      && FAST_U8_SIZE == 8 /* TODO: test speeds on 32-bit platform */
+      && !has_htt /* we currently assume that all threads will be used; XOR_JIT performs worse than SPLIT4 when hyper threading is used */
+    )
+  ))) {
     return gf_w16_xor_init(gf);
   }
   else
