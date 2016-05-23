@@ -685,43 +685,50 @@ void gf_w16_xor_create_jit_lut() {
 	memset(xor_jit_clut_code5, 0, sizeof(xor_jit_clut_code5));
 	memset(xor_jit_clut_code6, 0, sizeof(xor_jit_clut_code6));
 	
+	
+	/* XOR pairs/triples from memory */
+#ifdef AMD64
+	#define MEM_XP 1
+	#define MEM_XT 1
+#else
+	#define MEM_XP 5
+	#define MEM_XT 3
+#endif
+	
 	for(i=0; i<64; i++) {
 		int m = i;
 		FAST_U8 posM[4] = {0, 0, 0, 0};
 		FAST_U8 posR[4] = {0, 0, 0, 0};
-		char* pC1 = (char*)(xor_jit_clut_code1 + i);
-		char* pC2 = (char*)(xor_jit_clut_code2 + i);
-		char* pC3 = (char*)(xor_jit_clut_code3 + i);
-		char* pC4 = (char*)(xor_jit_clut_code4 + i);
-		char* pC5 = (char*)(xor_jit_clut_code5 + i);
-		char* pC6 = (char*)(xor_jit_clut_code6 + i);
+		uint8_t* pC[6] = {
+			(uint8_t*)(xor_jit_clut_code1 + i),
+			(uint8_t*)(xor_jit_clut_code2 + i),
+			(uint8_t*)(xor_jit_clut_code3 + i),
+			(uint8_t*)(xor_jit_clut_code4 + i),
+			(uint8_t*)(xor_jit_clut_code5 + i),
+			(uint8_t*)(xor_jit_clut_code6 + i)
+		};
 		
 		for(j=0; j<3; j++) {
 			int msk = m&3;
+			int k;
 			if(msk == 1) {
 				// (XORPS)
-				*(int32_t*)pC1 = 0x40570F + ((0) << 19) + ((j-8) <<28);
+				for(k=0; k<MEM_XT; k++)
+					pC[k] += _jit_xorps_m(pC[k], 0, AX, (j-8 + k*3) <<4);
 #ifdef AMD64
-				// for registers
-				*(int32_t*)pC2 = 0xC0570F + ((0) <<19) + ((j+3) <<16);
-				if(i < 16)
-					*(int32_t*)pC3 = 0xC0570F + ((0) <<19) + ((j+6) <<16);
-				
-				// registers64
-				*(int32_t*)pC4 = 0xC0570F41 + ((0) <<27) + (j <<24);
-				*(int32_t*)pC5 = 0xC0570F41 + ((0) <<27) + ((j+3) <<24);
-				if(i < 16)
-					*(int32_t*)pC6 = 0xC0570F41 + ((0) <<27) + ((j+6) <<24);
+				pC[1] += _jit_xorps_r(pC[1], 0, j+3);
+				pC[3] += _jit_xorps_r(pC[3], 0, j+8);
+				pC[4] += _jit_xorps_r(pC[4], 0, j+11);
+				if(i < 16) {
+					pC[2] += _jit_xorps_r(pC[2], 0, j+6);
+					pC[5] += _jit_xorps_r(pC[5], 0, j+14);
+				}
 #else
-				*(int32_t*)pC2 = 0x40570F + ((0) << 19) + ((j-5) <<28);
-				*(int32_t*)pC3 = 0x40570F + ((0) << 19) + ((j-2) <<28);
-				if(i < 16)
-					*(int32_t*)pC4 = 0x40570F + ((0) << 19) + ((j+1) <<28);
-				
-				// for registers
-				*(int32_t*)pC5 = 0xC0570F + ((0) <<19) + ((j+3) <<16);
-				if(i < 16)
-					*(int32_t*)pC6 = 0xC0570F + ((0) <<19) + ((j+6) <<16);
+				if(i < 16) {
+					pC[3] += _jit_xorps_m(pC[3], 0, AX, (j+1) <<4);
+					pC[5] += _jit_xorps_r(pC[5], 0, j+6);
+				}
+				pC[4] += _jit_xorps_r(pC[4], 0, j+3);
 #endif
 				// transformations (XORPS -> MOVAPS)
 				if(posM[1] == 0) posM[1] = posM[0] +1;
@@ -731,37 +738,22 @@ void gf_w16_xor_create_jit_lut() {
 				int reg = 1 + isCommon;
 				
 				// (PXOR)
-				*(int32_t*)pC1 = 0x40EF0F66 + (reg << 27);
-				pC1[4] = (j-8) << 4; // -8 is initial memory offset; this saves a paddb later on
+				for(k=0; k<MEM_XT; k++)
+					pC[k] += _jit_pxor_m(pC[k], reg, AX, (j-8 + k*3) <<4);
 #ifdef AMD64
-				// for registers
-				*(int32_t*)pC2 = 0xC0EF0F66 + (reg <<27) + ((j+3) <<24);
-				if(i < 16)
-					*(int32_t*)pC3 = 0xC0EF0F66 + (reg <<27) + ((j+6) <<24);
-				
-				// registers64
-				*(int32_t*)pC4 = 0xEF0F4166;
-				pC4[4] = 0xC0 + (reg <<3) + j;
-				*(int32_t*)pC5 = 0xEF0F4166;
-				pC5[4] = 0xC0 + (reg <<3) + j+3;
+				pC[1] += _jit_pxor_r(pC[1], reg, j+3);
+				pC[3] += _jit_pxor_r(pC[3], reg, j+8);
+				pC[4] += _jit_pxor_r(pC[4], reg, j+11);
 				if(i < 16) {
-					*(int32_t*)pC6 = 0xEF0F4166;
-					pC6[4] = 0xC0 + (reg <<3) + j+6;
+					pC[2] += _jit_pxor_r(pC[2], reg, j+6);
+					pC[5] += _jit_pxor_r(pC[5], reg, j+14);
 				}
 #else
-				*(int32_t*)pC2 = 0x40EF0F66 + (reg << 27);
-				pC2[4] = (j-5) << 4;
-				*(int32_t*)pC3 = 0x40EF0F66 + (reg << 27);
-				pC3[4] = (j-2) << 4;
 				if(i < 16) {
-					*(int32_t*)pC4 = 0x40EF0F66 + (reg << 27);
-					pC4[4] = (j+1) << 4;
+					pC[3] += _jit_pxor_m(pC[3], reg, AX, (j+1) <<4);
+					pC[5] += _jit_pxor_r(pC[5], reg, j+6);
 				}
-				
-				// for registers
-				*(int32_t*)pC5 = 0xC0EF0F66 + (reg <<27) + ((j+3) <<24);
-				if(i < 16)
-					*(int32_t*)pC6 = 0xC0EF0F66 + (reg <<27) + ((j+6) <<24);
+				pC[4] += _jit_pxor_r(pC[4], reg, j+3);
 #endif
 				
 				// transformations (PXOR -> MOVDQA)
@@ -775,20 +767,6 @@ void gf_w16_xor_create_jit_lut() {
 				/* advance pointers */
 				posM[0] += 4+xb;
 				posR[0] += 3+xb;
-				pC1 += 4+xb;
-#ifdef AMD64
-				pC2 += 3+xb;
-				pC3 += 3+xb;
-				pC4 += 4+xb;
-				pC5 += 4+xb;
-				pC6 += 4+xb;
-#else
-				pC2 += 4+xb;
-				pC3 += 4+xb;
-				pC4 += 4+xb;
-				pC5 += 3+xb;
-				pC6 += 3+xb;
-#endif
 			}
 			
 			m >>= 2;
@@ -808,42 +786,31 @@ void gf_w16_xor_create_jit_lut() {
 		FAST_U8 posM[3] = {0, 0, 0};
 		FAST_U8 posR[3] = {0, 0, 0};
 		FAST_U8 posRM[3] = {0, 0, 0};
-		char* pC[8];
+		uint8_t* pC[8];
 		for(k=0; k<8; k++) {
-			pC[k] = (char*)(xor_jit_clut_nocomm + i + k*16);
+			pC[k] = (uint8_t*)(xor_jit_clut_nocomm + i + k*16);
 		}
 		
-		/* XOR pairs from memory */
-#ifdef AMD64
-		#define MEM_XP 1
-#else
-		#define MEM_XP 5
-#endif
 		
 		for(j=0; j<2; j++) {
 			if(m & 1) {
 				// (XORPS)
 				for(k=0; k<MEM_XP; k++) {
-					*(int32_t*)pC[k] = 0x40570F + ((0) << 19) + ((j-8+k*2) <<28);
-					pC[k] += 4;
+					pC[k] += _jit_xorps_m(pC[k], 0, AX, (j-8+k*2) <<4);
 				}
 				if(j==0) {
-					*(int32_t*)pC[MEM_XP] = 0x40570F + ((0) << 19) + ((-8+MEM_XP*2) <<28);
-					pC[MEM_XP] += 4;
+					pC[MEM_XP] += _jit_xorps_m(pC[MEM_XP], 0, AX, (-8+MEM_XP*2) <<4);
 				} else {
-					*(int32_t*)pC[MEM_XP] = 0xC0570F + ((0) <<19) + ((3) <<16);
-					pC[MEM_XP] += 3;
+					pC[MEM_XP] += _jit_xorps_r(pC[MEM_XP], 0, 3);
 				}
 
 				for(k=0; k<2; k++) {
-					*(int32_t*)pC[k+MEM_XP+1] = 0xC0570F + ((0) <<19) + ((j+4+k*2) <<16);
-					pC[k+MEM_XP+1] += 3;
+					pC[k+MEM_XP+1] += _jit_xorps_r(pC[k+MEM_XP+1], 0, j+4+k*2);
 				}
 #ifdef AMD64
 				// registers64
 				for(k=0; k<4; k++) {
-					*(int32_t*)pC[k+4] = 0xC0570F41 + ((0) <<27) + ((j+k*2) <<24);
-					pC[k+4] += 4;
+					pC[k+4] += _jit_xorps_r(pC[k+4], 0, j+8+k*2);
 				}
 #endif
 				// transformations (XORPS -> MOVAPS)
@@ -857,29 +824,21 @@ void gf_w16_xor_create_jit_lut() {
 			if(m & 2) {
 				// (PXOR)
 				for(k=0; k<MEM_XP; k++) {
-					*(int32_t*)pC[k] = 0x40EF0F66 + (1 << 27);
-					pC[k][4] = (j-8+k*2) << 4;
-					pC[k] += 5;
+					pC[k] += _jit_pxor_m(pC[k], 1, AX, (j-8+k*2) <<4);
 				}
 				if(j==0) {
-					*(int32_t*)pC[MEM_XP] = 0x40EF0F66 + (1 << 27);
-					pC[MEM_XP][4] = (-8+MEM_XP*2) << 4;
-					pC[MEM_XP] += 5;
+					pC[MEM_XP] += _jit_pxor_m(pC[MEM_XP], 1, AX, (-8+MEM_XP*2) <<4);
 				} else {
-					*(int32_t*)pC[MEM_XP] = 0xC0EF0F66 + (1 <<27) + ((3) <<24);
-					pC[MEM_XP] += 4;
+					pC[MEM_XP] += _jit_pxor_r(pC[MEM_XP], 1, 3);
 				}
-				
+
 				for(k=0; k<2; k++) {
-					*(int32_t*)pC[k+MEM_XP+1] = 0xC0EF0F66 + (1 <<27) + ((j+4+k*2) <<24);
-					pC[k+MEM_XP+1] += 4;
+					pC[k+MEM_XP+1] += _jit_pxor_r(pC[k+MEM_XP+1], 1, j+4+k*2);
 				}
 #ifdef AMD64
 				// registers64
 				for(k=0; k<4; k++) {
-					*(int32_t*)pC[k+4] = 0xEF0F4166;
-					pC[k+4][4] = 0xC0 + (1 <<3) + j+k*2;
-					pC[k+4] += 5;
+					pC[k+4] += _jit_pxor_r(pC[k+4], 1, j+8+k*2);
 				}
 #endif
 				
@@ -894,7 +853,6 @@ void gf_w16_xor_create_jit_lut() {
 			
 			m >>= 2;
 		}
-		#undef MEM_XP
 		
 		xor_jit_clut_ncinfo_mem[i] = posM[0] | (posM[1] << 8) | (posM[2] << 12);
 		xor_jit_clut_ncinfo_reg[i] = posR[0] | (posR[1] << 8) | (posR[2] << 12);
@@ -902,6 +860,8 @@ void gf_w16_xor_create_jit_lut() {
 		
 	}
 #endif
+	#undef MEM_XP
+	#undef MEM_XT
 }
 
 /* tune flags set by GCC; not ideal, but good enough I guess (note, I don't care about anything older than Core2) */
