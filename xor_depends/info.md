@@ -220,7 +220,9 @@ operations. Also, the 3 operand XOR operations could be useful for eliminating
 MOV instructions if optimal sequences (above) are to be used. AVX512’s 32
 registers may also give a very minor boost by allowing all 16 inputs to be
 cached, and provide ample temporary storage to handle the case when the source
-and destination buffers are the same.
+and destination buffers are the same. The ternary logic instruction, if it ends
+up being as fast as a VPXOR, could cut the number of required operations in
+half.
 
 The downside is that 256 bit operations would require processing to be performed
 on rather large 512 byte blocks. Various parts of the current implementation
