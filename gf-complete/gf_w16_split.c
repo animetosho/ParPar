@@ -1,10 +1,4 @@
 
-#ifdef _MSC_VER
-#define ALIGN(_a, v) __declspec(align(_a)) v
-#else
-#define ALIGN(_a, v) v __attribute__((aligned(_a)))
-#endif
-
 
 /* src can be the same as dest */
 static void _FN(gf_w16_split_start)(void* src, int bytes, void* dest) {
