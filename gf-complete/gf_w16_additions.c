@@ -1127,28 +1127,28 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
 #endif
 
     if(setup_stack) {
-      _jit_push(jit, BP);
-      _jit_mov_r(jit, BP, SP);
+      jit->ptr += _jit_push(jit->ptr, BP);
+      jit->ptr += _jit_mov_r(jit->ptr, BP, SP);
       /* align pointer (avoid SP because stuff is encoded differently with it) */
-      _jit_mov_r(jit, AX, SP);
-      _jit_and_i(jit, AX, 0xF);
-      _jit_sub_r(jit, BP, AX);
+      jit->ptr += _jit_mov_r(jit->ptr, AX, SP);
+      jit->ptr += _jit_and_i(jit->ptr, AX, 0xF);
+      jit->ptr += _jit_sub_r(jit->ptr, BP, AX);
       
 #ifdef SAVE_XMM
       /* make Windows happy and save XMM6-15 registers */
       /* ideally should be done by this function, not JIT code, but MSVC has a convenient policy of no inline ASM */
       for(i=6; i<16; i++)
-        _jit_movaps_store(jit, BP, -((int32_t)i-5)*16, i);
+        jit->ptr += _jit_movaps_store(jit->ptr, BP, -((int32_t)i-5)*16, i);
 #endif
     }
     
     /* adding 128 to the destination pointer allows the register offset to be coded in 1 byte
      * eg: 'movdqa xmm0, [rdx+0x90]' is 8 bytes, whilst 'movdqa xmm0, [rdx-0x60]' is 5 bytes */
-    _jit_mov_i(jit, AX, (intptr_t)rd.s_start + 128);
-    _jit_mov_i(jit, DX, (intptr_t)rd.d_start + 128);
-    _jit_mov_i(jit, CX, (intptr_t)rd.d_top + 128);
+    jit->ptr += _jit_mov_i(jit->ptr, AX, (intptr_t)rd.s_start + 128);
+    jit->ptr += _jit_mov_i(jit->ptr, DX, (intptr_t)rd.d_start + 128);
+    jit->ptr += _jit_mov_i(jit->ptr, CX, (intptr_t)rd.d_top + 128);
     
-    _jit_align32(jit);
+    jit->ptr += _jit_align32(jit->ptr);
     pos_startloop = jit->ptr;
     
     
@@ -1323,8 +1323,8 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
 #ifndef AMD64
         /*temp storage*/
         for(bit=0; bit<8; bit+=2) {
-          _jit_movaps_store(jit, BP, -(bit<<4) -16, bit);
-          _jit_movdqa_store(jit, BP, -((bit+1)<<4) -16, bit+1);
+          jit->ptr += _jit_movaps_store(jit->ptr, BP, -(bit<<4) -16, bit);
+          jit->ptr += _jit_movdqa_store(jit->ptr, BP, -((bit+1)<<4) -16, bit+1);
         }
         for(; bit<16; bit+=2) {
           int destOffs = (bit<<4)-128;
@@ -1360,8 +1360,8 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
 #ifndef AMD64
         /*temp storage*/
         for(bit=0; bit<8; bit+=2) {
-          _jit_movaps_store(jit, BP, -((int32_t)bit<<4) -16, bit);
-          _jit_movdqa_store(jit, BP, -(((int32_t)bit+1)<<4) -16, bit+1);
+          jit->ptr += _jit_movaps_store(jit->ptr, BP, -((int32_t)bit<<4) -16, bit);
+          jit->ptr += _jit_movdqa_store(jit->ptr, BP, -(((int32_t)bit+1)<<4) -16, bit+1);
         }
 #endif
         for(bit=8; bit<16; bit+=2) {
@@ -1400,7 +1400,7 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
       }
       /* copy temp */
       for(bit=0; bit<8; bit++) {
-        _jit_movaps_load(jit, 0, BP, -((int32_t)bit<<4) -16);
+        jit->ptr += _jit_movaps_load(jit->ptr, 0, BP, -((int32_t)bit<<4) -16);
         _ST_APS(DX, (bit<<4)-128, 0);
       }
 #endif
@@ -1578,21 +1578,21 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
       }
     }
     
-    _jit_add_i(jit, AX, 256);
-    _jit_add_i(jit, DX, 256);
+    jit->ptr += _jit_add_i(jit->ptr, AX, 256);
+    jit->ptr += _jit_add_i(jit->ptr, DX, 256);
     
-    _jit_cmp_r(jit, DX, CX);
-    _jit_jcc(jit, JL, pos_startloop);
+    jit->ptr += _jit_cmp_r(jit->ptr, DX, CX);
+    jit->ptr += _jit_jcc(jit->ptr, JL, pos_startloop);
     
 #ifdef SAVE_XMM
     for(i=6; i<16; i++)
-      _jit_movaps_load(jit, i, BP, -((int32_t)i-5)*16);
+      jit->ptr += _jit_movaps_load(jit->ptr, i, BP, -((int32_t)i-5)*16);
 #endif
 #undef SAVE_XMM
     if(setup_stack)
-      _jit_pop(jit, BP);
+      jit->ptr += _jit_pop(jit->ptr, BP);
     
-    _jit_ret(jit);
+    jit->ptr += _jit_ret(jit->ptr);
     
     // exec
     (*(void(*)(void))jit->code)();
