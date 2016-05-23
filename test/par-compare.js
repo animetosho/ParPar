@@ -290,6 +290,12 @@ async.eachSeries([
 		blocks: 99,
 		singleFile: true
 	},
+	{
+		in: [tmpDir + 'test1b.bin', tmpDir + 'test8b.bin'],
+		blockSize: 8,
+		blocks: 2,
+		singleFile: true
+	},
 	
 ], function(test, cb) {
 	console.log('Testing: ', test);
