@@ -28,6 +28,9 @@
         }, {
           "cflags": ["-march=native","-Wall","-Wpointer-arith","-O3"],
           "ldflags": []
+        }],
+        ['OS=="win" and target_arch=="x64"', {
+          "sources": ["gf-complete/gf_w16_xor_jit_stub_masm64.asm"]
         }]
       ]
     }
