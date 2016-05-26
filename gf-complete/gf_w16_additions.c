@@ -902,13 +902,13 @@ extern void gf_w16_xor_jit_stub(intptr_t src, intptr_t dEnd, intptr_t dest, void
 void gf_w16_xor_jit_stub(intptr_t src, intptr_t dEnd, intptr_t dest, void* fn) {
 	asm volatile(
 		"leaq -8(%%rsp), %%r10\n"
-		"movq %%r10, %%rbx\n"
+		"movq %%r10, %%rsi\n"
 		/* we can probably assume that rsp mod 16 == 8, but will always realign for extra safety(tm) */
-		"andq 0xF, %%r10\n"
-		"subq %%r10, %%rbx\n"
+		"andq $0xF, %%r10\n"
+		"subq %%r10, %%rsi\n"
 		"callq *%[f]\n"
 		: "+a"(src), "+d"(dest) : "c"(dEnd), [f]"r"(fn)
-		: "%rbx", "%r10", "%xmm0", "%xmm1", "%xmm2", "%xmm3", "%xmm4", "%xmm5", "%xmm6", "%xmm7", "%xmm8", "%xmm9", "%xmm10", "%xmm11", "%xmm12", "%xmm13", "%xmm14", "%xmm15"
+		: "%rsi", "%r10", "%xmm0", "%xmm1", "%xmm2", "%xmm3", "%xmm4", "%xmm5", "%xmm6", "%xmm7", "%xmm8", "%xmm9", "%xmm10", "%xmm11", "%xmm12", "%xmm13", "%xmm14", "%xmm15"
 	);
 }
 # endif
@@ -916,24 +916,24 @@ void gf_w16_xor_jit_stub(intptr_t src, intptr_t dEnd, intptr_t dest, void* fn) {
 # ifdef _MSC_VER
 void gf_w16_xor_jit_stub(intptr_t src, intptr_t dEnd, intptr_t dest, intptr_t fn) {
 	__asm {
-		push ebx
-		lea ebx, [esp-4]
-		and ebx, 0FFFFFFF0h
+		push esi
+		lea esi, [esp-4]
+		and esi, 0FFFFFFF0h
 		mov eax, src
 		mov ecx, dEnd
 		mov edx, dest
 		call fn
-		pop ebx
+		pop esi
 	}
 }
 # else
 void gf_w16_xor_jit_stub(intptr_t src, intptr_t dEnd, intptr_t dest, void* fn) {
 	asm volatile(
-		"leal -4(%%esp), %%ebp\n"
-		"andl 0xFFFFFFF0, %%ebp\n"
+		"leal -4(%%esp), %%esi\n"
+		"andl $0xFFFFFFF0, %%esi\n"
 		"calll *%[f]\n"
 		: "+a"(src), "+d"(dest) : "c"(dEnd), [f]"r"(fn)
-		: "%ebx", "%xmm0", "%xmm1", "%xmm2", "%xmm3", "%xmm4", "%xmm5", "%xmm6", "%xmm7", "%xmm8", "%xmm9", "%xmm10", "%xmm11", "%xmm12", "%xmm13", "%xmm14", "%xmm15"
+		: "%esi", "%xmm0", "%xmm1", "%xmm2", "%xmm3", "%xmm4", "%xmm5", "%xmm6", "%xmm7"
 	);
 }
 # endif
@@ -1325,8 +1325,8 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
 #ifndef AMD64
         /*temp storage*/
         for(bit=0; bit<8; bit+=2) {
-          jitptr += _jit_movaps_store(jitptr, BX, -(bit<<4) -16, bit);
-          jitptr += _jit_movdqa_store(jitptr, BX, -((bit+1)<<4) -16, bit+1);
+          jitptr += _jit_movaps_store(jitptr, SI, -(bit<<4) -16, bit);
+          jitptr += _jit_movdqa_store(jitptr, SI, -((bit+1)<<4) -16, bit+1);
         }
         for(; bit<16; bit+=2) {
           int destOffs = (bit<<4)-128;
@@ -1362,8 +1362,8 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
 #ifndef AMD64
         /*temp storage*/
         for(bit=0; bit<8; bit+=2) {
-          jitptr += _jit_movaps_store(jitptr, BX, -((int32_t)bit<<4) -16, bit);
-          jitptr += _jit_movdqa_store(jitptr, BX, -(((int32_t)bit+1)<<4) -16, bit+1);
+          jitptr += _jit_movaps_store(jitptr, SI, -((int32_t)bit<<4) -16, bit);
+          jitptr += _jit_movdqa_store(jitptr, SI, -(((int32_t)bit+1)<<4) -16, bit+1);
         }
 #endif
         for(bit=8; bit<16; bit+=2) {
@@ -1402,7 +1402,7 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
       }
       /* copy temp */
       for(bit=0; bit<8; bit++) {
-        jitptr += _jit_movaps_load(jitptr, 0, BX, -((int32_t)bit<<4) -16);
+        jitptr += _jit_movaps_load(jitptr, 0, SI, -((int32_t)bit<<4) -16);
         _ST_APS(DX, (bit<<4)-128, 0);
       }
 #endif
