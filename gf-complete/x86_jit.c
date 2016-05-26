@@ -29,9 +29,6 @@
     defined(_M_AMD64  ) || \
     defined(_WIN64    )
 	#define AMD64 1
-	#define RXX_PREFIX size_t p = 1; *(jit++) = 0x48;
-#else
-	#define RXX_PREFIX size_t p = 0;
 #endif
 
 #ifdef _MSC_VER
@@ -44,6 +41,14 @@ static inline size_t _jit_rex_pref(uint8_t** jit, uint8_t xreg, uint8_t xreg2) {
 		*((*jit)++) = 0x40 | (xreg2 >>3) | ((xreg >>1)&4);
 		return 1;
 	}
+#endif
+	return 0;
+}
+
+static inline size_t _jit_rxx_pref(uint8_t** jit, uint8_t reg, uint8_t reg2) {
+#ifdef AMD64
+	*((*jit)++) = 0x48 | (reg >>3) | ((reg2 >>1)&4);
+	return 1;
 #endif
 	return 0;
 }
@@ -281,43 +286,54 @@ static inline size_t _jit_jcc(uint8_t* jit, char op, uint8_t* addr) {
 	}
 }
 static inline size_t _jit_cmp_r(uint8_t* jit, uint8_t reg, uint8_t reg2) {
-	RXX_PREFIX
+	size_t p = _jit_rxx_pref(&jit, reg, reg2);
+	reg &= 7;
+	reg2 &= 7;
 	*(int16_t*)jit = 0xC039 | (reg2 << 11) | (reg << 8);
 	return p+2;
 }
 static inline size_t _jit_add_i(uint8_t* jit, uint8_t reg, int32_t val) {
-	RXX_PREFIX
+	size_t p = _jit_rxx_pref(&jit, reg, 0);
+	reg &= 7;
 	*(int16_t*)jit = 0xC081 | (reg << 8);
 	jit += 2;
 	*(int32_t*)jit = val;
 	return p+6;
 }
 static inline size_t _jit_sub_i(uint8_t* jit, uint8_t reg, int32_t val) {
-	RXX_PREFIX
+	size_t p = _jit_rxx_pref(&jit, reg, 0);
+	reg &= 7;
 	*(int16_t*)jit = 0xC083 | (reg << 8);
 	jit += 2;
 	*(int32_t*)jit = val;
 	return p+6;
 }
 static inline size_t _jit_sub_r(uint8_t* jit, uint8_t reg, uint8_t reg2) {
-	RXX_PREFIX
+	size_t p = _jit_rxx_pref(&jit, reg, reg2);
+	reg &= 7;
+	reg2 &= 7;
 	*(int16_t*)jit = 0xC029 | (reg2 << 11) | (reg << 8);
 	return p+2;
 }
 static inline size_t _jit_and_i(uint8_t* jit, uint8_t reg, int32_t val) {
-	RXX_PREFIX
+	size_t p = _jit_rxx_pref(&jit, reg, 0);
+	reg &= 7;
 	*(int16_t*)jit = 0xE081 | (reg << 11);
 	jit += 2;
 	*(int32_t*)jit = val;
 	return p+6;
 }
 static inline size_t _jit_xor_r(uint8_t* jit, uint8_t reg, uint8_t reg2) {
-	RXX_PREFIX
+	size_t p = _jit_rxx_pref(&jit, reg, reg2);
+	reg &= 7;
+	reg2 &= 7;
 	*(int16_t*)jit = 0xC031 | (reg2 << 11) | (reg << 8);
 	return p+2;
 }
 static inline size_t _jit_xor_m(uint8_t* jit, uint8_t reg, uint8_t mreg, int32_t offs) {
-	RXX_PREFIX
+	size_t p = _jit_rxx_pref(&jit, mreg, reg);
+	reg &= 7;
+	mreg &= 7;
 	if((offs+128) & ~0xFF) {
 		*(int16_t*)jit = 0x8033 | (reg <<11) | (mreg << 8);
 		*(int32_t*)(jit +2) = offs;
@@ -332,7 +348,9 @@ static inline size_t _jit_xor_m(uint8_t* jit, uint8_t reg, uint8_t mreg, int32_t
 	}
 }
 static inline size_t _jit_xor_rm(uint8_t* jit, uint8_t mreg, int32_t offs, uint8_t reg) {
-	RXX_PREFIX
+	size_t p = _jit_rxx_pref(&jit, mreg, reg);
+	reg &= 7;
+	mreg &= 7;
 	if((offs+128) & ~0xFF) {
 		*(int16_t*)jit = 0x8031 | (reg <<11) | (mreg << 8);
 		*(int32_t*)(jit +2) = offs;
@@ -348,12 +366,14 @@ static inline size_t _jit_xor_rm(uint8_t* jit, uint8_t mreg, int32_t offs, uint8
 }
 static inline size_t _jit_mov_i(uint8_t* jit, uint8_t reg, intptr_t val) {
 #ifdef AMD64
+	_jit_rxx_pref(&jit, reg, 0);
+	reg &= 7;
 	if(val > 0x3fffffff || val < 0x40000000) {
-		*(int16_t*)jit = 0xB848 | (reg << 8);
+		*(int16_t*)jit = 0xB8 | reg;
 		*(int64_t*)(jit +2) = val;
 		return 10;
 	} else {
-		*(int32_t*)jit = 0xC0C748 | (reg << 16);
+		*(int32_t*)jit = 0xC0C7 | (reg << 8);
 		*(int32_t*)(jit +3) = (int32_t)val;
 		return 7;
 	}
@@ -364,12 +384,16 @@ static inline size_t _jit_mov_i(uint8_t* jit, uint8_t reg, intptr_t val) {
 #endif
 }
 static inline size_t _jit_mov_r(uint8_t* jit, uint8_t reg, uint8_t reg2) {
-	RXX_PREFIX
+	size_t p = _jit_rxx_pref(&jit, reg, reg2);
+	reg &= 7;
+	reg2 &= 7;
 	*(int16_t*)jit = 0xC089 | (reg2 << 11) | (reg << 8);
 	return p+2;
 }
 static inline size_t _jit_mov_load(uint8_t* jit, uint8_t reg, uint8_t mreg, int32_t offs) {
-	RXX_PREFIX
+	size_t p = _jit_rxx_pref(&jit, mreg, reg);
+	reg &= 7;
+	mreg &= 7;
 	if((offs+128) & ~0xFF) {
 		*(int16_t*)jit = 0x808B | (reg <<11) | (mreg << 8);
 		*(int32_t*)(jit +2) = offs;
@@ -384,7 +408,9 @@ static inline size_t _jit_mov_load(uint8_t* jit, uint8_t reg, uint8_t mreg, int3
 	}
 }
 static inline size_t _jit_mov_store(uint8_t* jit, uint8_t mreg, int32_t offs, uint8_t reg) {
-	RXX_PREFIX
+	size_t p = _jit_rxx_pref(&jit, mreg, reg);
+	reg &= 7;
+	mreg &= 7;
 	if((offs+128) & ~0xFF) {
 		*(int16_t*)jit = 0x8089 | (reg <<11) | (mreg << 8);
 		*(int32_t*)(jit +2) = offs;
