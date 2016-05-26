@@ -16,9 +16,10 @@
 #include <string.h>
 
 typedef struct {
-	uint8_t* ptr;
 	size_t len;
 	uint8_t* code;
+	uint8_t* pNorm;
+	uint8_t* pTemp;
 } jit_t;
 
 typedef struct {

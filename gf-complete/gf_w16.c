@@ -648,8 +648,11 @@ int gf_w16_xor_init(gf_t *gf)
   
   /* alloc JIT region */
   jit->code = jit_alloc(jit->len = 4096); /* 4KB should be enough for everyone */
-  /* pre-calc JIT lookup tables */
-  gf_w16_xor_create_jit_lut();
+  if(jit->code) {
+    /* pre-calc JIT lookup tables */
+    gf_w16_xor_create_jit_lut();
+    gf_w16_xor_init_jit(jit);
+  }
   
   /* if JIT allocation was successful (no W^X issue), use slightly faster JIT version, otherwise fall back to static code version */
   gf->multiply_region.w32 = jit->code ? gf_w16_xor_lazy_sse_jit_altmap_multiply_region : gf_w16_xor_lazy_sse_altmap_multiply_region;
