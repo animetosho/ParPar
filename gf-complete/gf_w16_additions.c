@@ -647,6 +647,22 @@ static void gf_w16_xor_lazy_sse_altmap_multiply_region(gf_t *gf, void *src, void
 
 #include "x86_jit.c"
 
+/* modified versions of PXOR/XORPS mem to have fixed sized instructions */
+static inline size_t _jit_pxor_mod(uint8_t* jit, uint8_t xreg, uint8_t mreg, int32_t offs) {
+	*(jit++) = 0x66;
+	size_t p = _jit_rex_pref(&jit, xreg, 0) +1;
+	xreg &= 7;
+	*(int32_t*)jit = 0x40EF0F | (xreg <<19) | (mreg <<16);
+	jit[3] = (uint8_t)offs;
+	return p+4;
+}
+static inline size_t _jit_xorps_mod(uint8_t* jit, uint8_t xreg, uint8_t mreg, int32_t offs) {
+	size_t p = _jit_rex_pref(&jit, xreg, 0);
+	xreg &= 7;
+	*(int32_t*)jit = 0x40570F | (xreg <<19) | (mreg <<16) | (offs <<24);
+	return p+4;
+}
+
 /* code lookup tables for XOR-JIT; align to 64 to maximize cache line usage */
 ALIGN(64, __m128i xor_jit_clut_code1[64]);
 ALIGN(64, __m128i xor_jit_clut_code2[64]);
@@ -714,7 +730,7 @@ void gf_w16_xor_create_jit_lut() {
 			if(msk == 1) {
 				// (XORPS)
 				for(k=0; k<MEM_XT; k++)
-					pC[k] += _jit_xorps_m(pC[k], 0, AX, (j-8 + k*3) <<4);
+					pC[k] += _jit_xorps_mod(pC[k], 0, AX, (j-8 + k*3) <<4);
 #ifdef AMD64
 				pC[1] += _jit_xorps_r(pC[1], 0, j+3);
 				pC[3] += _jit_xorps_r(pC[3], 0, j+8);
@@ -725,7 +741,7 @@ void gf_w16_xor_create_jit_lut() {
 				}
 #else
 				if(i < 16) {
-					pC[3] += _jit_xorps_m(pC[3], 0, AX, (j+1) <<4);
+					pC[3] += _jit_xorps_mod(pC[3], 0, AX, (j+1) <<4);
 					pC[5] += _jit_xorps_r(pC[5], 0, j+6);
 				}
 				pC[4] += _jit_xorps_r(pC[4], 0, j+3);
@@ -739,7 +755,7 @@ void gf_w16_xor_create_jit_lut() {
 				
 				// (PXOR)
 				for(k=0; k<MEM_XT; k++)
-					pC[k] += _jit_pxor_m(pC[k], reg, AX, (j-8 + k*3) <<4);
+					pC[k] += _jit_pxor_mod(pC[k], reg, AX, (j-8 + k*3) <<4);
 #ifdef AMD64
 				pC[1] += _jit_pxor_r(pC[1], reg, j+3);
 				pC[3] += _jit_pxor_r(pC[3], reg, j+8);
@@ -750,7 +766,7 @@ void gf_w16_xor_create_jit_lut() {
 				}
 #else
 				if(i < 16) {
-					pC[3] += _jit_pxor_m(pC[3], reg, AX, (j+1) <<4);
+					pC[3] += _jit_pxor_mod(pC[3], reg, AX, (j+1) <<4);
 					pC[5] += _jit_pxor_r(pC[5], reg, j+6);
 				}
 				pC[4] += _jit_pxor_r(pC[4], reg, j+3);
