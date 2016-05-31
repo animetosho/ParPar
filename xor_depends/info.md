@@ -434,6 +434,20 @@ Notes:
 -   XOR\_DEPENDS (JIT) does not perform as well on 32 bit builds as it does
     here, due to fewer XMM registers being available for caching
 
+-   some processor specific optimisations are used in XOR\_DEPENDS JIT code.
+    These optimisations predominantly affect smaller region sizes:
+
+    -   on Intel Core 2 (as well as first gen Atom), 128-bit unaligned stores
+        are done via 64-bit instructions as they are faster than a MOVDQU
+        instruction
+
+    -   on Intel Nehalem and newer (Core iX processors), JIT’d code is written
+        to a temporary location then copied across to the destination. This
+        reduces “machine clear” events due to SMC triggers and improves
+        performance significantly
+
+-   AVX is used if supported by the CPU (GF-Complete does this by default)
+
 -   a few optimisations have been applied to the SPLIT\_TABLE(16,4)
     implementation:
 
@@ -467,15 +481,15 @@ instruction, hence XOR\_DEPENDS usually comes out on top  
 Intel Silvermont
 ----------------
 
--   CPU: Intel Atom C2750 @2.4GHz
+-   CPU: Intel Atom C2350 @2.0GHz
 
-    -   24KB L1 cache, 4MB shared L2 cache, SSE2 and SSSE3 supported
+    -   24KB L1 cache, 1MB shared L2 cache, SSE2 and SSSE3 supported
 
--   RAM: 8GB DDR3 1600MHz dual channel
+-   RAM: 4GB DDR3 1600MHz
 
 -   Compiler: GCC 4.9.2
 
-![](<AtomC2750.png>)
+![](<AtomC2350.png>)
 
 **Comment**: It seems like SPLIT\_TABLE(16,4) is *really* slow on the Atom, only
 slightly faster than SPLIT\_TABLE(16,8), probably due to the `pshufb`
@@ -513,7 +527,7 @@ Intel Sandy Bridge
 
 -   RAM: 4GB DDR3 1333MHz dual channel
 
--   Compiler: GCC 4.8.2
+-   Compiler: GCC 5.2.1
 
 ![](<CoreI2400.png>)
 
@@ -530,8 +544,6 @@ A small, rough alteration to the *gf\_time* tool to run tests in 4 threads.
 Region data is no longer randomised to try to keep cores maximally loaded with
 calculations we wish to benchmark.
 
-![](<AtomC2750mt.png>)
-
 ![](<Phenom9950mt.png>)
 
 ![](<CoreI2400mt.png>)
@@ -540,6 +552,10 @@ calculations we wish to benchmark.
 
 Patch
 =====
+
+**This patch is now out of date as I can’t be bothered maintaining it; the
+latest implementation can be found in ParPar. If anyone is interested in such a
+patch, raise a Github issue.**
 
 A rather hacky patch for GF-Complete, which should apply cleanly to the v2 tag,
 can be [found here](<gfc.patch>).
