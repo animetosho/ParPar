@@ -1,5 +1,6 @@
 
 int has_ssse3 = 0;
+int has_slow_shuffle = 0;
 int has_pclmul = 0;
 int has_avx2 = 0;
 int has_avx512bw = 0;
@@ -41,12 +42,11 @@ void detect_cpu(void) {
 		/* from handy table at http://a4lg.com/tech/x86/database/x86-families-and-models.en.html */
 		if(model == 0x1C || model == 0x26 || model == 0x27 || model == 0x35 || model == 0x36 || model == 0x37 || model == 0x4A || model == 0x4D) {
 			/* we have a Bonnell/Silvermont CPU with a really slow pshufb instruction; pretend SSSE3 doesn't exist, as XOR_DEPENDS is much faster */
-			has_ssse3 = 0;
+			has_slow_shuffle = 2048;
 		}
 		if(model == 0x0F || model == 0x16) {
 			/* Conroe CPU with relatively slow pshufb; pretend SSSE3 doesn't exist, as XOR_DEPENDS is generally faster */
-			/* TODO: SPLIT4 is still faster for small blocksizes, so should prefer it then */
-			has_ssse3 = 0;
+			has_slow_shuffle = 16384;
 		}
 	}
 
@@ -687,7 +687,7 @@ ALIGN(16, uint16_t xor_jit_clut_ncinfo_reg[15]);
 
 int xor_jit_created = 0;
 
-void gf_w16_xor_create_jit_lut() {
+void gf_w16_xor_create_jit_lut(void) {
 	FAST_U32 i;
 	int j;
 	
@@ -930,7 +930,7 @@ void gf_w16_xor_jit_stub(intptr_t src, intptr_t dEnd, intptr_t dest, void* fn) {
 # endif
 #else
 # ifdef _MSC_VER
-void gf_w16_xor_jit_stub(intptr_t src, intptr_t dEnd, intptr_t dest, intptr_t fn) {
+void gf_w16_xor_jit_stub(intptr_t src, intptr_t dEnd, intptr_t dest, void* fn) {
 	__asm {
 		push esi
 		lea esi, [esp-4]
@@ -979,7 +979,7 @@ static inline void STOREU_XMM(void* dest, __m128i xmm) {
 	#define CMOV(c, d, s) if(c) (d) = (s)
 #endif
 
-static FAST_U16 inline xor_jit_bitpair3(uint8_t* dest, FAST_U32 mask, __m128i* tCode, uint16_t* tInfo, long* posC, FAST_U8* movC, FAST_U8 isR64) {
+static FAST_U16 inline xor_jit_bitpair3(uint8_t* dest, FAST_U32 mask, __m128i* tCode, uint16_t* tInfo, FAST_U16* posC, FAST_U8* movC, FAST_U8 isR64) {
     FAST_U16 info = tInfo[mask>>1];
     FAST_U8 pC = info >> 12;
     
@@ -994,7 +994,7 @@ static FAST_U16 inline xor_jit_bitpair3(uint8_t* dest, FAST_U32 mask, __m128i* t
     return info;
 }
 
-static FAST_U16 inline xor_jit_bitpair3_noxor(uint8_t* dest, FAST_U16 info, long* pos1, FAST_U8* mov1, long* pos2, FAST_U8* mov2, int isR64) {
+static FAST_U16 inline xor_jit_bitpair3_noxor(uint8_t* dest, FAST_U16 info, FAST_U16* pos1, FAST_U8* mov1, FAST_U16* pos2, FAST_U8* mov2, int isR64) {
     FAST_U8 p1 = (info >> 4) & 0xF;
     FAST_U8 p2 = (info >> 8) & 0xF;
     CMOV(*mov1, *pos1, p1+isR64);
@@ -1006,7 +1006,7 @@ static FAST_U16 inline xor_jit_bitpair3_noxor(uint8_t* dest, FAST_U16 info, long
     return info & 0xF;
 }
 
-static FAST_U16 inline xor_jit_bitpair3_nc_noxor(uint8_t* dest, FAST_U16 info, long* pos1, FAST_U8* mov1, long* pos2, FAST_U8* mov2, int isR64) {
+static FAST_U16 inline xor_jit_bitpair3_nc_noxor(uint8_t* dest, FAST_U16 info, FAST_U16* pos1, FAST_U8* mov1, FAST_U16* pos2, FAST_U8* mov2, int isR64) {
     FAST_U8 p1 = (info >> 8) & 0xF;
     FAST_U8 p2 = info >> 12;
     CMOV(*mov1, *pos1, p1+isR64);
@@ -1460,7 +1460,7 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
           int destOffs = (bit<<5)-128;
           int destOffs2 = destOffs+16;
           FAST_U8 movC = 0xFF;
-          long posC = 0;
+          FAST_U16 posC = 0;
           FAST_U32 mask = lumask[bit];
           _LD_APS(0, DX, destOffs);
           _LD_DQA(1, DX, destOffs2);
@@ -1529,7 +1529,7 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
           int destOffs2 = destOffs+16;
           FAST_U8 mov1 = 0xFF, mov2 = 0xFF,
                   movC = 0xFF;
-          long pos1 = 0, pos2 = 0, posC = 0;
+          FAST_U16 pos1 = 0, pos2 = 0, posC = 0;
           FAST_U32 mask = lumask[bit];
           
           if(no_common_mask & 1) {

@@ -706,7 +706,7 @@ int gf_w16_init(gf_t *gf)
 #ifdef INTEL_SSE2
   if(h->mult_type == GF_MULT_XOR_DEPENDS || (h->mult_type == GF_MULT_DEFAULT && (h->region_type & GF_REGION_ALTMAP) && (
     /* XOR_JIT is generally faster for ~128KB blocks */
-    !has_ssse3 || (
+    !has_ssse3 || (has_slow_shuffle && (!h->size_hint || h->size_hint > has_slow_shuffle)) || (
       /*h->size_hint && h->size_hint >= 112*1024*/ 0 // TODO: test ideal conditions for this
       && !has_avx2 && !has_avx512bw
       && FAST_U8_SIZE == 8 /* TODO: test speeds on 32-bit platform */
