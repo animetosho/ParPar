@@ -140,26 +140,29 @@ static void setup_gf() {
 	// TODO: this needs to be variable depending on the CPU cache size
 	// although these defaults are pretty good across most CPUs
 	if(!CHUNK_SIZE) {
+		int minChunkTarget;
 		switch(gf[0].mult_method) {
 			case GF_XOR_JIT_SSE2: /* JIT is a little slow, so larger blocks make things faster */
-				if(size_hint) {
-					/* try to keep in range 112-224KB */
-					CHUNK_SIZE = 128*1024;
-					int numChunks = (size_hint / CHUNK_SIZE) + ((size_hint % CHUNK_SIZE) ? 1 : 0);
-					if(size_hint / numChunks < 112*1024) {
-						CHUNK_SIZE = size_hint / (numChunks-1) + 1;
-					}
-				} else {
-					CHUNK_SIZE = 128*1024;
-				}
+				CHUNK_SIZE = 128*1024; // half L2 cache?
+				minChunkTarget = 96*1024; // keep in range 96-192KB
 				break;
 			case GF_SPLIT8:
 			case GF_XOR_SSE2:
-				CHUNK_SIZE = 64*1024; // 2* L1 data cache size ?
+				CHUNK_SIZE = 96*1024; // 2* L1 data cache size ?
+				minChunkTarget = 64*1024; // keep in range 64-128KB
 				break;
-			default:
-				CHUNK_SIZE = 48*1024; // ~=L1 data cache size seems to be efficient
+			default: // SPLIT4
+				CHUNK_SIZE = 48*1024; // ~=L1 * 1-2 data cache size seems to be efficient
+				minChunkTarget = 32*1024; // keep in range 32-64KB
 				break;
+		}
+		
+		if(size_hint) {
+			/* try to keep in range */
+			int numChunks = (size_hint / CHUNK_SIZE) + ((size_hint % CHUNK_SIZE) ? 1 : 0);
+			if(size_hint / numChunks < minChunkTarget) {
+				CHUNK_SIZE = size_hint / (numChunks-1) + 1;
+			}
 		}
 	}
 }
