@@ -162,221 +162,55 @@ void gf_w16_log_region_alignment(gf_region_data *rd,
 
 
 #ifdef INTEL_SSE2
-static void gf_w16_xor_start(void* src, int bytes, void* dest) {
-	gf_region_data rd;
-	__m128i *sW;
-	uint16_t *d16, *top16;
-	uint16_t dtmp[128];
-	__m128i ta, tb, lmask, th, tl;
-	int i, j;
-	
-	lmask = _mm_set1_epi16(0xff);
-	
-	if(((uintptr_t)src & 0xF) != ((uintptr_t)dest & 0xF)) {
-		// unaligned version, note that we go by destination alignment
-		gf_set_region_data(&rd, NULL, dest, dest, bytes, 0, 0, 16, 256);
-		
-		memcpy(rd.d_top, (void*)((uintptr_t)src + (uintptr_t)rd.d_top - (uintptr_t)rd.dest), (uintptr_t)rd.dest + rd.bytes - (uintptr_t)rd.d_top);
-		memcpy(rd.dest, src, (uintptr_t)rd.d_start - (uintptr_t)rd.dest);
-		
-		sW = (__m128i*)((uintptr_t)src + (uintptr_t)rd.d_start - (uintptr_t)rd.dest);
-		d16 = (uint16_t*)rd.d_start;
-		top16 = (uint16_t*)rd.d_top;
-		
-		while(d16 != top16) {
-			for(j=0; j<8; j++) {
-				ta = _mm_loadu_si128( sW);
-				tb = _mm_loadu_si128(sW+1);
-				
-				/* split to high/low parts */
-				th = _mm_packus_epi16(
-					_mm_srli_epi16(tb, 8),
-					_mm_srli_epi16(ta, 8)
-				);
-				tl = _mm_packus_epi16(
-					_mm_and_si128(tb, lmask),
-					_mm_and_si128(ta, lmask)
-				);
-				
-				/* save to dest by extracting 16-bit masks */
-				dtmp[0+j] = _mm_movemask_epi8(th);
-				for(i=1; i<8; i++) {
-					th = _mm_slli_epi16(th, 1); // byte shift would be nicer, but ultimately doesn't matter here
-					dtmp[i*8+j] = _mm_movemask_epi8(th);
-				}
-				dtmp[64+j] = _mm_movemask_epi8(tl);
-				for(i=1; i<8; i++) {
-					tl = _mm_slli_epi16(tl, 1);
-					dtmp[64+i*8+j] = _mm_movemask_epi8(tl);
-				}
-				sW += 2;
-			}
-			memcpy(d16, dtmp, sizeof(dtmp));
-			d16 += 128; /*==15*8*/
-		}
-	} else {
-		// standard, aligned version
-		gf_set_region_data(&rd, NULL, src, dest, bytes, 0, 0, 16, 256);
-		
-		
-		if(src != dest) {
-			/* copy end and initial parts */
-			memcpy(rd.d_top, rd.s_top, (uintptr_t)rd.src + rd.bytes - (uintptr_t)rd.s_top);
-			memcpy(rd.dest, rd.src, (uintptr_t)rd.s_start - (uintptr_t)rd.src);
-		}
-		
-		sW = (__m128i*)rd.s_start;
-		d16 = (uint16_t*)rd.d_start;
-		top16 = (uint16_t*)rd.d_top;
-		
-		while(d16 != top16) {
-			for(j=0; j<8; j++) {
-				ta = _mm_load_si128( sW);
-				tb = _mm_load_si128(sW+1);
-				
-				/* split to high/low parts */
-				th = _mm_packus_epi16(
-					_mm_srli_epi16(tb, 8),
-					_mm_srli_epi16(ta, 8)
-				);
-				tl = _mm_packus_epi16(
-					_mm_and_si128(tb, lmask),
-					_mm_and_si128(ta, lmask)
-				);
-				
-				/* save to dest by extracting 16-bit masks */
-				dtmp[0+j] = _mm_movemask_epi8(th);
-				for(i=1; i<8; i++) {
-					th = _mm_slli_epi16(th, 1); // byte shift would be nicer, but ultimately doesn't matter here
-					dtmp[i*8+j] = _mm_movemask_epi8(th);
-				}
-				dtmp[64+j] = _mm_movemask_epi8(tl);
-				for(i=1; i<8; i++) {
-					tl = _mm_slli_epi16(tl, 1);
-					dtmp[64+i*8+j] = _mm_movemask_epi8(tl);
-				}
-				sW += 2;
-			}
-			/* we only really need to copy temp -> dest if src==dest */
-			memcpy(d16, dtmp, sizeof(dtmp));
-			d16 += 128;
-		}
-	}
-}
+#include "x86_jit.c"
 
+#if defined(INTEL_AVX2) && defined(AMD64)
+#define MWORD_SIZE 32
+#define _mword __m256i
+#define _MM(f) _mm256_ ## f
+#define _MMI(f) _mm256_ ## f ## _si256
+#define _FN(f) f ## _avx2
+#define _MM_END _mm256_zeroupper();
 
-static void gf_w16_xor_final(void* src, int bytes, void* dest) {
-	gf_region_data rd;
-	uint16_t *s16, *d16, *top16;
-	__m128i ta, tb, lmask, th, tl;
-	uint16_t dtmp[128];
-	int i, j;
-	
-	/*shut up compiler warning*/
-	th = _mm_setzero_si128();
-	tl = _mm_setzero_si128();
-	
-	if(((uintptr_t)src & 0xF) != ((uintptr_t)dest & 0xF)) {
-		// unaligned version, note that we go by src alignment
-		gf_set_region_data(&rd, NULL, src, src, bytes, 0, 0, 16, 256);
-		
-		memcpy((void*)((uintptr_t)dest + (uintptr_t)rd.s_top - (uintptr_t)rd.src), rd.s_top, (uintptr_t)rd.src + rd.bytes - (uintptr_t)rd.s_top);
-		memcpy(dest, rd.src, (uintptr_t)rd.s_start - (uintptr_t)rd.src);
-		
-		d16 = (uint16_t*)((uintptr_t)dest + (uintptr_t)rd.s_start - (uintptr_t)rd.src);
-	} else {
-		// standard, aligned version
-		gf_set_region_data(&rd, NULL, src, dest, bytes, 0, 0, 16, 256);
-		
-		
-		if(src != dest) {
-			/* copy end and initial parts */
-			memcpy(rd.d_top, rd.s_top, (uintptr_t)rd.src + rd.bytes - (uintptr_t)rd.s_top);
-			memcpy(rd.dest, rd.src, (uintptr_t)rd.s_start - (uintptr_t)rd.src);
-		}
-		
-		d16 = (uint16_t*)rd.d_start;
-	}
-	
-	lmask = _mm_set1_epi16(0xff);
-	s16 = (uint16_t*)rd.s_start;
-	top16 = (uint16_t*)rd.s_top;
-	while(s16 != top16) {
-		for(j=0; j<8; j++) {
-			/* load in pattern: [0011223344556677] [8899AABBCCDDEEFF] */
-			/* MSVC _requires_ a constant so we have to manually unroll this loop */
-			#define MM_INSERT(i) \
-				tl = _mm_insert_epi16(tl, s16[120 - i*8], i); \
-				th = _mm_insert_epi16(th, s16[ 56 - i*8], i)
-			MM_INSERT(0);
-			MM_INSERT(1);
-			MM_INSERT(2);
-			MM_INSERT(3);
-			MM_INSERT(4);
-			MM_INSERT(5);
-			MM_INSERT(6);
-			MM_INSERT(7);
-			#undef MM_INSERT
-			
-			/* swizzle to [0123456789ABCDEF] [0123456789ABCDEF] */
-			ta = _mm_packus_epi16(
-				_mm_srli_epi16(tl, 8),
-				_mm_srli_epi16(th, 8)
-			);
-			tb = _mm_packus_epi16(
-				_mm_and_si128(tl, lmask),
-				_mm_and_si128(th, lmask)
-			);
-			
-			/* extract top bits */
-			dtmp[j*16 + 7] = _mm_movemask_epi8(ta);
-			dtmp[j*16 + 15] = _mm_movemask_epi8(tb);
-			for(i=1; i<8; i++) {
-				ta = _mm_slli_epi16(ta, 1);
-				tb = _mm_slli_epi16(tb, 1);
-				dtmp[j*16 + 7-i] = _mm_movemask_epi8(ta);
-				dtmp[j*16 + 15-i] = _mm_movemask_epi8(tb);
-			}
-			s16++;
-		}
-		/* we only really need to copy temp -> dest if src==dest */
-		memcpy(d16, dtmp, sizeof(dtmp));
-		d16 += 128;
-		s16 += 128 - 8; /*==15*8*/
-	}
-}
-#endif /*INTEL_SSE2*/
+#include "gf_w16_xor.c"
 
-static gf_val_32_t
-#ifdef __GNUC__
-__attribute__ ((unused))
+#undef MWORD_SIZE
+#undef _mword
+#undef _MM
+#undef _MMI
+#undef _FN
+#undef _MM_END
+
+#ifndef FUNC_SELECT
+#define FUNC_SELECT(f) \
+	(has_avx2 ? f ## _avx2 : f ## _sse)
 #endif
-gf_w16_xor_extract_word(gf_t *gf, void *start, int bytes, int index)
-{
-  uint16_t *r16, rv = 0;
-  uint8_t *r8;
-  int i;
-  gf_region_data rd;
 
-  gf_set_region_data(&rd, gf, start, start, bytes, 0, 0, 16, 256);
-  r16 = (uint16_t *) start;
-  if (r16 + index < (uint16_t *) rd.d_start) return r16[index];
-  if (r16 + index >= (uint16_t *) rd.d_top) return r16[index];
-  
-  index -= (((uint16_t *) rd.d_start) - r16);
-  r8 = (uint8_t *) rd.d_start;
-  r8 += (index & ~0x7f)*2; /* advance pointer to correct group */
-  r8 += (index >> 3) & 0xF; /* advance to correct byte */
-  for (i=0; i<16; i++) {
-    rv <<= 1;
-    rv |= (*r8 >> (7-(index & 7)) & 1);
-    r8 += 16;
-  }
-  return rv;
-}
+#endif /*INTEL_AVX2*/
 
 
-#ifdef INTEL_SSE2
+#define MWORD_SIZE 16
+#define _mword __m128i
+#define _MM(f) _mm_ ## f
+#define _MMI(f) _mm_ ## f ## _si128
+#define _FN(f) f ## _sse
+#define _MM_END
+
+#include "gf_w16_xor.c"
+
+#undef MWORD_SIZE
+#undef _mword
+#undef _MM
+#undef _MMI
+#undef _FN
+#undef _MM_END
+
+#ifndef FUNC_SELECT
+#define FUNC_SELECT(f) \
+	(f ## _sse)
+#endif
+
+
 static void gf_w16_xor_lazy_sse_altmap_multiply_region(gf_t *gf, void *src, void *dest, gf_val_32_t val, int bytes, int xor)
 {
   FAST_U32 i, bit;
@@ -645,7 +479,6 @@ static void gf_w16_xor_lazy_sse_altmap_multiply_region(gf_t *gf, void *src, void
   
 }
 
-#include "x86_jit.c"
 
 /* modified versions of PXOR/XORPS mem to have fixed sized instructions */
 static inline size_t _jit_pxor_mod(uint8_t* jit, uint8_t xreg, uint8_t mreg, int32_t offs) {
@@ -664,6 +497,7 @@ static inline size_t _jit_xorps_mod(uint8_t* jit, uint8_t xreg, uint8_t mreg, in
 }
 
 /* code lookup tables for XOR-JIT; align to 64 to maximize cache line usage */
+// TODO: for 32-bit, consider interleaving register sourced items more
 ALIGN(64, __m128i xor_jit_clut_code1[64]);
 ALIGN(64, __m128i xor_jit_clut_code2[64]);
 #ifdef AMD64
@@ -687,7 +521,7 @@ ALIGN(16, uint16_t xor_jit_clut_ncinfo_reg[15]);
 
 int xor_jit_created = 0;
 
-void gf_w16_xor_create_jit_lut(void) {
+void gf_w16_xor_create_jit_lut_sse(void) {
 	FAST_U32 i;
 	int j;
 	
@@ -880,7 +714,7 @@ void gf_w16_xor_create_jit_lut(void) {
 	#undef MEM_XT
 }
 
-void gf_w16_xor_init_jit(jit_t* jit) {
+void gf_w16_xor_init_jit_sse(jit_t* jit) {
 	/* since the 4KB region allocated has more than enough space, we'll segment it into 2x2KB regions
 	 * - first is for "normal" code
 	 * - second is for dealing with the overlap case (where temp variables are needed)
@@ -909,11 +743,33 @@ void gf_w16_xor_init_jit(jit_t* jit) {
 	jit->pTemp = cTemp;
 }
 
+void gf_w16_xor_init_jit_avx2(jit_t* jit) {
+	int i;
+	
+	jit->pNorm = jit->code;
+	jit->pNorm += _jit_add_i(jit->pNorm, AX, 512);
+	jit->pNorm += _jit_add_i(jit->pNorm, DX, 512);
+	
+	/* only 64-bit supported*/
+	for(i=3; i<16; i++) {
+		jit->pNorm += _jit_vmovdqa_load(jit->pNorm, i, AX, (i-4)<<5);
+	}
+}
+
+
+
+
+
 /* we support MSVC and GCC style ASM */
+#define gf_w16_xor256_jit_stub gf_w16_xor_jit_stub
 #ifdef AMD64
 # ifdef _MSC_VER
 /* specified in external file, as we can't use inline ASM for 64-bit MSVC */
 extern void gf_w16_xor_jit_stub(intptr_t src, intptr_t dEnd, intptr_t dest, void* fn);
+#  ifdef INTEL_AVX2
+#   undef gf_w16_xor256_jit_stub
+extern void gf_w16_xor256_jit_stub(intptr_t src, intptr_t dEnd, intptr_t dest, void* fn);
+#  endif
 # else
 void gf_w16_xor_jit_stub(intptr_t src, intptr_t dEnd, intptr_t dest, void* fn) {
 	asm volatile(
@@ -1019,7 +875,13 @@ static FAST_U16 inline xor_jit_bitpair3_nc_noxor(uint8_t* dest, FAST_U16 info, F
 }
 #undef CMOV
 
-static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, void *dest, gf_val_32_t val, int bytes, int xor)
+
+#if defined(__tune_corei7__) || defined(__tune_corei7_avx__) || defined(__tune_core_avx2__)
+  /* Nehalem and later Intel CPUs have a weird Self-Modifying Code slowdown when writing executable code, observed in Nehalem-Haswell, but not on Core2 and Silvermont or AMD K10 */
+  #define CPU_SLOW_SMC 1
+#endif
+
+static void gf_w16_xor_lazy_jit_altmap_multiply_region_sse(gf_t *gf, void *src, void *dest, gf_val_32_t val, int bytes, int xor)
 {
   FAST_U32 i, bit;
   long inBit;
@@ -1039,11 +901,6 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
   
   if(rd.d_start != rd.d_top) {
   
-#if defined(__tune_corei7__) || defined(__tune_corei7_avx__) || defined(__tune_core_avx2__)
-    /* Nehalem and later Intel CPUs have a weird Self-Modifying Code slowdown when writing executable code, observed in Nehalem-Haswell, but not on Core2 and Silvermont or AMD K10 */
-    #define CPU_SLOW_SMC 1
-#endif
-    
     uint8_t* jitptr, *jitcode;
 #ifdef CPU_SLOW_SMC
     ALIGN(32, uint8_t jitTemp[2048]);
@@ -1654,6 +1511,441 @@ static void gf_w16_xor_lazy_sse_jit_altmap_multiply_region(gf_t *gf, void *src, 
   }
   
 }
+
+#if defined(INTEL_AVX2) && defined(AMD64)
+
+ALIGN(64, __m128i xor256_jit_clut_code1[64]);
+ALIGN(64, __m128i xor256_jit_clut_code2[64]);
+ALIGN(64, __m128i xor256_jit_clut_code3[16]);
+ALIGN(64, __m128i xor256_jit_clut_code4[64]);
+ALIGN(64, __m128i xor256_jit_clut_code5[64]);
+ALIGN(64, __m128i xor256_jit_clut_code6[16]);
+ALIGN(64, uint16_t xor256_jit_clut_info_mem[64]);
+ALIGN(64, uint16_t xor256_jit_clut_info_reg[64]);
+
+int xor256_jit_created = 0;
+
+void gf_w16_xor_create_jit_lut_avx2(void) {
+	FAST_U32 i;
+	int j;
+	
+	if(xor256_jit_created) return;
+	xor256_jit_created = 1;
+	
+	memset(xor256_jit_clut_code1, 0, sizeof(xor256_jit_clut_code1));
+	memset(xor256_jit_clut_code2, 0, sizeof(xor256_jit_clut_code2));
+	memset(xor256_jit_clut_code3, 0, sizeof(xor256_jit_clut_code3));
+	memset(xor256_jit_clut_code4, 0, sizeof(xor256_jit_clut_code4));
+	memset(xor256_jit_clut_code5, 0, sizeof(xor256_jit_clut_code5));
+	memset(xor256_jit_clut_code6, 0, sizeof(xor256_jit_clut_code6));
+	
+	
+	for(i=0; i<64; i++) {
+		int m = i;
+		FAST_U8 posM[4] = {0, 0, 0, 0};
+		FAST_U8 posR[4] = {0, 0, 0, 0};
+		uint8_t* pC[6] = {
+			(uint8_t*)(xor256_jit_clut_code1 + i),
+			(uint8_t*)(xor256_jit_clut_code2 + i),
+			(uint8_t*)(xor256_jit_clut_code3 + i),
+			(uint8_t*)(xor256_jit_clut_code4 + i),
+			(uint8_t*)(xor256_jit_clut_code5 + i),
+			(uint8_t*)(xor256_jit_clut_code6 + i)
+		};
+		
+		for(j=0; j<3; j++) {
+			int msk = m&3;
+			
+			if(msk) {
+				int reg = msk-1;
+				
+				/* if we ever support 32-bit, need to ensure that vpxor/load is fixed length */
+				pC[0] += _jit_vpxor_m(pC[0], reg, reg, AX, (j-4) <<5);
+				pC[1] += _jit_vpxor_r(pC[1], reg, reg, j+3);
+				pC[3] += _jit_vpxor_r(pC[3], reg, reg, j+8);
+				pC[4] += _jit_vpxor_r(pC[4], reg, reg, j+11);
+				if(i < 16) {
+					pC[2] += _jit_vpxor_r(pC[2], reg, reg, j+6);
+					pC[5] += _jit_vpxor_r(pC[5], reg, reg, j+14);
+				}
+				
+				// transformations (PXOR -> MOVDQA)
+				// TODO:
+				if(posM[reg+1] == 0) posM[reg+1] = posM[0] +1;
+				if(posR[reg+1] == 0) posR[reg+1] = posR[0] +1;
+				
+				/* advance pointers */
+				posM[0] += 5;
+				posR[0] += 4;
+			}
+			
+			m >>= 2;
+		}
+		
+		xor256_jit_clut_info_mem[i] = posM[0] | (posM[1] << 4) | (posM[2] << 8) | (posM[3] << 12);
+		xor256_jit_clut_info_reg[i] = posR[0] | (posR[1] << 4) | (posR[2] << 8) | (posR[3] << 12);
+	}
+}
+
+static void gf_w16_xor_lazy_jit_altmap_multiply_region_avx2(gf_t *gf, void *src, void *dest, gf_val_32_t val, int bytes, int xor)
+{
+  FAST_U32 i, bit;
+  long inBit;
+  __m128i depmask1, depmask2, polymask1, polymask2, addvals1, addvals2;
+  ALIGN(32, uint32_t lumask[8]);
+  gf_region_data rd;
+  gf_internal_t *h;
+  jit_t* jit;
+  int use_temp = ((uintptr_t)src - (uintptr_t)dest + 512) < 1024;
+  void* tmp;
+  
+  if (val == 0) { gf_multby_zero(dest, bytes, xor); return; }
+  if (val == 1) { gf_multby_one(src, dest, bytes, xor); return; }
+
+  /* if src/dest overlap, resolve by copying */
+  if(use_temp) {
+    tmp = malloc(bytes+64);
+    void *nSrc = ((uintptr_t)tmp+31) & ~31;
+    nSrc += (uintptr_t)src & 31;
+    memcpy(nSrc, src, bytes);
+    src = nSrc;
+  }
+  
+  h = (gf_internal_t *) gf->scratch;
+  jit = &(h->jit);
+  gf_w16_log_region_alignment(&rd, gf, src, dest, bytes, val, xor, 32, 512);
+  
+  if(rd.d_start != rd.d_top) {
+  
+    uint8_t* jitptr, *jitcode;
+#ifdef CPU_SLOW_SMC
+    ALIGN(32, uint8_t jitTemp[2048]);
+    uint8_t* jitdst;
+#endif
+#ifdef XORDEP_DISABLE_NO_COMMON
+    #define no_common_mask 0
+#else
+    int no_common_mask;
+#endif
+    
+    
+    /* calculate dependent bits */
+    addvals1 = _mm_set_epi16(1<< 7, 1<< 6, 1<< 5, 1<< 4, 1<< 3, 1<< 2, 1<<1, 1<<0);
+    addvals2 = _mm_set_epi16(1<<15, 1<<14, 1<<13, 1<<12, 1<<11, 1<<10, 1<<9, 1<<8);
+    
+    /* duplicate each bit in the polynomial 16 times */
+    polymask2 = _mm_set1_epi16(h->prim_poly & 0xFFFF); /* chop off top bit, although not really necessary */
+    polymask1 = _mm_and_si128(polymask2, _mm_set_epi16(1<< 8, 1<< 9, 1<<10, 1<<11, 1<<12, 1<<13, 1<<14, 1<<15));
+    polymask2 = _mm_and_si128(polymask2, _mm_set_epi16(1<< 0, 1<< 1, 1<< 2, 1<< 3, 1<< 4, 1<< 5, 1<< 6, 1<< 7));
+    polymask1 = _mm_cmpeq_epi16(_mm_setzero_si128(), polymask1);
+    polymask2 = _mm_cmpeq_epi16(_mm_setzero_si128(), polymask2);
+    
+    if(val & (1<<15)) {
+      /* XOR */
+      depmask1 = addvals1;
+      depmask2 = addvals2;
+    } else {
+      depmask1 = _mm_setzero_si128();
+      depmask2 = _mm_setzero_si128();
+    }
+    for(i=(1<<14); i; i>>=1) {
+      /* rotate */
+      __m128i last = _mm_shuffle_epi32(_mm_shufflelo_epi16(depmask1, 0), 0);
+      depmask1 = _mm_insert_epi16(
+        _mm_srli_si128(depmask1, 2),
+        _mm_extract_epi16(depmask2, 0),
+        7
+      );
+      depmask2 = _mm_srli_si128(depmask2, 2);
+      
+      /* XOR poly */
+      depmask1 = _mm_xor_si128(depmask1, _mm_andnot_si128(polymask1, last));
+      depmask2 = _mm_xor_si128(depmask2, _mm_andnot_si128(polymask2, last));
+      
+      if(val & i) {
+        /* XOR */
+        depmask1 = _mm_xor_si128(depmask1, addvals1);
+        depmask2 = _mm_xor_si128(depmask2, addvals2);
+      }
+    }
+    
+    
+    __m128i common_mask, tmp1, tmp2, tmp3, tmp4, tmp3l, tmp3h, tmp4l, tmp4h;
+    __m128i lmask = _mm_set1_epi8(0xF);
+    
+    /* emulate PACKUSDW (SSE4.1 only) with SSE2 shuffles */
+    /* 01234567 -> 02461357 */
+    tmp1 = _mm_shuffle_epi32(
+      _mm_shufflelo_epi16(
+        _mm_shufflehi_epi16(depmask1, 0xD8), /* 0xD8 == 0b11011000 */
+        0xD8
+      ),
+      0xD8
+    );
+    tmp2 = _mm_shuffle_epi32(
+      _mm_shufflelo_epi16(
+        _mm_shufflehi_epi16(depmask2, 0xD8),
+        0xD8
+      ),
+      0xD8
+    );
+    /* [02461357, 8ACE9BDF] -> [02468ACE, 13579BDF]*/
+    tmp3 = _mm_unpacklo_epi64(tmp1, tmp2);
+    tmp4 = _mm_unpackhi_epi64(tmp1, tmp2);
+    
+    
+    /* interleave bits for faster lookups */
+    tmp3l = _mm_and_si128(tmp3, lmask);
+    tmp3h = _mm_and_si128(_mm_srli_epi16(tmp3, 4), lmask);
+    tmp4l = _mm_and_si128(tmp4, lmask);
+    tmp4h = _mm_and_si128(_mm_srli_epi16(tmp4, 4), lmask);
+    /* expand bits: idea from https://graphics.stanford.edu/~seander/bithacks.html#InterleaveBMN */
+    #define EXPAND_ROUND(src, shift, mask) _mm_and_si128( \
+      _mm_or_si128(src, _mm_slli_epi16(src, shift)), \
+      _mm_set1_epi16(mask) \
+    )
+    /* 8-bit -> 16-bit convert, with 4-bit interleave */
+    tmp1 = _mm_unpacklo_epi8(tmp3l, tmp3h);
+    tmp2 = _mm_unpacklo_epi8(tmp4l, tmp4h);
+    tmp1 = EXPAND_ROUND(tmp1, 2, 0x3333);
+    tmp2 = EXPAND_ROUND(tmp2, 2, 0x3333);
+    tmp1 = EXPAND_ROUND(tmp1, 1, 0x5555);
+    tmp2 = EXPAND_ROUND(tmp2, 1, 0x5555);
+    _mm_store_si128((__m128i*)(lumask), _mm_or_si128(tmp1, _mm_slli_epi16(tmp2, 1)));
+    
+    tmp1 = _mm_unpackhi_epi8(tmp3l, tmp3h);
+    tmp2 = _mm_unpackhi_epi8(tmp4l, tmp4h);
+    tmp1 = EXPAND_ROUND(tmp1, 2, 0x3333);
+    tmp2 = EXPAND_ROUND(tmp2, 2, 0x3333);
+    tmp1 = EXPAND_ROUND(tmp1, 1, 0x5555);
+    tmp2 = EXPAND_ROUND(tmp2, 1, 0x5555);
+    _mm_store_si128((__m128i*)(lumask + 4), _mm_or_si128(tmp1, _mm_slli_epi16(tmp2, 1)));
+    
+    #undef EXPAND_ROUND
+      
+#ifndef XORDEP_DISABLE_NO_COMMON
+    /* find cases where we don't wish to create the common queue - this is an optimisation to remove a single move operation when the common queue only contains one element */
+    /* we have the common elements between pairs, but it doesn't make sense to process a separate queue if there's only one common element (0 XORs), so find those */
+    common_mask = _mm_and_si128(tmp3, tmp4);
+    common_mask = _mm_andnot_si128(
+      _mm_cmpeq_epi16(_mm_setzero_si128(), common_mask),
+      _mm_cmpeq_epi16(
+        _mm_setzero_si128(),
+        /* "(v & (v-1)) == 0" is true if only zero/one bit is set in each word */
+        _mm_and_si128(common_mask, _mm_sub_epi16(common_mask, _mm_set1_epi16(1)))
+      )
+    );
+    /* now we have a 8x16 mask of one-bit common masks we wish to remove; pack into an int for easy dealing with */
+    no_common_mask = _mm_movemask_epi8(common_mask);
+#endif
+    
+    
+    jitptr = jit->pNorm;
+#ifdef CPU_SLOW_SMC
+    jitdst = jitptr;
+    if((uintptr_t)jitdst & 0x1F) {
+      /* copy unaligned part (might not be worth it for these CPUs, but meh) */
+      _mm_store_si128((__m128i*)jitTemp, _mm_load_si128((__m128i*)((uintptr_t)jitptr & ~0x1F)));
+      _mm_store_si128((__m128i*)(jitTemp+16), _mm_load_si128((__m128i*)((uintptr_t)jitptr & ~0x1F) +1));
+      jitptr = jitTemp + ((uintptr_t)jitdst & 0x1F);
+      jitdst -= (uintptr_t)jitdst & 0x1F;
+    }
+    else
+      jitptr = jitTemp;
+#endif
+    jitcode = jit->code;
+    
+    // TODO: AVX optimisations (i.e. avoiding loads)
+    
+    // TODO: optimize these
+    #undef _LD_DQA
+    #define _LD_DQA(yreg, mreg, offs) \
+        jitptr += _jit_vmovdqa_load(jitptr, yreg, mreg, offs)
+    #undef _ST_DQA
+    #define _ST_DQA(mreg, offs, yreg) \
+        jitptr += _jit_vmovdqa_store(jitptr, mreg, offs, yreg)
+    
+    //_jit_pxor_r(jit, r2, r1)
+    /*
+    #define _PXOR_R_(r2, r1, tr) \
+        *(int32_t*)(jitptr) = (0xC0EF0F66 + ((r2) <<27) + ((r1) <<24)) ^ (tr)
+    #define _PXOR_R(r2, r1) \
+        _PXOR_R_(r2, r1, 0); \
+        jitptr += 4
+    #define _C_PXOR_R(r2, r1, c) \
+        _PXOR_R_(r2, r1, 0); \
+        jitptr += (c)<<2
+    */
+    #undef _PXOR_R
+    #define _PXOR_R(r2, r1) jitptr += _jit_vpxor_r(jitptr, r2, r2, r1)
+    #undef _C_PXOR_R
+    #define _C_PXOR_R(r2, r1, c) jitptr += _jit_vpxor_r(jitptr, r2, r2, r1) & -(c)
+    
+    /* generate code */
+      if(xor) {
+        for(bit=0; bit<8; bit++) {
+          int destOffs = (bit<<6)-128;
+          int destOffs2 = destOffs+32;
+          FAST_U8 movC = 0xFF;
+          FAST_U16 posC = 0;
+          FAST_U32 mask = lumask[bit];
+          _LD_DQA(0, DX, destOffs);
+          _LD_DQA(1, DX, destOffs2);
+          
+          if(no_common_mask & 1) {
+#ifndef XORDEP_DISABLE_NO_COMMON
+            #define PROC_BITPAIR(n, inf, m) \
+              _mm_storeu_si128(jitptr, _mm_load_si128((__m128i*)((uint64_t*)xor256_jit_clut_nocomm + (n<<5) + ((m) & (0xF<<1))))); \
+              jitptr += ((uint8_t*)(xor256_jit_clut_ncinfo_ ##inf))[(m) & (0xF<<1)]; \
+              mask >>= 4
+            
+            PROC_BITPAIR(0, mem, mask<<1);
+            mask <<= 1;
+            PROC_BITPAIR(1, rm, mask);
+            PROC_BITPAIR(2, reg, mask);
+            PROC_BITPAIR(3, reg, mask);
+            PROC_BITPAIR(4, mem, mask);
+            PROC_BITPAIR(5, mem, mask);
+            PROC_BITPAIR(6, mem, mask);
+            PROC_BITPAIR(7, mem, mask);
+            #undef PROC_BITPAIR
+#endif
+          } else {
+            #define PROC_BITPAIR(n, bits, inf, m, r64) \
+              jitptr += xor_jit_bitpair3(jitptr, (m) & ((2<<bits)-2), xor256_jit_clut_code ##n, xor256_jit_clut_info_ ##inf, &posC, &movC, r64) & 0xF; \
+              mask >>= bits
+            PROC_BITPAIR(1, 6, mem, mask<<1, 0);
+            mask <<= 1;
+            PROC_BITPAIR(2, 6, reg, mask, 0);
+            PROC_BITPAIR(3, 4, reg, mask, 0);
+            PROC_BITPAIR(4, 6, mem, mask, 1);
+            PROC_BITPAIR(5, 6, mem, mask, 1);
+            PROC_BITPAIR(6, 4, mem, mask, 1);
+            #undef PROC_BITPAIR
+            
+            jitptr[posC + movC] |= 0xF<<3; // PXOR -> MOVDQA
+            jitptr[posC + movC +1] = 0x6F;
+            _C_PXOR_R(0, 2, movC==0);
+            _C_PXOR_R(1, 2, movC==0);
+          }
+#ifndef XORDEP_DISABLE_NO_COMMON
+          no_common_mask >>= 2;
+#endif
+          
+          _ST_DQA(DX, destOffs, 0);
+          _ST_DQA(DX, destOffs2, 1);
+        }
+      } else {
+        for(bit=0; bit<8; bit++) {
+          int destOffs = (bit<<6)-128;
+          int destOffs2 = destOffs+32;
+          FAST_U8 mov1 = 0xFF, mov2 = 0xFF,
+                  movC = 0xFF;
+          FAST_U16 pos1 = 0, pos2 = 0, posC = 0;
+          FAST_U32 mask = lumask[bit];
+          
+          if(no_common_mask & 1) {
+#ifndef XORDEP_DISABLE_NO_COMMON
+            #define PROC_BITPAIR(n, inf, m, r64) \
+              _mm_storeu_si128(jitptr, _mm_load_si128((__m128i*)((uint64_t*)xor256_jit_clut_nocomm + (n<<5) + ((m) & (0xF<<1))))); \
+              jitptr += xor_jit_bitpair3_nc_noxor(jitptr, xor256_jit_clut_ncinfo_ ##inf[((m) & (0xF<<1))>>1], &pos1, &mov1, &pos2, &mov2, r64); \
+              mask >>= 4
+
+            PROC_BITPAIR(0, mem, mask<<1, 0);
+            mask <<= 1;
+            PROC_BITPAIR(1, rm, mask, 0);
+            PROC_BITPAIR(2, reg, mask, 0);
+            PROC_BITPAIR(3, reg, mask, 0);
+            PROC_BITPAIR(4, mem, mask, 1);
+            PROC_BITPAIR(5, mem, mask, 1);
+            PROC_BITPAIR(6, mem, mask, 1);
+            PROC_BITPAIR(7, mem, mask, 1);
+            #undef PROC_BITPAIR
+            // PXOR -> MOVDQA
+            jitptr[pos1 + mov1] |= 0xF<<3;
+            jitptr[pos2 + mov2] |= 0xF<<3;
+            jitptr[pos1 + mov1 +1] = 0x6F;
+            jitptr[pos2 + mov2 +1] = 0x6F;
+#endif
+          } else {
+            #define PROC_BITPAIR(n, bits, inf, m, r64) \
+              jitptr += xor_jit_bitpair3_noxor(jitptr, xor_jit_bitpair3(jitptr, (m) & ((2<<bits)-2), xor256_jit_clut_code ##n, xor256_jit_clut_info_ ##inf, &posC, &movC, r64), &pos1, &mov1, &pos2, &mov2, r64); \
+              mask >>= bits
+            PROC_BITPAIR(1, 6, mem, mask<<1, 0);
+            mask <<= 1;
+            PROC_BITPAIR(2, 6, reg, mask, 0);
+            PROC_BITPAIR(3, 4, reg, mask, 0);
+            PROC_BITPAIR(4, 6, mem, mask, 1);
+            PROC_BITPAIR(5, 6, mem, mask, 1);
+            PROC_BITPAIR(6, 4, mem, mask, 1);
+            #undef PROC_BITPAIR
+          
+            // PXOR -> MOVDQA
+            jitptr[pos1 + mov1] |= 0xF<<3;
+            jitptr[pos2 + mov2] |= 0xF<<3;
+            jitptr[pos1 + mov1 +1] = 0x6F;
+            jitptr[pos2 + mov2 +1] = 0x6F;
+            if(!movC) {
+              jitptr[posC] |= 0xF<<3;
+              jitptr[posC +1] = 0x6F;
+              if(mov1) { /* no additional XORs were made? */
+                _ST_DQA(DX, destOffs, 2);
+              } else {
+                _PXOR_R(0, 2);
+              }
+              if(mov2) {
+                _ST_DQA(DX, destOffs2, 2);
+              } else {
+                _PXOR_R(1, 2); /*penalty?*/
+              }
+            }
+          }
+#ifndef XORDEP_DISABLE_NO_COMMON
+          no_common_mask >>= 2;
+#else
+          #undef no_common_mask
+#endif
+          
+          if(!mov1) {
+            _ST_DQA(DX, destOffs, 0);
+          }
+          if(!mov2) {
+            _ST_DQA(DX, destOffs2, 1);
+          }
+        }
+      }
+    
+    /* cmp/jcc */
+    *(uint32_t*)(jitptr) = 0x800FC039 | (DX <<8) | (CX <<11) | (JL <<24);
+#ifdef CPU_SLOW_SMC
+    *(int32_t*)(jitptr +4) = (jitTemp - (jitdst - jitcode)) - jitptr -8;
+#else
+    *(int32_t*)(jitptr +4) = jitcode - jitptr -8;
+#endif
+    jitptr[8] = 0xC3; /* ret */
+    
+#ifdef CPU_SLOW_SMC
+    /* memcpy to destination */
+    /* AVX does result in fewer writes, but testing on Haswell seems to indicate minimal benefit over SSE2 */
+    for(i=0; i<jitptr+9-jitTemp; i+=64) {
+      __m256i ta = _mm256_load_si256((__m256i*)(jitTemp + i));
+      __m256i tb = _mm256_load_si256((__m256i*)(jitTemp + i + 32));
+      _mm256_store_si256((__m256i*)(jitdst + i), ta);
+      _mm256_store_si256((__m256i*)(jitdst + i + 32), tb);
+    }
+#endif
+    
+    // exec
+    /* adding 128 to the destination pointer allows the register offset to be coded in 1 byte
+     * eg: 'movdqa xmm0, [rdx+0x90]' is 8 bytes, whilst 'movdqa xmm0, [rdx-0x60]' is 5 bytes */
+    gf_w16_xor256_jit_stub((intptr_t)rd.s_start - 384, (intptr_t)rd.d_top - 384, (intptr_t)rd.d_start - 384, jitcode);
+    
+    _mm256_zeroupper();
+    if(use_temp) free(tmp);
+  }
+}
+#endif /* INTEL_AVX2 + AMD64 */
+
 
 #endif /* INTEL_SSE2 */
 

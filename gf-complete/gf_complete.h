@@ -68,7 +68,8 @@ typedef enum {
 	GF_SPLIT4_AVX2,
 	GF_SPLIT4_AVX512,
 	GF_XOR_SSE2,
-	GF_XOR_JIT_SSE2
+	GF_XOR_JIT_SSE2,
+	GF_XOR_JIT_AVX2
 } gf_mult_method_used;
 
 /* These are the different ways to optimize region 

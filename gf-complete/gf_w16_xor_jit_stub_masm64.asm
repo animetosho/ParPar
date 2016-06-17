@@ -1,5 +1,5 @@
-PUBLIC  gf_w16_xor_jit_stub
 .code
+PUBLIC  gf_w16_xor_jit_stub
 gf_w16_xor_jit_stub PROC
 	; setup stack
 	push rsi
@@ -42,6 +42,53 @@ gf_w16_xor_jit_stub PROC
 	
 	pop rsi
 	ret
-
 gf_w16_xor_jit_stub    ENDP
+
+IFDEF YMM0
+PUBLIC  gf_w16_xor256_jit_stub
+gf_w16_xor256_jit_stub PROC
+	; setup stack
+	push rsi
+	lea rax, [rsp-16*12]
+	mov rsi, rax
+	and rax, 0Fh
+	sub rsi, rax
+	
+	; move registers to what we need them as
+	mov rax, rcx
+	mov rcx, rdx
+	mov rdx, r8
+	
+	; save XMM registers
+	vmovaps [rsi+16*1], xmm6
+	vmovaps [rsi+16*2], xmm7
+	vmovaps [rsi+16*3], xmm8
+	vmovaps [rsi+16*4], xmm9
+	vmovaps [rsi+16*5], xmm10
+	vmovaps [rsi+16*6], xmm11
+	vmovaps [rsi+16*7], xmm12
+	vmovaps [rsi+16*8], xmm13
+	vmovaps [rsi+16*9], xmm14
+	vmovaps [rsi+16*10], xmm15
+	
+	; run JIT code
+	call r9
+	
+	; restore XMM registers
+	vmovaps xmm6, [rsi+16*1]
+	vmovaps xmm7, [rsi+16*2]
+	vmovaps xmm8, [rsi+16*3]
+	vmovaps xmm9, [rsi+16*4]
+	vmovaps xmm10, [rsi+16*5]
+	vmovaps xmm11, [rsi+16*6]
+	vmovaps xmm12, [rsi+16*7]
+	vmovaps xmm13, [rsi+16*8]
+	vmovaps xmm14, [rsi+16*9]
+	vmovaps xmm15, [rsi+16*10]
+	
+	pop rsi
+	ret
+gf_w16_xor256_jit_stub    ENDP
+ENDIF
+
 END

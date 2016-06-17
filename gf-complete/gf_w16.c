@@ -650,18 +650,33 @@ int gf_w16_xor_init(gf_t *gf)
   jit->code = jit_alloc(jit->len = 4096); /* 4KB should be enough for everyone */
   if(jit->code) {
     /* pre-calc JIT lookup tables */
-    gf_w16_xor_create_jit_lut();
-    gf_w16_xor_init_jit(jit);
+    FUNC_SELECT(gf_w16_xor_create_jit_lut)();
+    FUNC_SELECT(gf_w16_xor_init_jit)(jit);
+    
+    gf->multiply_region.w32 = FUNC_SELECT(gf_w16_xor_lazy_jit_altmap_multiply_region);
+    gf->altmap_region = FUNC_SELECT(gf_w16_xor_start);
+    gf->unaltmap_region = FUNC_SELECT(gf_w16_xor_final);
+    gf->mult_method = GF_XOR_JIT_SSE2;
+  } else {
+    gf->multiply_region.w32 = gf_w16_xor_lazy_sse_altmap_multiply_region;
+    gf->altmap_region = gf_w16_xor_start_sse;
+    gf->unaltmap_region = gf_w16_xor_final_sse;
+    gf->mult_method = GF_XOR_SSE2;
   }
-  
   /* if JIT allocation was successful (no W^X issue), use slightly faster JIT version, otherwise fall back to static code version */
-  gf->multiply_region.w32 = jit->code ? gf_w16_xor_lazy_sse_jit_altmap_multiply_region : gf_w16_xor_lazy_sse_altmap_multiply_region;
-  gf->mult_method = jit->code ? GF_XOR_JIT_SSE2 : GF_XOR_SSE2;
-  gf->alignment = 16;
-  gf->walignment = 256;
+  
   gf->using_altmap = 1;
-  gf->altmap_region = gf_w16_xor_start;
-  gf->unaltmap_region = gf_w16_xor_final;
+#ifdef AMD64
+  if(jit->code && has_avx2) {
+    gf->mult_method = GF_XOR_JIT_AVX2;
+    gf->alignment = 32;
+    gf->walignment = 512;
+  } else
+#endif
+  {
+    gf->alignment = 16;
+    gf->walignment = 256;
+  }
   return 1;
 }
 #endif

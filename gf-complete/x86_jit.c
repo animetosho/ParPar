@@ -254,6 +254,85 @@ static inline size_t _jit_movapd_store(uint8_t* jit, uint8_t mreg, int32_t offs,
 	}
 }
 
+/** AVX (256-bit) VEX coded instructions **/
+static inline size_t _jit_vpxor_m(uint8_t* jit, uint8_t yregD, uint8_t yreg1, uint8_t mreg, int32_t offs) {
+	size_t p;
+	int offsFlag = (offs != 0) << (((offs+128) & ~0xFF) != 0);
+	if(mreg > 7) {
+		*(int32_t*)jit = 0xEF7DE1C4 ^ ((yregD >> 3) << 15) ^ ((mreg >> 3) << 13) ^ (yreg1 <<19);
+		jit[4] = (offsFlag<<6) | ((yregD & 7) <<3) | ((mreg & 7) <<0);
+		p = 5;
+	} else {
+		*(int32_t*)jit = (0x00EFFDC5 | ((yregD & 7) <<27) | ((mreg & 7) <<24) | (offsFlag << 30)) ^ ((yregD >> 3) << 15) ^ (yreg1 <<11);
+		p = 4;
+	}
+	
+	if(offsFlag == 2) {
+		*(int32_t*)(jit +p) = offs;
+		return p+4;
+	} else if(offsFlag) {
+		jit[p] = (uint8_t)offs;
+		return p+1;
+	}
+	return p;
+}
+static inline size_t _jit_vpxor_r(uint8_t* jit, uint8_t yregD, uint8_t yreg1, uint8_t yreg2) {
+	if(yreg2 > 7) {
+		*(int32_t*)jit = 0xEF7DE1C4 ^ ((yregD >> 3) << 15) ^ ((yreg2 >> 3) << 13) ^ (yreg1 <<19);
+		jit[4] = 0xC0 | ((yregD & 7) <<3) | ((yreg2 & 7) <<0);
+		return 5;
+	} else {
+		*(int32_t*)jit = (0xC0EFFDC5 | ((yregD & 7) <<27) | ((yreg2 & 7) <<24)) ^ ((yregD >> 3) << 15) ^ (yreg1 <<11);
+		return 4;
+	}
+}
+
+static inline size_t _jit_vmovdqa_load(uint8_t* jit, uint8_t yreg, uint8_t mreg, int32_t offs) {
+	size_t p;
+	int offsFlag = (offs != 0) << (((offs+128) & ~0xFF) != 0);
+	if(mreg > 7) {
+		*(int32_t*)jit = 0x6F7DE1C4 ^ ((yreg >> 3) << 15) ^ ((mreg >> 3) << 13);
+		jit[4] = (offsFlag<<6) | ((yreg & 7) <<3) | ((mreg & 7) <<0);
+		p = 5;
+	} else {
+		*(int32_t*)jit = (0x006FFDC5 | ((yreg & 7) <<27) | ((mreg & 7) <<24) | (offsFlag << 30)) ^ ((yreg >> 3) << 15);
+		p = 4;
+	}
+	
+	if(offsFlag == 2) {
+		*(int32_t*)(jit +p) = offs;
+		return p+4;
+	} else if(offsFlag) {
+		jit[p] = (uint8_t)offs;
+		return p+1;
+	}
+	return p;
+}
+
+static inline size_t _jit_vmovdqa_store(uint8_t* jit, uint8_t mreg, int32_t offs, uint8_t yreg) {
+	size_t p;
+	int offsFlag = (offs != 0) << (((offs+128) & ~0xFF) != 0);
+	if(mreg > 7) {
+		*(int32_t*)jit = 0x7F7DE1C4 ^ ((yreg >> 3) << 15) ^ ((mreg >> 3) << 13);
+		jit[4] = (offsFlag<<6) | ((yreg & 7) <<3) | ((mreg & 7) <<0);
+		p = 5;
+	} else {
+		*(int32_t*)jit = (0x007FFDC5 | ((yreg & 7) <<27) | ((mreg & 7) <<24) | (offsFlag << 30)) ^ ((yreg >> 3) << 15);
+		p = 4;
+	}
+	
+	if(offsFlag == 2) {
+		*(int32_t*)(jit +p) = offs;
+		return p+4;
+	} else if(offsFlag) {
+		jit[p] = (uint8_t)offs;
+		return p+1;
+	}
+	return p;
+}
+
+// TODO: evpxor_r, evpxor_m, evpmovdqa_store, evpxor2x_r, evpxor2x_m
+
 static inline size_t _jit_push(uint8_t* jit, uint8_t reg) {
 	jit[0] = 0x50 | reg;
 	return 1;
