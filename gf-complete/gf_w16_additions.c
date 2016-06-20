@@ -69,8 +69,8 @@ void detect_cpu(void) {
 		_cpuid(cpuInfo, 0);
 		if(cpuInfo[1] == 0x756E6547 && cpuInfo[2] == 0x6C65746E && cpuInfo[3] == 0x49656E69 && cpuInfo[0] >= 11) {
 			_cpuidX(cpuInfo, 11, 0);
-			if((cpuInfo[2] >> 8) & 0xFF == 1 // SMT level
-			&& cpuInfo[1] & 0xFFFF > 1) // multiple threads per core
+			if(((cpuInfo[2] >> 8) & 0xFF) == 1 // SMT level
+			&& (cpuInfo[1] & 0xFFFF) > 1) // multiple threads per core
 				has_htt = 1;
 		}
 	}
@@ -825,17 +825,16 @@ static inline void STOREU_XMM(void* dest, __m128i xmm) {
 
 /* conditional move, because, for whatever reason, no-one thought of making a CMOVcc intrinsic */
 #ifdef __GNUC__
-	#define CMOV(cond, dst, src) asm(".intel_syntax noprefix\n" \
+	#define CMOV(cond, dst, src) asm( \
 		"test %[c], %[c]\n" \
-		"cmovnz %[d], %[s]\n" \
-		".att_syntax prefix\n" \
+		"cmovnz %[s], %[d]\n" \
 		: [d]"+r"(dst): [c]"r"(cond), [s]"r"(src))
 #else
 	//#define CMOV(c,d,s) (d) = ((c) & (s)) | (~(c) & (d));
 	#define CMOV(c, d, s) if(c) (d) = (s)
 #endif
 
-static FAST_U16 inline xor_jit_bitpair3(uint8_t* dest, FAST_U32 mask, __m128i* tCode, uint16_t* tInfo, FAST_U16* posC, FAST_U8* movC, FAST_U8 isR64) {
+static inline FAST_U16 xor_jit_bitpair3(uint8_t* dest, FAST_U32 mask, __m128i* tCode, uint16_t* tInfo, FAST_U16* posC, FAST_U8* movC, FAST_U8 isR64) {
     FAST_U16 info = tInfo[mask>>1];
     FAST_U8 pC = info >> 12;
     
@@ -850,7 +849,7 @@ static FAST_U16 inline xor_jit_bitpair3(uint8_t* dest, FAST_U32 mask, __m128i* t
     return info;
 }
 
-static FAST_U16 inline xor_jit_bitpair3_noxor(uint8_t* dest, FAST_U16 info, FAST_U16* pos1, FAST_U8* mov1, FAST_U16* pos2, FAST_U8* mov2, int isR64) {
+static inline FAST_U16 xor_jit_bitpair3_noxor(uint8_t* dest, FAST_U16 info, FAST_U16* pos1, FAST_U8* mov1, FAST_U16* pos2, FAST_U8* mov2, int isR64) {
     FAST_U8 p1 = (info >> 4) & 0xF;
     FAST_U8 p2 = (info >> 8) & 0xF;
     CMOV(*mov1, *pos1, p1+isR64);
@@ -862,7 +861,7 @@ static FAST_U16 inline xor_jit_bitpair3_noxor(uint8_t* dest, FAST_U16 info, FAST
     return info & 0xF;
 }
 
-static FAST_U16 inline xor_jit_bitpair3_nc_noxor(uint8_t* dest, FAST_U16 info, FAST_U16* pos1, FAST_U8* mov1, FAST_U16* pos2, FAST_U8* mov2, int isR64) {
+static inline FAST_U16 xor_jit_bitpair3_nc_noxor(uint8_t* dest, FAST_U16 info, FAST_U16* pos1, FAST_U8* mov1, FAST_U16* pos2, FAST_U8* mov2, int isR64) {
     FAST_U8 p1 = (info >> 8) & 0xF;
     FAST_U8 p2 = info >> 12;
     CMOV(*mov1, *pos1, p1+isR64);
@@ -1605,10 +1604,10 @@ static void gf_w16_xor_lazy_jit_altmap_multiply_region_avx2(gf_t *gf, void *src,
   /* if src/dest overlap, resolve by copying */
   if(use_temp) {
     tmp = malloc(bytes+64);
-    void *nSrc = ((uintptr_t)tmp+31) & ~31;
+    char *nSrc = (char*)(((uintptr_t)tmp+31) & ~31);
     nSrc += (uintptr_t)src & 31;
     memcpy(nSrc, src, bytes);
-    src = nSrc;
+    src = (void*)nSrc;
   }
   
   h = (gf_internal_t *) gf->scratch;

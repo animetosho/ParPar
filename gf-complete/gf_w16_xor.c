@@ -151,27 +151,11 @@ static void _FN(gf_w16_xor_final)(void* src, int bytes, void* dest) {
 	while(s16 != top16) {
 		for(j=0; j<8; j++) {
 			/* load in pattern: [0011223344556677] [8899AABBCCDDEEFF] */
-			/* MSVC _requires_ a constant so we have to manually unroll this loop */
 #if MWORD_SIZE == 32
-			#define MM_INSERT(i) \
-				tl = _MM(insert_epi32)(tl, s16[120 - i*8], i); \
-				th = _MM(insert_epi32)(th, s16[ 56 - i*8], i)
-#else
-			#define MM_INSERT(i) \
-				tl = _MM(insert_epi16)(tl, s16[120 - i*8], i); \
-				th = _MM(insert_epi16)(th, s16[ 56 - i*8], i)
-#endif
-			MM_INSERT(0);
-			MM_INSERT(1);
-			MM_INSERT(2);
-			MM_INSERT(3);
-			MM_INSERT(4);
-			MM_INSERT(5);
-			MM_INSERT(6);
-			MM_INSERT(7);
-			#undef MM_INSERT
+			/* vpinsrd doesn't exist for ymm registers, so MSVC doesn't support _mm256_insert_epi32, so fall back to using gathers */
+			tl = _MM(i32gather_epi32)(s16, _MM(set_epi32)(64, 72, 80, 88, 96, 104, 112, 120), 4);
+			th = _MM(i32gather_epi32)(s16, _MM(set_epi32)(0, 8, 16, 24, 32, 40, 48, 56), 4);
 			
-#if MWORD_SIZE == 32
 			/* 00001111 -> 00112233 */
 			ta = _MM(packus_epi32)(
 				_MM(srli_epi32)(tl, 16),
@@ -181,8 +165,22 @@ static void _FN(gf_w16_xor_final)(void* src, int bytes, void* dest) {
 				_MMI(and)(tl, _MM(set1_epi32)(0xffff)),
 				_MMI(and)(th, _MM(set1_epi32)(0xffff))
 			);
-			tl = ta;
-			th = tb;
+			th = ta;
+			tl = tb;
+#else
+			/* MSVC _requires_ a constant so we have to manually unroll this loop */
+			#define MM_INSERT(i) \
+				tl = _MM(insert_epi16)(tl, s16[120 - i*8], i); \
+				th = _MM(insert_epi16)(th, s16[ 56 - i*8], i)
+			MM_INSERT(0);
+			MM_INSERT(1);
+			MM_INSERT(2);
+			MM_INSERT(3);
+			MM_INSERT(4);
+			MM_INSERT(5);
+			MM_INSERT(6);
+			MM_INSERT(7);
+			#undef MM_INSERT
 #endif
 			/* swizzle to [0123456789ABCDEF] [0123456789ABCDEF] */
 			ta = _MM(packus_epi16)(
