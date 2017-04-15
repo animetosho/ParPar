@@ -166,9 +166,6 @@ g.init(files, function(err) {
 		process.stderr.write(err + '\n');
 		process.exit(1);
 	}
-	g.on('error', function(err) {
-		process.stderr.write(err + '\n');
-	});
 	
 	if(!argv.q) {
 		var method_used = ParPar.getMethod();
@@ -200,14 +197,14 @@ g.init(files, function(err) {
 				process.stderr.write('Calculating: ' + (parts[1] + parts[2]) + '%\x1b[0G');
 			}, 200);
 		}
-		g.on('complete', function() {
-			var endTime = Date.now();
-			if(interval) clearInterval(interval);
-			process.stderr.write('Calculating: 100.00%\x1b[0G');
-			process.stderr.write('\nPAR2 created. Time taken: ' + ((endTime - startTime)/1000) + ' second(s)\n');
-		});
 	}
 	
-	g.start();
+	g.start(function(err) {
+		if(err) throw err;
+		var endTime = Date.now();
+		if(interval) clearInterval(interval);
+		process.stderr.write('Calculating: 100.00%\x1b[0G');
+		process.stderr.write('\nPAR2 created. Time taken: ' + ((endTime - startTime)/1000) + ' second(s)\n');
+	});
 	
 });
