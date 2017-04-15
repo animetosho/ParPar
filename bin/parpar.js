@@ -135,7 +135,7 @@ if(argv.o.match(/\.par2$/i))
 
 // TODO: expose minChunkSize etc
 var sliceSize = parseSize(argv.s);
-var g = new ParPar.PAR2Gen(files, sliceSize, argv.r|0, {
+var g = new ParPar.PAR2Gen(sliceSize, argv.r|0, {
 	outputBase: argv.o,
 	displayNameFormat: argv['filepath-format'],
 	recoveryOffset: argv.e,
@@ -161,7 +161,7 @@ ParPar.setMethod(argv.method, sliceSize);
 
 // TODO: sigint not respected?
 
-g.init(function(err) {
+g.init(files, function(err) {
 	if(err) {
 		process.stderr.write(err + '\n');
 		process.exit(1);
