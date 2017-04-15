@@ -135,20 +135,6 @@ if(argv.o.match(/\.par2$/i))
 
 // TODO: expose minChunkSize etc
 var sliceSize = parseSize(argv.s);
-var g = new ParPar.PAR2Gen(sliceSize, argv.r|0, {
-	outputBase: argv.o,
-	displayNameFormat: argv['filepath-format'],
-	recoveryOffset: argv.e,
-	memoryLimit: parseSize(argv.m),
-	minChunkSize: 16384,
-	comments: argv.c,
-	creator: 'ParPar v' + ParPar.version + ' [https://animetosho.org/app/parpar]',
-	unicode: null,
-	outputIndex: argv.i,
-	outputAltNamingScheme: argv.n,
-	outputSizeScheme: argv.d,
-	outputFileMaxSlices: argv.p,
-});
 
 // TODO: check output files don't exist
 
@@ -161,27 +147,35 @@ ParPar.setMethod(argv.method, sliceSize);
 
 // TODO: sigint not respected?
 
-g.init(files, function(err) {
+ParPar.fileInfo(files, function(err, info) {
 	if(err) {
 		process.stderr.write(err + '\n');
 		process.exit(1);
 	}
 	
+	var g = new ParPar.PAR2Gen(info, sliceSize, argv.r|0, {
+		outputBase: argv.o,
+		displayNameFormat: argv['filepath-format'],
+		recoveryOffset: argv.e,
+		memoryLimit: parseSize(argv.m),
+		minChunkSize: 16384,
+		comments: argv.c,
+		creator: 'ParPar v' + ParPar.version + ' [https://animetosho.org/app/parpar]',
+		unicode: null,
+		outputIndex: argv.i,
+		outputAltNamingScheme: argv.n,
+		outputSizeScheme: argv.d,
+		outputFileMaxSlices: argv.p,
+	});
+	
+	var currentSlice = 0;
 	if(!argv.q) {
 		var method_used = ParPar.getMethod();
 		var num_threads = ParPar.getNumThreads();
 		var thread_str = num_threads + ' thread' + (num_threads==1 ? '':'s');
 		process.stderr.write('Method used: ' + method_used.description + ' (' + method_used.wordBits + ' bit), ' + thread_str + '\n');
 		
-		/*
-		g.on('processing_file', function(file) {
-			process.stderr.write('Processing file ' + file.name + '\n');
-		});
-		*/
-		var totalSlices = g.chunks * g.passes * g.inputSlices, currentSlice = 0;
-		g.on('processing_slice', function(file, sliceNum) {
-			currentSlice++;
-		});
+		var totalSlices = g.chunks * g.passes * g.inputSlices;
 		if(totalSlices) {
 			var interval = setInterval(function() {
 				var perc = Math.floor(currentSlice / totalSlices *10000)/100;
@@ -205,6 +199,9 @@ g.init(files, function(err) {
 		if(interval) clearInterval(interval);
 		process.stderr.write('Calculating: 100.00%\x1b[0G');
 		process.stderr.write('\nPAR2 created. Time taken: ' + ((endTime - startTime)/1000) + ' second(s)\n');
+	}, function(event, arg1) {
+		if(event == 'processing_slice') currentSlice++;
+		// if(event == 'processing_file') process.stderr.write('Processing file ' + arg1.name + '\n');
 	});
 	
 });
