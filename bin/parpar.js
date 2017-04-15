@@ -96,7 +96,7 @@ var argv = require('yargs')
 	p: {
 		alias: 'slices-per-file',
 		describe: 'Specify the maximum number of slices each file should contain',
-		default: 32768
+		default: 65536
 	},
 	n: {
 		alias: 'alt-naming-scheme',
