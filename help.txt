@@ -52,13 +52,13 @@ Performance Options:
                              performance. Default `64M`.
   -t,  --threads             Limit number of threads to use. Default equals
                              number of CPU cores.
-       --min-chunk-size      Minimum chunking size. Set to same value as
-                             `--slice-size` to disable chunking. This is a
-                             tradeoff between sequential and random I/O. It is
-                             preferrable to use larger values on hard disks,
-                             where random I/O is slow, but smaller values on
-                             flash based storage, where random I/O is faster.
-                             Default `16K`.
+       --min-chunk-size      Minimum chunking size. Set to 0 to disable
+                             chunking. This is a tradeoff between sequential
+                             and random I/O. It is preferrable to use larger
+                             values (or 0) on hard disks, where random I/O is
+                             slow, but smaller values on flash based storage,
+                             where random I/O is faster.
+                             Default `128K`.
        --method              Algorithm for performing GF multiplies. Process
                              can crash if CPU does not support selected method.
                              Choices are `lh_lookup`, `xor` and `shuffle`.
