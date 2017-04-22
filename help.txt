@@ -4,6 +4,8 @@ High performance PAR2 creation tool
 
 Usage: parpar -s <blocksize> -r <blocks> -o <output> [options] [--] <input1> [<input2>...]
 
+Unless otherwise specified, all options take one parameter.
+
 PAR2 Options:
 
   -s,  --slice-size          Slice/block size to use.
@@ -11,15 +13,14 @@ PAR2 Options:
   -e,  --recovery-offset     Recovery slice start offset. Default 0.
   -c,  --comment             Add PAR2 comment. Can be specified multiple times.
        --packet-redundancy   How critical packets are repeated, can be either:
-                                 none: only a single copy of critical packets
-                                       is stored
+                                 none: only store a single copy of packets
                                  pow2: repeat packets in a power-of-2 fashion
                                        amongst recovery packets
                              Default is `pow2`.
        --filepath-format     How to format input file paths, can be either:
                                  basename: discard paths
                                  keep: retain full paths
-                                 common: discard common paths
+                                 common: discard common parts of paths
                              Default is `common`.
 
 Output Options:
@@ -30,7 +31,7 @@ Output Options:
                              popularized by par2cmdline. Output names will look
                              like xxx.vol12+10.par2 instead of
                              xxx.vol12-22.par2
-                             This option is boolean (doesn't take any values).
+                             This option doesn't take any parameters.
   -d,  --slice-dist          Specify how recovery slices are distributed
                              amongst output files. Can be:
                                  equal: equal sized files (default)
@@ -44,22 +45,33 @@ Output Options:
 Performance Options:
 
   -m,  --memory              Maximum amount of memory to use for recovery
-                             slices. Default `64M`.
-  -t,  --threads             Limit number of threads to use; default equals
+                             slices. If all recovery slices cannot be held in
+                             memory, ParPar will run multiple passes on input
+                             data to generate recovery, so increasing this
+                             value as much as possible, will greatly improve
+                             performance. Default `64M`.
+  -t,  --threads             Limit number of threads to use. Default equals
                              number of CPU cores.
        --min-chunk-size      Minimum chunking size. Set to same value as
-                             `--slice-size` to disable chunking.
+                             `--slice-size` to disable chunking. This is a
+                             tradeoff between sequential and random I/O. It is
+                             preferrable to use larger values on hard disks,
+                             where random I/O is slow, but smaller values on
+                             flash based storage, where random I/O is faster.
                              Default `16K`.
        --method              Algorithm for performing GF multiplies. Process
                              can crash if CPU does not support selected method.
                              Choices are `lh_lookup`, `xor` and `shuffle`.
-                             Default is auto-detected.
+                             Default is auto-detected. This option should
+                             generally never be changed, and left at default.
 
 UI Options:
 
+  All of the following options take no parameters.
+
   -q,  --quiet               Suppress information output
-  -?,  --help                Display a summarized list of options (flag option)
-       --version             Print application version number (flag option)
+  -?,  --help                Displays this list of options
+       --version             Print application version number and exit
 
 Input Files:
 
