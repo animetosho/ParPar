@@ -4,122 +4,128 @@
 process.title = 'ParPar';
 
 var ParPar = require('../');
-
-var parseSize = function(s) {
-	if(typeof s == 'number') return Math.floor(s);
-	var parts;
-	if(parts = s.match(/^([0-9.]+)([kKmMgGtTpPeE])$/)) {
-		var num = +(parts[1]);
-		switch(parts[2].toUpperCase()) {
-			case 'E': num *= 1024;
-			case 'P': num *= 1024;
-			case 'T': num *= 1024;
-			case 'G': num *= 1024;
-			case 'M': num *= 1024;
-			case 'K': num *= 1024;
-		}
-		if(isNaN(num) || num < 1) return false;
-		return Math.floor(num);
-	}
-	return false;
+var error = function(msg) {
+	console.error(msg);
+	console.error('Enter `nyuu --help` or `nyuu --help-full` for usage information');
+	process.exit(1);
 };
 
-var exe = 'parpar'; // '$0'
-
-var argv = require('yargs')
- .usage('ParPar, a high performance PAR2 creation tool\nUsage: '+exe+' -s <blocksize> -r <blocks> -o <output> [options] [--] <input1> [<input2>...]')
- .help('h')
- .example(exe+' -s 1M -r 64 -o my_recovery.par2 file1 file2', 'Generate 64MB of PAR2 recovery files from file1 and file2, named "my_recovery"')
- .demand(1, 'No input files supplied')
- .version(function() {
-	return ParPar.version;
- })
- .wrap(Math.max(80, require('yargs').terminalWidth()))
- .options({
-	o: {
-		alias: 'output',
-		demand: 'PAR2 output file name must be supplied',
-		describe: 'Base PAR2 file name. A .par2 extension will be appended if not supplied.'
+var opts = {
+	'slice-size': {
+		alias: 's',
+		type: 'size'
+	},
+	'recovery-slices': {
+		alias: 'r',
+		type: 'int'
+	},
+	'recovery-offset': {
+		alias: 'e',
+		type: 'int',
+		map: 'recoveryOffset'
+	},
+	'comment': {
+		alias: 'c',
+		type: 'array',
+		map: 'comments'
+	},
+	'packet-redundancy': {
+		type: 'enum',
+		enum: ['none','pow2'],
+		map: 'criticalRedundancyScheme'
 	},
 	'filepath-format': {
-		describe: 'How to format input file paths',
-		choices: ['basename', 'keep', 'common'],
-		default: 'common'
+		type: 'enum',
+		enum: ['basename','keep','common'],
+		default: 'common',
+		map: 'displayNameFormat'
 	},
-	s: {
-		alias: 'slice-size',
-		demand: 'Slice/block size not supplied',
-		describe: 'Slice/block size to use.'
+	'out': {
+		alias: 'o',
+		type: 'string'
 	},
-	r: {
-		alias: 'recovery-slices',
-		demand: 'Number of recovery slices not specified',
-		describe: 'Number of recovery slices to generate.'
+	'alt-naming-scheme': {
+		alias: 'n',
+		type: 'bool',
+		map: 'outputAltNamingScheme'
 	},
-	m: {
-		alias: 'memory',
-		describe: 'Maximum amount of memory to use for recovery slices.',
-		default: '64M'
+	'slice-dist': {
+		alias: 'd',
+		type: 'enum',
+		enum: ['equal','pow2'],
+		map: 'outputSizeScheme'
 	},
-	e: {
-		alias: 'recovery-offset',
-		describe: 'Recovery slice start offset.',
-		default: 0
+	'slices-per-file': {
+		alias: 'p',
+		type: 'int',
+		map: 'outputFileMaxSlices'
 	},
-	t: {
-		alias: 'threads',
-		describe: 'limit number of threads to use; by default, equals number of CPU cores',
-		default: null // TODO: override text
+	'index': {
+		alias: 'i',
+		type: 'bool',
+		map: 'outputIndex'
 	},
-	method: {
-		describe: 'Algorithm for performing GF multiplies. Process can crash if CPU does not support selected method.',
-		choices: ['auto', 'lh_lookup', 'xor', 'shuffle'],
-		default: 'auto'
+	'memory': {
+		alias: 'm',
+		type: 'size',
+		map: 'memoryLimit'
 	},
-	c: {
-		alias: 'comment',
-		describe: 'Add PAR2 comment. Can be specified multiple times.',
-		array: true,
-		default: []
+	'threads': {
+		alias: 't',
+		type: 'int'
 	},
-	i: { // TODO: change to no-index?
-		alias: 'index',
-		describe: 'Output an index file (file with no recovery blocks)',
-		default: true
+	'min-chunk-size': {
+		type: 'size',
+		map: 'minChunkSize'
 	},
-	d: {
-		alias: 'slice-dist',
-		describe: 'Specify how recovery slices are distributed amongst files',
-		choices: ['equal','pow2','single'],
-		default: 'equal'
+	'method': {
+		type: 'enum',
+		enum: ['lh_lookup','xor','shuffle'],
+		default: ''
 	},
-	p: {
-		alias: 'slices-per-file',
-		describe: 'Specify the maximum number of slices each file should contain',
-		default: 65536
+	'help': {
+		alias: '?',
+		type: 'bool'
 	},
-	n: {
-		alias: 'alt-naming-scheme',
-		describe: 'Use alternative naming scheme for recovery files (xxx.vol12+10.par2 instead of xxx.vol12-22.par2)',
-		boolean: true
+	'quiet': {
+		alias: 'q',
+		type: 'bool'
 	},
-	v: {
-		alias: 'verbose',
-		boolean: true
+	'version': {
+		type: 'bool'
 	},
-	q: {
-		alias: 'quiet',
-		boolean: true
-	},
-	h: {
-		alias: ['help', '?']
+};
+var argv;
+try {
+	argv = require('../lib/arg_parser.js')(process.argv.slice(2), opts);
+} catch(x) {
+	error(x.message);
+}
+
+var fs = require('fs'), path = require('path');
+if(argv.help) {
+	var helpText;
+	try {
+		helpText = require('./help.json');
+	} catch(x) {
+		helpText = fs.readFileSync(__dirname + '/../help.txt').toString();
 	}
-}).argv;
+	console.error(helpText.replace(/^ParPar(\r?\n)/, 'ParPar v' + require('../package.json').version + '$1'));
+	process.exit(0);
+}
+if(argv.version) {
+	console.error(require('../package.json').version);
+	process.exit(0);
+}
+
+if(!argv.out || !argv['slice-size'] || !argv['recovery-slices']) {
+	error('Error: Values for `out`, `slice-size` and `recovery-slices` are required');
+}
+
 
 // handle input directories
 // TODO: recursion control; consider recursion in fileInfo
 var files = [];
-var fs = require('fs'), path = require('path');
 argv._.forEach(function addFile(file) {
 	if(fs.statSync(file).isDirectory()) {
 		fs.readdirSync(file).forEach(function(subfile) {
@@ -130,20 +136,29 @@ argv._.forEach(function addFile(file) {
 	}
 });
 
-if(argv.o.match(/\.par2$/i))
-	argv.o = argv.o.substr(0, argv.o.length-5);
+if(!files.length) error('At least one input file must be supplied');
 
-// TODO: expose minChunkSize etc
-var sliceSize = parseSize(argv.s);
+var ppo = {
+	outputBase: argv.out,
+	creator: 'ParPar v' + require('../package.json').version + ' [https://animetosho.org/app/parpar]',
+	unicode: null
+};
+if(argv.out.match(/\.par2$/i))
+	ppo.outputBase = argv.out.substr(0, argv.out.length-5);
+
+for(var k in opts) {
+	if(opts[k].map && argv[k])
+		ppo[opts[k].map] = argv[k];
+}
 
 // TODO: check output files don't exist
 
 var startTime = Date.now();
 var decimalPoint = (1.1).toLocaleString().substr(1, 1);
 
-if(argv.t) ParPar.setMaxThreads(argv.t | 0);
-if(argv.method == 'auto') argv.method = '';
-ParPar.setMethod(argv.method, sliceSize);
+if(argv.threads) ParPar.setMaxThreads(argv.threads);
+//if(argv.method == 'auto') argv.method = '';
+ParPar.setMethod(argv.method, argv['slice-size']);
 
 // TODO: sigint not respected?
 
@@ -153,23 +168,10 @@ ParPar.fileInfo(files, function(err, info) {
 		process.exit(1);
 	}
 	
-	var g = new ParPar.PAR2Gen(info, sliceSize, argv.r|0, {
-		outputBase: argv.o,
-		displayNameFormat: argv['filepath-format'],
-		recoveryOffset: argv.e,
-		memoryLimit: parseSize(argv.m),
-		minChunkSize: 16384,
-		comments: argv.c,
-		creator: 'ParPar v' + ParPar.version + ' [https://animetosho.org/app/parpar]',
-		unicode: null,
-		outputIndex: argv.i,
-		outputAltNamingScheme: argv.n,
-		outputSizeScheme: argv.d,
-		outputFileMaxSlices: argv.p,
-	});
+	var g = new ParPar.PAR2Gen(info, argv['slice-size'], argv['recovery-slices'], ppo);
 	
 	var currentSlice = 0;
-	if(!argv.q) {
+	if(!argv.quiet) {
 		var method_used = ParPar.getMethod();
 		var num_threads = ParPar.getNumThreads();
 		var thread_str = num_threads + ' thread' + (num_threads==1 ? '':'s');

@@ -1,0 +1,72 @@
+ParPar
+High performance PAR2 creation tool
+-----------------------------------
+
+Usage: parpar -s <blocksize> -r <blocks> -o <output> [options] [--] <input1> [<input2>...]
+
+PAR2 Options:
+
+  -s,  --slice-size          Slice/block size to use.
+  -r,  --recovery-slices     Number of recovery slices to generate.
+  -e,  --recovery-offset     Recovery slice start offset. Default 0.
+  -c,  --comment             Add PAR2 comment. Can be specified multiple times.
+       --packet-redundancy   How critical packets are repeated, can be either:
+                                 none: only a single copy of critical packets
+                                       is stored
+                                 pow2: repeat packets in a power-of-2 fashion
+                                       amongst recovery packets
+                             Default is `pow2`.
+       --filepath-format     How to format input file paths, can be either:
+                                 basename: discard paths
+                                 keep: retain full paths
+                                 common: discard common paths
+                             Default is `common`.
+
+Output Options:
+
+  -o,  --out                 Base PAR2 file name. A .par2 extension will be
+                             appeneded if not supplied.
+  -n,  --alt-naming-scheme   Use alternative naming scheme for recovery files,
+                             popularized by par2cmdline. Output names will look
+                             like xxx.vol12+10.par2 instead of
+                             xxx.vol12-22.par2
+                             This option is boolean (doesn't take any values).
+  -d,  --slice-dist          Specify how recovery slices are distributed
+                             amongst output files. Can be:
+                                 equal: equal sized files (default)
+                                 pow2: power-of-2 sizing scheme
+  -p,  --slices-per-file     Specify the maximum number of slices each file
+                             may contain. Default 65536
+  -i,  --index               Output an index file (file with no recovery
+                             blocks). Default enabled, use `--no-index` to
+                             disable.
+
+Performance Options:
+
+  -m,  --memory              Maximum amount of memory to use for recovery
+                             slices. Default `64M`.
+  -t,  --threads             Limit number of threads to use; default equals
+                             number of CPU cores.
+       --min-chunk-size      Minimum chunking size. Set to same value as
+                             `--slice-size` to disable chunking.
+                             Default `16K`.
+       --method              Algorithm for performing GF multiplies. Process
+                             can crash if CPU does not support selected method.
+                             Choices are `lh_lookup`, `xor` and `shuffle`.
+                             Default is auto-detected.
+
+UI Options:
+
+  -q,  --quiet               Suppress information output
+  -?,  --help                Display a summarized list of options (flag option)
+       --version             Print application version number (flag option)
+
+Input Files:
+
+  Additional arguments are taken as files to be processed.
+
+------------------
+Examples
+
+  parpar -s 1M -r 64 -o my_recovery.par2 file1 file2
+      Generate 64MB of PAR2 recovery files from file1 and file2, named "my_recovery"

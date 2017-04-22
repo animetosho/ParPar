@@ -25,7 +25,6 @@
   "gypfile": true,
   "dependencies": {
     "async": "1.*",
-    "yargs": "*",
     "yencode": ">=1.0.4"
   },
   "bugs": {
