@@ -15,9 +15,13 @@ var opts = {
 		alias: 's',
 		type: 'size'
 	},
+	'slice-count': {
+		alias: 'b',
+		type: 'int'
+	},
 	'recovery-slices': {
 		alias: 'r',
-		type: 'int'
+		type: 'string'
 	},
 	'recovery-offset': {
 		alias: 'e',
@@ -118,10 +122,11 @@ if(argv.version) {
 	process.exit(0);
 }
 
-if(!argv.out || !argv['slice-size'] || !argv['recovery-slices']) {
-	error('Error: Values for `out`, `slice-size` and `recovery-slices` are required');
+if(!argv.out || (!argv['slice-size'] && !argv['slice-count'])) {
+	error('Values for `out` and `slice-size`/`slice-count` are required');
 }
-
+if(('slice-size' in argv) && ('slice-count' in argv))
+	error('Cannot specify both `slice-size` and `slice-count`');
 
 // handle input directories
 // TODO: recursion control; consider recursion in fileInfo
@@ -140,6 +145,7 @@ if(!files.length) error('At least one input file must be supplied');
 
 var ppo = {
 	outputBase: argv.out,
+	recoverySlicesUnit: 'slices',
 	creator: 'ParPar v' + require('../package.json').version + ' [https://animetosho.org/app/parpar]',
 	unicode: null
 };
@@ -151,6 +157,32 @@ for(var k in opts) {
 		ppo[opts[k].map] = argv[k];
 }
 
+if(argv['recovery-slices']) {
+	var m;
+	if(typeof argv['recovery-slices'] == 'number' || /^\d+$/.test(argv['recovery-slices']))
+		ppo.recoverySlices = argv['recovery-slices']|0;
+	else if(m = argv['recovery-slices'].match(/^([0-9.]+)([%kKmMgGtTpPeE])$/)) {
+		var n = +(m[1]);
+		if(isNaN(n)) error('Invalid value specified for `recovery-slices`');
+		if(m[2] == '%') {
+			ppo.recoverySlices = n/100;
+			ppo.recoverySlicesUnit = 'ratio';
+		} else {
+			switch(m[2].toUpperCase()) {
+				case 'E': n *= 1024;
+				case 'P': n *= 1024;
+				case 'T': n *= 1024;
+				case 'G': n *= 1024;
+				case 'M': n *= 1024;
+				case 'K': n *= 1024;
+			}
+			ppo.recoverySlices = Math.floor(n);
+			ppo.recoverySlicesUnit = 'bytes';
+		}
+	} else
+		error('Invalid value specified for `recovery-slices`');
+}
+
 // TODO: check output files don't exist
 
 var startTime = Date.now();
@@ -158,7 +190,6 @@ var decimalPoint = (1.1).toLocaleString().substr(1, 1);
 
 if(argv.threads) ParPar.setMaxThreads(argv.threads);
 //if(argv.method == 'auto') argv.method = '';
-ParPar.setMethod(argv.method, argv['slice-size']);
 
 // TODO: sigint not respected?
 
@@ -168,7 +199,8 @@ ParPar.fileInfo(files, function(err, info) {
 		process.exit(1);
 	}
 	
-	var g = new ParPar.PAR2Gen(info, argv['slice-size'], argv['recovery-slices'], ppo);
+	ParPar.setMethod(argv.method, argv['slice-size']); // TODO: allow size hint to work if slice-count is specified
+	var g = new ParPar.PAR2Gen(info, argv['slice-size'] || -argv['slice-count'], ppo);
 	
 	var currentSlice = 0;
 	if(!argv.quiet) {

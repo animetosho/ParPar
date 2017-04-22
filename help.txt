@@ -2,14 +2,22 @@ ParPar
 High performance PAR2 creation tool
 -----------------------------------
 
-Usage: parpar -s <blocksize> -r <blocks> -o <output> [options] [--] <input1> [<input2>...]
+Usage: parpar {-s <blocksize> | -b <count>} -o <output> [options] [--] <input1> [<input2>...]
 
 Unless otherwise specified, all options take one parameter.
 
 PAR2 Options:
 
   -s,  --slice-size          Slice/block size to use.
-  -r,  --recovery-slices     Number of recovery slices to generate.
+  -b,  --slice-count         Number of input slices/blocks. Cannot be used with
+                             `--slice-size`.
+  -r,  --recovery-slices     Number of recovery slices to generate. You can
+                             append a suffix to auto-calculate this, as in the
+                             following examples:
+                                 `-r100`: generates 100 recovery slices
+                                 `-r15%`: generates at least 15% recovery
+                                 `-r2.5M`: generates at least 2.5MB of recovery
+                             Default is 0, which generates no recovery.
   -e,  --recovery-offset     Recovery slice start offset. Default 0.
   -c,  --comment             Add PAR2 comment. Can be specified multiple times.
        --packet-redundancy   How critical packets are repeated, can be either:
