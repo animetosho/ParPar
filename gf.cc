@@ -285,7 +285,7 @@ FUNC(SetMaxThreads) {
 	if (mmActiveTasks)
 		RETURN_ERROR("Calculation already in progress");
 	
-	maxNumThreads = args[0]->ToInt32()->Value();
+	maxNumThreads = args[0]->ToInteger()->Value();
 	if(maxNumThreads < 1) maxNumThreads = defaultNumThreads;
 	
 	if(!gf) setup_gf();
@@ -533,7 +533,7 @@ FUNC(MultiplyMulti) {
 				RTN_ERROR("Length of input must be a multiple of 2");
 		}
 		
-		int ibNum = oIBNums->Get(i)->ToInt32()->Value();
+		int ibNum = oIBNums->Get(i)->ToInteger()->Value();
 		if (ibNum < 0 || ibNum > 32767)
 			RTN_ERROR("Invalid input block number specified");
 		iNums[i] = ibNum;
@@ -550,7 +550,7 @@ FUNC(MultiplyMulti) {
 		outputs[i] = (uint16_t*)node::Buffer::Data(output);
 		if ((uintptr_t)outputs[i] & (MEM_ALIGN-1))
 			RTN_ERROR("All output buffers must be address aligned");
-		int rbNum = oRBNums->Get(i)->ToInt32()->Value();
+		int rbNum = oRBNums->Get(i)->ToInteger()->Value();
 		if (rbNum < 0 || rbNum > 32767)
 			RTN_ERROR("Invalid recovery block number specified");
 		oNums[i] = rbNum;
@@ -874,7 +874,7 @@ FUNC(SetMethod) {
 	GF_METHOD_ARG1 = 0;
 	GF_METHOD_ARG2 = 0;
 	if (args.Length() >= 1) {
-		switch(args[0]->ToInt32()->Value()) {
+		switch(args[0]->ToInteger()->Value()) {
 			case GF_METHOD_DEFAULT:
 				GF_METHOD = GF_MULT_DEFAULT;
 			break;
@@ -898,7 +898,7 @@ FUNC(SetMethod) {
 		GF_METHOD = GF_MULT_DEFAULT;
 	
 	if (args.Length() >= 2)
-		size_hint = args[1]->ToInt32()->Value();
+		size_hint = args[1]->ToInteger()->Value();
 	else
 		size_hint = 0;
 	
