@@ -87,6 +87,9 @@ Input Files:
 
   Additional arguments are taken as files to be processed.
 
+  -R,  --recurse             If specified, recurse into subdirectories. This
+                             option takes no values.
+
 ------------------
 Examples
 

@@ -92,6 +92,10 @@ var opts = {
 		enum: ['lh_lookup','xor','shuffle'],
 		default: ''
 	},
+	'recurse': {
+		alias: 'R',
+		type: 'bool'
+	},
 	'help': {
 		alias: '?',
 		type: 'bool'
@@ -111,7 +115,7 @@ try {
 	error(x.message);
 }
 
-var fs = require('fs'), path = require('path');
+var fs = require('fs');
 if(argv.help) {
 	var helpText;
 	try {
@@ -133,20 +137,7 @@ if(!argv.out || (!argv['slice-size'] && !argv['slice-count'])) {
 if(('slice-size' in argv) && ('slice-count' in argv))
 	error('Cannot specify both `slice-size` and `slice-count`');
 
-// handle input directories
-// TODO: recursion control; consider recursion in fileInfo
-var files = [];
-argv._.forEach(function addFile(file) {
-	if(fs.statSync(file).isDirectory()) {
-		fs.readdirSync(file).forEach(function(subfile) {
-			addFile(file + path.sep + subfile);
-		});
-	} else {
-		files.push(file);
-	}
-});
-
-if(!files.length) error('At least one input file must be supplied');
+if(!argv._.length) error('At least one input file must be supplied');
 
 var ppo = {
 	outputBase: argv.out,
@@ -188,8 +179,6 @@ if(argv['recovery-slices']) {
 		error('Invalid value specified for `recovery-slices`');
 }
 
-// TODO: check output files don't exist
-
 var startTime = Date.now();
 var decimalPoint = (1.1).toLocaleString().substr(1, 1);
 
@@ -198,7 +187,7 @@ if(argv.threads) ParPar.setMaxThreads(argv.threads);
 
 // TODO: sigint not respected?
 
-ParPar.fileInfo(files, function(err, info) {
+ParPar.fileInfo(argv._, argv.recurse, function(err, info) {
 	if(err) {
 		process.stderr.write(err + '\n');
 		process.exit(1);
