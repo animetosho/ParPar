@@ -35,6 +35,8 @@ Output Options:
 
   -o,  --out                 Base PAR2 file name. A .par2 extension will be
                              appeneded if not supplied.
+  -O,  --overwrite           Overwrite existing files if they exist. This
+                             option doesn't take any parameters.
   -n,  --alt-naming-scheme   Use alternative naming scheme for recovery files,
                              popularized by par2cmdline. Output names will look
                              like xxx.vol12+10.par2 instead of

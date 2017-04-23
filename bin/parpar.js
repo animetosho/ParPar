@@ -48,6 +48,11 @@ var opts = {
 		alias: 'o',
 		type: 'string'
 	},
+	'overwrite': {
+		alias: 'O',
+		type: 'bool',
+		map: 'outputOverwrite'
+	},
 	'alt-naming-scheme': {
 		alias: 'n',
 		type: 'bool',
