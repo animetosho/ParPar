@@ -69,6 +69,8 @@ Performance Options:
                              slow, but smaller values on flash based storage,
                              where random I/O is faster.
                              Default `128K`.
+       --seq-first-pass      Disable chunked processing for the first pass. No
+                             values are taken for this option.
        --method              Algorithm for performing GF multiplies. Process
                              can crash if CPU does not support selected method.
                              Choices are `lh_lookup`, `xor` and `shuffle`.

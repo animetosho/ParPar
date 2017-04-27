@@ -87,6 +87,10 @@ var opts = {
 		type: 'size',
 		map: 'minChunkSize'
 	},
+	'seq-first-pass': {
+		type: 'bool',
+		map: 'noChunkFirstPass'
+	},
 	'method': {
 		type: 'enum',
 		enum: ['lh_lookup','xor','shuffle'],
@@ -204,6 +208,9 @@ ParPar.fileInfo(argv._, argv.recurse, function(err, info) {
 		process.stderr.write('Method used: ' + method_used.description + ' (' + method_used.wordBits + ' bit), ' + thread_str + '\n');
 		
 		var totalSlices = g.chunks * g.passes * g.inputSlices;
+		if(argv['seq-first-pass']) {
+			totalSlices = g.chunks * (g.passes-1) * g.inputSlices + g.inputSlices;
+		}
 		if(totalSlices) {
 			var interval = setInterval(function() {
 				var perc = Math.floor(currentSlice / totalSlices *10000)/100;
