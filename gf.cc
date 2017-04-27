@@ -637,7 +637,7 @@ FUNC(Finish) {
 	
 	Local<Object> oInputs = args[0]->ToObject();
 	bool calcMd5 = false;
-	if (args.Length() >= 2) {
+	if (args.Length() >= 2 && !args[1]->IsUndefined()) {
 		if (!args[1]->IsArray())
 			RETURN_ERROR("MD5 contexts not an array");
 		if (Local<Array>::Cast(args[1])->Length() != numInputs)
@@ -736,7 +736,7 @@ FUNC(MD5Start) {
 	md5_init(ctx);
 	
 	// in some cases, we want to pre-populate some data
-	if (args.Length() > 0) {
+	if (args.Length() > 0 && !args[0]->IsUndefined()) {
 		if (!node::Buffer::HasInstance(args[0]))
 			RETURN_ERROR("First argument must be a Buffer");
 		
@@ -873,7 +873,7 @@ FUNC(SetMethod) {
 	
 	GF_METHOD_ARG1 = 0;
 	GF_METHOD_ARG2 = 0;
-	if (args.Length() >= 1) {
+	if (args.Length() >= 1 && !args[0]->IsUndefined()) {
 		switch(args[0]->ToInteger()->Value()) {
 			case GF_METHOD_DEFAULT:
 				GF_METHOD = GF_MULT_DEFAULT;
