@@ -30,6 +30,11 @@ PAR2 Options:
                                  keep: retain full paths
                                  common: discard common parts of paths
                              Default is `common`.
+       --unicode             Whether to force PAR2 unicode packets to be
+                             generated. If set, unicode packets will always be
+                             generated. If explicitly unset (`--no-unicode`),
+                             will force unicode packets to never by generated.
+                             Default is to auto detect.
 
 Output Options:
 

@@ -44,6 +44,11 @@ var opts = {
 		default: 'common',
 		map: 'displayNameFormat'
 	},
+	'unicode': {
+		type: 'bool',
+		default: null,
+		map: 'unicode'
+	},
 	'out': {
 		alias: 'o',
 		type: 'string'
@@ -146,14 +151,13 @@ if(!argv._.length) error('At least one input file must be supplied');
 var ppo = {
 	outputBase: argv.out,
 	recoverySlicesUnit: 'slices',
-	creator: 'ParPar v' + require('../package.json').version + ' [https://animetosho.org/app/parpar]',
-	unicode: null
+	creator: 'ParPar v' + require('../package.json').version + ' [https://animetosho.org/app/parpar]'
 };
 if(argv.out.match(/\.par2$/i))
 	ppo.outputBase = argv.out.substr(0, argv.out.length-5);
 
 for(var k in opts) {
-	if(opts[k].map && argv[k])
+	if(opts[k].map && (k in argv))
 		ppo[opts[k].map] = argv[k];
 }
 
