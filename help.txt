@@ -64,7 +64,7 @@ Performance Options:
                              memory, ParPar will run multiple passes on input
                              data to generate recovery, so increasing this
                              value as much as possible, will greatly improve
-                             performance. Default `64M`.
+                             performance. Default `256M`.
   -t,  --threads             Limit number of threads to use. Default equals
                              number of CPU cores.
        --min-chunk-size      Minimum chunking size. Set to 0 to disable
