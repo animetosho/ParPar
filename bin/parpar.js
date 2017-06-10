@@ -6,7 +6,7 @@ process.title = 'ParPar';
 var ParPar = require('../');
 var error = function(msg) {
 	console.error(msg);
-	console.error('Enter `nyuu --help` or `nyuu --help-full` for usage information');
+	console.error('Enter `parpar --help` or `parpar --help-full` for usage information');
 	process.exit(1);
 };
 
