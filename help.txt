@@ -76,6 +76,12 @@ Performance Options:
                              Default `128K`.
        --seq-first-pass      Disable chunked processing for the first pass. No
                              values are taken for this option.
+       --proc-batch-size     Number of slices to submit as a job for GF
+                             calculation. Default is
+                             max(`--threads`*16, ceil(4M/chunk-size))
+       --proc-buffer-size    Number of additional slices to buffer. Set to 0
+                             to disable bufferring. Default equals
+                             `--proc-batch-size`
        --method              Algorithm for performing GF multiplies. Process
                              can crash if CPU does not support selected method.
                              Choices are `lh_lookup`, `xor` and `shuffle`.

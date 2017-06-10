@@ -96,6 +96,14 @@ var opts = {
 		type: 'bool',
 		map: 'noChunkFirstPass'
 	},
+	'proc-batch-size': {
+		type: 'int',
+		map: 'processBatchSize'
+	},
+	'proc-buffer-size': {
+		type: 'int',
+		map: 'processBufferSize'
+	},
 	'method': {
 		type: 'enum',
 		enum: ['lh_lookup','xor','shuffle'],
