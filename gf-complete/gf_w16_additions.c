@@ -880,32 +880,20 @@ static inline FAST_U16 xor_jit_bitpair3_nc_noxor(uint8_t* dest, FAST_U16 info, F
   #define CPU_SLOW_SMC 1
 #endif
 
-static void gf_w16_xor_lazy_jit_altmap_multiply_region_sse(gf_t *gf, void *src, void *dest, gf_val_32_t val, int bytes, int xor)
+static uint8_t* xor_write_jit_sse(jit_t* jit, gf_val_32_t val, int prim_poly, int use_temp, int xor)
 {
   FAST_U32 i, bit;
   long inBit;
   __m128i depmask1, depmask2, polymask1, polymask2, addvals1, addvals2;
   ALIGN(16, uint16_t tmp_depmask[16]);
   ALIGN(16, uint32_t lumask[8]);
-  gf_region_data rd;
-  gf_internal_t *h;
-  jit_t* jit;
-  
-  if (val == 0) { gf_multby_zero(dest, bytes, xor); return; }
-  if (val == 1) { gf_multby_one(src, dest, bytes, xor); return; }
 
-  h = (gf_internal_t *) gf->scratch;
-  jit = &(h->jit);
-  gf_w16_log_region_alignment(&rd, gf, src, dest, bytes, val, xor, 16, 256);
-  
-  if(rd.d_start != rd.d_top) {
-  
+
     uint8_t* jitptr, *jitcode;
 #ifdef CPU_SLOW_SMC
     ALIGN(32, uint8_t jitTemp[2048]);
     uint8_t* jitdst;
 #endif
-    int use_temp = ((uintptr_t)rd.s_start - (uintptr_t)rd.d_start + 256) < 512;
 #ifdef XORDEP_DISABLE_NO_COMMON
     #define no_common_mask 0
 #else
@@ -917,7 +905,7 @@ static void gf_w16_xor_lazy_jit_altmap_multiply_region_sse(gf_t *gf, void *src, 
     addvals2 = _mm_set_epi16(1<<15, 1<<14, 1<<13, 1<<12, 1<<11, 1<<10, 1<<9, 1<<8);
     
     /* duplicate each bit in the polynomial 16 times */
-    polymask2 = _mm_set1_epi16(h->prim_poly & 0xFFFF); /* chop off top bit, although not really necessary */
+    polymask2 = _mm_set1_epi16(prim_poly & 0xFFFF); /* chop off top bit, although not really necessary */
     polymask1 = _mm_and_si128(polymask2, _mm_set_epi16(1<< 8, 1<< 9, 1<<10, 1<<11, 1<<12, 1<<13, 1<<14, 1<<15));
     polymask2 = _mm_and_si128(polymask2, _mm_set_epi16(1<< 0, 1<< 1, 1<< 2, 1<< 3, 1<< 4, 1<< 5, 1<< 6, 1<< 7));
     polymask1 = _mm_cmpeq_epi16(_mm_setzero_si128(), polymask1);
@@ -1502,11 +1490,31 @@ static void gf_w16_xor_lazy_jit_altmap_multiply_region_sse(gf_t *gf, void *src, 
     }
 #endif
 #endif
-    
+
+  return jitcode;
+}
+
+static void gf_w16_xor_lazy_jit_altmap_multiply_region_sse(gf_t *gf, void *src, void *dest, gf_val_32_t val, int bytes, int xor)
+{
+  gf_region_data rd;
+  gf_internal_t *h;
+  
+  if (val == 0) { gf_multby_zero(dest, bytes, xor); return; }
+  if (val == 1) { gf_multby_one(src, dest, bytes, xor); return; }
+
+  h = (gf_internal_t *) gf->scratch;
+  gf_w16_log_region_alignment(&rd, gf, src, dest, bytes, val, xor, 16, 256);
+  
+  if(rd.d_start != rd.d_top) {
     // exec
     /* adding 128 to the destination pointer allows the register offset to be coded in 1 byte
      * eg: 'movdqa xmm0, [rdx+0x90]' is 8 bytes, whilst 'movdqa xmm0, [rdx-0x60]' is 5 bytes */
-    gf_w16_xor_jit_stub((intptr_t)rd.s_start - 128, (intptr_t)rd.d_top - 128, (intptr_t)rd.d_start - 128, jitcode);
+    gf_w16_xor_jit_stub(
+      (intptr_t)rd.s_start - 128,
+      (intptr_t)rd.d_top - 128,
+      (intptr_t)rd.d_start - 128,
+      xor_write_jit_sse(&(h->jit), val, h->prim_poly, ((uintptr_t)rd.s_start - (uintptr_t)rd.d_start + 256) < 512, xor)
+    );
   }
   
 }
@@ -1586,35 +1594,12 @@ void gf_w16_xor_create_jit_lut_avx2(void) {
 	}
 }
 
-static void gf_w16_xor_lazy_jit_altmap_multiply_region_avx2(gf_t *gf, void *src, void *dest, gf_val_32_t val, int bytes, int xor)
+static uint8_t* xor_write_jit_avx(jit_t* jit, gf_val_32_t val, int prim_poly, int xor)
 {
   FAST_U32 i, bit;
   long inBit;
   __m128i depmask1, depmask2, polymask1, polymask2, addvals1, addvals2;
   ALIGN(32, uint32_t lumask[8]);
-  gf_region_data rd;
-  gf_internal_t *h;
-  jit_t* jit;
-  int use_temp = ((uintptr_t)src - (uintptr_t)dest + 512) < 1024;
-  void* tmp;
-  
-  if (val == 0) { gf_multby_zero(dest, bytes, xor); return; }
-  if (val == 1) { gf_multby_one(src, dest, bytes, xor); return; }
-
-  /* if src/dest overlap, resolve by copying */
-  if(use_temp) {
-    tmp = malloc(bytes+64);
-    char *nSrc = (char*)(((uintptr_t)tmp+31) & ~31);
-    nSrc += (uintptr_t)src & 31;
-    memcpy(nSrc, src, bytes);
-    src = (void*)nSrc;
-  }
-  
-  h = (gf_internal_t *) gf->scratch;
-  jit = &(h->jit);
-  gf_w16_log_region_alignment(&rd, gf, src, dest, bytes, val, xor, 32, 512);
-  
-  if(rd.d_start != rd.d_top) {
   
     uint8_t* jitptr, *jitcode;
 #ifdef CPU_SLOW_SMC
@@ -1633,7 +1618,7 @@ static void gf_w16_xor_lazy_jit_altmap_multiply_region_avx2(gf_t *gf, void *src,
     addvals2 = _mm_set_epi16(1<<15, 1<<14, 1<<13, 1<<12, 1<<11, 1<<10, 1<<9, 1<<8);
     
     /* duplicate each bit in the polynomial 16 times */
-    polymask2 = _mm_set1_epi16(h->prim_poly & 0xFFFF); /* chop off top bit, although not really necessary */
+    polymask2 = _mm_set1_epi16(prim_poly & 0xFFFF); /* chop off top bit, although not really necessary */
     polymask1 = _mm_and_si128(polymask2, _mm_set_epi16(1<< 8, 1<< 9, 1<<10, 1<<11, 1<<12, 1<<13, 1<<14, 1<<15));
     polymask2 = _mm_and_si128(polymask2, _mm_set_epi16(1<< 0, 1<< 1, 1<< 2, 1<< 3, 1<< 4, 1<< 5, 1<< 6, 1<< 7));
     polymask1 = _mm_cmpeq_epi16(_mm_setzero_si128(), polymask1);
@@ -1933,11 +1918,40 @@ static void gf_w16_xor_lazy_jit_altmap_multiply_region_avx2(gf_t *gf, void *src,
       _mm256_store_si256((__m256i*)(jitdst + i + 32), tb);
     }
 #endif
-    
-    // exec
-    /* adding 128 to the destination pointer allows the register offset to be coded in 1 byte
-     * eg: 'movdqa xmm0, [rdx+0x90]' is 8 bytes, whilst 'movdqa xmm0, [rdx-0x60]' is 5 bytes */
-    gf_w16_xor256_jit_stub((intptr_t)rd.s_start - 384, (intptr_t)rd.d_top - 384, (intptr_t)rd.d_start - 384, jitcode);
+  return jitcode;
+}
+
+static void gf_w16_xor_lazy_jit_altmap_multiply_region_avx2(gf_t *gf, void *src, void *dest, gf_val_32_t val, int bytes, int xor)
+{
+  gf_region_data rd;
+  gf_internal_t *h;
+  jit_t* jit;
+  int use_temp = ((uintptr_t)src - (uintptr_t)dest + 512) < 1024;
+  void* tmp;
+  
+  if (val == 0) { gf_multby_zero(dest, bytes, xor); return; }
+  if (val == 1) { gf_multby_one(src, dest, bytes, xor); return; }
+
+  /* if src/dest overlap, resolve by copying */
+  if(use_temp) {
+    tmp = malloc(bytes+64);
+    char *nSrc = (char*)(((uintptr_t)tmp+31) & ~31);
+    nSrc += (uintptr_t)src & 31;
+    memcpy(nSrc, src, bytes);
+    src = (void*)nSrc;
+  }
+  
+  h = (gf_internal_t *) gf->scratch;
+  gf_w16_log_region_alignment(&rd, gf, src, dest, bytes, val, xor, 32, 512);
+  
+  if(rd.d_start != rd.d_top) {
+  
+    gf_w16_xor256_jit_stub(
+      (intptr_t)rd.s_start - 384,
+      (intptr_t)rd.d_top - 384,
+      (intptr_t)rd.d_start - 384,
+      xor_write_jit_avx(&(h->jit), val, h->prim_poly, xor)
+    );
     
     _mm256_zeroupper();
     if(use_temp) free(tmp);
