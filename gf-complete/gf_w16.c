@@ -591,7 +591,7 @@ int gf_w16_split_init(gf_t *gf)
 #ifdef INTEL_SSSE3
       else if(h->region_type & GF_REGION_ALTMAP) {
         FUNC_ASSIGN(gf->multiply_region.w32, gf_w16_split_4_16_lazy_altmap_multiply_region)
-        FUNC_ASSIGN(gf->multiply_regionX.w16, gf_w16_split_4_16_lazy_altmap_multiply_regionX)
+        //FUNC_ASSIGN(gf->multiply_regionX.w16, gf_w16_split_4_16_lazy_altmap_multiply_regionX)
         if(wordsize >= 512) {
           gf->alignment = 64;
           gf->mult_method = GF_SPLIT4_AVX512;
@@ -694,6 +694,16 @@ int gf_w16_xor_init(gf_t *gf)
 }
 #endif
 
+// default multi-region mul/add
+// REQUIRES: numSrc >= 1; src/dest cannot overlap
+void gf_w16_default_regionX(gf_t *gf, int numSrc, uintptr_t offset, void **src, void *dest, gf_val_32_t *val, int bytes, int xor)
+{
+  gf->multiply_region.w32(gf, (char*)(src[0]) + offset, (char*)dest + offset, val[0], bytes, xor);
+  for(unsigned int in = 1; in < numSrc; in++) {
+    gf->multiply_region.w32(gf, (char*)(src[in]) + offset, (char*)dest + offset, val[in], bytes, 1);
+  }
+}
+
 int gf_w16_scratch_size(int mult_type, int region_type, int divide_type, int arg1, int arg2)
 {
   return sizeof(gf_internal_t) + sizeof(struct gf_w16_logtable_data) + 64;
@@ -725,7 +735,7 @@ int gf_w16_init(gf_t *gf)
 
   gf->multiply.w32 = NULL;
   gf->multiply_region.w32 = NULL;
-  gf->multiply_regionX.w16 = NULL;
+  gf->multiply_regionX.w16 = gf_w16_default_regionX;
   gf->alignment = 16;
   gf->walignment = 16;
   gf->using_altmap = 0;

@@ -222,11 +222,13 @@ static inline void multiply_mat(uint16_t** inputs, uint_fast16_t* iNums, unsigne
 #else
 		gf_t* _gf = gf;
 #endif
-		
-		_gf->multiply_region.w32(_gf, inputs[0] + offset, outputs[out] + offset, calc_factor(iNums[0], oNums[out]), procSize, add);
-		for(unsigned int in = 1; in < numInputs; in++) {
-			_gf->multiply_region.w32(_gf, inputs[in] + offset, outputs[out] + offset, calc_factor(iNums[in], oNums[out]), procSize, true);
-	}
+		// TODO: perhaps it makes sense to just use a statically allocated array instead and loop?
+		gf_val_32_t* vals = (gf_val_32_t*)malloc(sizeof(gf_val_32_t) * numInputs);
+		for(int i=0; i<numInputs; i++)
+			vals[i] = calc_factor(iNums[i], oNums[out]);
+
+		_gf->multiply_regionX.w16(_gf, numInputs, offset, (void**)inputs, outputs[out], vals, procSize, add);
+		free(vals);
 	}
 	
 #ifdef _OPENMP
