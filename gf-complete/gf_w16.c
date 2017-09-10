@@ -554,8 +554,15 @@ static
 int gf_w16_split_init(gf_t *gf)
 {
   gf_internal_t *h;
+  int wordsize = 0;
 
   h = (gf_internal_t *) gf->scratch;
+  wordsize = h->wordsize;
+  if(!wordsize) {
+    if(has_ssse3) wordsize = 128;
+    if(has_avx2) wordsize = 256;
+    if(has_avx512bw) wordsize = 512;
+  }
 
   /* We'll be using LOG for multiplication, unless the pp isn't primitive.
      In that case, we'll be using SHIFT. */
@@ -567,7 +574,7 @@ int gf_w16_split_init(gf_t *gf)
     h->arg1 = has_ssse3 ? 4 : 8;
     h->arg2 = 16;
   }
-
+  
   if ((h->arg1 == 8 && h->arg2 == 16) || (h->arg2 == 8 && h->arg1 == 16)) {
     gf->multiply_region.w32 = gf_w16_split_8_16_lazy_multiply_region;
     gf->mult_method = GF_SPLIT8;
@@ -576,7 +583,7 @@ int gf_w16_split_init(gf_t *gf)
   } else if ((h->arg1 == 4 && h->arg2 == 16) || (h->arg2 == 4 && h->arg1 == 16)) {
     gf->mult_method = GF_SPLIT4;
     gf->alignment = 16;
-    if (has_ssse3) {
+    if (wordsize >= 128) {
       if(h->region_type & GF_REGION_ALTMAP && h->region_type & GF_REGION_NOSIMD)
         gf->multiply_region.w32 = gf_w16_split_4_16_lazy_nosse_altmap_multiply_region;
       else if(h->region_type & GF_REGION_NOSIMD)
@@ -585,10 +592,10 @@ int gf_w16_split_init(gf_t *gf)
       else if(h->region_type & GF_REGION_ALTMAP) {
         FUNC_ASSIGN(gf->multiply_region.w32, gf_w16_split_4_16_lazy_altmap_multiply_region)
         FUNC_ASSIGN(gf->multiply_regionX.w16, gf_w16_split_4_16_lazy_altmap_multiply_regionX)
-        if(has_avx512bw) {
+        if(wordsize >= 512) {
           gf->alignment = 64;
           gf->mult_method = GF_SPLIT4_AVX512;
-        } else if(has_avx2) {
+        } else if(wordsize >= 256) {
           gf->alignment = 32;
           gf->mult_method = GF_SPLIT4_AVX2;
         } else {
@@ -640,6 +647,12 @@ int gf_w16_xor_init(gf_t *gf)
 {
   gf_internal_t *h = (gf_internal_t *) gf->scratch;
   jit_t* jit = &(h->jit);
+  int wordsize = h->wordsize;
+  if(!wordsize) {
+    if(has_ssse3) wordsize = 128;
+    if(has_avx2) wordsize = 256;
+    if(has_avx512bw) wordsize = 512;
+  }
 
   /* We'll be using LOG for multiplication, unless the pp isn't primitive.
      In that case, we'll be using SHIFT. */

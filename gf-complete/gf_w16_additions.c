@@ -186,9 +186,8 @@ void gf_w16_log_region_alignment(gf_region_data *rd,
 
 #ifndef FUNC_SELECT
 #define FUNC_SELECT(f) \
-	(has_avx2 ? f ## _avx2 : f ## _sse)
+	(wordsize >= 256 ? f ## _avx2 : f ## _sse)
 #endif
-
 #endif /*INTEL_AVX2*/
 
 
@@ -1988,9 +1987,9 @@ static void gf_w16_xor_lazy_jit_altmap_multiply_region_avx2(gf_t *gf, void *src,
 #undef _MM_END
 
 #define FUNC_ASSIGN(v, f) { \
-	if(has_avx512bw) { \
+	if(wordsize >= 512) { \
 		v = f ## _avx512; \
-	} else if(has_avx2) { \
+	} else if(wordsize >= 256) { \
 		v = f ## _avx2; \
 	} else { \
 		v = f ## _sse; \
@@ -2017,7 +2016,7 @@ static void gf_w16_xor_lazy_jit_altmap_multiply_region_avx2(gf_t *gf, void *src,
 
 #ifndef FUNC_ASSIGN
 #define FUNC_ASSIGN(v, f) { \
-	if(has_avx2) { \
+	if(wordsize >= 256) { \
 		v = f ## _avx2; \
 	} else { \
 		v = f ## _sse; \

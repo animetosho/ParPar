@@ -76,7 +76,7 @@ int gfCount = 0;
 bool using_altmap = false;
 
 static inline void init_gf(gf_t* gf) {
-	gf_init_hard(gf, 16, GF_METHOD, GF_REGION_ALTMAP, GF_DIVIDE_DEFAULT, 0, GF_METHOD_ARG1, GF_METHOD_ARG2, size_hint, 0, NULL, NULL);
+	gf_init_hard(gf, 16, GF_METHOD, GF_REGION_ALTMAP, GF_DIVIDE_DEFAULT, 0, GF_METHOD_ARG1, GF_METHOD_ARG2, size_hint, 0, 0, NULL, NULL);
 }
 
 #ifdef _OPENMP
@@ -226,7 +226,7 @@ static inline void multiply_mat(uint16_t** inputs, uint_fast16_t* iNums, unsigne
 		_gf->multiply_region.w32(_gf, inputs[0] + offset, outputs[out] + offset, calc_factor(iNums[0], oNums[out]), procSize, add);
 		for(unsigned int in = 1; in < numInputs; in++) {
 			_gf->multiply_region.w32(_gf, inputs[in] + offset, outputs[out] + offset, calc_factor(iNums[in], oNums[out]), procSize, true);
-		}
+	}
 	}
 	
 #ifdef _OPENMP
