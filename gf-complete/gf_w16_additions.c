@@ -1,4 +1,5 @@
 
+int cpu_detect_run = 0;
 int has_ssse3 = 0;
 int has_slow_shuffle = 0;
 int has_pclmul = 0;
@@ -23,6 +24,8 @@ int has_htt = 0;
 
 
 void detect_cpu(void) {
+	if(cpu_detect_run) return;
+	cpu_detect_run = 1;
 #ifdef INTEL_SSE2 /* if we can't compile SSE, there's not much point in checking CPU capabilities; we use this to eliminate ARM :P */
 	int cpuInfo[4];
 	int family, model, hasMulticore;
@@ -207,7 +210,7 @@ void gf_w16_log_region_alignment(gf_region_data *rd,
 
 #ifndef FUNC_SELECT
 #define FUNC_SELECT(f) \
-	(f ## _sse)
+  (f ## _sse)
 #endif
 
 
@@ -721,39 +724,39 @@ void gf_w16_xor_init_jit_sse(jit_t* jit) {
 	 */
 	uint8_t *cNorm = jit->code, *cTemp = jit->code + 2048;
 	int i;
-	
-	cNorm += _jit_add_i(cNorm, AX, 256);
-	cTemp += _jit_add_i(cTemp, AX, 256);
-	cNorm += _jit_add_i(cNorm, DX, 256);
-	cTemp += _jit_add_i(cTemp, DX, 256);
-	
+  
+    cNorm += _jit_add_i(cNorm, AX, 256);
+    cTemp += _jit_add_i(cTemp, AX, 256);
+    cNorm += _jit_add_i(cNorm, DX, 256);
+    cTemp += _jit_add_i(cTemp, DX, 256);
+    
 #ifdef AMD64
-	/* preload upper 13 inputs into registers */
-	for(i=3; i<16; i++) {
-		cNorm += _jit_movaps_load(cNorm, i, AX, (i-8)<<4);
-	}
+    /* preload upper 13 inputs into registers */
+    for(i=3; i<16; i++) {
+      cNorm += _jit_movaps_load(cNorm, i, AX, (i-8)<<4);
+    }
 #else
-	/* can only fit 5 in 32-bit mode :( */
-	for(i=3; i<8; i++) { /* despite appearances, we're actually loading the top 5, not mid 5 */
-		cNorm += _jit_movaps_load(cNorm, i, AX, i<<4);
-	}
+    /* can only fit 5 in 32-bit mode :( */
+    for(i=3; i<8; i++) { /* despite appearances, we're actually loading the top 5, not mid 5 */
+      cNorm += _jit_movaps_load(cNorm, i, AX, i<<4);
+    }
 #endif
-	
+    
 	jit->pNorm = cNorm;
 	jit->pTemp = cTemp;
 }
 
 void gf_w16_xor_init_jit_avx2(jit_t* jit) {
 	int i;
-	
+  
 	jit->pNorm = jit->code;
 	jit->pNorm += _jit_add_i(jit->pNorm, AX, 512);
 	jit->pNorm += _jit_add_i(jit->pNorm, DX, 512);
-	
-	/* only 64-bit supported*/
-	for(i=3; i<16; i++) {
+    
+    /* only 64-bit supported*/
+    for(i=3; i<16; i++) {
 		jit->pNorm += _jit_vmovdqa_load(jit->pNorm, i, AX, (i-4)<<5);
-	}
+    }
 }
 
 
