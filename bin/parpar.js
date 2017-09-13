@@ -198,7 +198,11 @@ if(argv['recovery-slices']) {
 var startTime = Date.now();
 var decimalPoint = (1.1).toLocaleString().substr(1, 1);
 
-if(argv.threads) ParPar.setMaxThreads(argv.threads);
+if(argv.threads) {
+	if(!ParPar.setMaxThreads)
+		error('This build of ParPar has not been compiled with OpenMP support, which is required for multi-threading support');
+	ParPar.setMaxThreads(argv.threads);
+}
 //if(argv.method == 'auto') argv.method = '';
 
 // TODO: sigint not respected?
