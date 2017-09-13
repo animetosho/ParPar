@@ -12,6 +12,12 @@
           "cflags": ["-march=native", "-O3", "-fopenmp"],
           "cxxflags": ["-march=native", "-O3", "-fopenmp"],
           "ldflags": ["-fopenmp"]
+        }],
+        ['OS=="mac"', {
+          "xcode_settings": {
+            "OTHER_CFLAGS": ["-march=native", "-O3", "-fopenmp"],
+            "OTHER_LDFLAGS": ["-fopenmp"]
+          }
         }]
       ]
     },
@@ -28,6 +34,12 @@
         }, {
           "cflags": ["-march=native","-Wall","-Wpointer-arith","-O3"],
           "ldflags": []
+        }],
+        ['OS=="mac"', {
+          "xcode_settings": {
+            "OTHER_CFLAGS": ["-march=native","-Wall","-Wpointer-arith","-O3"],
+            "OTHER_LDFLAGS": []
+          }
         }],
         ['OS=="win" and target_arch=="x64"', {
           "sources": ["gf-complete/gf_w16_xor_jit_stub_masm64.asm"]
