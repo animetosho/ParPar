@@ -944,7 +944,10 @@ static uint8_t* xor_write_jit_sse(jit_t* jit, gf_val_32_t val, int prim_poly, in
     
     
     if (!use_temp) {
-      __m128i common_mask, tmp1, tmp2, tmp3, tmp4, tmp3l, tmp3h, tmp4l, tmp4h;
+#ifndef XORDEP_DISABLE_NO_COMMON
+      __m128i common_mask
+#endif
+      __m128i tmp1, tmp2, tmp3, tmp4, tmp3l, tmp3h, tmp4l, tmp4h;
       __m128i lmask = _mm_set1_epi8(0xF);
       
       /* emulate PACKUSDW (SSE4.1 only) with SSE2 shuffles */
