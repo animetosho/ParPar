@@ -9,13 +9,14 @@
         ['OS=="win"', {
           "msvs_settings": {"VCCLCompilerTool": {"OpenMP": "true"}}
         }, {
-          "cflags": ["-march=native", "-O3", "-fopenmp"],
+          "cflags": ["-march=native", "-O3"],
           "cxxflags": ["-march=native", "-O3", "-fopenmp"],
           "ldflags": ["-fopenmp"]
         }],
         ['OS=="mac"', {
           "xcode_settings": {
-            "OTHER_CFLAGS": ["-march=native", "-O3", "-fopenmp"],
+            "OTHER_CFLAGS": ["-march=native", "-O3"],
+            "OTHER_CPPFLAGS": ["-march=native", "-O3", "-fopenmp"],
             "OTHER_LDFLAGS": ["-fopenmp"]
           }
         }]
@@ -32,12 +33,12 @@
         ['OS=="win"', {
           "msvs_settings": {"VCCLCompilerTool": {"EnableEnhancedInstructionSet": "2"}}
         }, {
-          "cflags": ["-march=native","-Wall","-Wpointer-arith","-O3"],
+          "cflags": ["-march=native","-Wall","-O3","-Wno-unused-function"],
           "ldflags": []
         }],
         ['OS=="mac"', {
           "xcode_settings": {
-            "OTHER_CFLAGS": ["-march=native","-Wall","-Wpointer-arith","-O3"],
+            "OTHER_CFLAGS": ["-march=native","-Wall","-O3","-Wno-unused-function"],
             "OTHER_LDFLAGS": []
           }
         }],
