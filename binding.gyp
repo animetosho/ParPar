@@ -9,7 +9,7 @@
         ['OS=="win"', {
           "msvs_settings": {"VCCLCompilerTool": {"OpenMP": "true"}}
         }, {
-          "cflags": ["-march=native", "-O3", "-Wall"],
+          "cflags": ["-march=native", "-O3", "-Wall", "-fopenmp"],
           "cxxflags": ["-march=native", "-O3", "-Wall", "-fopenmp"],
           "ldflags": ["-fopenmp"]
         }],
