@@ -9,14 +9,14 @@
         ['OS=="win"', {
           "msvs_settings": {"VCCLCompilerTool": {"OpenMP": "true"}}
         }, {
-          "cflags": ["-march=native", "-O3"],
-          "cxxflags": ["-march=native", "-O3", "-fopenmp"],
+          "cflags": ["-march=native", "-O3", "-Wall"],
+          "cxxflags": ["-march=native", "-O3", "-Wall", "-fopenmp"],
           "ldflags": ["-fopenmp"]
         }],
         ['OS=="mac"', {
           "xcode_settings": {
-            "OTHER_CFLAGS": ["-march=native", "-O3"],
-            "OTHER_CPPFLAGS": ["-march=native", "-O3", "-fopenmp"],
+            "OTHER_CFLAGS": ["-march=native", "-O3", "-Wall"],
+            "OTHER_CPPFLAGS": ["-march=native", "-O3", "-Wall", "-fopenmp"],
             "OTHER_LDFLAGS": ["-fopenmp"]
           }
         }]
