@@ -140,7 +140,7 @@ static void setup_gf() {
 	// TODO: this needs to be variable depending on the CPU cache size
 	// although these defaults are pretty good across most CPUs
 	if(!CHUNK_SIZE) {
-		int minChunkTarget;
+		unsigned int minChunkTarget;
 		switch(gf[0].mult_method) {
 			case GF_XOR_JIT_SSE2: /* JIT is a little slow, so larger blocks make things faster */
 			case GF_XOR_JIT_AVX2:
@@ -160,7 +160,7 @@ static void setup_gf() {
 		
 		if(size_hint) {
 			/* try to keep in range */
-			int numChunks = (size_hint / CHUNK_SIZE) + ((size_hint % CHUNK_SIZE) ? 1 : 0);
+			unsigned int numChunks = (size_hint / CHUNK_SIZE) + ((size_hint % CHUNK_SIZE) ? 1 : 0);
 			if(size_hint / numChunks < minChunkTarget) {
 				CHUNK_SIZE = size_hint / (numChunks-1) + 1;
 			}
@@ -224,7 +224,7 @@ static inline void multiply_mat(uint16_t** inputs, uint_fast16_t* iNums, unsigne
 #endif
 		// TODO: perhaps it makes sense to just use a statically allocated array instead and loop?
 		gf_val_32_t* vals = (gf_val_32_t*)malloc(sizeof(gf_val_32_t) * numInputs);
-		for(int i=0; i<numInputs; i++)
+		for(unsigned int i=0; i<numInputs; i++)
 			vals[i] = calc_factor(iNums[i], oNums[out]);
 
 		_gf->multiply_regionX.w16(_gf, numInputs, offset, (void**)inputs, outputs[out], vals, procSize, add);
