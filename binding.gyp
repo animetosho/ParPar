@@ -10,10 +10,13 @@
           "msvs_settings": {"VCCLCompilerTool": {"OpenMP": "true"}}
         }, {
           "cflags": ["-march=native", "-O3", "-Wall", "-fopenmp"],
+          "cxxflags": ["-march=native", "-O3", "-Wall", "-fopenmp"],
           "ldflags": ["-fopenmp"]
         }],
         ['OS=="mac"', {
           "xcode_settings": {
+            "OTHER_CFLAGS": ["-march=native", "-O3", "-Wall", "-fopenmp"],
+            "OTHER_CPPFLAGS": ["-march=native", "-O3", "-Wall", "-fopenmp"],
             "OTHER_CXXFLAGS": ["-march=native", "-O3", "-Wall", "-fopenmp"],
             "OTHER_LDFLAGS": ["-fopenmp"]
           }
