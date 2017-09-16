@@ -698,8 +698,9 @@ int gf_w16_xor_init(gf_t *gf)
 // REQUIRES: numSrc >= 1; src/dest cannot overlap
 void gf_w16_default_regionX(gf_t *gf, unsigned int numSrc, uintptr_t offset, void **src, void *dest, gf_val_32_t *val, int bytes, int xor)
 {
+  unsigned int in;
   gf->multiply_region.w32(gf, (char*)(src[0]) + offset, (char*)dest + offset, val[0], bytes, xor);
-  for(unsigned int in = 1; in < numSrc; in++) {
+  for(in = 1; in < numSrc; in++) {
     gf->multiply_region.w32(gf, (char*)(src[in]) + offset, (char*)dest + offset, val[in], bytes, 1);
   }
 }
