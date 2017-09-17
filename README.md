@@ -64,7 +64,7 @@ Motivation
 ----------
 
 I needed a flexible library for creating PAR2 files, in particular, one which
-isn’t tied to the notion of on-disk files. ParPar *library *allows generating
+isn’t tied to the notion of on-disk files. ParPar *library* allows generating
 PAR2 from “immaterial files”, and the output doesn’t have to be written to disk.
 
 Also, all the fast PAR2 implementations seem to be Windows only; ParPar provides
@@ -128,6 +128,18 @@ having build issues with these compilers, try removing all instances of
 specific optimisations may not be enabled if the flag is removed.
 
 Do also remove the above flag if you are looking to make a portable build.
+
+Multi-Threading Support
+-----------------------
+
+ParPar’s multi-threading support requires OpenMP. If ParPar is compiled without
+OpenMP, it will only ever run on 1 thread. OpenMP is usually available in most
+compilers that you’d likely use.
+
+It appears that the default compiler in MacOSX does not include OpenMP support.
+If this is the case, you may need to fetch another build of the C++ compiler
+which has OpenMP support (e.g. clang/gcc from places like homebrew/macports) and
+override the `CXX` environment variable when installing.
 
 ARM NEON Support
 ----------------
