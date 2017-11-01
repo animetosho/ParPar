@@ -445,4 +445,21 @@ _FN(gf_w16_split_4_16_lazy_altmap_multiply_regionX)(gf_t *gf, uint16_t **src, vo
 #endif
 }
 
-
+#ifdef INCLUDE_EXTRACT_WORD
+static
+gf_val_32_t _FN(gf_w16_split_extract_word)(gf_t *gf, void *start, int bytes, int index)
+{
+	uint16_t *rStart = (uint16_t*)(((uintptr_t)start + MWORD_SIZE-1) & ~(MWORD_SIZE-1));
+	uint16_t *r16 = (uint16_t *) start;
+	uint16_t *rEnd = rStart + ((bytes - (rStart-r16)*2) & ~(MWORD_SIZE*2-1))/2;
+	
+	uint8_t *r8 = (uint8_t *) rStart;
+	
+	if(r16 + index < rStart || r16 + index >= rEnd) return r16[index];
+	
+	index -= rStart - (uint16_t *)start;
+	r8 += (index & ~(MWORD_SIZE-1))*2;
+	r8 += (index & (MWORD_SIZE-1));
+	return (*r8 << 8) | r8[MWORD_SIZE];
+}
+#endif

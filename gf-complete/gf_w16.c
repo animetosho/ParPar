@@ -626,6 +626,9 @@ int gf_w16_split_init(gf_t *gf)
 #ifdef FUNC_ASSIGN
     FUNC_ASSIGN(gf->altmap_region, gf_w16_split_start)
     FUNC_ASSIGN(gf->unaltmap_region, gf_w16_split_final)
+#ifdef INCLUDE_EXTRACT_WORD
+  gf->extract_word.w32 = FUNC_SELECT(gf_w16_split_extract_word);
+#endif
 #endif
     gf->using_altmap = 1;
   } else {
@@ -690,6 +693,10 @@ int gf_w16_xor_init(gf_t *gf)
     gf->alignment = 16;
     gf->walignment = 256;
   }
+  
+#ifdef INCLUDE_EXTRACT_WORD
+  gf->extract_word.w32 = FUNC_SELECT(gf_w16_xor_extract_word);
+#endif
   return 1;
 }
 #endif
@@ -710,6 +717,15 @@ int gf_w16_scratch_size(int mult_type, int region_type, int divide_type, int arg
   return sizeof(gf_internal_t) + sizeof(struct gf_w16_logtable_data) + 64;
 }
 
+
+#ifdef INCLUDE_EXTRACT_WORD
+static
+gf_val_32_t gf_w16_extract_word(gf_t *gf, void *start, int bytes, int index)
+{
+  uint16_t *r16 = (uint16_t *) start;
+  return r16[index];
+}
+#endif
 
 
 int gf_w16_init(gf_t *gf)
@@ -740,6 +756,10 @@ int gf_w16_init(gf_t *gf)
   gf->alignment = 16;
   gf->walignment = 16;
   gf->using_altmap = 0;
+
+#ifdef INCLUDE_EXTRACT_WORD
+  gf->extract_word.w32 = gf_w16_extract_word;
+#endif
 
   /* select an appropriate default - always use some variant of SPLIT unless SSSE3 is unavailable but SSE2 is */
 #ifdef INTEL_SSE2
