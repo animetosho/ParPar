@@ -627,7 +627,7 @@ int gf_w16_split_init(gf_t *gf)
     FUNC_ASSIGN(gf->altmap_region, gf_w16_split_start)
     FUNC_ASSIGN(gf->unaltmap_region, gf_w16_split_final)
 #ifdef INCLUDE_EXTRACT_WORD
-  gf->extract_word.w32 = FUNC_SELECT(gf_w16_split_extract_word);
+    FUNC_ASSIGN(gf->extract_word.w32, gf_w16_split_extract_word);
 #endif
 #endif
     gf->using_altmap = 1;
