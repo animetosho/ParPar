@@ -773,7 +773,7 @@ extern void gf_w16_xor_jit_stub(intptr_t src, intptr_t dEnd, intptr_t dest, void
 extern void gf_w16_xor256_jit_stub(intptr_t src, intptr_t dEnd, intptr_t dest, void* fn);
 #  endif
 # else
-void gf_w16_xor_jit_stub(intptr_t src, intptr_t dEnd, intptr_t dest, void* fn) {
+inline void gf_w16_xor_jit_stub(intptr_t src, intptr_t dEnd, intptr_t dest, void* fn) {
 	asm volatile(
 		"leaq -8(%%rsp), %%r10\n"
 		"movq %%r10, %%rsi\n"
@@ -788,7 +788,7 @@ void gf_w16_xor_jit_stub(intptr_t src, intptr_t dEnd, intptr_t dest, void* fn) {
 # endif
 #else
 # ifdef _MSC_VER
-void gf_w16_xor_jit_stub(intptr_t src, intptr_t dEnd, intptr_t dest, void* fn) {
+inline void gf_w16_xor_jit_stub(intptr_t src, intptr_t dEnd, intptr_t dest, void* fn) {
 	__asm {
 		push esi
 		lea esi, [esp-4]
@@ -801,7 +801,7 @@ void gf_w16_xor_jit_stub(intptr_t src, intptr_t dEnd, intptr_t dest, void* fn) {
 	}
 }
 # else
-void gf_w16_xor_jit_stub(intptr_t src, intptr_t dEnd, intptr_t dest, void* fn) {
+inline void gf_w16_xor_jit_stub(intptr_t src, intptr_t dEnd, intptr_t dest, void* fn) {
 	asm volatile(
 		"leal -4(%%esp), %%esi\n"
 		"andl $0xFFFFFFF0, %%esi\n"
@@ -1656,7 +1656,6 @@ static uint8_t* xor_write_jit_avx(jit_t* jit, gf_val_32_t val, int prim_poly, in
     
     
     __m128i common_mask, tmp1, tmp2, tmp3, tmp4, tmp3l, tmp3h, tmp4l, tmp4h;
-    __m128i lmask = _mm_set1_epi8(0xF);
     
     /* 01234567 -> 02461357 */
     tmp1 = _mm_shuffle_epi8(depmask1, _mm_set_epi8(15,14, 11,10, 7,6, 3,2, 13,12, 9,8, 5,4, 1,0));
@@ -1665,36 +1664,28 @@ static uint8_t* xor_write_jit_avx(jit_t* jit, gf_val_32_t val, int prim_poly, in
     tmp3 = _mm_unpacklo_epi64(tmp1, tmp2);
     tmp4 = _mm_unpackhi_epi64(tmp1, tmp2);
     
-    
     /* interleave bits for faster lookups */
-    tmp3l = _mm_and_si128(tmp3, lmask);
-    tmp3h = _mm_and_si128(_mm_srli_epi16(tmp3, 4), lmask);
-    tmp4l = _mm_and_si128(tmp4, lmask);
-    tmp4h = _mm_and_si128(_mm_srli_epi16(tmp4, 4), lmask);
-    /* expand bits: idea from https://graphics.stanford.edu/~seander/bithacks.html#InterleaveBMN */
-    #define EXPAND_ROUND(src, shift, mask) _mm_and_si128( \
-      _mm_or_si128(src, _mm_slli_epi16(src, shift)), \
-      _mm_set1_epi16(mask) \
-    )
-    /* 8-bit -> 16-bit convert, with 4-bit interleave */
-    tmp1 = _mm_unpacklo_epi8(tmp3l, tmp3h);
-    tmp2 = _mm_unpacklo_epi8(tmp4l, tmp4h);
-    tmp1 = EXPAND_ROUND(tmp1, 2, 0x3333);
-    tmp2 = EXPAND_ROUND(tmp2, 2, 0x3333);
-    tmp1 = EXPAND_ROUND(tmp1, 1, 0x5555);
-    tmp2 = EXPAND_ROUND(tmp2, 1, 0x5555);
-    _mm_store_si128((__m128i*)(lumask), _mm_or_si128(tmp1, _mm_slli_epi16(tmp2, 1)));
+    __m256i tmp3b = _mm256_cvtepu8_epi16(tmp3);
+    __m256i tmp4b = _mm256_cvtepu8_epi16(tmp4);
+    /* split 8-bits into 4-bit halves per byte */
+    tmp3b = _mm256_or_si256(
+      _mm256_and_si256(tmp3b, _mm256_set1_epi16(0xf)),
+      _mm256_and_si256(_mm256_slli_epi16(tmp3b, 4), _mm256_set1_epi16(0xf00))
+    );
+    tmp4b = _mm256_or_si256(
+      _mm256_and_si256(tmp4b, _mm256_set1_epi16(0xf)),
+      _mm256_and_si256(_mm256_slli_epi16(tmp4b, 4), _mm256_set1_epi16(0xf00))
+    );
+    /* bit expand */
+    #define _B(n, s) n|(5<<s), n|(4<<s), n|(1<<s), n
+    #define _C(s) _B(0x50<<s, s), _B(0x40<<s, s), _B(0x10<<s, s), _B(0x00, s)
+    tmp3b = _mm256_shuffle_epi8(_mm256_set_epi8(_C(0), _C(0)), tmp3b);
+    tmp4b = _mm256_shuffle_epi8(_mm256_set_epi8(_C(1), _C(1)), tmp4b);
+    #undef _B
+    #undef _C
     
-    tmp1 = _mm_unpackhi_epi8(tmp3l, tmp3h);
-    tmp2 = _mm_unpackhi_epi8(tmp4l, tmp4h);
-    tmp1 = EXPAND_ROUND(tmp1, 2, 0x3333);
-    tmp2 = EXPAND_ROUND(tmp2, 2, 0x3333);
-    tmp1 = EXPAND_ROUND(tmp1, 1, 0x5555);
-    tmp2 = EXPAND_ROUND(tmp2, 1, 0x5555);
-    _mm_store_si128((__m128i*)(lumask + 4), _mm_or_si128(tmp1, _mm_slli_epi16(tmp2, 1)));
+    _mm256_store_si256((__m256i*)(lumask), _mm256_or_si256(tmp3b, tmp4b));
     
-    #undef EXPAND_ROUND
-      
 #ifndef XORDEP_DISABLE_NO_COMMON
     /* find cases where we don't wish to create the common queue - this is an optimisation to remove a single move operation when the common queue only contains one element */
     /* we have the common elements between pairs, but it doesn't make sense to process a separate queue if there's only one common element (0 XORs), so find those */
