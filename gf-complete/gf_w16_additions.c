@@ -1639,12 +1639,8 @@ static uint8_t* xor_write_jit_avx(jit_t* jit, gf_val_32_t val, int prim_poly, in
     }
     for(i=(1<<14); i; i>>=1) {
       /* rotate */
-      __m128i last = _mm_shuffle_epi32(_mm_shufflelo_epi16(depmask1, 0), 0);
-      depmask1 = _mm_insert_epi16(
-        _mm_srli_si128(depmask1, 2),
-        _mm_extract_epi16(depmask2, 0),
-        7
-      );
+      __m128i last = _mm_shuffle_epi8(depmask1, _mm_set_epi8(1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0));
+      depmask1 = _mm_alignr_epi8(depmask2, depmask1, 2);
       depmask2 = _mm_srli_si128(depmask2, 2);
       
       /* XOR poly */
@@ -1662,22 +1658,9 @@ static uint8_t* xor_write_jit_avx(jit_t* jit, gf_val_32_t val, int prim_poly, in
     __m128i common_mask, tmp1, tmp2, tmp3, tmp4, tmp3l, tmp3h, tmp4l, tmp4h;
     __m128i lmask = _mm_set1_epi8(0xF);
     
-    /* emulate PACKUSDW (SSE4.1 only) with SSE2 shuffles */
     /* 01234567 -> 02461357 */
-    tmp1 = _mm_shuffle_epi32(
-      _mm_shufflelo_epi16(
-        _mm_shufflehi_epi16(depmask1, 0xD8), /* 0xD8 == 0b11011000 */
-        0xD8
-      ),
-      0xD8
-    );
-    tmp2 = _mm_shuffle_epi32(
-      _mm_shufflelo_epi16(
-        _mm_shufflehi_epi16(depmask2, 0xD8),
-        0xD8
-      ),
-      0xD8
-    );
+    tmp1 = _mm_shuffle_epi8(depmask1, _mm_set_epi8(15,14, 11,10, 7,6, 3,2, 13,12, 9,8, 5,4, 1,0));
+    tmp2 = _mm_shuffle_epi8(depmask2, _mm_set_epi8(15,14, 11,10, 7,6, 3,2, 13,12, 9,8, 5,4, 1,0));
     /* [02461357, 8ACE9BDF] -> [02468ACE, 13579BDF]*/
     tmp3 = _mm_unpacklo_epi64(tmp1, tmp2);
     tmp4 = _mm_unpackhi_epi64(tmp1, tmp2);
