@@ -216,7 +216,6 @@ static inline void multiply_mat(uint16_t** inputs, uint_fast16_t* iNums, unsigne
 		size_t offset = (loop / numOutputs) * chunkSize;
 		unsigned int out = loop % numOutputs;
 		int procSize = MIN(len-offset, chunkSize);
-		offset /= sizeof(**outputs);
 #ifdef _OPENMP
 		gf_t* _gf = &(gf[omp_get_thread_num()]);
 #else
