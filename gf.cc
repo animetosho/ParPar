@@ -864,7 +864,8 @@ enum {
 	GF_METHOD_DEFAULT,
 	GF_METHOD_LH_LOOKUP,
 	GF_METHOD_XOR,
-	GF_METHOD_SHUFFLE
+	GF_METHOD_SHUFFLE,
+	GF_METHOD_AFFINE
 };
 FUNC(SetMethod) {
 	FUNC_START;
@@ -891,6 +892,9 @@ FUNC(SetMethod) {
 				GF_METHOD = GF_MULT_SPLIT_TABLE;
 				GF_METHOD_ARG1 = 16;
 				GF_METHOD_ARG2 = 4;
+			break;
+			case GF_METHOD_AFFINE:
+				GF_METHOD = GF_MULT_AFFINE;
 			break;
 			default:
 				RETURN_ERROR("Unknown method specified");
@@ -967,6 +971,16 @@ FUNC(SetMethod) {
 			rMethod = GF_METHOD_XOR;
 			rWord = 256;
 			rMethLong = "XOR JIT";
+		break;
+		case GF_AFFINE_GFNI:
+			rMethod = GF_METHOD_AFFINE;
+			rWord = 128;
+			rMethLong = "Affine";
+		break;
+		case GF_AFFINE_AVX512:
+			rMethod = GF_METHOD_AFFINE;
+			rWord = 512;
+			rMethLong = "Affine";
 		break;
 		default:
 			rMethod = 0;

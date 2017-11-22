@@ -36,6 +36,10 @@
   /* immintrin seems to include this fine */
 #endif
 
+#ifdef INTEL_GFNI
+  #include <immintrin.h>
+#endif
+
 #ifdef ARM_NEON
   #include <arm_neon.h>
 #endif
@@ -58,6 +62,7 @@ typedef enum {GF_MULT_DEFAULT,
               GF_MULT_LOG_ZERO_EXT,
               GF_MULT_SPLIT_TABLE,
               GF_MULT_XOR_DEPENDS,
+              GF_MULT_AFFINE,
               GF_MULT_COMPOSITE } gf_mult_type_t;
 
 typedef enum {
@@ -69,7 +74,9 @@ typedef enum {
 	GF_SPLIT4_AVX512,
 	GF_XOR_SSE2,
 	GF_XOR_JIT_SSE2,
-	GF_XOR_JIT_AVX2
+	GF_XOR_JIT_AVX2,
+	GF_AFFINE_GFNI,
+	GF_AFFINE_AVX512
 } gf_mult_method_used;
 
 /* These are the different ways to optimize region 

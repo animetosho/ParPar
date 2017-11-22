@@ -643,6 +643,51 @@ int gf_w16_split_init(gf_t *gf)
 #endif /*ARM_NEON*/
 
 
+/* NOTE: we only support ALTMAP */
+static 
+int gf_w16_affine_init(gf_t *gf)
+{
+#ifdef INTEL_GFNI
+  gf_internal_t *h;
+  int wordsize = 0;
+
+  h = (gf_internal_t *) gf->scratch;
+  wordsize = h->wordsize;
+  if(!wordsize) {
+    if(has_ssse3) wordsize = 128;
+    if(has_avx512bw) wordsize = 512;
+  }
+
+  gf_w16_log_init(gf);
+  
+  gf->alignment = wordsize/8;
+  if(wordsize == 128) {
+    gf->mult_method = GF_AFFINE_GFNI;
+    gf->multiply_region.w32 = gf_w16_affine_multiply_region;
+    gf->altmap_region = gf_w16_split_start_sse;
+    gf->unaltmap_region = gf_w16_split_final_sse;
+#ifdef INCLUDE_EXTRACT_WORD
+    gf->extract_word.w32 = gf_w16_split_extract_word_sse;
+#endif
+  } else {
+#ifdef INTEL_AVX512BW
+    gf->mult_method = GF_AFFINE_AVX512;
+    gf->multiply_region.w32 = gf_w16_affine512_multiply_region;
+    gf->altmap_region = gf_w16_split_start_avx512;
+    gf->unaltmap_region = gf_w16_split_final_avx512;
+#ifdef INCLUDE_EXTRACT_WORD
+    gf->extract_word.w32 = gf_w16_split_extract_word_avx512;
+#endif
+#endif
+  }
+  gf->walignment = gf->alignment << 1;
+  gf->using_altmap = 1;
+
+#endif
+  return 1;
+}
+
+
 #ifdef INTEL_SSE2
 #include "x86_jit.c"
 static 
@@ -760,6 +805,9 @@ int gf_w16_init(gf_t *gf)
 #ifdef INCLUDE_EXTRACT_WORD
   gf->extract_word.w32 = gf_w16_extract_word;
 #endif
+
+  if(h->mult_type == GF_MULT_AFFINE)
+    return gf_w16_affine_init(gf);
 
   /* select an appropriate default - always use some variant of SPLIT unless SSSE3 is unavailable but SSE2 is */
 #ifdef INTEL_SSE2

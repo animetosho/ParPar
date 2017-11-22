@@ -84,7 +84,8 @@ Performance Options:
                              `--proc-batch-size`
        --method              Algorithm for performing GF multiplies. Process
                              can crash if CPU does not support selected method.
-                             Choices are `lh_lookup`, `xor` and `shuffle`.
+                             Choices are `lh_lookup`, `xor`, `shuffle` and
+                             `affine`.
                              Default is auto-detected. This option should
                              generally never be changed, and left at default.
 

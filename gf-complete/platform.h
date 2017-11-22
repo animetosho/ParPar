@@ -45,6 +45,9 @@ typedef unsigned __int32 FAST_U32;
 #ifdef __AVX2__
 	#define INTEL_AVX2 1
 #endif
+#ifdef __GFNI__
+	#define INTEL_GFNI
+#endif
 
 /*#define ARCH_AARCH64 1*/
 /*#define ARM_NEON 1*/

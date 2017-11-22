@@ -205,7 +205,12 @@ Modifications (beyond removing unused components) to the library include:
     technique](<xor_depends/info.md>) for faster processing on Atom CPUs, as
     well as SSE2 CPUs without SSSE3 support
 
--   AVX2 and AVX512BW variants of the SSSE3 implementation
+-   AVX2 and AVX512BW variants of the SSSE3 (“Shuffle” or SPLIT\_TABLE(16,4))
+    implementation
+
+-   Added an experimental technique which is a hybrid of “XOR” and “Shuffle”
+    algorithms above, dubbed “Affine”, which relies on the GF2P8AFFINEQB
+    instruction from GFNI on future Intel processors
 
 -   [Region transform to/from ALTMAP memory
     arrangement](<http://jerasure.org/jerasure/gf-complete/issues/9>)
