@@ -14,6 +14,9 @@
 #if defined(__AVX2__) || (_MSC_VER >= 1800 && defined(INTEL_SSE2))
 	#define INTEL_AVX2 1
 #endif
+#if defined(__AVX512BW__) || (_MSC_VER >= 1911 && defined(INTEL_AVX2))
+	#define INTEL_AVX512BW 1
+#endif
 
 #ifdef _WIN64
 typedef unsigned __int64 FAST_U8;
@@ -45,8 +48,8 @@ typedef unsigned __int32 FAST_U32;
 #ifdef __AVX2__
 	#define INTEL_AVX2 1
 #endif
-#ifdef __GFNI__
-	#define INTEL_GFNI
+#ifdef __AVX512BW__
+	#define INTEL_AVX512BW 1
 #endif
 
 /*#define ARCH_AARCH64 1*/
@@ -73,10 +76,9 @@ typedef uint_fast32_t FAST_U32;
 
 #endif /* _MSC_VER */
 
-#ifdef __AVX512BW__
-	#define INTEL_AVX512BW 1
+#ifdef __GFNI__
+	#define INTEL_GFNI
 #endif
-
 
 #ifdef __ARM_NEON__
 	#define ARM_NEON 1
