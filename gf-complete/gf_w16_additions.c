@@ -773,7 +773,7 @@ extern void gf_w16_xor_jit_stub(intptr_t src, intptr_t dEnd, intptr_t dest, void
 extern void gf_w16_xor256_jit_stub(intptr_t src, intptr_t dEnd, intptr_t dest, void* fn);
 #  endif
 # else
-inline void gf_w16_xor_jit_stub(intptr_t src, intptr_t dEnd, intptr_t dest, void* fn) {
+static inline void gf_w16_xor_jit_stub(intptr_t src, intptr_t dEnd, intptr_t dest, void* fn) {
 	asm volatile(
 		"leaq -8(%%rsp), %%r10\n"
 		"movq %%r10, %%rsi\n"
@@ -788,7 +788,7 @@ inline void gf_w16_xor_jit_stub(intptr_t src, intptr_t dEnd, intptr_t dest, void
 # endif
 #else
 # ifdef _MSC_VER
-inline void gf_w16_xor_jit_stub(intptr_t src, intptr_t dEnd, intptr_t dest, void* fn) {
+static inline void gf_w16_xor_jit_stub(intptr_t src, intptr_t dEnd, intptr_t dest, void* fn) {
 	__asm {
 		push esi
 		lea esi, [esp-4]
@@ -801,7 +801,7 @@ inline void gf_w16_xor_jit_stub(intptr_t src, intptr_t dEnd, intptr_t dest, void
 	}
 }
 # else
-inline void gf_w16_xor_jit_stub(intptr_t src, intptr_t dEnd, intptr_t dest, void* fn) {
+static inline void gf_w16_xor_jit_stub(intptr_t src, intptr_t dEnd, intptr_t dest, void* fn) {
 	asm volatile(
 		"leal -4(%%esp), %%esi\n"
 		"andl $0xFFFFFFF0, %%esi\n"
