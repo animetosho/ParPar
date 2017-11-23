@@ -552,7 +552,7 @@ FUNC(MultiplyMulti) {
 		if ((uintptr_t)outputs[i] & (MEM_ALIGN-1))
 			RTN_ERROR("All output buffers must be address aligned");
 		int rbNum = oRBNums->Get(i)->ToInteger()->Value();
-		if (rbNum < 0 || rbNum > 32767)
+		if (rbNum < 0 || rbNum > 65535)
 			RTN_ERROR("Invalid recovery block number specified");
 		oNums[i] = rbNum;
 	}
