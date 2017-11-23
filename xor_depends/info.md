@@ -327,6 +327,37 @@ to the lack of variable goto support.
 
  
 
+GFNI
+====
+
+Intel announced a new instruction set with their upcoming Icelake processors
+(expected around 2019), the Galois Field New Instructions (GFNI). Of particular
+interest is the new `GF2P8AFFINEQB` instruction which performs an affine
+transformation on 8 bit vectors. The instruction effectively allows us to
+selectively XOR bits to produce output, which is exactly what we do here.
+
+Unfortunately, the instruction only works with 8 bit words, however it can still
+be used by splitting a 16 bit word into halves and processing the 8 bit
+components separately. Doing so, we get something that is very similar to how
+the SPLIT\_TABLE(16,4) algorithm works, and in fact, such an implementation is
+largely a mix of this XOR\_DEPENDS algorithm and the SPLIT\_TABLE(16,4)
+technique. That is, we calculate bit dependencies as described above, and the
+main loop operates similarly to SPLIT\_TABLE(16,4). This algorithm is
+implemented in ParPar, dubbed AFFINE. Note that ParPar’s implementation is using
+the ALTMAP optimization, and the layout is identical to that for
+SPLIT\_TABLE(16,4).
+
+Performance will ultimately depend on how fast the instruction runs on the CPU,
+but one `GF2P8AFFINEQB` effectively processes all bits from the input, whereas
+`PSHUFB` only processes half of the input (4 bits per byte). As such, only two
+`GF2P8AFFINEQB` instructions (plus a `PXOR`) is needed to process a vector of
+data, compared to four `PSHUFB` instructions. So if we assume `GF2P8AFFINEQB`
+has the same throughput as `PSHUFB`, this new method should be roughly double in
+speed compared to SPLIT\_TABLE(16,4), and hence, likely be the fastest method
+available on supporting CPUs.
+
+ 
+
 Comparison with Cauchy
 ======================
 
