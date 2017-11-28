@@ -1362,8 +1362,13 @@ static uint8_t* xor_write_jit_sse(jit_t* jit, gf_val_32_t val, int prim_poly, in
             #undef PROC_BITPAIR
             
             jitptr[posC + movC] = 0x6F; // PXOR -> MOVDQA
+#ifdef AMD64
+            *(int64_t*)(jitptr) = (0xC0570F + (2 <<16)) + ((0xC0EF0F66ULL + (1 <<27) + (2 <<24)) <<24);
+            jitptr += ((movC==0)<<3) - (movC==0);
+#else
             _C_XORPS_R(0, 2, movC==0);
             _C_PXOR_R(1, 2, movC==0); /*penalty?*/
+#endif
           }
 #ifndef XORDEP_DISABLE_NO_COMMON
           no_common_mask >>= 2;
