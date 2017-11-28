@@ -1603,7 +1603,6 @@ static uint8_t* xor_write_jit_avx(jit_t* jit, gf_val_32_t val, int prim_poly, in
 {
   FAST_U32 i, bit;
   long inBit;
-  __m128i depmask1, depmask2, polymask1, polymask2, addvals1, addvals2;
   ALIGN(32, uint32_t lumask[8]);
   
     uint8_t* jitptr, *jitcode;
@@ -1618,51 +1617,52 @@ static uint8_t* xor_write_jit_avx(jit_t* jit, gf_val_32_t val, int prim_poly, in
 #endif
     
     
-    /* calculate dependent bits */
-    addvals1 = _mm_set_epi16(1<< 7, 1<< 6, 1<< 5, 1<< 4, 1<< 3, 1<< 2, 1<<1, 1<<0);
-    addvals2 = _mm_set_epi16(1<<15, 1<<14, 1<<13, 1<<12, 1<<11, 1<<10, 1<<9, 1<<8);
     
-    /* duplicate each bit in the polynomial 16 times */
-    polymask2 = _mm_set1_epi16(prim_poly & 0xFFFF); /* chop off top bit, although not really necessary */
-    polymask1 = _mm_and_si128(polymask2, _mm_set_epi16(1<< 8, 1<< 9, 1<<10, 1<<11, 1<<12, 1<<13, 1<<14, 1<<15));
-    polymask2 = _mm_and_si128(polymask2, _mm_set_epi16(1<< 0, 1<< 1, 1<< 2, 1<< 3, 1<< 4, 1<< 5, 1<< 6, 1<< 7));
-    polymask1 = _mm_cmpeq_epi16(_mm_setzero_si128(), polymask1);
-    polymask2 = _mm_cmpeq_epi16(_mm_setzero_si128(), polymask2);
+    __m256i addvals = _mm256_set_epi8(
+      0x80, 0x40, 0x20, 0x10, 0x08, 0x04, 0x02, 0x01, 0, 0, 0, 0, 0, 0, 0, 0,
+      0, 0, 0, 0, 0, 0, 0, 0, 0x80, 0x40, 0x20, 0x10, 0x08, 0x04, 0x02, 0x01
+    );
     
+    __m256i shuf = _mm256_broadcastsi128_si256(_mm_cmpeq_epi8(
+      _mm_setzero_si128(),
+      _mm_and_si128(
+        _mm_shuffle_epi8(
+          _mm_cvtsi32_si128(prim_poly & 0xffff),
+          _mm_set_epi32(0, 0, 0x01010101, 0x01010101)
+        ),
+        _mm_set_epi32(0x01020408, 0x10204080, 0x01020408, 0x10204080)
+      )
+    ));
+    
+    __m256i depmask;
     if(val & (1<<15)) {
       /* XOR */
-      depmask1 = addvals1;
-      depmask2 = addvals2;
+      depmask = addvals;
     } else {
-      depmask1 = _mm_setzero_si128();
-      depmask2 = _mm_setzero_si128();
+      depmask = _mm256_setzero_si256();
     }
     for(i=(1<<14); i; i>>=1) {
       /* rotate */
-      __m128i last = _mm_shuffle_epi8(depmask1, _mm_set_epi8(1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0));
-      depmask1 = _mm_alignr_epi8(depmask2, depmask1, 2);
-      depmask2 = _mm_srli_si128(depmask2, 2);
+      __m256i last = _mm256_shuffle_epi8(depmask, shuf);
+      depmask = _mm256_srli_si256(depmask, 1);
       
       /* XOR poly */
-      depmask1 = _mm_xor_si128(depmask1, _mm_andnot_si128(polymask1, last));
-      depmask2 = _mm_xor_si128(depmask2, _mm_andnot_si128(polymask2, last));
+      depmask = _mm256_xor_si256(depmask, last);
       
       if(val & i) {
         /* XOR */
-        depmask1 = _mm_xor_si128(depmask1, addvals1);
-        depmask2 = _mm_xor_si128(depmask2, addvals2);
+        depmask = _mm256_xor_si256(depmask, addvals);
       }
     }
     
+    __m128i common_mask, tmp1, tmp2, tmp3, tmp4;
     
-    __m128i common_mask, tmp1, tmp2, tmp3, tmp4, tmp3l, tmp3h, tmp4l, tmp4h;
+    /* interleave so that word pairs are split */
+    tmp1 = _mm256_castsi256_si128(depmask);
+    tmp2 = _mm256_extracti128_si256(depmask, 1);
+    tmp3 = _mm_blendv_epi8(_mm_slli_si128(tmp2, 1), tmp1, _mm_set1_epi16(0xff));
+    tmp4 = _mm_blendv_epi8(tmp2, _mm_srli_si128(tmp1, 1), _mm_set1_epi16(0xff));
     
-    /* 01234567 -> 02461357 */
-    tmp1 = _mm_shuffle_epi8(depmask1, _mm_set_epi8(15,14, 11,10, 7,6, 3,2, 13,12, 9,8, 5,4, 1,0));
-    tmp2 = _mm_shuffle_epi8(depmask2, _mm_set_epi8(15,14, 11,10, 7,6, 3,2, 13,12, 9,8, 5,4, 1,0));
-    /* [02461357, 8ACE9BDF] -> [02468ACE, 13579BDF]*/
-    tmp3 = _mm_unpacklo_epi64(tmp1, tmp2);
-    tmp4 = _mm_unpackhi_epi64(tmp1, tmp2);
     
     /* interleave bits for faster lookups */
     __m256i tmp3b = _mm256_cvtepu8_epi16(tmp3);
@@ -1859,7 +1859,7 @@ static uint8_t* xor_write_jit_avx(jit_t* jit, gf_val_32_t val, int prim_poly, in
               if(mov2) {
                 _ST_DQA(DX, destOffs2, 2);
               } else {
-                _PXOR_R(1, 2); /*penalty?*/
+                _PXOR_R(1, 2);
               }
             }
           }
@@ -2067,7 +2067,7 @@ static void gf_w16_affine512_multiply_region(gf_t *gf, void *src, void *dest, gf
   long inBit;
   __m512i* sW, * dW, * topW;
   __m512i ta, tb, tpl, tph;
-  __m128i depmask1, depmask2, polymask1, polymask2, addvals1, addvals2;
+  __m256i depmask, addvals;
   gf_region_data rd;
   gf_internal_t *h = (gf_internal_t *) gf->scratch;
 
@@ -2077,52 +2077,43 @@ static void gf_w16_affine512_multiply_region(gf_t *gf, void *src, void *dest, gf
   h = (gf_internal_t *) gf->scratch;
   gf_w16_log_region_alignment(&rd, gf, src, dest, bytes, val, xor, 64, 128);
   
-  /* calculate dependent bits */
-  addvals1 = _mm_set_epi16(0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80);
-  addvals2 = _mm_set_epi16(0x0100, 0x0200, 0x0400, 0x0800, 0x1000, 0x2000, 0x4000, 0x8000);
-    
-  /* duplicate each bit in the polynomial 16 times */
-  polymask2 = _mm_set1_epi16(h->prim_poly & 0xFFFF); /* chop off top bit, although not really necessary */
-  polymask1 = _mm_and_si128(polymask2, addvals2);
-  polymask2 = _mm_and_si128(polymask2, addvals1);
-  polymask1 = _mm_cmpeq_epi16(_mm_setzero_si128(), polymask1);
-  polymask2 = _mm_cmpeq_epi16(_mm_setzero_si128(), polymask2);
-    
+  
+  addvals = _mm256_set_epi8(
+    0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80
+  );
+  
+  uint16_t poly = ~(h->prim_poly & 0xFFFF);
+  __m256i shuf = _mm256_broadcastsi128_si256(_mm_shuffle_epi8(_mm_movm_epi8(poly), _mm_set_epi8(
+    0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15
+  )));
+  
   if(val & (1<<15)) {
     /* XOR */
-    depmask1 = addvals1;
-    depmask2 = addvals2;
+    depmask = addvals;
   } else {
-    depmask1 = _mm_setzero_si128();
-    depmask2 = _mm_setzero_si128();
+    depmask = _mm256_setzero_si256();
   }
   for(i=(1<<14); i; i>>=1) {
     /* rotate */
-    __m128i last = _mm_shuffle_epi8(depmask1, _mm_set_epi8(1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0));
-    depmask1 = _mm_alignr_epi8(depmask2, depmask1, 2);
-    depmask2 = _mm_srli_si128(depmask2, 2);
+    __m256i last = _mm256_shuffle_epi8(depmask, shuf);
+    depmask = _mm256_srli_si256(depmask, 1);
     
     /* XOR poly */
-    depmask1 = _mm_xor_si128(depmask1, _mm_andnot_si128(polymask1, last));
-    depmask2 = _mm_xor_si128(depmask2, _mm_andnot_si128(polymask2, last));
+    depmask = _mm256_xor_si256(depmask, last);
     
     if(val & i) {
       /* XOR */
-      depmask1 = _mm_xor_si128(depmask1, addvals1);
-      depmask2 = _mm_xor_si128(depmask2, addvals2);
+      depmask = _mm256_xor_si256(depmask, addvals);
     }
   }
+  
     
   __m512i mat_ll, mat_lh, mat_hl, mat_hh;
-  __m128i high_half = _mm_set_epi8(
-    14,12,10,8,6,4,2,0, 14,12,10,8,6,4,2,0
-  ), low_half = _mm_set_epi8(
-    15,13,11,9,7,5,3,1, 15,13,11,9,7,5,3,1
-  );
-  mat_lh = _mm512_broadcast_i32x4(_mm_shuffle_epi8(depmask2, high_half));
-  mat_ll = _mm512_broadcast_i32x4(_mm_shuffle_epi8(depmask2, low_half));
-  mat_hh = _mm512_broadcast_i32x4(_mm_shuffle_epi8(depmask1, high_half));
-  mat_hl = _mm512_broadcast_i32x4(_mm_shuffle_epi8(depmask1, low_half));
+  mat_lh = _mm512_broadcast_i32x2(_mm_srli_si128(_mm256_castsi256_si128(depmask), 8));
+  mat_ll = _mm512_permutexvar_epi64(_mm512_set1_epi64(3), _mm512_castsi256_si512(depmask));
+  mat_hh = _mm512_broadcast_i32x2(_mm256_castsi256_si128(depmask));
+  mat_hl = _mm512_permutexvar_epi64(_mm512_set1_epi64(2), _mm512_castsi256_si512(depmask));
   
   
   sW = (__m512i *) rd.s_start;
