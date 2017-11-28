@@ -72,11 +72,12 @@ static inline uint16_t calc_factor(uint_fast16_t inputBlock, uint_fast16_t recov
 
 gf_t* gf = NULL;
 size_t size_hint = 0;
+int gf_method_wordsize = 0;
 int gfCount = 0;
 bool using_altmap = false;
 
 static inline void init_gf(gf_t* gf) {
-	gf_init_hard(gf, 16, GF_METHOD, GF_REGION_ALTMAP, GF_DIVIDE_DEFAULT, 0, GF_METHOD_ARG1, GF_METHOD_ARG2, size_hint, 0, 0, NULL, NULL);
+	gf_init_hard(gf, 16, GF_METHOD, GF_REGION_ALTMAP, GF_DIVIDE_DEFAULT, 0, GF_METHOD_ARG1, GF_METHOD_ARG2, size_hint, 0, gf_method_wordsize, NULL, NULL);
 }
 
 #ifdef _OPENMP
@@ -903,7 +904,12 @@ FUNC(SetMethod) {
 		GF_METHOD = GF_MULT_DEFAULT;
 	
 	if (args.Length() >= 2)
-		size_hint = args[1]->ToInteger()->Value();
+		gf_method_wordsize = args[1]->ToInteger()->Value();
+	else
+		gf_method_wordsize = 0;
+	
+	if (args.Length() >= 3)
+		size_hint = args[2]->ToInteger()->Value();
 	else
 		size_hint = 0;
 	

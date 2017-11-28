@@ -728,7 +728,7 @@ int gf_w16_xor_init(gf_t *gf)
   
   gf->using_altmap = 1;
 #ifdef AMD64
-  if(jit->code && has_avx2) {
+  if(jit->code && wordsize >= 256) {
     gf->mult_method = GF_XOR_JIT_AVX2;
     gf->alignment = 32;
     gf->walignment = 512;

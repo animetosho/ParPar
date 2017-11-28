@@ -105,8 +105,7 @@ var opts = {
 		map: 'processBufferSize'
 	},
 	'method': {
-		type: 'enum',
-		enum: ['lh_lookup','xor','shuffle'],
+		type: 'string',
 		default: ''
 	},
 	'recurse': {
@@ -213,7 +212,8 @@ ParPar.fileInfo(argv._, argv.recurse, function(err, info) {
 		process.exit(1);
 	}
 	
-	ParPar.setMethod(argv.method, argv['slice-size']); // TODO: allow size hint to work if slice-count is specified
+	var meth = (argv.method || '').match(/^(.*?)(\d*)$/i);
+	ParPar.setMethod(meth[1], meth[2] | 0, argv['slice-size']); // TODO: allow size hint to work if slice-count is specified
 	var g = new ParPar.PAR2Gen(info, argv['slice-size'] || -argv['slice-count'], ppo);
 	
 	var currentSlice = 0;

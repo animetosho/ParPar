@@ -84,8 +84,18 @@ Performance Options:
                              `--proc-batch-size`
        --method              Algorithm for performing GF multiplies. Process
                              can crash if CPU does not support selected method.
-                             Choices are `lh_lookup`, `xor`, `shuffle` and
-                             `affine`.
+                             Choices are:
+                                 lh_lookup: split 2x 8-bit scalar table lookup
+                                 xor: vector XOR bit dependencies using JIT
+                                 xor128: force SSE2 variant of `xor`
+                                 xor256: force AVX2 variant of `xor`
+                                 shuffle: split 4x 4-bit vector table lookup
+                                 shuffle128: force SSSE3 variant of `shuffle`
+                                 shuffle256: force AVX2 variant of `shuffle`
+                                 shuffle512: force AVX512BW variant of `shuffle`
+                                 affine: split 2x 8-bit vector XOR dependencies
+                                 affine128: force GFNI variant of `affine`
+                                 affine512: force AVX512BW + GFNI `affine`
                              Default is auto-detected. This option should
                              generally never be changed, and left at default.
 
