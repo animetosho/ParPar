@@ -245,6 +245,16 @@ _FN(gf_w16_split_4_16_lazy_altmap_multiply_region)(gf_t *gf, void *src, void *de
       tpl = _MM(shuffle_epi8) (low0, ti);
   
       ti = _MMI(and) (mask, _MM(srli_epi16)(tb, 4));
+#if MWORD_SIZE == 64
+      tpl = _mm512_ternarylogic_epi32(tpl, _MM(shuffle_epi8) (low1, ti), _MMI(load)(dW+1), 0x96);
+      tph = _mm512_ternarylogic_epi32(tph, _MM(shuffle_epi8) (high1, ti), _MMI(load)(dW), 0x96);
+
+      ti = _MMI(and) (mask, ta);
+      _mword ti2 = _MMI(and) (mask, _MM(srli_epi16)(ta, 4));
+      
+      tpl = _mm512_ternarylogic_epi32(tpl, _MM(shuffle_epi8) (low2, ti), _MM(shuffle_epi8) (low3, ti2), 0x96);
+      tph = _mm512_ternarylogic_epi32(tph, _MM(shuffle_epi8) (high2, ti), _MM(shuffle_epi8) (high3, ti2), 0x96);
+#else
       tpl = _MMI(xor)(_MM(shuffle_epi8) (low1, ti), tpl);
       tph = _MMI(xor)(_MM(shuffle_epi8) (high1, ti), tph);
 
@@ -258,6 +268,7 @@ _FN(gf_w16_split_4_16_lazy_altmap_multiply_region)(gf_t *gf, void *src, void *de
       ti = _MMI(and) (mask, _MM(srli_epi16)(ta, 4));
       tpl = _MMI(xor)(_MM(shuffle_epi8) (low3, ti), tpl);
       tph = _MMI(xor)(_MM(shuffle_epi8) (high3, ti), tph);
+#endif
 
       _MMI(store) (dW, tph);
       _MMI(store) (dW+1, tpl);
@@ -276,13 +287,18 @@ _FN(gf_w16_split_4_16_lazy_altmap_multiply_region)(gf_t *gf, void *src, void *de
       tpl = _MM(shuffle_epi8) (low0, ti);
   
       ti = _MMI(and) (mask, _MM(srli_epi16)(tb, 4));
+#if MWORD_SIZE == 64
+      _mword ti2 = _MMI(and) (mask, ta);
+      tpl = _mm512_ternarylogic_epi32(tpl, _MM(shuffle_epi8) (low1, ti), _MM(shuffle_epi8) (low2, ti2), 0x96);
+      tph = _mm512_ternarylogic_epi32(tph, _MM(shuffle_epi8) (high1, ti), _MM(shuffle_epi8) (high2, ti2), 0x96);
+#else
       tpl = _MMI(xor)(_MM(shuffle_epi8) (low1, ti), tpl);
       tph = _MMI(xor)(_MM(shuffle_epi8) (high1, ti), tph);
 
       ti = _MMI(and) (mask, ta);
       tpl = _MMI(xor)(_MM(shuffle_epi8) (low2, ti), tpl);
       tph = _MMI(xor)(_MM(shuffle_epi8) (high2, ti), tph);
-  
+#endif
       ti = _MMI(and) (mask, _MM(srli_epi16)(ta, 4));
       tpl = _MMI(xor)(_MM(shuffle_epi8) (low3, ti), tpl);
       tph = _MMI(xor)(_MM(shuffle_epi8) (high3, ti), tph);
