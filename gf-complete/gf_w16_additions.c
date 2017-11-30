@@ -221,26 +221,22 @@ static void gf_w16_xor_lazy_sse_altmap_multiply_region(gf_t *gf, void *src, void
   __m128i depmask1, depmask2, polymask1, polymask2, addvals1, addvals2;
   ALIGN(16, uint16_t tmp_depmask[16]);
   gf_region_data rd;
-  gf_internal_t *h;
+  gf_internal_t *h = (gf_internal_t *) gf->scratch;
+	struct gf_w16_logtable_data* ltd = (struct gf_w16_logtable_data*)(h->private);
   __m128i *dW, *topW;
   uintptr_t sP;
 
   if (val == 0) { gf_multby_zero(dest, bytes, xor); return; }
   if (val == 1) { gf_multby_one(src, dest, bytes, xor); return; }
 
-  h = (gf_internal_t *) gf->scratch;
   gf_w16_log_region_alignment(&rd, gf, src, dest, bytes, val, xor, 16, 256);
   
   /* calculate dependent bits */
   addvals1 = _mm_set_epi16(1<< 7, 1<< 6, 1<< 5, 1<< 4, 1<< 3, 1<< 2, 1<<1, 1<<0);
   addvals2 = _mm_set_epi16(1<<15, 1<<14, 1<<13, 1<<12, 1<<11, 1<<10, 1<<9, 1<<8);
   
-  /* duplicate each bit in the polynomial 16 times */
-  polymask2 = _mm_set1_epi16(h->prim_poly & 0xFFFF); /* chop off top bit, although not really necessary */
-  polymask1 = _mm_and_si128(polymask2, _mm_set_epi16(1<< 8, 1<< 9, 1<<10, 1<<11, 1<<12, 1<<13, 1<<14, 1<<15));
-  polymask2 = _mm_and_si128(polymask2, _mm_set_epi16(1<< 0, 1<< 1, 1<< 2, 1<< 3, 1<< 4, 1<< 5, 1<< 6, 1<< 7));
-  polymask1 = _mm_cmpeq_epi16(_mm_setzero_si128(), polymask1);
-  polymask2 = _mm_cmpeq_epi16(_mm_setzero_si128(), polymask2);
+  polymask1 = ltd->poly->p16[0];
+  polymask2 = ltd->poly->p16[1];
   
   if(val & (1<<15)) {
     /* XOR */
@@ -882,7 +878,7 @@ static inline FAST_U16 xor_jit_bitpair3_nc_noxor(uint8_t* dest, FAST_U16 info, F
   #define CPU_SLOW_SMC 1
 #endif
 
-static uint8_t* xor_write_jit_sse(jit_t* jit, gf_val_32_t val, int prim_poly, int use_temp, int xor)
+static uint8_t* xor_write_jit_sse(jit_t* jit, gf_val_32_t val, gf_w16_poly_struct* poly, int use_temp, int xor)
 {
   FAST_U32 i, bit;
   long inBit;
@@ -906,12 +902,8 @@ static uint8_t* xor_write_jit_sse(jit_t* jit, gf_val_32_t val, int prim_poly, in
     addvals1 = _mm_set_epi16(1<< 7, 1<< 6, 1<< 5, 1<< 4, 1<< 3, 1<< 2, 1<<1, 1<<0);
     addvals2 = _mm_set_epi16(1<<15, 1<<14, 1<<13, 1<<12, 1<<11, 1<<10, 1<<9, 1<<8);
     
-    /* duplicate each bit in the polynomial 16 times */
-    polymask2 = _mm_set1_epi16(prim_poly & 0xFFFF); /* chop off top bit, although not really necessary */
-    polymask1 = _mm_and_si128(polymask2, _mm_set_epi16(1<< 8, 1<< 9, 1<<10, 1<<11, 1<<12, 1<<13, 1<<14, 1<<15));
-    polymask2 = _mm_and_si128(polymask2, _mm_set_epi16(1<< 0, 1<< 1, 1<< 2, 1<< 3, 1<< 4, 1<< 5, 1<< 6, 1<< 7));
-    polymask1 = _mm_cmpeq_epi16(_mm_setzero_si128(), polymask1);
-    polymask2 = _mm_cmpeq_epi16(_mm_setzero_si128(), polymask2);
+    polymask1 = poly->p16[0];
+    polymask2 = poly->p16[1];
     
     if(val & (1<<15)) {
       /* XOR */
@@ -1507,12 +1499,12 @@ static uint8_t* xor_write_jit_sse(jit_t* jit, gf_val_32_t val, int prim_poly, in
 static void gf_w16_xor_lazy_jit_altmap_multiply_region_sse(gf_t *gf, void *src, void *dest, gf_val_32_t val, int bytes, int xor)
 {
   gf_region_data rd;
-  gf_internal_t *h;
+  gf_internal_t *h = (gf_internal_t *) gf->scratch;
+	struct gf_w16_logtable_data* ltd = (struct gf_w16_logtable_data*)(h->private);
   
   if (val == 0) { gf_multby_zero(dest, bytes, xor); return; }
   if (val == 1) { gf_multby_one(src, dest, bytes, xor); return; }
 
-  h = (gf_internal_t *) gf->scratch;
   gf_w16_log_region_alignment(&rd, gf, src, dest, bytes, val, xor, 16, 256);
   
   if(rd.d_start != rd.d_top) {
@@ -1523,7 +1515,7 @@ static void gf_w16_xor_lazy_jit_altmap_multiply_region_sse(gf_t *gf, void *src, 
       (intptr_t)rd.s_start - 128,
       (intptr_t)rd.d_top - 128,
       (intptr_t)rd.d_start - 128,
-      xor_write_jit_sse(&(h->jit), val, h->prim_poly, ((uintptr_t)rd.s_start - (uintptr_t)rd.d_start + 256) < 512, xor)
+      xor_write_jit_sse(&(h->jit), val, ltd->poly, ((uintptr_t)rd.s_start - (uintptr_t)rd.d_start + 256) < 512, xor)
     );
   }
   
@@ -1604,7 +1596,7 @@ void gf_w16_xor_create_jit_lut_avx2(void) {
 	}
 }
 
-static uint8_t* xor_write_jit_avx(jit_t* jit, gf_val_32_t val, int prim_poly, int xor)
+static uint8_t* xor_write_jit_avx(jit_t* jit, gf_val_32_t val, gf_w16_poly_struct* poly, int xor)
 {
   FAST_U32 i, bit;
   long inBit;
@@ -1628,16 +1620,7 @@ static uint8_t* xor_write_jit_avx(jit_t* jit, gf_val_32_t val, int prim_poly, in
       0, 0, 0, 0, 0, 0, 0, 0, 0x80, 0x40, 0x20, 0x10, 0x08, 0x04, 0x02, 0x01
     );
     
-    __m256i shuf = _mm256_broadcastsi128_si256(_mm_cmpeq_epi8(
-      _mm_setzero_si128(),
-      _mm_and_si128(
-        _mm_shuffle_epi8(
-          _mm_cvtsi32_si128(prim_poly & 0xffff),
-          _mm_set_epi32(0, 0, 0x01010101, 0x01010101)
-        ),
-        _mm_set_epi32(0x01020408, 0x10204080, 0x01020408, 0x10204080)
-      )
-    ));
+    __m256i shuf = poly->p32;
     
     __m256i depmask;
     if(val & (1<<15)) {
@@ -1908,7 +1891,8 @@ static uint8_t* xor_write_jit_avx(jit_t* jit, gf_val_32_t val, int prim_poly, in
 static void gf_w16_xor_lazy_jit_altmap_multiply_region_avx2(gf_t *gf, void *src, void *dest, gf_val_32_t val, int bytes, int xor)
 {
   gf_region_data rd;
-  gf_internal_t *h;
+  gf_internal_t *h = (gf_internal_t *) gf->scratch;
+  struct gf_w16_logtable_data* ltd = (struct gf_w16_logtable_data*)(h->private);
   jit_t* jit;
   int use_temp = ((uintptr_t)src - (uintptr_t)dest + 512) < 1024;
   void* tmp;
@@ -1925,7 +1909,6 @@ static void gf_w16_xor_lazy_jit_altmap_multiply_region_avx2(gf_t *gf, void *src,
     src = (void*)nSrc;
   }
   
-  h = (gf_internal_t *) gf->scratch;
   gf_w16_log_region_alignment(&rd, gf, src, dest, bytes, val, xor, 32, 512);
   
   if(rd.d_start != rd.d_top) {
@@ -1934,7 +1917,7 @@ static void gf_w16_xor_lazy_jit_altmap_multiply_region_avx2(gf_t *gf, void *src,
       (intptr_t)rd.s_start - 384,
       (intptr_t)rd.d_top - 384,
       (intptr_t)rd.d_start - 384,
-      xor_write_jit_avx(&(h->jit), val, h->prim_poly, xor)
+      xor_write_jit_avx(&(h->jit), val, ltd->poly, xor)
     );
     
     _mm256_zeroupper();
@@ -1958,6 +1941,7 @@ static void gf_w16_affine_multiply_region(gf_t *gf, void *src, void *dest, gf_va
   __m128i depmask1, depmask2, polymask1, polymask2, addvals1, addvals2;
   gf_region_data rd;
   gf_internal_t *h = (gf_internal_t *) gf->scratch;
+  struct gf_w16_logtable_data* ltd = (struct gf_w16_logtable_data*)(h->private);
 
   if (val == 0) { gf_multby_zero(dest, bytes, xor); return; }
   if (val == 1) { gf_multby_one(src, dest, bytes, xor); return; }
@@ -1968,14 +1952,10 @@ static void gf_w16_affine_multiply_region(gf_t *gf, void *src, void *dest, gf_va
   /* calculate dependent bits */
   addvals1 = _mm_set_epi16(0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80);
   addvals2 = _mm_set_epi16(0x0100, 0x0200, 0x0400, 0x0800, 0x1000, 0x2000, 0x4000, 0x8000);
-    
-  /* duplicate each bit in the polynomial 16 times */
-  polymask2 = _mm_set1_epi16(h->prim_poly & 0xFFFF); /* chop off top bit, although not really necessary */
-  polymask1 = _mm_and_si128(polymask2, addvals2);
-  polymask2 = _mm_and_si128(polymask2, addvals1);
-  polymask1 = _mm_cmpeq_epi16(_mm_setzero_si128(), polymask1);
-  polymask2 = _mm_cmpeq_epi16(_mm_setzero_si128(), polymask2);
-    
+  
+  polymask1 = ltd->poly->p16[0];
+  polymask2 = ltd->poly->p16[1];
+  
   if(val & (1<<15)) {
     /* XOR */
     depmask1 = addvals1;
@@ -2075,6 +2055,7 @@ static void gf_w16_affine512_multiply_region(gf_t *gf, void *src, void *dest, gf
   __m256i depmask, addvals;
   gf_region_data rd;
   gf_internal_t *h = (gf_internal_t *) gf->scratch;
+  struct gf_w16_logtable_data* ltd = (struct gf_w16_logtable_data*)(h->private);
 
   if (val == 0) { gf_multby_zero(dest, bytes, xor); return; }
   if (val == 1) { gf_multby_one(src, dest, bytes, xor); return; }
@@ -2088,10 +2069,7 @@ static void gf_w16_affine512_multiply_region(gf_t *gf, void *src, void *dest, gf
     0, 0, 0, 0, 0, 0, 0, 0, 0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80
   );
   
-  uint16_t poly = ~(h->prim_poly & 0xFFFF);
-  __m256i shuf = _mm256_broadcastsi128_si256(_mm_shuffle_epi8(_mm_movm_epi8(poly), _mm_set_epi8(
-    0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15
-  )));
+  __m256i shuf = ltd->poly->p32;
   
   if(val & (1<<15)) {
     /* XOR */

@@ -643,6 +643,48 @@ int gf_w16_split_init(gf_t *gf)
 #endif /*ARM_NEON*/
 
 
+#ifdef INTEL_SSE2
+static void gf_w16_xordep128_poly_init(gf_internal_t* h) {
+	struct gf_w16_logtable_data* ltd = (struct gf_w16_logtable_data*)(h->private);
+	
+	__m128i polymask1, polymask2;
+	/* duplicate each bit in the polynomial 16 times */
+	polymask2 = _mm_set1_epi16(h->prim_poly & 0xFFFF); /* chop off top bit, although not really necessary */
+	polymask1 = _mm_and_si128(polymask2, _mm_set_epi16(1<< 8, 1<< 9, 1<<10, 1<<11, 1<<12, 1<<13, 1<<14, 1<<15));
+	polymask2 = _mm_and_si128(polymask2, _mm_set_epi16(1<< 0, 1<< 1, 1<< 2, 1<< 3, 1<< 4, 1<< 5, 1<< 6, 1<< 7));
+	polymask1 = _mm_cmpeq_epi16(_mm_setzero_si128(), polymask1);
+	polymask2 = _mm_cmpeq_epi16(_mm_setzero_si128(), polymask2);
+	
+	ltd->poly = (gf_w16_poly_struct*)((uintptr_t)(&ltd->_poly + sizeof(gf_w16_poly_struct)-1) & ~(sizeof(gf_w16_poly_struct)-1));
+	ltd->poly->p16[0] = polymask1;
+	ltd->poly->p16[1] = polymask2;
+}
+#endif
+#ifdef INTEL_AVX2
+static void gf_w16_xordep256_poly_init(gf_internal_t* h) {
+	struct gf_w16_logtable_data* ltd = (struct gf_w16_logtable_data*)(h->private);
+	
+    __m128i shuf = _mm_cmpeq_epi8(
+      _mm_setzero_si128(),
+      _mm_and_si128(
+        _mm_shuffle_epi8(
+          _mm_cvtsi32_si128(h->prim_poly & 0xffff),
+          _mm_set_epi32(0, 0, 0x01010101, 0x01010101)
+        ),
+        _mm_set_epi32(0x01020408, 0x10204080, 0x01020408, 0x10204080)
+      )
+    );
+	/* AVX512 version:
+	__m128i shuf = _mm_shuffle_epi8(_mm_movm_epi8(~(h->prim_poly & 0xFFFF)), _mm_set_epi8(
+		0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15
+	));
+	*/
+	ltd->poly = (gf_w16_poly_struct*)((uintptr_t)(&ltd->_poly + sizeof(gf_w16_poly_struct)-1) & ~(sizeof(gf_w16_poly_struct)-1));
+	ltd->poly->p32 = _mm256_broadcastsi128_si256(shuf);
+}
+#endif
+
+
 /* NOTE: we only support ALTMAP */
 static 
 int gf_w16_affine_init(gf_t *gf)
@@ -666,6 +708,7 @@ int gf_w16_affine_init(gf_t *gf)
     gf->multiply_region.w32 = gf_w16_affine_multiply_region;
     gf->altmap_region = gf_w16_split_start_sse;
     gf->unaltmap_region = gf_w16_split_final_sse;
+    gf_w16_xordep128_poly_init(h);
 #ifdef INCLUDE_EXTRACT_WORD
     gf->extract_word.w32 = gf_w16_split_extract_word_sse;
 #endif
@@ -675,6 +718,7 @@ int gf_w16_affine_init(gf_t *gf)
     gf->multiply_region.w32 = gf_w16_affine512_multiply_region;
     gf->altmap_region = gf_w16_split_start_avx512;
     gf->unaltmap_region = gf_w16_split_final_avx512;
+    gf_w16_xordep256_poly_init(h);
 #ifdef INCLUDE_EXTRACT_WORD
     gf->extract_word.w32 = gf_w16_split_extract_word_avx512;
 #endif
@@ -732,11 +776,13 @@ int gf_w16_xor_init(gf_t *gf)
     gf->mult_method = GF_XOR_JIT_AVX2;
     gf->alignment = 32;
     gf->walignment = 512;
+    gf_w16_xordep256_poly_init(h);
   } else
 #endif
   {
     gf->alignment = 16;
     gf->walignment = 256;
+    gf_w16_xordep128_poly_init(h);
   }
   
 #ifdef INCLUDE_EXTRACT_WORD
@@ -759,7 +805,7 @@ void gf_w16_default_regionX(gf_t *gf, unsigned int numSrc, uintptr_t offset, voi
 
 int gf_w16_scratch_size(int mult_type, int region_type, int divide_type, int arg1, int arg2)
 {
-  return sizeof(gf_internal_t) + sizeof(struct gf_w16_logtable_data) + 64;
+  return sizeof(gf_internal_t) + sizeof(struct gf_w16_logtable_data);
 }
 
 
