@@ -150,6 +150,7 @@ _FN(gf_w16_split_4_16_lazy_altmap_multiply_region)(gf_t *gf, void *src, void *de
   gf_region_data rd;
   _mword  mask, ta, tb, ti, tpl, tph;
   gf_internal_t *h = (gf_internal_t *) gf->scratch;
+  struct gf_w16_logtable_data* ltd = (struct gf_w16_logtable_data*)(h->private);
 
   if (val == 0) { gf_multby_zero(dest, bytes, xor); return; }
   if (val == 1) { gf_multby_one(src, dest, bytes, xor); return; }
@@ -157,10 +158,11 @@ _FN(gf_w16_split_4_16_lazy_altmap_multiply_region)(gf_t *gf, void *src, void *de
   gf_w16_log_region_alignment(&rd, gf, src, dest, bytes, val, xor, sizeof(_mword), sizeof(_mword)*2);
 
   
+  mask = _MM(set1_epi8) (0x0f);
   {
     _mword ta, tb;
+    _mword polyl, polyh;
     _mword lmask = _MM(set1_epi16) (0xff);
-    _mword poly = _MM(set1_epi16) (h->prim_poly);
     
     gf_val_32_t val2 = GF_MULTBY_TWO(val);
     gf_val_32_t val4 = GF_MULTBY_TWO(val2);
@@ -172,67 +174,53 @@ _FN(gf_w16_split_4_16_lazy_altmap_multiply_region)(gf_t *gf, void *src, void *de
       _mm_insert_epi16(_mm_setzero_si128(), val4, 4), 0
     ));
 #if MWORD_SIZE == 16
-    ta = tmp;
+    #define BCAST
 #endif
 #if MWORD_SIZE == 32
-    ta = _mm256_broadcastsi128_si256(tmp);
+    #define BCAST _mm256_broadcastsi128_si256
 #endif
 #if MWORD_SIZE == 64
-    ta = _mm512_broadcast_i32x4(tmp);
+    #define BCAST _mm512_broadcast_i32x4
 #endif
+    ta = BCAST(tmp);
+    polyl = BCAST(ltd->poly->p16[0]);
+    polyh = BCAST(ltd->poly->p16[1]);
     
     tb = _MMI(xor)(ta, _MM(set1_epi16)( GF_MULTBY_TWO(val4) ));
     
+    low0 = _MM(packus_epi16)(_MMI(and)(ta, lmask), _MMI(and)(tb, lmask));
+    high0 = _MM(packus_epi16)(_MM(srli_epi16)(ta, 8), _MM(srli_epi16)(tb, 8));
     
-    #define SWIZZLE_STORE(i, a, b) \
-      low  ##i = _MM(packus_epi16)(_MMI(and)(a, lmask), _MMI(and)(b, lmask)); \
-      high ##i = _MM(packus_epi16)(_MM(srli_epi16)(a, 8), _MM(srli_epi16)(b, 8))
-    
-    SWIZZLE_STORE(0, ta, tb);
-    
-    /* multiply by 16 */
 #if MWORD_SIZE == 64
-    /* _mm512_mask_xor_epi16 doesn't exist, neither does _mm512_cmpgt_epi16 :( */
-    /* may be more efficient to widen to 32-bit, I dunno, but probably doesn't matter much */
-    #define MUL2(x) _mm512_xor_si512( \
-      _mm512_slli_epi16(x, 1), \
-      _mm512_and_si512(poly, _mm512_sub_epi16( \
-        _mm512_setzero_si512(), \
-        _mm512_srli_epi16(x, 15) \
-      )) \
-    )
+    #define MUL16(p, c) \
+      ti = _MMI(and)(_MM(srli_epi16)(high ##p, 4), mask); \
+      tb = _mm512_ternarylogic_epi32(_MM(srli_epi16)(low ##p, 4), mask, _MM(slli_epi16)(high ##p, 4), 0xE2); \
+      tpl = _MM(shuffle_epi8)(polyl, ti); \
+      tph = _MM(shuffle_epi8)(polyh, ti); \
+      low ##c = _mm512_ternarylogic_epi32(tpl, mask, _MM(slli_epi16)(low ##p, 4), 0xD2); \
+      high ##c = _MMI(xor)(tb, tph)
 #else
-    #define MUL2(x) _MMI(xor)( \
-      _MM(slli_epi16)(x, 1), \
-      _MMI(and)(poly, _MM(cmpgt_epi16)( \
-        _MMI(setzero)(), x \
-      )) \
-    )
+    #define MUL16(p, c) \
+      ti = _MMI(and)(_MM(srli_epi16)(high ##p, 4), mask); \
+      ta = _MMI(andnot)(mask, _MM(slli_epi16)(low ##p, 4)); \
+      tb = _MMI(andnot)(mask, _MM(slli_epi16)(high ##p, 4)); \
+      tb = _MMI(or)(tb, _MMI(and)(_MM(srli_epi16)(low ##p, 4), mask)); \
+      tpl = _MM(shuffle_epi8)(polyl, ti); \
+      tph = _MM(shuffle_epi8)(polyh, ti); \
+      low ##c = _MMI(xor)(ta, tpl); \
+      high ##c = _MMI(xor)(tb, tph)
 #endif
-    #define MUL16(x) \
-      x = MUL2(x); \
-      x = MUL2(x); \
-      x = MUL2(x); \
-      x = MUL2(x)
-    MUL16(ta);
-    MUL16(tb);
-    SWIZZLE_STORE(1, ta, tb);
-    MUL16(ta);
-    MUL16(tb);
-    SWIZZLE_STORE(2, ta, tb);
-    MUL16(ta);
-    MUL16(tb);
-    SWIZZLE_STORE(3, ta, tb);
-    #undef MUL2
+
+    MUL16(0, 1);
+    MUL16(1, 2);
+    MUL16(2, 3);
     #undef MUL16
-    #undef SWIZZLE_STORE
+    #undef BCAST
   }
   
   sW = (_mword *) rd.s_start;
   dW = (_mword *) rd.d_start;
   topW = (_mword *) rd.d_top;
-
-  mask = _MM(set1_epi8) (0x0f);
 
   if (xor) {
     while (dW != topW) {

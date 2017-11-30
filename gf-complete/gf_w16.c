@@ -623,6 +623,30 @@ int gf_w16_split_init(gf_t *gf)
     /* !! There's no fallback if SSE not supported !!
      * ParPar never uses ALTMAP if SSSE3 isn't available, but this isn't ideal in gf-complete
      * Also: ALTMAP implementations differ on SSE/AVX support, so it doesn't make too much sense for a fallback */
+    
+#ifdef INTEL_SSSE3
+    /* generate polynomial table stuff */
+    struct gf_w16_logtable_data* ltd = (struct gf_w16_logtable_data*)(h->private);
+    ALIGN(16, uint16_t _poly[16]);
+    __m128i tmp1, tmp2;
+    __m128i polyL, polyH;
+    ltd->poly = (gf_w16_poly_struct*)((uintptr_t)(&ltd->_poly + sizeof(gf_w16_poly_struct)-1) & ~(sizeof(gf_w16_poly_struct)-1));
+    
+    for(int i=0; i<16; i++) {
+      int p = 0;
+      if(i & 8) p ^= h->prim_poly << 3;
+      if(i & 4) p ^= h->prim_poly << 2;
+      if(i & 2) p ^= h->prim_poly << 1;
+      if(i & 1) p ^= h->prim_poly << 0;
+      
+      _poly[i] = p & 0xffff;
+    }
+    tmp1 = _mm_load_si128((__m128i*)_poly);
+    tmp2 = _mm_load_si128((__m128i*)_poly + 1);
+    ltd->poly->p16[0] = _mm_packus_epi16(_mm_and_si128(tmp1, _mm_set1_epi16(0xff)), _mm_and_si128(tmp2, _mm_set1_epi16(0xff)));
+    ltd->poly->p16[1] = _mm_packus_epi16(_mm_srli_epi16(tmp1, 8), _mm_srli_epi16(tmp2, 8));
+#endif
+
 #ifdef FUNC_ASSIGN
     FUNC_ASSIGN(gf->altmap_region, gf_w16_split_start)
     FUNC_ASSIGN(gf->unaltmap_region, gf_w16_split_final)
@@ -664,16 +688,16 @@ static void gf_w16_xordep128_poly_init(gf_internal_t* h) {
 static void gf_w16_xordep256_poly_init(gf_internal_t* h) {
 	struct gf_w16_logtable_data* ltd = (struct gf_w16_logtable_data*)(h->private);
 	
-    __m128i shuf = _mm_cmpeq_epi8(
-      _mm_setzero_si128(),
-      _mm_and_si128(
-        _mm_shuffle_epi8(
-          _mm_cvtsi32_si128(h->prim_poly & 0xffff),
-          _mm_set_epi32(0, 0, 0x01010101, 0x01010101)
-        ),
-        _mm_set_epi32(0x01020408, 0x10204080, 0x01020408, 0x10204080)
-      )
-    );
+	__m128i shuf = _mm_cmpeq_epi8(
+		_mm_setzero_si128(),
+		_mm_and_si128(
+			_mm_shuffle_epi8(
+				_mm_cvtsi32_si128(h->prim_poly & 0xffff),
+				_mm_set_epi32(0, 0, 0x01010101, 0x01010101)
+			),
+			_mm_set_epi32(0x01020408, 0x10204080, 0x01020408, 0x10204080)
+		)
+	);
 	/* AVX512 version:
 	__m128i shuf = _mm_shuffle_epi8(_mm_movm_epi8(~(h->prim_poly & 0xFFFF)), _mm_set_epi8(
 		0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15
