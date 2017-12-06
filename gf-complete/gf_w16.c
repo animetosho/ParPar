@@ -629,8 +629,7 @@ int gf_w16_split_init(gf_t *gf)
     struct gf_w16_logtable_data* ltd = (struct gf_w16_logtable_data*)(h->private);
     ALIGN(16, uint16_t _poly[16]);
     __m128i tmp1, tmp2;
-    __m128i polyL, polyH;
-    ltd->poly = (gf_w16_poly_struct*)((uintptr_t)(&ltd->_poly + sizeof(gf_w16_poly_struct)-1) & ~(sizeof(gf_w16_poly_struct)-1));
+    ltd->poly = (gf_w16_poly_struct*)(((uintptr_t)&ltd->_poly + sizeof(gf_w16_poly_struct)-1) & ~(sizeof(gf_w16_poly_struct)-1));
     
     for(int i=0; i<16; i++) {
       int p = 0;
@@ -679,7 +678,7 @@ static void gf_w16_xordep128_poly_init(gf_internal_t* h) {
 	polymask1 = _mm_cmpeq_epi16(_mm_setzero_si128(), polymask1);
 	polymask2 = _mm_cmpeq_epi16(_mm_setzero_si128(), polymask2);
 	
-	ltd->poly = (gf_w16_poly_struct*)((uintptr_t)(&ltd->_poly + sizeof(gf_w16_poly_struct)-1) & ~(sizeof(gf_w16_poly_struct)-1));
+	ltd->poly = (gf_w16_poly_struct*)(((uintptr_t)&ltd->_poly + sizeof(gf_w16_poly_struct)-1) & ~(sizeof(gf_w16_poly_struct)-1));
 	ltd->poly->p16[0] = polymask1;
 	ltd->poly->p16[1] = polymask2;
 }
@@ -703,7 +702,7 @@ static void gf_w16_xordep256_poly_init(gf_internal_t* h) {
 		0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15
 	));
 	*/
-	ltd->poly = (gf_w16_poly_struct*)((uintptr_t)(&ltd->_poly + sizeof(gf_w16_poly_struct)-1) & ~(sizeof(gf_w16_poly_struct)-1));
+	ltd->poly = (gf_w16_poly_struct*)(((uintptr_t)&ltd->_poly + sizeof(gf_w16_poly_struct)-1) & ~(sizeof(gf_w16_poly_struct)-1));
 	ltd->poly->p32 = _mm256_broadcastsi128_si256(shuf);
 }
 #endif
@@ -795,7 +794,7 @@ int gf_w16_xor_init(gf_t *gf)
   /* if JIT allocation was successful (no W^X issue), use slightly faster JIT version, otherwise fall back to static code version */
   
   gf->using_altmap = 1;
-#ifdef AMD64
+#if defined(AMD64) && defined(INTEL_AVX2)
   if(jit->code && wordsize >= 256) {
     gf->mult_method = GF_XOR_JIT_AVX2;
     gf->alignment = 32;
