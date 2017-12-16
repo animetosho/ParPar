@@ -287,6 +287,16 @@ static inline size_t _jit_vpxor_r(uint8_t* jit, uint8_t yregD, uint8_t yreg1, ui
 	}
 }
 
+static inline size_t _jit_vmovdqa(uint8_t* jit, uint8_t yreg, uint8_t yreg2) {
+	if(yreg2 > 7) {
+		*(int32_t*)jit = 0x6F7DE1C4 ^ ((yreg >> 3) << 15) ^ ((yreg2 >> 3) << 13);
+		jit[4] = 0xC0 | ((yreg & 7) <<3) | ((yreg2 & 7) <<0);
+		return 5;
+	} else {
+		*(int32_t*)jit = (0xC06FFDC5 | ((yreg & 7) <<27) | ((yreg2 & 7) <<24)) ^ ((yreg >> 3) << 15);
+		return 4;
+	}
+}
 static inline size_t _jit_vmovdqa_load(uint8_t* jit, uint8_t yreg, uint8_t mreg, int32_t offs) {
 	size_t p;
 	int offsFlag = (offs != 0) << (((offs+128) & ~0xFF) != 0);

@@ -1596,6 +1596,33 @@ void gf_w16_xor_create_jit_lut_avx2(void) {
 	}
 }
 
+static inline __m128i ssse3_lzcnt_epi16(__m128i v) {
+    __m128i lmask = _mm_set1_epi8(0xf);
+	__m128i low = _mm_shuffle_epi8(_mm_set_epi8(
+		4,4,4,4,4,4,4,4,5,5,5,5,6,6,7,16
+	), _mm_and_si128(v, lmask));
+	__m128i high = _mm_shuffle_epi8(_mm_set_epi8(
+		0,0,0,0,0,0,0,0,1,1,1,1,2,2,3,16
+	), _mm_and_si128(_mm_srli_epi16(v, 4), lmask));
+	__m128i combined = _mm_min_epu8(low, high);
+	low = _mm_add_epi8(combined, _mm_set1_epi16(8));
+	high = _mm_srli_epi16(combined, 8);
+	return _mm_min_epu8(low, high);
+}
+static inline __m128i sse4_lzcnt_to_mask_epi16(__m128i v) {
+	__m128i zeroes = _mm_cmpeq_epi16(v, _mm_setzero_si128());
+	v = _mm_blendv_epi8(
+		v,
+		_mm_slli_si128(v, 1),
+		_mm_cmplt_epi16(v, _mm_set1_epi16(8))
+	);
+	__m128i bits = _mm_shuffle_epi8(_mm_set_epi8(
+		0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80,
+		0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0 /* fix this case specifically */
+	), v);
+	return _mm_or_si128(bits, _mm_slli_epi16(zeroes, 15));
+}
+
 static uint8_t* xor_write_jit_avx(jit_t* jit, gf_val_32_t val, gf_w16_poly_struct* poly, int xor)
 {
   FAST_U32 i, bit;
@@ -1652,6 +1679,30 @@ static uint8_t* xor_write_jit_avx(jit_t* jit, gf_val_32_t val, gf_w16_poly_struc
     tmp4 = _mm_blendv_epi8(tmp2, _mm_srli_si128(tmp1, 1), _mm_set1_epi16(0xff));
     
     
+    ALIGN(16, uint16_t common_highest[8]);
+    ALIGN(16, uint16_t dep1_highest[8]);
+    ALIGN(16, uint16_t dep2_highest[8]);
+    if(xor) {
+    /* obtain index of lowest bit set, and clear it */
+    common_mask = _mm_and_si128(tmp3, tmp4);
+    __m128i highest = ssse3_lzcnt_epi16(common_mask);
+    _mm_store_si128((__m128i*)common_highest, highest);
+    /* clear highest bit from common, tmp3/4 */
+    __m128i _common_highest = sse4_lzcnt_to_mask_epi16(highest);
+    common_mask = _mm_xor_si128(common_mask, _common_highest);
+    tmp3 = _mm_xor_si128(tmp3, _common_highest);
+    tmp4 = _mm_xor_si128(tmp4, _common_highest);
+    //if(!xor) {
+      highest = ssse3_lzcnt_epi16(tmp3);
+      _mm_store_si128((__m128i*)dep1_highest, highest);
+      tmp3 = _mm_xor_si128(tmp3, sse4_lzcnt_to_mask_epi16(highest));
+      highest = ssse3_lzcnt_epi16(tmp4);
+      _mm_store_si128((__m128i*)dep2_highest, highest);
+      tmp4 = _mm_xor_si128(tmp4, sse4_lzcnt_to_mask_epi16(highest));
+    //}
+    }
+    
+    
     /* interleave bits for faster lookups */
     __m256i tmp3b = _mm256_cvtepu8_epi16(tmp3);
     __m256i tmp4b = _mm256_cvtepu8_epi16(tmp4);
@@ -1677,7 +1728,6 @@ static uint8_t* xor_write_jit_avx(jit_t* jit, gf_val_32_t val, gf_w16_poly_struc
 #ifndef XORDEP_DISABLE_NO_COMMON
     /* find cases where we don't wish to create the common queue - this is an optimisation to remove a single move operation when the common queue only contains one element */
     /* we have the common elements between pairs, but it doesn't make sense to process a separate queue if there's only one common element (0 XORs), so find those */
-    common_mask = _mm_and_si128(tmp3, tmp4);
     common_mask = _mm_andnot_si128(
       _mm_cmpeq_epi16(_mm_setzero_si128(), common_mask),
       _mm_cmpeq_epi16(
@@ -1737,11 +1787,34 @@ static uint8_t* xor_write_jit_avx(jit_t* jit, gf_val_32_t val, gf_w16_poly_struc
         for(bit=0; bit<8; bit++) {
           int destOffs = (bit<<6)-128;
           int destOffs2 = destOffs+32;
-          FAST_U8 movC = 0xFF;
-          FAST_U16 posC = 0;
           FAST_U32 mask = lumask[bit];
-          _LD_DQA(0, DX, destOffs);
-          _LD_DQA(1, DX, destOffs2);
+          
+          /* if there's a lowest bit set, do a VPXOR-load, otherwise, regular load + VPXOR-load */
+          if(dep1_highest[bit] < 13) {
+            jitptr += _jit_vpxor_m(jitptr, 0, 15-dep1_highest[bit], DX, destOffs);
+          } else {
+            _LD_DQA(0, DX, destOffs);
+            if(dep1_highest[bit] < 16)
+              jitptr += _jit_vpxor_m(jitptr, 0, 0, AX, (15-dep1_highest[bit])*32-128);
+          }
+          if(dep2_highest[bit] < 13) {
+            jitptr += _jit_vpxor_m(jitptr, 1, 15-dep2_highest[bit], DX, destOffs2);
+          } else {
+            _LD_DQA(1, DX, destOffs2);
+            if(dep2_highest[bit] < 16)
+              jitptr += _jit_vpxor_m(jitptr, 1, 1, AX, (15-dep2_highest[bit])*32-128);
+          }
+          
+          /* for common mask, if two lowest bits available, do VPXOR, else if only one, just XOR at end (consider no common mask optimization to eliminate this case) */
+          if(common_highest[bit] < 16) {
+            if(common_highest[bit] > 12) {
+              /* load from mem */
+              _LD_DQA(2, AX, (15-common_highest[bit])*32-128);
+            } else {
+              /* just a move */
+              jitptr += _jit_vmovdqa(jitptr, 2, 15-common_highest[bit]);
+            }
+          }
           
           if(no_common_mask & 1) {
 #ifndef XORDEP_DISABLE_NO_COMMON
@@ -1763,8 +1836,10 @@ static uint8_t* xor_write_jit_avx(jit_t* jit, gf_val_32_t val, gf_w16_poly_struc
 #endif
           } else {
             #define PROC_BITPAIR(n, bits, inf, m, r64) \
-              jitptr += xor_jit_bitpair3(jitptr, (m) & ((2<<bits)-2), xor256_jit_clut_code ##n, xor256_jit_clut_info_ ##inf, &posC, &movC, r64) & 0xF; \
+              _mm_storeu_si128(jitptr, _mm_load_si128((__m128i*)((uint64_t*)xor256_jit_clut_code ##n + ((m) & ((2<<bits)-2))))); \
+              jitptr += (xor256_jit_clut_info_ ##inf)[((m) & ((2<<bits)-2)) >> 1] & 0xF; \
               mask >>= bits
+
             PROC_BITPAIR(1, 6, mem, mask<<1, 0);
             mask <<= 1;
             PROC_BITPAIR(2, 6, reg, mask, 0);
@@ -1774,10 +1849,8 @@ static uint8_t* xor_write_jit_avx(jit_t* jit, gf_val_32_t val, gf_w16_poly_struc
             PROC_BITPAIR(6, 4, mem, mask, 1);
             #undef PROC_BITPAIR
             
-            jitptr[posC + movC] |= 0xF<<3; // PXOR -> MOVDQA
-            jitptr[posC + movC +1] = 0x6F;
-            _C_PXOR_R(0, 2, movC==0);
-            _C_PXOR_R(1, 2, movC==0);
+            _C_PXOR_R(0, 2, common_highest[bit] < 16);
+            _C_PXOR_R(1, 2, common_highest[bit] < 16);
           }
 #ifndef XORDEP_DISABLE_NO_COMMON
           no_common_mask >>= 2;
