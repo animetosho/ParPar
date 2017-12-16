@@ -99,7 +99,7 @@ void gf_w16_log_region_alignment(gf_region_data *rd,
   int align,
   int walign)
 {
-  unsigned long uls;
+  uintptr_t uls;
   struct gf_w16_logtable_data *ltd = (struct gf_w16_logtable_data *) ((gf_internal_t *) gf->scratch)->private;
   int log_val = ltd->log_tbl[val];
   uint16_t *sEnd = ((uint16_t*)src) + (bytes>>1);
@@ -113,9 +113,9 @@ void gf_w16_log_region_alignment(gf_region_data *rd,
   rd->xor = xor;
 */
 
-  uls = ((unsigned long) src) & (align-1);
+  uls = ((uintptr_t) src) & (align-1);
 
-  if (uls != (((unsigned long) dest) & (align-1)))
+  if (uls != (((uintptr_t) dest) & (align-1)))
     assert(0);
   if ((bytes & 1) != 0)
     assert(0);

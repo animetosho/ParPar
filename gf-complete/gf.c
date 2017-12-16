@@ -228,7 +228,7 @@ void gf_set_region_data(gf_region_data *rd,
 {
   gf_internal_t *h = NULL;
   int wb;
-  unsigned long uls, uld;
+  uintptr_t uls, uld;
 
   if (gf == NULL) {  /* JSP - Can be NULL if you're just doing XOR's */
     wb = 1;
@@ -245,8 +245,8 @@ void gf_set_region_data(gf_region_data *rd,
   rd->val = val;
   rd->xor = xor;
 
-  uls = (unsigned long) src;
-  uld = (unsigned long) dest;
+  uls = (uintptr_t) src;
+  uld = (uintptr_t) dest;
 
   if (align == -1) { /* JSP: This is cauchy.  Error check bytes, then set up the pointers
                         so that there are no alignment regions. */
@@ -267,16 +267,16 @@ void gf_set_region_data(gf_region_data *rd,
     fprintf(stderr, "Error in region multiply operation.\n");
     fprintf(stderr, "The source & destination pointers must be aligned with respect\n");
     fprintf(stderr, "to each other along a %d byte boundary.\n", align);
-    fprintf(stderr, "Src = 0x%lx.  Dest = 0x%lx\n", (unsigned long) src,
-            (unsigned long) dest);
+    fprintf(stderr, "Src = 0x%lx.  Dest = 0x%lx\n", (uintptr_t) src,
+            (uintptr_t) dest);
     assert(0);
   }
 
   if (uls % wb != 0) {
     fprintf(stderr, "Error in region multiply operation.\n");
     fprintf(stderr, "The pointers must be aligned along a %d byte boundary.\n", wb);
-    fprintf(stderr, "Src = 0x%lx.  Dest = 0x%lx\n", (unsigned long) src,
-            (unsigned long) dest);
+    fprintf(stderr, "Src = 0x%lx.  Dest = 0x%lx\n", (uintptr_t) src,
+            (uintptr_t) dest);
     assert(0);
   }
 
@@ -345,7 +345,7 @@ void gf_multby_one(void *src, void *dest, int bytes, int xor)
   __m128i ms, md;
   int abytes;
 #endif
-  unsigned long uls, uld;
+  uintptr_t uls, uld;
   uint8_t *s8, *d8;
   FAST_U8 *s64, *d64, *dtop64;
   gf_region_data rd;
@@ -354,8 +354,8 @@ void gf_multby_one(void *src, void *dest, int bytes, int xor)
     memcpy(dest, src, bytes);
     return;
   }
-  uls = (unsigned long) src;
-  uld = (unsigned long) dest;
+  uls = (uintptr_t) src;
+  uld = (uintptr_t) dest;
 
 #ifdef   INTEL_SSE2
   s8 = (uint8_t *) src;
