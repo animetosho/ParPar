@@ -1538,8 +1538,8 @@ ALIGN(64, __m128i xor256_jit_clut_code3[16]);
 ALIGN(64, __m128i xor256_jit_clut_code4[64]);
 ALIGN(64, __m128i xor256_jit_clut_code5[64]);
 ALIGN(64, __m128i xor256_jit_clut_code6[16]);
-ALIGN(64, uint16_t xor256_jit_clut_info_mem[64]);
-ALIGN(64, uint16_t xor256_jit_clut_info_reg[64]);
+ALIGN(64, uint8_t xor256_jit_clut_info_mem[64]);
+ALIGN(64, uint8_t xor256_jit_clut_info_reg[64]);
 
 int xor256_jit_created = 0;
 
@@ -1560,8 +1560,8 @@ void gf_w16_xor_create_jit_lut_avx2(void) {
 	
 	for(i=0; i<64; i++) {
 		int m = i;
-		FAST_U8 posM[4] = {0, 0, 0, 0};
-		FAST_U8 posR[4] = {0, 0, 0, 0};
+		FAST_U8 posM = 0;
+		FAST_U8 posR = 0;
 		uint8_t* pC[6] = {
 			(uint8_t*)(xor256_jit_clut_code1 + i),
 			(uint8_t*)(xor256_jit_clut_code2 + i),
@@ -1587,21 +1587,16 @@ void gf_w16_xor_create_jit_lut_avx2(void) {
 					pC[5] += _jit_vpxor_r(pC[5], reg, j+14, reg);
 				}
 				
-				// transformations (PXOR -> MOVDQA)
-				// TODO:
-				if(posM[reg+1] == 0) posM[reg+1] = posM[0] +1;
-				if(posR[reg+1] == 0) posR[reg+1] = posR[0] +1;
-				
 				/* advance pointers */
-				posM[0] += 5;
-				posR[0] += 4;
+				posM += 5;
+				posR += 4;
 			}
 			
 			m >>= 2;
 		}
 		
-		xor256_jit_clut_info_mem[i] = posM[0] | (posM[1] << 4) | (posM[2] << 8) | (posM[3] << 12);
-		xor256_jit_clut_info_reg[i] = posR[0] | (posR[1] << 4) | (posR[2] << 8) | (posR[3] << 12);
+		xor256_jit_clut_info_mem[i] = posM;
+		xor256_jit_clut_info_reg[i] = posR;
 	}
 }
 
@@ -1897,7 +1892,7 @@ static uint8_t* xor_write_jit_avx(jit_t* jit, gf_val_32_t val, gf_w16_poly_struc
           } else {
             #define PROC_BITPAIR(n, bits, inf, m) \
               _mm_storeu_si128(jitptr, _mm_load_si128((__m128i*)((uint64_t*)xor256_jit_clut_code ##n + ((m) & ((2<<bits)-2))))); \
-              jitptr += (xor256_jit_clut_info_ ##inf)[((m) & ((2<<bits)-2)) >> 1] & 0xF; \
+              jitptr += (xor256_jit_clut_info_ ##inf)[((m) & ((2<<bits)-2)) >> 1]; \
               mask >>= bits
 
             PROC_BITPAIR(1, 6, mem, mask<<1);
@@ -1950,7 +1945,7 @@ static uint8_t* xor_write_jit_avx(jit_t* jit, gf_val_32_t val, gf_w16_poly_struc
           } else {
             #define PROC_BITPAIR(n, bits, inf, m) \
               _mm_storeu_si128(jitptr, _mm_load_si128((__m128i*)((uint64_t*)xor256_jit_clut_code ##n + ((m) & ((2<<bits)-2))))); \
-              jitptr += (xor256_jit_clut_info_ ##inf)[((m) & ((2<<bits)-2)) >> 1] & 0xF; \
+              jitptr += (xor256_jit_clut_info_ ##inf)[((m) & ((2<<bits)-2)) >> 1]; \
               mask >>= bits
 
             PROC_BITPAIR(1, 6, mem, mask<<1);
