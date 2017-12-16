@@ -1579,12 +1579,12 @@ void gf_w16_xor_create_jit_lut_avx2(void) {
 				
 				/* if we ever support 32-bit, need to ensure that vpxor/load is fixed length */
 				pC[0] += _jit_vpxor_m(pC[0], reg, reg, AX, (j-4) <<5);
-				pC[1] += _jit_vpxor_r(pC[1], reg, reg, j+3);
-				pC[3] += _jit_vpxor_r(pC[3], reg, reg, j+8);
-				pC[4] += _jit_vpxor_r(pC[4], reg, reg, j+11);
+				pC[1] += _jit_vpxor_r(pC[1], reg, j+3, reg);
+				pC[3] += _jit_vpxor_r(pC[3], reg, j+8, reg);
+				pC[4] += _jit_vpxor_r(pC[4], reg, j+11, reg);
 				if(i < 16) {
-					pC[2] += _jit_vpxor_r(pC[2], reg, reg, j+6);
-					pC[5] += _jit_vpxor_r(pC[5], reg, reg, j+14);
+					pC[2] += _jit_vpxor_r(pC[2], reg, j+6, reg);
+					pC[5] += _jit_vpxor_r(pC[5], reg, j+14, reg);
 				}
 				
 				// transformations (PXOR -> MOVDQA)
@@ -1649,19 +1649,19 @@ static inline void xor_write_avx_load_part(uint8_t** jitptr, int reg, int16_t lo
 	if(lowest < 16) {
 		if(lowest < 3) {
 #ifdef XORDEP_MERGE_AVX_XOR
-			if(highest < 13) {
-				*jitptr += _jit_vpxor_m(*jitptr, reg, 15-highest, AX, (lowest)*32-128);
-			} else if(highest < 16) {
-				*jitptr += _jit_vmovdqa_load(*jitptr, reg, AX, (15-highest)*32-128);
-				*jitptr += _jit_vpxor_m(*jitptr, reg, reg, AX, (lowest)*32-128);
+			if(highest > 2) {
+				*jitptr += _jit_vpxor_m(*jitptr, reg, highest, AX, lowest*32-128);
+			} else if(highest >= 0) {
+				*jitptr += _jit_vmovdqa_load(*jitptr, reg, AX, highest*32-128);
+				*jitptr += _jit_vpxor_m(*jitptr, reg, reg, AX, lowest*32-128);
 			} else
 #endif
-				*jitptr += _jit_vmovdqa_load(*jitptr, reg, AX, (lowest)*32-128);
+				*jitptr += _jit_vmovdqa_load(*jitptr, reg, AX, lowest*32-128);
 		} else {
 #ifdef XORDEP_MERGE_AVX_XOR
-			if(highest < 16) {
+			if(highest >= 0) {
 				/* highest dep cannot be sourced from memory */
-				*jitptr += _jit_vpxor_r(*jitptr, reg, 15-highest, lowest);
+				*jitptr += _jit_vpxor_r(*jitptr, reg, highest, lowest);
 			} else
 #endif
 				/* just a move; TODO: eliminate this */
@@ -1726,12 +1726,12 @@ static uint8_t* xor_write_jit_avx(jit_t* jit, gf_val_32_t val, gf_w16_poly_struc
     tmp4 = _mm_blendv_epi8(tmp2, _mm_srli_si128(tmp1, 1), _mm_set1_epi16(0xff));
     
     
-    ALIGN(16, uint16_t common_highest[8]);
-    ALIGN(16, uint16_t common_lowest[8]);
-    ALIGN(16, uint16_t dep1_highest[8]);
-    ALIGN(16, uint16_t dep1_lowest[8]);
-    ALIGN(16, uint16_t dep2_highest[8]);
-    ALIGN(16, uint16_t dep2_lowest[8]);
+    ALIGN(16, int16_t common_highest[8]);
+    ALIGN(16, int16_t common_lowest[8]);
+    ALIGN(16, int16_t dep1_highest[8]);
+    ALIGN(16, int16_t dep1_lowest[8]);
+    ALIGN(16, int16_t dep2_highest[8]);
+    ALIGN(16, int16_t dep2_lowest[8]);
     /* obtain index of lowest bit set, and clear it */
     common_mask = _mm_and_si128(tmp3, tmp4);
     __m128i lowest = ssse3_tzcnt_epi16(common_mask);
@@ -1743,7 +1743,7 @@ static uint8_t* xor_write_jit_avx(jit_t* jit, gf_val_32_t val, gf_w16_poly_struc
     __m128i highest;
 #ifdef XORDEP_MERGE_AVX_XOR
     highest = ssse3_lzcnt_epi16(common_mask);
-    _mm_store_si128((__m128i*)common_highest, highest);
+    _mm_store_si128((__m128i*)common_highest, _mm_sub_epi16(_mm_set1_epi16(15), highest));
     common_elim = _mm_or_si128(common_elim, sse4_lzcnt_to_mask_epi16(highest));
     common_mask = _mm_xor_si128(common_mask, common_elim);
 #endif
@@ -1764,10 +1764,10 @@ static uint8_t* xor_write_jit_avx(jit_t* jit, gf_val_32_t val, gf_w16_poly_struc
     else {
 #endif
     highest = ssse3_lzcnt_epi16(tmp3);
-    _mm_store_si128((__m128i*)dep1_highest, highest);
+    _mm_store_si128((__m128i*)dep1_highest, _mm_sub_epi16(_mm_set1_epi16(15), highest));
     tmp3 = _mm_xor_si128(tmp3, sse4_lzcnt_to_mask_epi16(highest));
     highest = ssse3_lzcnt_epi16(tmp4);
-    _mm_store_si128((__m128i*)dep2_highest, highest);
+    _mm_store_si128((__m128i*)dep2_highest, _mm_sub_epi16(_mm_set1_epi16(15), highest));
     tmp4 = _mm_xor_si128(tmp4, sse4_lzcnt_to_mask_epi16(highest));
 #ifndef XORDEP_MERGE_AVX_XOR
     }
@@ -1826,8 +1826,6 @@ static uint8_t* xor_write_jit_avx(jit_t* jit, gf_val_32_t val, gf_w16_poly_struc
 #endif
     jitcode = jit->code;
     
-    // TODO: AVX optimisations (i.e. avoiding loads)
-    
     // TODO: optimize these
     #undef _LD_DQA
     #define _LD_DQA(yreg, mreg, offs) \
@@ -1860,19 +1858,19 @@ static uint8_t* xor_write_jit_avx(jit_t* jit, gf_val_32_t val, gf_w16_poly_struc
           FAST_U32 mask = lumask[bit];
           
           /* if there's a higest bit set, do a VPXOR-load, otherwise, regular load + VPXOR-load */
-          if(dep1_highest[bit] < 13) {
-            jitptr += _jit_vpxor_m(jitptr, 0, 15-dep1_highest[bit], DX, destOffs);
+          if(dep1_highest[bit] > 2) {
+            jitptr += _jit_vpxor_m(jitptr, 0, dep1_highest[bit], DX, destOffs);
           } else {
             _LD_DQA(0, DX, destOffs);
-            if(dep1_highest[bit] < 16)
-              jitptr += _jit_vpxor_m(jitptr, 0, 0, AX, (15-dep1_highest[bit])*32-128);
+            if(dep1_highest[bit] >= 0)
+              jitptr += _jit_vpxor_m(jitptr, 0, 0, AX, dep1_highest[bit]*32-128);
           }
-          if(dep2_highest[bit] < 13) {
-            jitptr += _jit_vpxor_m(jitptr, 1, 15-dep2_highest[bit], DX, destOffs2);
+          if(dep2_highest[bit] > 2) {
+            jitptr += _jit_vpxor_m(jitptr, 1, dep2_highest[bit], DX, destOffs2);
           } else {
             _LD_DQA(1, DX, destOffs2);
-            if(dep2_highest[bit] < 16)
-              jitptr += _jit_vpxor_m(jitptr, 1, 1, AX, (15-dep2_highest[bit])*32-128);
+            if(dep2_highest[bit] >= 0)
+              jitptr += _jit_vpxor_m(jitptr, 1, 1, AX, dep2_highest[bit]*32-128);
           }
           
           /* for common mask, if two lowest bits available, do VPXOR, else if only one, just XOR at end (consider no common mask optimization to eliminate this case) */
@@ -1890,10 +1888,10 @@ static uint8_t* xor_write_jit_avx(jit_t* jit, gf_val_32_t val, gf_w16_poly_struc
             PROC_BITPAIR(1, rm, mask);
             PROC_BITPAIR(2, reg, mask);
             PROC_BITPAIR(3, reg, mask);
-            PROC_BITPAIR(4, mem, mask);
-            PROC_BITPAIR(5, mem, mask);
-            PROC_BITPAIR(6, mem, mask);
-            PROC_BITPAIR(7, mem, mask);
+            PROC_BITPAIR(4, reg, mask);
+            PROC_BITPAIR(5, reg, mask);
+            PROC_BITPAIR(6, reg, mask);
+            PROC_BITPAIR(7, reg, mask);
             #undef PROC_BITPAIR
 #endif
           } else {
@@ -1906,9 +1904,9 @@ static uint8_t* xor_write_jit_avx(jit_t* jit, gf_val_32_t val, gf_w16_poly_struc
             mask <<= 1;
             PROC_BITPAIR(2, 6, reg, mask);
             PROC_BITPAIR(3, 4, reg, mask);
-            PROC_BITPAIR(4, 6, mem, mask);
-            PROC_BITPAIR(5, 6, mem, mask);
-            PROC_BITPAIR(6, 4, mem, mask);
+            PROC_BITPAIR(4, 6, reg, mask);
+            PROC_BITPAIR(5, 6, reg, mask);
+            PROC_BITPAIR(6, 4, reg, mask);
             #undef PROC_BITPAIR
             
             _C_PXOR_R(0, 2, common_lowest[bit] < 16);
@@ -1943,10 +1941,10 @@ static uint8_t* xor_write_jit_avx(jit_t* jit, gf_val_32_t val, gf_w16_poly_struc
             PROC_BITPAIR(1, rm, mask, 0);
             PROC_BITPAIR(2, reg, mask, 0);
             PROC_BITPAIR(3, reg, mask, 0);
-            PROC_BITPAIR(4, mem, mask, 1);
-            PROC_BITPAIR(5, mem, mask, 1);
-            PROC_BITPAIR(6, mem, mask, 1);
-            PROC_BITPAIR(7, mem, mask, 1);
+            PROC_BITPAIR(4, reg, mask, 1);
+            PROC_BITPAIR(5, reg, mask, 1);
+            PROC_BITPAIR(6, reg, mask, 1);
+            PROC_BITPAIR(7, reg, mask, 1);
             #undef PROC_BITPAIR
 #endif
           } else {
@@ -1959,9 +1957,9 @@ static uint8_t* xor_write_jit_avx(jit_t* jit, gf_val_32_t val, gf_w16_poly_struc
             mask <<= 1;
             PROC_BITPAIR(2, 6, reg, mask);
             PROC_BITPAIR(3, 4, reg, mask);
-            PROC_BITPAIR(4, 6, mem, mask);
-            PROC_BITPAIR(5, 6, mem, mask);
-            PROC_BITPAIR(6, 4, mem, mask);
+            PROC_BITPAIR(4, 6, reg, mask);
+            PROC_BITPAIR(5, 6, reg, mask);
+            PROC_BITPAIR(6, 4, reg, mask);
             #undef PROC_BITPAIR
           
             if(dep1_lowest[bit] < 16) {
