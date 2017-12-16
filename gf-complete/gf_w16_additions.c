@@ -769,7 +769,16 @@ extern void gf_w16_xor_jit_stub(intptr_t src, intptr_t dEnd, intptr_t dest, void
 extern void gf_w16_xor256_jit_stub(intptr_t src, intptr_t dEnd, intptr_t dest, void* fn);
 #  endif
 # else
+#ifdef DBG_XORDEP
+ #include <stdio.h>
+#endif
 static inline void gf_w16_xor_jit_stub(intptr_t src, intptr_t dEnd, intptr_t dest, void* fn) {
+#ifdef DBG_XORDEP
+	FILE* fp = fopen("code.bin", "wb");
+	fwrite(fn, 2048, 1, fp);
+	fclose(fp);
+	// disassemble with `objdump -b binary -D -m i386:x86-64 -M intel code.bin|less`
+#endif
 	asm volatile(
 		"leaq -8(%%rsp), %%r10\n"
 		"movq %%r10, %%rsi\n"
