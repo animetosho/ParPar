@@ -1676,11 +1676,6 @@ static uint8_t* xor_write_jit_avx(jit_t* jit, gf_val_32_t val, gf_w16_poly_struc
     ALIGN(32, uint8_t jitTemp[2048]);
     uint8_t* jitdst;
 #endif
-#ifdef XORDEP_DISABLE_NO_COMMON
-    #define no_common_mask 0
-#else
-    int no_common_mask;
-#endif
     
     
     
@@ -1733,14 +1728,14 @@ static uint8_t* xor_write_jit_avx(jit_t* jit, gf_val_32_t val, gf_w16_poly_struc
     _mm_store_si128((__m128i*)common_lowest, lowest);
     __m128i common_sub1 = _mm_sub_epi16(common_mask, _mm_set1_epi16(1));
     __m128i common_elim = _mm_andnot_si128(common_sub1, common_mask);
-    common_mask = _mm_and_si128(common_mask, common_sub1);
     
     __m128i highest;
 #ifdef XORDEP_MERGE_AVX_XOR
+    common_mask = _mm_and_si128(common_mask, common_sub1);
+    
     highest = ssse3_lzcnt_epi16(common_mask);
     _mm_store_si128((__m128i*)common_highest, _mm_sub_epi16(_mm_set1_epi16(15), highest));
     common_elim = _mm_or_si128(common_elim, sse4_lzcnt_to_mask_epi16(highest));
-    common_mask = _mm_xor_si128(common_mask, common_elim);
 #endif
     
     /* clear highest/lowest bit from tmp3/4 */
@@ -1789,22 +1784,6 @@ static uint8_t* xor_write_jit_avx(jit_t* jit, gf_val_32_t val, gf_w16_poly_struc
     #undef _C
     
     _mm256_store_si256((__m256i*)(lumask), _mm256_or_si256(tmp3b, tmp4b));
-    
-#ifndef XORDEP_DISABLE_NO_COMMON
-    /* find cases where we don't wish to create the common queue - this is an optimisation to remove a single move operation when the common queue only contains one element */
-    /* we have the common elements between pairs, but it doesn't make sense to process a separate queue if there's only one common element (0 XORs), so find those */
-    common_mask = _mm_andnot_si128(
-      _mm_cmpeq_epi16(_mm_setzero_si128(), common_mask),
-      _mm_cmpeq_epi16(
-        _mm_setzero_si128(),
-        /* "(v & (v-1)) == 0" is true if only zero/one bit is set in each word */
-        _mm_and_si128(common_mask, _mm_sub_epi16(common_mask, _mm_set1_epi16(1)))
-      )
-    );
-    /* now we have a 8x16 mask of one-bit common masks we wish to remove; pack into an int for easy dealing with */
-    no_common_mask = _mm_movemask_epi8(common_mask);
-#endif
-    
     
     jitptr = jit->pNorm;
 #ifdef CPU_SLOW_SMC
@@ -1871,45 +1850,22 @@ static uint8_t* xor_write_jit_avx(jit_t* jit, gf_val_32_t val, gf_w16_poly_struc
           /* for common mask, if two lowest bits available, do VPXOR, else if only one, just XOR at end (consider no common mask optimization to eliminate this case) */
           xor_write_avx_load_part(&jitptr, 2, common_lowest[bit], common_highest[bit]);
           
-          if(no_common_mask & 1) {
-#ifndef XORDEP_DISABLE_NO_COMMON
-            #define PROC_BITPAIR(n, inf, m) \
-              _mm_storeu_si128(jitptr, _mm_load_si128((__m128i*)((uint64_t*)xor256_jit_clut_nocomm + (n<<5) + ((m) & (0xF<<1))))); \
-              jitptr += ((uint8_t*)(xor256_jit_clut_ncinfo_ ##inf))[(m) & (0xF<<1)]; \
-              mask >>= 4
-            
-            PROC_BITPAIR(0, mem, mask<<1);
-            mask <<= 1;
-            PROC_BITPAIR(1, rm, mask);
-            PROC_BITPAIR(2, reg, mask);
-            PROC_BITPAIR(3, reg, mask);
-            PROC_BITPAIR(4, reg, mask);
-            PROC_BITPAIR(5, reg, mask);
-            PROC_BITPAIR(6, reg, mask);
-            PROC_BITPAIR(7, reg, mask);
-            #undef PROC_BITPAIR
-#endif
-          } else {
-            #define PROC_BITPAIR(n, bits, inf, m) \
-              _mm_storeu_si128(jitptr, _mm_load_si128((__m128i*)((uint64_t*)xor256_jit_clut_code ##n + ((m) & ((2<<bits)-2))))); \
-              jitptr += (xor256_jit_clut_info_ ##inf)[((m) & ((2<<bits)-2)) >> 1]; \
-              mask >>= bits
+          #define PROC_BITPAIR(n, bits, inf, m) \
+            _mm_storeu_si128(jitptr, _mm_load_si128((__m128i*)((uint64_t*)xor256_jit_clut_code ##n + ((m) & ((2<<bits)-2))))); \
+            jitptr += (xor256_jit_clut_info_ ##inf)[((m) & ((2<<bits)-2)) >> 1]; \
+            mask >>= bits
 
-            PROC_BITPAIR(1, 6, mem, mask<<1);
-            mask <<= 1;
-            PROC_BITPAIR(2, 6, reg, mask);
-            PROC_BITPAIR(3, 4, reg, mask);
-            PROC_BITPAIR(4, 6, reg, mask);
-            PROC_BITPAIR(5, 6, reg, mask);
-            PROC_BITPAIR(6, 4, reg, mask);
-            #undef PROC_BITPAIR
-            
-            _C_PXOR_R(0, 2, common_lowest[bit] < 16);
-            _C_PXOR_R(1, 2, common_lowest[bit] < 16);
-          }
-#ifndef XORDEP_DISABLE_NO_COMMON
-          no_common_mask >>= 2;
-#endif
+          PROC_BITPAIR(1, 6, mem, mask<<1);
+          mask <<= 1;
+          PROC_BITPAIR(2, 6, reg, mask);
+          PROC_BITPAIR(3, 4, reg, mask);
+          PROC_BITPAIR(4, 6, reg, mask);
+          PROC_BITPAIR(5, 6, reg, mask);
+          PROC_BITPAIR(6, 4, reg, mask);
+          #undef PROC_BITPAIR
+          
+          _C_PXOR_R(0, 2, common_lowest[bit] < 16);
+          _C_PXOR_R(1, 2, common_lowest[bit] < 16);
           
           _ST_DQA(DX, destOffs, 0);
           _ST_DQA(DX, destOffs2, 1);
@@ -1924,58 +1880,33 @@ static uint8_t* xor_write_jit_avx(jit_t* jit, gf_val_32_t val, gf_w16_poly_struc
           xor_write_avx_load_part(&jitptr, 1, dep2_lowest[bit], dep2_highest[bit]);
           xor_write_avx_load_part(&jitptr, 2, common_lowest[bit], common_highest[bit]);
           
-          if(no_common_mask & 1) {
-#ifndef XORDEP_DISABLE_NO_COMMON
-            #define PROC_BITPAIR(n, inf, m, r64) \
-              _mm_storeu_si128(jitptr, _mm_load_si128((__m128i*)((uint64_t*)xor256_jit_clut_nocomm + (n<<5) + ((m) & (0xF<<1))))); \
-              jitptr += xor_jit_bitpair3_nc_noxor(jitptr, xor256_jit_clut_ncinfo_ ##inf[((m) & (0xF<<1))>>1], &pos1, &mov1, &pos2, &mov2, r64); \
-              mask >>= 4
+          #define PROC_BITPAIR(n, bits, inf, m) \
+            _mm_storeu_si128(jitptr, _mm_load_si128((__m128i*)((uint64_t*)xor256_jit_clut_code ##n + ((m) & ((2<<bits)-2))))); \
+            jitptr += (xor256_jit_clut_info_ ##inf)[((m) & ((2<<bits)-2)) >> 1]; \
+            mask >>= bits
 
-            PROC_BITPAIR(0, mem, mask<<1, 0);
-            mask <<= 1;
-            PROC_BITPAIR(1, rm, mask, 0);
-            PROC_BITPAIR(2, reg, mask, 0);
-            PROC_BITPAIR(3, reg, mask, 0);
-            PROC_BITPAIR(4, reg, mask, 1);
-            PROC_BITPAIR(5, reg, mask, 1);
-            PROC_BITPAIR(6, reg, mask, 1);
-            PROC_BITPAIR(7, reg, mask, 1);
-            #undef PROC_BITPAIR
-#endif
-          } else {
-            #define PROC_BITPAIR(n, bits, inf, m) \
-              _mm_storeu_si128(jitptr, _mm_load_si128((__m128i*)((uint64_t*)xor256_jit_clut_code ##n + ((m) & ((2<<bits)-2))))); \
-              jitptr += (xor256_jit_clut_info_ ##inf)[((m) & ((2<<bits)-2)) >> 1]; \
-              mask >>= bits
-
-            PROC_BITPAIR(1, 6, mem, mask<<1);
-            mask <<= 1;
-            PROC_BITPAIR(2, 6, reg, mask);
-            PROC_BITPAIR(3, 4, reg, mask);
-            PROC_BITPAIR(4, 6, reg, mask);
-            PROC_BITPAIR(5, 6, reg, mask);
-            PROC_BITPAIR(6, 4, reg, mask);
-            #undef PROC_BITPAIR
+          PROC_BITPAIR(1, 6, mem, mask<<1);
+          mask <<= 1;
+          PROC_BITPAIR(2, 6, reg, mask);
+          PROC_BITPAIR(3, 4, reg, mask);
+          PROC_BITPAIR(4, 6, reg, mask);
+          PROC_BITPAIR(5, 6, reg, mask);
+          PROC_BITPAIR(6, 4, reg, mask);
+          #undef PROC_BITPAIR
           
-            if(dep1_lowest[bit] < 16) {
-              _C_PXOR_R(0, 2, common_lowest[bit] < 16);
-              _ST_DQA(DX, destOffs, 0);
-            } else {
-              /* dep1 must be sourced from the common mask */
-              _ST_DQA(DX, destOffs, 2);
-            }
-            if(dep2_lowest[bit] < 16) {
-              _C_PXOR_R(1, 2, common_lowest[bit] < 16);
-              _ST_DQA(DX, destOffs2, 1);
-            } else {
-              _ST_DQA(DX, destOffs2, 2);
-            }
+          if(dep1_lowest[bit] < 16) {
+            _C_PXOR_R(0, 2, common_lowest[bit] < 16);
+            _ST_DQA(DX, destOffs, 0);
+          } else {
+            /* dep1 must be sourced from the common mask */
+            _ST_DQA(DX, destOffs, 2);
           }
-#ifndef XORDEP_DISABLE_NO_COMMON
-          no_common_mask >>= 2;
-#else
-          #undef no_common_mask
-#endif
+          if(dep2_lowest[bit] < 16) {
+            _C_PXOR_R(1, 2, common_lowest[bit] < 16);
+            _ST_DQA(DX, destOffs2, 1);
+          } else {
+            _ST_DQA(DX, destOffs2, 2);
+          }
         }
       }
     
