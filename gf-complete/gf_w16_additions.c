@@ -1643,17 +1643,14 @@ static inline __m128i sse4_lzcnt_to_mask_epi16(__m128i v) {
 static inline uint8_t xor_write_avx_load_part(uint8_t** jitptr, uint8_t reg, int16_t lowest, int16_t highest) {
 	if(lowest < 16) {
 		if(lowest < 3) {
-#ifdef XORDEP_MERGE_AVX_XOR
 			if(highest > 2) {
 				*jitptr += _jit_vpxor_m(*jitptr, reg, highest, AX, lowest*32-128);
 			} else if(highest >= 0) {
 				*jitptr += _jit_vmovdqa_load(*jitptr, reg, AX, highest*32-128);
 				*jitptr += _jit_vpxor_m(*jitptr, reg, reg, AX, lowest*32-128);
 			} else
-#endif
 				*jitptr += _jit_vmovdqa_load(*jitptr, reg, AX, lowest*32-128);
 		} else {
-#ifdef XORDEP_MERGE_AVX_XOR
 			if(highest >= 0) {
 				/* highest dep cannot be sourced from memory */
 				*jitptr += _jit_vpxor_r(*jitptr, reg, highest, lowest);
@@ -1663,9 +1660,7 @@ static inline uint8_t xor_write_avx_load_part(uint8_t** jitptr, uint8_t reg, int
 				/* just change XOR at end to merge from this register */
 				return lowest;
 			}
-#endif
-#endif
-#ifndef XORDEP_AVX_XOR_OPTIMAL
+#else
 			/* just a move */
 			*jitptr += _jit_vmovdqa(*jitptr, reg, lowest);
 #endif
@@ -1739,13 +1734,11 @@ static uint8_t* xor_write_jit_avx(jit_t* jit, gf_val_32_t val, gf_w16_poly_struc
     __m128i common_elim = _mm_andnot_si128(common_sub1, common_mask);
     
     __m128i highest;
-#ifdef XORDEP_MERGE_AVX_XOR
     common_mask = _mm_and_si128(common_mask, common_sub1);
     
     highest = ssse3_lzcnt_epi16(common_mask);
     _mm_store_si128((__m128i*)common_highest, _mm_sub_epi16(_mm_set1_epi16(15), highest));
     common_elim = _mm_or_si128(common_elim, sse4_lzcnt_to_mask_epi16(highest));
-#endif
     
     /* clear highest/lowest bit from tmp3/4 */
     tmp3 = _mm_xor_si128(tmp3, common_elim);
@@ -1759,18 +1752,12 @@ static uint8_t* xor_write_jit_avx(jit_t* jit, gf_val_32_t val, gf_w16_poly_struc
       _mm_store_si128((__m128i*)dep2_lowest, lowest);
       tmp4 = _mm_and_si128(tmp4, _mm_sub_epi16(tmp4, _mm_set1_epi16(1)));
     }
-#ifndef XORDEP_MERGE_AVX_XOR
-    else {
-#endif
     highest = ssse3_lzcnt_epi16(tmp3);
     _mm_store_si128((__m128i*)dep1_highest, _mm_sub_epi16(_mm_set1_epi16(15), highest));
     tmp3 = _mm_xor_si128(tmp3, sse4_lzcnt_to_mask_epi16(highest));
     highest = ssse3_lzcnt_epi16(tmp4);
     _mm_store_si128((__m128i*)dep2_highest, _mm_sub_epi16(_mm_set1_epi16(15), highest));
     tmp4 = _mm_xor_si128(tmp4, sse4_lzcnt_to_mask_epi16(highest));
-#ifndef XORDEP_MERGE_AVX_XOR
-    }
-#endif
 
     /* interleave bits for faster lookups */
     __m256i tmp3b = _mm256_cvtepu8_epi16(tmp3);
