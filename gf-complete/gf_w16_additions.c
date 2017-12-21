@@ -1532,14 +1532,10 @@ static void gf_w16_xor_lazy_jit_altmap_multiply_region_sse(gf_t *gf, void *src, 
 
 #if defined(INTEL_AVX2) && defined(AMD64)
 
-ALIGN(64, __m128i xor256_jit_clut_code1[64]);
-ALIGN(64, __m128i xor256_jit_clut_code2[64]);
-ALIGN(64, __m128i xor256_jit_clut_code3[16]);
-ALIGN(64, __m128i xor256_jit_clut_code4[64]);
-ALIGN(64, __m128i xor256_jit_clut_code5[64]);
-ALIGN(64, __m128i xor256_jit_clut_code6[16]);
-ALIGN(64, uint8_t xor256_jit_clut_info_mem[64]);
-ALIGN(64, uint8_t xor256_jit_clut_info_reg[64]);
+ALIGN(16, __m128i xor256_jit_clut_code1[64]);
+ALIGN(16, uint8_t xor256_jit_clut_info_mem[64]);
+ALIGN(16, __m64 xor256_jit_nums[128]);
+ALIGN(16, __m64 xor256_jit_rmask[128]);
 
 int xor256_jit_created = 0;
 
@@ -1551,25 +1547,12 @@ void gf_w16_xor_create_jit_lut_avx2(void) {
 	xor256_jit_created = 1;
 	
 	memset(xor256_jit_clut_code1, 0, sizeof(xor256_jit_clut_code1));
-	memset(xor256_jit_clut_code2, 0, sizeof(xor256_jit_clut_code2));
-	memset(xor256_jit_clut_code3, 0, sizeof(xor256_jit_clut_code3));
-	memset(xor256_jit_clut_code4, 0, sizeof(xor256_jit_clut_code4));
-	memset(xor256_jit_clut_code5, 0, sizeof(xor256_jit_clut_code5));
-	memset(xor256_jit_clut_code6, 0, sizeof(xor256_jit_clut_code6));
 	
 	
 	for(i=0; i<64; i++) {
-		int m = i;
+		int m = (i&1) | ((i&8)>>2) | ((i&2)<<1) | ((i&16)>>1) | ((i&4)<<2) | (i&32); /* interleave bits */
 		FAST_U8 posM = 0;
-		FAST_U8 posR = 0;
-		uint8_t* pC[6] = {
-			(uint8_t*)(xor256_jit_clut_code1 + i),
-			(uint8_t*)(xor256_jit_clut_code2 + i),
-			(uint8_t*)(xor256_jit_clut_code3 + i),
-			(uint8_t*)(xor256_jit_clut_code4 + i),
-			(uint8_t*)(xor256_jit_clut_code5 + i),
-			(uint8_t*)(xor256_jit_clut_code6 + i)
-		};
+		uint8_t* pC = (uint8_t*)(xor256_jit_clut_code1 + i);
 		
 		for(j=0; j<3; j++) {
 			int msk = m&3;
@@ -1578,25 +1561,28 @@ void gf_w16_xor_create_jit_lut_avx2(void) {
 				int reg = msk-1;
 				
 				/* if we ever support 32-bit, need to ensure that vpxor/load is fixed length */
-				pC[0] += _jit_vpxor_m(pC[0], reg, reg, AX, (j-4) <<5);
-				pC[1] += _jit_vpxor_r(pC[1], reg, j+3, reg);
-				pC[3] += _jit_vpxor_r(pC[3], reg, j+8, reg);
-				pC[4] += _jit_vpxor_r(pC[4], reg, j+11, reg);
-				if(i < 16) {
-					pC[2] += _jit_vpxor_r(pC[2], reg, j+6, reg);
-					pC[5] += _jit_vpxor_r(pC[5], reg, j+14, reg);
-				}
-				
+				pC += _jit_vpxor_m(pC, reg, reg, AX, (j-4) <<5);
 				/* advance pointers */
 				posM += 5;
-				posR += 4;
 			}
 			
 			m >>= 2;
 		}
 		
 		xor256_jit_clut_info_mem[i] = posM;
-		xor256_jit_clut_info_reg[i] = posR;
+	}
+	
+	memset(xor256_jit_nums, 255, sizeof(xor256_jit_nums));
+	memset(xor256_jit_rmask, 0, sizeof(xor256_jit_rmask));
+	for(i=0; i<128; i++) {
+		uint8_t* nums = (uint8_t*)(xor256_jit_nums + i),
+		       * rmask = (uint8_t*)(xor256_jit_rmask + i);
+		for(j=0; j<8; j++) {
+			if(i & (1<<j)) {
+				*nums++ = j;
+				rmask[j] = (1<<3)+1;
+			}
+		}
 	}
 }
 
@@ -1669,11 +1655,42 @@ static inline uint8_t xor_write_avx_load_part(uint8_t** jitptr, uint8_t reg, int
 	return reg;
 }
 
+// table originally from http://graphics.stanford.edu/~seander/bithacks.html#CountBitsSetTable
+// modified for our use (items pre-multiplied by 4, only 128 entries)
+static const unsigned char xor256_jit_len[128] = 
+{
+#   define B2(n) n,     n+4,     n+4,     n+8
+#   define B4(n) B2(n), B2(n+4), B2(n+4), B2(n+8)
+#   define B6(n) B4(n), B4(n+4), B4(n+4), B4(n+8)
+    B6(0), B6(4)
+#undef B2
+#undef B4
+#undef B6
+};
+
+static inline int xor_write_avx_main_part(void* jitptr, uint8_t dep1, uint8_t dep2, int high) {
+	uint8_t dep = dep1 | dep2;
+	__m128i nums = _mm_loadl_epi64((__m128i*)(xor256_jit_nums + dep));
+	// expand to 8x32b + shift into place
+	__m256i srcs = _mm256_slli_epi32(_mm256_cvtepu8_epi32(_mm_add_epi8(nums, _mm_set1_epi8(high ? 10 : 3))), 11);
+	
+	__m128i regs = _mm_loadl_epi64((__m128i*)(xor256_jit_rmask + dep1));
+	__m128i regs2 = _mm_loadl_epi64((__m128i*)(xor256_jit_rmask + dep2));
+	regs = _mm_or_si128(regs, _mm_add_epi8(regs2, regs2));
+	
+	regs = _mm_shuffle_epi8(regs, nums);
+	__m256i inst = _mm256_add_epi8(
+		_mm256_slli_epi32(_mm256_cvtepu8_epi32(regs), 24),
+		_mm256_set1_epi32(0xB7EFFDC5) /* VPXOR op-code, but last byte is 0xC0 - ((1<<3)+1) to offset the fact that our registers num is +1 too much */
+	);
+	_mm256_storeu_si256((__m256i*)jitptr, _mm256_xor_si256(srcs, inst));
+	
+	return xor256_jit_len[dep];
+}
+
 static uint8_t* xor_write_jit_avx(jit_t* jit, gf_val_32_t val, gf_w16_poly_struct* poly, int xor)
 {
   FAST_U32 i, bit;
-  long inBit;
-  ALIGN(32, uint32_t lumask[8]);
   
     uint8_t* jitptr, *jitcode;
 #ifdef CPU_SLOW_SMC
@@ -1759,27 +1776,23 @@ static uint8_t* xor_write_jit_avx(jit_t* jit, gf_val_32_t val, gf_w16_poly_struc
     _mm_store_si128((__m128i*)dep2_highest, _mm_sub_epi16(_mm_set1_epi16(15), highest));
     tmp4 = _mm_xor_si128(tmp4, sse4_lzcnt_to_mask_epi16(highest));
 
-    /* interleave bits for faster lookups */
-    __m256i tmp3b = _mm256_cvtepu8_epi16(tmp3);
-    __m256i tmp4b = _mm256_cvtepu8_epi16(tmp4);
-    /* split 8-bits into 4-bit halves per byte */
-    tmp3b = _mm256_or_si256(
-      _mm256_and_si256(tmp3b, _mm256_set1_epi16(0xf)),
-      _mm256_and_si256(_mm256_slli_epi16(tmp3b, 4), _mm256_set1_epi16(0xf00))
-    );
-    tmp4b = _mm256_or_si256(
-      _mm256_and_si256(tmp4b, _mm256_set1_epi16(0xf)),
-      _mm256_and_si256(_mm256_slli_epi16(tmp4b, 4), _mm256_set1_epi16(0xf00))
-    );
-    /* bit expand */
-    #define _B(n, s) n|(5<<s), n|(4<<s), n|(1<<s), n
-    #define _C(s) _B(0x50<<s, s), _B(0x40<<s, s), _B(0x10<<s, s), _B(0x00, s)
-    tmp3b = _mm256_shuffle_epi8(_mm256_set_epi8(_C(0), _C(0)), tmp3b);
-    tmp4b = _mm256_shuffle_epi8(_mm256_set_epi8(_C(1), _C(1)), tmp4b);
-    #undef _B
-    #undef _C
+
+    ALIGN(16, uint16_t memDeps[8]);
+    _mm_store_si128((__m128i*)memDeps, _mm_or_si128(
+      _mm_and_si128(tmp3, _mm_set1_epi16(7)),
+      _mm_slli_epi16(_mm_and_si128(tmp4, _mm_set1_epi16(7)), 3)
+    ));
     
-    _mm256_store_si256((__m256i*)(lumask), _mm256_or_si256(tmp3b, tmp4b));
+    ALIGN(16, uint8_t deps1[16]);
+    ALIGN(16, uint8_t deps2[16]);
+    tmp3 = _mm_srli_epi16(tmp3, 3);
+    tmp4 = _mm_srli_epi16(tmp4, 3);
+    tmp3 = _mm_blendv_epi8(_mm_slli_epi16(tmp3, 1), _mm_and_si128(tmp3, _mm_set1_epi8(0x7f)), _mm_set1_epi16(0xff));
+    tmp4 = _mm_blendv_epi8(_mm_slli_epi16(tmp4, 1), _mm_and_si128(tmp4, _mm_set1_epi8(0x7f)), _mm_set1_epi16(0xff));
+    _mm_store_si128((__m128i*)deps1, tmp3);
+    _mm_store_si128((__m128i*)deps2, tmp4);
+
+
     
     jitptr = jit->pNorm;
 #ifdef CPU_SLOW_SMC
@@ -1826,7 +1839,6 @@ static uint8_t* xor_write_jit_avx(jit_t* jit, gf_val_32_t val, gf_w16_poly_struc
           int destOffs = (bit<<6)-128;
           int destOffs2 = destOffs+32;
           uint8_t common_reg;
-          FAST_U32 mask = lumask[bit];
           
           /* if there's a higest bit set, do a VPXOR-load, otherwise, regular load + VPXOR-load */
           if(dep1_highest[bit] > 2) {
@@ -1847,19 +1859,12 @@ static uint8_t* xor_write_jit_avx(jit_t* jit, gf_val_32_t val, gf_w16_poly_struc
           /* for common mask, if two lowest bits available, do VPXOR, else if only one, just XOR at end (consider no common mask optimization to eliminate this case) */
           common_reg = xor_write_avx_load_part(&jitptr, 2, common_lowest[bit], common_highest[bit]);
           
-          #define PROC_BITPAIR(n, bits, inf, m) \
-            _mm_storeu_si128(jitptr, _mm_load_si128((__m128i*)((uint64_t*)xor256_jit_clut_code ##n + ((m) & ((2<<bits)-2))))); \
-            jitptr += (xor256_jit_clut_info_ ##inf)[((m) & ((2<<bits)-2)) >> 1]; \
-            mask >>= bits
 
-          PROC_BITPAIR(1, 6, mem, mask<<1);
-          mask <<= 1;
-          PROC_BITPAIR(2, 6, reg, mask);
-          PROC_BITPAIR(3, 4, reg, mask);
-          PROC_BITPAIR(4, 6, reg, mask);
-          PROC_BITPAIR(5, 6, reg, mask);
-          PROC_BITPAIR(6, 4, reg, mask);
-          #undef PROC_BITPAIR
+          _mm_storeu_si128(jitptr, _mm_load_si128(&xor256_jit_clut_code1[memDeps[bit]]));
+          jitptr += xor256_jit_clut_info_mem[memDeps[bit]];
+
+          jitptr += xor_write_avx_main_part(jitptr, deps1[bit*2], deps2[bit*2], 0);
+          jitptr += xor_write_avx_main_part(jitptr, deps1[bit*2+1], deps2[bit*2+1], 1);
           
           _C_PXOR_R(0, common_reg, 0, common_lowest[bit] < 16);
           _C_PXOR_R(1, common_reg, 1, common_lowest[bit] < 16);
@@ -1872,25 +1877,16 @@ static uint8_t* xor_write_jit_avx(jit_t* jit, gf_val_32_t val, gf_w16_poly_struc
           int destOffs = (bit<<6)-128;
           int destOffs2 = destOffs+32;
           uint8_t common_reg, reg1, reg2;
-          FAST_U32 mask = lumask[bit];
           
           reg1 = xor_write_avx_load_part(&jitptr, 0, dep1_lowest[bit], dep1_highest[bit]);
           reg2 = xor_write_avx_load_part(&jitptr, 1, dep2_lowest[bit], dep2_highest[bit]);
           common_reg = xor_write_avx_load_part(&jitptr, 2, common_lowest[bit], common_highest[bit]);
           
-          #define PROC_BITPAIR(n, bits, inf, m) \
-            _mm_storeu_si128(jitptr, _mm_load_si128((__m128i*)((uint64_t*)xor256_jit_clut_code ##n + ((m) & ((2<<bits)-2))))); \
-            jitptr += (xor256_jit_clut_info_ ##inf)[((m) & ((2<<bits)-2)) >> 1]; \
-            mask >>= bits
-
-          PROC_BITPAIR(1, 6, mem, mask<<1);
-          mask <<= 1;
-          PROC_BITPAIR(2, 6, reg, mask);
-          PROC_BITPAIR(3, 4, reg, mask);
-          PROC_BITPAIR(4, 6, reg, mask);
-          PROC_BITPAIR(5, 6, reg, mask);
-          PROC_BITPAIR(6, 4, reg, mask);
-          #undef PROC_BITPAIR
+          _mm_storeu_si128(jitptr, _mm_load_si128(&xor256_jit_clut_code1[memDeps[bit]]));
+          jitptr += xor256_jit_clut_info_mem[memDeps[bit]];
+          
+          jitptr += xor_write_avx_main_part(jitptr, deps1[bit*2], deps2[bit*2], 0);
+          jitptr += xor_write_avx_main_part(jitptr, deps1[bit*2+1], deps2[bit*2+1], 1);
           
           if(dep1_lowest[bit] < 16) {
 #ifdef XORDEP_AVX_XOR_OPTIMAL
