@@ -42,29 +42,45 @@ static inline __m512i MM512_SET_BYTES(char e63, char e62, char e61, char e60, ch
 }
 #undef _P
 
-static inline __m512i xor_avx512_main_part(int odd, int s, int r, __m128i indicies) {
+static inline __m512i xor_avx512_main_part(int odd, int r, __m128i indicies) {
 	__m512i idx = _mm512_broadcast_i32x4(indicies);
+	r <<= 3;
 	
-	// pre-shift first byte of every pair by 3 (position for instruction placement)
-	idx = _mm512_mask_blend_epi8(0xAAAAAAAAAAAAAAAA >> odd, _mm512_slli_epi16(idx, 3), idx);
-	
-	// shuffle bytes into position
+	__m512i inst;
 	if(odd) {
+		// pre-shift first byte of every pair by 3 (position for instruction placement)
+		idx = _mm512_mask_blend_epi8(0x5555555555555555, _mm512_slli_epi16(idx, 3), idx);
+		// shuffle bytes into position
 		idx = _mm512_shuffle_epi8(idx, MM512_SET_BYTES(
 			-1,-1,
-			#define _SEQ(n) -1,(n)+1+s,-1,-1,(n)+s,(n)+1+s,-1
+			#define _SEQ(n) -1,(n)+1,-1,-1,(n),(n)+1,-1
 			_SEQ(15), _SEQ(13), _SEQ(11), _SEQ(9), _SEQ(7), _SEQ(5), _SEQ(3), _SEQ(1),
 			#undef _SEQ
-			 0+s,-1,-1,-1, 0+s,-1
+			 0,-1,-1,-1, 0,-1
 		));
+		inst = MM512_SET_BYTES(
+			0x00,0x00,
+			#define _SEQ 0x96,0xC0+r,0x25,0x40,0x7D,0xB3,0x62
+			_SEQ, _SEQ, _SEQ, _SEQ, _SEQ, _SEQ, _SEQ, _SEQ,
+			#undef _SEQ
+			0xC0+r, 0x6F,0x48,0x7D,0xB1,0x62
+		);
 	} else {
+		idx = _mm512_mask_blend_epi8(0xAAAAAAAAAAAAAAAA, _mm512_slli_epi16(idx, 3), idx);
 		idx = _mm512_shuffle_epi8(idx, MM512_SET_BYTES(
 			-1,-1,-1,-1,-1,-1,-1,-1,-1,
-			#define _SEQ(n) -1,(n)+1+s,-1,-1,(n)+s,(n)+1+s,-1
+			#define _SEQ(n) -1,(n)+1,-1,-1,(n),(n)+1,-1
 			_SEQ(14), _SEQ(12), _SEQ(10), _SEQ(8), _SEQ(6), _SEQ(4), _SEQ(2),
 			#undef _SEQ
-			 1+s,-1,-1, 0+s, 1+s,-1
+			 1,-1,-1, 0, 1,-1
 		));
+		inst = MM512_SET_BYTES(
+			0x00,0x00,
+			#define _SEQ 0x96,0xC0+r,0x25,0x40,0x7D,0xB3,0x62
+			_SEQ, _SEQ, _SEQ, _SEQ, _SEQ, _SEQ, _SEQ, _SEQ,
+			#undef _SEQ
+			0xC0+r, 0xEF,0x40,0x7D,0xB1,0x62
+		);
 	}
 	// appropriate shifts/masks etc
 	__mmask64 high3 = _mm512_cmpgt_epu8_mask(idx, MM512_SET_BYTES(
@@ -85,14 +101,7 @@ static inline __m512i xor_avx512_main_part(int odd, int s, int r, __m128i indici
 	
 	
 	// add in vpternlog
-	r <<= 3;
-	return _mm512_xor_si512(idx, MM512_SET_BYTES(
-		0x00,0x00,
-		#define _SEQ 0x96,0xC0+r,0x25,0x40,0x7D,0xB3,0x62
-		_SEQ, _SEQ, _SEQ, _SEQ, _SEQ, _SEQ, _SEQ, _SEQ,
-		#undef _SEQ
-		0xC0+r, odd?0x6F:0xEF, odd?0x48:0x40,0x7D,0xB1,0x62
-	));
+	return _mm512_xor_si512(idx, inst);
 }
 
 static uint8_t* xor_write_jit_avx512(jit_t* jit, gf_val_32_t val, gf_w16_poly_struct* poly, int xor)
@@ -170,8 +179,6 @@ static uint8_t* xor_write_jit_avx512(jit_t* jit, gf_val_32_t val, gf_w16_poly_st
 	_mm_store_si128((__m128i*)depB, mask2);
 	_mm_store_si128((__m128i*)popcntB, ssse3_popcnt_epi16(mask2));
 	
-	// convert above to indicies
-	
 	__m512i numbers = _mm512_set_epi32(
 		15,14,13,12,11,10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0
 	);
@@ -213,14 +220,14 @@ static uint8_t* xor_write_jit_avx512(jit_t* jit, gf_val_32_t val, gf_w16_poly_st
 			idxB = _mm512_cvtepi32_epi8(_mm512_maskz_compress_epi32(depB[bit], numbers));
 			
 			if(popcntC[bit]) { // popcntC[bit] cannot == 1 (eliminated above)
-				_mm512_storeu_si512((__m512i*)jitptr, xor_avx512_main_part((popcntC[bit] & 1), 0, 3, idxC));
+				_mm512_storeu_si512((__m512i*)jitptr, xor_avx512_main_part((popcntC[bit] & 1), 3, idxC));
 				jitptr += ((popcntC[bit]-1) >> 1) * 7 + 6;
 				
 				// last xor of pipes A/B are a merge
 				if(popcntA[bit] == 0) {
 					jitptr += _jit_vpxord_m(jitptr, 1, 3, DX, destOffs);
 				} else {
-					_mm512_storeu_si512((__m512i*)jitptr, xor_avx512_main_part((popcntA[bit] & 1), 0, 1, idxA));
+					_mm512_storeu_si512((__m512i*)jitptr, xor_avx512_main_part((popcntA[bit] & 1), 1, idxA));
 					jitptr += ((popcntA[bit]-1) >> 1) * 7 + 6;
 					// TODO: perhaps ideally the load is done earlier?
 					jitptr += _jit_vpternlogd_m(jitptr, 1, 3, DX, destOffs, 0x96);
@@ -228,7 +235,7 @@ static uint8_t* xor_write_jit_avx512(jit_t* jit, gf_val_32_t val, gf_w16_poly_st
 				if(popcntB[bit] == 0) {
 					jitptr += _jit_vpxord_m(jitptr, 2, 3, DX, destOffs2);
 				} else {
-					_mm512_storeu_si512((__m512i*)jitptr, xor_avx512_main_part((popcntB[bit] & 1), 0, 2, idxB));
+					_mm512_storeu_si512((__m512i*)jitptr, xor_avx512_main_part((popcntB[bit] & 1), 2, idxB));
 					jitptr += ((popcntB[bit]-1) >> 1) * 7 + 6;
 					jitptr += _jit_vpternlogd_m(jitptr, 2, 3, DX, destOffs2, 0x96);
 				}
@@ -237,7 +244,7 @@ static uint8_t* xor_write_jit_avx512(jit_t* jit, gf_val_32_t val, gf_w16_poly_st
 				if(popcntA[bit] == 1) {
 					jitptr += _jit_vpxord_m(jitptr, 1, _mm_extract_epi8(idxA, 0)|16, DX, destOffs);
 				} else {
-					_mm512_storeu_si512((__m512i*)jitptr, xor_avx512_main_part((~popcntA[bit] & 1), 0, 1, idxA));
+					_mm512_storeu_si512((__m512i*)jitptr, xor_avx512_main_part((~popcntA[bit] & 1), 1, idxA));
 					jitptr += (popcntA[bit] >> 1) * 7 + 6;
 					// patch final vpternlog to merge from memory
 					// TODO: optimize
@@ -248,7 +255,7 @@ static uint8_t* xor_write_jit_avx512(jit_t* jit, gf_val_32_t val, gf_w16_poly_st
 				if(popcntB[bit] == 1) {
 					jitptr += _jit_vpxord_m(jitptr, 2, _mm_extract_epi8(idxB, 0)|16, DX, destOffs2);
 				} else {
-					_mm512_storeu_si512((__m512i*)jitptr, xor_avx512_main_part((~popcntB[bit] & 1), 0, 2, idxB));
+					_mm512_storeu_si512((__m512i*)jitptr, xor_avx512_main_part((~popcntB[bit] & 1), 2, idxB));
 					jitptr += (popcntB[bit] >> 1) * 7 + 6;
 					*(jitptr-6) |= 24<<2; // clear zreg3 bits
 					*(uint32_t*)(jitptr-2) = ((2<<3) | DX | 0x40) | (0x96<<16) | ((destOffs2<<(8-6)) & 0xff00);
@@ -271,14 +278,14 @@ static uint8_t* xor_write_jit_avx512(jit_t* jit, gf_val_32_t val, gf_w16_poly_st
 			idxB = _mm512_cvtepi32_epi8(_mm512_maskz_compress_epi32(depB[bit], numbers));
 			
 			if(popcntC[bit]) { // popcntC[bit] cannot == 1 (eliminated above)
-				_mm512_storeu_si512((__m512i*)jitptr, xor_avx512_main_part((popcntC[bit] & 1), 0, 3, idxC));
+				_mm512_storeu_si512((__m512i*)jitptr, xor_avx512_main_part((popcntC[bit] & 1), 3, idxC));
 				jitptr += ((popcntC[bit]-1) >> 1) * 7 + 6;
 				
 				// last xor of pipes A/B are a merge
 				if(popcntA[bit] == 0) {
 					jitptr += _jit_vmovdqa32_store(jitptr, DX, destOffs, 3);
 				} else {
-					_mm512_storeu_si512((__m512i*)jitptr, xor_avx512_main_part((~popcntA[bit] & 1), 0, 1, idxA));
+					_mm512_storeu_si512((__m512i*)jitptr, xor_avx512_main_part((~popcntA[bit] & 1), 1, idxA));
 					jitptr += (popcntA[bit] >> 1) * 7 + 6;
 					// patch final vpternlog/vpxor to merge from common mask
 					// TODO: optimize
@@ -291,7 +298,7 @@ static uint8_t* xor_write_jit_avx512(jit_t* jit, gf_val_32_t val, gf_w16_poly_st
 				if(popcntB[bit] == 0) {
 					jitptr += _jit_vmovdqa32_store(jitptr, DX, destOffs2, 3);
 				} else {
-					_mm512_storeu_si512((__m512i*)jitptr, xor_avx512_main_part((~popcntB[bit] & 1), 0, 2, idxB));
+					_mm512_storeu_si512((__m512i*)jitptr, xor_avx512_main_part((~popcntB[bit] & 1), 2, idxB));
 					jitptr += (popcntB[bit] >> 1) * 7 + 6;
 					uint8_t* ptr = (jitptr-6 + (popcntB[bit] == 1));
 					*ptr |= 24<<2;
@@ -304,14 +311,14 @@ static uint8_t* xor_write_jit_avx512(jit_t* jit, gf_val_32_t val, gf_w16_poly_st
 				if(popcntA[bit] == 1) {
 					jitptr += _jit_vmovdqa32_store(jitptr, DX, destOffs, _mm_extract_epi8(idxA, 0)|16);
 				} else {
-					_mm512_storeu_si512((__m512i*)jitptr, xor_avx512_main_part((popcntA[bit] & 1), 0, 1, idxA));
+					_mm512_storeu_si512((__m512i*)jitptr, xor_avx512_main_part((popcntA[bit] & 1), 1, idxA));
 					jitptr += ((popcntA[bit]-1) >> 1) * 7 + 6;
 					jitptr += _jit_vmovdqa32_store(jitptr, DX, destOffs, 1);
 				}
 				if(popcntB[bit] == 1) {
 					jitptr += _jit_vmovdqa32_store(jitptr, DX, destOffs2, _mm_extract_epi8(idxB, 0)|16);
 				} else {
-					_mm512_storeu_si512((__m512i*)jitptr, xor_avx512_main_part((popcntB[bit] & 1), 0, 2, idxB));
+					_mm512_storeu_si512((__m512i*)jitptr, xor_avx512_main_part((popcntB[bit] & 1), 2, idxB));
 					jitptr += ((popcntB[bit]-1) >> 1) * 7 + 6;
 					jitptr += _jit_vmovdqa32_store(jitptr, DX, destOffs2, 2);
 				}
