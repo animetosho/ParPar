@@ -271,7 +271,7 @@ static void _FN(gf_w16_xor_final)(void* src, int bytes, void* dest) {
 }
 
 #undef umask_t
-#undef PERMUTE_FIX
+#undef PERMUTE_FIX_REV
 #undef MOVMASK
 
 static gf_val_32_t

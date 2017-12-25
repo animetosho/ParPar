@@ -338,7 +338,7 @@ static uint8_t* xor_write_jit_avx512(jit_t* jit, gf_val_32_t val, gf_w16_poly_st
 #ifdef CPU_SLOW_SMC
 	/* memcpy to destination */
 	/* AVX does result in fewer writes, but testing on Haswell seems to indicate minimal benefit over SSE2 */
-	for(i=0; i<jitptr+9-jitTemp; i+=64) {
+	for(i=0; i<(FAST_U32)(jitptr+9-jitTemp); i+=64) {
 		__m256i ta = _mm256_load_si256((__m256i*)(jitTemp + i));
 		__m256i tb = _mm256_load_si256((__m256i*)(jitTemp + i + 32));
 		_mm256_store_si256((__m256i*)(jitdst + i), ta);
@@ -353,7 +353,6 @@ void gf_w16_xor_lazy_jit_altmap_multiply_region_avx512(gf_t *gf, void *src, void
   gf_region_data rd;
   gf_internal_t *h = (gf_internal_t *) gf->scratch;
   struct gf_w16_logtable_data* ltd = (struct gf_w16_logtable_data*)(h->private);
-  jit_t* jit;
   int use_temp = ((uintptr_t)src - (uintptr_t)dest + 1024) < 2048;
   void* tmp;
   

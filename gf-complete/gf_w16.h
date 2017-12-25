@@ -19,6 +19,8 @@
 
 #define GF_ANTILOG(x) ltd->antilog_tbl[((x) >> (GF_FIELD_WIDTH)) + ((x) & (GF_MULT_GROUP_SIZE))]
 
+void gf_w16_log_region_alignment(gf_region_data *rd, gf_t *gf, void *src, void *dest, int bytes, uint64_t val, int xor, int align, int walign);
+
 #ifdef INTEL_SSE2
 typedef union {
     __m128i p16[2];

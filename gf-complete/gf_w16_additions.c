@@ -1,7 +1,7 @@
 
 int cpu_detect_run = 0;
 int has_ssse3 = 0;
-int has_slow_shuffle = 0;
+size_t has_slow_shuffle = 0;
 int has_pclmul = 0;
 int has_avx2 = 0;
 int has_avx512bw = 0;
@@ -1448,7 +1448,7 @@ static uint8_t* xor_write_jit_sse(jit_t* jit, gf_val_32_t val, gf_w16_poly_struc
     }
     _mm256_zeroupper();
 #else
-    for(i=0; i<jitptr+9-jitTemp; i+=64) {
+    for(i=0; i<(FAST_U32)(jitptr+9-jitTemp); i+=64) {
       __m128i ta = _mm_load_si128((__m128i*)(jitTemp + i));
       __m128i tb = _mm_load_si128((__m128i*)(jitTemp + i + 16));
       __m128i tc = _mm_load_si128((__m128i*)(jitTemp + i + 32));
@@ -1819,7 +1819,7 @@ static uint8_t* xor_write_jit_avx(jit_t* jit, gf_val_32_t val, gf_w16_poly_struc
           common_reg = xor_write_avx_load_part(&jitptr, 2, common_lowest[bit], common_highest[bit]);
           
 
-          _mm_storeu_si128(jitptr, _mm_load_si128(&xor256_jit_clut_code1[memDeps[bit]]));
+          _mm_storeu_si128((__m128i*)jitptr, _mm_load_si128(&xor256_jit_clut_code1[memDeps[bit]]));
           jitptr += xor256_jit_clut_info_mem[memDeps[bit]];
 
           jitptr += xor_write_avx_main_part(jitptr, deps1[bit*2], deps2[bit*2], 0);
@@ -1841,7 +1841,7 @@ static uint8_t* xor_write_jit_avx(jit_t* jit, gf_val_32_t val, gf_w16_poly_struc
           reg2 = xor_write_avx_load_part(&jitptr, 1, dep2_lowest[bit], dep2_highest[bit]);
           common_reg = xor_write_avx_load_part(&jitptr, 2, common_lowest[bit], common_highest[bit]);
           
-          _mm_storeu_si128(jitptr, _mm_load_si128(&xor256_jit_clut_code1[memDeps[bit]]));
+          _mm_storeu_si128((__m128i*)jitptr, _mm_load_si128(&xor256_jit_clut_code1[memDeps[bit]]));
           jitptr += xor256_jit_clut_info_mem[memDeps[bit]];
           
           jitptr += xor_write_avx_main_part(jitptr, deps1[bit*2], deps2[bit*2], 0);
@@ -1893,7 +1893,7 @@ static uint8_t* xor_write_jit_avx(jit_t* jit, gf_val_32_t val, gf_w16_poly_struc
 #ifdef CPU_SLOW_SMC
     /* memcpy to destination */
     /* AVX does result in fewer writes, but testing on Haswell seems to indicate minimal benefit over SSE2 */
-    for(i=0; i<jitptr+9-jitTemp; i+=64) {
+    for(i=0; i<(FAST_U32)(jitptr+9-jitTemp); i+=64) {
       __m256i ta = _mm256_load_si256((__m256i*)(jitTemp + i));
       __m256i tb = _mm256_load_si256((__m256i*)(jitTemp + i + 32));
       _mm256_store_si256((__m256i*)(jitdst + i), ta);
@@ -1908,7 +1908,6 @@ static void gf_w16_xor_lazy_jit_altmap_multiply_region_avx2(gf_t *gf, void *src,
   gf_region_data rd;
   gf_internal_t *h = (gf_internal_t *) gf->scratch;
   struct gf_w16_logtable_data* ltd = (struct gf_w16_logtable_data*)(h->private);
-  jit_t* jit;
   int use_temp = ((uintptr_t)src - (uintptr_t)dest + 512) < 1024;
   void* tmp;
   
@@ -1949,8 +1948,7 @@ static void gf_w16_xor_lazy_jit_altmap_multiply_region_avx2(gf_t *gf, void *src,
 #ifdef INTEL_GFNI
 static void gf_w16_affine_multiply_region(gf_t *gf, void *src, void *dest, gf_val_32_t val, int bytes, int xor)
 {
-  FAST_U32 i, bit;
-  long inBit;
+  FAST_U32 i;
   __m128i* sW, * dW, * topW;
   __m128i ta, tb, tpl, tph;
   __m128i depmask1, depmask2, polymask1, polymask2, addvals1, addvals2;
@@ -2063,8 +2061,7 @@ static void gf_w16_affine_multiply_region(gf_t *gf, void *src, void *dest, gf_va
 #ifdef INTEL_AVX512BW
 static void gf_w16_affine512_multiply_region(gf_t *gf, void *src, void *dest, gf_val_32_t val, int bytes, int xor)
 {
-  FAST_U32 i, bit;
-  long inBit;
+  FAST_U32 i;
   __m512i* sW, * dW, * topW;
   __m512i ta, tb, tpl, tph;
   __m256i depmask, addvals;
