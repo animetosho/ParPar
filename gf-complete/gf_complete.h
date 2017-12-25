@@ -75,6 +75,7 @@ typedef enum {
 	GF_XOR_SSE2,
 	GF_XOR_JIT_SSE2,
 	GF_XOR_JIT_AVX2,
+	GF_XOR_JIT_AVX512,
 	GF_AFFINE_GFNI,
 	GF_AFFINE_AVX512
 } gf_mult_method_used;

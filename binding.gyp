@@ -45,7 +45,8 @@
       "type": "static_library",
       "sources": [
         "gf-complete/gf.c",
-        "gf-complete/gf_w16.c"
+        "gf-complete/gf_w16.c",
+        "gf-complete/gf_w16/xor512.c"
       ],
       "conditions": [
         ['OS=="win"', {

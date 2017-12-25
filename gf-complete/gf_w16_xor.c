@@ -1,9 +1,24 @@
 
 /* type returned by *movemask* function */
-#if MWORD_SIZE == 32
-# define umask_t uint32_t 
+#if MWORD_SIZE == 64
+# define umask_t uint64_t
+/* fix PACKUS not crossing lanes + reverse order for mask extraction */
+# define PERMUTE_FIX(v) _mm512_permutexvar_epi64(_mm512_set_epi64(7,5,3,1,6,4,2,0), v)
+/* why isn't the reverse pattern: 2,0,6,4,3,1,7,5 ? */
+# define PERMUTE_FIX_REV(v) _mm512_permutexvar_epi64(_mm512_set_epi64(6,4,2,0,7,5,3,1), v)
+#elif MWORD_SIZE == 32
+# define umask_t uint32_t
+# define PERMUTE_FIX(v) _mm256_permute4x64_epi64(v, 0xD8) /* 3,1,2,0 */
+# define PERMUTE_FIX_REV(v) _mm256_permute4x64_epi64(v, 0x8D) /* 2,0,3,1 */
 #else
 # define umask_t uint16_t
+# define PERMUTE_FIX(v) (v)
+# define PERMUTE_FIX_REV(v) (v)
+#endif
+#if MWORD_SIZE == 64
+# define MOVMASK _mm512_movepi8_mask
+#else
+# define MOVMASK _MM(movemask_epi8)
 #endif
 
 static void _FN(gf_w16_xor_start)(void* src, int bytes, void* dest) {
@@ -41,22 +56,19 @@ static void _FN(gf_w16_xor_start)(void* src, int bytes, void* dest) {
 					_MMI(and)(tb, lmask),
 					_MMI(and)(ta, lmask)
 				);
-#if MWORD_SIZE == 32
-				/* fix PACKUS not crossing lanes + reverse order for mask extraction */
-				tl = _mm256_permute4x64_epi64(tl, 0x8D); // [2,0,3,1]
-				th = _mm256_permute4x64_epi64(th, 0x8D); // [2,0,3,1]
-#endif
+				tl = PERMUTE_FIX_REV(tl);
+				th = PERMUTE_FIX_REV(th);
 				
 				/* save to dest by extracting 16-bit masks */
-				dtmp[0+j] = _MM(movemask_epi8)(th);
+				dtmp[0+j] = MOVMASK(th);
 				for(i=1; i<8; i++) {
 					th = _MM(slli_epi16)(th, 1); // byte shift would be nicer, but ultimately doesn't matter here
-					dtmp[i*8+j] = _MM(movemask_epi8)(th);
+					dtmp[i*8+j] = MOVMASK(th);
 				}
-				dtmp[64+j] = _MM(movemask_epi8)(tl);
+				dtmp[64+j] = MOVMASK(tl);
 				for(i=1; i<8; i++) {
 					tl = _MM(slli_epi16)(tl, 1);
-					dtmp[64+i*8+j] = _MM(movemask_epi8)(tl);
+					dtmp[64+i*8+j] = MOVMASK(tl);
 				}
 				sW += 2;
 			}
@@ -92,22 +104,19 @@ static void _FN(gf_w16_xor_start)(void* src, int bytes, void* dest) {
 					_MMI(and)(tb, lmask),
 					_MMI(and)(ta, lmask)
 				);
-#if MWORD_SIZE == 32
-				/* fix PACKUS not crossing lanes + reverse order for mask extraction */
-				tl = _mm256_permute4x64_epi64(tl, 0x8D); // [2,0,3,1]
-				th = _mm256_permute4x64_epi64(th, 0x8D); // [2,0,3,1]
-#endif
+				tl = PERMUTE_FIX_REV(tl);
+				th = PERMUTE_FIX_REV(th);
 				
 				/* save to dest by extracting masks */
-				dtmp[0+j] = _MM(movemask_epi8)(th);
+				dtmp[0+j] = MOVMASK(th);
 				for(i=1; i<8; i++) {
 					th = _MM(slli_epi16)(th, 1); // byte shift would be nicer, but ultimately doesn't matter here
-					dtmp[i*8+j] = _MM(movemask_epi8)(th);
+					dtmp[i*8+j] = MOVMASK(th);
 				}
-				dtmp[64+j] = _MM(movemask_epi8)(tl);
+				dtmp[64+j] = MOVMASK(tl);
 				for(i=1; i<8; i++) {
 					tl = _MM(slli_epi16)(tl, 1);
-					dtmp[64+i*8+j] = _MM(movemask_epi8)(tl);
+					dtmp[64+i*8+j] = MOVMASK(tl);
 				}
 				sW += 2;
 			}
@@ -158,11 +167,45 @@ static void _FN(gf_w16_xor_final)(void* src, int bytes, void* dest) {
 	while(s16 != top16) {
 		for(j=0; j<8; j++) {
 			/* load in pattern: [0011223344556677] [8899AABBCCDDEEFF] */
-#if MWORD_SIZE == 32
-			/* vpinsrd doesn't exist for ymm registers, so MSVC doesn't support _mm256_insert_epi32, so fall back to using gathers */
+#if MWORD_SIZE == 64
+			tl = _MM(i32gather_epi64)(_mm256_set_epi32(32, 40, 48, 56, 96, 104, 112, 120), (int*)s16, 8);
+			th = _MM(i32gather_epi64)(_mm256_set_epi32(0, 8, 16, 24, 64, 72, 80, 88), (int*)s16, 8);
+			/*
+			// 0000000011111111 -> 00001111 
+			ta = _mm512_inserti64x4(
+				_mm512_castsi256_si512(_mm512_cvtepi64_epi32(tl)),
+				_mm512_cvtepi64_epi32(_mm512_srli_epi64(tl, 32)),
+				1
+			);
+			tb = _mm512_inserti64x4(
+				_mm512_castsi256_si512(_mm512_cvtepi64_epi32(th)),
+				_mm512_cvtepi64_epi32(_mm512_srli_epi64(th, 32)),
+				1
+			);
+			
+			// 00001111 -> 00112233
+			tl = _MM(packus_epi32)(
+				_MMI(and)(ta, _MM(set1_epi32)(0xffff)),
+				_MMI(and)(tb, _MM(set1_epi32)(0xffff))
+			);
+			th = _MM(packus_epi32)(
+				_MM(srli_epi32)(ta, 16),
+				_MM(srli_epi32)(tb, 16)
+			);
+			ta = _mm512_permutex2var_epi64(tl, _mm512_set_epi64(11,10,9,8,3,2,1,0), th);
+			tb = _mm512_permutex2var_epi64(tl, _mm512_set_epi64(15,14,13,12,7,6,5,4), th);
+			*/
+# define _P(a,b) (((a)<<16)|(b))
+# define _Q(n) _P(44+n,40+n), _P(36+n,32+n), _P(12+n,8+n), _P(4+n,0+n)
+			ta = _mm512_permutex2var_epi16(tl, _mm512_set_epi32(_Q(17), _Q(1), _Q(16), _Q(0)), th);
+			tb = _mm512_permutex2var_epi16(tl, _mm512_set_epi32(_Q(19), _Q(3), _Q(18), _Q(2)), th);
+# undef _Q
+# undef _P
+			tl = ta;
+			th = tb;
+#elif MWORD_SIZE == 32
 			tl = _MM(i32gather_epi32)((int*)s16, _MM(set_epi32)(32, 40, 48, 56, 96, 104, 112, 120), 4);
 			th = _MM(i32gather_epi32)((int*)s16, _MM(set_epi32)(0, 8, 16, 24, 64, 72, 80, 88), 4);
-			
 			/* 00001111 -> 00112233 */
 			ta = _MM(packus_epi32)(
 				_MMI(and)(tl, _MM(set1_epi32)(0xffff)),
@@ -199,30 +242,39 @@ static void _FN(gf_w16_xor_final)(void* src, int bytes, void* dest) {
 				_MMI(and)(th, lmask)
 			);
 			
-#if MWORD_SIZE == 32
-			/* fix up AVX's implementation of PACKUS to be like SSE */
-			/* TODO: is it possible to avoid this during gather? */
-			ta = _mm256_permute4x64_epi64(ta, 0xD8); // [3,1,2,0]
-			tb = _mm256_permute4x64_epi64(tb, 0xD8); // [3,1,2,0]
-#endif
+			/* TODO: is it possible to avoid this permute during gather? */
+			ta = PERMUTE_FIX(ta);
+			tb = PERMUTE_FIX(tb);
 			
 			/* extract top bits */
-			dtmp[j*16 + 7] = _MM(movemask_epi8)(ta);
-			dtmp[j*16 + 15] = _MM(movemask_epi8)(tb);
+			dtmp[j*16 + 7] = MOVMASK(ta);
+			dtmp[j*16 + 15] = MOVMASK(tb);
 			for(i=1; i<8; i++) {
 				ta = _MM(slli_epi16)(ta, 1);
 				tb = _MM(slli_epi16)(tb, 1);
-				dtmp[j*16 + 7-i] = _MM(movemask_epi8)(ta);
-				dtmp[j*16 + 15-i] = _MM(movemask_epi8)(tb);
+				dtmp[j*16 + 7-i] = MOVMASK(ta);
+				dtmp[j*16 + 15-i] = MOVMASK(tb);
 			}
 			s16++;
 		}
 		/* we only really need to copy temp -> dest if src==dest */
-#if MWORD_SIZE == 32
+#if MWORD_SIZE == 32 || MWORD_SIZE == 64
 		/* ...but since we're copying anyway, may as well fix data arrangement! */
 		for(j=0; j<16; j+=2) {
-			ta = _mm256_load_si256((__m256i*)dtmp +j);
-			tb = _mm256_load_si256((__m256i*)dtmp +1 +j);
+			ta = _MMI(load)((_mword*)dtmp +j);
+			tb = _MMI(load)((_mword*)dtmp +1 +j);
+#if MWORD_SIZE == 64
+# define _P(a,b) (((a)<<16)|(b))
+# define _Q(n) _P(28+n,24+n), _P(20+n,16+n), _P(12+n,8+n), _P(4+n,0+n)
+			/* TODO: see if we can avoid permuting across both vectors by re-arranging earlier stuff */
+			tl = _mm512_permutex2var_epi16(tb, _mm512_set_epi32(_Q(33), _Q(1), _Q(32), _Q(0)), ta);
+			th = _mm512_permutex2var_epi16(tb, _mm512_set_epi32(_Q(35), _Q(3), _Q(34), _Q(2)), ta);
+			ta = tl;
+			tb = th;
+# undef _Q
+# undef _P
+#endif
+#if MWORD_SIZE == 32
 			/* TODO: it should be possible to eliminate some permutes by storing things more efficiently */
 			tl = _mm256_permute2x128_si256(ta, tb, 0x02);
 			th = _mm256_permute2x128_si256(ta, tb, 0x13);
@@ -234,8 +286,9 @@ static void _FN(gf_w16_xor_final)(void* src, int bytes, void* dest) {
 				_MM(srli_epi32)(tl, 16),
 				_MM(srli_epi32)(th, 16)
 			);
-			_mm256_storeu_si256((__m256i*)d16 +j, ta);
-			_mm256_storeu_si256((__m256i*)d16 +1 +j, tb);
+#endif
+			_MMI(storeu)((_mword*)d16 +j, ta);
+			_MMI(storeu)((_mword*)d16 +1 +j, tb);
 		}
 #else
 		memcpy(d16, dtmp, sizeof(dtmp));
@@ -246,6 +299,8 @@ static void _FN(gf_w16_xor_final)(void* src, int bytes, void* dest) {
 }
 
 #undef umask_t
+#undef PERMUTE_FIX
+#undef MOVMASK
 
 static gf_val_32_t
 #ifdef __GNUC__

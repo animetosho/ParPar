@@ -794,6 +794,14 @@ int gf_w16_xor_init(gf_t *gf)
   /* if JIT allocation was successful (no W^X issue), use slightly faster JIT version, otherwise fall back to static code version */
   
   gf->using_altmap = 1;
+#if defined(AMD64) && defined(INTEL_AVX512BW)
+  if(jit->code && wordsize >= 512) {
+    gf->mult_method = GF_XOR_JIT_AVX512;
+    gf->alignment = 64;
+    gf->walignment = 1024;
+    gf_w16_xordep256_poly_init(h);
+  } else
+#endif
 #if defined(AMD64) && defined(INTEL_AVX2)
   if(jit->code && wordsize >= 256) {
     gf->mult_method = GF_XOR_JIT_AVX2;

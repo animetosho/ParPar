@@ -341,7 +341,77 @@ static inline size_t _jit_vmovdqa_store(uint8_t* jit, uint8_t mreg, int32_t offs
 	return p;
 }
 
-// TODO: evpxor_r, evpxor_m, evpmovdqa_store, evpxor2x_r, evpxor2x_m
+/** AVX3 (512-bit) EVEX coded instructions **/
+static inline size_t _jit_vpxord_m(uint8_t* jit, uint8_t zregD, uint8_t zreg1, uint8_t mreg, int32_t offs) {
+	int offsFlag = (offs != 0) << (((offs+128*64) & ~0x3FC0) != 0);
+	*(int32_t*)jit = 0x487DF162 ^ ((zregD & 8) <<12) ^ ((zregD & 16) << 8) ^ ((zreg1 & 15) <<19) ^ ((zreg1 & 16) <<23) ^ ((mreg & 8) <<10);
+	*(int16_t*)(jit+4) = 0x00EF | ((zregD & 7) <<11) | ((mreg & 7) << 8) | (offsFlag << 14);
+	if(offsFlag == 2) {
+		*(int32_t*)(jit+6) = offs;
+		return 10;
+	} else if(offs) {
+		*(jit+6) = (offs>>6);
+		return 7;
+	}
+	return 6;
+}
+static inline size_t _jit_vpxord_r(uint8_t* jit, uint8_t zregD, uint8_t zreg1, uint8_t zreg2) {
+	*(int32_t*)jit = 0x487DF162 ^ ((zregD & 8) <<12) ^ ((zregD & 16) << 8) ^ ((zreg1 & 15) <<19) ^ ((zreg1 & 16) <<23) ^ ((zreg2 & 24) <<10);
+	*(int16_t*)(jit+4) = 0xC0EF | ((zregD & 7) <<11) | ((zreg2 & 7) << 8);
+	return 6;
+}
+static inline size_t _jit_vpternlogd_m(uint8_t* jit, uint8_t zreg1, uint8_t zreg2, uint8_t mreg, int32_t offs, uint8_t op) {
+	int offsFlag = (offs != 0) << (((offs+128*64) & ~0x3FC0) != 0);
+	*(int32_t*)jit = 0x487DF362 ^ ((zreg1 & 8) <<12) ^ ((zreg1 & 16) << 8) ^ ((zreg2 & 15) <<19) ^ ((zreg2 & 16) <<23) ^ ((mreg & 8) <<10);
+	*(int16_t*)(jit+4) = 0x0025 | ((zreg1 & 7) <<11) | ((mreg & 7) << 8) | (offsFlag << 14);
+	if(offsFlag == 2) {
+		*(int32_t*)(jit+6) = offs;
+		*(jit+10) = op;
+		return 11;
+	} else if(offs) {
+		*(int16_t*)(jit+6) = (uint8_t)(offs>>6) | (op <<8);
+		return 8;
+	}
+	*(jit+6) = op;
+	return 7;
+}
+static inline size_t _jit_vpternlogd_r(uint8_t* jit, uint8_t zreg1, uint8_t zreg2, uint8_t zreg3, uint8_t op) {
+	*(int32_t*)jit = 0x487DF362 ^ ((zreg1 & 8) <<12) ^ ((zreg1 & 16) << 8) ^ ((zreg2 & 15) <<19) ^ ((zreg2 & 16) <<23) ^ ((zreg3 & 24) <<10);
+	*(int32_t*)(jit+4) = 0x00C025 | ((zreg1 & 7) <<11) | ((zreg3 & 7) << 8) | (op<<24);
+	return 7;
+}
+
+static inline size_t _jit_vmovdqa32(uint8_t* jit, uint8_t zregD, uint8_t zreg) {
+	*(int32_t*)jit = 0x487DF162 ^ ((zregD & 8) <<12) ^ ((zregD & 16) << 8) ^ ((zreg & 24) <<10);
+	*(int16_t*)(jit+4) = 0xC06F | ((zregD & 7) <<11) | ((zreg & 7) << 8);
+	return 6;
+}
+static inline size_t _jit_vmovdqa32_load(uint8_t* jit, uint8_t zreg, uint8_t mreg, int32_t offs) {
+	int offsFlag = (offs != 0) << (((offs+128*64) & ~0x3FC0) != 0);
+	*(int32_t*)jit = 0x487DF162 ^ ((zreg & 8) <<12) ^ ((zreg & 16) << 8) ^ ((mreg & 8) <<10);
+	*(int16_t*)(jit+4) = 0x006F | ((zreg & 7) <<11) | ((mreg & 7) << 8) | (offsFlag << 14);
+	if(offsFlag == 2) {
+		*(int32_t*)(jit+6) = offs;
+		return 10;
+	} else if(offs) {
+		*(jit+6) = (offs>>6);
+		return 7;
+	}
+	return 6;
+}
+static inline size_t _jit_vmovdqa32_store(uint8_t* jit, uint8_t mreg, int32_t offs, uint8_t zreg) {
+	int offsFlag = (offs != 0) << (((offs+128*64) & ~0x3FC0) != 0);
+	*(int32_t*)jit = 0x487DF162 ^ ((zreg & 8) <<12) ^ ((zreg & 16) << 8) ^ ((mreg & 8) <<10);
+	*(int16_t*)(jit+4) = 0x007F | ((zreg & 7) <<11) | ((mreg & 7) << 8) | (offsFlag << 14);
+	if(offsFlag == 2) {
+		*(int32_t*)(jit+6) = offs;
+		return 10;
+	} else if(offs) {
+		*(jit+6) = (offs>>6);
+		return 7;
+	}
+	return 6;
+}
 
 static inline size_t _jit_push(uint8_t* jit, uint8_t reg) {
 	jit[0] = 0x50 | reg;

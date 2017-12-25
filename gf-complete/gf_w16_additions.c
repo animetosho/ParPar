@@ -88,7 +88,6 @@ void detect_cpu(void) {
 #endif
 
 
-static
 void gf_w16_log_region_alignment(gf_region_data *rd,
   gf_t *gf,
   void *src,
@@ -166,6 +165,31 @@ void gf_w16_log_region_alignment(gf_region_data *rd,
 
 #ifdef INTEL_SSE2
 #include "x86_jit.c"
+#include "gf_w16/xor.h"
+
+#if defined(INTEL_AVX512BW) && defined(AMD64)
+#define MWORD_SIZE 64
+#define _mword __m512i
+#define _MM(f) _mm512_ ## f
+#define _MMI(f) _mm512_ ## f ## _si512
+#define _FN(f) f ## _avx512
+#define _MM_END _mm256_zeroupper();
+
+#include "gf_w16_xor.c"
+
+#undef MWORD_SIZE
+#undef _mword
+#undef _MM
+#undef _MMI
+#undef _FN
+#undef _MM_END
+
+#ifndef FUNC_SELECT
+#define FUNC_SELECT(f) \
+	(wordsize >= 512 ? f ## _avx512 : (wordsize >= 256 ? f ## _avx2 : f ## _sse))
+#endif
+#endif /*INTEL_AVX512BW*/
+
 
 #if defined(INTEL_AVX2) && defined(AMD64)
 #define MWORD_SIZE 32
@@ -757,67 +781,6 @@ void gf_w16_xor_init_jit_avx2(jit_t* jit) {
 
 
 
-
-/* we support MSVC and GCC style ASM */
-#define gf_w16_xor256_jit_stub gf_w16_xor_jit_stub
-#ifdef AMD64
-# ifdef _MSC_VER
-/* specified in external file, as we can't use inline ASM for 64-bit MSVC */
-extern void gf_w16_xor_jit_stub(intptr_t src, intptr_t dEnd, intptr_t dest, void* fn);
-#  ifdef INTEL_AVX2
-#   undef gf_w16_xor256_jit_stub
-extern void gf_w16_xor256_jit_stub(intptr_t src, intptr_t dEnd, intptr_t dest, void* fn);
-#  endif
-# else
-#ifdef DBG_XORDEP
- #include <stdio.h>
-#endif
-static inline void gf_w16_xor_jit_stub(intptr_t src, intptr_t dEnd, intptr_t dest, void* fn) {
-#ifdef DBG_XORDEP
-	FILE* fp = fopen("code.bin", "wb");
-	fwrite(fn, 2048, 1, fp);
-	fclose(fp);
-	// disassemble with `objdump -b binary -D -m i386:x86-64 -M intel code.bin|less`
-#endif
-	asm volatile(
-		"leaq -8(%%rsp), %%r10\n"
-		"movq %%r10, %%rsi\n"
-		/* we can probably assume that rsp mod 16 == 8, but will always realign for extra safety(tm) */
-		"andq $0xF, %%r10\n"
-		"subq %%r10, %%rsi\n"
-		"callq *%[f]\n"
-		: "+a"(src), "+d"(dest) : "c"(dEnd), [f]"r"(fn)
-		: "%rsi", "%r10", "%xmm0", "%xmm1", "%xmm2", "%xmm3", "%xmm4", "%xmm5", "%xmm6", "%xmm7", "%xmm8", "%xmm9", "%xmm10", "%xmm11", "%xmm12", "%xmm13", "%xmm14", "%xmm15"
-	);
-}
-# endif
-#else
-# ifdef _MSC_VER
-static inline void gf_w16_xor_jit_stub(intptr_t src, intptr_t dEnd, intptr_t dest, void* fn) {
-	__asm {
-		push esi
-		lea esi, [esp-4]
-		and esi, 0FFFFFFF0h
-		mov eax, src
-		mov ecx, dEnd
-		mov edx, dest
-		call fn
-		pop esi
-	}
-}
-# else
-static inline void gf_w16_xor_jit_stub(intptr_t src, intptr_t dEnd, intptr_t dest, void* fn) {
-	asm volatile(
-		"leal -4(%%esp), %%esi\n"
-		"andl $0xFFFFFFF0, %%esi\n"
-		"calll *%[f]\n"
-		: "+a"(src), "+d"(dest) : "c"(dEnd), [f]"r"(fn)
-		: "%esi", "%xmm0", "%xmm1", "%xmm2", "%xmm3", "%xmm4", "%xmm5", "%xmm6", "%xmm7"
-	);
-}
-# endif
-#endif
-
 /* tune flags set by GCC; not ideal, but good enough I guess (note, I don't care about anything older than Core2) */
 #if defined(__tune_core2__) || defined(__tune_atom__)
 /* on pre-Nehalem Intel CPUs, it is faster to store unaligned XMM registers in halves */
@@ -882,10 +845,6 @@ static inline FAST_U16 xor_jit_bitpair3_nc_noxor(uint8_t* dest, FAST_U16 info, F
 #undef CMOV
 
 
-#if defined(__tune_corei7__) || defined(__tune_corei7_avx__) || defined(__tune_core_avx2__)
-  /* Nehalem and later Intel CPUs have a weird Self-Modifying Code slowdown when writing executable code, observed in Nehalem-Haswell, but not on Core2 and Silvermont or AMD K10 */
-  #define CPU_SLOW_SMC 1
-#endif
 
 static uint8_t* xor_write_jit_sse(jit_t* jit, gf_val_32_t val, gf_w16_poly_struct* poly, int use_temp, int xor)
 {

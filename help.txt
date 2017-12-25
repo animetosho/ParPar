@@ -89,6 +89,7 @@ Performance Options:
                                  xor: vector XOR bit dependencies using JIT
                                  xor128: force SSE2 variant of `xor`
                                  xor256: force AVX2 variant of `xor`
+                                 xor512: force AVX512BW variant of `xor`
                                  shuffle: split 4x 4-bit vector table lookup
                                  shuffle128: force SSSE3 variant of `shuffle`
                                  shuffle256: force AVX2 variant of `shuffle`

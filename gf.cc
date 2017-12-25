@@ -145,6 +145,7 @@ static void setup_gf() {
 		switch(gf[0].mult_method) {
 			case GF_XOR_JIT_SSE2: /* JIT is a little slow, so larger blocks make things faster */
 			case GF_XOR_JIT_AVX2:
+			case GF_XOR_JIT_AVX512:
 				CHUNK_SIZE = 128*1024; // half L2 cache?
 				minChunkTarget = 96*1024; // keep in range 96-192KB
 				break;
@@ -976,6 +977,11 @@ FUNC(SetMethod) {
 		case GF_XOR_JIT_AVX2:
 			rMethod = GF_METHOD_XOR;
 			rWord = 256;
+			rMethLong = "XOR JIT";
+		break;
+		case GF_XOR_JIT_AVX512:
+			rMethod = GF_METHOD_XOR;
+			rWord = 512;
 			rMethLong = "XOR JIT";
 		break;
 		case GF_AFFINE_GFNI:
