@@ -463,6 +463,22 @@ void gf_w16_xor_lazy_jit_altmap_multiply_region_avx2(gf_t *gf, void *src, void *
 }
 
 
+#define MWORD_SIZE 32
+#define _mword __m256i
+#define _MM(f) _mm256_ ## f
+#define _MMI(f) _mm256_ ## f ## _si256
+#define _FN(f) f ## _avx2
+#define _MM_END _mm256_zeroupper();
+
+#include "xor_common.c"
+
+#undef MWORD_SIZE
+#undef _mword
+#undef _MM
+#undef _MMI
+#undef _FN
+#undef _MM_END
+
 
 #else
 void gf_w16_xor_lazy_jit_altmap_multiply_region_avx2(gf_t *gf, void *src, void *dest, gf_val_32_t val, int bytes, int xor)

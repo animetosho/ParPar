@@ -79,3 +79,48 @@ void gf_w16_xor_create_jit_lut_avx2(void);
 void gf_w16_xor_lazy_jit_altmap_multiply_region_avx512(gf_t *gf, void *src, void *dest, gf_val_32_t val, int bytes, int xor);
 void gf_w16_xor_init_jit_avx512(jit_t* jit);
 void gf_w16_xor_create_jit_lut_avx512(void);
+
+
+/* non-JIT version */
+void gf_w16_xor_lazy_sse_altmap_multiply_region(gf_t *gf, void *src, void *dest, gf_val_32_t val, int bytes, int xor);
+
+
+#if defined(INTEL_AVX512BW) && defined(AMD64)
+#ifndef FUNC_SELECT
+#define FUNC_SELECT(f) \
+	(wordsize >= 512 ? f ## _avx512 : (wordsize >= 256 ? f ## _avx2 : f ## _sse))
+#endif
+
+void gf_w16_xor_start_avx512(void* src, int bytes, void* dest);
+void gf_w16_xor_final_avx512(void* src, int bytes, void* dest);
+#ifdef INCLUDE_EXTRACT_WORD
+gf_val_32_t gf_w16_xor_extract_word_avx512(gf_t *gf, void *start, int bytes, int index);
+#endif
+#endif
+
+#if defined(INTEL_AVX2) && defined(AMD64)
+#ifndef FUNC_SELECT
+#define FUNC_SELECT(f) \
+	(wordsize >= 256 ? f ## _avx2 : f ## _sse)
+#endif
+
+void gf_w16_xor_start_avx2(void* src, int bytes, void* dest);
+void gf_w16_xor_final_avx2(void* src, int bytes, void* dest);
+#ifdef INCLUDE_EXTRACT_WORD
+gf_val_32_t gf_w16_xor_extract_word_avx2(gf_t *gf, void *start, int bytes, int index);
+#endif
+#endif
+
+#if defined(INTEL_SSE2)
+#ifndef FUNC_SELECT
+#define FUNC_SELECT(f) \
+  (f ## _sse)
+#endif
+
+void gf_w16_xor_start_sse(void* src, int bytes, void* dest);
+void gf_w16_xor_final_sse(void* src, int bytes, void* dest);
+#ifdef INCLUDE_EXTRACT_WORD
+gf_val_32_t gf_w16_xor_extract_word_sse(gf_t *gf, void *start, int bytes, int index);
+#endif
+#endif
+

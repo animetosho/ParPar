@@ -18,7 +18,7 @@
 # define MOVMASK _MM(movemask_epi8)
 #endif
 
-static void _FN(gf_w16_xor_start)(void* src, int bytes, void* dest) {
+void _FN(gf_w16_xor_start)(void* src, int bytes, void* dest) {
 	gf_region_data rd;
 	_mword *sW;
 	umask_t *d16, *top16;
@@ -125,7 +125,7 @@ static void _FN(gf_w16_xor_start)(void* src, int bytes, void* dest) {
 	_MM_END
 }
 
-static void _FN(gf_w16_xor_final)(void* src, int bytes, void* dest) {
+void _FN(gf_w16_xor_final)(void* src, int bytes, void* dest) {
 	gf_region_data rd;
 	umask_t *s16, *d16, *top16;
 	_mword ta, tb, lmask, th, tl;
