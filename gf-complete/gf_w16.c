@@ -756,7 +756,7 @@ int gf_w16_affine_init(gf_t *gf)
 
 
 #ifdef INTEL_SSE2
-#include "x86_jit.c"
+#include "gf_w16/x86_jit.c" /* for AMD64 define */
 static 
 int gf_w16_xor_init(gf_t *gf)
 {

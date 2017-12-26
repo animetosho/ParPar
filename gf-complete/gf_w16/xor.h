@@ -68,6 +68,14 @@ static inline void gf_w16_xor_jit_stub(intptr_t src, intptr_t dEnd, intptr_t des
 #endif
 
 
+void gf_w16_xor_lazy_jit_altmap_multiply_region_sse(gf_t *gf, void *src, void *dest, gf_val_32_t val, int bytes, int xor);
+void gf_w16_xor_init_jit_sse(jit_t* jit);
+void gf_w16_xor_create_jit_lut_sse(void);
+
+void gf_w16_xor_lazy_jit_altmap_multiply_region_avx2(gf_t *gf, void *src, void *dest, gf_val_32_t val, int bytes, int xor);
+void gf_w16_xor_init_jit_avx2(jit_t* jit);
+void gf_w16_xor_create_jit_lut_avx2(void);
+
 void gf_w16_xor_lazy_jit_altmap_multiply_region_avx512(gf_t *gf, void *src, void *dest, gf_val_32_t val, int bytes, int xor);
 void gf_w16_xor_init_jit_avx512(jit_t* jit);
 void gf_w16_xor_create_jit_lut_avx512(void);

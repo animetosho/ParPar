@@ -1,9 +1,9 @@
 
-#include "../x86_jit.c"
+#include "x86_jit.c"
 #include "../gf_w16.h"
 #include "xor.h"
 
-#ifdef INTEL_AVX512BW
+#if defined(INTEL_AVX512BW) && defined(AMD64)
 #include <immintrin.h>
 
 /* TODO: move this elsewhere */

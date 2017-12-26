@@ -1,7 +1,7 @@
 #ifndef __GFC_JIT__
 #define __GFC_JIT__
 
-#include "gf_int.h"
+#include "../gf_int.h"
 
 /* registers */
 #define AX 0
