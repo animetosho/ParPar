@@ -58,6 +58,9 @@ void gf_w16_split_4_16_lazy_altmap_multiply_regionX_sse(gf_t *gf, uint16_t **src
 gf_val_32_t gf_w16_split_extract_word_sse(gf_t *gf, void *start, int bytes, int index);
 #endif
 
+
+void gf_w16_split_4_16_lazy_sse_multiply_region(gf_t *gf, void *src, void *dest, gf_val_32_t val, int bytes, int xor);
+
 #endif /*INTEL_SSSE3*/
 
 
