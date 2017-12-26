@@ -1,4 +1,6 @@
 
+#include "../gf_complete.h"
+#include "../gf_int.h"
 #include "../gf_w16.h"
 
 #if defined(INTEL_GFNI) && defined(INTEL_SSSE3)
