@@ -48,9 +48,9 @@ void gf_w16_affine512_multiply_region(gf_t *gf, void *src, void *dest, gf_val_32
   
     
   __m512i mat_ll, mat_lh, mat_hl, mat_hh;
-  mat_lh = _mm512_broadcast_i32x2(_mm_srli_si128(_mm256_castsi256_si128(depmask), 8));
+  mat_lh = _mm512_permutexvar_epi64(_mm512_set1_epi64(1), _mm512_castsi256_si512(depmask));
   mat_ll = _mm512_permutexvar_epi64(_mm512_set1_epi64(3), _mm512_castsi256_si512(depmask));
-  mat_hh = _mm512_broadcast_i32x2(_mm256_castsi256_si128(depmask));
+  mat_hh = _mm512_broadcastq_epi64(_mm256_castsi256_si128(depmask));
   mat_hl = _mm512_permutexvar_epi64(_mm512_set1_epi64(2), _mm512_castsi256_si512(depmask));
   
   
