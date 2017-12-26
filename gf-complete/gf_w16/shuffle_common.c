@@ -1,7 +1,12 @@
 
+#ifdef MWORD_SIZE
+
+
+#define GF_MULTBY_TWO(p) (((p) << 1) ^ (h->prim_poly & -((p) >> 15)))
+
 
 /* src can be the same as dest */
-static void _FN(gf_w16_split_start)(void* src, int bytes, void* dest) {
+void _FN(gf_w16_split_start)(void* src, int bytes, void* dest) {
 #ifdef INTEL_SSE2
 	gf_region_data rd;
 	_mword *sW, *dW, *topW;
@@ -81,7 +86,7 @@ static void _FN(gf_w16_split_start)(void* src, int bytes, void* dest) {
 }
 
 /* src can be the same as dest */
-static void _FN(gf_w16_split_final)(void* src, int bytes, void* dest) {
+void _FN(gf_w16_split_final)(void* src, int bytes, void* dest) {
 #ifdef INTEL_SSE2
 	gf_region_data rd;
 	_mword *sW, *dW, *topW;
@@ -140,9 +145,7 @@ static void _FN(gf_w16_split_final)(void* src, int bytes, void* dest) {
 
 
 
-static
-void
-_FN(gf_w16_split_4_16_lazy_altmap_multiply_region)(gf_t *gf, void *src, void *dest, gf_val_32_t val, int bytes, int xor)
+void _FN(gf_w16_split_4_16_lazy_altmap_multiply_region)(gf_t *gf, void *src, void *dest, gf_val_32_t val, int bytes, int xor)
 {
 #ifdef INTEL_SSSE3
   _mword *sW, *dW, *topW;
@@ -313,9 +316,7 @@ typedef union {
 
 #define MUL_REGIONS 4
 
-static
-void
-_FN(gf_w16_split_4_16_lazy_altmap_multiply_regionX)(gf_t *gf, uint16_t **src, void *dest, gf_val_32_t *val, int bytes, int xor)
+void _FN(gf_w16_split_4_16_lazy_altmap_multiply_regionX)(gf_t *gf, uint16_t **src, void *dest, gf_val_32_t *val, int bytes, int xor)
 {
 #ifdef INTEL_SSSE3
   FAST_U32 i, j, k, r;
@@ -450,7 +451,6 @@ _FN(gf_w16_split_4_16_lazy_altmap_multiply_regionX)(gf_t *gf, uint16_t **src, vo
 }
 
 #ifdef INCLUDE_EXTRACT_WORD
-static
 gf_val_32_t _FN(gf_w16_split_extract_word)(gf_t *gf, void *start, int bytes, int index)
 {
 	uint16_t *rStart = (uint16_t*)(((uintptr_t)start + MWORD_SIZE-1) & ~(MWORD_SIZE-1));
@@ -466,4 +466,7 @@ gf_val_32_t _FN(gf_w16_split_extract_word)(gf_t *gf, void *start, int bytes, int
 	r8 += (index & (MWORD_SIZE-1));
 	return (*r8 << 8) | r8[MWORD_SIZE];
 }
+#endif
+
+
 #endif
