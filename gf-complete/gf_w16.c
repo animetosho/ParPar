@@ -110,7 +110,6 @@ int gf_w16_log_init(gf_t *gf)
 
 
 #ifdef ARM_NEON
-# include "gf_w16_neon.c"
 
 static 
 int gf_w16_split_init(gf_t *gf)

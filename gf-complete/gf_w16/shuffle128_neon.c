@@ -41,10 +41,12 @@
  *
  */
 
-#include "gf_int.h"
+#include "../gf_int.h"
 #include <stdio.h>
 #include <stdlib.h>
-#include "gf_w16.h"
+#include "../gf_w16.h"
+
+#ifdef ARM_NEON
 
 #ifndef ARCH_AARCH64
 #define vqtbl1q_u8(tbl, v) vcombine_u8(vtbl2_u8(tbl, vget_low_u8(v)),   \
@@ -151,6 +153,18 @@ gf_w16_split_4_16_lazy_multiply_region_neon(gf_t *gf, void *src, void *dest,
     }
   }
 }
+
+#else
+static
+void
+gf_w16_split_4_16_lazy_multiply_region_neon(gf_t *gf, void *src, void *dest,
+                                            gf_val_32_t val, int bytes, int xor)
+{
+	
+}
+#endif
+
+#include "shuffle.h"
 
 void gf_w16_neon_split_init(gf_t *gf)
 {

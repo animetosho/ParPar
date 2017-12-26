@@ -64,6 +64,8 @@ void gf_w16_split_4_16_lazy_sse_multiply_region(gf_t *gf, void *src, void *dest,
 #endif /*INTEL_SSSE3*/
 
 
+void gf_w16_neon_split_init(gf_t *gf);
+
 static void gf_w16_split_null(void* src, int bytes, void* dest) {
   if(src != dest) memcpy(dest, src, bytes);
 }

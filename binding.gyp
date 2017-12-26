@@ -47,6 +47,7 @@
         "gf-complete/gf.c",
         "gf-complete/gf_w16.c",
         "gf-complete/gf_w16/shuffle128.c",
+        "gf-complete/gf_w16/shuffle128_neon.c",
         "gf-complete/gf_w16/shuffle256.c",
         "gf-complete/gf_w16/shuffle512.c",
         "gf-complete/gf_w16/xor128.c",
