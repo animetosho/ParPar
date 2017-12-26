@@ -1,4 +1,7 @@
 
+#ifdef MWORD_SIZE
+
+
 /* type returned by *movemask* function */
 #if MWORD_SIZE == 64
 # define umask_t uint64_t
@@ -274,11 +277,8 @@ void _FN(gf_w16_xor_final)(void* src, int bytes, void* dest) {
 #undef PERMUTE_FIX_REV
 #undef MOVMASK
 
-static gf_val_32_t
-#ifdef __GNUC__
-__attribute__ ((unused))
-#endif
-_FN(gf_w16_xor_extract_word)(gf_t *gf, void *start, int bytes, int index)
+#ifdef INCLUDE_EXTRACT_WORD
+gf_val_32_t _FN(gf_w16_xor_extract_word)(gf_t *gf, void *start, int bytes, int index)
 {
   uint16_t *r16, rv = 0;
   uint8_t *r8;
@@ -301,5 +301,7 @@ _FN(gf_w16_xor_extract_word)(gf_t *gf, void *start, int bytes, int index)
   }
   return rv;
 }
+#endif
 
 
+#endif /* defined(MWORD_SIZE) */
