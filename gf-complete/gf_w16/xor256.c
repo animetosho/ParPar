@@ -6,13 +6,6 @@
 #if defined(INTEL_AVX2) && defined(AMD64)
 #include <immintrin.h>
 
-/* TODO: move this elsewhere */
-#ifdef _MSC_VER
-#define ALIGN(_a, v) __declspec(align(_a)) v
-#else
-#define ALIGN(_a, v) v __attribute__((aligned(_a)))
-#endif
-
 
 ALIGN(16, __m128i xor256_jit_clut_code1[64]);
 ALIGN(16, uint8_t xor256_jit_clut_info_mem[64]);

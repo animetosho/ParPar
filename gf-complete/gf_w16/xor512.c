@@ -6,13 +6,6 @@
 #if defined(INTEL_AVX512BW) && defined(AMD64)
 #include <immintrin.h>
 
-/* TODO: move this elsewhere */
-#ifdef _MSC_VER
-#define ALIGN(_a, v) __declspec(align(_a)) v
-#else
-#define ALIGN(_a, v) v __attribute__((aligned(_a)))
-#endif
-
 
 static inline __m128i ssse3_popcnt_epi8(__m128i src) {
 	__m128i lmask = _mm_set1_epi8(0xf);

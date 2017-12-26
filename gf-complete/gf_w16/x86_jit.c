@@ -2,6 +2,7 @@
 #define __GFC_JIT__
 
 #include "../gf_int.h"
+#include "../platform.h"
 
 /* registers */
 #define AX 0
@@ -21,15 +22,6 @@
 #define JLE 0xE
 #define JG  0xF
 
-
-#if defined(__x86_64__) || \
-    defined(__amd64__ ) || \
-    defined(__LP64    ) || \
-    defined(_M_X64    ) || \
-    defined(_M_AMD64  ) || \
-    defined(_WIN64    )
-	#define AMD64 1
-#endif
 
 #ifdef _MSC_VER
 #define inline __inline

@@ -5,13 +5,6 @@
 
 #if defined(INTEL_SSE2)
 
-/* TODO: move this elsewhere */
-#ifdef _MSC_VER
-#define ALIGN(_a, v) __declspec(align(_a)) v
-#else
-#define ALIGN(_a, v) v __attribute__((aligned(_a)))
-#endif
-
 /* modified versions of PXOR/XORPS mem to have fixed sized instructions */
 static inline size_t _jit_pxor_mod(uint8_t* jit, uint8_t xreg, uint8_t mreg, int32_t offs) {
 	*(jit++) = 0x66;

@@ -2,6 +2,16 @@
 #ifndef GF_COMPLETE_PLATFORM_H
 #define GF_COMPLETE_PLATFORM_H
 
+#if defined(__x86_64__) || \
+    defined(__amd64__ ) || \
+    defined(__LP64    ) || \
+    defined(_M_X64    ) || \
+    defined(_M_AMD64  ) || \
+    defined(_WIN64    )
+	#define AMD64 1
+#endif
+
+
 #ifdef _MSC_VER
 
 #if (defined(_M_IX86_FP) && _M_IX86_FP == 2) || defined(_M_X64)

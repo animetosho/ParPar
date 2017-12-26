@@ -175,3 +175,9 @@ typedef enum {GF_E_MDEFDIV, /* Dev != Default && Mult == Default */
               GF_E_GROUPNU, /* Arguments not integers in GROUP. */
               GF_E_DEFAULT } gf_error_type_t;
 
+
+#ifdef _MSC_VER
+#define ALIGN(_a, v) __declspec(align(_a)) v
+#else
+#define ALIGN(_a, v) v __attribute__((aligned(_a)))
+#endif

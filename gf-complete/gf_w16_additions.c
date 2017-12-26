@@ -81,12 +81,6 @@ void detect_cpu(void) {
 }
 
 
-#ifdef _MSC_VER
-#define ALIGN(_a, v) __declspec(align(_a)) v
-#else
-#define ALIGN(_a, v) v __attribute__((aligned(_a)))
-#endif
-
 
 void gf_w16_log_region_alignment(gf_region_data *rd,
   gf_t *gf,
