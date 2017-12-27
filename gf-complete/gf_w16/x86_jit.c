@@ -440,17 +440,32 @@ static inline size_t _jit_cmp_r(uint8_t* jit, uint8_t reg, uint8_t reg2) {
 	size_t p = _jit_rxx_pref(&jit, reg, reg2);
 	reg &= 7;
 	reg2 &= 7;
-	*(int16_t*)jit = 0xC039 | (reg2 << 11) | (reg << 8);
+	*(int16_t*)jit = 0xC039 | ((uint16_t)reg2 << 11) | ((uint16_t)reg << 8);
 	return p+2;
 }
 static inline size_t _jit_add_i(uint8_t* jit, uint8_t reg, int32_t val) {
 	size_t p = _jit_rxx_pref(&jit, reg, 0);
 	reg &= 7;
-	*(int16_t*)jit = 0xC081 | (reg << 8);
-	jit += 2;
-	*(int32_t*)jit = val;
-	return p+6;
+	if((val + 128) & ~0xff) {
+		if(reg == AX) {
+			*jit = 5;
+			jit += 1;
+			*(int32_t*)jit = val;
+			return p+5;
+		} else {
+			*(int16_t*)jit = 0xC081 | (reg << 8);
+			jit += 2;
+			*(int32_t*)jit = val;
+			return p+6;
+		}
+	} else {
+		*(int16_t*)jit = 0xC083 | (reg << 8);
+		jit += 2;
+		*jit = (int8_t)val;
+		return p+3;
+	}
 }
+/* TODO: consider supporting shorter sequences for sub, xor, and etc */
 static inline size_t _jit_sub_i(uint8_t* jit, uint8_t reg, int32_t val) {
 	size_t p = _jit_rxx_pref(&jit, reg, 0);
 	reg &= 7;

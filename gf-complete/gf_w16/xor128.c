@@ -307,7 +307,7 @@ static inline FAST_U16 xor_jit_bitpair3_nc_noxor(uint8_t* dest, FAST_U16 info, F
 
 
 
-static uint8_t* xor_write_jit_sse(jit_t* jit, gf_val_32_t val, gf_w16_poly_struct* poly, int use_temp, int xor)
+static inline uint8_t* xor_write_jit_sse(jit_t* jit, gf_val_32_t val, gf_w16_poly_struct* poly, int use_temp, int xor)
 {
   FAST_U32 i, bit;
   long inBit;
