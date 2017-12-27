@@ -398,18 +398,18 @@ static uint8_t* xor_write_jit_avx(jit_t* jit, gf_val_32_t val, gf_w16_poly_struc
       }
     
     /* cmp/jcc */
-    *(uint32_t*)(jitptr) = 0x800FC039 | (DX <<8) | (CX <<11) | (JL <<24);
+    *(uint64_t*)(jitptr) = 0x800FC03948 | (DX <<16) | (CX <<19) | ((uint64_t)JL <<32);
 #ifdef CPU_SLOW_SMC
-    *(int32_t*)(jitptr +4) = (jitTemp - (jitdst - jitcode)) - jitptr -8;
+    *(int32_t*)(jitptr +5) = (jitTemp - (jitdst - jitcode)) - jitptr -9;
 #else
-    *(int32_t*)(jitptr +4) = jitcode - jitptr -8;
+    *(int32_t*)(jitptr +5) = jitcode - jitptr -9;
 #endif
-    jitptr[8] = 0xC3; /* ret */
+    jitptr[9] = 0xC3; /* ret */
     
 #ifdef CPU_SLOW_SMC
     /* memcpy to destination */
     /* AVX does result in fewer writes, but testing on Haswell seems to indicate minimal benefit over SSE2 */
-    for(i=0; i<(FAST_U32)(jitptr+9-jitTemp); i+=64) {
+    for(i=0; i<(FAST_U32)(jitptr+10-jitTemp); i+=64) {
       __m256i ta = _mm256_load_si256((__m256i*)(jitTemp + i));
       __m256i tb = _mm256_load_si256((__m256i*)(jitTemp + i + 32));
       _mm256_store_si256((__m256i*)(jitdst + i), ta);
