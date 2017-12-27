@@ -34,16 +34,9 @@ extern int gf_size(gf_t *gf)
   s = sizeof(gf_t);
   h = (gf_internal_t *) gf->scratch;
   s += gf_scratch_size(h->w, h->mult_type, h->region_type, h->divide_type, h->arg1, h->arg2);
-  if (h->mult_type == GF_MULT_COMPOSITE) s += gf_size(h->base_gf);
   return s;
 }
 
-
-int gf_init_easy(gf_t *gf, int w)
-{
-  return gf_init_hard(gf, w, GF_MULT_DEFAULT, GF_REGION_DEFAULT, GF_DIVIDE_DEFAULT, 
-                      0, 0, 0, 0, 0, 0, NULL, NULL);
-}
 
 /* Allen: What's going on here is this function is putting info into the
        scratch mem of gf, and then calling the relevant REAL init
@@ -101,6 +94,12 @@ int gf_init_hard(gf_t *gf, int w, int mult_type,
     case 16: return gf_w16_init(gf);
   }
   return 0;
+}
+
+int gf_init_easy(gf_t *gf, int w)
+{
+  return gf_init_hard(gf, w, GF_MULT_DEFAULT, GF_REGION_DEFAULT, GF_DIVIDE_DEFAULT, 
+                      0, 0, 0, 0, 0, 0, NULL, NULL);
 }
 
 #ifdef INTEL_SSE2
@@ -267,16 +266,16 @@ void gf_set_region_data(gf_region_data *rd,
     fprintf(stderr, "Error in region multiply operation.\n");
     fprintf(stderr, "The source & destination pointers must be aligned with respect\n");
     fprintf(stderr, "to each other along a %d byte boundary.\n", align);
-    fprintf(stderr, "Src = 0x%lx.  Dest = 0x%lx\n", (uintptr_t) src,
-            (uintptr_t) dest);
+    fprintf(stderr, "Src = 0x%p.  Dest = 0x%p\n", src,
+            dest);
     assert(0);
   }
 
   if (uls % wb != 0) {
     fprintf(stderr, "Error in region multiply operation.\n");
     fprintf(stderr, "The pointers must be aligned along a %d byte boundary.\n", wb);
-    fprintf(stderr, "Src = 0x%lx.  Dest = 0x%lx\n", (uintptr_t) src,
-            (uintptr_t) dest);
+    fprintf(stderr, "Src = 0x%p.  Dest = 0x%p\n", src,
+            dest);
     assert(0);
   }
 

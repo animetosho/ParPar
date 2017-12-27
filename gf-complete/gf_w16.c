@@ -605,6 +605,23 @@ gf_val_32_t gf_w16_extract_word(gf_t *gf, void *start, int bytes, int index)
 }
 #endif
 
+void gf_memcpy(gf_t *gf, void *src, void *dest, gf_val_32_t val, int bytes, int xor) {
+#ifdef INTEL_AVX512BW
+	// seems like memcpy isn't taking advantage of AVX512 yet, so ... implement it ourself
+	intptr_t offs = -bytes;
+	void* d = dest + bytes;
+	const void* s = src + bytes;
+	while(offs) {
+		__m512i a = _mm512_load_si512((__m512i*)(s + offs));
+		__m512i b = _mm512_load_si512((__m512i*)(s + offs + 64));
+		_mm512_store_si512((__m512i*)(d + offs), a);
+		_mm512_store_si512((__m512i*)(d + offs + 64), b);
+		offs += 128;
+	}
+#else
+	memcpy(dest, src, bytes);
+#endif
+}
 
 int gf_w16_init(gf_t *gf)
 {
@@ -639,6 +656,10 @@ int gf_w16_init(gf_t *gf)
   gf->extract_word.w32 = gf_w16_extract_word;
 #endif
 
+  if(h->mult_type == GF_COPY) { // memcpy for performance testing only
+    gf->multiply_region.w32 = gf_memcpy;
+    return 1;
+  }
   if(h->mult_type == GF_MULT_AFFINE)
     return gf_w16_affine_init(gf);
 

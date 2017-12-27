@@ -63,7 +63,6 @@ void detect_cpu(void) {
 	has_avx512bw = (cpuInfo[1] & 0x40010000) == 0x40010000;
 	#endif
 #endif
-#endif /* INTEL_SSE2 */
 
 	/* try to detect hyper-threading */
 	has_htt = 0;
@@ -77,6 +76,7 @@ void detect_cpu(void) {
 				has_htt = 1;
 		}
 	}
+#endif /* INTEL_SSE2 */
 	
 }
 
