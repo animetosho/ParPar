@@ -943,6 +943,10 @@ void gf_w16_xor_lazy_jit_altmap_multiply_region_sse(gf_t *gf, void *src, void *d
   gf_w16_log_region_alignment(&rd, gf, src, dest, bytes, val, xor, 16, 256);
   
   if(rd.d_start != rd.d_top) {
+#ifdef CPU_SLOW_SMC_CLR
+    memset(h->jit.pNorm, 0, 1536);
+#endif
+    
     // exec
     /* adding 128 to the destination pointer allows the register offset to be coded in 1 byte
      * eg: 'movdqa xmm0, [rdx+0x90]' is 8 bytes, whilst 'movdqa xmm0, [rdx-0x60]' is 5 bytes */

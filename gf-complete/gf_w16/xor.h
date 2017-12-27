@@ -1,9 +1,13 @@
 
 #include "../gf_complete.h"
 
-#if defined(__tune_corei7__) || defined(__tune_corei7_avx__) || defined(__tune_core_avx2__)
+#if defined(__tune_corei7__) || defined(__tune_corei7_avx__)
   /* Nehalem and later Intel CPUs have a weird Self-Modifying Code slowdown when writing executable code, observed in Nehalem-Haswell, but not on Core2 and Silvermont or AMD K10 */
   #define CPU_SLOW_SMC 1
+#endif
+#if defined(__tune_core_avx2__)
+  /* For some reason, on Haswell and Skylake, clearing memory with memset is faster than the memcpy hack above; not observed on IvyBridge (despite ERMS support) */
+  #define CPU_SLOW_SMC_CLR 1
 #endif
 
 
@@ -36,7 +40,7 @@ static inline void gf_w16_xor_jit_stub(intptr_t src, intptr_t dEnd, intptr_t des
 		"subq %%r10, %%rsi\n"
 		"callq *%[f]\n"
 		: "+a"(src), "+d"(dest) : "c"(dEnd), [f]"r"(fn)
-		: "%rsi", "%r10", "%xmm0", "%xmm1", "%xmm2", "%xmm3", "%xmm4", "%xmm5", "%xmm6", "%xmm7", "%xmm8", "%xmm9", "%xmm10", "%xmm11", "%xmm12", "%xmm13", "%xmm14", "%xmm15"
+		: "%rsi", "%r10", "%xmm0", "%xmm1", "%xmm2", "%xmm3", "%xmm4", "%xmm5", "%xmm6", "%xmm7", "%xmm8", "%xmm9", "%xmm10", "%xmm11", "%xmm12", "%xmm13", "%xmm14", "%xmm15", "memory"
 	);
 }
 # endif
@@ -61,7 +65,7 @@ static inline void gf_w16_xor_jit_stub(intptr_t src, intptr_t dEnd, intptr_t des
 		"andl $0xFFFFFFF0, %%esi\n"
 		"calll *%[f]\n"
 		: "+a"(src), "+d"(dest) : "c"(dEnd), [f]"r"(fn)
-		: "%esi", "%xmm0", "%xmm1", "%xmm2", "%xmm3", "%xmm4", "%xmm5", "%xmm6", "%xmm7"
+		: "%esi", "%xmm0", "%xmm1", "%xmm2", "%xmm3", "%xmm4", "%xmm5", "%xmm6", "%xmm7", "memory"
 	);
 }
 # endif

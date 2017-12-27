@@ -353,6 +353,9 @@ void gf_w16_xor_lazy_jit_altmap_multiply_region_avx512(gf_t *gf, void *src, void
   gf_w16_log_region_alignment(&rd, gf, src, dest, bytes, val, xor, 64, 1024);
   
   if(rd.d_start != rd.d_top) {
+#ifdef CPU_SLOW_SMC_CLR
+    memset(h->jit.pNorm, 0, 1536);
+#endif
   
     gf_w16_xor256_jit_stub(
       (intptr_t)rd.s_start - 896,
