@@ -346,21 +346,10 @@ void gf_w16_xor_lazy_jit_altmap_multiply_region_avx512(gf_t *gf, void *src, void
   gf_region_data rd;
   gf_internal_t *h = (gf_internal_t *) gf->scratch;
   struct gf_w16_logtable_data* ltd = (struct gf_w16_logtable_data*)(h->private);
-  int use_temp = ((uintptr_t)src - (uintptr_t)dest + 1024) < 2048;
-  void* tmp;
   
   if (val == 0) { gf_multby_zero(dest, bytes, xor); return; }
   if (val == 1) { gf_multby_one(src, dest, bytes, xor); return; }
 
-  /* if src/dest overlap, resolve by copying */
-  if(use_temp) {
-    tmp = malloc(bytes+128);
-    char *nSrc = (char*)(((uintptr_t)tmp+63) & ~63);
-    nSrc += (uintptr_t)src & 63;
-    memcpy(nSrc, src, bytes);
-    src = (void*)nSrc;
-  }
-  
   gf_w16_log_region_alignment(&rd, gf, src, dest, bytes, val, xor, 64, 1024);
   
   if(rd.d_start != rd.d_top) {
@@ -373,7 +362,6 @@ void gf_w16_xor_lazy_jit_altmap_multiply_region_avx512(gf_t *gf, void *src, void
     );
     
     _mm256_zeroupper();
-    if(use_temp) free(tmp);
   }
 }
 
