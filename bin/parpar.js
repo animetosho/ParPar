@@ -92,10 +92,10 @@ var opts = {
 		type: 'size',
 		map: 'minChunkSize'
 	},
-	'seq-first-pass': {
+	/*'seq-first-pass': {
 		type: 'bool',
 		map: 'noChunkFirstPass'
-	},
+	},*/
 	'proc-batch-size': {
 		type: 'int',
 		map: 'processBatchSize'
