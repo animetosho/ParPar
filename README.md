@@ -32,9 +32,13 @@ Features
 
 -   multi-threading via OpenMP
 
--   fast calculation routines (see [benchmark
+-   multiple fast calculation routines (see [benchmark
     comparisons](<benchmarks/info.md>)) using x86 and ARM SIMD capabilities when
-    available
+    available, and automatically select the best routine for a variety of CPU
+    microarchitectures
+
+-   single read pass on source files if memory constraints allow (no separate
+    hashing pass required)
 
 -   chunking support for memory constrained situations
 
@@ -57,6 +61,8 @@ not implemented include:
 
 -   better handling of input buffering and processing chunks based on CPU cache
     size
+
+-   streamed slice processing for handling very large slice sizes
 
 -   various other tweaks
 
@@ -209,8 +215,9 @@ Modifications (beyond removing unused components) to the library include:
     implementation
 
 -   Added an experimental technique which is a hybrid of “XOR” and “Shuffle”
-    algorithms above, dubbed “Affine”, which relies on the GF2P8AFFINEQB
-    instruction from GFNI on future Intel processors
+    algorithms above, dubbed “Affine”, which [relies on the GF2P8AFFINEQB
+    instruction](<xor_depends/info.md#gfni>) from GFNI on future Intel
+    processors
 
 -   [Region transform to/from ALTMAP memory
     arrangement](<http://jerasure.org/jerasure/gf-complete/issues/9>)

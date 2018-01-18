@@ -1,22 +1,17 @@
 The GF-Complete library provides a [very fast SSSE3
-implementation](<http://web.eecs.utk.edu/~plank/plank/papers/FAST-2013-GF.html>)
-for GF region multiplication, dubbed SPLIT\_TABLE(16,4). This method abuses the
+implementation](http://web.eecs.utk.edu/~plank/plank/papers/FAST-2013-GF.html)
+for GF region multiplication, dubbed SPLIT_TABLE(16,4). This method abuses the
 `pshufb` instruction to perform parallel 4-bit multiplies. For cases where the
 CPU does not support SSSE3, GF-Complete falls back to a significantly slower
-SPLIT\_TABLE(16,8) method, which does not use SIMD, instead relying on scalar
-lookups.  
-I present a technique below, named “XOR\_DEPENDS”, suitable for CPUs with SSE2
+SPLIT_TABLE(16,8) method, which does not use SIMD, instead relying on scalar
+lookups \*.  
+I present a technique below, named “XOR_DEPENDS”, suitable for CPUs with SSE2
 support but not SSSE3, such as the AMD K10. The technique is also a viable
 alternative for SSSE3 CPUs with a slow `pshufb` instruction (i.e. Intel Atom).
 
-**Update:** Yutaka Sawada has pointed out that faster, hand-tuned x86 assembly
-implementations of SPLIT\_TABLE(16,8)
-[exist](<https://github.com/pcordes/par2-asm-experiments/blob/master/asm-pinsrw.s>)
-(some of which may use some SIMD, though the core lookup operations of the
-algorithm don’t). Rough tests I’ve performed seem to show that they’re roughly
-up to 50% faster than GF-Complete’s implementation (likely dependent on CPU). As
-these implementations aren’t a part of GF-Complete, I’ll pretend they don’t
-exist on this page.
+\* A bit of SIMD can be used to accelerate the lookup table by a fair amount
+(around 50% in my rough tests), but ultimately are still much slower than faster
+techniques
 
  
 
@@ -48,11 +43,16 @@ Or more concisely:
 
 We can recursively apply the above definition for any multiplier, eg:
 
-[a][b][c][d] \* 3 = [a\^b][b\^c][a\^c\^d][a\^d]
+[a][b][c][d] \* 3 = ([a][b][c][d] \* 2) + [a][b][c][d] = [b][c][d\^a][a] \^
+[a][b][c][d] = [a\^b][b\^c][a\^c\^d][a\^d]
 
-[a][b][c][d] \* 4 = [c][a\^d][a\^b][b]
+[a][b][c][d] \* 4 = ([a][b][c][d] \* 2) \* 2 = [c][a\^d][a\^b][b]
 
 This is similar to how the BYTWO method in GF-Complete operates.
+
+Since we’re performing modular multiplication by a constant to a region of data,
+once we calculate which bits to XOR together to produce the product, we can
+simply apply the same sequence of XORs to each word in the data.
 
  
 
@@ -67,10 +67,12 @@ SSE supports 128 bit operations, therefore, we should rearrange our data so that
 the most significant bit for 128 words are stored together, followed by the next
 significant bit of these 128 words, and so on.
 
-PAR2 uses GF(65536), so we operate on 16 \* 128 bit = 256 byte blocks. The
-algorithm simply generates the most significant bits of 128 products by
-selectively XORing various bits of the 128 muliplicands. This is repeated for
-all 16 bits in the word.
+PAR2 uses GF(65536), so we will focus on PAR2’s case for the rest of the
+document. The ideas here can be used for other GF sizes (even non powers of 2).  
+For GF(65536) we operate on 16 \* 128 bit = 256 byte blocks. The algorithm
+simply generates the most significant bits of 128 products by selectively XORing
+various bits of the 128 muliplicands. This is repeated for all 16 bits in the
+word.
 
 JIT
 ---
@@ -94,17 +96,29 @@ switch(xor_count[bit]) {
 }
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Whilst this performs fairly well (usually beating SPLIT\_TABLE(16,8)), the
-lookup operation and jump table have a fair impact on performance.
+Whilst this performs fairly well (usually beating SPLIT_TABLE(16,8)), the lookup
+operation and jump table have a fair impact on performance.
 
-We can eliminate these overheads by dynamically generating code, which is what
-the JIT version of the algorithm does.
+We could eliminate these overheads by writing precomputed functions for every
+multiplicand - whilst this would work for small fields (such as 8 bits or less),
+it’s problematic for GF(65536). See the Static Pre-generation section below for
+more on this.
+
+Alternatively, we can look to JIT to dynamically generate such functions at
+runtime, which is what the JIT version of the algorithm does.
 
 Unfortunately, this does require the OS to allocate a memory page that is both
 writable and executable. It’s theoretically possible to switch between
 write/execute permissions, for OSes that implement
-[W\^X](<https://en.wikipedia.org/wiki/W%5EX>), but I expect that the syscall
+[W\^X](https://en.wikipedia.org/wiki/W%5EX), but I expect that the syscall
 overhead would be significant.
+
+### Self-modifying Code
+
+Unfortunately, a cost of this form of single use JIT is that it displays
+properties of self-modifying code, which modern processors perform poorly with.
+This is most evident with the poor performance for small amounts of data.
+However, despite this, performance seems to be good for large amounts of data.
 
 Optimal Sequences
 -----------------
@@ -128,18 +142,17 @@ z = a^b^d
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 You may notice that there are “duplicate” XOR operations above, which can be
-eliminated, reducing 9 XOR operations to 6, for example:
+eliminated, reducing 9 XOR operations to 5, for example:
 
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 w = a^b^c
 x = w^d
-temp = b^d
-y = temp^c
-z = temp^a
+y = x^a
+z = x^c
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Finding these common sub-sequences, in an efficient manner (i.e. not make the
-JIT code rather slow), is somewhat a challenge. I’m not sure what good
+JIT code rather slow), is somewhat of a challenge. I’m not sure what good
 strategies exist, but I’ve investigated the following heuristics, with the
 average number of XOR operations performed per 256 byte block (including the XOR
 into destination, for the 16 bit GF):
@@ -164,7 +177,9 @@ into destination, for the 16 bit GF):
     hit), failing that, it should be possible to precompute the ordering and
     pack and store it. If storing precomputed orderings is to be done, each
     ordering can trivially fit into 8 bytes (16x 4-bit indicies), or 5 bytes
-    (totaling 320KB) if a more complex packing scheme is to be used.
+    (totaling 320KB) if a more complex packing scheme is to be used. From
+    testing, this doesn’t seem to improve actual performance, possible due to
+    reducing parallelism available (see below).
 
 -   **Pair of pairs** (89.739 XORs/block?): like above, however the common
     sub-sequences themselves are searched for common elements. This means that
@@ -190,7 +205,8 @@ into destination, for the 16 bit GF):
     a fairly exhaustive search and very slow to perform. It is also likely
     impractical (ignoring JIT speed), since register allocation isn’t
     considered, and there is likely not enough to handle all the temporary
-    sequences.
+    sequences. Lastly, it completely ignores achievable parallelism (and hence,
+    likely not good)
 
 -   **Greedy cost search** (72.608 XORs/block): as above, but finds the best
     common sub-sequence (amongst pairs) which minimises total XORs at each step
@@ -207,6 +223,43 @@ efficient algorithms.
 Note that the average figures above may be incorrect as I haven’t checked them
 thoroughly.
 
+### Note on Parallelism
+
+CPUs can execute multiple instructions per clock if there’s no dependency chain
+between them. Unfortunately, many optimal XOR sequences may actually perform
+worse than a “suboptimal” number of XORs because of this.
+
+Taking the example from above:
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+w = a^b^c
+x = w^d
+y = x^a
+z = x^c
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+*x* cannot be calculated until *w* has been, and *y* and *z* cannot be
+calculated until *x* has been. However, once *x* has been calculated, *y* and
+*z* can be calculated in parallel. This means that if one XOR takes one clock
+cycle, the above sequence requires 4 cycles to compute on a superscalar
+processor (assuming no other overheads).
+
+On the other hand, consider the following equivalent sequence:
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+temp = b^d
+w = a^b
+y = temp^c
+w = w^c
+z = temp^a
+x = w^d
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Although there are 6 XORs, *temp* and *w* can be calculated in parallel, as well
+as the other lines. This means that the sequence can actually be computed in 3
+cycles, and hence faster than the “optimal” sequence despite needing one more
+XOR operation.
+
 AVX
 ---
 
@@ -215,29 +268,34 @@ instructions. The algorithm can trivially be adopted for any number of bits
 (including non-SIMD sizes) and only needs load, store and XOR operations to
 function.
 
-Using 256 bit AVX operations may improve performance over 128 bit SSE
-operations. Also, the 3 operand XOR operations could be useful for eliminating
-MOV instructions if optimal sequences (above) are to be used. AVX512’s 32
-registers may also give a very minor boost by allowing all 16 inputs to be
-cached, and provide ample temporary storage to handle the case when the source
-and destination buffers are the same. The ternary logic instruction, if it ends
-up being as fast as a VPXOR, could cut the number of required operations in
-half.
+Using 256 bit AVX operations improves performance over 128 bit SSE operations,
+plus the 3 operand syntax of AVX is useful for eliminating MOV instructions if
+optimal sequences (above) are to be used. AVX512’s 32 registers may also give a
+very minor boost by allowing all 16 inputs to be cached (which also eliminates
+the need to handle cases when the source and destination buffers are the same).
+The ternary logic instruction, which effectively can perform 2 XORs at once,
+further improves speed.
 
 The downside is that 256 bit operations would require processing to be performed
-on rather large 512 byte blocks. Various parts of the current implementation
-would need to be rewritten for AVX to implement 3 operand support (including the
-JIT routines).
+on rather large 512 byte blocks. Also, the JIT operation is relatively slow,
+which becomes a larger portion of overall time when the main processing loop
+becomes faster.
 
-I haven’t yet explored using an AVX implementation. Initial tests with AVX
+I haven’t yet explored using an AVX(1) implementation. Initial tests with AVX
 (floating point operations) seem to show minimal benefit\* on Intel CPUs due to
-limited FP concurrency. I expect AMD Bulldozer based CPUs not to yield any
-benefit when multi-threading when AVX operations are used. Hence, it seems like
-AVX2 capable CPUs are necessary for better performance.
+limited FP concurrency. I expect AMD Bulldozer/Jaguar based CPUs not to yield
+any benefit when multi-threading when AVX operations are used. Hence, it seems
+like AVX2 capable CPUs are necessary for better performance.
 
 \* it may be possible to mix 128 bit integer and 256 bit FP operations to
 improve throughput, but, despite the complexity, would only matter to Intel
 Sandy/Ivy Bridge CPUs
+
+ParPar includes a AVX2 and AVX512BW implementation of the algorithm. Despite
+limitations, these seem to perform fairly well, however the implementations have
+basically needed to be rewritten for each vector size to take advantage of the
+features provided by the AVX extension. Hence, these implementations are quite
+different from the SSE2 implementation, and have little code in common.
 
 x86 Micro-optimisations (JIT)
 -----------------------------
@@ -254,6 +312,16 @@ x86 Micro-optimisations (JIT)
     using `PXOR`, but mix in some `XORPS` instructions, which seems to improve
     overall performance slightly.  
     Note that `XORPD` is a largely useless instruction, and not considered here.
+    Also, there is no length difference for (E)VEX encoded instructions, so we
+    always prefer VPXOR for AVX code.
+
+-   For AVX512 implementation, the `VPTERNLOG` instruction can replace two XOR
+    operations, and this one instruction is just as fast as a `VPXOR`. If the
+    number of XORs isn’t even, we can start a chain with a `VMOVDQA` (which
+    effectively gets move eliminated) which makes the remaining number of XORs
+    even. Testing on a Skylake-X processor, however, shows that the AVX512
+    implementation seems to just about saturate L2 cache bandwidth, so this
+    optimisation may not have as large of a visible effect.
 
 -   Memory offsets between -128 and 127 can be encoded in 1 byte, otherwise 4
     byte offsets are necessary. Since we operate on 256 byte blocks, we can
@@ -267,24 +335,41 @@ x86 Micro-optimisations (JIT)
 
     -   It follows that larger block sizes (i.e. AVX2 implementation) will cause
         some instructions to exceed this one byte range, but offsetting is still
-        beneficial since -256 to 255 has fewer long instructions than 0 to 511
+        beneficial since -256 to 255 has fewer long instructions than 0 to 511.
+        AVX512’s EVEX coding scheme supports compressed displacement addressing,
+        which makes this a moot point.
 
 -   The JIT routine uses a number of speed tricks, which may make the code
-    difficult to read. The main loop is almost entirely branchless, relying on
-    some tricks, such as incrementing the write pointer based on a flag, and
-    using an XOR to conditionally transform a `PXOR`/`XORPS`into a
-    `MOVDQA`/`MOVAPS`instruction.
+    difficult to read.
 
-Static Pre-generation
----------------------
+    -   For the SSE2 implementation, the main loop is almost entirely
+        branchless, relying on some tricks, such as incrementing the write
+        pointer based on a flag, and using an XOR to conditionally transform a
+        `PXOR`/`XORPS`into a `MOVDQA`/`MOVAPS`instruction.
+
+    -   For the AVX2 implementation, almost all instructions are 4 bytes in
+        length, which means the algorithm can use precomputed index
+        lookup-tables, expand the indicies to 32 bit and mix instruction opcodes
+        in.
+
+    -   For the AVX512 implementation, indicies can be obtained via the
+        `VCOMPRESSD` instruction instead of a lookup (unsure if faster though),
+        and instruction sequences can be built up in 512 bit registers via some
+        shuffling and mixing of data.
+
+Other Ideas
+-----------
+
+### Static Pre-generation
 
 An alternative to JIT may be to statically generate kernels for every possible
 multiplier. Not only does this avoid issues of JIT (memory protection and slow
 code generation), it enables more exhaustive searches for optimal sequences and
 further code optimisation techniques, and also makes it easier to generate code
-for other platforms (e.g. AVX2 or ARM NEON) as we can rely on compilers for
-support without writing our own JIT routines. Whilst it is somewhat feasible to
-generate 65536 different routines, assuming we only need to the consider the
+for other platforms (e.g. ARM NEON) as we can rely on compilers for support
+without writing our own JIT routines. This should be doable for small GF field
+sizes, such as GF(256), however, for GF(65536), whilst it is somewhat feasible
+to generate 65536 different routines, assuming we only need to the consider the
 default polynomial, the resulting code size would be rather large.
 
 From some initial testing, it seems like GCC does a fairly good job of
@@ -296,21 +381,20 @@ GF-Complete handles multiply by 0 and 1 for us).
 
 Unfortunately the performance from this is very poor. Whilst fetching code from
 memory (60MB is guaranteed to cache miss) should still be much faster than JIT,
-I suspect that the overhead of the pagefault generated, whenever a kernel is
-executed, to be the main cause of slowdown.
+I suspect that the overhead of the pagefault generated (TLB misses etc),
+whenever a kernel is executed, to be the main cause of slowdown.
 
 It may be worthwhile exploring the use of large memory pages and/or compacting
 the code (which is dynamically unpacked with JIT) to mitigate the performance
 issues. However, due to the significant drawbacks of using pre-generated code
-(large code size and need for large page support), I have not explored these
-options.
+(large code size and need for large page support (which seems a little unwieldy
+in current OSes)), I have not explored these options.
 
-Split Multiplication
---------------------
+### Split Multiplication
 
 Instead of trying to pre-generate 65534 different kernels, perhaps we could
 exploit the distributive property of multiplication and divide the problem into
-2x 8-bit multiplies (similar to how SPLIT\_TABLE(16,8) works). This reduces the
+2x 8-bit multiplies (similar to how SPLIT_TABLE(16,8) works). This reduces the
 number of kernels required to 511, a much more feasible number.
 
 Whilst this has all the advantages of static pre-generation, one serious
@@ -321,9 +405,26 @@ to registers, or reducing loop overhead, but it's likely to still be
 significantly slower than a JIT implementation of the full 16-bit multiply.
 
 This may be a viable approach if JIT cannot be performed, as long as one doesn't
-mind compiling 511 kernels (which is still quite a significant number). A C
+mind compiling 511 kernels (which is still quite a significant number). A pure C
 implementation may also not be able to exploit certain optimal strategies, due
-to the lack of variable goto support.
+to the lack of variable goto support (GCC extensions to C allow this however).
+
+### Multi-region Optimization
+
+Typically we’re going to be multiplying multiple regions, not just one region,
+so there may be ways to exploit this.
+
+One idea is to JIT kernels for multiple values before actually executing them.
+In theory, this may allow CPUs, which speculatively execute far ahead, more time
+to deal with self-modifying code. It also may amortize the cost of kernel calls
+if we wish to be W\^X friendly.
+
+Initial testing seems to show that this strategy can have noticeable effects on
+performance, though they appear to be linked with Intel i3/i5/i7 range CPUs
+generating fewer SMC (machine clear due to self modifying code) events, rather
+than being more friendly to speculative execution. This gain is mostly noticed
+when processing small blocks of data, however, for larger blocks, this generally
+performs worse, probably due to the less efficient cache usage.
 
  
 
@@ -339,13 +440,12 @@ selectively XOR bits to produce output, which is exactly what we do here.
 Unfortunately, the instruction only works with 8 bit words, however it can still
 be used by splitting a 16 bit word into halves and processing the 8 bit
 components separately. Doing so, we get something that is very similar to how
-the SPLIT\_TABLE(16,4) algorithm works, and in fact, such an implementation is
-largely a mix of this XOR\_DEPENDS algorithm and the SPLIT\_TABLE(16,4)
-technique. That is, we calculate bit dependencies as described above, and the
-main loop operates similarly to SPLIT\_TABLE(16,4). This algorithm is
-implemented in ParPar, dubbed AFFINE. Note that ParPar’s implementation is using
-the ALTMAP optimization, and the layout is identical to that for
-SPLIT\_TABLE(16,4).
+the SPLIT_TABLE(16,4) algorithm works, and in fact, such an implementation is
+largely a mix of this XOR_DEPENDS algorithm and the SPLIT_TABLE(16,4) technique.
+That is, we calculate bit dependencies as described above, and the main loop
+operates similarly to SPLIT_TABLE(16,4). This algorithm is implemented in
+ParPar, dubbed AFFINE. Note that ParPar’s implementation is using the ALTMAP
+optimization, and the layout is identical to that for SPLIT_TABLE(16,4).
 
 Performance will ultimately depend on how fast the instruction runs on the CPU,
 but one `GF2P8AFFINEQB` effectively processes all bits from the input, whereas
@@ -353,7 +453,7 @@ but one `GF2P8AFFINEQB` effectively processes all bits from the input, whereas
 `GF2P8AFFINEQB` instructions (plus a `PXOR`) is needed to process a vector of
 data, compared to four `PSHUFB` instructions. So if we assume `GF2P8AFFINEQB`
 has the same throughput as `PSHUFB`, this new method should be roughly double in
-speed compared to SPLIT\_TABLE(16,4), and hence, likely be the fastest method
+speed compared to SPLIT_TABLE(16,4), and hence, likely be the fastest method
 available on supporting CPUs.
 
  
@@ -375,7 +475,10 @@ Differences include:
 Drawbacks
 =========
 
--   Processing block size is relatively large at 256 bytes. SPLIT\_TABLE(16,4),
+Compared to most other techniques, the XOR_DEPENDS algorithm has a number of
+drawbacks:
+
+-   Processing block size is relatively large at 256 bytes. SPLIT_TABLE(16,4),
     for example only needs to process using 32 byte blocks.
 
 -   If the source (multiplicand) and destination (products) is the same area,
@@ -387,16 +490,24 @@ Drawbacks
     best performance.
 
     -   A separate code branch is implemented to handle the case of src==dest,
-        as well as seperate branches for 32 bit and 64 bit in the JIT version
+        as well as seperate branches for 32 bit and 64 bit in the SSE2 JIT
+        version (AVX2 version avoids this complexity by just copying the source
+        to a temporary location)
 
     -   This separate branch does not implement the heuristic optimisation to
         remove some unnecessary XORs (complications with managing register usage
         and additional temporary variables), so expect a speed penalty from that
 
+    -   This isn’t an issue with the (64-bit) AVX512 implementation as there are
+        sufficient registers available to not require a temporary memory store
+
 -   JIT requires memory to be allocated with write and execute permissions
 
 -   Overhead of JIT is comparitively high; JIT works best when fed larger
     buffers
+
+-   Single use JIT can usually trigger self-modifying code behaviour on
+    processors, which increases the overhead of this technique
 
 -   As with other ALTMAP implementations, the data needs to be re-arranged
     before and after processing. Unfortunately, the process of converting
@@ -417,20 +528,20 @@ Drawbacks
 Usage in ParPar
 ===============
 
-GF-Complete uses SPLIT\_TABLE(16,4) method by default, if SSSE3 is available.
+GF-Complete uses SPLIT_TABLE(16,4) method by default, if SSSE3 is available.
 ParPar also enables the ALTMAP optimisation (rearrange input and output) for
 better performance, and extends the SSSE3 implementation to AVX2 and AVX512BW if
 available.
 
-If SSSE3 is unavailable, GF-Complete falls back to SPLIT\_TABLE(16,8), which is
+If SSSE3 is unavailable, GF-Complete falls back to SPLIT_TABLE(16,8), which is
 roughly 5 times slower than SPLIT(16,4) with ALTMAP. ParPar, instead, will fall
-back to XOR\_DEPENDS with alternative mapping, if SSE2 is available (or CPU is
+back to XOR_DEPENDS with alternative mapping, if SSE2 is available (or CPU is
 Intel Atom/Conroe). If a memory region with read, write and execute permissions
 can be mapped, the JIT version is used, otherwise the static code version is
-used, which is faster than or as fast as SPLIT\_TABLE(16,8).
+used, which is faster than or as fast as SPLIT_TABLE(16,8).
 
-As the current implementation of XOR\_DEPENDS seems to be faster than
-SPLIT\_TABLE(16,4) in a number of cases, I may decide to favour it in ParPar
+As the current implementation of XOR_DEPENDS seems to be faster than
+SPLIT_TABLE(16,4) in a number of cases, I may decide to favour it in ParPar
 more.
 
  
@@ -438,7 +549,7 @@ more.
 Benchmarks
 ==========
 
-Non-scientific benchmark using a modified version of the *time\_tool.sh* (to
+Non-scientific benchmark using a modified version of the *time_tool.sh* (to
 generate CSV output and try 4KB - 16MB blocks) provided with GF-Complete. Tests
 were ran with `sh time_tool.sh R 16 {method}` for "interesting" methods. This
 was repeated 3 times and the highest values (maximums) are shown here, for a few
@@ -446,30 +557,30 @@ different CPUs.
 
 All tests were ran on Linux amd64. Results from MSYS/Windows appear to be
 inaccurate (have not investigated why) and i386 builds are likely [unfairly
-penalised](<http://jerasure.org/jerasure/gf-complete/issues/7>) as GF-Complete
+penalised](http://jerasure.org/jerasure/gf-complete/issues/7) as GF-Complete
 appears to be designed for amd64 platforms (and it [doesn’t build without
-changes](<http://lab.jerasure.org/jerasure/gf-complete/issues/6>)).
+changes](http://lab.jerasure.org/jerasure/gf-complete/issues/6)).
 
 Notes:
 
--   ALTMAP is implied for XOR\_DEPENDS since the data is arranged differently.
+-   ALTMAP is implied for XOR_DEPENDS since the data is arranged differently.
     ALTMAP implementations require conversion to/from the normal layout, the
     overhead of which is not shown in these benchmarks (for PAR2 purposes, the
     overhead is likely negligible if large number of recovery slices are being
     generated).
 
 -   the benchmark uses different memory locations for source and destination,
-    and hence, does not incur the XOR\_DEPENDS speed penalty where source ==
+    and hence, does not incur the XOR_DEPENDS speed penalty where source ==
     destination.
 
--   XOR\_DEPENDS (JIT) does not perform as well on 32 bit builds as it does
-    here, due to fewer XMM registers being available for caching
+-   XOR_DEPENDS (JIT) does not perform as well on 32 bit builds as it does here,
+    due to fewer XMM registers being available for caching
 
--   some processor specific optimisations are used in XOR\_DEPENDS JIT code.
+-   some processor specific optimisations are used in XOR_DEPENDS JIT code.
     These optimisations predominantly affect smaller region sizes:
 
     -   on Intel Core 2 (as well as first gen Atom), 128-bit unaligned stores
-        are done via 64-bit instructions as they are faster than a MOVDQU
+        are done via 64-bit instructions as they are faster than a `MOVDQU`
         instruction
 
     -   on Intel Nehalem and newer (Core iX processors), JIT’d code is written
@@ -479,7 +590,7 @@ Notes:
 
 -   AVX is used if supported by the CPU (GF-Complete does this by default)
 
--   a few optimisations have been applied to the SPLIT\_TABLE(16,4)
+-   a few optimisations have been applied to the SPLIT_TABLE(16,4)
     implementation:
 
     -   LUT generation uses SSE and no longer requires log table lookups
@@ -501,11 +612,11 @@ Intel Core 2 (65nm)
 
 -   Compiler: GCC 4.8.4
 
-![](<CoreT2310.png>)
+![](CoreT2310.png)
 
 **Comment**: The Conroe CPU has a [relatively
-slow](<http://forum.doom9.org/showthread.php?p=1668136#post1668136>) `pshufb`
-instruction, hence XOR\_DEPENDS usually comes out on top  
+slow](http://forum.doom9.org/showthread.php?p=1668136#post1668136) `pshufb`
+instruction, hence XOR_DEPENDS usually comes out on top  
 
  
 
@@ -520,12 +631,12 @@ Intel Silvermont
 
 -   Compiler: GCC 4.9.2
 
-![](<AtomC2350.png>)
+![](AtomC2350.png)
 
-**Comment**: It seems like SPLIT\_TABLE(16,4) is *really* slow on the Atom, only
-slightly faster than SPLIT\_TABLE(16,8), probably due to the `pshufb`
-instruction taking [5 cycles to execute on
-Silvermont](<http://www.agner.org/optimize/instruction_tables.pdf>)
+**Comment**: It seems like SPLIT_TABLE(16,4) is *really* slow on the Atom, only
+slightly faster than SPLIT_TABLE(16,8), probably due to the `pshufb` instruction
+taking [5 cycles to execute on
+Silvermont](http://www.agner.org/optimize/instruction_tables.pdf)
 
  
 
@@ -540,10 +651,10 @@ AMD K10
 
 -   Compiler: GCC 4.4.3
 
-![](<Phenom9950.png>)
+![](Phenom9950.png)
 
-**Comment**: SPLIT\_TABLE(16,4) is not using SIMD here, as the CPU does not
-support SSSE3. As expected, XOR\_DEPENDS is faster than SPLIT\_TABLE(16,8)
+**Comment**: SPLIT_TABLE(16,4) is not using SIMD here, as the CPU does not
+support SSSE3. As expected, XOR_DEPENDS is faster than SPLIT_TABLE(16,8)
 although the non-JIT version is about the same.
 
  
@@ -560,24 +671,24 @@ Intel Sandy Bridge
 
 -   Compiler: GCC 5.2.1
 
-![](<CoreI2400.png>)
+![](CoreI2400.png)
 
-**Comment**: XOR\_DEPENDS can actually beat SPLIT\_TABLE(16,4) here, despite
-Sandy Bridge having a fast shuffle unit, and the SPLIT method taking advantage
-of AVX. At smaller buffer sizes, the high overhead of JIT rears its head though.
+**Comment**: XOR_DEPENDS can actually beat SPLIT_TABLE(16,4) here, despite Sandy
+Bridge having a fast shuffle unit, and the SPLIT method taking advantage of AVX.
+At smaller buffer sizes, the high overhead of JIT rears its head though.
 
  
 
 Multi-Threaded Benchmarks
 -------------------------
 
-A small, rough alteration to the *gf\_time* tool to run tests in 4 threads.
+A small, rough alteration to the *gf_time* tool to run tests in 4 threads.
 Region data is no longer randomised to try to keep cores maximally loaded with
 calculations we wish to benchmark.
 
-![](<Phenom9950mt.png>)
+![](Phenom9950mt.png)
 
-![](<CoreI2400mt.png>)
+![](CoreI2400mt.png)
 
  
 
@@ -589,26 +700,26 @@ latest implementation can be found in ParPar. If anyone is interested in such a
 patch, raise a Github issue.**
 
 A rather hacky patch for GF-Complete, which should apply cleanly to the v2 tag,
-can be [found here](<gfc.patch>).
+can be [found here](gfc.patch).
 
-The patch only implements XOR\_DEPENDS for w=16. Since ALTMAP is implied and
+The patch only implements XOR_DEPENDS for w=16. Since ALTMAP is implied and
 always used, I abuse the `-r ALTMAP` flag to turn on JIT (i.e. use `-m
 XOR_DEPENDS -r ALTMAP -` to use the JIT version, and just `-m XOR_DEPENDS -` for
 non-JIT version).
 
 The patch does also include an implementation for `extract_word` so that it's
-compatible with *gf\_unit*.
+compatible with *gf_unit*.
 
 Other things I included because I found useful, but you mightn’t:
 
--   gf\_unit failures also dump a 256 source/target memory region; fairly
-    crudely implemented but may assist debugging
+-   gf_unit failures also dump a 256 source/target memory region; fairly crudely
+    implemented but may assist debugging
 
--   crude *time\_tool.sh* modifications for CSV output used in benchmarks above
+-   crude *time_tool.sh* modifications for CSV output used in benchmarks above
 
 -   intentionally breaking code for w=32,64,128 to enable compilation on i386
     platforms (basically instances of `_mm_insert_epi64` and `_mm_extract_epi64`
     have been deleted with no appropriate replacement)
 
--   slightly improved speed of LUT generation for SPLIT\_TABLE(16,4) SSSE3
+-   slightly improved speed of LUT generation for SPLIT_TABLE(16,4) SSSE3
     versions by removing duplicate log table lookups
