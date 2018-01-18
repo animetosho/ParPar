@@ -32,17 +32,15 @@
   #include <immintrin.h>
 #endif
 
-#ifdef INTEL_AVX512BW
-  /* #include <zmmintrin.h> */
-  /* immintrin seems to include this fine */
-#endif
-
 #ifdef INTEL_GFNI
   #include <immintrin.h>
 #endif
 
 #ifdef ARM_NEON
   #include <arm_neon.h>
+#endif
+#ifdef _M_ARM64 /* MSVC header */
+  #include <arm64_neon.h>
 #endif
 
 

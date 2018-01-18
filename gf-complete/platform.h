@@ -24,8 +24,11 @@
 #if defined(__AVX2__) || (_MSC_VER >= 1800 && defined(INTEL_SSE2))
 	#define INTEL_AVX2 1
 #endif
-#if defined(__AVX512BW__) || (_MSC_VER >= 1911 && defined(INTEL_AVX2))
+#if _MSC_VER >= 1911 && defined(INTEL_AVX2)
 	#define INTEL_AVX512BW 1
+#endif
+#if _MSC_VER >= 1912 && defined(INTEL_AVX512BW)
+	#define INTEL_AVX512VL 1
 #endif
 
 #ifdef _WIN64
@@ -90,11 +93,16 @@ typedef uint_fast32_t FAST_U32;
 	#define INTEL_GFNI
 #endif
 
-#ifdef __ARM_NEON__
+#ifdef _M_ARM64
 	#define ARM_NEON 1
-#endif
-#if defined(__ARM_ARCH) && __ARM_ARCH >= 8
 	#define ARCH_AARCH64 1
+#else
+# ifdef __ARM_NEON
+	#define ARM_NEON 1
+# endif
+# if defined(__ARM_ARCH) && __ARM_ARCH >= 8
+	#define ARCH_AARCH64 1
+# endif
 #endif
 
 #endif /* GF_COMPLETE_PLATFORM_H */

@@ -168,8 +168,8 @@ void _FN(gf_w16_xor_final)(void* src, int bytes, void* dest) {
 		for(j=0; j<8; j++) {
 			/* load in pattern: [0011223344556677] [8899AABBCCDDEEFF] */
 #if MWORD_SIZE == 64
-			tl = _MM(i32gather_epi64)(_mm256_set_epi32(64, 72, 80, 88, 96, 104, 112, 120), s16, 8);
-			th = _MM(i32gather_epi64)(_mm256_set_epi32(0, 8, 16, 24, 32, 40, 48, 56), s16, 8);
+			tl = _MM(i32gather_epi64)(_mm256_set_epi32(64, 72, 80, 88, 96, 104, 112, 120), (const void*)s16, 8);
+			th = _MM(i32gather_epi64)(_mm256_set_epi32(0, 8, 16, 24, 32, 40, 48, 56), (const void*)s16, 8);
 			
 # define _P(a,b) (((a)<<16)|(b))
 # define _Q(n) _P(28+n,24+n), _P(20+n,16+n), _P(12+n,8+n), _P(4+n,0+n)
