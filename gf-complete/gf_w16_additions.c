@@ -7,8 +7,6 @@ int has_avx2 = 0;
 int has_avx512bw = 0;
 int has_htt = 0;
 
-#include <assert.h>
-
 #if !defined(_MSC_VER) && defined(INTEL_SSE2)
 #include <cpuid.h>
 #endif
