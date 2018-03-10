@@ -400,6 +400,29 @@ int gf_w16_split_init(gf_t *gf)
     tmp2 = _mm_load_si128((__m128i*)_poly + 1);
     ltd->poly->p16[0] = _mm_packus_epi16(_mm_and_si128(tmp1, _mm_set1_epi16(0xff)), _mm_and_si128(tmp2, _mm_set1_epi16(0xff)));
     ltd->poly->p16[1] = _mm_packus_epi16(_mm_srli_epi16(tmp1, 8), _mm_srli_epi16(tmp2, 8));
+    
+    /* factor tables - currently not used
+    __m128i* multbl = (__m128i*)(ltd->poly + 1);
+    for(int shift=0; shift<16; shift+=4) {
+		for(int i=0; i<16; i++) {
+			int val = i << shift;
+			int val2 = GF_MULTBY_TWO(val);
+			int val4 = GF_MULTBY_TWO(val2);
+			__m128i tmp = _mm_cvtsi32_si128(val << 16);
+			tmp = _mm_insert_epi16(tmp, val2, 2);
+			tmp = _mm_insert_epi16(tmp, val2 ^ val, 3);
+			tmp = _mm_shuffle_epi32(tmp, 0x44);
+			tmp = _mm_xor_si128(tmp, _mm_shufflehi_epi16(
+				_mm_insert_epi16(_mm_setzero_si128(), val4, 4), 0
+			));
+			
+			// put in *8 factor so we don't have to calculate it later
+			tmp = _mm_insert_epi16(tmp, GF_MULTBY_TWO(val4), 0);
+			
+			_mm_store_si128(multbl + shift*4 + i, _mm_shuffle_epi8(tmp, _mm_set_epi8(15, 13, 11, 9, 7, 5, 3, 1, 14, 12, 10, 8, 6, 4, 2, 0)));
+		}
+    }
+    */
 #endif
 
 #ifdef FUNC_ASSIGN

@@ -163,19 +163,6 @@ void _FN(gf_w16_split_4_16_lazy_altmap_multiply_region)(gf_t *gf, void *src, voi
   
   mask = _MM(set1_epi8) (0x0f);
   {
-    _mword ta, tb;
-    _mword polyl, polyh;
-    _mword lmask = _MM(set1_epi16) (0xff);
-    
-    gf_val_32_t val2 = GF_MULTBY_TWO(val);
-    gf_val_32_t val4 = GF_MULTBY_TWO(val2);
-    __m128i tmp = _mm_insert_epi16(_mm_setzero_si128(), val, 1);
-    tmp = _mm_insert_epi16(tmp, val2, 2);
-    tmp = _mm_insert_epi16(tmp, val2 ^ val, 3);
-    tmp = _mm_shuffle_epi32(tmp, 0x44);
-    tmp = _mm_xor_si128(tmp, _mm_shufflehi_epi16(
-      _mm_insert_epi16(_mm_setzero_si128(), val4, 4), 0
-    ));
 #if MWORD_SIZE == 16
     #define BCAST
 #endif
@@ -185,14 +172,40 @@ void _FN(gf_w16_split_4_16_lazy_altmap_multiply_region)(gf_t *gf, void *src, voi
 #if MWORD_SIZE == 64
     #define BCAST _mm512_broadcast_i32x4
 #endif
-    ta = BCAST(tmp);
+    _mword polyl, polyh;
+    
+    gf_val_32_t val2 = GF_MULTBY_TWO(val);
+    gf_val_32_t val4 = GF_MULTBY_TWO(val2);
+    __m128i tmp = _mm_cvtsi32_si128(val << 16);
+    tmp = _mm_insert_epi16(tmp, val2, 2);
+    tmp = _mm_insert_epi16(tmp, val2 ^ val, 3);
+    tmp = _mm_shuffle_epi32(tmp, 0x44);
+    tmp = _mm_xor_si128(tmp, _mm_shufflehi_epi16(
+      _mm_insert_epi16(_mm_setzero_si128(), val4, 4), 0
+    ));
+    
+    __m128i tmp8 = _mm_xor_si128(tmp, _mm_set1_epi16(GF_MULTBY_TWO(val4)));
+    low0 = BCAST(_mm_packus_epi16(_mm_and_si128(tmp, _mm_set1_epi16(0xff)), _mm_and_si128(tmp8, _mm_set1_epi16(0xff))));
+    high0 = BCAST(_mm_packus_epi16(_mm_srli_epi16(tmp, 8), _mm_srli_epi16(tmp8, 8)));
+    
+/* // although the following seems simpler, it doesn't actually seem to be faster, although I don't know why
+    __m128i* multbl = (__m128i*)(ltd->poly + 1);
+    
+    __m128i factor0 = _mm_load_si128(multbl + (val & 0xf));
+    factor0 = _mm_xor_si128(factor0, _mm_load_si128(multbl + 16 + ((val & 0xf0) >> 4)));
+    factor0 = _mm_xor_si128(factor0, _mm_load_si128(multbl + 32 + ((val & 0xf00) >> 8)));
+    factor0 = _mm_xor_si128(factor0, _mm_load_si128(multbl + 48 + ((val & 0xf000) >> 12)));
+    
+    __m128i factor8 = _mm_shuffle_epi8(factor0, _mm_set_epi32(0x08080808, 0x08080808, 0, 0));
+    factor0 = _mm_and_si128(factor0, _mm_set_epi32(-1, 0xffffff00, -1, 0xffffff00));
+    factor8 = _mm_xor_si128(factor0, factor8);
+    
+    low0 = BCAST(_mm_unpacklo_epi64(factor0, factor8));
+    high0 = BCAST(_mm_unpackhi_epi64(factor0, factor8));
+*/
+    
     polyl = BCAST(ltd->poly->p16[0]);
     polyh = BCAST(ltd->poly->p16[1]);
-    
-    tb = _MMI(xor)(ta, _MM(set1_epi16)( GF_MULTBY_TWO(val4) ));
-    
-    low0 = _MM(packus_epi16)(_MMI(and)(ta, lmask), _MMI(and)(tb, lmask));
-    high0 = _MM(packus_epi16)(_MM(srli_epi16)(ta, 8), _MM(srli_epi16)(tb, 8));
     
 #if MWORD_SIZE == 64
     #define MUL16(p, c) \
