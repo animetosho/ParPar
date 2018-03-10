@@ -129,6 +129,6 @@ static inline void gf_w16_log_region_alignment(gf_region_data *rd,
 		if(val) gf_multby_one(src, dest, bytes, xor); \
 		else    gf_multby_zero(dest, bytes, xor); \
 		return; \
-	} (val)
+	}
 
 #endif /* GF_COMPLETE_GF_W16_H */
