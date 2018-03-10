@@ -43,6 +43,7 @@
     {
       "target_name": "gf-complete",
       "type": "static_library",
+      "defines": ["NDEBUG"],
       "sources": [
         "gf-complete/gf.c",
         "gf-complete/gf_w16.c",
