@@ -71,7 +71,7 @@
           }
         }],
         ['OS=="win" and target_arch=="x64"', {
-          "sources": ["gf-complete/gf_w16_xor_jit_stub_masm64.asm"]
+          "sources": ["gf-complete/gf_w16/xor_jit_stub_masm64.asm"]
         }]
       ]
     }
