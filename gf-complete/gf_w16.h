@@ -38,6 +38,9 @@ struct gf_w16_logtable_data {
     /* hijack struct for our polynomial stuff */
 #ifdef INTEL_SSE2
     uint8_t _poly[sizeof(gf_w16_poly_struct)*2]; /* storage for *poly; padding allows alignment */
+/*#ifdef INTEL_SSSE3
+    uint8_t _multbl[1024]; // this variable isn't actually used; table is 1024 bytes long, and we rely on overflowing the above (urgh) and space provided by this to enable aligned access
+#endif*/
     gf_w16_poly_struct *poly;
 #endif
 };
