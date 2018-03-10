@@ -347,9 +347,7 @@ void gf_w16_xor_lazy_jit_altmap_multiply_region_avx512(gf_t *gf, void *src, void
   gf_internal_t *h = (gf_internal_t *) gf->scratch;
   struct gf_w16_logtable_data* ltd = (struct gf_w16_logtable_data*)(h->private);
   
-  if (val == 0) { gf_multby_zero(dest, bytes, xor); return; }
-  if (val == 1) { gf_multby_one(src, dest, bytes, xor); return; }
-
+  GF_W16_SKIP_SIMPLE;
   gf_w16_log_region_alignment(&rd, gf, src, dest, bytes, val, xor, 64, 1024);
   
   if(rd.d_start != rd.d_top) {

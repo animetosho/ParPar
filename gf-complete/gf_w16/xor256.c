@@ -427,8 +427,7 @@ void gf_w16_xor_lazy_jit_altmap_multiply_region_avx2(gf_t *gf, void *src, void *
   int use_temp = ((uintptr_t)src - (uintptr_t)dest + 512) < 1024;
   void* tmp;
   
-  if (val == 0) { gf_multby_zero(dest, bytes, xor); return; }
-  if (val == 1) { gf_multby_one(src, dest, bytes, xor); return; }
+  GF_W16_SKIP_SIMPLE;
 
   /* if src/dest overlap, resolve by copying */
   if(use_temp) {

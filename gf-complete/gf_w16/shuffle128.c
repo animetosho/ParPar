@@ -31,8 +31,7 @@ void gf_w16_split_4_16_lazy_sse_multiply_region(gf_t *gf, void *src, void *dest,
 
   __m128i  mask, ta, tb, ti, tpl, tph, tlow[4], thigh[4], tta, ttb, lmask;
 
-  if (val == 0) { gf_multby_zero(dest, bytes, xor); return; }
-  if (val == 1) { gf_multby_one(src, dest, bytes, xor); return; }
+  GF_W16_SKIP_SIMPLE;
 
   gf_set_region_data(&rd, gf, src, dest, bytes, val, xor, 16, 32);
   gf_do_initial_region_alignment(&rd);

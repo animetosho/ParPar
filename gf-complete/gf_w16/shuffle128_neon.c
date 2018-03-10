@@ -64,8 +64,8 @@ gf_w16_split_4_16_lazy_multiply_region_neon(gf_t *gf, void *src, void *dest,
   uint8_t tbl[2 * 4 * 16];
   uint8_t *high = tbl + 4 * 16;
 
-  if (val == 0) { gf_multby_zero(dest, bytes, xor); return; }
-  if (val == 1) { gf_multby_one(src, dest, bytes, xor); return; }
+  GF_W16_SKIP_SIMPLE;
+  gf_w16_log_region_alignment(&rd, gf, src, dest, bytes, val, xor, 16, 32);
 
   for (i = 0; i < 4; i++) {
     for (j = 0; j < 16; j++) {
@@ -92,7 +92,6 @@ gf_w16_split_4_16_lazy_multiply_region_neon(gf_t *gf, void *src, void *dest,
   }
 #endif
 
-  gf_w16_log_region_alignment(&rd, gf, src, dest, bytes, val, xor, 16, 32);
 
   uint16_t *s16   = rd.s_start;
   uint16_t *d16   = rd.d_start;

@@ -155,9 +155,7 @@ void _FN(gf_w16_split_4_16_lazy_altmap_multiply_region)(gf_t *gf, void *src, voi
   gf_internal_t *h = (gf_internal_t *) gf->scratch;
   struct gf_w16_logtable_data* ltd = (struct gf_w16_logtable_data*)(h->private);
 
-  if (val == 0) { gf_multby_zero(dest, bytes, xor); return; }
-  if (val == 1) { gf_multby_one(src, dest, bytes, xor); return; }
-
+  GF_W16_SKIP_SIMPLE;
   gf_w16_log_region_alignment(&rd, gf, src, dest, bytes, val, xor, sizeof(_mword), sizeof(_mword)*2);
 
   
