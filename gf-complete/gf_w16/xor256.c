@@ -425,7 +425,7 @@ void gf_w16_xor_lazy_jit_altmap_multiply_region_avx2(gf_t *gf, void *src, void *
   gf_internal_t *h = (gf_internal_t *) gf->scratch;
   struct gf_w16_logtable_data* ltd = (struct gf_w16_logtable_data*)(h->private);
   int use_temp = ((uintptr_t)src - (uintptr_t)dest + 512) < 1024;
-  void* tmp;
+  void* tmp = NULL;
   
   GF_W16_SKIP_SIMPLE;
 
