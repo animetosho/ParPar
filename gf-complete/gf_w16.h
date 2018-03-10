@@ -19,8 +19,6 @@
 
 #define GF_ANTILOG(x) ltd->antilog_tbl[((x) >> (GF_FIELD_WIDTH)) + ((x) & (GF_MULT_GROUP_SIZE))]
 
-void gf_w16_log_region_alignment(gf_region_data *rd, gf_t *gf, void *src, void *dest, int bytes, uint64_t val, int xor, int align, int walign);
-
 #ifdef INTEL_SSE2
 typedef union {
     __m128i p16[2];
@@ -44,5 +42,65 @@ struct gf_w16_logtable_data {
     gf_w16_poly_struct *poly;
 #endif
 };
+
+#include <assert.h>
+static inline void gf_w16_log_region_alignment(gf_region_data *rd,
+  gf_t *gf,
+  void *src,
+  void *dest,
+  int bytes,
+  uint64_t val,
+  int xor,
+  int align,
+  int walign)
+{
+  uintptr_t uls;
+  struct gf_w16_logtable_data *ltd = (struct gf_w16_logtable_data *) ((gf_internal_t *) gf->scratch)->private;
+  int log_val = ltd->log_tbl[val];
+  uint16_t *sEnd = ((uint16_t*)src) + (bytes>>1);
+  
+/* never used, so don't bother setting them
+  rd->gf = gf;
+  rd->src = src;
+  rd->dest = dest;
+  rd->bytes = bytes;
+  rd->val = val;
+  rd->xor = xor;
+*/
+
+  uls = ((uintptr_t) src) & (align-1);
+
+  if (uls != (((uintptr_t) dest) & (align-1)))
+    assert(0);
+  if ((bytes & 1) != 0)
+    assert(0);
+
+  if (uls != 0) uls = (align-uls);
+  rd->s_start = (uint8_t *)src + uls;
+  rd->d_start = (uint8_t *)dest + uls;
+  bytes -= uls;
+  bytes -= (bytes & (walign-1));
+  rd->s_top = (uint8_t *)rd->s_start + bytes;
+  rd->d_top = (uint8_t *)rd->d_start + bytes;
+
+  /* slow multiply for init/end area */
+  #define MUL_LOOP(op, src, dest, srcto) { \
+    uint16_t *s16 = (uint16_t *)src, *d16 = (uint16_t *)dest; \
+    while (s16 < (uint16_t *)(srcto)) { \
+      *d16 op (*s16 == 0) ? 0 : GF_ANTILOG((int) ltd->log_tbl[*s16] + log_val); \
+      s16++; \
+      d16++; \
+    } \
+  }
+  if (xor) {
+    MUL_LOOP(^=, src, dest, rd->s_start)
+    MUL_LOOP(^=, rd->s_top, rd->d_top, sEnd)
+  } else {
+    MUL_LOOP(=, src, dest, rd->s_start)
+    MUL_LOOP(=, rd->s_top, rd->d_top, sEnd)
+  }
+  #undef MUL_LOOP
+}
+
 
 #endif /* GF_COMPLETE_GF_W16_H */
