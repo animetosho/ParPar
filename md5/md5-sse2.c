@@ -26,9 +26,13 @@
         a=_mm(add_epi32)(a, b); };
 #else
 # define F(b,c,d)        _mmi(xor)(_mmi(and)(_mmi(xor)((c), (d)), (b)), (d))
+# ifdef __XOP__
+#  define G(b,c,d)        _mmi(cmov)((b), (c), (d))
+# else
 /* using ANDNOT is likely faster: http://www.zorinaq.com/papers/md5-amd64.html */
-# define G(b,c,d)        _mmi(or)(_mmi(and)((b), (d)), _mmi(andnot)((d), (c)))
+#  define G(b,c,d)        _mmi(or)(_mmi(and)((d), (b)), _mmi(andnot)((d), (c)))
 /*#define G(b,c,d)        F(d, b, c)*/
+# endif
 # define H(b,c,d)        _mmi(xor)(_mmi(xor)((d), (c)), (b))
 # define I(b,c,d)        _mmi(xor)(_mmi(or)(_mmi(xor)((d), _mm(set1_epi8(0xFF))), (b)), (c))
 
