@@ -5,6 +5,7 @@ size_t has_slow_shuffle = 0;
 int has_pclmul = 0;
 int has_avx2 = 0;
 int has_avx512bw = 0;
+int has_gfni = 0;
 int has_htt = 0;
 
 #if !defined(_MSC_VER) && defined(INTEL_SSE2)
@@ -59,6 +60,9 @@ void detect_cpu(void) {
 	#endif
 	#ifdef INTEL_AVX512BW
 	has_avx512bw = (cpuInfo[1] & 0x40010000) == 0x40010000;
+	#endif
+	#ifdef INTEL_GFNI
+	has_gfni = (cpuInfo[2] & 0x100) == 0x100;
 	#endif
 #endif
 
