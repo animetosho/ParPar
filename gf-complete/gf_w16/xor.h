@@ -5,8 +5,8 @@
   /* Nehalem and later Intel CPUs have a weird Self-Modifying Code slowdown when writing executable code, observed in Nehalem-Haswell, but not on Core2 and Silvermont or AMD K10 */
   #define CPU_SLOW_SMC 1
 #endif
-#if defined(__tune_core_avx2__)
-  /* For some reason, on Haswell and Skylake, clearing memory with memset is faster than the memcpy hack above; not observed on IvyBridge (despite ERMS support) */
+#if defined(__tune_core_avx2__) || defined(__tune_znver1__)
+  /* For some reason, on Haswell/Skylake and Zen, clearing memory with memset is faster than the memcpy hack above; not observed on IvyBridge (despite ERMS support), unknown what Bulldozer family prefers */
   #define CPU_SLOW_SMC_CLR 1
 #endif
 
