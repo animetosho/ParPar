@@ -108,19 +108,6 @@ int gf_w16_log_init(gf_t *gf)
 */
 
 
-#ifdef ARM_NEON
-
-static 
-int gf_w16_split_init(gf_t *gf)
-{
-  gf_w16_log_init(gf);
-  gf_w16_neon_split_init(gf);
-  gf->mult_method = GF_SPLIT4_NEON;
-  return 1;
-}
-
-#else
-
 /* Ben: Does alternate mapping multiplication using a split table in the
  lazy method without sse instructions*/
 
@@ -330,8 +317,13 @@ int gf_w16_split_init(gf_t *gf)
     gf->alignment = sizeof(FAST_U32);
     gf->walignment = sizeof(FAST_U32);
   } else if ((h->arg1 == 4 && h->arg2 == 16) || (h->arg2 == 4 && h->arg1 == 16)) {
+#ifdef ARM_NEON
+    gf_w16_neon_split_init(gf);
+    gf->mult_method = GF_SPLIT4_NEON;
+#else
     gf->mult_method = GF_SPLIT4;
     gf->alignment = 16;
+
     if (wordsize >= 128) {
       if(h->region_type & GF_REGION_ALTMAP && h->region_type & GF_REGION_NOSIMD)
         gf->multiply_region.w32 = gf_w16_split_4_16_lazy_nosse_altmap_multiply_region;
@@ -366,9 +358,11 @@ int gf_w16_split_init(gf_t *gf)
         gf->multiply_region.w32 = gf_w16_split_4_16_lazy_multiply_region;
     }
     gf->walignment = gf->alignment << 1;
+#endif
   }
 
-  if ((h->region_type & GF_REGION_ALTMAP) && gf->multiply_region.w32 != gf_w16_split_8_16_lazy_multiply_region) {
+#ifndef ARM_NEON
+  if ((h->region_type & GF_REGION_ALTMAP) && h->arg1 == 4) {
     /* !! There's no fallback if SSE not supported !!
      * ParPar never uses ALTMAP if SSSE3 isn't available, but this isn't ideal in gf-complete
      * Also: ALTMAP implementations differ on SSE/AVX support, so it doesn't make too much sense for a fallback */
@@ -433,11 +427,10 @@ int gf_w16_split_init(gf_t *gf)
     gf->unaltmap_region = gf_w16_split_null;
     gf->using_altmap = 0;
   }
+#endif
   
   return 1;
 }
-
-#endif /*ARM_NEON*/
 
 
 #ifdef INTEL_SSE2
