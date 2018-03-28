@@ -378,9 +378,10 @@ int gf_w16_split_init(gf_t *gf)
     struct gf_w16_logtable_data* ltd = (struct gf_w16_logtable_data*)(h->private);
     ALIGN(16, uint16_t _poly[16]);
     __m128i tmp1, tmp2;
+    int i;
     ltd->poly = (gf_w16_poly_struct*)(((uintptr_t)&ltd->_poly + sizeof(gf_w16_poly_struct)-1) & ~(sizeof(gf_w16_poly_struct)-1));
     
-    for(int i=0; i<16; i++) {
+    for(i=0; i<16; i++) {
       int p = 0;
       if(i & 8) p ^= h->prim_poly << 3;
       if(i & 4) p ^= h->prim_poly << 2;
@@ -396,8 +397,9 @@ int gf_w16_split_init(gf_t *gf)
     
     /* factor tables - currently not used
     __m128i* multbl = (__m128i*)(ltd->poly + 1);
-    for(int shift=0; shift<16; shift+=4) {
-		for(int i=0; i<16; i++) {
+    int shift, i;
+    for(shift=0; shift<16; shift+=4) {
+		for(i=0; i<16; i++) {
 			int val = i << shift;
 			int val2 = GF_MULTBY_TWO(val);
 			int val4 = GF_MULTBY_TWO(val2);
