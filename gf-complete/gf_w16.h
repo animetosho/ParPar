@@ -27,6 +27,9 @@ typedef union {
 #endif
 } gf_w16_poly_struct;
 #endif
+#ifdef ARM_NEON
+typedef uint8x16x2_t gf_w16_poly_struct;
+#endif
 
 struct gf_w16_logtable_data {
     uint16_t      log_tbl[GF_FIELD_SIZE];
@@ -34,14 +37,20 @@ struct gf_w16_logtable_data {
     uint8_t  random_padding[64]; /* GF-Complete allocates an additional 64 bytes, but I don't know what it's for... */
     
     /* hijack struct for our polynomial stuff */
-#ifdef INTEL_SSE2
+#if defined(INTEL_SSE2) || defined(ARM_NEON)
     uint8_t _poly[sizeof(gf_w16_poly_struct)*2]; /* storage for *poly; padding allows alignment */
 /*#ifdef INTEL_SSSE3
     uint8_t _multbl[1024]; // this variable isn't actually used; table is 1024 bytes long, and we rely on overflowing the above (urgh) and space provided by this to enable aligned access
+#endif
+#ifdef ARM_NEON
+    uint16_t _multbl[512]; // this variable isn't actually used; table is 1024 bytes long, and we rely on overflowing the above (urgh) and space provided by this to enable aligned access
 #endif*/
     gf_w16_poly_struct *poly;
 #endif
 };
+
+
+
 
 #include <assert.h>
 static inline void gf_w16_log_region_alignment(gf_region_data *rd,
