@@ -247,9 +247,9 @@ static inline void multiply_mat(uint16_t** inputs, uint_fast16_t* iNums, unsigne
 	Isolate* isolate = args.GetIsolate(); \
 	HandleScope scope(isolate)
 
-#define NEW_STRING(s) String::NewFromOneByte(isolate, (const uint8_t*)s)
+#define NEW_STRING(s) String::NewFromUtf8(isolate, s)
 
-#define RETURN_ERROR(e) { isolate->ThrowException(Exception::Error(String::NewFromOneByte(isolate, (const uint8_t*)e))); return; }
+#define RETURN_ERROR(e) { isolate->ThrowException(Exception::Error(String::NewFromUtf8(isolate, e))); return; }
 #define RETURN_VAL(v) args.GetReturnValue().Set(v)
 #define RETURN_UNDEF return;
 #define ISOLATE isolate,
