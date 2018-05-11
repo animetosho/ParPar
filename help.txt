@@ -34,7 +34,10 @@ PAR2 Options:
                              generated. If set, unicode packets will always be
                              generated. If explicitly unset (`--no-unicode`),
                              will force unicode packets to never by generated.
-                             Default is to auto detect.
+                             Default is to auto detect (use if non 7-bit ASCII
+                             characters present).
+       --ascii-charset       Character set to use for "ASCII" packets. Default
+                             is `utf-8`.
 
 Output Options:
 

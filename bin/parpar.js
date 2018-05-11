@@ -49,6 +49,18 @@ var opts = {
 		default: null,
 		map: 'unicode'
 	},
+	'ascii-charset': {
+		type: 'string',
+		default: 'utf-8',
+		fn: function(v) {
+			try {
+				Buffer.alloc ? Buffer.from('', v) : new Buffer('', v);
+			} catch(x) {
+				error('Unknown encoding for `ascii-charset`');
+			}
+			return v;
+		}
+	},
 	'out': {
 		alias: 'o',
 		type: 'string'
@@ -203,6 +215,10 @@ if(argv.threads) {
 	ParPar.setMaxThreads(argv.threads);
 }
 //if(argv.method == 'auto') argv.method = '';
+
+if(argv['ascii-charset']) {
+	ParPar.setAsciiCharset(argv['ascii-charset']);
+}
 
 // TODO: sigint not respected?
 
