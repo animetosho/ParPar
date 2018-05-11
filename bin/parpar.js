@@ -237,7 +237,7 @@ ParPar.fileInfo(argv._, argv.recurse, function(err, info) {
 		var method_used = ParPar.getMethod();
 		var num_threads = ParPar.getNumThreads();
 		var thread_str = num_threads + ' thread' + (num_threads==1 ? '':'s');
-		process.stderr.write('Method used: ' + method_used.description + ' (' + method_used.wordBits + ' bit), ' + thread_str + '\n');
+		process.stderr.write('Multiply method used: ' + method_used.description + ' (' + method_used.wordBits + ' bit), ' + thread_str + '\n');
 		
 		var totalSlices = g.chunks * g.passes * g.inputSlices;
 		if(argv['seq-first-pass']) {
