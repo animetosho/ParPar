@@ -11,13 +11,9 @@ var error = function(msg) {
 };
 
 var opts = {
-	'slice-size': {
+	'input-slices': {
 		alias: 's',
-		type: 'size'
-	},
-	'slice-count': {
-		alias: 'b',
-		type: 'int'
+		type: 'string'
 	},
 	'recovery-slices': {
 		alias: 'r',
@@ -159,11 +155,9 @@ if(argv.version) {
 	process.exit(0);
 }
 
-if(!argv.out || (!argv['slice-size'] && !argv['slice-count'])) {
-	error('Values for `out` and `slice-size`/`slice-count` are required');
+if(!argv.out || !argv['input-slices']) {
+	error('Values for `out` and `input-slices` are required');
 }
-if(('slice-size' in argv) && ('slice-count' in argv))
-	error('Cannot specify both `slice-size` and `slice-count`');
 
 if(!argv._.length) error('At least one input file must be supplied');
 
@@ -180,16 +174,17 @@ for(var k in opts) {
 		ppo[opts[k].map] = argv[k];
 }
 
-if(argv['recovery-slices']) {
+var parseSizeOrNum = function(arg) {
 	var m;
-	if(typeof argv['recovery-slices'] == 'number' || /^\d+$/.test(argv['recovery-slices']))
-		ppo.recoverySlices = argv['recovery-slices']|0;
-	else if(m = argv['recovery-slices'].match(/^([0-9.]+)([%kKmMgGtTpPeE])$/)) {
+	if(typeof argv[arg] == 'number' || /^\d+$/.test(argv[arg]))
+		return ['count', argv[arg]|0];
+	else if(m = argv[arg].match(/^([0-9.]+)([%bBkKmMgGtTpPeE])$/)) {
 		var n = +(m[1]);
-		if(isNaN(n)) error('Invalid value specified for `recovery-slices`');
+		if(isNaN(n)) error('Invalid value specified for `'+arg+'`');
 		if(m[2] == '%') {
-			ppo.recoverySlices = n/100;
-			ppo.recoverySlicesUnit = 'ratio';
+			if(arg != 'recovery-slices')
+				error('Invalid value specified for `'+arg+'`');
+			return ['ratio', n/100];
 		} else {
 			switch(m[2].toUpperCase()) {
 				case 'E': n *= 1024;
@@ -198,13 +193,21 @@ if(argv['recovery-slices']) {
 				case 'G': n *= 1024;
 				case 'M': n *= 1024;
 				case 'K': n *= 1024;
+				case 'B': n *= 1;
 			}
-			ppo.recoverySlices = Math.floor(n);
-			ppo.recoverySlicesUnit = 'bytes';
+			return ['bytes', Math.floor(n)];
 		}
 	} else
-		error('Invalid value specified for `recovery-slices`');
+		error('Invalid value specified for `'+arg+'`');
+};
+
+if(argv['recovery-slices']) {
+	var v = parseSizeOrNum('recovery-slices');
+	ppo.recoverySlices = v[1];
+	ppo.recoverySlicesUnit = v[0];
 }
+
+var inputSliceDef = parseSizeOrNum('input-slices');
 
 var startTime = Date.now();
 var decimalPoint = (1.1).toLocaleString().substr(1, 1);
@@ -229,8 +232,8 @@ ParPar.fileInfo(argv._, argv.recurse, function(err, info) {
 	}
 	
 	var meth = (argv.method || '').match(/^(.*?)(\d*)$/i);
-	ParPar.setMethod(meth[1], meth[2] | 0, argv['slice-size']); // TODO: allow size hint to work if slice-count is specified
-	var g = new ParPar.PAR2Gen(info, argv['slice-size'] || -argv['slice-count'], ppo);
+	ParPar.setMethod(meth[1], meth[2] | 0, inputSliceDef[0] == 'count' ? 0 : inputSliceDef[1]); // TODO: allow size hint to work if slice-count is specified
+	var g = new ParPar.PAR2Gen(info, inputSliceDef[0] == 'count' ? -inputSliceDef[1] : inputSliceDef[1], ppo);
 	
 	var currentSlice = 0;
 	if(!argv.quiet) {

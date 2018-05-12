@@ -2,15 +2,23 @@ ParPar
 High performance PAR2 creation tool
 -----------------------------------
 
-Usage: parpar {-s <blocksize> | -b <count>} -o <output> [options] [--] <input1> [<input2>...]
+Usage: parpar -s <slice_size/count> -o <output> [options] [--] <input1> [<input2>...]
 
 Unless otherwise specified, all options take one parameter.
 
 PAR2 Options:
 
-  -s,  --slice-size          Slice/block size to use.
-  -b,  --slice-count         Number of input slices/blocks. Cannot be used with
-                             `--slice-size`.
+  -s,  --input-slices        Slice/block size or number of input slices/blocks.
+                             To specify exact slice size, append a size suffix
+                             to the number. Examples:
+                                 `-s1000`: selects a slice size so that there
+                                           are 1000 input slices. Note that
+                                           ParPar will error if it cannot
+                                           select a slice size which satisfies
+                                           this condition exactly
+                                 `-s1M`: sets the slice size to 1 megabyte
+                                 `-s1024B`: set the slice size to 1 kilobyte
+                             This option must be specified.
   -r,  --recovery-slices     Number of recovery slices to generate. You can
                              append a suffix to auto-calculate this, as in the
                              following examples:
