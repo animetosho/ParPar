@@ -82,10 +82,14 @@ var opts = {
 		type: 'bool',
 		map: 'outputOverwrite'
 	},
-	'alt-naming-scheme': {
+	'std-naming': { // inverted option
 		alias: 'n',
 		type: 'bool',
-		map: 'outputAltNamingScheme'
+		map: 'outputAltNamingScheme',
+		default: true,
+		fn: function(v) {
+			return !v;
+		}
 	},
 	'slice-dist': {
 		alias: 'd',

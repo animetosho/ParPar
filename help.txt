@@ -81,10 +81,10 @@ Output Options:
                              appeneded if not supplied.
   -O,  --overwrite           Overwrite existing files if they exist. This
                              option doesn't take any parameters.
-  -n,  --alt-naming-scheme   Use alternative naming scheme for recovery files,
-                             popularized by par2cmdline. Output names will look
-                             like xxx.vol12+10.par2 instead of
-                             xxx.vol12-22.par2
+  -n,  --std-naming          Use standard naming scheme for recovery files,
+                             instead of that popularized by par2cmdline. Output
+                             names will look like xxx.vol12-22.par2 instead of
+                             xxx.vol12+10.par2
                              This option doesn't take any parameters.
   -d,  --slice-dist          Specify how recovery slices are distributed
                              amongst output files. Can be:
