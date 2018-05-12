@@ -15,8 +15,24 @@ var opts = {
 		alias: 's',
 		type: 'string'
 	},
+	'min-input-slices': {
+		type: 'string'
+	},
+	'max-input-slices': {
+		type: 'string'
+	},
+	'slice-size-multiple': {
+		type: 'size',
+		map: 'sliceSizeMultiple'
+	},
 	'recovery-slices': {
 		alias: 'r',
+		type: 'string'
+	},
+	'min-recovery-slices': {
+		type: 'string'
+	},
+	'max-recovery-slices': {
 		type: 'string'
 	},
 	'recovery-offset': {
@@ -182,7 +198,7 @@ var parseSizeOrNum = function(arg) {
 		var n = +(m[1]);
 		if(isNaN(n)) error('Invalid value specified for `'+arg+'`');
 		if(m[2] == '%') {
-			if(arg != 'recovery-slices')
+			if(arg.substr(-15) != 'recovery-slices')
 				error('Invalid value specified for `'+arg+'`');
 			return ['ratio', n/100];
 		} else {
@@ -201,13 +217,26 @@ var parseSizeOrNum = function(arg) {
 		error('Invalid value specified for `'+arg+'`');
 };
 
-if(argv['recovery-slices']) {
-	var v = parseSizeOrNum('recovery-slices');
-	ppo.recoverySlices = v[1];
-	ppo.recoverySlicesUnit = v[0];
-}
+[['recovery-slices', 'recoverySlices'], ['min-recovery-slices', 'minRecoverySlices'], ['max-recovery-slices', 'maxRecoverySlices']].forEach(function(k) {
+	if(k[0] in argv) {
+		var v = parseSizeOrNum(k[0]);
+		ppo[k[1]] = v[1];
+		ppo[k[1] + 'Unit'] = v[0];
+	}
+});
 
 var inputSliceDef = parseSizeOrNum('input-slices');
+var inputSliceCount = inputSliceDef[0] == 'count' ? -inputSliceDef[1] : inputSliceDef[1];
+['min', 'max'].forEach(function(e) {
+	var k = e + '-input-slices';
+	if(k in argv) {
+		var v = parseSizeOrNum(k);
+		ppo[e + 'SliceSize'] = v[0] == 'count' ? -v[1] : v[1];
+	}
+});
+if(inputSliceDef[0] == 'bytes' && !('slice-size-multiple' in argv) && (!('min-input-slices' in argv) || ppo.minSliceSize == inputSliceCount)) {
+	ppo.sliceSizeMultiple = inputSliceDef[1];
+}
 
 var startTime = Date.now();
 var decimalPoint = (1.1).toLocaleString().substr(1, 1);
@@ -232,8 +261,8 @@ ParPar.fileInfo(argv._, argv.recurse, function(err, info) {
 	}
 	
 	var meth = (argv.method || '').match(/^(.*?)(\d*)$/i);
-	ParPar.setMethod(meth[1], meth[2] | 0, inputSliceDef[0] == 'count' ? 0 : inputSliceDef[1]); // TODO: allow size hint to work if slice-count is specified
-	var g = new ParPar.PAR2Gen(info, inputSliceDef[0] == 'count' ? -inputSliceDef[1] : inputSliceDef[1], ppo);
+	ParPar.setMethod(meth[1], meth[2] | 0, inputSliceDef[0] == 'count' ? 0 : inputSliceDef[1]); // TODO: allow size hint to work if slice-count is specified + consider min/max limits
+	var g = new ParPar.PAR2Gen(info, inputSliceCount, ppo);
 	
 	var currentSlice = 0;
 	if(!argv.quiet) {
@@ -261,6 +290,16 @@ ParPar.fileInfo(argv._, argv.recurse, function(err, info) {
 				process.stderr.write('Calculating: ' + (parts[1] + parts[2]) + '%\x1b[0G');
 			}, 200);
 		}
+		
+		var friendlySize = function(s) {
+			var units = ['B', 'KiB', 'MiB', 'GiB', 'TiB', 'PiB', 'EiB'];
+			for(var i=0; i<units.length; i++) {
+				if(s < 10000) break;
+				s /= 1024;
+			}
+			return (Math.round(s *100)/100) + ' ' + units[i];
+		};
+		process.stderr.write('Generating '+friendlySize(g.opts.recoverySlices*g.opts.sliceSize)+' recovery data ('+g.opts.recoverySlices+' slices) from '+friendlySize(g.totalSize)+' of data\n');
 	}
 	
 	g.run(function(event, arg1) {
