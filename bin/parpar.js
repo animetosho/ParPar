@@ -266,7 +266,12 @@ ParPar.fileInfo(argv._, argv.recurse, function(err, info) {
 	
 	var meth = (argv.method || '').match(/^(.*?)(\d*)$/i);
 	ParPar.setMethod(meth[1], meth[2] | 0, inputSliceDef[0] == 'count' ? 0 : inputSliceDef[1]); // TODO: allow size hint to work if slice-count is specified + consider min/max limits
-	var g = new ParPar.PAR2Gen(info, inputSliceCount, ppo);
+	var g;
+	try {
+		g = new ParPar.PAR2Gen(info, inputSliceCount, ppo);
+	} catch(x) {
+		error(x.message);
+	}
 	
 	var currentSlice = 0;
 	if(!argv.quiet) {
