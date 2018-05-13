@@ -3,6 +3,7 @@
 #endif
 #include "../stdint.h"
 #include <gf_complete.h>
+#include <string.h>
 
 // memory alignment to 16-bytes for SSE operations (may grow for AVX operations)
 int MEM_ALIGN = 16;
