@@ -1,9 +1,9 @@
 
 #include "x86_jit.c"
 #include "../gf_w16.h"
-#include "xor.h"
 
 #if defined(INTEL_SSE2)
+#include "xor.h"
 
 /* modified versions of PXOR/XORPS mem to have fixed sized instructions */
 static inline size_t _jit_pxor_mod(uint8_t* jit, uint8_t xreg, uint8_t mreg, int32_t offs) {
