@@ -2,7 +2,7 @@ ParPar
 ======
 
 ParPar is a high performance, multi-threaded
-[PAR2](<https://en.wikipedia.org/wiki/Parchive>) creation tool and library for
+[PAR2](https://en.wikipedia.org/wiki/Parchive) creation tool and library for
 node.js. ParPar does not verify or repair files, only creates redundancy. ParPar
 is a completely new, from ground-up, implementation, which does not use
 components from existing PAR2 implementations.
@@ -24,30 +24,34 @@ Features
 --------
 
 -   all main packets from the [PAR2
-    specification](<http://parchive.sourceforge.net/docs/specifications/parity-volume-spec/article-spec.html>)
+    specification](http://parchive.sourceforge.net/docs/specifications/parity-volume-spec/article-spec.html)
 
 -   unicode filename/comment support
 
--   asychronous calculations
+-   asychronous calculations and I/O
 
 -   multi-threading via OpenMP
 
--   multiple fast calculation routines (see [benchmark
-    comparisons](<benchmarks/info.md>)) using x86 and ARM SIMD capabilities when
-    available, and automatically select the best routine for a variety of CPU
-    microarchitectures
+-   multiple fast calculation implementations leveraging x86 (SSE2, SSSE3, AVX2,
+    AVX512BW, GFNI) and ARM (NEON) SIMD capabilities, automatically selecting
+    the best routine for the CPU (see [benchmark
+    comparisons](benchmarks/info.md))
+
+-   multi-buffer (SIMD) MD5 implementation and accelerated CRC32 computation
 
 -   single read pass on source files if memory constraints allow (no separate
     hashing pass required)
 
--   chunking support for memory constrained situations
+-   chunking support for memory constrained situations or for generating large
+    amounts of recovery data
 
 -   minimum chunk size restrictions to avoid heavy I/O seeking when memory is
     limited
 
--   multi-platform support
+-   cross-platform support
 
--   completely different implementation to all the par2cmdline forks :)
+-   completely different implementation to all the par2cmdline forks, using
+    fresh new ideas and approaches :)
 
 Planned Features
 ----------------
@@ -82,7 +86,7 @@ Installation / Building
 =======================
 
 Pre-packaged Windows builds (with node.js v0.10.40) can be found [on the
-Releases page](<https://github.com/animetosho/ParPar/releases>).
+Releases page](https://github.com/animetosho/ParPar/releases).
 
 Dependencies
 ------------
@@ -121,9 +125,9 @@ node-gyp rebuild
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Note that you'll also need node-yencode; [follow the instructions
-here](<https://animetosho.org/app/node-yencode>) on how to build it. After
-building it, create a folder named *node\_modules* and place the folder
-*yencode* in there.
+here](https://animetosho.org/app/node-yencode) on how to build it. After
+building it, create a folder named *node_modules* and place the folder *yencode*
+in there.
 
 GCC/Clang build issues
 ----------------------
@@ -162,6 +166,68 @@ API
 
 *Note: the terms* slices *and* blocks *are used interchangeably here*
 
+Simple Example
+--------------
+
+This is a basic example of the high level JS API (note, API not yet finalised so
+names etc. may change in future):
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+var par2creator = require('parpar').run(
+	['file1', 'file2'],   // array of input files
+	1024*1024,   // 1MB slice size; if you want a slice count instead, give it as a negative number, e.g. -10 means select a slice size which results in 10 input slices
+	{   // options; all these are optional
+		outputBase: 'my_recovery_set',
+		recoverySlices: 8,
+		
+		// the following are the default values for other options
+		//outputBase: '', // output filename without extension
+		minSliceSize: null, // default(null) => use sliceSize; give negative number to indicate slice count
+		maxSliceSize: null,
+		sliceSizeMultiple: 4,
+		//recoverySlices: 0,
+		recoverySlicesUnit: 'slices', // slices/count, ratio or bytes
+		minRecoverySlices: null, // default = recoverySlices
+		minRecoverySlicesUnit: 'slices',
+		maxRecoverySlices: 65537,
+		maxRecoverySlicesUnit: 'slices',
+		recoveryOffset: 0,
+		memoryLimit: 256*1048576,
+		minChunkSize: 128*1024, // 0 to disable chunking
+		noChunkFirstPass: false,
+		processBatchSize: null, // default = max(numthreads * 16, ceil(4M/chunkSize))
+		processBufferSize: null, // default = processBatchSize
+		comments: [], // array of strings
+		unicode: null, // null => auto, false => never, true => always generate unicode packets
+		outputOverwrite: false,
+		outputIndex: true,
+		outputSizeScheme: 'equal', // equal or pow2
+		outputFileMaxSlices: 65536,
+		criticalRedundancyScheme: 'pow2', // none or pow2
+		outputAltNamingScheme: true,
+		displayNameFormat: 'common' // basename, keep or common
+	},
+	function(err) {
+		console.log(err || 'Process finished');
+	}
+);
+par2creator.on('info', function(par) {
+	console.log('Creating PAR2 archive with ' + par.opts.recoverySlices*par.opts.sliceSize + ' byte(s) of recovery data from ' + par.totalSize + ' input bytes');
+});
+par2creator.on('processing_file', function(par, file) {
+	console.log('Processing input file ' + file.name);
+});
+par2creator.on('processing_slice', function(par, file, sliceNum) {
+	console.log('Processing slice #' + sliceNum + ' of ' + par.inputSlices + ' from ' + file.name);
+});
+par2creator.on('pass_complete', function(par, passNum, passChunkNum) {
+	console.log('Completed read pass ' + passNum + ' of ' + par.passes + ' pass(es)');
+});
+par2creator.on('files_written', function(par, passNum, passChunkNum) {
+	console.log('Written data for read pass ' + passNum);
+});
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
 Functions
 ---------
 
@@ -182,45 +248,44 @@ Examples
 ========
 
 Examples for the low level JS API can be found in [the examples
-folder](<examples/>).
+folder](examples/).
 
 GF-Complete
 ===========
 
 ParPar relies on the excellent
-[GF-Complete](<http://jerasure.org/jerasure/gf-complete>) library for the heavy
+[GF-Complete](http://jerasure.org/jerasure/gf-complete) library for the heavy
 lifting. A somewhat stripped-down and modified version (from the [v2
-branch](<http://jerasure.org/jerasure/gf-complete/tree/v2>)) is included with
+branch](http://jerasure.org/jerasure/gf-complete/tree/v2)) is included with
 ParPar to make installation easier. Code from GF-Complete can be found in the
 *gf-complete* folder.
 
 Modifications (beyond removing unused components) to the library include:
 
 -   [MSVC compatibility
-    fixes](<http://jerasure.org/jerasure/gf-complete/issues/6>)
+    fixes](http://jerasure.org/jerasure/gf-complete/issues/6)
 
 -   Runtime CPU detection and automatic algorithm selection
 
 -   [Optimisation for 32-bit
-    builds](<http://jerasure.org/jerasure/gf-complete/issues/7>)
+    builds](http://jerasure.org/jerasure/gf-complete/issues/7)
 
--   Some optimisations for CPUs without SSE support (SPLIT\_TABLE(16,8)
+-   Some optimisations for CPUs without SSE support (SPLIT_TABLE(16,8)
     implementation)
 
 -   Added a Cauchy-like [XOR based region multiply
-    technique](<xor_depends/info.md>) for faster processing on Atom CPUs, as
-    well as SSE2 CPUs without SSSE3 support
+    technique](xor_depends/info.md) for faster processing on Atom CPUs, as well
+    as SSE2 CPUs without SSSE3 support
 
--   AVX2 and AVX512BW variants of the SSSE3 (“Shuffle” or SPLIT\_TABLE(16,4))
+-   AVX2 and AVX512BW variants of the SSSE3 (“Shuffle” or SPLIT_TABLE(16,4))
     implementation
 
 -   Added an experimental technique which is a hybrid of “XOR” and “Shuffle”
     algorithms above, dubbed “Affine”, which [relies on the GF2P8AFFINEQB
-    instruction](<xor_depends/info.md#gfni>) from GFNI on future Intel
-    processors
+    instruction](xor_depends/info.md#gfni) from GFNI on future Intel processors
 
 -   [Region transform to/from ALTMAP memory
-    arrangement](<http://jerasure.org/jerasure/gf-complete/issues/9>)
+    arrangement](http://jerasure.org/jerasure/gf-complete/issues/9)
 
 -   Some tweaks to make ParPar integration easier, such as exposing alignment
     requirements
@@ -229,19 +294,19 @@ Alternatives
 ============
 
 For a list of command-line PAR2 tools, [see
-here](<benchmarks/info.md#applications-tested-and-commands-given>).
+here](benchmarks/info.md#applications-tested-and-commands-given).
 
-For a nodejs module, there’s [node-par2](<https://github.com/andykant/par2>)
-which is not an implementation of PAR2, rather a wrapper around par2cmdline.
+For a nodejs module, there’s [node-par2](https://github.com/andykant/par2) which
+is not an implementation of PAR2, rather a wrapper around par2cmdline.
 
 For a C++ library implementation, there’s
-[libpar2](<https://launchpad.net/libpar2>), which I believe is based off
+[libpar2](https://launchpad.net/libpar2), which I believe is based off
 par2cmdline.
 
-There’s also [node-gf](<https://github.com/lamphamsy/node-gf>), which is a
-node.js binding for GF-Complete. ParPar’s binding is stripped down for PAR2
-purposes, so node-gf is more feature complete and faithful to the original
-library, but lacks modifications mentioned above.
+There’s also [node-gf](https://github.com/lamphamsy/node-gf), which is a node.js
+binding for GF-Complete. ParPar’s binding is stripped down for PAR2 purposes, so
+node-gf is more feature complete and faithful to the original library, but lacks
+modifications mentioned above.
 
 License
 =======
@@ -249,7 +314,7 @@ License
 This module is Public Domain.
 
 GF-Complete’s license can be found
-[here](<http://jerasure.org/jerasure/gf-complete/blob/master/License.txt>).
+[here](http://jerasure.org/jerasure/gf-complete/blob/master/License.txt).
 
 Multi-buffer MD5 implementation is based off implementation from
-[OpenSSL](<https://www.openssl.org/>).
+[OpenSSL](https://www.openssl.org/).
