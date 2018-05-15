@@ -362,7 +362,7 @@ int gf_w16_split_init(gf_t *gf)
   }
 
 #ifndef ARM_NEON
-  if ((h->region_type & GF_REGION_ALTMAP) && h->arg1 == 4) {
+  if ((h->region_type & GF_REGION_ALTMAP) && (h->arg1 == 4 || h->arg2 == 4)) {
     /* !! There's no fallback if SSE not supported !!
      * ParPar never uses ALTMAP if SSSE3 isn't available, but this isn't ideal in gf-complete
      * Also: ALTMAP implementations differ on SSE/AVX support, so it doesn't make too much sense for a fallback */
@@ -631,8 +631,8 @@ void gf_memcpy(gf_t *gf, void *src, void *dest, gf_val_32_t val, int bytes, int 
 #ifdef INTEL_AVX512BW
 	// seems like memcpy isn't taking advantage of AVX512 yet, so ... implement it ourself
 	intptr_t offs = -bytes;
-	void* d = dest + bytes;
-	const void* s = src + bytes;
+	uint8_t* d = (uint8_t*)dest + bytes;
+	const uint8_t* s = (uint8_t*)src + bytes;
 	while(offs) {
 		__m512i a = _mm512_load_si512((__m512i*)(s + offs));
 		__m512i b = _mm512_load_si512((__m512i*)(s + offs + 64));
