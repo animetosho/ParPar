@@ -4,6 +4,7 @@ int has_ssse3 = 0;
 size_t has_slow_shuffle = 0;
 int has_pclmul = 0;
 int has_avx2 = 0;
+int has_avxslow = 0;
 int has_avx512bw = 0;
 int has_gfni = 0;
 int has_htt = 0;
@@ -40,6 +41,8 @@ void detect_cpu(void) {
 	family = ((cpuInfo[0]>>8) & 0xf) + ((cpuInfo[0]>>20) & 0xff);
 	model = ((cpuInfo[0]>>4) & 0xf) + ((cpuInfo[0]>>12) & 0xf0);
 	
+	has_slow_shuffle = 131072; // it seems like XOR JIT is always faster than shuffle at ~128KB sizes
+	
 	if(family == 6) {
 		/* from handy table at http://a4lg.com/tech/x86/database/x86-families-and-models.en.html */
 		if(model == 0x1C || model == 0x26 || model == 0x27 || model == 0x35 || model == 0x36 || model == 0x37 || model == 0x4A || model == 0x4D) {
@@ -51,6 +54,8 @@ void detect_cpu(void) {
 			has_slow_shuffle = 16384;
 		}
 	}
+	
+	has_avxslow = (family == 0x6f || family == 0x7f || family == 0x8f); // AMD CPUs currently have 128b FPUs
 
 #if !defined(_MSC_VER) || _MSC_VER >= 1600
 	_cpuidX(cpuInfo, 7, 0);
@@ -69,7 +74,7 @@ void detect_cpu(void) {
 	/* try to detect hyper-threading */
 	has_htt = 0;
 	if(hasMulticore) {
-		/* only Intel CPUs have HT (VMs which obscure CPUID -> too bad) */
+		/* only Intel CPUs have HT (VMs which obscure CPUID -> too bad); we won't include AMD Zen here */
 		_cpuid(cpuInfo, 0);
 		if(cpuInfo[1] == 0x756E6547 && cpuInfo[2] == 0x6C65746E && cpuInfo[3] == 0x49656E69 && cpuInfo[0] >= 11) {
 			_cpuidX(cpuInfo, 11, 0);

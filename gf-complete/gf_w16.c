@@ -517,19 +517,30 @@ int gf_w16_affine_init(gf_t *gf)
   gf->walignment = gf->alignment << 1;
   gf->using_altmap = 1;
 
-#endif
   return 1;
+#else
+  return 0;
+#endif
 }
 
 
 #ifdef INTEL_SSE2
 #include "gf_w16/x86_jit.c"
+#endif
 static 
-int gf_w16_xor_init(gf_t *gf)
+int gf_w16_xor_init(gf_t *gf, int use_jit)
 {
+#ifdef INTEL_SSE2
   gf_internal_t *h = (gf_internal_t *) gf->scratch;
   jit_t* jit = &(h->jit);
   int wordsize = h->wordsize;
+  
+  if(use_jit) {
+    /* alloc JIT region */
+    jit->code = jit_alloc(jit->len = 4096); /* 4KB should be enough for everyone */
+    if(!jit->code) return 0;
+  }
+  
   if(!wordsize) {
     if(has_ssse3) wordsize = 128;
     if(has_avx2) wordsize = 256;
@@ -541,9 +552,7 @@ int gf_w16_xor_init(gf_t *gf)
 
   gf_w16_log_init(gf);
   
-  /* alloc JIT region */
-  jit->code = jit_alloc(jit->len = 4096); /* 4KB should be enough for everyone */
-  if(jit->code) {
+  if(use_jit) {
     /* pre-calc JIT lookup tables */
     FUNC_SELECT(gf_w16_xor_create_jit_lut)();
     FUNC_SELECT(gf_w16_xor_init_jit)(jit);
@@ -587,8 +596,10 @@ int gf_w16_xor_init(gf_t *gf)
   gf->extract_word.w32 = FUNC_SELECT(gf_w16_xor_extract_word);
 #endif
   return 1;
-}
+#else
+  return 0;
 #endif
+}
 
 // default multi-region mul/add
 // REQUIRES: numSrc >= 1; src/dest cannot overlap
@@ -673,21 +684,30 @@ int gf_w16_init(gf_t *gf)
   }
   if(h->mult_type == GF_MULT_AFFINE)
     return gf_w16_affine_init(gf);
-
-  /* select an appropriate default - always use some variant of SPLIT unless SSSE3 is unavailable but SSE2 is */
-#ifdef INTEL_SSE2
-  if(h->mult_type == GF_MULT_XOR_DEPENDS || (h->mult_type == GF_MULT_DEFAULT && (h->region_type & GF_REGION_ALTMAP) && (
-    /* XOR_JIT is generally faster for ~128KB blocks */
-    !has_ssse3 || (has_slow_shuffle && (!h->size_hint || h->size_hint > has_slow_shuffle)) || (
-      /*h->size_hint && h->size_hint >= 112*1024*/ 0 // TODO: test ideal conditions for this
-      && !has_avx2 && !has_avx512bw
-      && FAST_U8_SIZE == 8 /* TODO: test speeds on 32-bit platform */
-      && !has_htt /* we currently assume that all threads will be used; XOR_JIT performs worse than SPLIT4 when hyper threading is used */
-    )
-  ))) {
-    return gf_w16_xor_init(gf);
+  if(h->mult_type == GF_MULT_SPLIT_TABLE)
+    return gf_w16_split_init(gf);
+  if(h->mult_type == GF_MULT_XOR_DEPENDS) {
+    int ret = gf_w16_xor_init(gf, 1);
+    if(!ret) return gf_w16_xor_init(gf, 0); /* JIT unavailable */
+    return ret;
   }
-  else
+
+  /* default behaviour */
+#ifdef INTEL_SSE2
+  if(has_avx512bw) /* shuffle always preferred on AVX512 */
+    return gf_w16_split_init(gf);
+# ifndef AMD64
+  if(has_avx2 && !has_avxslow)
+    return gf_w16_split_init(gf);
+# endif
+  if(has_avx2 && has_htt) /* Intel AVX2 CPU with HT - it seems that shuffle256 is roughly same as xor256 so prefer former */
+    return gf_w16_split_init(gf);
+  if(!h->size_hint || h->size_hint > has_slow_shuffle)
+    if(gf_w16_xor_init(gf, 1)) /* XOR usually is faster if JIT is possible (less so on x86-32, but still faster on CPUs tested) */
+      return 1;
+  if(!has_ssse3) /* if JIT impossible and shuffle unavailable, but SSE2 available, prefer non-JIT XOR */
+    return gf_w16_xor_init(gf, 0);
+  /* otherwise fall through to shuffle/lh_lookup */
 #endif
     return gf_w16_split_init(gf);
 }
