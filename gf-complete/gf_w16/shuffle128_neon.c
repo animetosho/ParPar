@@ -61,8 +61,6 @@ gf_w16_split_4_16_lazy_multiply_region_neon(gf_t *gf, void *src, void *dest,
                                             gf_val_32_t val, int bytes, int xor)
 {
   gf_region_data rd;
-  unsigned i, j;
-  uint64_t c, prod;
   uint8x16_t rl, rh, ri;
   gf_internal_t *h = (gf_internal_t *) gf->scratch;
   struct gf_w16_logtable_data* ltd = (struct gf_w16_logtable_data*)(h->private);
