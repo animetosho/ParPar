@@ -1,4 +1,7 @@
+IFDEF RAX
+
 .code
+
 PUBLIC  gf_w16_xor_jit_stub
 gf_w16_xor_jit_stub PROC
 	; setup stack
@@ -89,6 +92,8 @@ gf_w16_xor256_jit_stub PROC
 	pop rsi
 	ret
 gf_w16_xor256_jit_stub    ENDP
-ENDIF
+ENDIF ; IFDEF YMM0
+
+ENDIF ; IFDEF RAX
 
 END

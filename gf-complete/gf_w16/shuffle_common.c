@@ -168,7 +168,8 @@ void _FN(gf_w16_split_4_16_lazy_altmap_multiply_region)(gf_t *gf, void *src, voi
     #define BCAST _mm256_broadcastsi128_si256
 #endif
 #if MWORD_SIZE == 64
-    #define BCAST _mm512_broadcast_i32x4
+    #define BCAST(n) _mm512_shuffle_i32x4(_mm512_castsi128_si512(n), _mm512_castsi128_si512(n), 0)
+    /* MSVC seems to crash when _mm512_broadcast_i32x4 is used for 32-bit compiles, so be explicit in what we want */
 #endif
     _mword polyl, polyh;
     

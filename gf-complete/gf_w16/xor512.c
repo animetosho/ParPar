@@ -44,52 +44,52 @@ static inline __m512i xor_avx512_main_part(int odd, int r, __m128i indicies) {
 		// pre-shift first byte of every pair by 3 (position for instruction placement)
 		idx = _mm512_mask_blend_epi8(0x5555555555555555, _mm512_slli_epi16(idx, 3), idx);
 		// shuffle bytes into position
+		#define _SEQ(n) -1,(n)+1,-1,-1,(n),(n)+1,-1
 		idx = _mm512_shuffle_epi8(idx, MM512_SET_BYTES(
 			-1,-1,
-			#define _SEQ(n) -1,(n)+1,-1,-1,(n),(n)+1,-1
 			_SEQ(15), _SEQ(13), _SEQ(11), _SEQ(9), _SEQ(7), _SEQ(5), _SEQ(3), _SEQ(1),
-			#undef _SEQ
 			 0,-1,-1,-1, 0,-1
 		));
+		#undef _SEQ
+		#define _SEQ 0x96,0xC0+r,0x25,0x40,0x7D,0xB3,0x62 /*VPTERNLOGD*/
 		inst = MM512_SET_BYTES(
 			0x00,0x00,
-			#define _SEQ 0x96,0xC0+r,0x25,0x40,0x7D,0xB3,0x62 /*VPTERNLOGD*/
 			_SEQ, _SEQ, _SEQ, _SEQ, _SEQ, _SEQ, _SEQ, _SEQ,
-			#undef _SEQ
 			0xC0+r, 0x6F,0x48,0x7D,0xB1,0x62 /*VMOVDQA32*/
 		);
+		#undef _SEQ
 	} else {
 		idx = _mm512_mask_blend_epi8(0xAAAAAAAAAAAAAAAA, _mm512_slli_epi16(idx, 3), idx);
+		#define _SEQ(n) -1,(n)+1,-1,-1,(n),(n)+1,-1
 		idx = _mm512_shuffle_epi8(idx, MM512_SET_BYTES(
 			-1,-1,-1,-1,-1,-1,-1,-1,-1,
-			#define _SEQ(n) -1,(n)+1,-1,-1,(n),(n)+1,-1
 			_SEQ(14), _SEQ(12), _SEQ(10), _SEQ(8), _SEQ(6), _SEQ(4), _SEQ(2),
-			#undef _SEQ
 			 1,-1,-1, 0, 1,-1
 		));
+		#undef _SEQ
+		#define _SEQ 0x96,0xC0+r,0x25,0x40,0x7D,0xB3,0x62 /*VPTERNLOGD*/
 		inst = MM512_SET_BYTES(
 			0x00,0x00,
-			#define _SEQ 0x96,0xC0+r,0x25,0x40,0x7D,0xB3,0x62 /*VPTERNLOGD*/
 			_SEQ, _SEQ, _SEQ, _SEQ, _SEQ, _SEQ, _SEQ, _SEQ,
-			#undef _SEQ
 			0xC0+r, 0xEF,0x40,0x7D,0xB1,0x62 /*VPXORD*/
 		);
+		#undef _SEQ
 	}
 	// appropriate shifts/masks etc
+	#define _SEQ -1,-1,-1,-1,-1, 7,-1
 	__mmask64 high3 = _mm512_cmpgt_epu8_mask(idx, MM512_SET_BYTES(
 		-1,-1,
-		#define _SEQ -1,-1,-1,-1,-1, 7,-1
 		_SEQ, _SEQ, _SEQ, _SEQ, _SEQ, _SEQ, _SEQ, _SEQ,
-		#undef _SEQ
 		-1,-1,-1,-1, 7,-1
 	));
+	#undef _SEQ
+	#define _SEQ -1, 7,-1,-1,-1, 0,-1
 	idx = _mm512_and_si512(idx, MM512_SET_BYTES(
 		-1,-1,
-		#define _SEQ -1, 7,-1,-1,-1, 0,-1
 		_SEQ, _SEQ, _SEQ, _SEQ, _SEQ, _SEQ, _SEQ, _SEQ,
-		#undef _SEQ
 		 7,-1,-1,-1, 0,-1
 	));
+	#undef _SEQ
 	idx = _mm512_mask_blend_epi8(high3, idx, _mm512_set1_epi8(1<<5));
 	
 	
