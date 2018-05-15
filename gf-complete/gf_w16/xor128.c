@@ -328,8 +328,8 @@ static inline uint8_t* xor_write_jit_sse(jit_t* jit, gf_val_32_t val, gf_w16_pol
 #endif
     
     /* calculate dependent bits */
-    addvals1 = _mm_set_epi16(1<< 7, 1<< 6, 1<< 5, 1<< 4, 1<< 3, 1<< 2, 1<<1, 1<<0);
-    addvals2 = _mm_set_epi16(1<<15, 1<<14, 1<<13, 1<<12, 1<<11, 1<<10, 1<<9, 1<<8);
+    addvals1 = _mm_set_epi16(0x80, 0x40, 0x20, 0x10, 0x08, 0x04, 0x02, 0x01);
+    addvals2 = _mm_set_epi16(0x8000, 0x4000, 0x2000, 0x1000, 0x0800, 0x0400, 0x0200, 0x0100);
     
     polymask1 = poly->p16[0];
     polymask2 = poly->p16[1];
@@ -976,8 +976,8 @@ void gf_w16_xor_lazy_sse_altmap_multiply_region(gf_t *gf, void *src, void *dest,
   gf_w16_log_region_alignment(&rd, gf, src, dest, bytes, val, xor, 16, 256);
   
   /* calculate dependent bits */
-  addvals1 = _mm_set_epi16(1<< 7, 1<< 6, 1<< 5, 1<< 4, 1<< 3, 1<< 2, 1<<1, 1<<0);
-  addvals2 = _mm_set_epi16(1<<15, 1<<14, 1<<13, 1<<12, 1<<11, 1<<10, 1<<9, 1<<8);
+  addvals1 = _mm_set_epi16(0x80, 0x40, 0x20, 0x10, 0x08, 0x04, 0x02, 0x01);
+  addvals2 = _mm_set_epi16(0x8000, 0x4000, 0x2000, 0x1000, 0x0800, 0x0400, 0x0200, 0x0100);
   
   polymask1 = ltd->poly->p16[0];
   polymask2 = ltd->poly->p16[1];
@@ -1038,22 +1038,22 @@ void gf_w16_xor_lazy_sse_altmap_multiply_region(gf_t *gf, void *src, void *dest,
           uintptr_t* deps = deptable[bit]; \
           dest[bit] = _mm_load_ ## type((typed*)(dW + bit)); \
           switch(counts[bit]) { \
-            case 16: dest[bit] = _mm_xor_ ## type(dest[bit], *(typev*)(sP + deps[15])); \
-            case 15: dest[bit] = _mm_xor_ ## type(dest[bit], *(typev*)(sP + deps[14])); \
-            case 14: dest[bit] = _mm_xor_ ## type(dest[bit], *(typev*)(sP + deps[13])); \
-            case 13: dest[bit] = _mm_xor_ ## type(dest[bit], *(typev*)(sP + deps[12])); \
-            case 12: dest[bit] = _mm_xor_ ## type(dest[bit], *(typev*)(sP + deps[11])); \
-            case 11: dest[bit] = _mm_xor_ ## type(dest[bit], *(typev*)(sP + deps[10])); \
-            case 10: dest[bit] = _mm_xor_ ## type(dest[bit], *(typev*)(sP + deps[ 9])); \
-            case  9: dest[bit] = _mm_xor_ ## type(dest[bit], *(typev*)(sP + deps[ 8])); \
-            case  8: dest[bit] = _mm_xor_ ## type(dest[bit], *(typev*)(sP + deps[ 7])); \
-            case  7: dest[bit] = _mm_xor_ ## type(dest[bit], *(typev*)(sP + deps[ 6])); \
-            case  6: dest[bit] = _mm_xor_ ## type(dest[bit], *(typev*)(sP + deps[ 5])); \
-            case  5: dest[bit] = _mm_xor_ ## type(dest[bit], *(typev*)(sP + deps[ 4])); \
-            case  4: dest[bit] = _mm_xor_ ## type(dest[bit], *(typev*)(sP + deps[ 3])); \
-            case  3: dest[bit] = _mm_xor_ ## type(dest[bit], *(typev*)(sP + deps[ 2])); \
-            case  2: dest[bit] = _mm_xor_ ## type(dest[bit], *(typev*)(sP + deps[ 1])); \
-            case  1: dest[bit] = _mm_xor_ ## type(dest[bit], *(typev*)(sP + deps[ 0])); \
+            case 16: dest[bit] = _mm_xor_ ## type(dest[bit], *(typev*)(sP + deps[15])); /* FALLTHRU */ \
+            case 15: dest[bit] = _mm_xor_ ## type(dest[bit], *(typev*)(sP + deps[14])); /* FALLTHRU */ \
+            case 14: dest[bit] = _mm_xor_ ## type(dest[bit], *(typev*)(sP + deps[13])); /* FALLTHRU */ \
+            case 13: dest[bit] = _mm_xor_ ## type(dest[bit], *(typev*)(sP + deps[12])); /* FALLTHRU */ \
+            case 12: dest[bit] = _mm_xor_ ## type(dest[bit], *(typev*)(sP + deps[11])); /* FALLTHRU */ \
+            case 11: dest[bit] = _mm_xor_ ## type(dest[bit], *(typev*)(sP + deps[10])); /* FALLTHRU */ \
+            case 10: dest[bit] = _mm_xor_ ## type(dest[bit], *(typev*)(sP + deps[ 9])); /* FALLTHRU */ \
+            case  9: dest[bit] = _mm_xor_ ## type(dest[bit], *(typev*)(sP + deps[ 8])); /* FALLTHRU */ \
+            case  8: dest[bit] = _mm_xor_ ## type(dest[bit], *(typev*)(sP + deps[ 7])); /* FALLTHRU */ \
+            case  7: dest[bit] = _mm_xor_ ## type(dest[bit], *(typev*)(sP + deps[ 6])); /* FALLTHRU */ \
+            case  6: dest[bit] = _mm_xor_ ## type(dest[bit], *(typev*)(sP + deps[ 5])); /* FALLTHRU */ \
+            case  5: dest[bit] = _mm_xor_ ## type(dest[bit], *(typev*)(sP + deps[ 4])); /* FALLTHRU */ \
+            case  4: dest[bit] = _mm_xor_ ## type(dest[bit], *(typev*)(sP + deps[ 3])); /* FALLTHRU */ \
+            case  3: dest[bit] = _mm_xor_ ## type(dest[bit], *(typev*)(sP + deps[ 2])); /* FALLTHRU */ \
+            case  2: dest[bit] = _mm_xor_ ## type(dest[bit], *(typev*)(sP + deps[ 1])); /* FALLTHRU */ \
+            case  1: dest[bit] = _mm_xor_ ## type(dest[bit], *(typev*)(sP + deps[ 0])); /* FALLTHRU */ \
           } \
         }
         STEP( 0, si128, __m128i, __m128i)
@@ -1086,21 +1086,21 @@ void gf_w16_xor_lazy_sse_altmap_multiply_region(gf_t *gf, void *src, void *dest,
           uintptr_t* deps = deptable[bit]; \
           dest[bit] = _mm_load_ ## type((typed*)(sP + deps[ 0])); \
           switch(counts[bit]) { \
-            case 16: dest[bit] = _mm_xor_ ## type(dest[bit], *(typev*)(sP + deps[15])); \
-            case 15: dest[bit] = _mm_xor_ ## type(dest[bit], *(typev*)(sP + deps[14])); \
-            case 14: dest[bit] = _mm_xor_ ## type(dest[bit], *(typev*)(sP + deps[13])); \
-            case 13: dest[bit] = _mm_xor_ ## type(dest[bit], *(typev*)(sP + deps[12])); \
-            case 12: dest[bit] = _mm_xor_ ## type(dest[bit], *(typev*)(sP + deps[11])); \
-            case 11: dest[bit] = _mm_xor_ ## type(dest[bit], *(typev*)(sP + deps[10])); \
-            case 10: dest[bit] = _mm_xor_ ## type(dest[bit], *(typev*)(sP + deps[ 9])); \
-            case  9: dest[bit] = _mm_xor_ ## type(dest[bit], *(typev*)(sP + deps[ 8])); \
-            case  8: dest[bit] = _mm_xor_ ## type(dest[bit], *(typev*)(sP + deps[ 7])); \
-            case  7: dest[bit] = _mm_xor_ ## type(dest[bit], *(typev*)(sP + deps[ 6])); \
-            case  6: dest[bit] = _mm_xor_ ## type(dest[bit], *(typev*)(sP + deps[ 5])); \
-            case  5: dest[bit] = _mm_xor_ ## type(dest[bit], *(typev*)(sP + deps[ 4])); \
-            case  4: dest[bit] = _mm_xor_ ## type(dest[bit], *(typev*)(sP + deps[ 3])); \
-            case  3: dest[bit] = _mm_xor_ ## type(dest[bit], *(typev*)(sP + deps[ 2])); \
-            case  2: dest[bit] = _mm_xor_ ## type(dest[bit], *(typev*)(sP + deps[ 1])); \
+            case 16: dest[bit] = _mm_xor_ ## type(dest[bit], *(typev*)(sP + deps[15])); /* FALLTHRU */ \
+            case 15: dest[bit] = _mm_xor_ ## type(dest[bit], *(typev*)(sP + deps[14])); /* FALLTHRU */ \
+            case 14: dest[bit] = _mm_xor_ ## type(dest[bit], *(typev*)(sP + deps[13])); /* FALLTHRU */ \
+            case 13: dest[bit] = _mm_xor_ ## type(dest[bit], *(typev*)(sP + deps[12])); /* FALLTHRU */ \
+            case 12: dest[bit] = _mm_xor_ ## type(dest[bit], *(typev*)(sP + deps[11])); /* FALLTHRU */ \
+            case 11: dest[bit] = _mm_xor_ ## type(dest[bit], *(typev*)(sP + deps[10])); /* FALLTHRU */ \
+            case 10: dest[bit] = _mm_xor_ ## type(dest[bit], *(typev*)(sP + deps[ 9])); /* FALLTHRU */ \
+            case  9: dest[bit] = _mm_xor_ ## type(dest[bit], *(typev*)(sP + deps[ 8])); /* FALLTHRU */ \
+            case  8: dest[bit] = _mm_xor_ ## type(dest[bit], *(typev*)(sP + deps[ 7])); /* FALLTHRU */ \
+            case  7: dest[bit] = _mm_xor_ ## type(dest[bit], *(typev*)(sP + deps[ 6])); /* FALLTHRU */ \
+            case  6: dest[bit] = _mm_xor_ ## type(dest[bit], *(typev*)(sP + deps[ 5])); /* FALLTHRU */ \
+            case  5: dest[bit] = _mm_xor_ ## type(dest[bit], *(typev*)(sP + deps[ 4])); /* FALLTHRU */ \
+            case  4: dest[bit] = _mm_xor_ ## type(dest[bit], *(typev*)(sP + deps[ 3])); /* FALLTHRU */ \
+            case  3: dest[bit] = _mm_xor_ ## type(dest[bit], *(typev*)(sP + deps[ 2])); /* FALLTHRU */ \
+            case  2: dest[bit] = _mm_xor_ ## type(dest[bit], *(typev*)(sP + deps[ 1])); /* FALLTHRU */ \
           } \
         }
         STEP( 0, si128, __m128i, __m128i)
@@ -1133,22 +1133,22 @@ void gf_w16_xor_lazy_sse_altmap_multiply_region(gf_t *gf, void *src, void *dest,
           uintptr_t* deps = deptable[bit]; \
           typev tmp = _mm_load_ ## type((typed*)(dW + bit)); \
           switch(counts[bit]) { \
-            case 16: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[15])); \
-            case 15: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[14])); \
-            case 14: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[13])); \
-            case 13: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[12])); \
-            case 12: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[11])); \
-            case 11: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[10])); \
-            case 10: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 9])); \
-            case  9: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 8])); \
-            case  8: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 7])); \
-            case  7: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 6])); \
-            case  6: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 5])); \
-            case  5: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 4])); \
-            case  4: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 3])); \
-            case  3: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 2])); \
-            case  2: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 1])); \
-            case  1: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 0])); \
+            case 16: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[15])); /* FALLTHRU */ \
+            case 15: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[14])); /* FALLTHRU */ \
+            case 14: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[13])); /* FALLTHRU */ \
+            case 13: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[12])); /* FALLTHRU */ \
+            case 12: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[11])); /* FALLTHRU */ \
+            case 11: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[10])); /* FALLTHRU */ \
+            case 10: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 9])); /* FALLTHRU */ \
+            case  9: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 8])); /* FALLTHRU */ \
+            case  8: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 7])); /* FALLTHRU */ \
+            case  7: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 6])); /* FALLTHRU */ \
+            case  6: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 5])); /* FALLTHRU */ \
+            case  5: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 4])); /* FALLTHRU */ \
+            case  4: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 3])); /* FALLTHRU */ \
+            case  3: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 2])); /* FALLTHRU */ \
+            case  2: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 1])); /* FALLTHRU */ \
+            case  1: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 0])); /* FALLTHRU */ \
           } \
           _mm_store_ ## type((typed*)(dW + bit), tmp); \
         }
@@ -1179,21 +1179,21 @@ void gf_w16_xor_lazy_sse_altmap_multiply_region(gf_t *gf, void *src, void *dest,
           uintptr_t* deps = deptable[bit]; \
           typev tmp = _mm_load_ ## type((typed*)(sP + deps[ 0])); \
           switch(counts[bit]) { \
-            case 16: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[15])); \
-            case 15: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[14])); \
-            case 14: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[13])); \
-            case 13: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[12])); \
-            case 12: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[11])); \
-            case 11: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[10])); \
-            case 10: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 9])); \
-            case  9: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 8])); \
-            case  8: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 7])); \
-            case  7: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 6])); \
-            case  6: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 5])); \
-            case  5: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 4])); \
-            case  4: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 3])); \
-            case  3: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 2])); \
-            case  2: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 1])); \
+            case 16: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[15])); /* FALLTHRU */ \
+            case 15: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[14])); /* FALLTHRU */ \
+            case 14: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[13])); /* FALLTHRU */ \
+            case 13: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[12])); /* FALLTHRU */ \
+            case 12: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[11])); /* FALLTHRU */ \
+            case 11: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[10])); /* FALLTHRU */ \
+            case 10: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 9])); /* FALLTHRU */ \
+            case  9: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 8])); /* FALLTHRU */ \
+            case  8: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 7])); /* FALLTHRU */ \
+            case  7: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 6])); /* FALLTHRU */ \
+            case  6: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 5])); /* FALLTHRU */ \
+            case  5: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 4])); /* FALLTHRU */ \
+            case  4: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 3])); /* FALLTHRU */ \
+            case  3: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 2])); /* FALLTHRU */ \
+            case  2: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 1])); /* FALLTHRU */ \
           } \
           _mm_store_ ## type((typed*)(dW + bit), tmp); \
         }

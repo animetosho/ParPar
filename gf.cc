@@ -98,6 +98,7 @@ FUNC(GetNumThreads) {
 	RETURN_VAL(Integer::New(ISOLATE ppgf_get_num_threads()));
 }
 
+#if !NODE_VERSION_AT_LEAST(3, 0, 0)
 static void free_buffer(char* data, void* _size) {
 #if !NODE_VERSION_AT_LEAST(0, 11, 0)
 	int size = (int)(size_t)_size;
@@ -105,8 +106,6 @@ static void free_buffer(char* data, void* _size) {
 #endif
 	ALIGN_FREE(data);
 }
-
-#if !NODE_VERSION_AT_LEAST(3, 0, 0)
 FUNC(AlignedBuffer) {
 	FUNC_START;
 	
