@@ -104,6 +104,9 @@ Performance Options:
                              data to generate recovery, so increasing this
                              value as much as possible, will greatly improve
                              performance. Default `256M`.
+                             Note that additional memory is used during
+                             processing, particularly if large slice sizes are
+                             being used.
   -t,  --threads             Limit number of threads to use. Default equals
                              number of CPU cores.
        --min-chunk-size      Minimum chunking size. Set to 0 to disable
