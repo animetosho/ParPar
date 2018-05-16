@@ -408,7 +408,7 @@ async.eachSeries([
 		in: [tmpDir + 'test64m.bin'],
 		blockSize: Math.floor((require('buffer').kMaxLength || (1024*1024*1024-1))/4)*4 - 192, // max allowable buffer size test
 		blocks: 1,
-		memory: '4g',
+		memory: process.arch == 'x64' ? '2.5g' : '1.5g',
 		singleFile: true
 	},
 	{
