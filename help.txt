@@ -92,9 +92,8 @@ Output Options:
                                  pow2: power-of-2 sizing scheme
   -p,  --slices-per-file     Specify the maximum number of slices each file
                              may contain. Default 65536
-  -i,  --index               Output an index file (file with no recovery
-                             blocks). Default enabled, use `--no-index` to
-                             disable.
+  -i,  --noindex             Don't output an index file (file with no recovery
+                             blocks). This option takes no value.
 
 Performance Options:
 

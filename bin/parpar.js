@@ -102,10 +102,14 @@ var opts = {
 		type: 'int',
 		map: 'outputFileMaxSlices'
 	},
-	'index': {
+	'noindex': {
 		alias: 'i',
 		type: 'bool',
-		map: 'outputIndex'
+		map: 'outputIndex',
+		default: true,
+		fn: function(v) {
+			return !v;
+		}
 	},
 	'memory': {
 		alias: 'm',
