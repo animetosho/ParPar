@@ -120,6 +120,10 @@ var opts = {
 		type: 'size',
 		map: 'minChunkSize'
 	},
+	'seq-read-size': {
+		type: 'size',
+		map: 'seqReadSize'
+	},
 	/*'seq-first-pass': {
 		type: 'bool',
 		map: 'noChunkFirstPass'

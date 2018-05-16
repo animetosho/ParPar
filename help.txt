@@ -113,6 +113,10 @@ Performance Options:
                              slow, but smaller values on flash based storage,
                              where random I/O is faster, relative to bandwidth.
                              Default `128K`.
+       --seq-read-size       Target read buffer size for sequential reading.
+                             Actually buffer size will vary, and may be
+                             significantly larger depending on memory limit
+                             supplied. Default `4M`
        --proc-batch-size     Number of slices to submit as a job for GF
                              calculation. Default is
                              max(`--threads`*16, ceil(4M/chunk-size))

@@ -66,8 +66,6 @@ not implemented include:
 -   better handling of input buffering and processing chunks based on CPU cache
     size
 
--   streamed slice processing for handling very large slice sizes
-
 -   various other tweaks
 
 Motivation
@@ -205,7 +203,8 @@ var par2creator = require('parpar').run(
 		outputFileMaxSlices: 65536,
 		criticalRedundancyScheme: 'pow2', // none or pow2
 		outputAltNamingScheme: true,
-		displayNameFormat: 'common' // basename, keep or common
+		displayNameFormat: 'common', // basename, keep or common
+		seqReadSize: 4*1048576
 	},
 	function(err) {
 		console.log(err || 'Process finished');
