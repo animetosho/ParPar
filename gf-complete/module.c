@@ -16,8 +16,8 @@ uint16_t input_lookup[32768]; // logarithms of input constants
 uint16_t gf_exp[65536]; // pre-calculated exponents in GF(2^16)
 // TODO: consider using GF-Complete's antilog table instead of gf_exp
 void ppgf_init_constants() {
-	int exp = 0, n = 1;
-	for (int i = 0; i < 32768; i++) {
+	int exp = 0, n = 1, i;
+	for (i = 0; i < 32768; i++) {
 		do {
 			gf_exp[exp] = n;
 			exp++; // exp will reach 65534 by the end of the loop
@@ -202,7 +202,8 @@ void ppgf_multiply_mat(uint16_t** inputs, uint_fast16_t* iNums, unsigned int num
 #endif
 		// TODO: perhaps it makes sense to just use a statically allocated array instead and loop?
 		gf_val_32_t* vals = (gf_val_32_t*)malloc(sizeof(gf_val_32_t) * numInputs);
-		for(unsigned int i=0; i<numInputs; i++)
+		unsigned int i;
+		for(i=0; i<numInputs; i++)
 			vals[i] = calc_factor(iNums[i], oNums[out]);
 
 		_gf->multiply_regionX.w16(_gf, numInputs, offset, (void**)inputs, outputs[out], vals, procSize, add);
