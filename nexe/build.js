@@ -45,7 +45,7 @@ var doPatch = function(r, s, ignoreMissing) {
 		if(ignoreMissing) return;
 		throw new Error('Could not match ' + r);
 	}
-	if(gypData.substr(m.index+1).match(r))
+	if(!r.global && gypData.substr(m.index+1).match(r))
 		throw new Error('Expression matched >1 times: ' + r);
 	gypData = gypData.replace(r, '$1 ' + s);
 };
@@ -152,8 +152,12 @@ if(!findGypTarget('crcutil')) {
     }].map(JSON.stringify).join(',')+',');
 }
 
-var tNode = findGypTarget('<(node_core_target_name)');
-var tNodeM = "['\"]target_name['\"]:\\s*['\"]<\\(node_core_target_name\\)['\"],";
+var tNode = findGypTarget('<(node_lib_target_name)');
+var tNodeM = "['\"]target_name['\"]:\\s*['\"]<\\(node_lib_target_name\\)['\"],";
+if(!tNode) {
+	tNode = findGypTarget('<(node_core_target_name)');
+	tNodeM = "['\"]target_name['\"]:\\s*['\"]<\\(node_core_target_name\\)['\"],";
+}
 if(!tNode) {
 	tNode = findGypTarget('node');
 	tNodeM = "['\"]target_name['\"]:\\s*['\"]node['\"],";
@@ -162,9 +166,10 @@ var tNodeMatch = new RegExp('('+tNodeM+')');
 if(tNode.sources.indexOf('yencode/yencode.cc') < 0)
 	doPatch(/(['"]src\/node_file\.cc['"],)/, "'yencode/yencode.cc','parpar_gf/gf.cc',");
 if(tNode.dependencies.indexOf('crcutil') < 0)
-	doPatch(/(['"]node_js2c#host['"],)/, "'crcutil','parpar_gf',");
+	// try to avoid matching the cctest target
+	doPatch(/('target_name': '<\([^\]]+?['"]node_js2c#host['"],)/, "'crcutil','parpar_gf',");
 if(tNode.include_dirs.indexOf('yencode/crcutil-1.0/code') < 0)
-	doPatch(/(['"]deps\/uv\/src\/ares['"],)/, "'yencode/crcutil-1.0/code', 'yencode/crcutil-1.0/examples',");
+	doPatch(/(['"]<\(SHARED_INTERMEDIATE_DIR\)['"],? # for node_natives\.h\r?\n)/g, "'yencode/crcutil-1.0/code', 'yencode/crcutil-1.0/examples',");
 // TODO: add gf stuff
 
 if(gyp.variables.library_files.indexOf('lib/yencode.js') < 0)
@@ -276,6 +281,56 @@ if(fs.existsSync(nodeSrc + 'src/node_extensions.h')) { // node 0.10.x
 patchFile('src/node.h', 'define NODE_EXTERN __declspec(dllexport)', 'define NODE_EXTERN __declspec(dllexport)', 'define NODE_EXTERN');
 patchFile('common.gypi', null, /'BUILDING_(V8|UV)_SHARED=1',/g, '');
 
+/*
+// MSVS2017 support if not available
+patchFile('vcbuild.bat', '@rem Look for Visual Studio 2017', /((if defined target_env if "%target_env%" NEQ "vc2015" goto vc-set-2013\r\n)?@rem Look for Visual Studio 2015)/, `
+if defined target_env if "%target_env%" NEQ "vc2017" goto vc-set-2015
+@rem Look for Visual Studio 2017
+echo Looking for Visual Studio 2017
+if not defined VS150COMNTOOLS goto vc-set-2015
+if not exist "%VS150COMNTOOLS%\..\..\vc\Auxiliary\Build\vcvarsall.bat" goto vc-set-2015
+echo Found Visual Studio 2017
+if "%VCVARS_VER%" == "150" goto vc-set-2017-done
+
+SET msvs_host_arch=x86
+if _%PROCESSOR_ARCHITECTURE%_==_AMD64_ set msvs_host_arch=amd64
+if _%PROCESSOR_ARCHITEW6432%_==_AMD64_ set msvs_host_arch=amd64
+@rem usually vcvarsall takes an argument: host + '_' + target
+SET vcvarsall_arg=%msvs_host_arch%_%target_arch%
+@rem unless both host and target are x64
+if %target_arch%_%msvs_host_arch%==x64_amd64 set vcvarsall_arg=amd64
+if %target_arch%_%msvs_host_arch%==x86_x86 set vcvarsall_arg=x86
+
+@rem need to clear VSINSTALLDIR for vcvarsall to work as expected
+SET "VSINSTALLDIR="
+@rem prevent VsDevCmd.bat from changing the current working directory
+SET "VSCMD_START_DIR=%CD%"
+
+call "%VS150COMNTOOLS%\..\..\vc\Auxiliary\Build\vcvarsall.bat" %vcvarsall_arg%
+SET VCVARS_VER=150
+
+:vc-set-2017-done
+$1
+`);
+
+patchFile('tools/gyp/pylib/gyp/MSVSVersion.py', "'2017': VisualStudioVersion('2017'", "'2015': VisualStudioVersion('2015',", `      '2017': VisualStudioVersion('2017',
+                                  'Visual Studio 2017',
+                                  solution_version='12.00',
+                                  project_version='15.0',
+                                  flat_sln=False,
+                                  uses_vcxproj=True,
+                                  path=path,
+                                  sdk_based=sdk_based,
+                                  default_toolset='v141'),
+      '2015': VisualStudioVersion('2015',`);
+patchFile('tools/gyp/pylib/gyp/MSVSVersion.py', "'15.0': '2017'", "'14.0': '2015'", "'14.0': '2015', '15.0': '2017'");
+patchFile('tools/gyp/pylib/gyp/MSVSVersion.py', "'auto': ('15.0'", "''auto': ('14.0'", "'auto': ('15.0', '14.0'");
+patchFile('tools/gyp/pylib/gyp/MSVSVersion.py', "'2017': ('15.0',)", "'2015': ('14.0',)", "'2015': ('14.0',), '2017': ('15.0',)");
+patchFile('tools/gyp/pylib/gyp/MSVSVersion.py', "if version == '15.0':", "if version != '14.0':", `if version == '15.0':
+          if os.path.exists(path):
+              versions.append(_CreateVersion('2017', path))
+      elif version != '14.0':`);
+*/
 
 // create embeddable help
 fs.writeFileSync('../bin/help.json', JSON.stringify(fs.readFileSync('../help.txt').toString()));
@@ -297,12 +352,16 @@ var copyCC = function(src, dest) {
 		code = code.replace(/NODE_MODULE\(([a-z0-9_]+)/, 'NODE_MODULE('+modulePref+'$1');
 	else
 		code = code.replace('NODE_MODULE(', 'NODE_MODULE_CONTEXT_AWARE_BUILTIN(');
-	fs.writeFileSync(nodeSrc + dest, code);
+	if(dest.substr(0, 3) != '../')
+		dest = nodeSrc + dest;
+	fs.writeFileSync(dest, code);
 };
 var copyJS = function(src, dest) {
 	var code = fs.readFileSync(src).toString();
 	code = code.replace(/require\(['"][^'"]*\/([0-9a-z_]+)\.node'\)/g, "process.binding('$1')");
-	fs.writeFileSync(nodeSrc + dest, code);
+	if(dest.substr(0, 3) != '../')
+		dest = nodeSrc + dest;
+	fs.writeFileSync(dest, code);
 };
 
 
@@ -314,6 +373,7 @@ ncp(yencSrc, nodeSrc + 'yencode', function() {
 	copyJS(yencSrc + 'index.js', 'lib/yencode.js');
 	copyCC('../gf.cc', 'parpar_gf/gf.cc');
 	copyCC('../stdint.h', 'parpar_gf/stdint.h');
+	copyJS('../lib/par2.js', '../lib/par2.js'); // !! overwrites file !!
 	
 	// now run nexe
 	// TODO: consider building startup snapshot?
