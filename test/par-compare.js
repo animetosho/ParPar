@@ -403,6 +403,20 @@ async.eachSeries([
 		singleFile: true
 	},
 	
+	// TODO: no recovery test (par2cmdline doesn't support it?)
+	/*{
+		in: [tmpDir + 'test64m.bin'],
+		blockSize: 1048576,
+		blocks: 0,
+		singleFile: true
+	},
+	{
+		in: [tmpDir + 'test65k.bin'],
+		blockSize: 1048576,
+		blocks: 0,
+		singleFile: true
+	},*/
+	
 	// 2x large block size test
 	{
 		in: [tmpDir + 'test64m.bin'],
