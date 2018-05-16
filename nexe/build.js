@@ -386,7 +386,7 @@ ncp(yencSrc, nodeSrc + 'yencode', function() {
 	    // --without-snapshot
 	    nodeConfigureArgs: ['--fully-static', '--without-dtrace', '--without-etw', '--without-perfctr', '--without-npm', '--with-intl=none'], // for all your configure arg needs.
 	    nodeMakeArgs: makeArgs, // when you want to control the make process.
-	    nodeVCBuildArgs: ["nosign", vcBuildArch], // when you want to control the make process for windows.
+	    nodeVCBuildArgs: ["nosign", vcBuildArch, "noetw", "noperfctr", "intl-none"], // when you want to control the make process for windows.
 	                                        // By default "nosign" option will be specified
 	                                        // You can check all available options and its default values here:
 	                                        // https://github.com/nodejs/node/blob/master/vcbuild.bat
