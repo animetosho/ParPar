@@ -619,7 +619,7 @@ FUNC(MD5UpdateZeroes) {
 	
 	if(sizeof(size_t) < 6) {
 		// 32-bit platform, may need to feed via multiple passes
-		double len = args[1]->ToNumber()->Value();
+		double len = args[1]->NumberValue();
 		MD5_CTX* md5 = (MD5_CTX*)node::Buffer::Data(args[0]);
 		#define MD5_MAX_LEN 0x7fffffff
 		while(len > MD5_MAX_LEN) {
