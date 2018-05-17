@@ -617,8 +617,21 @@ FUNC(MD5UpdateZeroes) {
 	if(((MD5_CTX*)node::Buffer::Data(args[0]))->dataLen > MD5_BLOCKSIZE)
 		RETURN_ERROR("Invalid MD5 context data");
 	
-	size_t len = (size_t)args[1]->ToInteger()->Value();
-	md5_update_zeroes((MD5_CTX*)node::Buffer::Data(args[0]), len);
+	if(sizeof(size_t) < 6) {
+		// 32-bit platform, may need to feed via multiple passes
+		double len = args[1]->ToNumber()->Value();
+		MD5_CTX* md5 = (MD5_CTX*)node::Buffer::Data(args[0]);
+		#define MD5_MAX_LEN 0x7fffffff
+		while(len > MD5_MAX_LEN) {
+			md5_update_zeroes(md5, MD5_MAX_LEN);
+			len -= MD5_MAX_LEN;
+		}
+		#undef MD5_MAX_LEN
+		md5_update_zeroes(md5, (size_t)len);
+	} else {
+		size_t len = (size_t)args[1]->ToInteger()->Value();
+		md5_update_zeroes((MD5_CTX*)node::Buffer::Data(args[0]), len);
+	}
 	
 	RETURN_UNDEF
 }

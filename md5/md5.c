@@ -349,7 +349,7 @@ void md5_update_zeroes(MD5_CTX *c, size_t len)
     if (len == 0)
         return;
 
-    c->length += len << 3;
+    c->length += ((uint64_t)len) << 3;
     if(c->dataLen) {
         if(c->dataLen + len >= MD5_BLOCKSIZE) {
             memset((char*)c->data + c->dataLen, 0, MD5_BLOCKSIZE - c->dataLen);
