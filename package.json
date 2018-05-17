@@ -1,12 +1,17 @@
 {
-  "name": "parpar",
-  "version": "0.2.2",
+  "name": "@animetosho/parpar",
+  "version": "0.3.0",
   "description": "High performance multi-threaded PAR2 creation library",
   "keywords": [
     "par2",
     "par2cmdline",
     "par2create",
-    "parchive"
+    "parchive",
+    "parity",
+    "error-correcting-codes",
+    "erasure-coding",
+    "ecc",
+    "reed-solomon"
   ],
   "license": "CC0-1.0",
   "author": "Anime Tosho",
