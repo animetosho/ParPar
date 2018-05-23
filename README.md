@@ -53,8 +53,8 @@ Features
 -   completely different implementation to all the par2cmdline forks, using
     fresh new ideas and approaches :)
 
-Planned Features
-----------------
+Possible Future Features
+------------------------
 
 As mentioned above, ParPar is still under development. Some features currently
 not implemented include:
@@ -66,7 +66,22 @@ not implemented include:
 -   better handling of input buffering and processing chunks based on CPU cache
     size
 
+-   improve handling of extremely large (e.g. gigabyte sized) slice sizes
+
 -   various other tweaks
+
+Unsupported Features
+--------------------
+
+Here’s a list of features currently *not* in ParPar, and may never be supported:
+
+-   Support for external recovery data or packed slices (I don’t think any PAR2
+    client supports this)
+
+-   Verify/repair PAR2
+
+-   Some optimisations in weird edge cases, such as using slice sizes
+    significantly larger than all input data
 
 Motivation
 ----------
@@ -83,16 +98,45 @@ platforms (i.e. ARM).
 Installation / Building
 =======================
 
-Pre-packaged Windows builds (with node.js v0.10.40) can be found [on the
-Releases page](https://github.com/animetosho/ParPar/releases).
+Pre-Built Binaries
+------------------
 
-Dependencies
-------------
+Pre-packaged Windows builds with Node 4.x may be found on [the releases
+page](https://github.com/animetosho/ParPar/releases) if I can be bothered to
+provide them.
 
-ParPar requires node.js 0.10.x or later.
+Install Via NPM
+---------------
 
-For building you’ll need node.js, node-gyp (can be obtained via `npm install -g
-node-gyp` command) and relevant build tools (i.e. MS Visual C++ for Windows,
+If NPM is installed (usually comes bundled with
+[node.js](https://nodejs.org/en/download/)), the following command can be used
+to install ParPar:
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+npm install -g @animetosho/parpar
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+You’ll then be able to run ParPar via the **parpar** command.
+
+If the **npm** command isn’t available, it can probably be installed via your
+package manager (`apt-get install npm` for Debian), or see the [node.js
+website](https://nodejs.org/en/download/).
+
+You can then later uninstall ParPar via:
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+npm uninstall -g @animetosho/parpar
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Note that installing from NPM essentially compiles from source, so see issues
+listed in the following section if the install is failing on the build step.
+
+Install From Source
+-------------------
+
+For building you’ll need node.js (0.10.x or later), node-gyp (can be obtained
+via `npm install -g node-gyp` command if NPM is available; may be in package
+managers otherwise) and relevant build tools (i.e. MS Visual C++ for Windows,
 GCC/Clang family otherwise). After you have the dependencies, the following
 commands can be used to build:
 
@@ -106,10 +150,10 @@ this, delete all instances of `"msvs_settings": {"VCCLCompilerTool":
 {"EnableEnhancedInstructionSet": "2"}},` in *binding.gyp* before compiling.
 
 Relatively recent compilers (any supported compiler released in the last \~4
-years should work) are needed if AVX support is desired.
+years should work) are needed if AVX support is desired. AVX512 support requires
+even newer compilers (GCC 5+, MSVC 2017 or later etc).
 
-Building without NPM
---------------------
+### Building without NPM
 
 If you do not have NPM installed, ParPar can be built easily if your system's
 package manager has the necessary packages.
@@ -127,8 +171,7 @@ here](https://animetosho.org/app/node-yencode) on how to build it. After
 building it, create a folder named *node_modules* and place the folder *yencode*
 in there.
 
-GCC/Clang build issues
-----------------------
+### GCC/Clang build issues
 
 Some versions of GCC/Clang don't like the `-march=native` switch. If you're
 having build issues with these compilers, try removing all instances of
@@ -137,23 +180,21 @@ specific optimisations may not be enabled if the flag is removed.
 
 Do also remove the above flag if you are looking to make a portable build.
 
-Multi-Threading Support
------------------------
+### Multi-Threading Support
 
 ParPar’s multi-threading support requires OpenMP. If ParPar is compiled without
 OpenMP, it will only ever run on 1 thread. OpenMP is usually available in most
 compilers that you’d likely use.
 
-It appears that the default compiler in MacOSX does not include OpenMP support.
-If this is the case, you may need to fetch another build of the C++ compiler
-which has OpenMP support (e.g. clang/gcc from places like homebrew/macports) and
-override the `CXX` environment variable when installing.
+It appears that the default compiler in MacOSX does not include OpenMP support
+(at time of writing). If this is the case, you may need to fetch another build
+of the C++ compiler which has OpenMP support (e.g. clang/gcc from places like
+homebrew/macports) and override the `CXX` environment variable when installing.
 
-ARM NEON Support
-----------------
+### ARM NEON Support
 
-If compiling for ARM CPUs, you may need to pass the `-mfpu=neon` flag to GCC to
-enable NEON compilation, as GCC doesn’t always auto-detect this, e.g.:
+If compiling for ARMv7 CPUs, you may need to pass the `-mfpu=neon` flag to GCC
+to enable NEON compilation, as GCC doesn’t always auto-detect this, e.g.:
 
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 CFLAGS=-mfpu=neon node-gyp rebuild
@@ -171,59 +212,59 @@ This is a basic example of the high level JS API (note, API not yet finalised so
 names etc. may change in future):
 
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-var par2creator = require('parpar').run(
-	['file1', 'file2'],   // array of input files
-	1024*1024,   // 1MB slice size; if you want a slice count instead, give it as a negative number, e.g. -10 means select a slice size which results in 10 input slices
-	{   // options; all these are optional
-		outputBase: 'my_recovery_set',
-		recoverySlices: 8,
-		
-		// the following are the default values for other options
-		//outputBase: '', // output filename without extension
-		minSliceSize: null, // default(null) => use sliceSize; give negative number to indicate slice count
-		maxSliceSize: null,
-		sliceSizeMultiple: 4,
-		//recoverySlices: 0,
-		recoverySlicesUnit: 'slices', // slices/count, ratio or bytes
-		minRecoverySlices: null, // default = recoverySlices
-		minRecoverySlicesUnit: 'slices',
-		maxRecoverySlices: 65537,
-		maxRecoverySlicesUnit: 'slices',
-		recoveryOffset: 0,
-		memoryLimit: 256*1048576,
-		minChunkSize: 128*1024, // 0 to disable chunking
-		noChunkFirstPass: false,
-		processBatchSize: null, // default = max(numthreads * 16, ceil(4M/chunkSize))
-		processBufferSize: null, // default = processBatchSize
-		comments: [], // array of strings
-		unicode: null, // null => auto, false => never, true => always generate unicode packets
-		outputOverwrite: false,
-		outputIndex: true,
-		outputSizeScheme: 'equal', // equal or pow2
-		outputFileMaxSlices: 65536,
-		criticalRedundancyScheme: 'pow2', // none or pow2
-		outputAltNamingScheme: true,
-		displayNameFormat: 'common', // basename, keep or common
-		seqReadSize: 4*1048576
-	},
-	function(err) {
-		console.log(err || 'Process finished');
-	}
+var par2creator = require('@animetosho/parpar').run(
+    ['file1', 'file2'],   // array of input files
+    1024*1024,   // 1MB slice size; if you want a slice count instead, give it as a negative number, e.g. -10 means select a slice size which results in 10 input slices
+    {   // options; all these are optional
+        outputBase: 'my_recovery_set',
+        recoverySlices: 8,
+        
+        // the following are the default values for other options
+        //outputBase: '', // output filename without extension
+        minSliceSize: null, // default(null) => use sliceSize; give negative number to indicate slice count
+        maxSliceSize: null,
+        sliceSizeMultiple: 4,
+        //recoverySlices: 0,
+        recoverySlicesUnit: 'slices', // slices/count, ratio or bytes
+        minRecoverySlices: null, // default = recoverySlices
+        minRecoverySlicesUnit: 'slices',
+        maxRecoverySlices: 65537,
+        maxRecoverySlicesUnit: 'slices',
+        recoveryOffset: 0,
+        memoryLimit: 256*1048576,
+        minChunkSize: 128*1024, // 0 to disable chunking
+        noChunkFirstPass: false,
+        processBatchSize: null, // default = max(numthreads * 16, ceil(4M/chunkSize))
+        processBufferSize: null, // default = processBatchSize
+        comments: [], // array of strings
+        unicode: null, // null => auto, false => never, true => always generate unicode packets
+        outputOverwrite: false,
+        outputIndex: true,
+        outputSizeScheme: 'equal', // equal or pow2
+        outputFileMaxSlices: 65536,
+        criticalRedundancyScheme: 'pow2', // none or pow2
+        outputAltNamingScheme: true,
+        displayNameFormat: 'common', // basename, keep or common
+        seqReadSize: 4*1048576
+    },
+    function(err) {
+        console.log(err || 'Process finished');
+    }
 );
 par2creator.on('info', function(par) {
-	console.log('Creating PAR2 archive with ' + par.opts.recoverySlices*par.opts.sliceSize + ' byte(s) of recovery data from ' + par.totalSize + ' input bytes');
+    console.log('Creating PAR2 archive with ' + par.opts.recoverySlices*par.opts.sliceSize + ' byte(s) of recovery data from ' + par.totalSize + ' input bytes');
 });
 par2creator.on('processing_file', function(par, file) {
-	console.log('Processing input file ' + file.name);
+    console.log('Processing input file ' + file.name);
 });
 par2creator.on('processing_slice', function(par, file, sliceNum) {
-	console.log('Processing slice #' + sliceNum + ' of ' + par.inputSlices + ' from ' + file.name);
+    console.log('Processing slice #' + sliceNum + ' of ' + par.inputSlices + ' from ' + file.name);
 });
 par2creator.on('pass_complete', function(par, passNum, passChunkNum) {
-	console.log('Completed read pass ' + passNum + ' of ' + par.passes + ' pass(es)');
+    console.log('Completed read pass ' + passNum + ' of ' + par.passes + ' pass(es)');
 });
 par2creator.on('files_written', function(par, passNum, passChunkNum) {
-	console.log('Written data for read pass ' + passNum);
+    console.log('Written data for read pass ' + passNum);
 });
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -249,15 +290,45 @@ Examples
 Examples for the low level JS API can be found in [the examples
 folder](examples/).
 
+Development
+===========
+
+Running Tests
+-------------
+
+Currently only some very basic test scripts are included, which can be found in
+the aptly named *test* folder.
+
+*md5.js* tests the internal MD5 implementation against the reference OpenSSL
+implementation in Node.
+
+*par-compare.js* tests PAR2 generation by comparing output from ParPar against
+that of par2cmdline. As such, par2cmdline needs to be installed for tests to be
+run. Note that tests will cover extreme cases, including those using large
+amounts of memory, generating large amounts of recovery data and so on. As such,
+you will likely need a machine with large amounts of RAM available (preferrably
+at least 8GB) and reasonable amount of free disk space available (20GB or more
+recommended) to successfully run all tests.  
+The test will write several files to a temporary location (sourced from `TEMP`
+or `TMP` environment variables, or the current working directory if none set)
+and will likely take a while to complete.
+
+Building Binary
+---------------
+
+Compiling ParPar into a single binary can be done via
+[nexe](https://github.com/nexe/nexe) 1.x. The process is basically the same as
+[building Nyuu’s binary](https://github.com/animetosho/nyuu#building-binary), so
+see those instructions for details.
+
 GF-Complete
 ===========
 
 ParPar relies on the excellent
 [GF-Complete](http://jerasure.org/jerasure/gf-complete) library for the heavy
-lifting. A somewhat stripped-down and modified version (from the [v2
+lifting. A heavily stripped-down and modified version (from the [v2
 branch](http://jerasure.org/jerasure/gf-complete/tree/v2)) is included with
-ParPar to make installation easier. Code from GF-Complete can be found in the
-*gf-complete* folder.
+ParPar. Code from GF-Complete can be found in the *gf-complete* folder.
 
 Modifications (beyond removing unused components) to the library include:
 
