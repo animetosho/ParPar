@@ -1,8 +1,12 @@
 
 var proc = require('child_process');
 var isWindows = require('os').platform() == 'win32';
-var arch = require('os').arch();
+var os = require('os');
+var arch = os.arch();
 var isX86 = (arch == 'ia32' || arch == 'x64');
+var tmpDir = (process.env.TMP || process.env.TEMP || '');
+if(tmpDir.length) tmpDir += require('path').sep;
+var benchmarkDelay = 5000; // wait 5 seconds between benchmark runs to prevent CPUs overheating
 
 var engines = {
 	par2j: {
@@ -56,19 +60,33 @@ var engines = {
 		version: function(exe, cb) {
 			proc.execFile(exe, ['--version'], function(err, stdout, stderr) {
 				if(err) return cb(err);
-				var ver = stdout.toString().trim();
+				var ver = stderr.toString().trim();
 				if(isWindows && err === null && ver === '' && stderr === '') // node bug where stdout isn't captured?
 					ver = '0.1.0';
 				cb(null, ver);
 			});
 		},
 		args: function(a) {
-			var args = ['-s', a.blockSize, '-r', a.blocks, '-m', '2000M', '-o', a.out, a.in];
+			var args = ['-s', a.blockSize+'b', '-r', a.blocks, '-m', '2000M', '-o', a.out, a.in];
 			if(a.st) {
 				args.push('-t');
 				args.push('1');
 			}
 			return args;
+		}
+	},
+	gopar: {
+		version: function(exe, cb) {
+			// doesn't give version info as of now; just check if executing it works
+			proc.execFile(exe, ['-h'], function(err, stdout, stderr) {
+				if(err && err.errno) return cb(err);
+				if(!stdout.toString().indexOf('Usage'))
+					return cb(true);
+				cb(null, '?');
+			});
+		},
+		args: function(a) {
+			return ['-g', a.st ? 1 : os.cpus().length, 'c', '-s', a.blockSize, '-c', a.blocks, a.out + '.par2', a.in];
 		}
 	}
 };
@@ -79,61 +97,68 @@ var exePref = isWindows ? '' : './'; // Linux needs './' prepended to execute in
 var benchmarks = {
 	parpar: {
 		name: 'parpar',
-		exe: exePref + 'parpar' + (exeExt ? '.cmd':''),
+		exe: exePref + 'parpar' + exeExt,
+		exeAlt: exePref + 'parpar' + (isWindows ? '.cmd' : '.sh'),
 		supportsMt: true,
-		winOnly: false,
+		platform: 'any',
+		arch: 'ia32',
 		engine: 'parpar'
 	},
 	parpar64: {
-		name: 'parpar (64-bit)',
-		exe: exePref + 'parpar64' + (exeExt ? '.cmd':''),
+		name: 'parpar (x64)',
+		exe: exePref + 'parpar64' + exeExt,
+		exeAlt: exePref + 'parpar64' + (isWindows ? '.cmd' : '.sh'),
 		supportsMt: true,
-		winOnly: true,
+		platform: 'any',
+		arch: 'x64',
 		engine: 'parpar'
 	},
 	par2j: {
 		name: 'par2j',
 		exe: exePref + 'par2j.exe',
 		supportsMt: true,
-		wine: 'wine',
-		winOnly: true,
+		platform: 'win',
+		arch: 'ia32',
 		engine: 'par2j'
 	},
 	par2j64: {
-		name: 'par2j (64-bit)',
+		name: 'par2j (x64)',
 		exe: exePref + 'par2j64.exe',
 		supportsMt: true,
-		wine: 'wine64',
-		winOnly: true,
+		platform: 'win',
+		arch: 'x64',
 		engine: 'par2j'
 	},
 	phpar2: {
 		name: 'phpar2',
 		exe: exePref + 'phpar2.exe',
 		supportsMt: true,
-		wine: 'wine',
-		winOnly: true,
+		platform: 'win',
+		arch: 'ia32',
+		engine: 'phpar2'
+	},
+	phpar2_64: {
+		name: 'phpar2 (x64)',
+		exe: exePref + 'phpar2_64.exe',
+		supportsMt: true,
+		platform: 'win',
+		arch: 'x64',
 		engine: 'phpar2'
 	},
 	par2cmdline: {
 		name: 'par2cmdline',
 		exe: exePref + 'par2' + exeExt,
-		supportsMt: false,
-		winOnly: false,
+		supportsMt: true,
+		platform: 'any',
+		arch: 'ia32',
 		engine: 'par2'
 	},
-	par2cmdline_mt: {
-		name: 'par2cmdline-mt',
-		exe: exePref + 'par2_mt' + exeExt,
+	par2cmdline64: {
+		name: 'par2cmdline (x64)',
+		exe: exePref + 'par2_64' + exeExt,
 		supportsMt: true,
-		winOnly: false,
-		engine: 'par2'
-	},
-	par2cmdline_mt64: {
-		name: 'par2cmdline-mt (64-bit)',
-		exe: exePref + 'par2_mt64',
-		supportsMt: true,
-		winOnly: true,
+		platform: 'any',
+		arch: 'x64',
 		engine: 'par2'
 	},
 	par2cmdline_tbb: {
@@ -141,25 +166,54 @@ var benchmarks = {
 		exe: exePref + 'par2_tbb' + exeExt,
 		version: '20150503',
 		supportsMt: true,
-		winOnly: false,
+		platform: 'x86',
+		arch: 'ia32',
 		engine: 'par2'
 	},
 	par2cmdline_tbb64: {
-		name: 'par2cmdline-tbb (64-bit)',
-		exe: exePref + 'par2_tbb64',
+		name: 'par2cmdline-tbb (x64)',
+		exe: exePref + 'par2_tbb64' + exeExt,
 		version: '20150503',
 		supportsMt: true,
-		winOnly: true,
+		platform: 'x86',
+		arch: 'x64',
 		engine: 'par2'
 	},
+	/*gopar: { // problematic due to allocating too much memory
+		name: 'gopar',
+		exe: exePref + 'gopar' + exeExt,
+		version: '?',
+		supportsMt: true,
+		platform: 'any',
+		arch: 'ia32',
+		engine: 'gopar'
+	},*/
+	gopar64: {
+		name: 'gopar (x64)',
+		exe: exePref + 'gopar64' + exeExt,
+		version: '?',
+		supportsMt: true,
+		platform: 'any',
+		arch: 'x64',
+		engine: 'gopar'
+	},
 };
+
+// filter out non-applicable benchmarks
+for(var i in benchmarks) {
+	var bm = benchmarks[i];
+	if(!isX86 && bm.platform != 'any')
+		delete benchmarks[i];
+	else if(arch != 'x64' && bm.arch == 'x64')
+		delete benchmarks[i];
+}
 
 var fsWriteSync = function(fd, data) {
 	fs.writeSync(fd, data, 0, data.length, null);
 };
 var findFile = function(dir, re) {
 	var ret = null;
-	fs.readdirSync(dir).forEach(function(f) {
+	fs.readdirSync(dir || '.').forEach(function(f) {
 		if(f.match(re)) ret = f;
 	});
 	return ret;
@@ -167,22 +221,24 @@ var findFile = function(dir, re) {
 
 var async = require('async');
 var fs = require('fs');
-var tmpDir = (process.env.TMP || process.env.TEMP || '.') + require('path').sep;
 var nullBuf = new Buffer(1024*16);
 nullBuf.fill(0);
 var results = {};
 // grab versions (this also checks existence)
-async.eachSeries(Object.keys(benchmarks), function(prog, cb) {
+async.eachSeries(Object.keys(benchmarks), function getVersion(prog, cb) {
 	var b = benchmarks[prog], e = engines[b.engine];
-	if(isWindows || !b.winOnly || (b.wine && isX86)) {
-		e.version(b.exe, function(err, ver) {
-			if(!err && ver)
-				results[prog] = {version: benchmarks[prog].version || ver, times: []};
-			else
-				console.log('\t' + b.name + ' missing or failed, not benchmaking it');
-			cb();
-		}, b.wine);
-	} else cb();
+	e.version(b.exe, function(err, ver) {
+		if(!err && ver)
+			results[prog] = {version: benchmarks[prog].version || ver, times: []};
+		else if(b.exeAlt) {
+			b.exe = b.exeAlt;
+			delete b.exeAlt;
+			return getVersion(prog, cb);
+		}
+		else
+			console.log('\t' + b.name + ' missing or failed, not benchmaking it');
+		cb();
+	}, b.arch == 'x64' ? 'wine64' : 'wine');
 }, function(err) {
 	
 	if(Object.keys(results).length < 1) {
@@ -192,13 +248,22 @@ async.eachSeries(Object.keys(benchmarks), function(prog, cb) {
 	
 	console.log('Creating random input file...');
 	// use RC4 as a fast (and consistent) random number generator (pseudoRandomBytes is sloooowwww)
-	var fd = fs.openSync(tmpDir + 'test1g.bin', 'w');
-	var rand = require('crypto').createCipher('rc4', 'my_incredibly_strong_password');
-	for(var i=0; i<65536; i++) {
-		fsWriteSync(fd, rand.update(nullBuf));
+	function writeRndFile(name, size) {
+		var fd = fs.openSync(tmpDir + name, 'w');
+		var rand = require('crypto').createCipher('rc4', 'my_incredibly_strong_password' + name);
+		rand.setAutoPadding(false);
+		var nullBuf = new Buffer(1024*16);
+		nullBuf.fill(0);
+		var written = 0;
+		while(written < size) {
+			var b = rand.update(nullBuf).slice(0, size-written);
+			fsWriteSync(fd, b);
+			written += b.length;
+		}
+		//fsWriteSync(fd, rand.final());
+		fs.closeSync(fd);
 	}
-	fsWriteSync(fd, rand.final());
-	fs.closeSync(fd);
+	writeRndFile('test1g.bin', 1024*1048576);
 	
 	console.log('Running benchmarks...');
 	async.eachSeries([
@@ -228,6 +293,8 @@ async.eachSeries(Object.keys(benchmarks), function(prog, cb) {
 			set.out = tmpDir + 'benchout';
 			var args = e.args(set);
 			
+			if(b.args) args = args.concat(b.args);
+			
 			try {
 				fs.unlinkSync(tmpDir + 'benchout.par2');
 			} catch(x) {}
@@ -236,37 +303,41 @@ async.eachSeries(Object.keys(benchmarks), function(prog, cb) {
 			console.log(b.exe + ' ' + args.join(' '));
 			
 			var _exe = b.exe;
-			if(b.winOnly && !isWindows) {
+			if(b.platform == 'win' && !isWindows) {
 				args.unshift(b.exe);
-				_exe = b.wine;
+				_exe = b.arch == 'x64' ? 'wine64' : 'wine';
 				// TODO: paths may need to change for Wine
 			}
 			
 			var start = Date.now();
 			proc.execFile(_exe, args, function(err, stdout, stderr) {
 				var time = Date.now() - start;
-				if(err) return cb(err);
-				
-				results[prog].times.push(time/1000);
 				
 				// do some very basic verification of the output
 				var outputFile = findFile(tmpDir, /^benchout\.vol/);
-				if(!outputFile || fs.statSync(tmpDir + outputFile).size < set.blockSize*set.blocks)
-					return cb(new Error('Process ' + prog + ' likely failed'));
+				var minSize = set.blockSize*set.blocks;
+				if(b.engine == 'gopar') {
+					// gopar has no single file option, so hacky solution is to check that there's at least 1 block
+					minSize = set.blockSize;
+				}
+				if(!outputFile || fs.statSync(tmpDir + outputFile).size < minSize)
+					err = err || new Error('No/invalid output generated');
 				
-				fs.unlinkSync(tmpDir + outputFile);
+				while(outputFile) {
+					fs.unlinkSync(tmpDir + outputFile);
+					outputFile = findFile(tmpDir, /^benchout\.vol/);
+				}
 				
-				cb();
+				if(err) {
+					console.log(prog + ' failed; took ' + (time/1000) + ', but ignoring output: ', err);
+					results[prog].times.push('');
+				} else
+					results[prog].times.push(time/1000);
+				setTimeout(cb, benchmarkDelay);
 			});
 			
 		}, cb);
 	}, function(err) {
-		
-		try {
-			fs.unlinkSync(tmpDir + 'benchout.par2');
-		} catch(x) {}
-		fs.unlinkSync(tmpDir + 'test1g.bin');
-		
 		if(err) {
 			console.error(err);
 		} else {
@@ -280,6 +351,11 @@ async.eachSeries(Object.keys(benchmarks), function(prog, cb) {
 				console.log(line);
 			}
 		}
+		
+		try {
+			fs.unlinkSync(tmpDir + 'benchout.par2');
+		} catch(x) {}
+		fs.unlinkSync(tmpDir + 'test1g.bin');
 	});
 	
 });
