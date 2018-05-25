@@ -102,9 +102,9 @@ Applications Tested (and commands given)
 
     -   par2j will select an algorithm depending on CPU capabilities in the
         following order: 256-bit “shuffle”
-        ([AVX2](https://en.wikipedia.org/wiki/Advanced_Vector_Extensions#CPUs_with_AVX2)capable
-        CPU required), 128-bit “shuffle” (SSSE3), 128-bit “XOR” (JIT code to XOR
-        bit dependencies; requires SSE2), “LH lookup” (MMX/generic)
+        ([AVX2](https://en.wikipedia.org/wiki/Advanced_Vector_Extensions#CPUs_with_AVX2)
+        capable CPU required), 128-bit “shuffle” (SSSE3), 128-bit “XOR” (JIT
+        code to XOR bit dependencies; requires SSE2), “LH lookup” (MMX/generic)
 
     -   ParPar will select an algorithm based on a number of rules on which CPU
         it is running on. It includes the following algorithms: 128-bit
