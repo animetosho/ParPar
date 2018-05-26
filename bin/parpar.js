@@ -240,6 +240,9 @@ var parseSizeOrNum = function(arg) {
 
 var inputSliceDef = parseSizeOrNum('input-slices');
 var inputSliceCount = inputSliceDef[0] == 'count' ? -inputSliceDef[1] : inputSliceDef[1];
+if(inputSliceCount < -32768) // capture potentially common mistake
+	error('Invalid number (>32768) of input slices requested. Perhaps you meant `--input-slices=' + (-inputSliceCount) + 'b` instead?');
+
 ['min', 'max'].forEach(function(e) {
 	var k = e + '-input-slices';
 	if(k in argv) {
