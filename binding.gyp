@@ -61,6 +61,16 @@
         ['OS=="win"', {
           "msvs_settings": {"VCCLCompilerTool": {"EnableEnhancedInstructionSet": "2"}}
         }, {
+          "conditions": [
+            ['OS in "linux android" and target_arch in "arm arm64"', {
+              "variables": {"has_neon%": "<!(grep -e ' neon ' /proc/cpuinfo || true)"},
+              "conditions": [
+                ['has_neon!=""', {
+                  "cflags": ["-mfpu=neon"]
+                }]
+              ]
+            }]
+          ],
           "cflags": ["-march=native","-Wall","-O3","-Wno-unused-function"],
           "ldflags": []
         }],

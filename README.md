@@ -191,15 +191,6 @@ It appears that the default compiler in MacOSX does not include OpenMP support
 of the C++ compiler which has OpenMP support (e.g. clang/gcc from places like
 homebrew/macports) and override the `CXX` environment variable when installing.
 
-### ARM NEON Support
-
-If compiling for ARMv7 CPUs, you may need to pass the `-mfpu=neon` flag to GCC
-to enable NEON compilation, as GCC doesn’t always auto-detect this, e.g.:
-
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-CFLAGS=-mfpu=neon node-gyp rebuild
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
 API
 ===
 
