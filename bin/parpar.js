@@ -51,6 +51,7 @@ var opts = {
 		map: 'criticalRedundancyScheme'
 	},
 	'filepath-format': {
+		alias: 'f',
 		type: 'enum',
 		enum: ['basename','keep','common'],
 		default: 'common',
