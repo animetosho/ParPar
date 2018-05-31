@@ -25,57 +25,8 @@
 #include "gf_w16_additions.c"
 
 
-/* KMG: GF_MULT_LOGTABLE: */
-
 static
-void
-gf_w16_log_multiply_region(gf_t *gf, void *src, void *dest, gf_val_32_t val, int bytes, int xor)
-{
-  uint16_t *s16, *d16;
-  int lv;
-  struct gf_w16_logtable_data *ltd;
-  gf_region_data rd;
-
-  GF_W16_SKIP_SIMPLE;
-
-  gf_set_region_data(&rd, gf, src, dest, bytes, val, xor, 2, 2);
-  gf_do_initial_region_alignment(&rd);
-
-  ltd = (struct gf_w16_logtable_data *) ((gf_internal_t *) gf->scratch)->private;
-  s16 = (uint16_t *) rd.s_start;
-  d16 = (uint16_t *) rd.d_start;
-
-  lv = ltd->log_tbl[val];
-
-  if (xor) {
-    while (d16 < (uint16_t *) rd.d_top) {
-      *d16 ^= (*s16 == 0 ? 0 : GF_ANTILOG(lv + ltd->log_tbl[*s16]));
-      d16++;
-      s16++;
-    }
-  } else {
-    while (d16 < (uint16_t *) rd.d_top) {
-      *d16 = (*s16 == 0 ? 0 : GF_ANTILOG(lv + ltd->log_tbl[*s16]));
-      d16++;
-      s16++;
-    }
-  }
-  gf_do_final_region_alignment(&rd);
-}
-
-static
-inline
-gf_val_32_t
-gf_w16_log_multiply(gf_t *gf, gf_val_32_t a, gf_val_32_t b)
-{
-  struct gf_w16_logtable_data *ltd;
-
-  ltd = (struct gf_w16_logtable_data *) ((gf_internal_t *) gf->scratch)->private;
-  return (a == 0 || b == 0) ? 0 : GF_ANTILOG((int) ltd->log_tbl[a] + (int) ltd->log_tbl[b]);
-}
-
-static
-int gf_w16_log_init(gf_t *gf)
+void gf_w16_log_init(gf_t *gf)
 {
   gf_internal_t *h;
   struct gf_w16_logtable_data *ltd;
@@ -97,11 +48,6 @@ int gf_w16_log_init(gf_t *gf)
       }
   }
   ltd->antilog_tbl[GF_MULT_GROUP_SIZE] = ltd->antilog_tbl[0];
-
-  gf->multiply.w32 = gf_w16_log_multiply;
-  gf->multiply_region.w32 = gf_w16_log_multiply_region;
-
-  return 1;
 }
 
 static
