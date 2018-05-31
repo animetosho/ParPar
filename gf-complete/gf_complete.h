@@ -78,15 +78,7 @@ typedef enum {
    Again, please see documentation for how to use these */
    
 #define GF_REGION_DEFAULT      (0x0)
-#define GF_REGION_DOUBLE_TABLE (0x1)
-#define GF_REGION_QUAD_TABLE   (0x2)
-#define GF_REGION_LAZY         (0x4)
-#define GF_REGION_SIMD         (0x8)
-#define GF_REGION_SSE          (0x8)
-#define GF_REGION_NOSIMD       (0x10)
-#define GF_REGION_NOSSE        (0x10)
 #define GF_REGION_ALTMAP       (0x20)
-#define GF_REGION_CAUCHY       (0x40)
 
 typedef uint32_t gf_region_type_t;
 

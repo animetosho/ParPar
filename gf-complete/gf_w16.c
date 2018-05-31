@@ -104,109 +104,6 @@ int gf_w16_log_init(gf_t *gf)
   return 1;
 }
 
-/* JSP: GF_MULT_SPLIT_TABLE: Using 8 multiplication tables to leverage SSE instructions.
-*/
-
-
-/* Ben: Does alternate mapping multiplication using a split table in the
- lazy method without sse instructions*/
-
-static 
-void
-gf_w16_split_4_16_lazy_nosse_altmap_multiply_region(gf_t *gf, void *src, void *dest, gf_val_32_t val, int bytes, int xor)
-{
-  uint64_t i, j, c, prod;
-  uint8_t *s8, *d8, *top;
-  uint16_t table[4][16];
-  gf_region_data rd;
-
-  GF_W16_SKIP_SIMPLE;
-  gf_set_region_data(&rd, gf, src, dest, bytes, val, xor, 16, 32);
-  gf_do_initial_region_alignment(&rd);    
-
-  /*Ben: Constructs lazy multiplication table*/
-
-  for (j = 0; j < 16; j++) {
-    for (i = 0; i < 4; i++) {
-      c = (j << (i*4));
-      table[i][j] = gf->multiply.w32(gf, c, val);
-    }
-  }
-
-  /*Ben: s8 is the start of source, d8 is the start of dest, top is end of dest region. */
-  
-  s8 = (uint8_t *) rd.s_start;
-  d8 = (uint8_t *) rd.d_start;
-  top = (uint8_t *) rd.d_top;
-
-
-  while (d8 < top) {
-    
-    /*Ben: Multiplies across 16 two byte quantities using alternate mapping 
-       high bits are on the left, low bits are on the right. */
-  
-    for (j=0;j<16;j++) {
-    
-      /*Ben: If the xor flag is set, the product should include what is in dest */
-      prod = (xor) ? ((uint16_t)(*d8)<<8) ^ *(d8+16) : 0;
-
-      /*Ben: xors all 4 table lookups into the product variable*/
-      
-      prod ^= ((table[0][*(s8+16)&0xf]) ^
-          (table[1][(*(s8+16)&0xf0)>>4]) ^
-          (table[2][*(s8)&0xf]) ^
-          (table[3][(*(s8)&0xf0)>>4]));
-
-      /*Ben: Stores product in the destination and moves on*/
-      
-      *d8 = (uint8_t)(prod >> 8);
-      *(d8+16) = (uint8_t)(prod & 0x00ff);
-      s8++;
-      d8++;
-    }
-    s8+=16;
-    d8+=16;
-  }
-  gf_do_final_region_alignment(&rd);
-}
-
-static
-  void
-gf_w16_split_4_16_lazy_multiply_region(gf_t *gf, void *src, void *dest, gf_val_32_t val, int bytes, int xor)
-{
-  uint64_t i, j, a, c, prod;
-  uint16_t *s16, *d16, *top;
-  uint16_t table[4][16];
-  gf_region_data rd;
-
-  GF_W16_SKIP_SIMPLE;
-  gf_set_region_data(&rd, gf, src, dest, bytes, val, xor, 2, 2);
-  gf_do_initial_region_alignment(&rd);    
-
-  for (j = 0; j < 16; j++) {
-    for (i = 0; i < 4; i++) {
-      c = (j << (i*4));
-      table[i][j] = gf->multiply.w32(gf, c, val);
-    }
-  }
-
-  s16 = (uint16_t *) rd.s_start;
-  d16 = (uint16_t *) rd.d_start;
-  top = (uint16_t *) rd.d_top;
-
-  while (d16 < top) {
-    a = *s16;
-    prod = (xor) ? *d16 : 0;
-    for (i = 0; i < 4; i++) {
-      prod ^= table[i][a&0xf];
-      a >>= 4;
-    }
-    *d16 = prod;
-    s16++;
-    d16++;
-  }
-}
-
 static
 void
 gf_w16_split_8_16_lazy_multiply_region(gf_t *gf, void *src, void *dest, gf_val_32_t val, int bytes, int xor)
@@ -328,12 +225,8 @@ int gf_w16_split_init(gf_t *gf)
       gf->alignment = 16;
 
       if (wordsize >= 128) {
-        if(h->region_type & GF_REGION_ALTMAP && h->region_type & GF_REGION_NOSIMD)
-          gf->multiply_region.w32 = gf_w16_split_4_16_lazy_nosse_altmap_multiply_region;
-        else if(h->region_type & GF_REGION_NOSIMD)
-          gf->multiply_region.w32 = gf_w16_split_4_16_lazy_multiply_region;
 #ifdef INTEL_SSSE3
-        else if(h->region_type & GF_REGION_ALTMAP) {
+        if(h->region_type & GF_REGION_ALTMAP) {
           FUNC_ASSIGN(gf->multiply_region.w32, gf_w16_split_4_16_lazy_altmap_multiply_region)
           //FUNC_ASSIGN(gf->multiply_regionX.w16, gf_w16_split_4_16_lazy_altmap_multiply_regionX)
           if(wordsize >= 512) {
@@ -352,14 +245,8 @@ int gf_w16_split_init(gf_t *gf)
           gf->mult_method = GF_SPLIT4_SSSE3;
         }
 #endif
-      } else {
-        if(h->region_type & GF_REGION_SIMD)
-          return 0;
-        else if(h->region_type & GF_REGION_ALTMAP)
-          gf->multiply_region.w32 = gf_w16_split_4_16_lazy_nosse_altmap_multiply_region;
-        else
-          gf->multiply_region.w32 = gf_w16_split_4_16_lazy_multiply_region;
-      }
+      } else
+        return 0;
       gf->walignment = gf->alignment << 1;
     }
   }
