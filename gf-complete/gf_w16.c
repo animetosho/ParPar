@@ -318,47 +318,50 @@ int gf_w16_split_init(gf_t *gf)
     gf->walignment = sizeof(FAST_U32);
   } else if ((h->arg1 == 4 && h->arg2 == 16) || (h->arg2 == 4 && h->arg1 == 16)) {
 #ifdef ARM_NEON
-    gf_w16_neon_split_init(gf);
-    gf->mult_method = GF_SPLIT4_NEON;
-#else
-    gf->mult_method = GF_SPLIT4;
-    gf->alignment = 16;
+    if(has_neon) {
+      gf_w16_neon_split_init(gf);
+      gf->mult_method = GF_SPLIT4_NEON;
+    } else
+#endif
+    {
+      gf->mult_method = GF_SPLIT4;
+      gf->alignment = 16;
 
-    if (wordsize >= 128) {
-      if(h->region_type & GF_REGION_ALTMAP && h->region_type & GF_REGION_NOSIMD)
-        gf->multiply_region.w32 = gf_w16_split_4_16_lazy_nosse_altmap_multiply_region;
-      else if(h->region_type & GF_REGION_NOSIMD)
-        gf->multiply_region.w32 = gf_w16_split_4_16_lazy_multiply_region;
+      if (wordsize >= 128) {
+        if(h->region_type & GF_REGION_ALTMAP && h->region_type & GF_REGION_NOSIMD)
+          gf->multiply_region.w32 = gf_w16_split_4_16_lazy_nosse_altmap_multiply_region;
+        else if(h->region_type & GF_REGION_NOSIMD)
+          gf->multiply_region.w32 = gf_w16_split_4_16_lazy_multiply_region;
 #ifdef INTEL_SSSE3
-      else if(h->region_type & GF_REGION_ALTMAP) {
-        FUNC_ASSIGN(gf->multiply_region.w32, gf_w16_split_4_16_lazy_altmap_multiply_region)
-        //FUNC_ASSIGN(gf->multiply_regionX.w16, gf_w16_split_4_16_lazy_altmap_multiply_regionX)
-        if(wordsize >= 512) {
-          gf->alignment = 64;
-          gf->mult_method = GF_SPLIT4_AVX512;
-        } else if(wordsize >= 256) {
-          gf->alignment = 32;
-          gf->mult_method = GF_SPLIT4_AVX2;
-        } else {
-          gf->alignment = 16;
+        else if(h->region_type & GF_REGION_ALTMAP) {
+          FUNC_ASSIGN(gf->multiply_region.w32, gf_w16_split_4_16_lazy_altmap_multiply_region)
+          //FUNC_ASSIGN(gf->multiply_regionX.w16, gf_w16_split_4_16_lazy_altmap_multiply_regionX)
+          if(wordsize >= 512) {
+            gf->alignment = 64;
+            gf->mult_method = GF_SPLIT4_AVX512;
+          } else if(wordsize >= 256) {
+            gf->alignment = 32;
+            gf->mult_method = GF_SPLIT4_AVX2;
+          } else {
+            gf->alignment = 16;
+            gf->mult_method = GF_SPLIT4_SSSE3;
+          }
+        }
+        else {
+          gf->multiply_region.w32 = gf_w16_split_4_16_lazy_sse_multiply_region;
           gf->mult_method = GF_SPLIT4_SSSE3;
         }
-      }
-      else {
-        gf->multiply_region.w32 = gf_w16_split_4_16_lazy_sse_multiply_region;
-        gf->mult_method = GF_SPLIT4_SSSE3;
-      }
 #endif
-    } else {
-      if(h->region_type & GF_REGION_SIMD)
-        return 0;
-      else if(h->region_type & GF_REGION_ALTMAP)
-        gf->multiply_region.w32 = gf_w16_split_4_16_lazy_nosse_altmap_multiply_region;
-      else
-        gf->multiply_region.w32 = gf_w16_split_4_16_lazy_multiply_region;
+      } else {
+        if(h->region_type & GF_REGION_SIMD)
+          return 0;
+        else if(h->region_type & GF_REGION_ALTMAP)
+          gf->multiply_region.w32 = gf_w16_split_4_16_lazy_nosse_altmap_multiply_region;
+        else
+          gf->multiply_region.w32 = gf_w16_split_4_16_lazy_multiply_region;
+      }
+      gf->walignment = gf->alignment << 1;
     }
-    gf->walignment = gf->alignment << 1;
-#endif
   }
 
 #ifndef ARM_NEON

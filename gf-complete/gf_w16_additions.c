@@ -9,6 +9,8 @@ int has_avx512bw = 0;
 int has_gfni = 0;
 int has_htt = 0;
 
+int has_neon = 0;
+
 #if !defined(_MSC_VER) && defined(INTEL_SSE2)
 #include <cpuid.h>
 #endif
@@ -22,6 +24,14 @@ int has_htt = 0;
 	#define _cpuidX(ar, eax, ecx) __cpuid_count(eax, ecx, ar[0], ar[1], ar[2], ar[3])
 #endif
 
+#ifdef ARM_NEON
+# ifdef __ANDROID__
+#  include <cpu-features.h>
+# elif defined(__linux__)
+#  include <sys/auxv.h>
+#  include <asm/hwcap.h>
+# endif
+#endif
 
 void detect_cpu(void) {
 	if(cpu_detect_run) return;
@@ -85,6 +95,21 @@ void detect_cpu(void) {
 	}
 #endif /* INTEL_SSE2 */
 	
+#ifdef ARM_NEON
+# if defined(AT_HWCAP)
+#  ifdef ARCH_AARCH64
+	has_neon = getauxval(AT_HWCAP) & HWCAP_ASIMD;
+#  else
+	has_neon = getauxval(AT_HWCAP) & HWCAP_NEON;
+#  endif
+# elif defined(ANDROID_CPU_FAMILY_ARM)
+#  ifdef ARCH_AARCH64
+	has_neon = android_getCpuFeatures() & ANDROID_CPU_ARM64_FEATURE_ASIMD;
+#  else
+	has_neon = android_getCpuFeatures() & ANDROID_CPU_ARM_FEATURE_NEON;
+#  endif
+# endif
+#endif
 }
 
 
