@@ -35,8 +35,14 @@ PAR2 Options:
                              append a suffix to auto-calculate this, as in the
                              following examples:
                                  `-r100`: generates 100 recovery slices
-                                 `-r15%`: generates 15% recovery
+                                 `-r15.7%`: generates 15.7% recovery
                                  `-r2.5M`: generates 2.5MB of recovery
+                                 `-r2l`: recovery slices equals number of input
+                                         slices from 2 largest files
+                                 `-r1.5s`: recovery slices equals number of
+                                           input slices from smallest file,
+                                           plus half the number of input slices
+                                           for the second smallest file
                              Default is 0, which generates no recovery.
        --min-recovery-slices Enables number of recovery slices to be
                              automatically scaled if it falls below this value.

@@ -207,13 +207,17 @@ var parseSizeOrNum = function(arg) {
 	var m;
 	if(typeof argv[arg] == 'number' || /^\d+$/.test(argv[arg]))
 		return ['count', argv[arg]|0];
-	else if(m = argv[arg].match(/^([0-9.]+)([%bBkKmMgGtTpPeE])$/)) {
+	else if(m = argv[arg].match(/^([0-9.]+)([%bBkKmMgGtTpPeElLsS])$/)) {
 		var n = +(m[1]);
 		if(isNaN(n)) error('Invalid value specified for `'+arg+'`');
 		if(m[2] == '%') {
 			if(arg.substr(-15) != 'recovery-slices')
 				error('Invalid value specified for `'+arg+'`');
 			return ['ratio', n/100];
+		} else if(['l','L','s','S'].indexOf(m[2]) >= 0) {
+			if(arg.substr(-15) != 'recovery-slices')
+				error('Invalid value specified for `'+arg+'`');
+			return [m[2].toLowerCase() == 'l' ? 'largest_files' : 'smallest_files', n];
 		} else {
 			switch(m[2].toUpperCase()) {
 				case 'E': n *= 1024;
