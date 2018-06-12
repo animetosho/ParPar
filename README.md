@@ -208,7 +208,11 @@ var par2creator = require('@animetosho/parpar').run(
     1024*1024,   // 1MB slice size; if you want a slice count instead, give it as a negative number, e.g. -10 means select a slice size which results in 10 input slices
     {   // options; all these are optional
         outputBase: 'my_recovery_set',
-        recoverySlices: 8,
+        recoverySlices: { // can also be an array of such objects, of which the sum all these are used
+            unit: 'slices', // slices/count, ratio, bytes, largest_files or smallest_files
+            value: ,
+            scale: 1 // multiply the number of blocks by this amount
+        },
         
         // the following are the default values for other options
         //outputBase: '', // output filename without extension
@@ -216,11 +220,11 @@ var par2creator = require('@animetosho/parpar').run(
         maxSliceSize: null,
         sliceSizeMultiple: 4,
         //recoverySlices: 0,
-        recoverySlicesUnit: 'slices', // slices/count, ratio or bytes
         minRecoverySlices: null, // default = recoverySlices
-        minRecoverySlicesUnit: 'slices',
-        maxRecoverySlices: 65537,
-        maxRecoverySlicesUnit: 'slices',
+        maxRecoverySlices: {
+            unit: 'slices',
+            value: 65537
+        },
         recoveryOffset: 0,
         memoryLimit: 256*1048576,
         minChunkSize: 128*1024, // 0 to disable chunking

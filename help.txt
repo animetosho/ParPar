@@ -43,6 +43,13 @@ PAR2 Options:
                                            input slices from smallest file,
                                            plus half the number of input slices
                                            for the second smallest file
+                             The 'l' and 's' suffixes can be followed by a
+                             scale factor, e.g. `-r1l*1.5` takes the number of
+                             slices in the largest file and multiplies it by
+                             1.5.
+                             You can also specify multiple values by joining
+                             them with `+` or `-`, e.g. `-r10%+2` will generate
+                             10% recovery plus 2 extra slices.
                              Default is 0, which generates no recovery.
        --min-recovery-slices Enables number of recovery slices to be
                              automatically scaled if it falls below this value.

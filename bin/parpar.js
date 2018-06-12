@@ -203,21 +203,31 @@ for(var k in opts) {
 		ppo[opts[k].map] = argv[k];
 }
 
-var parseSizeOrNum = function(arg) {
+var parseSizeOrNum = function(arg, input) {
 	var m;
-	if(typeof argv[arg] == 'number' || /^\d+$/.test(argv[arg]))
-		return ['count', argv[arg]|0];
-	else if(m = argv[arg].match(/^([0-9.]+)([%bBkKmMgGtTpPeElLsS])$/)) {
+	var isRec = (arg.substr(-15) == 'recovery-slices');
+	input = input || argv[arg];
+	if(typeof input == 'number' || /^-?\d+$/.test(input)) {
+		input = input|0;
+		if(!isRec && input < 0) error('Invalid value specified for `'+arg+'`');
+		return {unit: 'count', value: input};
+	} else if(m = input.match(/^(-?[0-9.]+)([%bBkKmMgGtTpPeElLsS]|[lLsS]\*[0-9.]+)$/)) {
 		var n = +(m[1]);
-		if(isNaN(n)) error('Invalid value specified for `'+arg+'`');
+		if(isNaN(n) || !isFinite(n) || (!isRec && n < 0))
+			error('Invalid value specified for `'+arg+'`');
 		if(m[2] == '%') {
-			if(arg.substr(-15) != 'recovery-slices')
+			if(!isRec)
 				error('Invalid value specified for `'+arg+'`');
-			return ['ratio', n/100];
-		} else if(['l','L','s','S'].indexOf(m[2]) >= 0) {
-			if(arg.substr(-15) != 'recovery-slices')
+			return {unit: 'ratio', value: n/100};
+		} else if(['l','L','s','S'].indexOf(m[2][0]) >= 0) {
+			if(!isRec)
 				error('Invalid value specified for `'+arg+'`');
-			return [m[2].toLowerCase() == 'l' ? 'largest_files' : 'smallest_files', n];
+			var scale = 1;
+			if(m[2].length > 2) {
+				scale = +(m[2].substr(2));
+				if(isNaN(scale) || !isFinite(scale)) error('Invalid value specified for `'+arg+'`');
+			}
+			return {unit: m[2][0].toLowerCase() == 'l' ? 'largest_files' : 'smallest_files', value: n, scale: scale};
 		} else {
 			switch(m[2].toUpperCase()) {
 				case 'E': n *= 1024;
@@ -228,7 +238,7 @@ var parseSizeOrNum = function(arg) {
 				case 'K': n *= 1024;
 				case 'B': n *= 1;
 			}
-			return ['bytes', Math.floor(n)];
+			return {unit: 'bytes', value: Math.floor(n)};
 		}
 	} else
 		error('Invalid value specified for `'+arg+'`');
@@ -236,14 +246,18 @@ var parseSizeOrNum = function(arg) {
 
 [['recovery-slices', 'recoverySlices'], ['min-recovery-slices', 'minRecoverySlices'], ['max-recovery-slices', 'maxRecoverySlices']].forEach(function(k) {
 	if(k[0] in argv) {
-		var v = parseSizeOrNum(k[0]);
-		ppo[k[1]] = v[1];
-		ppo[k[1] + 'Unit'] = v[0];
+		var expr = argv[k[0]].replace(/\s/g, '').replace(/^\+/, '').replace(/([\-+][\-+])/g, function(x) {
+			if(x == '++' || x == '--') return '+';
+			return '-';
+		}).replace(/-/g, '+-').split('+');
+		ppo[k[1]] = expr.map(function(val) {
+			return parseSizeOrNum(k[0], val);
+		});
 	}
 });
 
 var inputSliceDef = parseSizeOrNum('input-slices');
-var inputSliceCount = inputSliceDef[0] == 'count' ? -inputSliceDef[1] : inputSliceDef[1];
+var inputSliceCount = inputSliceDef.unit == 'count' ? -inputSliceDef.value : inputSliceDef.value;
 if(inputSliceCount < -32768) // capture potentially common mistake
 	error('Invalid number (>32768) of input slices requested. Perhaps you meant `--input-slices=' + (-inputSliceCount) + 'b` instead?');
 
@@ -251,11 +265,11 @@ if(inputSliceCount < -32768) // capture potentially common mistake
 	var k = e + '-input-slices';
 	if(k in argv) {
 		var v = parseSizeOrNum(k);
-		ppo[e + 'SliceSize'] = v[0] == 'count' ? -v[1] : v[1];
+		ppo[e + 'SliceSize'] = v.unit == 'count' ? -v.value : v.value;
 	}
 });
-if(inputSliceDef[0] == 'bytes' && !('slice-size-multiple' in argv) && (!('min-input-slices' in argv) || ppo.minSliceSize == inputSliceCount)) {
-	ppo.sliceSizeMultiple = inputSliceDef[1];
+if(inputSliceDef.unit == 'bytes' && !('slice-size-multiple' in argv) && (!('min-input-slices' in argv) || ppo.minSliceSize == inputSliceCount)) {
+	ppo.sliceSizeMultiple = inputSliceDef.value;
 }
 
 var startTime = Date.now();
@@ -281,7 +295,7 @@ ParPar.fileInfo(argv._, argv.recurse, function(err, info) {
 	}
 	
 	var meth = (argv.method || '').match(/^(.*?)(\d*)$/i);
-	ParPar.setMethod(meth[1], meth[2] | 0, inputSliceDef[0] == 'count' ? 0 : inputSliceDef[1]); // TODO: allow size hint to work if slice-count is specified + consider min/max limits
+	ParPar.setMethod(meth[1], meth[2] | 0, inputSliceDef.unit == 'count' ? 0 : inputSliceDef.value); // TODO: allow size hint to work if slice-count is specified + consider min/max limits
 	var g;
 	try {
 		g = new ParPar.PAR2Gen(info, inputSliceCount, ppo);
