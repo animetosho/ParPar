@@ -246,7 +246,10 @@ var parseSizeOrNum = function(arg, input) {
 
 [['recovery-slices', 'recoverySlices'], ['min-recovery-slices', 'minRecoverySlices'], ['max-recovery-slices', 'maxRecoverySlices']].forEach(function(k) {
 	if(k[0] in argv) {
-		var expr = argv[k[0]].replace(/\s/g, '').replace(/^\+/, '').replace(/([\-+][\-+])/g, function(x) {
+		var expr = argv[k[0]].replace(/\s/g, '').replace(/^[\-+]/, function(x) {
+			if(x == '-') return '0-'; // hack to get initial negative term to work
+			return '';
+		}).replace(/([\-+][\-+])/g, function(x) {
 			if(x == '++' || x == '--') return '+';
 			return '-';
 		}).replace(/-/g, '+-').split('+');
