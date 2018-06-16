@@ -96,7 +96,7 @@ static inline __m512i xor_avx512_main_part_fromreg(int odd, int r, __m128i indic
 	// add in vpternlog
 	return _mm512_xor_si512(idx, inst);
 }
-static inline __m512i xor_avx512_main_part_frommem(int odd, int r, __m128i indicies) {
+static inline __m512i xor_avx512_main_part_frommem(int odd, int r, int memreg, __m128i indicies) {
 	__m512i idx = _mm512_broadcast_i32x4(indicies);
 	int destRegPart1 = (r&16) | ((r&8)<<4), destRegPart2 = (r&7)<<3;
 	
@@ -154,15 +154,18 @@ static inline __m512i xor_avx512_main_part_frommem(int odd, int r, __m128i indic
 	idx = _mm512_mask_blend_epi8(high3, idx, _mm512_set1_epi8(1<<5));
 	
 	
-	// add in vpternlog
-	return _mm512_xor_si512(idx, inst);
+	// add in memory source register
+	__m128i sr = _mm_cvtsi64_si128((((uint64_t)memreg & 8) << 10) | (((uint64_t)memreg & 7) << 40));
+	
+	// add in vpternlog + source reg
+	return _mm512_ternarylogic_epi32(idx, inst, _mm512_castsi128_si512(sr), 0x96);
 }
 
-static inline int xor_avx512_main_part(uint8_t* jitptr, int popcnt, int odd, int r, __m128i indicies) {
+static inline int xor_avx512_main_part(uint8_t* jitptr, int popcnt, int odd, int r, int memreg, __m128i indicies) {
 	
 	__m512i result;
 	if(_mm_extract_epi8(indicies, 0) == 0)
-		result = xor_avx512_main_part_frommem(odd, r, indicies);
+		result = xor_avx512_main_part_frommem(odd, r, memreg, indicies);
 	else
 		result = xor_avx512_main_part_fromreg(odd, r, indicies);
 	
@@ -245,7 +248,7 @@ static inline __m512i xor_avx512_merge_part_fromreg(int odd, int r, __m128i indi
 	// add in vpternlog
 	return _mm512_xor_si512(idx, inst);
 }
-static inline __m512i xor_avx512_merge_part_frommem(int odd, int r, __m128i indicies) {
+static inline __m512i xor_avx512_merge_part_frommem(int odd, int r, int memreg, __m128i indicies) {
 	__m512i idx = _mm512_broadcast_i32x4(indicies);
 	int destRegPart1 = (r&16) | ((r&8)<<4), destRegPart2 = (r&7)<<3;
 	
@@ -320,15 +323,18 @@ static inline __m512i xor_avx512_merge_part_frommem(int odd, int r, __m128i indi
 	}
 	idx = _mm512_mask_blend_epi8(high3, idx, _mm512_set1_epi8(1<<5));
 	
-	// add in vpternlog
-	return _mm512_xor_si512(idx, inst);
+	// add in memory source register
+	__m128i sr = _mm_cvtsi64_si128((((uint64_t)memreg & 8) << 10) | (((uint64_t)memreg & 7) << 40));
+	
+	// add in vpternlog + source reg
+	return _mm512_ternarylogic_epi32(idx, inst, _mm512_castsi128_si512(sr), 0x96);
 }
 
-static inline int xor_avx512_merge_part(uint8_t* jitptr, int popcnt, int odd, int r, __m128i indicies) {
+static inline int xor_avx512_merge_part(uint8_t* jitptr, int popcnt, int odd, int r, int memreg, __m128i indicies) {
 	
 	__m512i result;
 	if(_mm_extract_epi8(indicies, 0) == 0)
-		result = xor_avx512_merge_part_frommem(odd, r, indicies);
+		result = xor_avx512_merge_part_frommem(odd, r, memreg, indicies);
 	else
 		result = xor_avx512_merge_part_fromreg(odd, r, indicies);
 	
@@ -338,7 +344,7 @@ static inline int xor_avx512_merge_part(uint8_t* jitptr, int popcnt, int odd, in
 
 
 // note: xor can be 3 values: 0=clear, 1=xor (merge), 2=xor (load)
-static inline void* xor_write_jit_avx512(uint8_t* jitptr, gf_val_32_t val, gf_w16_poly_struct* poly, int xor)
+static inline void* xor_write_jit_avx512(uint8_t* jitptr, int memreg, gf_val_32_t val, gf_w16_poly_struct* poly, int xor)
 {
 	FAST_U32 i, bit;
 	
@@ -423,22 +429,22 @@ static inline void* xor_write_jit_avx512(uint8_t* jitptr, gf_val_32_t val, gf_w1
 		idxB = _mm512_cvtepi32_epi8(_mm512_maskz_compress_epi32(depB[bit], numbers));
 		
 		if(popcntC[bit]) { // popcntC[bit] cannot == 1 (eliminated above)
-			jitptr += xor_avx512_main_part(jitptr, popcntC[bit]-1, (popcntC[bit] & 1), 16, idxC);
+			jitptr += xor_avx512_main_part(jitptr, popcntC[bit]-1, (popcntC[bit] & 1), 16, memreg, idxC);
 			
 			if(xor == 2) {
 				// last xor of pipes A/B are a merge
 				if(popcntA[bit] == 0) {
-					jitptr += _jit_vpxord_m(jitptr, bit, 16, DX, destOffs);
+					jitptr += _jit_vpxord_m(jitptr, bit, 16, AX, destOffs);
 				} else {
-					jitptr += xor_avx512_main_part(jitptr, popcntA[bit]-1, (popcntA[bit] & 1), bit, idxA);
+					jitptr += xor_avx512_main_part(jitptr, popcntA[bit]-1, (popcntA[bit] & 1), bit, memreg, idxA);
 					// TODO: perhaps ideally the load is done earlier?
-					jitptr += _jit_vpternlogd_m(jitptr, bit, 16, DX, destOffs, 0x96);
+					jitptr += _jit_vpternlogd_m(jitptr, bit, 16, AX, destOffs, 0x96);
 				}
 				if(popcntB[bit] == 0) {
-					jitptr += _jit_vpxord_m(jitptr, bit+8, 16, DX, destOffs2);
+					jitptr += _jit_vpxord_m(jitptr, bit+8, 16, AX, destOffs2);
 				} else {
-					jitptr += xor_avx512_main_part(jitptr, popcntB[bit]-1, (popcntB[bit] & 1), bit+8, idxB);
-					jitptr += _jit_vpternlogd_m(jitptr, bit+8, 16, DX, destOffs2, 0x96);
+					jitptr += xor_avx512_main_part(jitptr, popcntB[bit]-1, (popcntB[bit] & 1), bit+8, memreg, idxB);
+					jitptr += _jit_vpternlogd_m(jitptr, bit+8, 16, AX, destOffs2, 0x96);
 				}
 			} else if(xor) {
 				// last xor of pipes A/B are a merge
@@ -446,12 +452,12 @@ static inline void* xor_write_jit_avx512(uint8_t* jitptr, gf_val_32_t val, gf_w1
 					jitptr += _jit_vpxord_r(jitptr, bit, 16, bit);
 				} else {
 					// increase the popcnt by 1; since idxA is zero filled at the end, this has the convenient effect of merging an XOR with zmm16 (common queue)
-					jitptr += xor_avx512_merge_part(jitptr, popcntA[bit]+1, (~popcntA[bit] & 1), bit, idxA);
+					jitptr += xor_avx512_merge_part(jitptr, popcntA[bit]+1, (~popcntA[bit] & 1), bit, memreg, idxA);
 				}
 				if(popcntB[bit] == 0) {
 					jitptr += _jit_vpxord_r(jitptr, bit+8, 16, bit+8);
 				} else {
-					jitptr += xor_avx512_merge_part(jitptr, popcntB[bit]+1, (~popcntB[bit] & 1), bit+8, idxB);
+					jitptr += xor_avx512_merge_part(jitptr, popcntB[bit]+1, (~popcntB[bit] & 1), bit+8, memreg, idxB);
 				}
 			} else {
 				// last xor of pipes A/B are a merge
@@ -461,12 +467,12 @@ static inline void* xor_write_jit_avx512(uint8_t* jitptr, gf_val_32_t val, gf_w1
 					// special case if we need to merge w/ memory'd source
 					if(popcntA[bit] == 2) {
 						jitptr += _jit_vmovdqa32(jitptr, bit, 16);
-						jitptr += _jit_vpternlogd_m(jitptr, bit, _mm_extract_epi8(idxA, 1)|16, AX, 0, 0x96);
+						jitptr += _jit_vpternlogd_m(jitptr, bit, _mm_extract_epi8(idxA, 1)|16, memreg, 0, 0x96);
 					} else {
-						jitptr += _jit_vpxord_m(jitptr, bit, 16, AX, 0);
+						jitptr += _jit_vpxord_m(jitptr, bit, 16, memreg, 0);
 					}
 				} else {
-					jitptr += xor_avx512_main_part(jitptr, popcntA[bit], (~popcntA[bit] & 1), bit, idxA);
+					jitptr += xor_avx512_main_part(jitptr, popcntA[bit], (~popcntA[bit] & 1), bit, memreg, idxA);
 					// patch final vpternlog/vpxor to merge from common mask
 					uint8_t* ptr = (jitptr-6 + (popcntA[bit] == 1));
 					*ptr |= 8<<2; // set zreg3 to 16 (the highest bit is always set, so we don't need to do anything special for that)
@@ -477,12 +483,12 @@ static inline void* xor_write_jit_avx512(uint8_t* jitptr, gf_val_32_t val, gf_w1
 				} else if(popcntB[bit] <= 2 && _mm_extract_epi8(idxB, 0) == 0) {
 					if(popcntB[bit] == 2) {
 						jitptr += _jit_vmovdqa32(jitptr, bit+8, 16);
-						jitptr += _jit_vpternlogd_m(jitptr, bit+8, _mm_extract_epi8(idxB, 1)|16, AX, 0, 0x96);
+						jitptr += _jit_vpternlogd_m(jitptr, bit+8, _mm_extract_epi8(idxB, 1)|16, memreg, 0, 0x96);
 					} else {
-						jitptr += _jit_vpxord_m(jitptr, bit+8, 16, AX, 0);
+						jitptr += _jit_vpxord_m(jitptr, bit+8, 16, memreg, 0);
 					}
 				} else {
-					jitptr += xor_avx512_main_part(jitptr, popcntB[bit], (~popcntB[bit] & 1), bit+8, idxB);
+					jitptr += xor_avx512_main_part(jitptr, popcntB[bit], (~popcntB[bit] & 1), bit+8, memreg, idxB);
 					uint8_t* ptr = (jitptr-6 + (popcntB[bit] == 1));
 					*ptr |= 8<<2;
 					//*ptr &= ~(8<<4); // set +8 for zreg1
@@ -495,51 +501,51 @@ static inline void* xor_write_jit_avx512(uint8_t* jitptr, gf_val_32_t val, gf_w1
 				if(popcntA[bit] == 1) {
 					int inNum = _mm_extract_epi8(idxA, 0);
 					if(inNum == 0) // we can re-use reg 16 since we don't have a common queue
-						jitptr += _jit_vmovdqa32_load(jitptr, 16, AX, 0);
-					jitptr += _jit_vpxord_m(jitptr, bit, inNum|16, DX, destOffs);
+						jitptr += _jit_vmovdqa32_load(jitptr, 16, memreg, 0);
+					jitptr += _jit_vpxord_m(jitptr, bit, inNum|16, AX, destOffs);
 				} else {
-					jitptr += xor_avx512_main_part(jitptr, popcntA[bit], (~popcntA[bit] & 1), bit, idxA);
+					jitptr += xor_avx512_main_part(jitptr, popcntA[bit], (~popcntA[bit] & 1), bit, memreg, idxA);
 					// patch final vpternlog to merge from memory
 					// TODO: optimize
 					*(jitptr-6) |= 24<<2; // clear zreg3 bits
 					//*(jitptr-6) &= ~(8<<4); // set +8 flag for zreg1
-					*(uint32_t*)(jitptr-2) = ((bit<<3) | DX | 0x40) | (0x96<<16) | ((destOffs<<(8-6)) & 0xff00);
+					*(uint32_t*)(jitptr-2) = ((bit<<3) | AX | 0x40) | (0x96<<16) | ((destOffs<<(8-6)) & 0xff00);
 					jitptr++;
 				}
 				if(popcntB[bit] == 1) {
 					int inNum = _mm_extract_epi8(idxB, 0);
 					if(inNum == 0)
-						jitptr += _jit_vmovdqa32_load(jitptr, 16, AX, 0);
-					jitptr += _jit_vpxord_m(jitptr, bit+8, inNum|16, DX, destOffs2);
+						jitptr += _jit_vmovdqa32_load(jitptr, 16, memreg, 0);
+					jitptr += _jit_vpxord_m(jitptr, bit+8, inNum|16, AX, destOffs2);
 				} else {
-					jitptr += xor_avx512_main_part(jitptr, popcntB[bit], (~popcntB[bit] & 1), bit+8, idxB);
+					jitptr += xor_avx512_main_part(jitptr, popcntB[bit], (~popcntB[bit] & 1), bit+8, memreg, idxB);
 					*(jitptr-6) |= 24<<2; // clear zreg3 bits
 					//*(jitptr-6) &= ~(8<<4);
-					*(uint32_t*)(jitptr-2) = ((bit<<3) | DX | 0x40) | (0x96<<16) | ((destOffs2<<(8-6)) & 0xff00);
+					*(uint32_t*)(jitptr-2) = ((bit<<3) | AX | 0x40) | (0x96<<16) | ((destOffs2<<(8-6)) & 0xff00);
 					jitptr++;
 				}
 			} else if(xor) {
-				jitptr += xor_avx512_merge_part(jitptr, popcntA[bit], popcntA[bit] & 1, bit, idxA);
-				jitptr += xor_avx512_merge_part(jitptr, popcntB[bit], popcntB[bit] & 1, bit+8, idxB);
+				jitptr += xor_avx512_merge_part(jitptr, popcntA[bit], popcntA[bit] & 1, bit, memreg, idxA);
+				jitptr += xor_avx512_merge_part(jitptr, popcntB[bit], popcntB[bit] & 1, bit+8, memreg, idxB);
 			} else {
 				// if no common queue, popcntA/B assumed to be >= 1
 				if(popcntA[bit] == 1) {
 					int inNum = _mm_extract_epi8(idxA, 0);
 					if(inNum == 0)
-						jitptr += _jit_vmovdqa32_load(jitptr, bit, AX, 0);
+						jitptr += _jit_vmovdqa32_load(jitptr, bit, memreg, 0);
 					else
 						jitptr += _jit_vmovdqa32(jitptr, bit, inNum|16);
 				} else {
-					jitptr += xor_avx512_main_part(jitptr, popcntA[bit]-1, (popcntA[bit] & 1), bit, idxA);
+					jitptr += xor_avx512_main_part(jitptr, popcntA[bit]-1, (popcntA[bit] & 1), bit, memreg, idxA);
 				}
 				if(popcntB[bit] == 1) {
 					int inNum = _mm_extract_epi8(idxB, 0);
 					if(inNum == 0)
-						jitptr += _jit_vmovdqa32_load(jitptr, bit+8, AX, 0);
+						jitptr += _jit_vmovdqa32_load(jitptr, bit+8, memreg, 0);
 					else
 						jitptr += _jit_vmovdqa32(jitptr, bit+8, inNum|16);
 				} else {
-					jitptr += xor_avx512_main_part(jitptr, popcntB[bit]-1, (popcntB[bit] & 1), bit+8, idxB);
+					jitptr += xor_avx512_main_part(jitptr, popcntB[bit]-1, (popcntB[bit] & 1), bit+8, memreg, idxB);
 				}
 			}
 		}
@@ -587,25 +593,25 @@ void gf_w16_xor_lazy_jit_altmap_multiply_region_avx512(gf_t *gf, void *src, void
 	if(xor) {
 #if 0 /* for testing xor-merge */
 		for(int i=0; i<16; i+=2) {
-			jitptr += _jit_vmovdqa32_load(jitptr, i>>1, DX, i<<6);
-			jitptr += _jit_vmovdqa32_load(jitptr, (i>>1)+8, DX, (i+1)<<6);
+			jitptr += _jit_vmovdqa32_load(jitptr, i>>1, AX, i<<6);
+			jitptr += _jit_vmovdqa32_load(jitptr, (i>>1)+8, AX, (i+1)<<6);
 	    }
-		jitptr = xor_write_jit_avx512(jitptr, val, ltd->poly, 1);
+		jitptr = xor_write_jit_avx512(jitptr, DX, val, ltd->poly, 1);
 #else
-		jitptr = xor_write_jit_avx512(jitptr, val, ltd->poly, 2);
+		jitptr = xor_write_jit_avx512(jitptr, DX, val, ltd->poly, 2);
 #endif
 	} else {
-		jitptr = xor_write_jit_avx512(jitptr, val, ltd->poly, 0);
+		jitptr = xor_write_jit_avx512(jitptr, DX, val, ltd->poly, 0);
 	}
 	
 	// write out registers
     for(int i=0; i<16; i+=2) {
-		jitptr += _jit_vmovdqa32_store(jitptr, DX, i<<6, i>>1);
-		jitptr += _jit_vmovdqa32_store(jitptr, DX, (i+1)<<6, (i>>1)+8);
+		jitptr += _jit_vmovdqa32_store(jitptr, AX, i<<6, i>>1);
+		jitptr += _jit_vmovdqa32_store(jitptr, AX, (i+1)<<6, (i>>1)+8);
     }
 	
 	/* cmp/jcc */
-    *(uint64_t*)(jitptr) = 0x800FC03948 | (DX <<16) | (CX <<19) | ((uint64_t)JL <<32);
+    *(uint64_t*)(jitptr) = 0x800FC03948 | (AX <<16) | (CX <<19) | ((uint64_t)JL <<32);
 #ifdef CPU_SLOW_SMC
 	*(int32_t*)(jitptr +5) = (jitTemp - (jitdst - jitcode)) - jitptr -9;
 #else
@@ -627,9 +633,9 @@ void gf_w16_xor_lazy_jit_altmap_multiply_region_avx512(gf_t *gf, void *src, void
 	
 	
     gf_w16_xor256_jit_stub(
-      (intptr_t)rd.s_start - 1024,
-      (intptr_t)rd.d_top - 1024,
       (intptr_t)rd.d_start - 1024,
+      (intptr_t)rd.d_top - 1024,
+      (intptr_t)rd.s_start - 1024,
       jitcode
     );
     
@@ -668,12 +674,12 @@ void gf_w16_xor_init_jit_avx512(jit_t* jit) {
 	int i;
   
 	jit->pNorm = jit->code;
-	jit->pNorm += _jit_add_i(jit->pNorm, AX, 1024);
 	jit->pNorm += _jit_add_i(jit->pNorm, DX, 1024);
+	jit->pNorm += _jit_add_i(jit->pNorm, AX, 1024);
     
     /* only 64-bit supported*/
     for(i=1; i<16; i++) {
-		jit->pNorm += _jit_vmovdqa32_load(jit->pNorm, 16+i, AX, i<<6);
+		jit->pNorm += _jit_vmovdqa32_load(jit->pNorm, 16+i, DX, i<<6);
     }
 }
 
