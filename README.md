@@ -237,10 +237,12 @@ var par2creator = require('@animetosho/parpar').run(
         outputIndex: true,
         outputSizeScheme: 'equal', // equal, uniform or pow2
         outputFirstFileSlices: null, // null => default, otherwise pass in same format as outputFileMaxSlices
+        outputFirstFileSlicesRounding: 'round', // round, floor or ceil
         outputFileMaxSlices: {
             unit: 'slices',
             value: 65536
         },
+        outputFileMaxSlicesRounding: 'round', // round, floor or ceil
         criticalRedundancyScheme: 'pow2', // none or pow2
         outputAltNamingScheme: true,
         displayNameFormat: 'common', // basename, keep or common

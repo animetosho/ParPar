@@ -119,7 +119,10 @@ Output Options:
   -p,  --slices-per-file     Specify the maximum number of slices each file
                              may contain. This option follows the same format
                              as `--recovery-slices` and supports the same
-                             suffixes.
+                             suffixes. By default, fractional slices are
+                             rounded to the nearest whole slice, but rounding
+                             can be controlled by prefixing this option with
+                             '<' (round down) or '>' (round up).
                              Default 65536
        --slices-first-file   Number of slices in the first recovery file. If
                              `--slice-dist` is `pow2`, the subsequent file will

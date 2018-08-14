@@ -260,7 +260,12 @@ var parseSizeOrNum = function(arg, input) {
 	['slices-first-file', 'outputFirstFileSlices']
 ].forEach(function(k) {
 	if(k[0] in argv) {
-		var expr = argv[k[0]].replace(/\s/g, '').replace(/^[\-+]/, function(x) {
+		var val = argv[k[0]].replace(/\s/g, '');
+		if(/^slices-/.test(k[0]) && val[0] == '<' || val[0] == '>') {
+			ppo[k[1]+'Rounding'] = (val[0] == '<' ? 'floor' : 'ceil');
+			val = val.substr(1);
+		}
+		var expr = val.replace(/^[\-+]/, function(x) {
 			if(x == '-') return '0-'; // hack to get initial negative term to work
 			return '';
 		}).replace(/([\-+][\-+])/g, function(x) {
