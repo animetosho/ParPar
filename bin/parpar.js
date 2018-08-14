@@ -211,7 +211,7 @@ var parseSizeOrNum = function(arg, input) {
 		input = input|0;
 		if(!isRec && input < 0) error('Invalid value specified for `'+arg+'`');
 		return {unit: 'count', value: input};
-	} else if(m = input.match(/^(-?[0-9.]+)([%bBkKmMgGtTpPeElLsS]|[lLsS]\*[0-9.]+)$/)) {
+	} else if(m = input.match(/^(-?[0-9.]+)([%bBkKmMgGtTpPeElLsS]|[lLsS][*\/][0-9.]+)$/)) {
 		var n = +(m[1]);
 		if(isNaN(n) || !isFinite(n) || (!isRec && n < 0))
 			error('Invalid value specified for `'+arg+'`');
@@ -226,6 +226,10 @@ var parseSizeOrNum = function(arg, input) {
 			if(m[2].length > 2) {
 				scale = +(m[2].substr(2));
 				if(isNaN(scale) || !isFinite(scale)) error('Invalid value specified for `'+arg+'`');
+				if(m[2][1] == '/') {
+					scale = 1/scale;
+					if(isNaN(scale) || !isFinite(scale)) error('Invalid value specified for `'+arg+'`');
+				}
 			}
 			return {unit: m[2][0].toLowerCase() == 'l' ? 'largest_files' : 'smallest_files', value: n, scale: scale};
 		} else {
