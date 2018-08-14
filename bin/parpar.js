@@ -102,6 +102,9 @@ var opts = {
 		alias: 'p',
 		type: 'string'
 	},
+	'slices-first-file': {
+		type: 'string'
+	},
 	'noindex': {
 		alias: 'i',
 		type: 'bool',
@@ -204,7 +207,7 @@ for(var k in opts) {
 
 var parseSizeOrNum = function(arg, input) {
 	var m;
-	var isRec = (arg.substr(-15) == 'recovery-slices' || arg == 'slices-per-file');
+	var isRec = (arg.substr(-15) == 'recovery-slices' || arg == 'slices-per-file' || arg == 'slices-first-file');
 	input = input || argv[arg];
 	if(typeof input == 'number' || /^-?\d+$/.test(input)) {
 		input = input|0;
@@ -251,7 +254,8 @@ var parseSizeOrNum = function(arg, input) {
 	['recovery-slices', 'recoverySlices'],
 	['min-recovery-slices', 'minRecoverySlices'],
 	['max-recovery-slices', 'maxRecoverySlices'],
-	['slices-per-file', 'outputFileMaxSlices']
+	['slices-per-file', 'outputFileMaxSlices'],
+	['slices-first-file', 'outputFirstFileSlices']
 ].forEach(function(k) {
 	if(k[0] in argv) {
 		var expr = argv[k[0]].replace(/\s/g, '').replace(/^[\-+]/, function(x) {

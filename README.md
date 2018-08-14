@@ -236,6 +236,7 @@ var par2creator = require('@animetosho/parpar').run(
         outputOverwrite: false,
         outputIndex: true,
         outputSizeScheme: 'equal', // equal or pow2
+        outputFirstFileSlices: null, // null => default, otherwise pass in same format as outputFileMaxSlices
         outputFileMaxSlices: {
             unit: 'slices',
             value: 65536

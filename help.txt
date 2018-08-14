@@ -108,6 +108,12 @@ Output Options:
                              as `--recovery-slices` and supports the same
                              suffixes.
                              Default 65536
+       --slices-first-file   Number of slices in the first recovery file. If
+                             `--slice-dist` is `pow2`, the subsequent file will
+                             contain double this number of slices. Format of
+                             this option is identical to `--slices-per-file`.
+                             Default is 1 if `--slice-dist` is `pow2`,
+                             otherwise is `--slices-per-file`
   -i,  --noindex             Don't output an index file (file with no recovery
                              blocks). This option takes no value.
 
