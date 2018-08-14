@@ -95,7 +95,7 @@ var opts = {
 	'slice-dist': {
 		alias: 'd',
 		type: 'enum',
-		enum: ['equal','pow2'],
+		enum: ['equal','uniform','pow2'],
 		map: 'outputSizeScheme'
 	},
 	'slices-per-file': {

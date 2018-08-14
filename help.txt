@@ -111,7 +111,10 @@ Output Options:
                              This option doesn't take any parameters.
   -d,  --slice-dist          Specify how recovery slices are distributed
                              amongst output files. Can be:
-                                 equal: equal sized files (default)
+                                 equal: each file contains `--slices-per-file`
+                                        slices (default)
+                                 uniform: slices evenly distributed amongst
+                                          files
                                  pow2: power-of-2 sizing scheme
   -p,  --slices-per-file     Specify the maximum number of slices each file
                              may contain. This option follows the same format
@@ -122,8 +125,9 @@ Output Options:
                              `--slice-dist` is `pow2`, the subsequent file will
                              contain double this number of slices. Format of
                              this option is identical to `--slices-per-file`.
-                             Default is 1 if `--slice-dist` is `pow2`,
-                             otherwise is `--slices-per-file`
+                             Default is 1 if `--slice-dist` is `pow2`, ignored
+                             if `--slice-dist` is `uniform`, otherwise equals
+                             `--slices-per-file`
   -i,  --noindex             Don't output an index file (file with no recovery
                              blocks). This option takes no value.
 
