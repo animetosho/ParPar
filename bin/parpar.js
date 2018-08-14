@@ -100,8 +100,7 @@ var opts = {
 	},
 	'slices-per-file': {
 		alias: 'p',
-		type: 'int',
-		map: 'outputFileMaxSlices'
+		type: 'string'
 	},
 	'noindex': {
 		alias: 'i',
@@ -205,7 +204,7 @@ for(var k in opts) {
 
 var parseSizeOrNum = function(arg, input) {
 	var m;
-	var isRec = (arg.substr(-15) == 'recovery-slices');
+	var isRec = (arg.substr(-15) == 'recovery-slices' || arg == 'slices-per-file');
 	input = input || argv[arg];
 	if(typeof input == 'number' || /^-?\d+$/.test(input)) {
 		input = input|0;
@@ -248,7 +247,12 @@ var parseSizeOrNum = function(arg, input) {
 		error('Invalid value specified for `'+arg+'`');
 };
 
-[['recovery-slices', 'recoverySlices'], ['min-recovery-slices', 'minRecoverySlices'], ['max-recovery-slices', 'maxRecoverySlices']].forEach(function(k) {
+[
+	['recovery-slices', 'recoverySlices'],
+	['min-recovery-slices', 'minRecoverySlices'],
+	['max-recovery-slices', 'maxRecoverySlices'],
+	['slices-per-file', 'outputFileMaxSlices']
+].forEach(function(k) {
 	if(k[0] in argv) {
 		var expr = argv[k[0]].replace(/\s/g, '').replace(/^[\-+]/, function(x) {
 			if(x == '-') return '0-'; // hack to get initial negative term to work

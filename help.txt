@@ -104,7 +104,10 @@ Output Options:
                                  equal: equal sized files (default)
                                  pow2: power-of-2 sizing scheme
   -p,  --slices-per-file     Specify the maximum number of slices each file
-                             may contain. Default 65536
+                             may contain. This option follows the same format
+                             as `--recovery-slices` and supports the same
+                             suffixes.
+                             Default 65536
   -i,  --noindex             Don't output an index file (file with no recovery
                              blocks). This option takes no value.
 
