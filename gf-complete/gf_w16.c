@@ -25,6 +25,19 @@
 #include "gf_w16_additions.c"
 
 
+#ifdef INCLUDE_EXTRACT_WORD
+static
+inline
+gf_val_32_t
+gf_w16_log_multiply(gf_t *gf, gf_val_32_t a, gf_val_32_t b)
+{
+  struct gf_w16_logtable_data *ltd;
+
+  ltd = (struct gf_w16_logtable_data *) ((gf_internal_t *) gf->scratch)->private;
+  return (a == 0 || b == 0) ? 0 : GF_ANTILOG((int) ltd->log_tbl[a] + (int) ltd->log_tbl[b]);
+}
+#endif
+
 static
 void gf_w16_log_init(gf_t *gf)
 {
@@ -48,6 +61,10 @@ void gf_w16_log_init(gf_t *gf)
       }
   }
   ltd->antilog_tbl[GF_MULT_GROUP_SIZE] = ltd->antilog_tbl[0];
+  
+#ifdef INCLUDE_EXTRACT_WORD
+  gf->multiply.w32 = gf_w16_log_multiply;
+#endif
 }
 
 static
