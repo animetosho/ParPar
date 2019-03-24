@@ -39,8 +39,8 @@ void gf_w16_affine_multiply_region(gf_t *gf, void *src, void *dest, gf_val_32_t 
     depmask2 = _mm_srli_si128(depmask2, 2);
     
     /* XOR poly */
-    depmask1 = _mm_xor_si128(depmask1, _mm_andnot_si128(polymask1, last));
-    depmask2 = _mm_xor_si128(depmask2, _mm_andnot_si128(polymask2, last));
+    depmask1 = _mm_xor_si128(depmask1, _mm_and_si128(polymask1, last));
+    depmask2 = _mm_xor_si128(depmask2, _mm_and_si128(polymask2, last));
     
     if(val & i) {
       /* XOR */

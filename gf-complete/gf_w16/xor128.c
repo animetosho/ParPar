@@ -345,16 +345,15 @@ static inline uint8_t* xor_write_jit_sse(jit_t* jit, gf_val_32_t val, gf_w16_pol
     for(i=(1<<14); i; i>>=1) {
       /* rotate */
       __m128i last = _mm_shuffle_epi32(_mm_shufflelo_epi16(depmask1, 0), 0);
-      depmask1 = _mm_insert_epi16(
+      depmask1 = _mm_or_si128(
         _mm_srli_si128(depmask1, 2),
-        _mm_extract_epi16(depmask2, 0),
-        7
+        _mm_slli_si128(depmask2, 14)
       );
       depmask2 = _mm_srli_si128(depmask2, 2);
       
       /* XOR poly */
-      depmask1 = _mm_xor_si128(depmask1, _mm_andnot_si128(polymask1, last));
-      depmask2 = _mm_xor_si128(depmask2, _mm_andnot_si128(polymask2, last));
+      depmask1 = _mm_xor_si128(depmask1, _mm_and_si128(polymask1, last));
+      depmask2 = _mm_xor_si128(depmask2, _mm_and_si128(polymask2, last));
       
       if(val & i) {
         /* XOR */
@@ -430,7 +429,7 @@ static inline uint8_t* xor_write_jit_sse(jit_t* jit, gf_val_32_t val, gf_w16_pol
         _mm_cmpeq_epi16(
           _mm_setzero_si128(),
           /* "(v & (v-1)) == 0" is true if only zero/one bit is set in each word */
-          _mm_and_si128(common_mask, _mm_sub_epi16(common_mask, _mm_set1_epi16(1)))
+          _mm_and_si128(common_mask, _mm_add_epi16(common_mask, _mm_set1_epi16(0xffff)))
         )
       );
       /* now we have a 8x16 mask of one-bit common masks we wish to remove; pack into an int for easy dealing with */
@@ -993,16 +992,15 @@ void gf_w16_xor_lazy_sse_altmap_multiply_region(gf_t *gf, void *src, void *dest,
   for(i=(1<<14); i; i>>=1) {
     /* rotate */
     __m128i last = _mm_shuffle_epi32(_mm_shufflelo_epi16(depmask1, 0), 0);
-    depmask1 = _mm_insert_epi16(
+    depmask1 = _mm_or_si128(
       _mm_srli_si128(depmask1, 2),
-      _mm_extract_epi16(depmask2, 0),
-      7
+      _mm_slli_si128(depmask2, 14)
     );
     depmask2 = _mm_srli_si128(depmask2, 2);
     
     /* XOR poly */
-    depmask1 = _mm_xor_si128(depmask1, _mm_andnot_si128(polymask1, last));
-    depmask2 = _mm_xor_si128(depmask2, _mm_andnot_si128(polymask2, last));
+    depmask1 = _mm_xor_si128(depmask1, _mm_and_si128(polymask1, last));
+    depmask2 = _mm_xor_si128(depmask2, _mm_and_si128(polymask2, last));
     
     if(val & i) {
       /* XOR */

@@ -282,8 +282,8 @@ static void gf_w16_xordep128_poly_init(gf_internal_t* h) {
 	polymask2 = _mm_cmpeq_epi16(_mm_setzero_si128(), polymask2);
 	
 	ltd->poly = (gf_w16_poly_struct*)(((uintptr_t)&ltd->_poly + sizeof(gf_w16_poly_struct)-1) & ~(sizeof(gf_w16_poly_struct)-1));
-	ltd->poly->p16[0] = polymask1;
-	ltd->poly->p16[1] = polymask2;
+	ltd->poly->p16[0] = _mm_xor_si128(polymask1, _mm_set1_epi8(0xff));
+	ltd->poly->p16[1] = _mm_xor_si128(polymask2, _mm_set1_epi8(0xff));
 }
 #endif
 #ifdef INTEL_AVX2
