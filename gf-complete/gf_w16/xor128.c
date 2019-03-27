@@ -351,7 +351,7 @@ static inline uint8_t* xor_write_jit_sse(jit_t* jit, gf_val_32_t val, gf_w16_pol
       depmask1 = _mm_xor_si128(depmask1, _mm_and_si128(polymask1, last));
       depmask2 = _mm_xor_si128(depmask2, _mm_and_si128(polymask2, last));
       
-      valtest = _mm_slli_epi16(valtest, 1);
+      valtest = _mm_add_epi16(valtest, valtest);
       addmask = _mm_srai_epi16(valtest, 15);
       depmask1 = _mm_xor_si128(depmask1, _mm_and_si128(addvals1, addmask));
       depmask2 = _mm_xor_si128(depmask2, _mm_and_si128(addvals2, addmask));
@@ -393,7 +393,7 @@ static inline uint8_t* xor_write_jit_sse(jit_t* jit, gf_val_32_t val, gf_w16_pol
       tmp4h = _mm_and_si128(_mm_srli_epi16(tmp4, 4), lmask);
       /* expand bits: idea from https://graphics.stanford.edu/~seander/bithacks.html#InterleaveBMN */
       #define EXPAND_ROUND(src, shift, mask) _mm_and_si128( \
-        _mm_or_si128(src, _mm_slli_epi16(src, shift)), \
+        _mm_or_si128(src, shift==1 ? _mm_add_epi16(src, src) : _mm_slli_epi16(src, shift)), \
         _mm_set1_epi16(mask) \
       )
       /* 8-bit -> 16-bit convert, with 4-bit interleave */
@@ -403,7 +403,7 @@ static inline uint8_t* xor_write_jit_sse(jit_t* jit, gf_val_32_t val, gf_w16_pol
       tmp2 = EXPAND_ROUND(tmp2, 2, 0x3333);
       tmp1 = EXPAND_ROUND(tmp1, 1, 0x5555);
       tmp2 = EXPAND_ROUND(tmp2, 1, 0x5555);
-      _mm_store_si128((__m128i*)(lumask), _mm_or_si128(tmp1, _mm_slli_epi16(tmp2, 1)));
+      _mm_store_si128((__m128i*)(lumask), _mm_or_si128(tmp1, _mm_add_epi16(tmp2, tmp2)));
       
       tmp1 = _mm_unpackhi_epi8(tmp3l, tmp3h);
       tmp2 = _mm_unpackhi_epi8(tmp4l, tmp4h);
@@ -411,7 +411,7 @@ static inline uint8_t* xor_write_jit_sse(jit_t* jit, gf_val_32_t val, gf_w16_pol
       tmp2 = EXPAND_ROUND(tmp2, 2, 0x3333);
       tmp1 = EXPAND_ROUND(tmp1, 1, 0x5555);
       tmp2 = EXPAND_ROUND(tmp2, 1, 0x5555);
-      _mm_store_si128((__m128i*)(lumask + 4), _mm_or_si128(tmp1, _mm_slli_epi16(tmp2, 1)));
+      _mm_store_si128((__m128i*)(lumask + 4), _mm_or_si128(tmp1, _mm_add_epi16(tmp2, tmp2)));
       
       #undef EXPAND_ROUND
       
@@ -993,7 +993,7 @@ void gf_w16_xor_lazy_sse_altmap_multiply_region(gf_t *gf, void *src, void *dest,
     depmask1 = _mm_xor_si128(depmask1, _mm_and_si128(polymask1, last));
     depmask2 = _mm_xor_si128(depmask2, _mm_and_si128(polymask2, last));
     
-    valtest = _mm_slli_epi16(valtest, 1);
+    valtest = _mm_add_epi16(valtest, valtest);
     addmask = _mm_srai_epi16(valtest, 15);
     depmask1 = _mm_xor_si128(depmask1, _mm_and_si128(addvals1, addmask));
     depmask2 = _mm_xor_si128(depmask2, _mm_and_si128(addvals2, addmask));

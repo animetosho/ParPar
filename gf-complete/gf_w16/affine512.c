@@ -32,7 +32,7 @@ void gf_w16_affine512_multiply_region(gf_t *gf, void *src, void *dest, gf_val_32
     __m256i last = _mm256_shuffle_epi8(depmask, shuf);
     depmask = _mm256_srli_si256(depmask, 1);
     
-    valtest = _mm256_slli_epi16(valtest, 1);
+    valtest = _mm256_add_epi16(valtest, valtest);
     addmask = _mm256_srai_epi16(valtest, 15);
     addmask = _mm256_and_si256(addvals, addmask);
     

@@ -124,7 +124,7 @@ static uint8_t* xor_write_jit_avx512(jit_t* jit, gf_val_32_t val, gf_w16_poly_st
       __m256i last = _mm256_shuffle_epi8(depmask, shuf);
       depmask = _mm256_srli_si256(depmask, 1);
       
-	  valtest = _mm256_slli_epi16(valtest, 1);
+	  valtest = _mm256_add_epi16(valtest, valtest);
 	  addmask = _mm256_srai_epi16(valtest, 15);
 	  addmask = _mm256_and_si256(addvals, addmask);
 	  

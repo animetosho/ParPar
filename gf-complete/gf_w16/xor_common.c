@@ -62,12 +62,12 @@ void _FN(gf_w16_xor_start)(void* src, int bytes, void* dest) {
 				/* save to dest by extracting 16-bit masks */
 				dtmp[0+j] = MOVMASK(th);
 				for(i=1; i<8; i++) {
-					th = _MM(slli_epi16)(th, 1); // byte shift would be nicer, but ultimately doesn't matter here
+					th = _MM(add_epi8)(th, th); // << 1
 					dtmp[i*8+j] = MOVMASK(th);
 				}
 				dtmp[64+j] = MOVMASK(tl);
 				for(i=1; i<8; i++) {
-					tl = _MM(slli_epi16)(tl, 1);
+					tl = _MM(add_epi8)(tl, tl);
 					dtmp[64+i*8+j] = MOVMASK(tl);
 				}
 				sW += 2;
@@ -110,12 +110,12 @@ void _FN(gf_w16_xor_start)(void* src, int bytes, void* dest) {
 				/* save to dest by extracting masks */
 				dtmp[0+j] = MOVMASK(th);
 				for(i=1; i<8; i++) {
-					th = _MM(slli_epi16)(th, 1); // byte shift would be nicer, but ultimately doesn't matter here
+					th = _MM(add_epi8)(th, th);
 					dtmp[i*8+j] = MOVMASK(th);
 				}
 				dtmp[64+j] = MOVMASK(tl);
 				for(i=1; i<8; i++) {
-					tl = _MM(slli_epi16)(tl, 1);
+					tl = _MM(add_epi8)(tl, tl);
 					dtmp[64+i*8+j] = MOVMASK(tl);
 				}
 				sW += 2;
@@ -225,8 +225,8 @@ void _FN(gf_w16_xor_final)(void* src, int bytes, void* dest) {
 			dtmp[j*16 + 7] = MOVMASK(ta);
 			dtmp[j*16 + 15] = MOVMASK(tb);
 			for(i=1; i<8; i++) {
-				ta = _MM(slli_epi16)(ta, 1);
-				tb = _MM(slli_epi16)(tb, 1);
+				ta = _MM(add_epi8)(ta, ta);
+				tb = _MM(add_epi8)(tb, tb);
 				dtmp[j*16 + 7-i] = MOVMASK(ta);
 				dtmp[j*16 + 15-i] = MOVMASK(tb);
 			}
