@@ -62,7 +62,7 @@ void gf_w16_xor_create_jit_lut_avx2(void) {
 }
 
 static inline __m128i ssse3_tzcnt_epi16(__m128i v) {
-    __m128i lmask = _mm_set1_epi8(0xf);
+	__m128i lmask = _mm_set1_epi8(0xf);
 	__m128i low = _mm_shuffle_epi8(_mm_set_epi8(
 		0,1,0,2,0,1,0,3,0,1,0,2,0,1,0,16
 	), _mm_and_si128(v, lmask));
@@ -75,7 +75,7 @@ static inline __m128i ssse3_tzcnt_epi16(__m128i v) {
 	return _mm_min_epu8(low, high);
 }
 static inline __m128i ssse3_lzcnt_epi16(__m128i v) {
-    __m128i lmask = _mm_set1_epi8(0xf);
+	__m128i lmask = _mm_set1_epi8(0xf);
 	__m128i low = _mm_shuffle_epi8(_mm_set_epi8(
 		4,4,4,4,4,4,4,4,5,5,5,5,6,6,7,16
 	), _mm_and_si128(v, lmask));
@@ -182,14 +182,10 @@ static uint8_t* xor_write_jit_avx(jit_t* jit, gf_val_32_t val, gf_w16_poly_struc
     
     __m256i shuf = poly->p32;
     
-    __m256i depmask;
-    if(val & (1<<15)) {
-      /* XOR */
-      depmask = addvals;
-    } else {
-      depmask = _mm256_setzero_si256();
-    }
-    for(i=(1<<14); i; i>>=1) {
+	__m256i valtest = _mm256_set1_epi16(val);
+	__m256i addmask = _mm256_srai_epi16(valtest, 15);
+	__m256i depmask = _mm256_and_si256(addvals, addmask);
+    for(i=0; i<15; i++) {
       /* rotate */
       __m256i last = _mm256_shuffle_epi8(depmask, shuf);
       depmask = _mm256_srli_si256(depmask, 1);
@@ -197,10 +193,9 @@ static uint8_t* xor_write_jit_avx(jit_t* jit, gf_val_32_t val, gf_w16_poly_struc
       /* XOR poly */
       depmask = _mm256_xor_si256(depmask, last);
       
-      if(val & i) {
-        /* XOR */
-        depmask = _mm256_xor_si256(depmask, addvals);
-      }
+	  valtest = _mm256_slli_epi16(valtest, 1);
+	  addmask = _mm256_srai_epi16(valtest, 15);
+	  depmask = _mm256_xor_si256(depmask, _mm256_and_si256(addvals, addmask));
     }
     
     __m128i common_mask, tmp1, tmp2, tmp3, tmp4;

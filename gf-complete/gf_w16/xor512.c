@@ -2,7 +2,7 @@
 #include "x86_jit.c"
 #include "../gf_w16.h"
 
-#if defined(INTEL_AVX512BW) && defined(AMD64)
+#if defined(INTEL_AVX512BW) && defined(INTEL_AVX512VL) && defined(AMD64)
 #include "xor.h"
 #include <immintrin.h>
 
@@ -116,26 +116,25 @@ static uint8_t* xor_write_jit_avx512(jit_t* jit, gf_val_32_t val, gf_w16_poly_st
 	
 	__m256i shuf = poly->p32;
 	
-	__m256i depmask;
-	if(val & (1<<15)) {
-		/* XOR */
-		depmask = addvals;
-	} else {
-		depmask = _mm256_setzero_si256();
-	}
-	for(i=(1<<14); i; i>>=1) {
-		/* rotate */
-		__m256i last = _mm256_shuffle_epi8(depmask, shuf);
-		depmask = _mm256_srli_si256(depmask, 1);
-		
-		/* XOR poly */
-		depmask = _mm256_xor_si256(depmask, last);
-		
-		if(val & i) {
-			/* XOR */
-			depmask = _mm256_xor_si256(depmask, addvals);
-		}
-	}
+	__m256i valtest = _mm256_set1_epi16(val);
+	__m256i addmask = _mm256_srai_epi16(valtest, 15);
+	__m256i depmask = _mm256_and_si256(addvals, addmask);
+    for(i=0; i<15; i++) {
+      /* rotate */
+      __m256i last = _mm256_shuffle_epi8(depmask, shuf);
+      depmask = _mm256_srli_si256(depmask, 1);
+      
+	  valtest = _mm256_slli_epi16(valtest, 1);
+	  addmask = _mm256_srai_epi16(valtest, 15);
+	  addmask = _mm256_and_si256(addvals, addmask);
+	  
+      /* XOR poly+addvals */
+      depmask = _mm256_ternarylogic_epi32(depmask, last, addmask, 0x96);
+	  
+	  // the above tactic seems to be a tad bit faster than the old one using the following:
+	  // depmask = _mm256_mask_xor_epi32(depmask, -((val & i)!=0), depmask, addvals);
+    }
+	
 	
 	/* interleave so that word pairs are split */
 	__m128i depmask1 = _mm256_castsi256_si128(depmask);

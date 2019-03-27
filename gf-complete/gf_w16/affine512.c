@@ -3,13 +3,12 @@
 #include "../gf_int.h"
 #include "../gf_w16.h"
 
-#if defined(INTEL_GFNI) && defined(INTEL_AVX512BW)
+#if defined(INTEL_GFNI) && defined(INTEL_AVX512BW) && defined(INTEL_AVX512VL)
 void gf_w16_affine512_multiply_region(gf_t *gf, void *src, void *dest, gf_val_32_t val, int bytes, int xor)
 {
   FAST_U32 i;
   __m512i* sW, * dW, * topW;
   __m512i ta, tb, tpl, tph;
-  __m256i depmask, addvals;
   gf_region_data rd;
   gf_internal_t *h = (gf_internal_t *) gf->scratch;
   struct gf_w16_logtable_data* ltd = (struct gf_w16_logtable_data*)(h->private);
@@ -18,31 +17,27 @@ void gf_w16_affine512_multiply_region(gf_t *gf, void *src, void *dest, gf_val_32
   gf_w16_log_region_alignment(&rd, gf, src, dest, bytes, val, xor, 64, 128);
   
   
-  addvals = _mm256_set_epi8(
+  __m256i addvals = _mm256_set_epi8(
     0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0, 0, 0, 0, 0, 0, 0, 0,
     0, 0, 0, 0, 0, 0, 0, 0, 0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80
   );
   
   __m256i shuf = ltd->poly->p32;
   
-  if(val & (1<<15)) {
-    /* XOR */
-    depmask = addvals;
-  } else {
-    depmask = _mm256_setzero_si256();
-  }
-  for(i=(1<<14); i; i>>=1) {
+  __m256i valtest = _mm256_set1_epi16(val);
+  __m256i addmask = _mm256_srai_epi16(valtest, 15);
+  __m256i depmask = _mm256_and_si256(addvals, addmask);
+  for(i=0; i<15; i++) {
     /* rotate */
     __m256i last = _mm256_shuffle_epi8(depmask, shuf);
     depmask = _mm256_srli_si256(depmask, 1);
     
-    /* XOR poly */
-    depmask = _mm256_xor_si256(depmask, last);
+    valtest = _mm256_slli_epi16(valtest, 1);
+    addmask = _mm256_srai_epi16(valtest, 15);
+    addmask = _mm256_and_si256(addvals, addmask);
     
-    if(val & i) {
-      /* XOR */
-      depmask = _mm256_xor_si256(depmask, addvals);
-    }
+    /* XOR poly+addvals */
+    depmask = _mm256_ternarylogic_epi32(depmask, last, addmask, 0x96);
   }
   
     

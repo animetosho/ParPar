@@ -75,6 +75,9 @@ typedef unsigned __int32 FAST_U32;
 # ifdef __AVX512BW__
 	#define INTEL_AVX512BW 1
 # endif
+# ifdef __AVX512VL__
+	#define INTEL_AVX512VL 1
+# endif
 
 
 # if defined(__WORDSIZE)

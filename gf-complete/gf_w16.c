@@ -356,7 +356,7 @@ int gf_w16_affine_init(gf_t *gf)
     gf->extract_word.w32 = gf_w16_split_extract_word_sse;
 #endif
   } else {
-#ifdef INTEL_AVX512BW
+#if defined(INTEL_AVX512BW) && defined(INTEL_AVX512VL)
     gf->mult_method = GF_AFFINE_AVX512;
     gf->multiply_region.w32 = gf_w16_affine512_multiply_region;
     gf->altmap_region = gf_w16_split_start_avx512;
@@ -423,7 +423,7 @@ int gf_w16_xor_init(gf_t *gf, int use_jit)
   /* if JIT allocation was successful (no W^X issue), use slightly faster JIT version, otherwise fall back to static code version */
   
   gf->using_altmap = 1;
-#if defined(AMD64) && defined(INTEL_AVX512BW)
+#if defined(AMD64) && defined(INTEL_AVX512BW) && defined(INTEL_AVX512VL)
   if(jit->code && wordsize >= 512) {
     gf->mult_method = GF_XOR_JIT_AVX512;
     gf->alignment = 64;

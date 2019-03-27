@@ -334,15 +334,11 @@ static inline uint8_t* xor_write_jit_sse(jit_t* jit, gf_val_32_t val, gf_w16_pol
     polymask1 = poly->p16[0];
     polymask2 = poly->p16[1];
     
-    if(val & (1<<15)) {
-      /* XOR */
-      depmask1 = addvals1;
-      depmask2 = addvals2;
-    } else {
-      depmask1 = _mm_setzero_si128();
-      depmask2 = _mm_setzero_si128();
-    }
-    for(i=(1<<14); i; i>>=1) {
+    __m128i valtest = _mm_set1_epi16(val);
+    __m128i addmask = _mm_srai_epi16(valtest, 15);
+    depmask1 = _mm_and_si128(addvals1, addmask);
+    depmask2 = _mm_and_si128(addvals2, addmask);
+    for(i=0; i<15; i++) {
       /* rotate */
       __m128i last = _mm_shuffle_epi32(_mm_shufflelo_epi16(depmask1, 0), 0);
       depmask1 = _mm_or_si128(
@@ -355,11 +351,10 @@ static inline uint8_t* xor_write_jit_sse(jit_t* jit, gf_val_32_t val, gf_w16_pol
       depmask1 = _mm_xor_si128(depmask1, _mm_and_si128(polymask1, last));
       depmask2 = _mm_xor_si128(depmask2, _mm_and_si128(polymask2, last));
       
-      if(val & i) {
-        /* XOR */
-        depmask1 = _mm_xor_si128(depmask1, addvals1);
-        depmask2 = _mm_xor_si128(depmask2, addvals2);
-      }
+      valtest = _mm_slli_epi16(valtest, 1);
+      addmask = _mm_srai_epi16(valtest, 15);
+      depmask1 = _mm_xor_si128(depmask1, _mm_and_si128(addvals1, addmask));
+      depmask2 = _mm_xor_si128(depmask2, _mm_and_si128(addvals2, addmask));
     }
     
     
@@ -981,15 +976,11 @@ void gf_w16_xor_lazy_sse_altmap_multiply_region(gf_t *gf, void *src, void *dest,
   polymask1 = ltd->poly->p16[0];
   polymask2 = ltd->poly->p16[1];
   
-  if(val & (1<<15)) {
-    /* XOR */
-    depmask1 = addvals1;
-    depmask2 = addvals2;
-  } else {
-    depmask1 = _mm_setzero_si128();
-    depmask2 = _mm_setzero_si128();
-  }
-  for(i=(1<<14); i; i>>=1) {
+  __m128i valtest = _mm_set1_epi16(val);
+  __m128i addmask = _mm_srai_epi16(valtest, 15);
+  depmask1 = _mm_and_si128(addvals1, addmask);
+  depmask2 = _mm_and_si128(addvals2, addmask);
+  for(i=0; i<15; i++) {
     /* rotate */
     __m128i last = _mm_shuffle_epi32(_mm_shufflelo_epi16(depmask1, 0), 0);
     depmask1 = _mm_or_si128(
@@ -1002,12 +993,12 @@ void gf_w16_xor_lazy_sse_altmap_multiply_region(gf_t *gf, void *src, void *dest,
     depmask1 = _mm_xor_si128(depmask1, _mm_and_si128(polymask1, last));
     depmask2 = _mm_xor_si128(depmask2, _mm_and_si128(polymask2, last));
     
-    if(val & i) {
-      /* XOR */
-      depmask1 = _mm_xor_si128(depmask1, addvals1);
-      depmask2 = _mm_xor_si128(depmask2, addvals2);
-    }
+    valtest = _mm_slli_epi16(valtest, 1);
+    addmask = _mm_srai_epi16(valtest, 15);
+    depmask1 = _mm_xor_si128(depmask1, _mm_and_si128(addvals1, addmask));
+    depmask2 = _mm_xor_si128(depmask2, _mm_and_si128(addvals2, addmask));
   }
+  
   
   /* generate needed tables */
   _mm_store_si128((__m128i*)(tmp_depmask), depmask1);

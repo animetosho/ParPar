@@ -24,15 +24,11 @@ void gf_w16_affine_multiply_region(gf_t *gf, void *src, void *dest, gf_val_32_t 
   polymask1 = ltd->poly->p16[0];
   polymask2 = ltd->poly->p16[1];
   
-  if(val & (1<<15)) {
-    /* XOR */
-    depmask1 = addvals1;
-    depmask2 = addvals2;
-  } else {
-    depmask1 = _mm_setzero_si128();
-    depmask2 = _mm_setzero_si128();
-  }
-  for(i=(1<<14); i; i>>=1) {
+  __m128i valtest = _mm_set1_epi16(val);
+  __m128i addmask = _mm_srai_epi16(valtest, 15);
+  depmask1 = _mm_and_si128(addvals1, addmask);
+  depmask2 = _mm_and_si128(addvals2, addmask);
+  for(i=0; i<15; i++) {
     /* rotate */
     __m128i last = _mm_shuffle_epi8(depmask1, _mm_set_epi8(1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0));
     depmask1 = _mm_alignr_epi8(depmask2, depmask1, 2);
@@ -42,11 +38,10 @@ void gf_w16_affine_multiply_region(gf_t *gf, void *src, void *dest, gf_val_32_t 
     depmask1 = _mm_xor_si128(depmask1, _mm_and_si128(polymask1, last));
     depmask2 = _mm_xor_si128(depmask2, _mm_and_si128(polymask2, last));
     
-    if(val & i) {
-      /* XOR */
-      depmask1 = _mm_xor_si128(depmask1, addvals1);
-      depmask2 = _mm_xor_si128(depmask2, addvals2);
-    }
+    valtest = _mm_slli_epi16(valtest, 1);
+    addmask = _mm_srai_epi16(valtest, 15);
+    depmask1 = _mm_xor_si128(depmask1, _mm_and_si128(addvals1, addmask));
+    depmask2 = _mm_xor_si128(depmask2, _mm_and_si128(addvals2, addmask));
   }
     
   __m128i mat_ll, mat_lh, mat_hl, mat_hh;
