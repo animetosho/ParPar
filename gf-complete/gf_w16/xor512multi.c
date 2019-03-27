@@ -2,7 +2,7 @@
 #include "x86_jit.c"
 #include "../gf_w16.h"
 
-#if defined(INTEL_AVX512BW) && defined(AMD64)
+#if defined(INTEL_AVX512BW) && defined(INTEL_AVX512VL) && defined(AMD64)
 #include "xor.h"
 #include <immintrin.h>
 
@@ -375,9 +375,8 @@ static inline void* xor_write_jit_avx512(uint8_t* jitptr, int memreg, gf_val_32_
 	/* interleave so that word pairs are split */
 	__m128i depmask1 = _mm256_castsi256_si128(depmask);
 	__m128i depmask2 = _mm256_extracti128_si256(depmask, 1);
-	__m128i mask1 = _mm_blendv_epi8(_mm_slli_si128(depmask2, 1), depmask1, _mm_set1_epi16(0xff));
-	__m128i mask2 = _mm_blendv_epi8(depmask2, _mm_srli_si128(depmask1, 1), _mm_set1_epi16(0xff));
-	
+	__m128i mask1 = _mm_mask_blend_epi8(0x5555, _mm_slli_si128(depmask2, 1), depmask1);
+	__m128i mask2 = _mm_mask_blend_epi8(0x5555, depmask2, _mm_srli_si128(depmask1, 1));
 
 	__m128i common_mask = _mm_and_si128(mask1, mask2);
 	/* eliminate pointless common_mask entries */
