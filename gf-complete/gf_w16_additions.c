@@ -48,14 +48,14 @@ void detect_cpu(void) {
 	has_pclmul = (cpuInfo[2] & 0x2);
 	#endif
 	
-	family = ((cpuInfo[0]>>8) & 0xf) + ((cpuInfo[0]>>20) & 0xff);
+	family = ((cpuInfo[0]>>8) & 0xf) + ((cpuInfo[0]>>16) & 0xff0);
 	model = ((cpuInfo[0]>>4) & 0xf) + ((cpuInfo[0]>>12) & 0xf0);
 	
 	has_slow_shuffle = 131072; // it seems like XOR JIT is always faster than shuffle at ~128KB sizes
 	
 	if(family == 6) {
 		/* from handy table at http://a4lg.com/tech/x86/database/x86-families-and-models.en.html */
-		if(model == 0x1C || model == 0x26 || model == 0x27 || model == 0x35 || model == 0x36 || model == 0x37 || model == 0x4A || model == 0x4D) {
+		if(model == 0x1C || model == 0x26 || model == 0x27 || model == 0x35 || model == 0x36 || model == 0x37 || model == 0x4A || model == 0x4C || model == 0x4D || model == 0x5A || model == 0x5D) {
 			/* we have a Bonnell/Silvermont CPU with a really slow pshufb instruction; pretend SSSE3 doesn't exist, as XOR_DEPENDS is much faster */
 			has_slow_shuffle = 2048;
 		}
@@ -64,8 +64,12 @@ void detect_cpu(void) {
 			has_slow_shuffle = 16384;
 		}
 	}
+	if((family == 0x5f && (model == 0 || model == 1 || model == 2)) || (family == 0x6f && (model == 0 || model == 0x10 || model == 0x20 || model == 0x30))) {
+		/* Jaguar has a slow shuffle instruction and XOR is much faster; presumably the same for Bobcat/Puma */
+		has_slow_shuffle = 2048;
+	}
 	
-	has_avxslow = (family == 0x6f || family == 0x7f || family == 0x8f); // AMD CPUs currently have 128b FPUs
+	has_avxslow = (family == 0x6f || family == 0x7f || (family == 0x8f && (model == 0 || model == 1 || model == 8 || model == 0x11))); // AMD CPUs currently have 128b FPUs
 
 #if !defined(_MSC_VER) || _MSC_VER >= 1600
 	_cpuidX(cpuInfo, 7, 0);

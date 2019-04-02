@@ -3,7 +3,7 @@
 
 #ifdef INTEL_SSE2
 #if defined(__tune_corei7__) || defined(__tune_corei7_avx__)
-  /* Nehalem and later Intel CPUs have a weird Self-Modifying Code slowdown when writing executable code, observed in Nehalem-Haswell, but not on Core2 and Silvermont or AMD K10 */
+  /* Nehalem and later Intel CPUs have a weird Self-Modifying Code slowdown when writing executable code, observed in Nehalem-Haswell, but not on Core2, Silvermont/Goldmont, AMD K10 or AMD Jaguar */
   #define CPU_SLOW_SMC 1
 #endif
 #if defined(__tune_core_avx2__) || defined(__tune_znver1__)
