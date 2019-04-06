@@ -41,6 +41,9 @@
 # if _MSC_VER >= 1912 && defined(INTEL_AVX512BW)
 	#define INTEL_AVX512VL 1
 # endif
+# if _MSC_VER >= 1920 && defined(INTEL_SSE2)
+	#define INTEL_GFNI 1
+# endif
 
 # ifdef _WIN64
 typedef unsigned __int64 FAST_U8;
