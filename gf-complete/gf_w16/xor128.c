@@ -335,7 +335,7 @@ static inline uint8_t* xor_write_jit_sse(jit_t* jit, gf_val_32_t val, gf_w16_pol
     polymask2 = poly->p16[1];
     
     __m128i valtest = _mm_set1_epi16(val);
-    __m128i addmask = _mm_srai_epi16(valtest, 15);
+    __m128i addmask = _mm_srai_epi16(valtest, 15); /* _mm_cmpgt_epi16(_mm_setzero_si128(), valtest)  is an alternative, but GCC/Clang prefer the former, so trust the compiler */
     depmask1 = _mm_and_si128(addvals1, addmask);
     depmask2 = _mm_and_si128(addvals2, addmask);
     for(i=0; i<15; i++) {
@@ -484,24 +484,14 @@ static inline uint8_t* xor_write_jit_sse(jit_t* jit, gf_val_32_t val, gf_w16_pol
     #define _LD_DQA(xreg, mreg, offs) \
         *(int64_t*)(jitptr) = 0x406F0F66 + ((xreg) <<27) + ((mreg) <<24) + ((int64_t)((offs)&0xFF) <<32); \
         jitptr += 5
-    #define _ST_DQA(mreg, offs, xreg) \
-        *(int64_t*)(jitptr) = 0x407F0F66 + ((xreg) <<27) + ((mreg) <<24) + ((int64_t)((offs)&0xFF) <<32); \
-        jitptr += 5
 #else
     #define _LD_DQA(xreg, mreg, offs) \
         *(int32_t*)(jitptr) = 0x406F0F66 + ((xreg) <<27) + ((mreg) <<24); \
         *(jitptr +4) = (uint8_t)((offs)&0xFF); \
         jitptr += 5
-    #define _ST_DQA(mreg, offs, xreg) \
-        *(int32_t*)(jitptr) = 0x407F0F66 + ((xreg) <<27) + ((mreg) <<24); \
-        *(jitptr +4) = (uint8_t)((offs)&0xFF); \
-        jitptr += 5
 #endif
     #define _LD_DQA64(xreg, mreg, offs) \
         *(int64_t*)(jitptr) = 0x406F0F4466 + ((int64_t)(xreg-8) <<35) + ((int64_t)(mreg) <<32) + ((int64_t)((offs)&0xFF) <<40); \
-        jitptr += 6
-    #define _ST_DQA64(mreg, offs, xreg) \
-        *(int64_t*)(jitptr) = 0x407F0F4466 + ((int64_t)(xreg-8) <<35) + ((int64_t)(mreg) <<32) + ((int64_t)((offs)&0xFF) <<40); \
         jitptr += 6
     
     
@@ -637,7 +627,7 @@ static inline uint8_t* xor_write_jit_sse(jit_t* jit, gf_val_32_t val, gf_w16_pol
         /*temp storage*/
         for(bit=0; bit<8; bit+=2) {
           jitptr += _jit_movaps_store(jitptr, SI, -(bit<<4) -16, bit);
-          jitptr += _jit_movdqa_store(jitptr, SI, -((bit+1)<<4) -16, bit+1);
+          jitptr += _jit_movaps_store(jitptr, SI, -((bit+1)<<4) -16, bit+1);
         }
         for(; bit<16; bit+=2) {
           int destOffs = (bit<<4)-128;
@@ -674,7 +664,7 @@ static inline uint8_t* xor_write_jit_sse(jit_t* jit, gf_val_32_t val, gf_w16_pol
         /*temp storage*/
         for(bit=0; bit<8; bit+=2) {
           jitptr += _jit_movaps_store(jitptr, SI, -((int32_t)bit<<4) -16, bit);
-          jitptr += _jit_movdqa_store(jitptr, SI, -(((int32_t)bit+1)<<4) -16, bit+1);
+          jitptr += _jit_movaps_store(jitptr, SI, -(((int32_t)bit+1)<<4) -16, bit+1);
         }
 #endif
         for(bit=8; bit<16; bit+=2) {
@@ -698,18 +688,18 @@ static inline uint8_t* xor_write_jit_sse(jit_t* jit, gf_val_32_t val, gf_w16_pol
       for(bit=0; bit<8; bit+=2) {
         int destOffs = (bit<<4)-128;
         _ST_APS(DX, destOffs, bit);
-        _ST_DQA(DX, destOffs+16, bit+1);
+        _ST_APS(DX, destOffs+16, bit+1);
       }
       for(; bit<16; bit+=2) {
         int destOffs = (bit<<4)-128;
         _ST_APS64(DX, destOffs, bit);
-        _ST_DQA64(DX, destOffs+16, bit+1);
+        _ST_APS64(DX, destOffs+16, bit+1);
       }
 #else
       for(bit=8; bit<16; bit+=2) {
         int destOffs = (bit<<4)-128;
         _ST_APS(DX, destOffs, bit -8);
-        _ST_DQA(DX, destOffs+16, bit -7);
+        _ST_APS(DX, destOffs+16, bit -7);
       }
       /* copy temp */
       for(bit=0; bit<8; bit++) {
@@ -790,7 +780,7 @@ static inline uint8_t* xor_write_jit_sse(jit_t* jit, gf_val_32_t val, gf_w16_pol
 #endif
           
           _ST_APS(DX, destOffs, 0);
-          _ST_DQA(DX, destOffs2, 1);
+          _ST_APS(DX, destOffs2, 1);
         }
       } else {
         for(bit=0; bit<8; bit++) {
@@ -855,12 +845,12 @@ static inline uint8_t* xor_write_jit_sse(jit_t* jit, gf_val_32_t val, gf_w16_pol
             if(!movC) {
               jitptr[posC] = 0x6F; // PXOR -> MOVDQA
               if(mov1) { /* no additional XORs were made? */
-                _ST_DQA(DX, destOffs, 2);
+                _ST_APS(DX, destOffs, 2);
               } else {
                 _XORPS_R(0, 2);
               }
               if(mov2) {
-                _ST_DQA(DX, destOffs2, 2);
+                _ST_APS(DX, destOffs2, 2);
               } else {
                 _PXOR_R(1, 2); /*penalty?*/
               }
@@ -876,7 +866,7 @@ static inline uint8_t* xor_write_jit_sse(jit_t* jit, gf_val_32_t val, gf_w16_pol
             _ST_APS(DX, destOffs, 0);
           }
           if(!mov2) {
-            _ST_DQA(DX, destOffs2, 1);
+            _ST_APS(DX, destOffs2, 1);
           }
         }
       }
