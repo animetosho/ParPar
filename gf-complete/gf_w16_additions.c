@@ -18,10 +18,20 @@ int has_neon = 0;
 #ifdef _MSC_VER
 	#define _cpuid __cpuid
 	#define _cpuidX __cpuidex
+	#if _MSC_VER >= 1600
+		#include <immintrin.h>
+		#define _GET_XCR() _xgetbv(_XCR_XFEATURE_ENABLED_MASK)
+	#endif
 #else
 	/* GCC seems to support this, I assume everyone else does too? */
 	#define _cpuid(ar, eax) __cpuid(eax, ar[0], ar[1], ar[2], ar[3])
 	#define _cpuidX(ar, eax, ecx) __cpuid_count(eax, ecx, ar[0], ar[1], ar[2], ar[3])
+	
+	static inline _GET_XCR() {
+		uint32_t xcr0;
+		__asm__ __volatile__("xgetbv" : "=a" (xcr0) : "c" (0) : "%edx");
+		return xcr0;
+	}
 #endif
 
 #ifdef ARM_NEON
@@ -72,14 +82,18 @@ void detect_cpu(void) {
 	has_avxslow = (family == 0x6f || family == 0x7f || (family == 0x8f && (model == 0 || model == 1 || model == 8 || model == 0x11))); // AMD CPUs currently have 128b FPUs
 
 #if !defined(_MSC_VER) || _MSC_VER >= 1600
+	int hasOSXsave = (cpuInfo[2] & 0x8000000);
 	_cpuidX(cpuInfo, 7, 0);
 	
-	#ifdef INTEL_AVX2
-	has_avx2 = (cpuInfo[1] & 0x20);
-	#endif
-	#ifdef INTEL_AVX512BW
-	has_avx512bw = (cpuInfo[1] & 0x40010000) == 0x40010000;
-	#endif
+	if(hasOSXsave) {
+		int xcr = _GET_XCR() & 0xff;
+		#ifdef INTEL_AVX2
+		has_avx2 = (cpuInfo[1] & 0x20) && (xcr & 6 == 6);
+		#endif
+		#ifdef INTEL_AVX512BW
+		has_avx512bw = ((cpuInfo[1] & 0x40010000) == 0x40010000) && (xcr & 0xE6 == 0xE6);
+		#endif
+	}
 	#ifdef INTEL_GFNI
 	has_gfni = (cpuInfo[2] & 0x100) == 0x100;
 	#endif
