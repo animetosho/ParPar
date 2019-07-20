@@ -18,7 +18,7 @@ Note that I will not explore multiplying by 0 or 1 here, as they can be triviall
 
 ### Terms
 
-- the symbol ‘w’ will refer the size of the Galois Field in bits, i.e. GF(2^w^), e.g. w=8 refers to GF(256).
+- the symbol ‘w’ will refer the size of the Galois Field in bits, i.e. GF(2<sup>w</sup>), e.g. w=8 refers to GF(256).
 - the symbol *Polynomial* will refer to the polynomial of the *w*-bit field being used
 - the symbol *n* will refer to the *w*-bit constant to be multiplied by, aka ‘the multiplier’
 
@@ -255,12 +255,12 @@ End For
 -   Not performant when trying to generalise across arbitrary multipliers. In other words, you may want to ‘special-case’ (i.e. hard-code) a multiply by 2 and 3 (and maybe a few others) using this technique, and use other techniques for other multipliers, instead of implementing this to support arbitrary *n*
 -   Only fast for small, select multipliers
 
-Multiply by 2^x^ with Vector Lookup
+Multiply by 2<sup>x</sup> with Vector Lookup
 -----------------------------------
 
 Combining ideas from the *Vector Split Lookup Table* and *Multiply by 2* techniques above, we can cover a few more cases than the few that *Multiply by 2* are good at.
 
-Essentially, a shift can be used to partially compute a multiply by 2^x^, then a lookup can be used for the bits shifted out (assuming *x*<=4 with 128-bit SIMD shuffles). This lookup computes the effect of the generator polynomial which needs to be XORed into the result.
+Essentially, a shift can be used to partially compute a multiply by 2<sup>x</sup>, then a lookup can be used for the bits shifted out (assuming *x*<=4 with 128-bit SIMD shuffles). This lookup computes the effect of the generator polynomial which needs to be XORed into the result.
 
 Pseudo-code for multiplying by 16 in w=8, using 128-bit vectors:
 
@@ -392,7 +392,7 @@ End For
     -   High overhead for each invocation (somewhat dependent on CPU) and hence performs very poorly across small regions
     -   Implementation complexity, particularly with optimised implementations
     -   Very platform specific, and not easily ported
-    -   May perform poorly if OS enforces [W\^X policies](https://en.wikipedia.org/wiki/W%5EX)
+    -   May perform poorly if OS enforces [W^X policies](https://en.wikipedia.org/wiki/W%5EX)
 -   If not using JIT, code size could be large due to hard-coded routines for each multiplier
 -   Requires another technique to handle ‘misaligned parts’ (e.g. if data length is not a multiple of w\*w bits)
 -   Poor handling of in-place encoding if registers are limited (that is, if the ‘block’ state cannot be fully held in available registers) 
@@ -528,6 +528,6 @@ Resources
 =========
 
 * [Intel’s Intelligent Storage Acceleration Library](https://github.com/intel/isa-l) - provides highly optimized assembly routines for GF(256). Uses the ‘Vector Split Table Lookup’ technique
-* [GF-Complete](http://jerasure.org/jerasure/gf-complete) - implements many techniques (“all known techniques” according to the author) across many field sizes up to GF(2^128^), including many slower techniques
-* “[Improving RS in GF(2\^n)](https://www.livebusinesschat.com/smf/index.php?topic=5954.0)” - post listing ideas for fast techniques, from which this page draws some inspiration from
+* [GF-Complete](http://jerasure.org/jerasure/gf-complete) - implements many techniques (“all known techniques” according to the author) across many field sizes up to GF(2<sup>128</sup>), including many slower techniques
+* “[Improving RS in GF(2^n)](https://www.livebusinesschat.com/smf/index.php?topic=5954.0)” - post listing ideas for fast techniques, from which this page draws some inspiration from
 * [Reed-Solomon: Optimizing performances](https://en.wikiversity.org/wiki/Reed%E2%80%93Solomon_codes_for_coders/Additional_information#Optimizing_performances) - lists general concepts around optimising Reed-Solomon coding
