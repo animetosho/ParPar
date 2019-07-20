@@ -1,4 +1,4 @@
-Fast Galois Field Multiplication Techniques
+Fast Galois Field Region Multiplication Techniques
 ===========================================
 
 Whilst developing [ParPar](https://github.com/animetosho/ParPar), a PAR2 client, I’ve investigated fast techniques for performing its core calculation: Galois Field multiplication, by a constant, over a region of data.  
@@ -10,9 +10,9 @@ Feedback and suggestions are welcome - you can do this by creating [an issue](ht
 
 I assume that you (the reader) are familiar with the basics of [Reed Solomon](https://en.wikiversity.org/wiki/Reed%E2%80%93Solomon_codes_for_coders) coding, as I will not be covering them here. Knowledge of [SIMD](https://en.wikipedia.org/wiki/SIMD) basics is also strongly recommended as I won’t be covering them in depth here. This page aims to be *somewhat* of a reference, rather than an introductory guide.
 
-I primarily focus on performance for x86 and ARM CPUs for fields GF(256) (commonly used field size) and GF(65536) (used in [PAR2](https://en.wikipedia.org/wiki/Parchive)), although the techniques may extend to other CPUs and field sizes. I have not explored GPGPU techniques, so won’t be covering them here.
+I primarily focus on performance for x86 and ARM CPUs for fields GF(256) (commonly used field size) and GF(65536) (used in [PAR2](https://en.wikipedia.org/wiki/Parchive)), although the techniques may extend to other CPUs and field sizes in GF(2<sup>w</sup>). I have not explored GPGPU techniques, so won’t be covering them here.
 
-Only core multiplication over a region is investigated here, with performance evaluation being a primary concern; related performance aspects such as [loop tiling](https://en.wikipedia.org/wiki/Loop_nest_optimization) won’t be investigated, despite their importance.
+Only core multiplication over a region is investigated here, with performance evaluation being a primary concern; related performance aspects such as [loop tiling](https://en.wikipedia.org/wiki/Loop_nest_optimization) won’t be investigated, despite their importance. Techniques for fast *single* multiplies (as opposed to multiplication over a region) are not explored here.
 
 Note that I will not explore multiplying by 0 or 1 here, as they can be trivially implemented via `memset` (multiply by 0) or `memcpy` (multiply by 1), if not adding to a destination. For simplicity’s sake, I will also not show adding products into the destination, as this is just a trivial exclusive-or (XOR) with the destination.
 
@@ -21,6 +21,8 @@ Note that I will not explore multiplying by 0 or 1 here, as they can be triviall
 - the symbol ‘w’ will refer the size of the Galois Field in bits, i.e. GF(2<sup>w</sup>), e.g. w=8 refers to GF(256).
 - the symbol *Polynomial* will refer to the polynomial of the *w*-bit field being used
 - the symbol *n* will refer to the *w*-bit constant to be multiplied by, aka ‘the multiplier’
+
+A number of techniques listed here are also explained in [this paper](https://web.eecs.utk.edu/~plank/plank/papers/UT-CS-13-717.html) (sections 6 and 8), and implemented in the [GF-Complete](http://jerasure.org/jerasure/gf-complete) library. For reference, I’ll mention the names of the techniques used in the paper with the label “GF-Complete”.
 
 (Split) Lookup Table
 --------------------
@@ -77,10 +79,10 @@ This strategy extends naturally to arbitrary sizes for w.
 **Cons:**
 
 -   Only operates one byte at a time (or some relatively small unit of data, if a different lookup table size is used), so not particularly fast, compared to SIMD optimised techniques
-
 -   Requires computing a (w/8)\*256 entry lookup table
-
 -   Typically bound by L1 cache lookup performance
+
+**GF-Complete**: equivalent to *TABLE* for w≤8 or *SPLIT-TABLE(w, 8)* for w≥16
 
 Vector Split Lookup Table (VTBL/PSHUFB)
 ---------------------------------------
@@ -126,7 +128,7 @@ End Function
 However, for w > 8, there is also an additional complication, as the looked-up value (product) can only be 8-bit wide, meaning that the products need to be split across multiple vectors, one for each 8-bit part.  
 For example, for w=16, multiplying *a* by *n*, and breaking *a* (the input) into 4x 4-bit parts and *n* (the constant) into 2x8-bit, yields:
 
-a\*n = (a1+a2+a3+a4)\*(n1+n2)
+a\*n = (a1+a2+a3+a4)\*(n1+n2)  
     = a1\*n1 + a1\*n2 + a2\*n1 + a2\*n2 + a3\*n1 + a3\*n2 + a4\*n1 + a4\*n2
 
 In other words, 8 multiplies are required for w=16, 32 (= (32/4) * (32/8)) would be required for w=32 and so on.  
@@ -219,11 +221,13 @@ Interleaving bytes for this trick can easily be done along with the load using A
 -   Vector lookup/shuffle may be a relatively complex operation in hardware, and not all CPUs have fast implementations. In particular, ARMv7 doesn’t have a native 128-bit table lookup instruction (unlike in ARMv8), so must be emulated via 2x `VTBL2` instructions there
 -   Data may require rearrangement for best performance for fields larger than GF(256) (not applicable on ARM NEON for w=16 and w=32)
 
+**GF-Complete**: equivalent to *TABLE* for w≤4 or *SPLIT-TABLE(w, 4)* for w≥8. See also *ALTMAP* memory configuration for w≥16.
+
 ### Further ideas
 
 - If the processor supports vector byte lookup across more than 16 elements, it may be possible to exploit this to perform >4-bit multiplies. For example, for w=16, one could try a 6+6+4 multiply pattern instead of a 4+4+4+4 one, if a vector lookup could be done across 64 elements. On x86, this is available via the [`VPERMB`](https://www.felixcloutier.com/x86/vpermb) instruction on Cannon Lake and later Intel processors, which seems to have a throughput of 1 instruction/clock.
   ARM has `VTBL4` instructions, however, these seem to be much slower than `VBTL1`, so it is likely not be worthwhile there.
-- For some multipliers in w>=16, some of the partial products end up being zero-vectors, in which case, these shuffle operations can be skipped. For example, to multiply by 2 in w=16, only half the lookups are actually necessary, because some of the lookup vectors end up being all 0 bytes.
+- For some multipliers in w≥16, some of the partial products end up being zero-vectors, in which case, these shuffle operations can be skipped. For example, to multiply by 2 in w=16, only half the lookups are actually necessary, because some of the lookup vectors end up being all 0 bytes.
   There generally aren’t many such cases, thus this optimisation often yields negligible benefit, however, if you frequently deal with values which fall under this category, it may be worthwhile exploring.
 
 
@@ -237,12 +241,12 @@ This strategy is very fast for multiplying by very small multipliers (particular
 
 Pseudo-code for multiplying by 2 in field size *w* and *Polynomial*:
 
-```
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 For each w-bit word "i" in Input
   TopBitMask := Input[i] >> (w-1)  ; where >> denotes right arithmetic shift
   Output[i] := (Input[i] << 1) ^ (TopBitMask & Polynomial)  ; ^ denotes XOR
 End For
-```
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 **Pros:**
 
@@ -255,12 +259,14 @@ End For
 -   Not performant when trying to generalise across arbitrary multipliers. In other words, you may want to ‘special-case’ (i.e. hard-code) a multiply by 2 and 3 (and maybe a few others) using this technique, and use other techniques for other multipliers, instead of implementing this to support arbitrary *n*
 -   Only fast for small, select multipliers
 
+**GF-Complete**: similar to *BYTWO*
+
 Multiply by 2<sup>x</sup> with Vector Lookup
 -----------------------------------
 
 Combining ideas from the *Vector Split Lookup Table* and *Multiply by 2* techniques above, we can cover a few more cases than the few that *Multiply by 2* are good at.
 
-Essentially, a shift can be used to partially compute a multiply by 2<sup>x</sup>, then a lookup can be used for the bits shifted out (assuming *x*<=4 with 128-bit SIMD shuffles). This lookup computes the effect of the generator polynomial which needs to be XORed into the result.
+Essentially, a shift can be used to partially compute a multiply by 2<sup>x</sup>, then a lookup can be used for the bits shifted out (assuming *x*≤4 with 128-bit SIMD shuffles). This lookup computes the effect of the generator polynomial which needs to be XORed into the result.
 
 Pseudo-code for multiplying by 16 in w=8, using 128-bit vectors:
 
@@ -303,18 +309,18 @@ XOR Bit Dependencies
 
 If data can be rearranged so that the first bit of *s* input words are together, followed by the second bit of the same *s* words and so on, GF multiplication can be implemented as a series of *s*-bit wide XOR operations. (if the layout of data isn’t strictly important, one can even skip this rearrangement step)
 
-This is essentially the Cauchy layout, which GF-Complete has an implementation of. However, I found that the many *if* conditionals used greatly slow down the main processing loop. As the conditionals don’t change throughout the loop, hard-coding each loop without conditionals greatly improves performance. Efficiency can be further be improved by eliminating “redundant XORs” (XOR operations which end up cancelling each other out, or are common amongst outputs).
+This is similar to the Cauchy layout, which GF-Complete has an implementation of. However, I found that the many *if* conditionals used greatly slow down the main processing loop. As the conditionals don’t change throughout the loop, hard-coding each loop without conditionals greatly improves performance. Efficiency can be further be improved by eliminating “redundant XORs” (XOR operations which end up cancelling each other out, or are common amongst outputs).
 
 Unfortunately, hard-coding in w=8 does mean that 254 routines (excluding 0 and 1 special cases) need to be implemented. This becomes unwieldy at w=16, which would need 65534 routines, however, JIT can be used to generate the routines on-the-fly. At w=16, I haven’t found any strategy which is more efficient than JIT-generating routines on-the-fly.
 
 JIT, however, brings about a number of drawbacks, from complexity in implementation to being completely platform dependent, as well as high overhead. Despite this, I’ve found that it typically performs very well, often out-performing the more well-known *Vector Split Lookup Table* method (at least on x86 for w=16).
 
-More details on this technique [can be found here](../xor_depends/info.md).
+More details on this technique [can be found here](xor_depends/info.md).
 
-Pseudo-code for multiplying by 2 in w=8, polynomial 0x11B (0b100011011) with SIMD word-size *s*:
+Pseudo-code for multiplying by 2 in w=8, polynomial 0x11B (0b100011011):
 
-```
-For i := 0 To Input.Length IncrementBy 8
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+For every 8 words "i", "i+1" ... "i+7" in Input
   ; where ^ denotes XOR
   Output[i  ] = Input[i+7]
   Output[i+1] = Input[i  ] ^ Input[i+7]
@@ -325,11 +331,11 @@ For i := 0 To Input.Length IncrementBy 8
   Output[i+6] = Input[i+5]
   Output[i+7] = Input[i+6]
 End For
-```
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Pseudo-code for JIT generating a routine, for multiplying by arbitrary *n* with SIMD with *s*:
+Pseudo-code for JIT generating a routine, for multiplying by arbitrary *n*:
 
-```
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ; allocate a blank array
 Dependencies := Array(w) of w-bit words
 Dependencies.SetAllElements(0)
@@ -373,7 +379,9 @@ For each w-bit word "i" in Dependencies
   End For
   Write "\n" ; next output
 End For
-```
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Note that the above sample implementation lacks optimisations such as [common-expression elimination](xor_depends/info.md#optimal-sequences).
 
 **Pros:**
 
@@ -386,7 +394,7 @@ End For
 
 **Cons:**
 
--   Requires pre and post re-arrangement of data for good performance (unless Cauchy layout is fine)
+-   Requires pre and post re-arrangement of data for good performance
     -   As such, this technique doesn’t mix well with other techniques mentioned here
 -   The many drawbacks of JIT (if JIT is being used), such as:
     -   High overhead for each invocation (somewhat dependent on CPU) and hence performs very poorly across small regions
@@ -395,7 +403,9 @@ End For
     -   May perform poorly if OS enforces [W^X policies](https://en.wikipedia.org/wiki/W%5EX)
 -   If not using JIT, code size could be large due to hard-coded routines for each multiplier
 -   Requires another technique to handle ‘misaligned parts’ (e.g. if data length is not a multiple of w\*w bits)
--   Poor handling of in-place encoding if registers are limited (that is, if the ‘block’ state cannot be fully held in available registers) 
+-   Poor handling of in-place encoding if registers are limited (that is, if the ‘block’ state cannot be fully held in available registers)
+
+**GF-Complete**: idea similar to *CAUCHY*, however a significantly more complex implementation
 
 Carry-less Multiplication
 -------------------------
@@ -405,7 +415,7 @@ Both ARM and x86 provide [carry-less multiply](https://en.wikipedia.org/wiki/Car
 If, however, memory is not an issue, modular reduction can be deferred until all blocks are computed and accumulated. Alternatively, if multiple regions are to be computed together, the cost of modular reduction can be slightly amortized across them.
 
 On x86, there is the [`PCLMULQDQ`](https://www.felixcloutier.com/x86/pclmulqdq) instruction which performs 64-bit carry-less multiplies. For smaller w, multiple words can be packed in for a single multiply, however efficiency is halved to deal with the widening effect (for example, only two 16-bit words can be fit in a 64-bit multiplier instead of four).  
-On ARM NEON, there are [`VMULL.P8`](https://developer.arm.com/docs/100069/0608/advanced-simd-instructions-32-bit/vmull)/[`PMULL`](http://infocenter.arm.com/help/index.jsp?topic=/com.arm.doc.dui0802b/PMULL_advsimd_vector.html) instructions, however they are only 8-bit wide, so only sufficient for w <= 8. ARMv8 does also have a 64-bit wide multiply, which is the same as x86’s `PCLMULQDQ` instruction.
+On ARM NEON, there are [`VMULL.P8`](https://developer.arm.com/docs/100069/0608/advanced-simd-instructions-32-bit/vmull)/[`PMULL`](http://infocenter.arm.com/help/index.jsp?topic=/com.arm.doc.dui0802b/PMULL_advsimd_vector.html) instructions, however they are only 8-bit wide, so only sufficient for w ≤ 8. ARMv8 does also have a 64-bit wide multiply, which is the same as x86’s `PCLMULQDQ` instruction.
 
 **Pros:**
 
@@ -422,6 +432,8 @@ On ARM NEON, there are [`VMULL.P8`](https://developer.arm.com/docs/100069/0608/a
 -   For x86: requires AES-NI extension (requires Intel Westmere, AMD Bulldozer or later; missing on some low-end Intel SKUs)
 -   For x86: not extended beyond 128 bits of output, until AVX512-VPCLMULQDQ (added in Intel’s Icelake processor)
 -   Precise implementations are ISA specific
+
+**GF-Complete**: equivalent to *CARRY-FREE*
 
 CRC
 ---
@@ -453,7 +465,7 @@ The x86 GFNI instruction set also includes the [`GF2P8AFFINEQB`](https://www.fel
 
 For w=8, an 8x8 bit matrix can be computed in exactly the same way that dependencies are computed in the *XOR Bit Dependencies* technique above, then this matrix applied to all bytes in the input with `GF2P8AFFINEQB`.
 
-```
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ; Compute Dependencies array described in XOR Bit Dependencies method above
 
 Matrix := interpret Dependencies as Vector(8) of 8-bit words
@@ -479,11 +491,11 @@ Function AffineByte(Input: byte, Matrix: Vector(8) of byte)
   End For
   Return ResultByte
 End Function
-```
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 For w=16, the 16x16 bit matrix needs to be split into 4 such 8x8 bit matrices to run the input over, similar to how the *Vector Split Lookup Table* technique processes input.
 
-```
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ; Compute Dependencies array described in XOR Bit Dependencies method above
 
 ; Split up Dependencies into 4 8x8 bit matricies
@@ -510,7 +522,7 @@ For each 16-bit word "i" in Input
   
   Output[i] := ProductL + (ProductH << 8)
 End For
-```
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 **Pros:**
 
@@ -528,6 +540,6 @@ Resources
 =========
 
 * [Intel’s Intelligent Storage Acceleration Library](https://github.com/intel/isa-l) - provides highly optimized assembly routines for GF(256). Uses the ‘Vector Split Table Lookup’ technique
-* [GF-Complete](http://jerasure.org/jerasure/gf-complete) - implements many techniques (“all known techniques” according to the author) across many field sizes up to GF(2<sup>128</sup>), including many slower techniques
+* [GF-Complete](http://jerasure.org/jerasure/gf-complete) - implements many techniques (“all known techniques” according to the author) across many field sizes up to GF(2<sup>128</sup>), including many slower techniques. Techniques implemented are explained in detail [in this paper](https://web.eecs.utk.edu/~plank/plank/papers/UT-CS-13-717.html)
 * “[Improving RS in GF(2^n)](https://www.livebusinesschat.com/smf/index.php?topic=5954.0)” - post listing ideas for fast techniques, from which this page draws some inspiration from
 * [Reed-Solomon: Optimizing performances](https://en.wikiversity.org/wiki/Reed%E2%80%93Solomon_codes_for_coders/Additional_information#Optimizing_performances) - lists general concepts around optimising Reed-Solomon coding
