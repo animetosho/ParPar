@@ -46,9 +46,18 @@ using namespace v8;
 	Isolate* isolate = args.GetIsolate(); \
 	HandleScope scope(isolate)
 
-#define NEW_STRING(s) String::NewFromUtf8(isolate, s)
+# if NODE_VERSION_AT_LEAST(8, 0, 0)
+#  define NEW_STRING(s) String::NewFromOneByte(isolate, (const uint8_t*)(s), NewStringType::kNormal).ToLocalChecked()
+#  define RETURN_ERROR(e) { isolate->ThrowException(Exception::Error(String::NewFromOneByte(isolate, (const uint8_t*)(e), NewStringType::kNormal).ToLocalChecked())); return; }
+#  define ARG_TO_INT(a) (a).As<Integer>()->Value()
+#  define ARG_TO_OBJ(a) (a).As<Object>()
+# else
+#  define NEW_STRING(s) String::NewFromUtf8(isolate, s)
+#  define RETURN_ERROR(e) { isolate->ThrowException(Exception::Error(String::NewFromUtf8(isolate, e))); return; }
+#  define ARG_TO_INT(a) (a)->ToInteger()->Value()
+#  define ARG_TO_OBJ(a) (a)->ToObject()
+# endif
 
-#define RETURN_ERROR(e) { isolate->ThrowException(Exception::Error(String::NewFromUtf8(isolate, e))); return; }
 #define RETURN_VAL(v) args.GetReturnValue().Set(v)
 #define RETURN_UNDEF return;
 #define ISOLATE isolate,
@@ -74,6 +83,14 @@ using namespace v8;
 #define BUFFER_NEW(...) node::Buffer::New(ISOLATE __VA_ARGS__)
 #endif
 
+#if NODE_VERSION_AT_LEAST(12, 0, 0)
+# define SET_OBJ(obj, key, val) (obj)->Set(isolate->GetCurrentContext(), NEW_STRING(key), val).Check()
+# define GET_ARR(obj, idx) (obj)->Get(isolate->GetCurrentContext(), idx).ToLocalChecked()
+#else
+# define SET_OBJ(obj, key, val) (obj)->Set(NEW_STRING(key), val)
+# define GET_ARR(obj, idx) (obj)->Get(idx)
+#endif
+
 
 
 int mmActiveTasks = 0;
@@ -87,7 +104,7 @@ FUNC(SetMaxThreads) {
 	if (mmActiveTasks)
 		RETURN_ERROR("Calculation already in progress");
 	
-	ppgf_set_num_threads(args[0]->ToInteger()->Value());
+	ppgf_set_num_threads(ARG_TO_INT(args[0]));
 	
 	RETURN_UNDEF
 }
@@ -123,7 +140,7 @@ FUNC(AlignedBuffer) {
 		len = node::StringBytes::Size(ISOLATE args[0]->ToString(), enc);
 	} else
 	*/
-		len = (size_t)args[0]->ToInteger()->Value();
+		len = (size_t)ARG_TO_INT(args[0]);
 	
 	char* buf = NULL;
 	ALIGN_ALLOC(buf, len);
@@ -237,7 +254,13 @@ static void MMAfter(uv_work_t* work_req, int status) {
 #if NODE_VERSION_AT_LEAST(0, 11, 0)
 	HandleScope scope(req->isolate);
 	Local<Object> obj = Local<Object>::New(req->isolate, req->obj_);
+# if NODE_VERSION_AT_LEAST(12, 0, 0)
+	node::async_context ac;
+	memset(&ac, 0, sizeof(ac));
+	node::MakeCallback(req->isolate, obj, "ondone", 0, NULL, ac);
+# else
 	node::MakeCallback(req->isolate, obj, "ondone", 0, NULL);
+# endif
 #else
 	HandleScope scope;
 	node::MakeCallback(req->obj_, "ondone", 0, NULL);
@@ -267,13 +290,13 @@ FUNC(MultiplyMulti) {
 	if(numOutputs != Local<Array>::Cast(args[3])->Length())
 		RETURN_ERROR("Output and recoveryBlockNumber arrays must have the same length");
 	
-	Local<Object> oInputs = args[0]->ToObject();
-	Local<Object> oIBNums = args[1]->ToObject();
+	Local<Object> oInputs = ARG_TO_OBJ(args[0]);
+	Local<Object> oIBNums = ARG_TO_OBJ(args[1]);
 	uint16_t** inputs = new uint16_t*[numInputs];
 	uint_fast16_t* iNums = new uint_fast16_t[numInputs];
 	
-	Local<Object> oOutputs = args[2]->ToObject();
-	Local<Object> oRBNums = args[3]->ToObject();
+	Local<Object> oOutputs = ARG_TO_OBJ(args[2]);
+	Local<Object> oRBNums = ARG_TO_OBJ(args[3]);
 	uint16_t** outputs = new uint16_t*[numOutputs];
 	uint_fast16_t* oNums = new uint_fast16_t[numOutputs];
 	
@@ -284,7 +307,7 @@ FUNC(MultiplyMulti) {
 	
 	size_t len = 0;
 	for(unsigned int i = 0; i < numInputs; i++) {
-		Local<Value> input = oInputs->Get(i);
+		Local<Value> input = GET_ARR(oInputs, i);
 		if (!node::Buffer::HasInstance(input))
 			RTN_ERROR("All inputs must be Buffers");
 		
@@ -302,7 +325,7 @@ FUNC(MultiplyMulti) {
 				RTN_ERROR("Length of input must be a multiple of 2");
 		}
 		
-		int ibNum = oIBNums->Get(i)->ToInteger()->Value();
+		int ibNum = ARG_TO_INT(GET_ARR(oIBNums, i));
 		if (ibNum < 0 || ibNum > 32767)
 			RTN_ERROR("Invalid input block number specified");
 		iNums[i] = ibNum;
@@ -310,7 +333,7 @@ FUNC(MultiplyMulti) {
 	
 	
 	for(unsigned int i = 0; i < numOutputs; i++) {
-		Local<Value> output = oOutputs->Get(i);
+		Local<Value> output = GET_ARR(oOutputs, i);
 		if (!node::Buffer::HasInstance(output))
 			RTN_ERROR("All outputs must be Buffers");
 		if (node::Buffer::Length(output) < len)
@@ -319,7 +342,7 @@ FUNC(MultiplyMulti) {
 		outputs[i] = (uint16_t*)node::Buffer::Data(output);
 		if ((uintptr_t)outputs[i] & (MEM_ALIGN-1))
 			RTN_ERROR("All output buffers must be address aligned");
-		int rbNum = oRBNums->Get(i)->ToInteger()->Value();
+		int rbNum = ARG_TO_INT(GET_ARR(oRBNums, i));
 		if (rbNum < 0 || rbNum > 65535)
 			RTN_ERROR("Invalid recovery block number specified");
 		oNums[i] = rbNum;
@@ -329,7 +352,11 @@ FUNC(MultiplyMulti) {
 	
 	bool add = false;
 	if (args.Length() >= 5) {
+#if NODE_VERSION_AT_LEAST(8, 0, 0)
+		add = args[4].As<Boolean>()->Value();
+#else
 		add = args[4]->ToBoolean()->Value();
+#endif
 	}
 	
 	ppgf_maybe_setup_gf();
@@ -353,7 +380,7 @@ FUNC(MultiplyMulti) {
 		
 #if NODE_VERSION_AT_LEAST(0, 11, 0)
 		Local<Object> obj = Object::New(isolate);
-		obj->Set(NEW_STRING("ondone"), args[5]);
+		SET_OBJ(obj, "ondone", args[5]);
 		req->obj_.Reset(ISOLATE obj);
 		//if (env->in_domain())
 		//	req->obj_->Set(env->domain_string(), env->domain_array()->Get(0));
@@ -404,7 +431,7 @@ FUNC(Finish) {
 	unsigned int allocArrSize = numInputs;
 	if(numInputs < 1) RETURN_UNDEF
 	
-	Local<Object> oInputs = args[0]->ToObject();
+	Local<Object> oInputs = ARG_TO_OBJ(args[0]);
 	bool calcMd5 = false;
 	if (args.Length() >= 2 && !args[1]->IsUndefined()) {
 		if (!args[1]->IsArray())
@@ -426,7 +453,7 @@ FUNC(Finish) {
 	
 	size_t len = 0;
 	for(unsigned int i = 0; i < numInputs; i++) {
-		Local<Value> input = oInputs->Get(i);
+		Local<Value> input = GET_ARR(oInputs, i);
 		if (!node::Buffer::HasInstance(input))
 			RTN_ERROR("All inputs must be Buffers");
 		inputs[i] = (uint16_t*)node::Buffer::Data(input);
@@ -445,12 +472,12 @@ FUNC(Finish) {
 	MD5_CTX** md5 = NULL;
 	MD5_CTX dummyMd5;
 	if(calcMd5) {
-		Local<Object> oMd5 = args[1]->ToObject();
+		Local<Object> oMd5 = ARG_TO_OBJ(args[1]);
 		md5 = new MD5_CTX*[allocArrSize];
 		
 		unsigned int i = 0;
 		for(; i < numInputs; i++) {
-			Local<Value> md5Ctx = oMd5->Get(i);
+			Local<Value> md5Ctx = GET_ARR(oMd5, i);
 			if (!node::Buffer::HasInstance(md5Ctx) || node::Buffer::Length(md5Ctx) != sizeof(MD5_CTX)) {
 				delete[] inputs;
 				delete[] md5;
@@ -531,7 +558,7 @@ FUNC(MD5Finish) {
 		RETURN_ERROR("Invalid MD5 context length");
 	
 	/*
-	Local<Object> o = args[0]->ToObject();
+	Local<Object> o = ARG_TO_OBJ(args[0]);
 	// TODO: check object validity
 	
 	// copy to MD5 ctx
@@ -540,7 +567,7 @@ FUNC(MD5Finish) {
 	ctx.B = o.Get(NEW_STRING("B"))->ToUint32().Value();
 	ctx.C = o.Get(NEW_STRING("C"))->ToUint32().Value();
 	ctx.D = o.Get(NEW_STRING("D"))->ToUint32().Value();
-	ctx.length = o.Get(NEW_STRING("length"))->ToInteger().Value();
+	ctx.length = ARG_TO_INT(o.Get(NEW_STRING("length")));
 	ctx.dataLen = o.Get
 	*/
 	
@@ -619,7 +646,11 @@ FUNC(MD5UpdateZeroes) {
 	
 	if(sizeof(size_t) < 6) {
 		// 32-bit platform, may need to feed via multiple passes
+#if NODE_VERSION_AT_LEAST(8, 0, 0)
+		double len = args[1].As<Number>()->Value();
+#else
 		double len = args[1]->NumberValue();
+#endif
 		MD5_CTX* md5 = (MD5_CTX*)node::Buffer::Data(args[0]);
 		#define MD5_MAX_LEN 0x7fffffff
 		while(len > MD5_MAX_LEN) {
@@ -629,7 +660,7 @@ FUNC(MD5UpdateZeroes) {
 		#undef MD5_MAX_LEN
 		md5_update_zeroes(md5, (size_t)len);
 	} else {
-		size_t len = (size_t)args[1]->ToInteger()->Value();
+		size_t len = (size_t)ARG_TO_INT(args[1]);
 		md5_update_zeroes((MD5_CTX*)node::Buffer::Data(args[0]), len);
 	}
 	
@@ -643,9 +674,9 @@ FUNC(SetMethod) {
 		RETURN_ERROR("Calculation already in progress");
 	
 	if(ppgf_set_method(
-		args.Length() >= 1 && !args[0]->IsUndefined() ? args[0]->ToInteger()->Value() : 0 /*GF_METHOD_DEFAULT*/,
-		args.Length() >= 2 ? args[1]->ToInteger()->Value() : 0,
-		args.Length() >= 3 ? args[2]->ToInteger()->Value() : 0
+		args.Length() >= 1 && !args[0]->IsUndefined() ? ARG_TO_INT(args[0]) : 0 /*GF_METHOD_DEFAULT*/,
+		args.Length() >= 2 ? ARG_TO_INT(args[1]) : 0,
+		args.Length() >= 3 ? ARG_TO_INT(args[2]) : 0
 	))
 		RETURN_ERROR("Unknown method specified");
 	
@@ -660,18 +691,26 @@ FUNC(SetMethod) {
 	const char* rMethLong;
 	ppgf_get_method(&rMethod, &rWord, &rMethLong, &wAlign);
 	
-	ret->Set(NEW_STRING("alignment"), Integer::New(ISOLATE MEM_ALIGN));
-	ret->Set(NEW_STRING("alignment_width"), Integer::New(ISOLATE wAlign));
-	ret->Set(NEW_STRING("method"), Integer::New(ISOLATE rMethod));
-	ret->Set(NEW_STRING("word_bits"), Integer::New(ISOLATE rWord));
-	ret->Set(NEW_STRING("method_desc"), NEW_STRING(rMethLong));
+	SET_OBJ(ret, "alignment", Integer::New(ISOLATE MEM_ALIGN));
+	SET_OBJ(ret, "alignment_width", Integer::New(ISOLATE wAlign));
+	SET_OBJ(ret, "method", Integer::New(ISOLATE rMethod));
+	SET_OBJ(ret, "word_bits", Integer::New(ISOLATE rWord));
+	SET_OBJ(ret, "method_desc", NEW_STRING(rMethLong));
 	
 	
 	RETURN_VAL(ret);
 }
 
 
-void parpar_gf_init(Handle<Object> target) {
+void parpar_gf_init(
+#if NODE_VERSION_AT_LEAST(4, 0, 0)
+ Local<Object> target,
+ Local<Value> module,
+ void* priv
+#else
+ Handle<Object> target
+#endif
+) {
 	ppgf_init_constants();
 	ppgf_init_gf_module();
 	
