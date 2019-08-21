@@ -87,18 +87,16 @@ void detect_cpu(void) {
 	);
 
 #if !defined(_MSC_VER) || _MSC_VER >= 1600
-	int hasOSXsave = (cpuInfo[2] & 0x8000000);
 	_cpuidX(cpuInfo, 7, 0);
-	
-	if(hasOSXsave) {
+	#ifdef INTEL_AVX2
+	if(cpuInfo[2] & 0x8000000) { // has OSXSAVE
 		int xcr = _GET_XCR() & 0xff;
-		#ifdef INTEL_AVX2
 		has_avx2 = (cpuInfo[1] & 0x20) && ((xcr & 6) == 6);
-		#endif
 		#ifdef INTEL_AVX512BW
 		has_avx512bw = ((cpuInfo[1] & 0x40010000) == 0x40010000) && ((xcr & 0xE6) == 0xE6);
 		#endif
 	}
+	#endif
 	#ifdef INTEL_GFNI
 	has_gfni = (cpuInfo[2] & 0x100) == 0x100;
 	#endif
