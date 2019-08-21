@@ -339,11 +339,13 @@ int ppgf_get_num_threads() {
 #endif
 }
 void ppgf_set_num_threads(int threads) {
+#ifdef _OPENMP
 	maxNumThreads = threads;
 	if(maxNumThreads < 1) maxNumThreads = defaultNumThreads;
 	
 	ppgf_maybe_setup_gf();
 	alloc_gf();
+#endif
 }
 void ppgf_init_gf_module() {
 	GF_METHOD = GF_MULT_DEFAULT;
