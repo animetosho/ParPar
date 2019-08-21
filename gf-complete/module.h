@@ -1,4 +1,4 @@
-#include "../stdint.h"
+#include "../src/stdint.h"
 
 extern int MEM_ALIGN;
 

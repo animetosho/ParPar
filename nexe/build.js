@@ -172,7 +172,7 @@ if(!tNode) {
 }
 var tNodeMatch = new RegExp('('+tNodeM+')');
 if(tNode.sources.indexOf('yencode/yencode.cc') < 0)
-	doPatch(/(['"]src\/node_file\.cc['"],)/, "'yencode/yencode.cc','parpar_gf/gf.cc',");
+	doPatch(/(['"]src\/node_file\.cc['"],)/, "'yencode/yencode.cc','parpar_gf/src/gf.cc',");
 if(tNode.dependencies.indexOf('crcutil') < 0)
 	// try to avoid matching the cctest target
 	doPatch(/('target_name': '<\([^\]]+?['"]node_js2c#host['"],)/, "'crcutil','parpar_gf',");
@@ -358,6 +358,7 @@ var mkdir = function(d) {
 mkdir('parpar_gf');
 mkdir('parpar_gf/gf-complete');
 mkdir('parpar_gf/md5');
+mkdir('parpar_gf/src');
 mkdir('yencode');
 
 // copy yencode sources across
@@ -382,12 +383,11 @@ var copyJS = function(src, dest) {
 
 ncp('../gf-complete', nodeSrc + 'parpar_gf/gf-complete', function() {
 ncp('../md5', nodeSrc + 'parpar_gf/md5', function() {
+ncp('../src', nodeSrc + 'parpar_gf/src', function() {
 ncp(yencSrc, nodeSrc + 'yencode', function() {
 	
 	copyCC(yencSrc + 'yencode.cc', 'yencode/yencode.cc');
 	copyJS(yencSrc + 'index.js', 'lib/yencode.js');
-	copyCC('../gf.cc', 'parpar_gf/gf.cc');
-	copyCC('../stdint.h', 'parpar_gf/stdint.h');
 	copyJS('../lib/par2.js', '../lib/par2.js'); // !! overwrites file !!
 	
 	// now run nexe
@@ -426,6 +426,7 @@ ncp(yencSrc, nodeSrc + 'yencode', function() {
 	    console.log('done');
 	    fs.unlinkSync('../bin/help.json');
 	});
+});
 });
 });
 });

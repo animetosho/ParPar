@@ -10,7 +10,7 @@
 
 #ifndef _GF_COMPLETE_H_
 #define _GF_COMPLETE_H_
-#include "../stdint.h"
+#include "../src/stdint.h"
 #include <stddef.h>
 
 #include "platform.h"

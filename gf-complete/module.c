@@ -1,7 +1,7 @@
 #ifdef _OPENMP
 #include <omp.h>
 #endif
-#include "../stdint.h"
+#include "../src/stdint.h"
 #include <gf_complete.h>
 #include <string.h>
 #include <stdlib.h>

@@ -11,7 +11,7 @@
 #ifndef GF_COMPLETE_GF_W16_H
 #define GF_COMPLETE_GF_W16_H
 
-#include "../stdint.h"
+#include "../src/stdint.h"
 
 #define GF_FIELD_WIDTH (16)
 #define GF_FIELD_SIZE (1 << GF_FIELD_WIDTH)
