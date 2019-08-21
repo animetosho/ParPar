@@ -27,8 +27,8 @@ int has_neon = 0;
 	#define _cpuid(ar, eax) __cpuid(eax, ar[0], ar[1], ar[2], ar[3])
 	#define _cpuidX(ar, eax, ecx) __cpuid_count(eax, ecx, ar[0], ar[1], ar[2], ar[3])
 	
-	static inline _GET_XCR() {
-		uint32_t xcr0;
+	static inline int _GET_XCR() {
+		int xcr0;
 		__asm__ __volatile__("xgetbv" : "=a" (xcr0) : "c" (0) : "%edx");
 		return xcr0;
 	}
@@ -79,7 +79,12 @@ void detect_cpu(void) {
 		has_slow_shuffle = 2048;
 	}
 	
-	has_avxslow = (family == 0x6f || family == 0x7f || (family == 0x8f && (model == 0 || model == 1 || model == 8 || model == 0x11))); // AMD CPUs currently have 128b FPUs
+	has_avxslow = ( // CPUs with 128-bit AVX units
+		   family == 0x6f // AMD Bulldozer family
+		|| family == 0x7f // AMD Jaguar/Puma family
+		|| (family == 0x8f && (model == 0 /*Summit Ridge ES*/ || model == 1 /*Zen*/ || model == 8 /*Zen+*/ || model == 0x11 /*Zen APU*/ || model == 0x18 /*Zen+ APU*/ || model == 0x50 /*Subor Z+*/)) // AMD Zen1 family
+		|| (family == 6 && model == 0xf) // Centaur/Zhaoxin; overlaps with Intel Core 2, but they don't support AVX
+	);
 
 #if !defined(_MSC_VER) || _MSC_VER >= 1600
 	int hasOSXsave = (cpuInfo[2] & 0x8000000);
@@ -88,10 +93,10 @@ void detect_cpu(void) {
 	if(hasOSXsave) {
 		int xcr = _GET_XCR() & 0xff;
 		#ifdef INTEL_AVX2
-		has_avx2 = (cpuInfo[1] & 0x20) && (xcr & 6 == 6);
+		has_avx2 = (cpuInfo[1] & 0x20) && ((xcr & 6) == 6);
 		#endif
 		#ifdef INTEL_AVX512BW
-		has_avx512bw = ((cpuInfo[1] & 0x40010000) == 0x40010000) && (xcr & 0xE6 == 0xE6);
+		has_avx512bw = ((cpuInfo[1] & 0x40010000) == 0x40010000) && ((xcr & 0xE6) == 0xE6);
 		#endif
 	}
 	#ifdef INTEL_GFNI
