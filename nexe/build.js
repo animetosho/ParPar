@@ -208,7 +208,7 @@ if(!tNode.cxxflags) {
 }
 
 if(!tNode.ldflags) {
-	doPatch(tNodeMatch, "'ldflags': ['-s'"+ltoFlagC+"],");
+	doPatch(tNodeMatch, "'ldflags': ['-s','-fopenmp"+openMpLib+"'"+ltoFlagC+"],");
 } else if(tNode.ldflags.indexOf('-s') < 0) {
 	doPatch(new RegExp("(" + tNodeM + "[^]*?['\"]ldflags['\"]:\\s*\\[)"), "'-s'"+ltoFlagC+",");
 }
