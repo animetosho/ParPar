@@ -112,17 +112,20 @@ Output Options:
   -d,  --slice-dist          Specify how recovery slices are distributed
                              amongst output files. Can be:
                                  equal: each file contains `--slices-per-file`
-                                        slices (default)
-                                 uniform: slices evenly distributed amongst
+                                        slices
+                                 uniform: like `equal` but try to distribute
+                                          slices evenly distributed amongst
                                           files
-                                 pow2: power-of-2 sizing scheme
+                                 pow2: power-of-2 sizing scheme (default)
   -p,  --slices-per-file     Specify the maximum number of slices each file
                              may contain. This option follows the same format
                              as `--recovery-slices` and supports the same
                              suffixes. By default, fractional slices are
                              rounded to the nearest whole slice, but rounding
                              can be controlled by prefixing this option with
-                             '<' (round down) or '>' (round up).
+                             '<' (round down) or '>' (round up) [also take care
+                             that the shell may interpret these characters, so
+                             escape them if appropriate]
                              Default 65536
        --slices-first-file   Number of slices in the first recovery file. If
                              `--slice-dist` is `pow2`, the subsequent file will
