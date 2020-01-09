@@ -131,7 +131,7 @@ Output Options:
                              Default is 1 if `--slice-dist` is `pow2`, ignored
                              if `--slice-dist` is `uniform`, otherwise equals
                              `--slices-per-file`
-  -i,  --noindex             Don't output an index file (file with no recovery
+       --noindex             Don't output an index file (file with no recovery
                              blocks). This option takes no value.
 
 Performance Options:
@@ -197,6 +197,17 @@ Input Files:
 
   -R,  --recurse             If specified, recurse into subdirectories. This
                              option takes no values.
+  -i,  --input-file          Supply a list of files to be posted, separated
+                             by newlines. Can be `-` to read from stdin, or a
+                             command prefixed with proc:// to read from the
+                             stdout of specified process (example:
+                             `proc://cat somefile.txt`). Can also be an fd
+                             prefixed with fd:// (requires NodeJS >= 0.12),
+                             i.e. `fd://0` is an alias for stdin.
+                             Can be specified multiple times.
+  -0,  --input-file0         Same as the `--input-file` option, except files
+                             are separated by null characters instead of
+                             newlines.
 
 ------------------
 Examples
