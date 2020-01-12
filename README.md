@@ -171,14 +171,16 @@ here](https://animetosho.org/app/node-yencode) on how to build it. After
 building it, create a folder named *node_modules* and place the folder *yencode*
 in there.
 
-### GCC/Clang build issues
+### Native binary targeting
 
-Some versions of GCC/Clang don't like the `-march=native` switch. If you're
-having build issues with these compilers, try removing all instances of
-`"-march=native",` from *binding.gyp* and recompiling. Note that some CPU
-specific optimisations may not be enabled if the flag is removed.
-
-Do also remove the above flag if you are looking to make a portable build.
+Currently ParPar doesn't have proper runtime dispatch for calculation kernels on
+GCC/Clang compilers (runtime dispatch on Windows (MSVC) does work).  
+This means that compilation is always done with the `-march=native` switch. The
+build script will try to auto-detect whether this is supported by the compiler,
+and avoid the flag if it's unavailable, but this means that the build may not be
+correctly optimized if your version of GCC/Clang doesn't recognize the native
+CPU architecture.  
+This also means that portable builds from GCC/Clang are currently unsupported.
 
 ### Multi-Threading Support
 
@@ -382,7 +384,8 @@ modifications mentioned above.
 License
 =======
 
-This module is Public Domain.
+This code is Public Domain or [CC0](https://creativecommons.org/publicdomain/zero/1.0/legalcode) (or
+equivalent) if PD isn’t recognised.
 
 GF-Complete’s license can be found
 [here](http://jerasure.org/jerasure/gf-complete/blob/master/License.txt).
