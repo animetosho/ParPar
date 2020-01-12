@@ -48,6 +48,7 @@ void detect_cpu(void) {
 	cpu_detect_run = 1;
 #ifdef INTEL_SSE2 /* if we can't compile SSE, there's not much point in checking CPU capabilities; we use this to eliminate ARM :P */
 	int cpuInfo[4];
+	int cpuInfoX[4];
 	int family, model, hasMulticore;
 	_cpuid(cpuInfo, 1);
 	hasMulticore = (cpuInfo[3] & (1<<28));
@@ -87,18 +88,18 @@ void detect_cpu(void) {
 	);
 
 #if !defined(_MSC_VER) || _MSC_VER >= 1600
-	_cpuidX(cpuInfo, 7, 0);
+	_cpuidX(cpuInfoX, 7, 0);
 	#ifdef INTEL_AVX2
 	if(cpuInfo[2] & 0x8000000) { // has OSXSAVE
 		int xcr = _GET_XCR() & 0xff;
-		has_avx2 = (cpuInfo[1] & 0x20) && ((xcr & 6) == 6);
+		has_avx2 = (cpuInfoX[1] & 0x20) && ((xcr & 6) == 6);
 		#ifdef INTEL_AVX512BW
-		has_avx512bw = ((cpuInfo[1] & 0x40010000) == 0x40010000) && ((xcr & 0xE6) == 0xE6);
+		has_avx512bw = ((cpuInfoX[1] & 0xC0010000) == 0xC0010000) && ((xcr & 0xE6) == 0xE6);
 		#endif
 	}
 	#endif
 	#ifdef INTEL_GFNI
-	has_gfni = (cpuInfo[2] & 0x100) == 0x100;
+	has_gfni = (cpuInfoX[2] & 0x100) == 0x100;
 	#endif
 #endif
 
@@ -106,11 +107,12 @@ void detect_cpu(void) {
 	has_htt = 0;
 	if(hasMulticore) {
 		/* only Intel CPUs have HT (VMs which obscure CPUID -> too bad); we won't include AMD Zen here */
-		_cpuid(cpuInfo, 0);
-		if(cpuInfo[1] == 0x756E6547 && cpuInfo[2] == 0x6C65746E && cpuInfo[3] == 0x49656E69 && cpuInfo[0] >= 11) {
-			_cpuidX(cpuInfo, 11, 0);
-			if(((cpuInfo[2] >> 8) & 0xFF) == 1 // SMT level
-			&& (cpuInfo[1] & 0xFFFF) > 1) // multiple threads per core
+		int cpuInfoModel[4];
+		_cpuid(cpuInfoModel, 0);
+		if(cpuInfoModel[1] == 0x756E6547 && cpuInfoModel[2] == 0x6C65746E && cpuInfoModel[3] == 0x49656E69 && cpuInfoModel[0] >= 11) {
+			_cpuidX(cpuInfoModel, 11, 0);
+			if(((cpuInfoModel[2] >> 8) & 0xFF) == 1 // SMT level
+			&& (cpuInfoModel[1] & 0xFFFF) > 1) // multiple threads per core
 				has_htt = 1;
 		}
 	}
