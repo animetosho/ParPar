@@ -2,12 +2,13 @@
 #include "../gf_complete.h"
 
 #ifdef INTEL_SSE2
+// hacks for CPUs with uop caches?
 #if defined(__tune_corei7__) || defined(__tune_corei7_avx__)
-  /* Nehalem and later Intel CPUs have a weird Self-Modifying Code slowdown when writing executable code, observed in Nehalem-Haswell, but not on Core2, Silvermont/Goldmont, AMD K10 or AMD Jaguar */
+  /* Nehalem and later Intel CPUs have a weird Self-Modifying Code slowdown when writing executable code, observed in Nehalem-Haswell, but not on Core2, Silvermont/Goldmont, AMD K10, Piledriver or Jaguar */
   #define CPU_SLOW_SMC 1
 #endif
 #if defined(__tune_core_avx2__) || defined(__tune_znver1__)
-  /* For some reason, on Haswell/Skylake and Zen, clearing memory with memset is faster than the memcpy hack above; not observed on IvyBridge (despite ERMS support), unknown what Bulldozer family prefers */
+  /* For some reason, on Haswell/Skylake and Zen, clearing memory with memset is faster than the memcpy hack above; not observed on IvyBridge (despite ERMS support), and Piledriver */
   #define CPU_SLOW_SMC_CLR 1
 #endif
 
