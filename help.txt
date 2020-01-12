@@ -53,6 +53,9 @@ PAR2 Options:
                                          's' denotes the number preceeding the
                                          'n' suffix (1 in this case) multiplied
                                          by the total number of input slices
+                                         This curve encourages a higher ratio
+                                         of recovery slices to be chosen for
+                                         smaller inputs
                              The 'l', 's', 'w' and 'n' suffixes can be followed
                              by a scale factor, e.g. `-r1l*1.5` takes the
                              number of slices in the largest file and
@@ -104,6 +107,9 @@ Output Options:
                              appeneded if not supplied.
   -O,  --overwrite           Overwrite existing files if they exist. This
                              option doesn't take any parameters.
+                             Note that this will not delete existing PAR2
+                             recovery files that match the base PAR2 name, but
+                             wouldn't be written to.
   -n,  --std-naming          Use standard naming scheme for recovery files,
                              instead of that popularized by par2cmdline. Output
                              names will look like xxx.vol12-22.par2 instead of
@@ -198,8 +204,12 @@ Input Files:
 
   Additional arguments are taken as files to be processed.
 
-  -R,  --recurse             If specified, recurse into subdirectories. This
-                             option takes no values.
+  -R,  --recurse             If specified, recurse into subdirectories. If
+                             `--no-recurse` is specified, do not traverse
+                             subdirectories. The default is to traverse
+                             directories given on the command line without
+                             recursion.
+                             This option takes no values.
   -i,  --input-file          Supply a list of files to be posted, separated
                              by newlines. Can be `-` to read from stdin, or a
                              command prefixed with proc:// to read from the

@@ -148,7 +148,8 @@ var opts = {
 	},
 	'recurse': {
 		alias: 'R',
-		type: 'bool'
+		type: 'bool',
+		default: 1 /* traverse folders explicitly specified */
 	},
 	'input-file': {
 		type: 'array',
