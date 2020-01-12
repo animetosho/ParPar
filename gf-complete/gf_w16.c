@@ -547,8 +547,12 @@ int gf_w16_init(gf_t *gf)
 
   /* default behaviour */
 #ifdef INTEL_SSE2
-  if(has_avx512bw) /* shuffle always preferred on AVX512 */
-    return gf_w16_split_init(gf);
+  if(has_avx512bw) {
+    if(has_gfni)
+      return gf_w16_affine_init(gf);
+    else
+      return gf_w16_split_init(gf); /* faster than XOR512 */
+  }
 # ifndef AMD64
   if(has_avx2 && !has_avxslow)
     return gf_w16_split_init(gf);
