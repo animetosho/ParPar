@@ -19,7 +19,16 @@
           }]
         ]
       }]
-    ]
+    ],
+    "msvs_settings": {"VCCLCompilerTool": {"Optimization": "MaxSpeed"}},
+    "configurations": {"Release": {
+      "cflags": ["-fomit-frame-pointer"],
+      "cxxflags": ["-fomit-frame-pointer"],
+      "xcode_settings": {
+        "OTHER_CFLAGS": ["-fomit-frame-pointer"],
+        "OTHER_CXXFLAGS": ["-fomit-frame-pointer"]
+      }
+    }}
   },
   "targets": [
     {
@@ -65,7 +74,14 @@
     {
       "target_name": "multi_md5",
       "type": "static_library",
-      "sources": ["md5/md5.c", "md5/md5-simd.c"]
+      "sources": ["md5/md5.c", "md5/md5-simd.c"],
+      "cflags!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"],
+      "cxxflags!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"],
+      "xcode_settings": {
+        "OTHER_CFLAGS!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"],
+        "OTHER_CXXFLAGS!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"]
+      },
+      "msvs_settings": {"VCCLCompilerTool": {"BufferSecurityCheck": "false"}}
     },
     {
       "target_name": "gf-complete",
@@ -87,8 +103,13 @@
       "cflags": ["-Wno-unused-function"],
       "xcode_settings": {
         "OTHER_CFLAGS": ["-Wno-unused-function"],
+        "OTHER_CFLAGS!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"],
+        "OTHER_CXXFLAGS!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"],
         "OTHER_LDFLAGS": []
       },
+      "cflags!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"],
+      "cxxflags!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"],
+      "msvs_settings": {"VCCLCompilerTool": {"BufferSecurityCheck": "false"}},
       "conditions": [
         ['OS in "linux android" and target_arch=="arm"', {
           "variables": {"has_neon%": "<!(grep -e ' neon ' /proc/cpuinfo || true)"},
