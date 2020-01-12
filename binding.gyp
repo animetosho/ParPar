@@ -5,7 +5,7 @@
         "msvs_settings": {"VCCLCompilerTool": {"EnableEnhancedInstructionSet": "2"}}
       }],
       ['OS!="win"', {
-        "variables": {"supports_native%": "<!(<!(echo ${CXX_target:-${CXX:-c++}}) -MM -E src/gyp_warnings.c -march=native 2>/dev/null || true)"},
+        "variables": {"supports_native%": "<!(<!(echo ${CXX_target:-${CXX:-c++}}) -MM -E src/gyp_warnings.cc -march=native 2>/dev/null || true)"},
         "conditions": [
           ['supports_native!=""', {
             "cflags": ["-march=native"],
@@ -34,35 +34,29 @@
     {
       "target_name": "parpar_gf",
       "dependencies": ["gf-complete", "multi_md5"],
-      "sources": ["src/gf.cc", "gf-complete/module.c", "src/gyp_warnings.c"],
+      "sources": ["src/gf.cc", "gf-complete/module.c", "src/gyp_warnings.cc"],
       "include_dirs": ["gf-complete"],
       "conditions": [
         ['OS=="win"', {
           "msvs_settings": {"VCCLCompilerTool": {"OpenMP": "true"}}
         }, {
           "variables": {
-            "supports_omp%": "<!(<!(echo ${CXX_target:-${CXX:-c++}}) -MM -E src/gyp_warnings.c -fopenmp 2>/dev/null || true)",
-            "supports_omp_clang%": "<!(<!(echo ${CXX_target:-${CXX:-c++}}) -MM -E src/gyp_warnings.c -fopenmp=libomp 2>/dev/null || true)"
+            "supports_omp%": "<!(<!(echo ${CXX_target:-${CXX:-c++}}) -MM -E src/gyp_warnings.cc -fopenmp 2>/dev/null || true)",
+            "supports_omp_clang%": "<!(<!(echo ${CXX_target:-${CXX:-c++}}) -MM -E src/gyp_warnings.cc -fopenmp=libomp 2>/dev/null || true)"
           },
           "conditions": [
             ['supports_omp!=""', {
-              "cflags": ["-fopenmp"],
               "cxxflags": ["-fopenmp"],
               "ldflags": ["-fopenmp"],
               "xcode_settings": {
-                "OTHER_CFLAGS": ["-fopenmp"],
-                "OTHER_CPPFLAGS": ["-fopenmp"],
                 "OTHER_CXXFLAGS": ["-fopenmp"],
                 "OTHER_LDFLAGS": ["-fopenmp"]
               }
             }],
             ['supports_omp_clang!="" and supports_omp==""', {
-              "cflags": ["-fopenmp=libomp"],
               "cxxflags": ["-fopenmp=libomp"],
               "ldflags": ["-fopenmp=libomp"],
               "xcode_settings": {
-                "OTHER_CFLAGS": ["-fopenmp=libomp"],
-                "OTHER_CPPFLAGS": ["-fopenmp=libomp"],
                 "OTHER_CXXFLAGS": ["-fopenmp=libomp"],
                 "OTHER_LDFLAGS": ["-fopenmp=libomp"]
               }
