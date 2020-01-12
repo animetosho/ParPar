@@ -16,19 +16,13 @@
 # define G(b,c,d)        _mm(ternarylogic_epi32)(b,c,d,0xE4) /*0b11100100*/
 # define H(b,c,d)        _mm(ternarylogic_epi32)(b,c,d,0x96) /*0b10010110*/
 # define I(b,c,d)        _mm(ternarylogic_epi32)(b,c,d,0x39) /*0b00111001*/
-/* since f() is (hopefully) cheap in AVX512, we re-arrange the adds a bit to shorten dependency chain */
-# define RX(f,a,b,c,d,k,s,t) { \
-        a=_mm(add_epi32)( \
-          _mm(add_epi32)((k),_mm(set1_epi32)(t)), \
-          _mm(add_epi32)(a, f((b),(c),(d))) \
-        ); \
-        a=_mm(rol_epi32)(a, s); \
-        a=_mm(add_epi32)(a, b); };
+# define ROTATE          _mm(rol_epi32)
 #else
-# define F(b,c,d)        _mmi(xor)(_mmi(and)(_mmi(xor)((c), (d)), (b)), (d))
 # ifdef __XOP__
+#  define F(b,c,d)        _mmi(cmov)((c), (d), (b))
 #  define G(b,c,d)        _mmi(cmov)((b), (c), (d))
 # else
+#  define F(b,c,d)        _mmi(xor)(_mmi(and)(_mmi(xor)((c), (d)), (b)), (d))
 /* using ANDNOT is likely faster: http://www.zorinaq.com/papers/md5-amd64.html */
 #  define G(b,c,d)        _mmi(or)(_mmi(and)((d), (b)), _mmi(andnot)((d), (c)))
 /*#define G(b,c,d)        F(d, b, c)*/
@@ -39,9 +33,15 @@
 # if defined(__XOP__) && MD5_SIMD_NUM == 4
 #  define ROTATE          _mm_roti_epi32
 # else
-#  define ROTATE(a,n)     _mmi(or)(_mm(slli_epi32)((a), (n)), _mm(srli_epi32)((a), (32-(n))))
+// TODO: investigate with SSSE3 byte shuffle
+#  define ROTATE(a,n)     (n == 16 ? \
+_mm(shufflehi_epi16)(_mm(shufflelo_epi16)((a), 0xb1), 0xb1) \
+: _mmi(or)(_mm(slli_epi32)((a), (n)), _mm(srli_epi32)((a), (32-(n)))) \
+)
 # endif
-# define RX(f,a,b,c,d,k,s,t) { \
+#endif
+
+#define RX(f,a,b,c,d,k,s,t) { \
         a=_mm(add_epi32)( \
           _mm(add_epi32)( \
             a, \
@@ -51,7 +51,7 @@
         ); \
         a=ROTATE(a,s); \
         a=_mm(add_epi32)(a, b); };
-#endif
+
 
 #define TRANSPOSE4(a, b, c, d) { \
         MWORD T0 = _mm(unpacklo_epi32)((a), (b)); \
