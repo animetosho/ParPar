@@ -313,7 +313,7 @@ x86 Micro-optimisations (JIT)
     overall performance slightly.  
     Note that `XORPD` is a largely useless instruction, and not considered here.
     Also, there is no length difference for (E)VEX encoded instructions, so we
-    always prefer VPXOR for AVX code.
+    always prefer `VPXOR` for AVX code.
 
 -   For AVX512 implementation, the `VPTERNLOG` instruction can replace two XOR
     operations, and this one instruction is just as fast as a `VPXOR`. If the
