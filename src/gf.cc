@@ -255,7 +255,7 @@ static void MMAfter(uv_work_t* work_req, int status) {
 #if NODE_VERSION_AT_LEAST(0, 11, 0)
 	HandleScope scope(req->isolate);
 	Local<Object> obj = Local<Object>::New(req->isolate, req->obj_);
-# if NODE_VERSION_AT_LEAST(12, 0, 0)
+# if NODE_VERSION_AT_LEAST(10, 0, 0)
 	node::async_context ac;
 	memset(&ac, 0, sizeof(ac));
 	node::MakeCallback(req->isolate, obj, "ondone", 0, NULL, ac);
