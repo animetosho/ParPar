@@ -34,7 +34,7 @@
     {
       "target_name": "parpar_gf",
       "dependencies": ["gf-complete", "multi_md5"],
-      "sources": ["src/gf.cc", "gf-complete/module.c", "src/gyp_warnings.cc"],
+      "sources": ["src/gf.cc", "gf-complete/module.cc", "src/gyp_warnings.cc"],
       "include_dirs": ["gf-complete"],
       "conditions": [
         ['OS=="win"', {
@@ -45,18 +45,22 @@
             "supports_omp_clang%": "<!(<!(echo ${CXX_target:-${CXX:-c++}}) -MM -E src/gyp_warnings.cc -fopenmp=libomp 2>/dev/null || true)"
           },
           "conditions": [
-            ['supports_omp!=""', {
+            ['supports_omp!="" and supports_omp_clang==""', {
+              "cflags": ["-fopenmp"],
               "cxxflags": ["-fopenmp"],
               "ldflags": ["-fopenmp"],
               "xcode_settings": {
+                "OTHER_CFLAGS": ["-fopenmp"],
                 "OTHER_CXXFLAGS": ["-fopenmp"],
                 "OTHER_LDFLAGS": ["-fopenmp"]
               }
             }],
-            ['supports_omp_clang!="" and supports_omp==""', {
+            ['supports_omp_clang!=""', {
+              "cflags": ["-fopenmp=libomp"],
               "cxxflags": ["-fopenmp=libomp"],
               "ldflags": ["-fopenmp=libomp"],
               "xcode_settings": {
+                "OTHER_CFLAGS": ["-fopenmp=libomp"],
                 "OTHER_CXXFLAGS": ["-fopenmp=libomp"],
                 "OTHER_LDFLAGS": ["-fopenmp=libomp"]
               }

@@ -12,11 +12,12 @@
 #include <malloc.h>
 #endif
 
+#include "../gf-complete/module.h"
+
 extern "C" {
 #ifdef _OPENMP
 #include <omp.h>
 #endif
-#include "../gf-complete/module.h"
 #include "../md5/md5.h"
 }
 
