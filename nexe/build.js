@@ -53,6 +53,7 @@ var doPatch = function(r, s, ignoreMissing) {
 	gypData = gypData.replace(r, '$1 ' + s);
 };
 if(!findGypTarget('crcutil')) {
+	// TODO: update this to enable building yencode 1.1.0
 	doPatch(/(\},\s*['"]targets['"]: \[)/, [{
 	      "target_name": "crcutil",
 	      "type": "static_library",
@@ -67,14 +68,15 @@ if(!findGypTarget('crcutil')) {
 	      ],
 	      "conditions": [
 	        ['OS=="win"', {
-	          "msvs_settings": {"VCCLCompilerTool": {"EnableEnhancedInstructionSet": "2"}}
+	          "msvs_settings": {"VCCLCompilerTool": {"EnableEnhancedInstructionSet": "2", "Optimization": "MaxSpeed", "BufferSecurityCheck": "false"}}
 	        }, (vcBuildArch == 'x86' ? {
 	          "cxxflags": ["-msse2", "-O3", "-fomit-frame-pointer"],
 	          // some of the ASM won't compile with LTO, so disable it for CRCUtil
 	          "cflags!": ['-flto'],
-	          "cxxflags!": ['-flto']
+	          "cxxflags!": ['-flto', "-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"]
 	        } : {
-	          "cxxflags": ["-msse2", "-O3", "-fomit-frame-pointer"].concat(useLTO ? ['-flto'] : [])
+	          "cxxflags": ["-msse2", "-O3", "-fomit-frame-pointer"].concat(useLTO ? ['-flto'] : []),
+	          "cxxflags!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"]
 	        })]
 	      ],
 	      "include_dirs": ["yencode/crcutil-1.0/code", "yencode/crcutil-1.0/tests"],
@@ -90,7 +92,7 @@ if(!findGypTarget('crcutil')) {
       ],
       "conditions": [
         ['OS=="win"', {
-          "msvs_settings": {"VCCLCompilerTool": {"OpenMP": "true"}}
+          "msvs_settings": {"VCCLCompilerTool": {"OpenMP": "true", "Optimization": "MaxSpeed"}}
         }, {
           "cflags": ["-msse2", "-O3", "-Wall", "-fopenmp"+openMpLib],
           "cxxflags": ["-msse2", "-O3", "-Wall", "-fopenmp"+openMpLib],
@@ -99,7 +101,6 @@ if(!findGypTarget('crcutil')) {
         ['OS=="mac"', {
           "xcode_settings": {
             "OTHER_CFLAGS": ["-msse2", "-O3", "-Wall", "-fopenmp"+openMpLib],
-            "OTHER_CPPFLAGS": ["-msse2", "-O3", "-Wall", "-fopenmp"+openMpLib],
             "OTHER_CXXFLAGS": ["-msse2", "-O3", "-Wall", "-fopenmp"+openMpLib],
             "OTHER_LDFLAGS": ["-fopenmp"+openMpLib]
           }
@@ -112,13 +113,15 @@ if(!findGypTarget('crcutil')) {
       "sources": ["parpar_gf/md5/md5.c", "parpar_gf/md5/md5-simd.c"],
       "conditions": [
         ['OS=="win"', {
-          "msvs_settings": {"VCCLCompilerTool": {"EnableEnhancedInstructionSet": "2"}}
+          "msvs_settings": {"VCCLCompilerTool": {"EnableEnhancedInstructionSet": "2", "Optimization": "MaxSpeed", "BufferSecurityCheck": "false"}}
         }, {
-          "cflags": ["-msse2", "-O3", "-Wall"]
+          "cflags": ["-msse2", "-O3", "-Wall", "-fomit-frame-pointer"],
+          "cflags!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"]
         }],
         ['OS=="mac"', {
           "xcode_settings": {
-            "OTHER_CFLAGS": ["-msse2", "-O3", "-Wall"]
+            "OTHER_CFLAGS": ["-msse2", "-O3", "-Wall", "-fomit-frame-pointer"],
+             "OTHER_CFLAGS!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"]
           }
         }]
       ]
@@ -142,14 +145,27 @@ if(!findGypTarget('crcutil')) {
       ],
       "conditions": [
         ['OS=="win"', {
-          "msvs_settings": {"VCCLCompilerTool": {"EnableEnhancedInstructionSet": "2"}}
+          "msvs_settings": {"VCCLCompilerTool": {"EnableEnhancedInstructionSet": "2", "Optimization": "MaxSpeed", "BufferSecurityCheck": "false"}}
         }, {
-          "cflags": ["-msse2","-Wall","-O3","-Wno-unused-function"],
+          "conditions": [
+            ['OS in "linux android" and target_arch in "arm arm64"', {
+              "variables": {"has_neon%": "<!(grep -e ' neon ' /proc/cpuinfo || true)"},
+              "conditions": [
+                ['has_neon!=""', {
+                  "cflags": ["-mfpu=neon"],
+                  "cxxflags": ["-mfpu=neon"]
+                }]
+              ]
+            }]
+          ],
+          "cflags": ["-msse2","-Wall","-O3","-fomit-frame-pointer","-Wno-unused-function"],
+          "cflags!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"],
           "ldflags": []
         }],
         ['OS=="mac"', {
           "xcode_settings": {
-            "OTHER_CFLAGS": ["-msse2","-Wall","-O3","-Wno-unused-function"],
+            "OTHER_CFLAGS": ["-msse2","-Wall","-O3","-fomit-frame-pointer","-Wno-unused-function"],
+            "OTHER_CFLAGS!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"],
             "OTHER_LDFLAGS": []
           }
         }],
@@ -173,11 +189,17 @@ if(!tNode) {
 var tNodeMatch = new RegExp('('+tNodeM+')');
 if(tNode.sources.indexOf('yencode/yencode.cc') < 0)
 	doPatch(/(['"]src\/node_file\.cc['"],)/, "'yencode/yencode.cc','parpar_gf/src/gf.cc',");
-if(tNode.dependencies.indexOf('crcutil') < 0)
-	// try to avoid matching the cctest target
-	doPatch(/('target_name': '<\([^\]]+?['"]node_js2c#host['"],)/, "'crcutil','parpar_gf',");
+if(tNode.dependencies.indexOf('crcutil') < 0) {
+	if(tNode.dependencies.indexOf('deps/histogram/histogram.gyp:histogram') == 0)
+		// Node 12
+		// TODO: this gets double-replaced if run twice
+		doPatch(/('src\/node_main\.cc'[^]{2,50}'dependencies': \[ 'deps\/histogram\/histogram\.gyp:histogram')/, ",'crcutil','parpar_gf'");
+	else
+		// try to avoid matching the cctest target
+		doPatch(/('target_name': '<\([^\]]+?['"]node_js2c#host['"],)/, "'crcutil','parpar_gf',");
+}
 if(tNode.include_dirs.indexOf('yencode/crcutil-1.0/code') < 0)
-	doPatch(/(['"]<\(SHARED_INTERMEDIATE_DIR\)['"],? # for node_natives\.h\r?\n)/g, "'yencode/crcutil-1.0/code', 'yencode/crcutil-1.0/examples',");
+	doPatch(/(['"]<\(SHARED_INTERMEDIATE_DIR\)['"](,?) # for node_natives\.h\r?\n)/g, ",'yencode/crcutil-1.0/code', 'yencode/crcutil-1.0/examples'$2");
 // TODO: add gf stuff
 
 if(gyp.variables.library_files.indexOf('lib/yencode.js') < 0)
@@ -266,9 +288,10 @@ patchGypCompiler('deps/cares/cares.gyp');
 patchGypCompiler('deps/openssl/openssl.gyp');
 patchGypCompiler('deps/uv/uv.gyp');
 patchGypCompiler('deps/zlib/zlib.gyp', 'conditions');
+// node 12's v8 doesn't use gyp
 if(fs.existsSync(nodeSrc + 'deps/v8/src/v8.gyp'))
 	patchGypCompiler('deps/v8/src/v8.gyp');
-else
+else if(fs.existsSync(nodeSrc + 'deps/v8/tools/gyp/v8.gyp'))
 	patchGypCompiler('deps/v8/tools/gyp/v8.gyp');
 
 
