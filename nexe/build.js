@@ -6,6 +6,7 @@ var python = 'python';
 var makeArgs = ["-j", "1"];
 var vcBuildArch = "x86"; // x86 or x64
 var useLTO = true;
+var oLevel = '-O2'; // prefer -O2 on GCC, -Os on Clang
 
 var fs = require('fs');
 var ncp = require('./ncp').ncp;
@@ -224,9 +225,9 @@ if(!tNode.msvs_settings) {
 	}
 }
 if(!tNode.cxxflags) {
-	doPatch(tNodeMatch, "'cxxflags': ['-Os','-msse2'"+ltoFlagC+",'-fopenmp"+openMpLib+"'],");
-} else if(tNode.cxxflags.indexOf('-Os') < 0) {
-	doPatch(new RegExp("(" + tNodeM + "[^]*?['\"]cxxflags['\"]:\\s*\\[)"), "'-Os','-msse2'"+ltoFlagC+",'-fopenmp"+openMpLib+"',");
+	doPatch(tNodeMatch, "'cxxflags': ['"+oLevel+"','-msse2'"+ltoFlagC+",'-fopenmp"+openMpLib+"'],");
+} else if(tNode.cxxflags.indexOf(oLevel) < 0) {
+	doPatch(new RegExp("(" + tNodeM + "[^]*?['\"]cxxflags['\"]:\\s*\\[)"), "'"+oLevel+"','-msse2'"+ltoFlagC+",'-fopenmp"+openMpLib+"',");
 }
 
 if(!tNode.ldflags) {
@@ -263,7 +264,7 @@ var patchGypCompiler = function(file, targets) {
 	
 	if(!gyp.target_defaults) {
 		targets = targets || 'targets';
-		gypData = gypData.replace("'"+targets+"':", "'target_defaults': {'msvs_settings': {'VCCLCompilerTool': {'EnableEnhancedInstructionSet': '2', 'FavorSizeOrSpeed': '2'}, 'VCLinkerTool': {'GenerateDebugInformation': 'false'}}, 'cxxflags': ['-Os','-msse2'"+ltoFlagC+"], 'ldflags': ['-s'"+ltoFlagC+"]}, '"+targets+"':");
+		gypData = gypData.replace("'"+targets+"':", "'target_defaults': {'msvs_settings': {'VCCLCompilerTool': {'EnableEnhancedInstructionSet': '2', 'FavorSizeOrSpeed': '2'}, 'VCLinkerTool': {'GenerateDebugInformation': 'false'}}, 'cxxflags': ['"+oLevel+"','-msse2'"+ltoFlagC+"], 'ldflags': ['-s'"+ltoFlagC+"]}, '"+targets+"':");
 	} else {
 		// TODO: other possibilities
 		if(!gyp.target_defaults.msvs_settings)
@@ -271,7 +272,7 @@ var patchGypCompiler = function(file, targets) {
 		else if(!gyp.target_defaults.msvs_settings.VCCLCompilerTool || !gyp.target_defaults.msvs_settings.VCLinkerTool || !gyp.target_defaults.msvs_settings.VCCLCompilerTool.EnableEnhancedInstructionSet)
 			throw new Error('To be implemented');
 		if(!gyp.target_defaults.cxxflags)
-			gypData = gypData.replace("'target_defaults': {", "'target_defaults': {'cxxflags': ['-Os','-msse2'"+ltoFlagC+"],");
+			gypData = gypData.replace("'target_defaults': {", "'target_defaults': {'cxxflags': ['"+oLevel+"','-msse2'"+ltoFlagC+"],");
 		else if(useLTO && gyp.target_defaults.cxxflags.indexOf('-flto') < 0)
 			throw new Error('To be implemented');
 		if(!gyp.target_defaults.ldflags)
@@ -309,7 +310,7 @@ if(fs.existsSync(nodeSrc + 'src/node_extensions.h')) { // node 0.10.x
 }
 
 // TODO: improve placement of ldflags
-patchFile('common.gypi', null, "'cflags': [ '-O3',", (useLTO ? "'ldflags': ['-flto'], ":'')+"'cflags': [ '-Os','-msse2'"+ltoFlagC+",");
+patchFile('common.gypi', null, "'cflags': [ '-O3',", (useLTO ? "'ldflags': ['-flto'], ":'')+"'cflags': [ '"+oLevel+"','-msse2'"+ltoFlagC+",");
 patchFile('common.gypi', null, "'FavorSizeOrSpeed': 1,", "'FavorSizeOrSpeed': 2, 'EnableEnhancedInstructionSet': '2',");
 patchFile('common.gypi', null, "'GenerateDebugInformation': 'true',", "'GenerateDebugInformation': 'false',");
 
