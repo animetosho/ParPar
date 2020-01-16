@@ -3,6 +3,7 @@ var nexeBase = '.';
 var nodeSrc = nexeBase + '/node/' + nodeVer + '/_/'; // TODO: auto search folder
 var yencSrc = './yencode-src/';
 var python = 'python';
+// process.env.path = '' + process.env.path; // if need to specify a Python path
 var makeArgs = ["-j", "1"];
 var vcBuildArch = "x86"; // x86 or x64
 var useLTO = true;
@@ -87,7 +88,7 @@ if(!findGypTarget('crcutil')) {
       "target_name": "parpar_gf",
       "type": "static_library",
       "dependencies": ["gf-complete", "multi_md5"],
-      "sources": ["parpar_gf/gf-complete/module.c"],
+      "sources": ["parpar_gf/gf-complete/module.cc"],
       "include_dirs": [
         "parpar_gf/gf-complete",
       ],
@@ -200,7 +201,7 @@ if(tNode.dependencies.indexOf('crcutil') < 0) {
 		doPatch(/('target_name': '<\([^\]]+?['"]node_js2c#host['"],)/, "'crcutil','parpar_gf',");
 }
 if(tNode.include_dirs.indexOf('yencode/crcutil-1.0/code') < 0)
-	doPatch(/(['"]<\(SHARED_INTERMEDIATE_DIR\)['"](,?) # for node_natives\.h\r?\n)/g, ",'yencode/crcutil-1.0/code', 'yencode/crcutil-1.0/examples'$2");
+	doPatch(/(['"]<\(SHARED_INTERMEDIATE_DIR\)['"])(,?) # for node_natives\.h\r?\n/g, ",'yencode/crcutil-1.0/code', 'yencode/crcutil-1.0/examples'$2");
 // TODO: add gf stuff
 
 if(gyp.variables.library_files.indexOf('lib/yencode.js') < 0)
@@ -237,7 +238,7 @@ if(!tNode.ldflags) {
 }
 
 // strip OpenSSL exports
-doPatch(/('use_openssl_def':) 1,/, "0,", true);
+doPatch(/('use_openssl_def%?':) 1,/, "0,", true);
 
 
 fs.writeFileSync(nodeSrc + 'node.gyp', gypData);
@@ -299,7 +300,7 @@ else if(fs.existsSync(nodeSrc + 'deps/v8/tools/gyp/v8.gyp'))
 
 var patchFile = function(path, find, replFrom, replTo) {
 	var ext = fs.readFileSync(nodeSrc + path).toString();
-	if(!find || !ext.match(find)) {
+	if(!find || (find.test ? !find.test(ext) : ext.indexOf(find) < 0)) {
 		ext = ext.replace(replFrom, replTo);
 		fs.writeFileSync(nodeSrc + path, ext);
 	}
@@ -307,6 +308,11 @@ var patchFile = function(path, find, replFrom, replTo) {
 
 if(fs.existsSync(nodeSrc + 'src/node_extensions.h')) { // node 0.10.x
 	patchFile('src/node_extensions.h', 'yencode', '\nNODE_EXT_LIST_START', '\nNODE_EXT_LIST_START\nNODE_EXT_LIST_ITEM('+modulePref+'yencode)\nNODE_EXT_LIST_ITEM('+modulePref+'gf)');
+}
+if(nodeVer.startsWith('8.')) { // doesn't work for node 4 or 12, but does for 8
+	patchFile('src/node_internals.h', 'V(yencode)', 'V(async_wrap)', 'V(parpar_gf) V(yencode) V(async_wrap)');
+	// nexe fails to patch the new code, so we'll do it ourself
+	patchFile('lib/internal/bootstrap_node.js', '"nexe.js"', 'function startup() {', 'if (process.argv[1] !== "nexe.js") process.argv.splice(1, 0, "nexe.js");\n  function startup() {\n    process._eval = NativeModule.getSource("nexe");');
 }
 
 // TODO: improve placement of ldflags
@@ -317,8 +323,12 @@ patchFile('common.gypi', null, "'GenerateDebugInformation': 'true',", "'Generate
 // TODO: set AR=gcc-ar if ar fails
 
 // strip exports
-patchFile('src/node.h', 'define NODE_EXTERN __declspec(dllexport)', 'define NODE_EXTERN __declspec(dllexport)', 'define NODE_EXTERN');
+patchFile('src/node.h', null, 'define NODE_EXTERN __declspec(dllexport)', 'define NODE_EXTERN');
+patchFile('src/node.h', null, 'define NODE_MODULE_EXPORT __declspec(dllexport)', 'define NODE_MODULE_EXPORT');
+patchFile('src/node_api.h', null, 'define NAPI_EXTERN __declspec(dllexport)', 'define NAPI_EXTERN');
+patchFile('src/node_api.h', null, 'define NAPI_MODULE_EXPORT __declspec(dllexport)', 'define NAPI_MODULE_EXPORT');
 patchFile('common.gypi', null, /'BUILDING_(V8|UV)_SHARED=1',/g, '');
+fs.writeFileSync(nodeSrc + 'deps/zlib/win32/zlib.def', 'EXPORTS');
 
 /*
 // MSVS2017 support if not available
@@ -390,6 +400,8 @@ var copyCC = function(src, dest) {
 	var code = fs.readFileSync(src).toString();
 	if(isNode010)
 		code = code.replace(/NODE_MODULE\(([a-z0-9_]+)/, 'NODE_MODULE('+modulePref+'$1');
+	else if(parseFloat(nodeVer) >= 8)
+		code = code.replace('NODE_MODULE(', '#include "'+dest.replace(/\/[^\/]+$/, '/src').replace(/[^\/]+\//g, '../') + '/node_internals.h"' + '\r\n' + 'NODE_BUILTIN_MODULE_CONTEXT_AWARE(');
 	else
 		code = code.replace('NODE_MODULE(', 'NODE_MODULE_CONTEXT_AWARE_BUILTIN(');
 	if(dest.substr(0, 3) != '../')
@@ -410,6 +422,7 @@ ncp('../md5', nodeSrc + 'parpar_gf/md5', function() {
 ncp('../src', nodeSrc + 'parpar_gf/src', function() {
 ncp(yencSrc, nodeSrc + 'yencode', function() {
 	
+	copyCC('../src/gf.cc', 'parpar_gf/src/gf.cc');
 	copyCC(yencSrc + 'yencode.cc', 'yencode/yencode.cc');
 	copyJS(yencSrc + 'index.js', 'lib/yencode.js');
 	copyJS('../lib/par2.js', '../lib/par2.js'); // !! overwrites file !!
@@ -434,7 +447,7 @@ ncp(yencSrc, nodeSrc + 'yencode', function() {
 	    resourceRoot: [  ], // where to embed the resourceFiles.
 	    flags: true, // use this for applications that need command line flags.
 	    jsFlags: "", // v8 flags
-	    startupSnapshot: '', // when you want to specify a script to be
+	    startupSnapshot: null, // when you want to specify a script to be
 	                                            // added to V8's startup snapshot. This V8
 	                                            // feature deserializes a heap to save startup time.
 	                                            // More information in this blog post:
