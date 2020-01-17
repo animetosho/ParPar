@@ -440,10 +440,12 @@ var inputFiles = argv._;
 			// if(event == 'processing_file') process.stderr.write('Processing file ' + arg1.name + '\n');
 		}, function(err) {
 			if(err) throw err;
-			var endTime = Date.now();
-			if(interval) clearInterval(interval);
-			process.stderr.write('Calculating: 100.00%\x1b[0G');
-			process.stderr.write('\nPAR2 created. Time taken: ' + ((endTime - startTime)/1000) + ' second(s)\n');
+			if(!argv.quiet) {
+				var endTime = Date.now();
+				if(interval) clearInterval(interval);
+				process.stderr.write('Calculating: 100.00%\x1b[0G');
+				process.stderr.write('\nPAR2 created. Time taken: ' + ((endTime - startTime)/1000) + ' second(s)\n');
+			}
 		});
 		
 	});
