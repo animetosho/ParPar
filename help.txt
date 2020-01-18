@@ -89,9 +89,14 @@ PAR2 Options:
                              Default is `pow2`.
   -f,  --filepath-format     How to format input file paths, can be either:
                                  basename: discard paths
-                                 keep: retain full paths
+                                 keep: retain full paths as specified
                                  common: discard common parts of paths
+                                 path: path computed relative to that specified
+                                       in `--filepath-base`
                              Default is `common`.
+       --filepath-base       The base path to use when computing paths when
+                             `--filepath-format=path` is used.
+                             Default is `.` (i.e. current working directory)
        --unicode             Whether to force PAR2 unicode packets to be
                              generated. If set, unicode packets will always be
                              generated. If explicitly unset (`--no-unicode`),
