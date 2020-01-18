@@ -27,10 +27,13 @@
   "scripts": {
     "install": "node-gyp rebuild"
   },
+  "pkg": {
+    "assets": "help*.txt"
+  },
   "gypfile": true,
   "dependencies": {
     "async": "0.2.0 - 2.9999.9999",
-    "yencode": ">=1.0.4"
+    "yencode": "1.0.4 - 1.9999.9999"
   },
   "bugs": {
     "url": "https://github.com/animetosho/parpar/issues"
