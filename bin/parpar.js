@@ -176,6 +176,10 @@ var opts = {
 		alias: 'q',
 		type: 'bool'
 	},
+	'progress': {
+		type: 'enum',
+		enum: ['none','stderr','stdout']
+	},
 	'version': {
 		type: 'bool'
 	},
@@ -206,6 +210,14 @@ if(argv.version) {
 if(!argv.out || !argv['input-slices']) {
 	error('Values for `out` and `input-slices` are required');
 }
+
+if(!argv.progress)
+	argv.progress = argv.quiet ? 'none' : 'stderr';
+var writeProgress = function() {};
+if(argv.progress == 'stdout' || argv.progress == 'stderr')
+	writeProgress = function(text) {
+		process[argv.progress].write(text + '\x1b[0G');
+	};
 
 var inputFiles = argv._;
 
@@ -407,31 +419,12 @@ var inputFiles = argv._;
 		}
 		
 		var currentSlice = 0;
+		var progressInterval;
 		if(!argv.quiet) {
 			var method_used = ParPar.getMethod();
 			var num_threads = ParPar.getNumThreads();
 			var thread_str = num_threads + ' thread' + (num_threads==1 ? '':'s');
 			process.stderr.write('Multiply method used: ' + method_used.description + ' (' + method_used.wordBits + ' bit), ' + thread_str + '\n');
-			
-			var totalSlices = g.chunks * g.passes * g.inputSlices;
-			if(argv['seq-first-pass']) {
-				totalSlices = g.chunks * (g.passes-1) * g.inputSlices + g.inputSlices;
-			}
-			if(totalSlices) {
-				var interval = setInterval(function() {
-					var perc = Math.floor(currentSlice / totalSlices *10000)/100;
-					perc = Math.min(perc, 99.99);
-					// add formatting for aesthetics
-					var parts = perc.toLocaleString().match(/^([0-9]+)([.,][0-9]+)?$/);
-					while(parts[1].length < 3)
-						parts[1] = ' ' + parts[1];
-					if(parts[2]) while(parts[2].length < 3)
-						parts[2] += '0';
-					else
-						parts[2] = decimalPoint + '00';
-					process.stderr.write('Calculating: ' + (parts[1] + parts[2]) + '%\x1b[0G');
-				}, 200);
-			}
 			
 			var friendlySize = function(s) {
 				var units = ['B', 'KiB', 'MiB', 'GiB', 'TiB', 'PiB', 'EiB'];
@@ -443,16 +436,40 @@ var inputFiles = argv._;
 			};
 			process.stderr.write('Generating '+friendlySize(g.opts.recoverySlices*g.opts.sliceSize)+' recovery data ('+g.opts.recoverySlices+' slices) from '+friendlySize(g.totalSize)+' of data\n');
 		}
+		if(argv.progress != 'none') {
+			var totalSlices = g.chunks * g.passes * g.inputSlices;
+			if(argv['seq-first-pass']) {
+				totalSlices = g.chunks * (g.passes-1) * g.inputSlices + g.inputSlices;
+			}
+			if(totalSlices) {
+				progressInterval = setInterval(function() {
+					var perc = Math.floor(currentSlice / totalSlices *10000)/100;
+					perc = Math.min(perc, 99.99);
+					// add formatting for aesthetics
+					var parts = perc.toLocaleString().match(/^([0-9]+)([.,][0-9]+)?$/);
+					while(parts[1].length < 3)
+						parts[1] = ' ' + parts[1];
+					if(parts[2]) while(parts[2].length < 3)
+						parts[2] += '0';
+					else
+						parts[2] = decimalPoint + '00';
+					writeProgress('Calculating: ' + (parts[1] + parts[2]) + '%');
+				}, 200);
+			}
+		}
 		
 		g.run(function(event, arg1) {
 			if(event == 'processing_slice') currentSlice++;
 			// if(event == 'processing_file') process.stderr.write('Processing file ' + arg1.name + '\n');
 		}, function(err) {
 			if(err) throw err;
+			
+			if(argv.progress != 'none') {
+				if(progressInterval) clearInterval(progressInterval);
+				writeProgress('Calculating: 100.00%');
+			}
 			if(!argv.quiet) {
 				var endTime = Date.now();
-				if(interval) clearInterval(interval);
-				process.stderr.write('Calculating: 100.00%\x1b[0G');
 				process.stderr.write('\nPAR2 created. Time taken: ' + ((endTime - startTime)/1000) + ' second(s)\n');
 			}
 		});

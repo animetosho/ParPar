@@ -210,6 +210,12 @@ UI Options:
 
   All of the following options take no parameters.
 
+       --progress            Progress indicator display, which can be either:
+                                 none: disable progress output
+                                 stderr: output a progress indicator to stderr
+                                 stdout: output a progress indicator to stdout
+                             Default is `stderr`, or `none` if `--quiet` is
+                             specified.
   -q,  --quiet               Suppress information output
   -?,  --help                Displays this list of options
        --version             Print application version number and exit
