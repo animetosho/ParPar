@@ -109,6 +109,11 @@ var opts = {
 	'slices-first-file': {
 		type: 'string'
 	},
+	'recovery-files': {
+		alias: 'F',
+		type: 'int',
+		map: 'outputFileCount'
+	},
 	'noindex': {
 		type: 'bool',
 		map: 'outputIndex',

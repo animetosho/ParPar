@@ -145,6 +145,15 @@ Output Options:
                              Default is 1 if `--slice-dist` is `pow2`, ignored
                              if `--slice-dist` is `uniform`, otherwise equals
                              `--slices-per-file`
+  -F,  --recovery-files      Number of recovery volume files to generate. If
+                             specified, will override another option to ensure
+                             the requested file count is met. The option
+                             overridden depends on what `--slice-dist` is used:
+                                 equal:   overrides `--slices-per-file`
+                                 uniform: overrides `--slices-per-file`
+                                 pow2:    overrides `--slices-first-file`
+                             If the requested file count cannot be met, an
+                             error will be generated.
        --noindex             Don't output an index file (file with no recovery
                              blocks). This option takes no value.
 
