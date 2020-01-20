@@ -101,7 +101,7 @@ Installation / Building
 Pre-Built Binaries
 ------------------
 
-Pre-packaged Windows builds with Node 4.x may be found on [the releases
+Pre-packaged Windows builds with Node 8.x may be found on [the releases
 page](https://github.com/animetosho/ParPar/releases) if I can be bothered to
 provide them.
 
