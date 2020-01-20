@@ -7,9 +7,12 @@
 
 // Change these variables if necessary
 var tmpDir = (process.env.TMP || process.env.TEMP || '.') + require('path').sep;
+//var tmpDir = require('path').resolve('./tmp') + require('path').sep;
+var exeNode = 'node';
 var exeParpar = '../bin/parpar';
 var exePar2 = 'par2';
 
+var skipFileCreate = false; // skip creating test files if they already exist (speeds up repeated failing tests, but existing files aren't checked)
 
 
 var fs = require('fs');
@@ -198,7 +201,7 @@ function compare_files(file1, file2) {
 
 function par2_args(o) {
 	var a = ['c', '-q'];
-	if(o.singleFile) a.push('-n1');
+	if(o.singleFile && o.blocks) a.push('-n1');
 	else if(o.uniformSizes) a.push('-u');
 	if(o.blockSize) a.push('-s'+o.blockSize);
 	if(o.inBlocks) a.push('-b'+o.inBlocks);
@@ -216,7 +219,10 @@ function parpar_args(o) {
 	if(o.blocks || o.blocks === 0) a.push('--recovery-slices='+o.blocks);
 	if(o.percentage) a.push('--recovery-slices='+o.percentage+'%');
 	if(o.offset) a.push('-e'+o.offset);
-	if(!o.singleFile) a.push('--slice-dist=' + (o.uniformSizes ? 'equal' : 'pow2'));
+	if(!o.singleFile)
+		a.push('--slice-dist=' + (o.uniformSizes ? 'equal' : 'pow2'));
+	else
+		a.push('--slice-dist=equal');
 	if(o.blockLimit) a.push('--slices-per-file='+o.blockLimit);
 	
 	// ParPar only tests
@@ -281,6 +287,7 @@ var delOutput = function() {
 console.log('Creating random input file...');
 // use RC4 as a fast (and consistent) random number generator (pseudoRandomBytes is sloooowwww)
 function writeRndFile(name, size) {
+	if(skipFileCreate && fs.existsSync(tmpDir + name)) return;
 	var fd = fs.openSync(tmpDir + name, 'w');
 	var rand = require('crypto').createCipher('rc4', 'my_incredibly_strong_password' + name);
 	rand.setAutoPadding(false);
@@ -288,7 +295,7 @@ function writeRndFile(name, size) {
 	nullBuf.fill(0);
 	var written = 0;
 	while(written < size) {
-		var b = rand.update(nullBuf).slice(0, size-written);
+		var b = rand.update(nullBuf).slice(0, Math.min(1024*16, size-written));
 		fsWriteSync(fd, b);
 		written += b.length;
 	}
@@ -296,6 +303,7 @@ function writeRndFile(name, size) {
 	fs.closeSync(fd);
 }
 writeRndFile('test64m.bin', 64*1048576);
+writeRndFile('test2200m.bin', 2200*1048576);
 
 // we don't test 0 byte files - different implementations seem to treat it differently:
 // - par2cmdline: skips all 0 byte files
@@ -309,26 +317,38 @@ writeRndFile('test65k.bin', 65521);
 writeRndFile('test13m.bin', 13631477);
 
 
-async.eachSeries([
+var cachedResults = {};
+var sourceFiles = {};
+
+try {
+	cachedResults = require(tmpDir + 'cached-cmpref.json');
+} catch(x) {
+	cachedResults = {};
+}
+
+var allTests = [
 	
 	{
 		in: [tmpDir + 'test64m.bin'],
 		blockSize: 65521*4, // prime number * 4
 		blocks: 200,
-		singleFile: true
+		singleFile: true,
+		cacheKey: '0'
 	},
 	{
 		in: [tmpDir + 'test64m.bin'],
 		blockSize: 65540,
 		blocks: 1,
-		singleFile: true
+		singleFile: true,
+		cacheKey: '1'
 	},
 	// 2x memory limited tests
 	{
 		in: [tmpDir + 'test64m.bin'],
 		memory: '16m',
 		blockSize: 1024*1024,
-		blocks: 17
+		blocks: 17,
+		cacheKey: '2'
 	},
 	{
 		in: [tmpDir + 'test1b.bin', tmpDir + 'test8b.bin', tmpDir + 'test64m.bin'],
@@ -337,7 +357,8 @@ async.eachSeries([
 		blockSize: 1024*1024,
 		chunk: 512*1024,
 		blocks: 40,
-		singleFile: true
+		singleFile: true,
+		cacheKey: '3'
 	},
 	// 2x test blockSize > memory limit
 	{
@@ -345,14 +366,16 @@ async.eachSeries([
 		memory: 1048573, // prime less than 1MB
 		blockSize: 524309*4, // roughly 2MB
 		blocks: 7,
-		singleFile: true
+		singleFile: true,
+		cacheKey: '4'
 	},
 	{
 		in: [tmpDir + 'test64m.bin'],
 		memory: '1m',
 		blockSize: 4*1048576,
 		blocks: 24,
-		singleFile: true
+		singleFile: true,
+		cacheKey: '5'
 	},
 	{
 		in: [tmpDir + 'test1b.bin', tmpDir + 'test8b.bin', tmpDir + 'test64m.bin'],
@@ -361,24 +384,28 @@ async.eachSeries([
 		blockSize: 1024*1024,
 		chunk: 512*1024,
 		blocks: 40,
-		singleFile: true
+		singleFile: true,
+		cacheKey: '6'
 	},
 	{
 		in: [tmpDir + 'test1b.bin', tmpDir + 'test8b.bin', tmpDir + 'test13m.bin', tmpDir + 'test65k.bin'],
 		blockSize: 12224,
 		blocks: 113,
 		offset: 7,
-		singleFile: true
+		singleFile: true,
+		cacheKey: '7'
 	},
 	{
 		in: [tmpDir + 'test1b.bin', tmpDir + 'test8b.bin'],
 		blockSize: 8,
-		blocks: 2
+		blocks: 2,
+		cacheKey: '8'
 	},
 	{
 		in: [tmpDir + 'test8b.bin'],
 		blockSize: 4,
-		blocks: 0
+		blocks: 0,
+		cacheKey: '9'
 	},
 	{
 		in: [tmpDir + 'test1b.bin', tmpDir + 'test8b.bin', tmpDir + 'test64m.bin'],
@@ -386,13 +413,15 @@ async.eachSeries([
 		par2: {inBlocks: null, blockSize: 16777216}, // bug in par2cmdline-tbb which will use a suboptimal block size
 		percentage: 10,
 		offset: 1,
-		uniformSizes: true
+		uniformSizes: true,
+		cacheKey: '10'
 	},
 	{ // more recovery blocks than input
 		in: [tmpDir + 'test13m.bin'],
 		blockSize: 1024*1024,
 		blocks: 64,
-		singleFile: true
+		singleFile: true,
+		cacheKey: '11'
 	},
 	
 	// issue #6
@@ -400,11 +429,12 @@ async.eachSeries([
 		in: [tmpDir + 'test64m.bin'],
 		blockSize: 40000,
 		blocks: 10000,
-		singleFile: true
+		singleFile: true,
+		cacheKey: '12'
 	},
 	
 	// TODO: no recovery test (par2cmdline doesn't support it?)
-	/*{
+	{
 		in: [tmpDir + 'test64m.bin'],
 		blockSize: 1048576,
 		blocks: 0,
@@ -415,31 +445,55 @@ async.eachSeries([
 		blockSize: 1048576,
 		blocks: 0,
 		singleFile: true
-	},*/
+	},
 	
 	// 2x large block size test
 	{
 		in: [tmpDir + 'test64m.bin'],
-		blockSize: Math.floor((require('buffer').kMaxLength || (1024*1024*1024-1))/4)*4 - 192, // max allowable buffer size test
+		blockSize: 2147483452,
 		blocks: 1,
 		memory: process.arch == 'x64' ? '2.5g' : '1.5g',
-		singleFile: true
+		singleFile: true,
+		cacheKey: '13'
 	},
 	{
 		in: [tmpDir + 'test64m.bin'],
 		blockSize: 4294967296, // 4GB, should exceed node's limit
 		blocks: 2,
 		memory: '511m',
-		singleFile: true
+		singleFile: true,
+		cacheKey: '14'
 	},
+	
+	// 2x large input file test
+	{
+		in: [tmpDir + 'test2200m.bin'],
+		blockSize: 1048576,
+		blocks: 64,
+		singleFile: true,
+		cacheKey: '15'
+	},
+	{
+		in: [tmpDir + 'test2200m.bin', tmpDir + 'test1b.bin'],
+		blockSize: 768000,
+		blocks: 2800,
+		singleFile: true,
+		cacheKey: '16'
+	},
+	
 	{ // max number of blocks test
 		in: [tmpDir + 'test64m.bin'],
 		blockSize: 2048,
 		blocks: 32768, // max allowed by par2cmdline; TODO: test w/ 65536
-		singleFile: true
+		singleFile: true,
+		cacheKey: '17'
 	},
 	
-], function(test, cb) {
+];
+
+
+async.timesSeries(allTests.length, function(testNum, cb) {
+	var test = allTests[testNum];
 	console.log('Testing: ', test);
 	
 	test.out = tmpDir + 'testout';
@@ -450,7 +504,7 @@ async.eachSeries([
 	var testFiles, refFiles;
 	var timePP, timeP2;
 	timePP = Date.now();
-	proc.execFile('node', [exeParpar].concat(testArgs), function(err, stdout, stderr) {
+	proc.execFile(exeNode, exeParpar ? (Array.isArray(exeParpar) ? exeParpar : [exeParpar]).concat(testArgs) : testArgs, function(err, stdout, stderr) {
 		timePP = Date.now() - timePP;
 		if(err) throw err;
 		
@@ -463,28 +517,61 @@ async.eachSeries([
 		});
 		testFiles.push(normalize_packets(parse_file(tmpDir + 'testout.par2')));
 		
-		timeP2 = Date.now();
-		proc.execFile(exePar2, refArgs, function(err, stdout, stderr) {
-			timeP2 = Date.now() - timeP2;
-			if(err) throw err;
+		(function(cb) {
+			if(test.expected || (test.cacheKey && cachedResults[test.cacheKey])) {
+				console.log('Exec times (ParPar): ' + timePP/1000);
+				var refFiles = test.expected || cachedResults[test.cacheKey];
+				return cb(refFiles.map(function(f) {
+					var ret = {};
+					for(var k in f) {
+						ret[k] = {
+							type: f[k].type,
+							md5: new Buffer(f[k].md5, 'hex'),
+							len: f[k].len
+						};
+					}
+					return ret;
+				}));
+			}
 			
-			console.log('Exec times (ParPar, Par2): ' + timePP/1000 + ', ' + timeP2/1000);
-			
-			var outs = findFiles(tmpDir, /^refout\.vol/);
-			//if(!outs.length || fs.statSync(tmpDir + outs[0]).size < 1)
-			//	throw new Error('par2cmdline likely failed');
-			
-			refFiles = outs.map(function(f) {
-				return normalize_packets(parse_file(tmpDir + f));
+			timeP2 = Date.now();
+			proc.execFile(exePar2, refArgs, function(err, stdout, stderr) {
+				timeP2 = Date.now() - timeP2;
+				if(err) throw err;
+				
+				console.log('Exec times (ParPar, Par2): ' + timePP/1000 + ', ' + timeP2/1000);
+				
+				var outs = findFiles(tmpDir, /^refout\.vol/);
+				//if(!outs.length || fs.statSync(tmpDir + outs[0]).size < 1)
+				//	throw new Error('par2cmdline likely failed');
+				
+				refFiles = outs.map(function(f) {
+					return normalize_packets(parse_file(tmpDir + f));
+				});
+				refFiles.push(normalize_packets(parse_file(tmpDir + 'refout.par2')));
+				cb(refFiles);
 			});
-			refFiles.push(normalize_packets(parse_file(tmpDir + 'refout.par2')));
 			
+		})(function(refFiles) {
 			// now run comparisons
 			// TODO: there's an ordering problem here - HOPE that it isn't an issue for now
 			if(refFiles.length != testFiles.length) throw new Error('Number of output files mismatch');
 			for(var i=0; i<refFiles.length; i++) {
 				compare_files(refFiles[i], testFiles[i]);
 			}
+			
+			// output PAR stuff for caching par2cmdline output
+			cachedResults[test.cacheKey] = JSON.parse(JSON.stringify(refFiles.map(function(f) {
+				var ret = {};
+				for(var k in f) {
+					ret[k] = {
+						type: f[k].type,
+						md5: f[k].md5.toString('hex'),
+						len: f[k].len
+					};
+				}
+				return ret;
+			})));
 			
 			delOutput();
 			cb();
@@ -498,6 +585,14 @@ async.eachSeries([
 	fs.unlinkSync(tmpDir + 'test8b.bin');
 	fs.unlinkSync(tmpDir + 'test65k.bin');
 	fs.unlinkSync(tmpDir + 'test13m.bin');
+	
+	if(!err) {
+		try {
+			fs.writeFileSync(tmpDir + 'cached-cmpref.json', JSON.stringify(cachedResults));
+		} catch(x) {
+			console.log(x);
+		}
+	}
 	
 	if(!err)
 		console.log('All tests passed');
