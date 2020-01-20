@@ -197,7 +197,8 @@ if(argv.help) {
 	try {
 		helpText = require('./help.json');
 	} catch(x) {
-		helpText = fs.readFileSync(__dirname + '/../help.txt').toString();
+		// use eval to prevent nexe trying to detect the variable
+		helpText = fs.readFileSync(eval('__'+'dirname') + '/../help.txt').toString();
 	}
 	console.error(helpText.replace(/^ParPar(\r?\n)/, 'ParPar v' + require('../package.json').version + '$1'));
 	process.exit(0);
