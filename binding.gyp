@@ -110,7 +110,7 @@
       "msvs_settings": {"VCCLCompilerTool": {"BufferSecurityCheck": "false"}},
       "conditions": [
         ['OS in "linux android" and target_arch=="arm"', {
-          "variables": {"has_neon%": "<!(grep -e ' neon ' /proc/cpuinfo || true)"},
+          "variables": {"has_neon%": "<!(grep -e ' neon ' -e ' asimd ' /proc/cpuinfo || true)"},
           "conditions": [
             ['has_neon!=""', {
               "cflags": ["-mfpu=neon"],

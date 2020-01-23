@@ -167,7 +167,7 @@ int gf_w16_split_init(gf_t *gf)
   
   /* Defaults */
   if (!h->arg1 || !h->arg2) {
-    h->arg1 = has_ssse3 ? 4 : 8;
+    h->arg1 = (has_ssse3 || has_neon) ? 4 : 8;
     h->arg2 = 16;
   }
   
