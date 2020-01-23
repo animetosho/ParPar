@@ -10,6 +10,18 @@
     defined(_WIN64    )
 	#define AMD64 1
 #endif
+#if defined(__aarch64__) || \
+    defined(__armv7__  ) || \
+    defined(__arm__    ) || \
+    defined(_M_ARM64   ) || \
+    defined(_M_ARM     ) || \
+    defined(__ARM_ARCH_6__ ) || \
+    defined(__ARM_ARCH_7__ ) || \
+    defined(__ARM_ARCH_7A__) || \
+    defined(__ARM_ARCH_8A__) || \
+    (defined(__ARM_ARCH    ) && __ARM_ARCH >= 6)
+	#define PLATFORM_ARM 1
+#endif
 
 # ifdef _M_ARM64
 	#define ARM_NEON 1
@@ -18,7 +30,7 @@
 #  ifdef __ARM_NEON
 	#define ARM_NEON 1
 #  endif
-#  if defined(__ARM_ARCH) && __ARM_ARCH >= 8
+#  if defined(__aarch64__)
 	#define ARCH_AARCH64 1
 #  endif
 # endif

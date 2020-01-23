@@ -34,7 +34,7 @@ int has_neon = 0;
 	}
 #endif
 
-#ifdef ARM_NEON
+#ifdef PLATFORM_ARM
 # ifdef __ANDROID__
 #  include <cpu-features.h>
 # elif defined(__linux__)
@@ -118,7 +118,7 @@ void detect_cpu(void) {
 	}
 #endif /* INTEL_SSE2 */
 	
-#ifdef ARM_NEON
+#ifdef PLATFORM_ARM
 # if defined(AT_HWCAP)
 #  ifdef ARCH_AARCH64
 	has_neon = getauxval(AT_HWCAP) & HWCAP_ASIMD;
