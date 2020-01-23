@@ -193,6 +193,10 @@ It appears that the default compiler in MacOSX does not include OpenMP support
 of the C++ compiler which has OpenMP support (e.g. clang/gcc from places like
 homebrew/macports) and override the `CXX` environment variable when installing.
 
+### “no suitable image found” error on MacOS 10.15
+
+Due to security changes in OSX 10.15, libraries may require code signing to work. To deal with this, you’ll either need to [disable this security option](https://developer.apple.com/documentation/bundleresources/entitlements/com_apple_security_cs_disable-library-validation?language=objc) or [codesign the built .node module](https://successfulsoftware.net/2018/11/16/how-to-notarize-your-software-on-macos/). Note that I do not have OSX and can’t provide much support for the platform.
+
 API
 ===
 
