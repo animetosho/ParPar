@@ -192,7 +192,7 @@ void ppgf_multiply_mat(uint16_t** inputs, uint_fast16_t* iNums, unsigned int num
 	
 	// avoid nested loop issues by combining chunk & output loop into one
 	// the loop goes through outputs before chunks
-	int loop;
+	int loop = 0;
 	#pragma omp parallel for
 	for(loop = 0; loop < (int)(numOutputs * numChunks); loop++) {
 		size_t offset = (loop / numOutputs) * chunkSize;

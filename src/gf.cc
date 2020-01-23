@@ -503,7 +503,7 @@ FUNC(Finish) {
 	ppgf_finish_input(numInputs, inputs, len);
 	if(calcMd5) {
 		ppgf_omp_check_num_threads();
-		int i;
+		int i=0;
 		#pragma omp parallel for
 		for(i=0; i<(int)numInputs; i+=MD5_SIMD_NUM) {
 			md5_multi_update(md5 + i, (const void**)(inputs + i), len);
