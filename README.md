@@ -186,7 +186,7 @@ This also means that portable builds from GCC/Clang are currently unsupported.
 
 ParPar’s multi-threading support requires OpenMP. If ParPar is compiled without
 OpenMP, it will only ever run on 1 thread. OpenMP is usually available in most
-compilers that you’d likely use.
+compilers that you’d likely use. On some systems, you may need to ensure that the `libomp-dev` package is installed.
 
 It appears that the default compiler in MacOSX does not include OpenMP support
 (at time of writing). If this is the case, you may need to fetch another build
