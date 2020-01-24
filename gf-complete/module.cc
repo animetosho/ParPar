@@ -8,6 +8,8 @@ extern "C" {
 #include <stdlib.h>
 };
 
+#define CACHELINE_SIZE 64
+
 // memory alignment to 16-bytes for SSE operations (may grow for AVX operations)
 int MEM_ALIGN = 16;
 int MEM_WALIGN = 16;
@@ -152,6 +154,20 @@ void ppgf_maybe_setup_gf() {
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 #define CEIL_DIV(a, b) (((a) + (b)-1) / (b))
 
+#if defined(__cplusplus) && __cplusplus > 201100 && !(defined(_MSC_VER) && defined(__clang__)) && !defined(__APPLE__)
+	// C++11 method
+	// len needs to be a multiple of alignment, although it sometimes works if it isn't...
+	#include <cstdlib>
+	#define ALIGN_ALLOC(buf, len, align) *(void**)&(buf) = aligned_alloc(align, ((len) + (align)-1) & ~((align)-1))
+	#define ALIGN_FREE free
+#elif defined(_MSC_VER)
+	#define ALIGN_ALLOC(buf, len, align) *(void**)&(buf) = _aligned_malloc((len), align)
+	#define ALIGN_FREE _aligned_free
+#else
+	#define ALIGN_ALLOC(buf, len, align) if(posix_memalign((void**)&(buf), align, (len))) (buf) = NULL
+	#define ALIGN_FREE free
+#endif
+
 // performs multiple multiplies for a region, using threads
 // note that inputs will get trashed
 /* REQUIRES:
@@ -185,6 +201,11 @@ void ppgf_multiply_mat(uint16_t** inputs, uint_fast16_t* iNums, unsigned int num
 	}
 	*/
 	
+	unsigned int factStride = sizeof(gf_val_32_t) * numInputs;
+	factStride = (factStride + CACHELINE_SIZE-1) & ~(CACHELINE_SIZE-1);
+	uint8_t* factors;
+	ALIGN_ALLOC(factors, factStride * gfCount, CACHELINE_SIZE);
+	
 	// break the slice into smaller chunks so that we maximise CPU cache usage
 	int numChunks = (len / CHUNK_SIZE) + ((len % CHUNK_SIZE) ? 1 : 0);
 	unsigned int alignMask = MEM_WALIGN-1;
@@ -200,23 +221,19 @@ void ppgf_multiply_mat(uint16_t** inputs, uint_fast16_t* iNums, unsigned int num
 		int procSize = MIN(len-offset, chunkSize);
 #ifdef _OPENMP
 		gf_t* _gf = &(gf[omp_get_thread_num()]);
+		gf_val_32_t* vals = (gf_val_32_t*)(factors + factStride * omp_get_thread_num());
 #else
 		gf_t* _gf = gf;
+		gf_val_32_t* vals = (gf_val_32_t*)factors;
 #endif
-		// TODO: perhaps it makes sense to just use a statically allocated array instead and loop?
-		gf_val_32_t* vals = (gf_val_32_t*)malloc(sizeof(gf_val_32_t) * numInputs);
 		unsigned int i;
 		for(i=0; i<numInputs; i++)
 			vals[i] = calc_factor(iNums[i], oNums[out]);
 
 		_gf->multiply_regionX.w16(_gf, numInputs, offset, (void**)inputs, outputs[out], vals, procSize, add);
-		free(vals);
 	}
 	
-#ifdef _OPENMP
-	// if(max_threads != maxNumThreads)
-		// omp_set_num_threads(max_threads);
-#endif
+	ALIGN_FREE(factors);
 }
 
 
