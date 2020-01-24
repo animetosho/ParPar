@@ -22,9 +22,10 @@ extern "C" {
 }
 
 
-#if defined(__cplusplus) && __cplusplus > 201100
+#if defined(__cplusplus) && __cplusplus > 201100 && !(defined(_MSC_VER) && defined(__clang__)) && !defined(__APPLE__)
 	// C++11 method
 	// len needs to be a multiple of alignment, although it sometimes works if it isn't...
+	#include <cstdlib>
 	#define ALIGN_ALLOC(buf, len) *(void**)&(buf) = aligned_alloc(MEM_ALIGN, ((len) + MEM_ALIGN-1) & ~(MEM_ALIGN-1))
 	#define ALIGN_FREE free
 #elif defined(_MSC_VER)
