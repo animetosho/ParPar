@@ -15,14 +15,15 @@ int has_neon = 0;
 #include <cpuid.h>
 #endif
 
-#ifdef _MSC_VER
+#ifdef PLATFORM_X86
+# ifdef _MSC_VER
 	#define _cpuid __cpuid
 	#define _cpuidX __cpuidex
 	#if _MSC_VER >= 1600
 		#include <immintrin.h>
 		#define _GET_XCR() _xgetbv(_XCR_XFEATURE_ENABLED_MASK)
 	#endif
-#else
+# else
 	/* GCC seems to support this, I assume everyone else does too? */
 	#define _cpuid(ar, eax) __cpuid(eax, ar[0], ar[1], ar[2], ar[3])
 	#define _cpuidX(ar, eax, ecx) __cpuid_count(eax, ecx, ar[0], ar[1], ar[2], ar[3])
@@ -32,6 +33,7 @@ int has_neon = 0;
 		__asm__ __volatile__("xgetbv" : "=a" (xcr0) : "c" (0) : "%edx");
 		return xcr0;
 	}
+# endif
 #endif
 
 #ifdef PLATFORM_ARM

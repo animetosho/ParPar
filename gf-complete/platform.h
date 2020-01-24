@@ -10,6 +10,16 @@
     defined(_WIN64    )
 	#define AMD64 1
 #endif
+#if defined(AMD64) || \
+    defined(__i386__  ) || \
+    defined(__i486__  ) || \
+    defined(__i586__  ) || \
+    defined(__i686__  ) || \
+    defined(_M_I86    ) || \
+    defined(_M_IX86   ) || \
+    defined(_WIN32    )
+	#define PLATFORM_X86 1
+#endif
 #if defined(__aarch64__) || \
     defined(__armv7__  ) || \
     defined(__arm__    ) || \
