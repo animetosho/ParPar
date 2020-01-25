@@ -17,6 +17,7 @@ var isNode010 = !!nodeVer.match(/^0\.10\./);
 var ltoFlag = useLTO ? '"-flto"' : '';
 var ltoFlagC = useLTO ? ',"-flto"' : '';
 var openMpLib = ''; // for clang, set to '=libomp'
+if(process.platform == 'darwin') openMpLib = '=libomp'; // assume Clang by default if compiling on OSX
 var modulePref = isNode010?'node_':'';
 fs.statSync(yencSrc + 'yencode.cc'); // trigger error if it doesn't exist
 
