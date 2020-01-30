@@ -8,6 +8,7 @@ var makeArgs = ["-j", "1"];
 var vcBuildArch = "x86"; // x86 or x64
 var useLTO = true;
 var oLevel = '-O2'; // prefer -O2 on GCC, -Os on Clang
+var isaBaseFlag = ',"-msse2"'; // set to blank for non-x86 targets
 
 var fs = require('fs');
 var ncp = require('./ncp').ncp;
@@ -20,6 +21,7 @@ var openMpLib = ''; // for clang, set to '=libomp'
 if(process.platform == 'darwin') openMpLib = '=libomp'; // assume Clang by default if compiling on OSX
 var modulePref = isNode010?'node_':'';
 fs.statSync(yencSrc + 'yencode.cc'); // trigger error if it doesn't exist
+
 
 var gypParse = function(gyp) {
 	// very hacky fixes for Python's flexibility
@@ -72,15 +74,21 @@ if(!findGypTarget('crcutil')) {
 	      "conditions": [
 	        ['OS=="win"', {
 	          "msvs_settings": {"VCCLCompilerTool": {"EnableEnhancedInstructionSet": "2", "Optimization": "MaxSpeed", "BufferSecurityCheck": "false"}}
-	        }, (vcBuildArch == 'x86' ? {
-	          "cxxflags": ["-msse2", "-O3", "-fomit-frame-pointer"],
-	          // some of the ASM won't compile with LTO, so disable it for CRCUtil
-	          "cflags!": ['-flto'],
-	          "cxxflags!": ['-flto', "-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"]
-	        } : {
-	          "cxxflags": ["-msse2", "-O3", "-fomit-frame-pointer"].concat(useLTO ? ['-flto'] : []),
+	        }, {
+	          "cxxflags": ["-O3", "-fomit-frame-pointer"],
 	          "cxxflags!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"]
-	        })]
+	        }],
+	        // some of the ASM won't compile with LTO, so disable it for CRCUtil
+	        ['target_arch == "ia32"', {
+	          "cflags!": ['-flto'],
+	          "cxxflags!": ['-flto'],
+	        }, {
+	          "cxxflags": ['-flto'],
+	        }],
+	        ['target_arch in "ia32 x64"', {
+	          "cxxflags": ["-msse2"],
+	          "xcode_settings": {"OTHER_CXXFLAGS": ["-msse2"]}
+	        }]
 	      ],
 	      "include_dirs": ["yencode/crcutil-1.0/code", "yencode/crcutil-1.0/tests"],
 	      "defines": ["CRCUTIL_USE_MM_CRC32=0"]
@@ -97,16 +105,21 @@ if(!findGypTarget('crcutil')) {
         ['OS=="win"', {
           "msvs_settings": {"VCCLCompilerTool": {"OpenMP": "true", "Optimization": "MaxSpeed"}}
         }, {
-          "cflags": ["-msse2", "-O3", "-Wall", "-fopenmp"+openMpLib],
-          "cxxflags": ["-msse2", "-O3", "-Wall", "-fopenmp"+openMpLib],
+          "cflags": ["-O3", "-Wall", "-fopenmp"+openMpLib],
+          "cxxflags": ["-O3", "-Wall", "-fopenmp"+openMpLib],
           "ldflags": ["-fopenmp"+openMpLib]
         }],
         ['OS=="mac"', {
           "xcode_settings": {
-            "OTHER_CFLAGS": ["-msse2", "-O3", "-Wall", "-fopenmp"+openMpLib],
-            "OTHER_CXXFLAGS": ["-msse2", "-O3", "-Wall", "-fopenmp"+openMpLib],
+            "OTHER_CFLAGS": ["-O3", "-Wall", "-fopenmp"+openMpLib],
+            "OTHER_CXXFLAGS": ["-O3", "-Wall", "-fopenmp"+openMpLib],
             "OTHER_LDFLAGS": ["-fopenmp"+openMpLib]
           }
+        }],
+        ['target_arch in "ia32 x64"', {
+          "cflags": ["-msse2"],
+          "cxxflags": ["-msse2"],
+          "xcode_settings": {"OTHER_CFLAGS": ["-msse2"], "OTHER_CXXFLAGS": ["-msse2"]}
         }]
       ]
     },
@@ -118,14 +131,18 @@ if(!findGypTarget('crcutil')) {
         ['OS=="win"', {
           "msvs_settings": {"VCCLCompilerTool": {"EnableEnhancedInstructionSet": "2", "Optimization": "MaxSpeed", "BufferSecurityCheck": "false"}}
         }, {
-          "cflags": ["-msse2", "-O3", "-Wall", "-fomit-frame-pointer"],
+          "cflags": ["-O3", "-Wall", "-fomit-frame-pointer"],
           "cflags!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"]
         }],
         ['OS=="mac"', {
           "xcode_settings": {
-            "OTHER_CFLAGS": ["-msse2", "-O3", "-Wall", "-fomit-frame-pointer"],
+            "OTHER_CFLAGS": ["-O3", "-Wall", "-fomit-frame-pointer"],
              "OTHER_CFLAGS!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"]
           }
+        }],
+        ['target_arch in "ia32 x64"', {
+          "cflags": ["-msse2"],
+          "xcode_settings": {"OTHER_CFLAGS": ["-msse2"]}
         }]
       ]
     },
@@ -152,22 +169,26 @@ if(!findGypTarget('crcutil')) {
         }, {
           "conditions": [
             ['OS in "linux android" and target_arch in "arm arm64"', {
-              "variables": {"has_neon%": "<!(grep -e ' neon ' /proc/cpuinfo || true)"},
+              "variables": {"has_neon%": "<!(grep -e ' neon ' -e ' asimd ' /proc/cpuinfo || true)"},
               "conditions": [
                 ['has_neon!=""', {
                   "cflags": ["-mfpu=neon"],
                   "cxxflags": ["-mfpu=neon"]
                 }]
               ]
+            }],
+            ['target_arch in "ia32 x64"', {
+              "cflags": ["-msse2"],
+              "xcode_settings": {"OTHER_CFLAGS": ["-msse2"]}
             }]
           ],
-          "cflags": ["-msse2","-Wall","-O3","-fomit-frame-pointer","-Wno-unused-function"],
+          "cflags": ["-Wall","-O3","-fomit-frame-pointer","-Wno-unused-function"],
           "cflags!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"],
           "ldflags": []
         }],
         ['OS=="mac"', {
           "xcode_settings": {
-            "OTHER_CFLAGS": ["-msse2","-Wall","-O3","-fomit-frame-pointer","-Wno-unused-function"],
+            "OTHER_CFLAGS": ["-Wall","-O3","-fomit-frame-pointer","-Wno-unused-function"],
             "OTHER_CFLAGS!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"],
             "OTHER_LDFLAGS": []
           }
@@ -209,6 +230,10 @@ if(gyp.variables.library_files.indexOf('lib/yencode.js') < 0)
 	doPatch(/(['"]lib\/fs\.js['"],)/, "'lib/yencode.js',");
 
 
+// disable cctest
+var tCCT = findGypTarget('cctest');
+if(tCCT && tCCT.type == 'executable')
+	doPatch(/(['"]target_name['"]:\s*['"]cctest['"],\s*['"]type['"]:\s*)['"]executable['"]/, "'none'");
 
 // urgh, copy+paste :/
 if(!tNode.msvs_settings) {
@@ -227,9 +252,9 @@ if(!tNode.msvs_settings) {
 	}
 }
 if(!tNode.cxxflags) {
-	doPatch(tNodeMatch, "'cxxflags': ['"+oLevel+"','-msse2'"+ltoFlagC+",'-fopenmp"+openMpLib+"'],");
+	doPatch(tNodeMatch, "'cxxflags': ['"+oLevel+"'"+isaBaseFlag+ltoFlagC+",'-fopenmp"+openMpLib+"'],");
 } else if(tNode.cxxflags.indexOf(oLevel) < 0) {
-	doPatch(new RegExp("(" + tNodeM + "[^]*?['\"]cxxflags['\"]:\\s*\\[)"), "'"+oLevel+"','-msse2'"+ltoFlagC+",'-fopenmp"+openMpLib+"',");
+	doPatch(new RegExp("(" + tNodeM + "[^]*?['\"]cxxflags['\"]:\\s*\\[)"), "'"+oLevel+"'"+isaBaseFlag+ltoFlagC+",'-fopenmp"+openMpLib+"',");
 }
 
 if(!tNode.ldflags) {
@@ -266,7 +291,7 @@ var patchGypCompiler = function(file, targets) {
 	
 	if(!gyp.target_defaults) {
 		targets = targets || 'targets';
-		gypData = gypData.replace("'"+targets+"':", "'target_defaults': {'msvs_settings': {'VCCLCompilerTool': {'EnableEnhancedInstructionSet': '2', 'FavorSizeOrSpeed': '2'}, 'VCLinkerTool': {'GenerateDebugInformation': 'false'}}, 'cxxflags': ['"+oLevel+"','-msse2'"+ltoFlagC+"], 'ldflags': ['-s'"+ltoFlagC+"]}, '"+targets+"':");
+		gypData = gypData.replace("'"+targets+"':", "'target_defaults': {'msvs_settings': {'VCCLCompilerTool': {'EnableEnhancedInstructionSet': '2', 'FavorSizeOrSpeed': '2'}, 'VCLinkerTool': {'GenerateDebugInformation': 'false'}}, 'cxxflags': ['"+oLevel+"'"+isaBaseFlag+ltoFlagC+"], 'ldflags': ['-s'"+ltoFlagC+"]}, '"+targets+"':");
 	} else {
 		// TODO: other possibilities
 		if(!gyp.target_defaults.msvs_settings)
@@ -274,7 +299,7 @@ var patchGypCompiler = function(file, targets) {
 		else if(!gyp.target_defaults.msvs_settings.VCCLCompilerTool || !gyp.target_defaults.msvs_settings.VCLinkerTool || !gyp.target_defaults.msvs_settings.VCCLCompilerTool.EnableEnhancedInstructionSet)
 			throw new Error('To be implemented');
 		if(!gyp.target_defaults.cxxflags)
-			gypData = gypData.replace("'target_defaults': {", "'target_defaults': {'cxxflags': ['"+oLevel+"','-msse2'"+ltoFlagC+"],");
+			gypData = gypData.replace("'target_defaults': {", "'target_defaults': {'cxxflags': ['"+oLevel+"'"+isaBaseFlag+ltoFlagC+"],");
 		else if(useLTO && gyp.target_defaults.cxxflags.indexOf('-flto') < 0)
 			throw new Error('To be implemented');
 		if(!gyp.target_defaults.ldflags)
@@ -317,7 +342,7 @@ if(nodeVer.startsWith('8.')) { // doesn't work for node 4 or 12, but does for 8
 }
 
 // TODO: improve placement of ldflags
-patchFile('common.gypi', null, "'cflags': [ '-O3',", (useLTO ? "'ldflags': ['-flto'], ":'')+"'cflags': [ '"+oLevel+"','-msse2'"+ltoFlagC+",");
+patchFile('common.gypi', null, "'cflags': [ '-O3',", (useLTO ? "'ldflags': ['-flto'], ":'')+"'cflags': [ '"+oLevel+"'"+isaBaseFlag+ltoFlagC+",");
 patchFile('common.gypi', null, "'FavorSizeOrSpeed': 1,", "'FavorSizeOrSpeed': 2, 'EnableEnhancedInstructionSet': '2',");
 patchFile('common.gypi', null, "'GenerateDebugInformation': 'true',", "'GenerateDebugInformation': 'false',");
 
