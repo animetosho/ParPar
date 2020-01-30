@@ -261,16 +261,27 @@ if(!tNode.msvs_settings) {
 		doPatch(/(['"]VCLinkerTool['"]:\s*\{)/, "'GenerateDebugInformation': 'false',");
 	}
 }
-if(!tNode.cxxflags) {
-	doPatch(tNodeMatch, "'cxxflags': ['"+oLevel+"'"+isaBaseFlag+ltoFlagC+",'-fopenmp"+openMpLib+"'],");
-} else if(tNode.cxxflags.indexOf(oLevel) < 0) {
-	doPatch(new RegExp("(" + tNodeM + "[^]*?['\"]cxxflags['\"]:\\s*\\[)"), "'"+oLevel+"'"+isaBaseFlag+ltoFlagC+",'-fopenmp"+openMpLib+"',");
-}
 
-if(!tNode.ldflags) {
-	doPatch(tNodeMatch, "'ldflags': ['-s','-fopenmp"+openMpLib+"'"+ltoFlagC+"],");
-} else if(tNode.ldflags.indexOf('-s') < 0) {
-	doPatch(new RegExp("(" + tNodeM + "[^]*?['\"]ldflags['\"]:\\s*\\[)"), "'-s'"+ltoFlagC+",");
+var patchTargetFlags = function(node, regex) {
+	var match = new RegExp('('+regex+')');
+	if(!node.cxxflags) {
+		doPatch(match, "'cxxflags': ['"+oLevel+"'"+isaBaseFlag+ltoFlagC+",'-fopenmp"+openMpLib+"'],");
+	} else if(node.cxxflags.indexOf(oLevel) < 0) {
+		doPatch(new RegExp("(" + regex + "[^]*?['\"]cxxflags['\"]:\\s*\\[)"), "'"+oLevel+"'"+isaBaseFlag+ltoFlagC+",'-fopenmp"+openMpLib+"',");
+	}
+	
+	if(!node.ldflags) {
+		doPatch(match, "'ldflags': ['-s','-fopenmp"+openMpLib+"'"+ltoFlagC+"],");
+	} else if(node.ldflags.indexOf('-s') < 0) {
+		doPatch(new RegExp("(" + regex + "[^]*?['\"]ldflags['\"]:\\s*\\[)"), "'-s'"+ltoFlagC+",");
+	}
+};
+patchTargetFlags(tNode, tNodeM);
+if(tNodeM.indexOf('node_lib_target_name')) {
+	// needed in node v8.x?
+	var tNodeExe = findGypTarget('<(node_core_target_name)');
+	if(tNodeExe)
+		patchTargetFlags(tNodeExe, "['\"]target_name['\"]:\\s*['\"]<\\(node_core_target_name\\)['\"],");
 }
 
 // strip OpenSSL exports
