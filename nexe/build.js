@@ -11,7 +11,6 @@ var oLevel = '-O2'; // prefer -O2 on GCC, -Os on Clang
 var isaBaseFlag = ',"-msse2"'; // set to blank for non-x86 targets
 
 var fs = require('fs');
-var ncp = require('./ncp').ncp;
 var nexe = require('nexe');
 
 var isNode010 = !!nodeVer.match(/^0\.10\./);
@@ -22,6 +21,17 @@ if(process.platform == 'darwin') openMpLib = '=libomp'; // assume Clang by defau
 var modulePref = isNode010?'node_':'';
 fs.statSync(yencSrc + 'yencode.cc'); // trigger error if it doesn't exist
 
+
+var path = require('path');
+var copyRecursiveSync = function(src, dest) {
+	if(fs.statSync(src).isDirectory()) {
+		if(!fs.existsSync(dest)) fs.mkdirSync(dest);
+		fs.readdirSync(src).forEach(function(child) {
+			copyRecursiveSync(path.join(src, child), path.join(dest, child));
+		});
+	} else
+		fs.copyFileSync(src, dest);
+};
 
 var gypParse = function(gyp) {
 	// very hacky fixes for Python's flexibility
@@ -443,53 +453,49 @@ var copyJS = function(src, dest) {
 };
 
 
-ncp('../gf-complete', nodeSrc + 'parpar_gf/gf-complete', function() {
-ncp('../md5', nodeSrc + 'parpar_gf/md5', function() {
-ncp('../src', nodeSrc + 'parpar_gf/src', function() {
-ncp(yencSrc, nodeSrc + 'yencode', function() {
-	
-	copyCC('../src/gf.cc', 'parpar_gf/src/gf.cc');
-	copyCC(yencSrc + 'yencode.cc', 'yencode/yencode.cc');
-	copyJS(yencSrc + 'index.js', 'lib/yencode.js');
-	copyJS('../lib/par2.js', '../lib/par2.js'); // !! overwrites file !!
-	
-	// now run nexe
-	// TODO: consider building startup snapshot?
-	
-	nexe.compile({
-	    input: '../bin/parpar.js', // where the input file is
-	    output: './parpar' + (require('os').platform() == 'win32' ? '.exe':''), // where to output the compiled binary
-	    nodeVersion: nodeVer, // node version
-	    nodeTempDir: nexeBase, // where to store node source.
-	    // --without-snapshot
-	    nodeConfigureArgs: ['--fully-static', '--without-dtrace', '--without-etw', '--without-perfctr', '--without-npm', '--with-intl=none'], // for all your configure arg needs.
-	    nodeMakeArgs: makeArgs, // when you want to control the make process.
-	    nodeVCBuildArgs: ["nosign", vcBuildArch, "noetw", "noperfctr", "intl-none"], // when you want to control the make process for windows.
-	                                        // By default "nosign" option will be specified
-	                                        // You can check all available options and its default values here:
-	                                        // https://github.com/nodejs/node/blob/master/vcbuild.bat
-	    python: python, // for non-standard python setups. Or python 3.x forced ones.
-	    resourceFiles: [  ], // array of files to embed.
-	    resourceRoot: [  ], // where to embed the resourceFiles.
-	    flags: true, // use this for applications that need command line flags.
-	    jsFlags: "", // v8 flags
-	    startupSnapshot: null, // when you want to specify a script to be
-	                                            // added to V8's startup snapshot. This V8
-	                                            // feature deserializes a heap to save startup time.
-	                                            // More information in this blog post:
-	                                            // http://v8project.blogspot.de/2015/09/custom-startup-snapshots.html
-	    framework: "node", // node, nodejs, or iojs
-	    
-	    browserifyExcludes: ['yencode', '../build/Release/parpar_gf.node']
-	}, function(err) {
-	    if(err) {
-	        return console.log(err);
-	    }
-	    
-	    console.log('done');
-	    fs.unlinkSync('../bin/help.json');
-	});
-});
-});
-});
+copyRecursiveSync('../gf-complete', nodeSrc + 'parpar_gf/gf-complete');
+copyRecursiveSync('../md5', nodeSrc + 'parpar_gf/md5');
+copyRecursiveSync('../src', nodeSrc + 'parpar_gf/src');
+copyRecursiveSync(yencSrc, nodeSrc + 'yencode');
+
+copyCC('../src/gf.cc', 'parpar_gf/src/gf.cc');
+copyCC(yencSrc + 'yencode.cc', 'yencode/yencode.cc');
+copyJS(yencSrc + 'index.js', 'lib/yencode.js');
+copyJS('../lib/par2.js', '../lib/par2.js'); // !! overwrites file !!
+
+// now run nexe
+// TODO: consider building startup snapshot?
+
+nexe.compile({
+    input: '../bin/parpar.js', // where the input file is
+    output: './parpar' + (require('os').platform() == 'win32' ? '.exe':''), // where to output the compiled binary
+    nodeVersion: nodeVer, // node version
+    nodeTempDir: nexeBase, // where to store node source.
+    // --without-snapshot
+    nodeConfigureArgs: ['--fully-static', '--without-dtrace', '--without-etw', '--without-perfctr', '--without-npm', '--with-intl=none'], // for all your configure arg needs.
+    nodeMakeArgs: makeArgs, // when you want to control the make process.
+    nodeVCBuildArgs: ["nosign", vcBuildArch, "noetw", "noperfctr", "intl-none"], // when you want to control the make process for windows.
+                                        // By default "nosign" option will be specified
+                                        // You can check all available options and its default values here:
+                                        // https://github.com/nodejs/node/blob/master/vcbuild.bat
+    python: python, // for non-standard python setups. Or python 3.x forced ones.
+    resourceFiles: [  ], // array of files to embed.
+    resourceRoot: [  ], // where to embed the resourceFiles.
+    flags: true, // use this for applications that need command line flags.
+    jsFlags: "", // v8 flags
+    startupSnapshot: null, // when you want to specify a script to be
+                                            // added to V8's startup snapshot. This V8
+                                            // feature deserializes a heap to save startup time.
+                                            // More information in this blog post:
+                                            // http://v8project.blogspot.de/2015/09/custom-startup-snapshots.html
+    framework: "node", // node, nodejs, or iojs
+    
+    browserifyExcludes: ['yencode', '../build/Release/parpar_gf.node']
+}, function(err) {
+    if(err) {
+        return console.log(err);
+    }
+    
+    console.log('done');
+    fs.unlinkSync('../bin/help.json');
 });
