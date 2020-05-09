@@ -122,6 +122,12 @@ If the **npm** command isn’t available, it can probably be installed via your
 package manager (`apt-get install npm` for Debian), or see the [node.js
 website](https://nodejs.org/en/download/).
 
+If you get a `gyp ERR! stack Error: EACCES: permission denied` error when installing, try the following command instead:
+
+```
+npm install -g @animetosho/parpar --unsafe-perm
+```
+
 You can then later uninstall ParPar via:
 
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -144,6 +150,8 @@ commands can be used to build:
 node-gyp rebuild
 npm install
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+This sets up ParPar to be run from the *bin/parpar.js* file (i.e. via `node bin/parpar.js` command). If you want it to be globally accessible via the `parpar` command, the process is OS dependent. On Linux, you can usually create a symlink named *parpar* in a location specified in the `PATH` environment variable, to *bin/parpar.js* (e.g. `ln -s bin/parpar.js /usr/bin/parpar`). On Windows, either add the *bin* folder to your `PATH` environment, or copy *bin/parpar.cmd* to a `PATH` specified directory and edit the paths appropriately in this copy of *parpar.cmd*.
 
 Note, Windows builds are always compiled with SSE2 support. If you can’t have
 this, delete all instances of `"msvs_settings": {"VCCLCompilerTool":
