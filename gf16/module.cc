@@ -50,7 +50,7 @@ void ppgf_omp_check_num_threads() {
 #endif
 }
 
-static void setup_gf(Galois16Methods method = GF_AUTO, size_t size_hint = 0) {
+static void setup_gf(Galois16Methods method = GF16_AUTO, size_t size_hint = 0) {
 	delete gf;
 	gf = new Galois16Mul(method);
 	
@@ -61,14 +61,14 @@ static void setup_gf(Galois16Methods method = GF_AUTO, size_t size_hint = 0) {
 	if(!CHUNK_SIZE) {
 		unsigned int minChunkTarget;
 		switch(gf->method()) {
-			case GF_XOR_JIT_SSE2: /* JIT is a little slow, so larger blocks make things faster */
-			case GF_XOR_JIT_AVX2:
-			case GF_XOR_JIT_AVX512:
+			case GF16_XOR_JIT_SSE2: /* JIT is a little slow, so larger blocks make things faster */
+			case GF16_XOR_JIT_AVX2:
+			case GF16_XOR_JIT_AVX512:
 				CHUNK_SIZE = 128*1024; // half L2 cache?
 				minChunkTarget = 96*1024; // keep in range 96-192KB
 				break;
-			case GF_LOOKUP:
-			case GF_XOR_SSE2:
+			case GF16_LOOKUP:
+			case GF16_XOR_SSE2:
 				CHUNK_SIZE = 96*1024; // 2* L1 data cache size ?
 				minChunkTarget = 64*1024; // keep in range 64-128KB
 				break;
@@ -182,8 +182,10 @@ void ppgf_prep_input(size_t destLen, size_t inputLen, char* dest, char* src) {
 	ppgf_maybe_setup_gf();
 	if(gf->needPrepare() && inputLen < destLen) {
 		// zero out misaligned region for safety
-		size_t inputLenAligned = inputLen & (gf->stride-1);
-		memset(dest + inputLenAligned, 0, destLen - inputLenAligned);
+		size_t inputLenAligned = inputLen & ~(gf->stride-1);
+		size_t clearSize = destLen - inputLenAligned;
+		if(clearSize > gf->stride) clearSize = gf->stride;
+		memset(dest + inputLenAligned, 0, clearSize);
 	}
 	gf->prepare(dest, src, inputLen);
 }

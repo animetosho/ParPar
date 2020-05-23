@@ -13,19 +13,19 @@ typedef void(*Galois16AddFunc) (void *HEDLEY_RESTRICT dst, const void *HEDLEY_RE
 
 
 enum Galois16Methods {
-	GF_AUTO,
-	GF_LOOKUP,
-	GF_SHUFFLE_NEON,
-	GF_SHUFFLE_SSSE3,
-	GF_SHUFFLE_AVX,
-	GF_SHUFFLE_AVX2,
-	GF_SHUFFLE_AVX512,
-	GF_XOR_SSE2,
-	GF_XOR_JIT_SSE2,
-	GF_XOR_JIT_AVX2,
-	GF_XOR_JIT_AVX512,
-	GF_AFFINE_GFNI,
-	GF_AFFINE_AVX512
+	GF16_AUTO,
+	GF16_LOOKUP,
+	GF16_SHUFFLE_NEON,
+	GF16_SHUFFLE_SSSE3,
+	GF16_SHUFFLE_AVX,
+	GF16_SHUFFLE_AVX2,
+	GF16_SHUFFLE_AVX512,
+	GF16_XOR_SSE2,
+	GF16_XOR_JIT_SSE2,
+	GF16_XOR_JIT_AVX2,
+	GF16_XOR_JIT_AVX512,
+	GF16_AFFINE_GFNI,
+	GF16_AFFINE_AVX512
 	// TODO: consider non-transforming shuffle/affine
 };
 static const char* Galois16MethodsText[] = {
@@ -73,7 +73,7 @@ private:
 	
 public:
 	static Galois16Methods default_method(size_t regionSizeHint = 0, unsigned outputs = 0, unsigned threadCountHint = 0);
-	Galois16Mul(Galois16Methods method = Galois16Methods::GF_AUTO);
+	Galois16Mul(Galois16Methods method = GF16_AUTO);
 	~Galois16Mul();
 	
 #if __cplusplus >= 201100

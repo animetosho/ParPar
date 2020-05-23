@@ -1,5 +1,8 @@
 
 #include "../src/hedley.h"
+#ifdef __SSE2__
+# include <emmintrin.h>
+#endif
 
 static void gf16_bitdep_init128(void* dst, int polynomial) {
 #ifdef __SSE2__

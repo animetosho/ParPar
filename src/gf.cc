@@ -71,6 +71,8 @@ using namespace v8;
 #define FUNC(name) static Handle<Value> name(const Arguments& args)
 #define FUNC_START HandleScope scope
 #define NEW_STRING String::New
+#define ARG_TO_INT(a) (a)->ToInteger()->Value()
+#define ARG_TO_OBJ(a) (a)->ToObject()
 #define RETURN_ERROR(e) \
 	return ThrowException(Exception::Error( \
 		String::New(e)) \

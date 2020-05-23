@@ -1,5 +1,8 @@
 
 #include "../src/hedley.h"
+#ifdef __AVX2__
+# include <immintrin.h>
+#endif
 
 static void gf16_bitdep_init256(void* dst, int polynomial) {
 #ifdef __AVX2__
