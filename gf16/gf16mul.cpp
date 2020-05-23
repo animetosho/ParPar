@@ -32,6 +32,7 @@ extern "C" {
 		return xcr0;
 	}
 # endif
+# include "x86_jit.h"
 struct CpuCap {
 	bool hasSSE2, hasSSSE3, hasAVX, hasAVX2, hasAVX512VLBW, hasGFNI;
 	size_t propPrefShuffleThresh;
@@ -116,8 +117,10 @@ struct CpuCap {
 			}
 		}
 		
-		// TODO: test for JIT capability
-		//canMemWX;
+		// test for JIT capability
+		void* jitTest = jit_alloc(256);
+		canMemWX = (jitTest != NULL);
+		if(jitTest) jit_free(jitTest, 256);
 	}
 };
 #endif
