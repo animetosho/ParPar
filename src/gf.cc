@@ -325,8 +325,8 @@ FUNC(MultiplyMulti) {
 				RTN_ERROR("All inputs' length must be equal");
 		} else {
 			len = node::Buffer::Length(input);
-			if (len % 2)
-				RTN_ERROR("Length of input must be a multiple of 2");
+			if ((len & (MEM_STRIDE-1)) != 0)
+				RTN_ERROR("Length of input must be a multiple of stride");
 		}
 		
 		int ibNum = ARG_TO_INT(GET_ARR(oIBNums, i));
@@ -428,7 +428,10 @@ FUNC(MultiplyMulti) {
 FUNC(Finish) {
 	FUNC_START;
 	
-	if (args.Length() < 1 || !args[0]->IsArray())
+	if (args.Length() < 2)
+		RETURN_ERROR("At least two arguments required");
+	
+	if (!args[0]->IsArray())
 		RETURN_ERROR("First argument must be an array");
 	
 	unsigned int numInputs = Local<Array>::Cast(args[0])->Length();
@@ -437,10 +440,10 @@ FUNC(Finish) {
 	
 	Local<Object> oInputs = ARG_TO_OBJ(args[0]);
 	bool calcMd5 = false;
-	if (args.Length() >= 2 && !args[1]->IsUndefined()) {
-		if (!args[1]->IsArray())
+	if (args.Length() >= 3 && !args[2]->IsUndefined()) {
+		if (!args[2]->IsArray())
 			RETURN_ERROR("MD5 contexts not an array");
-		if (Local<Array>::Cast(args[1])->Length() != numInputs)
+		if (Local<Array>::Cast(args[2])->Length() != numInputs)
 			RETURN_ERROR("Number of MD5 contexts doesn't equal number of inputs");
 		calcMd5 = true;
 		
@@ -455,28 +458,36 @@ FUNC(Finish) {
 		RETURN_ERROR(m); \
 	}
 	
-	size_t len = 0;
+	size_t len = (size_t)ARG_TO_INT(args[1]);
+	if (len % 2)
+		RTN_ERROR("Length must be a multiple of 2");
+	size_t bufLen = 0;
 	for(unsigned int i = 0; i < numInputs; i++) {
 		Local<Value> input = GET_ARR(oInputs, i);
 		if (!node::Buffer::HasInstance(input))
 			RTN_ERROR("All inputs must be Buffers");
 		inputs[i] = (uint16_t*)node::Buffer::Data(input);
 		
+		size_t currentLen = node::Buffer::Length(input);
+		if (currentLen < len)
+			RTN_ERROR("All inputs' length must be at least specified size");
 		if(i) {
-			if (node::Buffer::Length(input) != len)
+			if (currentLen != bufLen)
 				RTN_ERROR("All inputs' length must be equal");
 		} else {
-			len = node::Buffer::Length(input);
-			if (len % 2)
-				RTN_ERROR("Length of input must be a multiple of 2");
+			bufLen = currentLen;
 		}
+		if((uintptr_t)(node::Buffer::Data(input)) & (MEM_ALIGN-1))
+			RETURN_ERROR("All inputs' must be aligned");
 	}
+	if ((bufLen & (MEM_STRIDE-1)) != 0)
+		RTN_ERROR("Length of input must be a multiple of stride");
 	#undef RTN_ERROR
 	
 	MD5_CTX** md5 = NULL;
 	MD5_CTX dummyMd5;
 	if(calcMd5) {
-		Local<Object> oMd5 = ARG_TO_OBJ(args[1]);
+		Local<Object> oMd5 = ARG_TO_OBJ(args[2]);
 		md5 = new MD5_CTX*[allocArrSize];
 		
 		unsigned int i = 0;
@@ -503,7 +514,7 @@ FUNC(Finish) {
 	}
 	
 	// TODO: make this stuff async
-	ppgf_finish_input(numInputs, inputs, len);
+	ppgf_finish_input(numInputs, inputs, bufLen);
 	if(calcMd5) {
 		ppgf_omp_check_num_threads();
 		int i=0;
@@ -678,7 +689,7 @@ FUNC(SetMethod) {
 		RETURN_ERROR("Calculation already in progress");
 	
 	if(ppgf_set_method(
-		args.Length() >= 1 && !args[0]->IsUndefined() ? ARG_TO_INT(args[0]) : 0 /*GF_AUTO*/,
+		args.Length() >= 1 && !args[0]->IsUndefined() ? ARG_TO_INT(args[0]) : 0 /*GF16_AUTO*/,
 		args.Length() >= 2 ? ARG_TO_INT(args[1]) : 0
 	))
 		RETURN_ERROR("Unknown method specified");
@@ -695,7 +706,7 @@ FUNC(SetMethod) {
 	ppgf_get_method(&rMethod, &rMethLong, &MEM_ALIGN, &MEM_STRIDE);
 	
 	SET_OBJ(ret, "alignment", Integer::New(ISOLATE MEM_ALIGN));
-	SET_OBJ(ret, "alignment_width", Integer::New(ISOLATE MEM_STRIDE));
+	SET_OBJ(ret, "stride", Integer::New(ISOLATE MEM_STRIDE));
 	SET_OBJ(ret, "method", Integer::New(ISOLATE rMethod));
 	SET_OBJ(ret, "method_desc", NEW_STRING(rMethLong));
 	

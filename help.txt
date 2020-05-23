@@ -190,21 +190,18 @@ Performance Options:
                              can crash if CPU does not support selected method.
                              Choices are:
                                  lh_lookup: split 2x 8-bit scalar table lookup
-                                 xor: vector XOR bit dependencies
-                                 xor128: force SSE2 variant of `xor`
-                                 xor256: force AVX2 x64 variant of `xor`
-                                 xor512: force AVX512BW x64 variant of `xor`
-                                 shuffle: split 4x 4-bit vector table lookup
-                                 shuffle128: force SSSE3 variant of `shuffle`
-                                 shuffle256: force AVX2 variant of `shuffle`
-                                 shuffle512: force AVX512BW variant of `shuffle`
-                                 affine: split 2x 8-bit vector XOR dependencies
-                                 affine128: force GFNI variant of `affine`
-                                 affine512: force AVX512BW + GFNI `affine`
-                             Default is auto-detected. This option should
-                             generally never be changed, and left at default.
-                             Currently, this option may also not do what you
-                             might expect it to do.
+                                 xor-sse: vector XOR bit dependencies (SSE2)
+                                 xorjit-sse: JIT variant of above
+                                 xorjit-avx2: AVX2 x64 variant of above
+                                 xorjit-avx512: AVX512BW x64 variant of above
+                                 shuffle-sse: split 4x 4-bit vector table lookup (SSSE3)
+                                 shuffle-avx: AVX variant of above
+                                 shuffle-avx2: AVX2 variant of above
+                                 shuffle-avx512: AVX512BW variant of above
+                                 shuffle-neon: NEON variant of above
+                                 affine-gfni: split 2x 8-bit vector XOR dependencies (GFNI)
+                                 affine-avx512: AVX512BW + GFNI variant of above
+                             Default is auto-detected.
 
 UI Options:
 

@@ -337,45 +337,6 @@ Compiling ParPar into a single binary can be done via
 [building Nyuu’s binary](https://github.com/animetosho/nyuu#building-binary), so
 see those instructions for details.
 
-GF-Complete
-===========
-
-ParPar relies on the excellent
-[GF-Complete](http://jerasure.org/jerasure/gf-complete) library for the heavy
-lifting. A heavily stripped-down and modified version (from the [v2
-branch](http://jerasure.org/jerasure/gf-complete/tree/v2)) is included with
-ParPar. Code from GF-Complete can be found in the *gf-complete* folder.
-
-Modifications (beyond removing unused components) to the library include:
-
--   [MSVC compatibility
-    fixes](http://jerasure.org/jerasure/gf-complete/issues/6)
-
--   Runtime CPU detection and automatic algorithm selection
-
--   [Optimisation for 32-bit
-    builds](http://jerasure.org/jerasure/gf-complete/issues/7)
-
--   Some optimisations for CPUs without SSE support (SPLIT_TABLE(16,8)
-    implementation)
-
--   Added a Cauchy-like [XOR based region multiply
-    technique](xor_depends/info.md) for faster processing on Atom CPUs, as well
-    as SSE2 CPUs without SSSE3 support
-
--   AVX2 and AVX512BW variants of the SSSE3 (“Shuffle” or SPLIT_TABLE(16,4))
-    implementation
-
--   Added an experimental technique which is a hybrid of “XOR” and “Shuffle”
-    algorithms above, dubbed “Affine”, which [relies on the GF2P8AFFINEQB
-    instruction](xor_depends/info.md#gfni) from GFNI on future Intel processors
-
--   [Region transform to/from ALTMAP memory
-    arrangement](http://jerasure.org/jerasure/gf-complete/issues/9)
-
--   Some tweaks to make ParPar integration easier, such as exposing alignment
-    requirements
-
 Alternatives
 ============
 
@@ -389,19 +350,11 @@ For a C++ library implementation, there’s
 [libpar2](https://launchpad.net/libpar2), which I believe is based off
 par2cmdline.
 
-There’s also [node-gf](https://github.com/lamphamsy/node-gf), which is a node.js
-binding for GF-Complete. ParPar’s binding is stripped down for PAR2 purposes, so
-node-gf is more feature complete and faithful to the original library, but lacks
-modifications mentioned above.
-
 License
 =======
 
 This code is Public Domain or [CC0](https://creativecommons.org/publicdomain/zero/1.0/legalcode) (or
 equivalent) if PD isn’t recognised.
-
-GF-Complete’s license can be found
-[here](http://jerasure.org/jerasure/gf-complete/blob/master/License.txt).
 
 Multi-buffer MD5 implementation is based off implementation from
 [OpenSSL](https://www.openssl.org/).

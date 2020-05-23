@@ -410,8 +410,7 @@ var inputFiles = argv._;
 			process.exit(1);
 		}
 		
-		var meth = (argv.method || '').match(/^(.*?)(\d*)$/i);
-		ParPar.setMethod(meth[1], meth[2] | 0, inputSliceDef.unit == 'count' ? 0 : inputSliceDef.value); // TODO: allow size hint to work if slice-count is specified + consider min/max limits
+		ParPar.setMethod(argv.method || '', inputSliceDef.unit == 'count' ? 0 : inputSliceDef.value); // TODO: allow size hint to work if slice-count is specified + consider min/max limits
 		var g;
 		try {
 			g = new ParPar.PAR2Gen(info, inputSliceCount, ppo);
@@ -425,7 +424,7 @@ var inputFiles = argv._;
 			var method_used = ParPar.getMethod();
 			var num_threads = ParPar.getNumThreads();
 			var thread_str = num_threads + ' thread' + (num_threads==1 ? '':'s');
-			process.stderr.write('Multiply method used: ' + method_used.description + ' (' + method_used.wordBits + ' bit), ' + thread_str + '\n');
+			process.stderr.write('Multiply method used: ' + method_used.description + ', ' + thread_str + '\n');
 			
 			var friendlySize = function(s) {
 				var units = ['B', 'KiB', 'MiB', 'GiB', 'TiB', 'PiB', 'EiB'];
