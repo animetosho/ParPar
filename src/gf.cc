@@ -23,7 +23,7 @@ extern "C" {
 
 static int MEM_ALIGN, MEM_STRIDE;
 
-#if defined(__cplusplus) && __cplusplus > 201100 && !(defined(_MSC_VER) && defined(__clang__)) && !defined(__APPLE__)
+#if defined(__cplusplus) && __cplusplus >= 201100 && !(defined(_MSC_VER) && defined(__clang__)) && !defined(__APPLE__)
 	// C++11 method
 	// len needs to be a multiple of alignment, although it sometimes works if it isn't...
 	#include <cstdlib>
@@ -33,6 +33,7 @@ static int MEM_ALIGN, MEM_STRIDE;
 	#define ALIGN_ALLOC(buf, len) *(void**)&(buf) = _aligned_malloc((len), MEM_ALIGN)
 	#define ALIGN_FREE _aligned_free
 #else
+	#include <stdlib.h>
 	#define ALIGN_ALLOC(buf, len) if(posix_memalign((void**)&(buf), MEM_ALIGN, (len))) (buf) = NULL
 	#define ALIGN_FREE free
 #endif

@@ -1,4 +1,5 @@
 
+#include "platform.h"
 
 #define MWORD_SIZE 64
 #define _mword __m512i

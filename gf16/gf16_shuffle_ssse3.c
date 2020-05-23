@@ -1,5 +1,5 @@
 
-
+#include "platform.h"
 
 #define MWORD_SIZE 16
 #define _mword __m128i
@@ -23,7 +23,6 @@
 #undef _MM_END
 
 
-#include "platform.h"
 
 void* gf16_shuffle_init_x86(int polynomial) {
 #if defined(__SSSE3__)

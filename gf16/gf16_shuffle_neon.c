@@ -18,7 +18,33 @@ int gf16_shuffle_available_neon = 1;
 int gf16_shuffle_available_neon = 0;
 #endif
 
-void gf16_shuffle_mul_neon(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient) {
+
+#ifdef _MSC_VER
+# define vld1_u8_align vld1_u8_ex
+# define vld1q_u8_align vld1q_u8_ex
+#elif defined(__GNUC__)
+# define vld1_u8_align(p, n) vld1_u8((uint8_t*)__builtin_assume_aligned(p, n))
+# define vld1q_u8_align(p, n) vld1q_u8((uint8_t*)__builtin_assume_aligned(p, n))
+#else
+# define vld1_u8_align(p, n) vld1_u8(p)
+# define vld1q_u8_align(p, n) vld1q_u8(p)
+#endif
+
+// for compilers that lack these functions
+#if defined(__clang__) || (defined(__GNUC__) && (defined(__aarch64__) && __GNUC__ >= 8))
+# define vld1q_u8_x2_align(p, n) vld1q_u8_x2((uint8_t*)__builtin_assume_aligned(p, n))
+# define vst1q_u8_x2_align(p, data) vst1q_u8_x2((uint8_t*)__builtin_assume_aligned(p, 16), data)
+#else
+HEDLEY_ALWAYS_INLINE uint8x16x2_t vld1q_u8_x2_align(const uint8_t* p, int n) {
+	return (uint8x16x2_t){vld1q_u8_align(p, n), vld1q_u8_align(p+16, n-16)};
+}
+HEDLEY_ALWAYS_INLINE void vst1q_u8_x2_align(uint8_t* p, uint8x16x2_t data) {
+	vst1q_u8(__builtin_assume_aligned(p, 16), data.val[0]);
+	vst1q_u8(__builtin_assume_aligned(p+16, 16), data.val[1]);
+}
+#endif
+
+void gf16_shuffle_mul_neon(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t val) {
 #if defined(__ARM_NEON)
 	uint8x16_t ri;
 	
@@ -32,7 +58,7 @@ void gf16_shuffle_mul_neon(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RES
 	));
 	uint8x16_t rh = veorq_u8(
 		rl,
-		vreinterpretq_u8_u16(vdupq_n_u16(GF_MULTBY_TWO(val4)))
+		vreinterpretq_u8_u16(vdupq_n_u16(GF16_MULTBY_TWO(val4)))
 	);
 	
 	/*
@@ -49,7 +75,7 @@ void gf16_shuffle_mul_neon(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RES
 	rh = vreinterpretq_u8_u16(factor8);
 	*/
 	
-	uint8x16x2_t polyIn = vld1q_u8_x2(scratch);
+	uint8x16x2_t polyIn = vld1q_u8_x2_align(scratch, 32);
 #ifdef __aarch64__
 	uint8x16_t tbl_h[4], tbl_l[4];
 	tbl_l[0] = vuzp1q_u8(rl, rh);
@@ -118,7 +144,7 @@ void gf16_shuffle_mul_neon(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RES
 #endif
 }
 
-void gf16_shuffle_muladd_neon(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient) {
+void gf16_shuffle_muladd_neon(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t val) {
 #if defined(__ARM_NEON)
 	uint8x16_t ri;
 	
@@ -132,10 +158,10 @@ void gf16_shuffle_muladd_neon(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_
 	));
 	uint8x16_t rh = veorq_u8(
 		rl,
-		vreinterpretq_u8_u16(vdupq_n_u16(GF_MULTBY_TWO(val4)))
+		vreinterpretq_u8_u16(vdupq_n_u16(GF16_MULTBY_TWO(val4)))
 	);
 	
-	uint8x16x2_t polyIn = vld1q_u8_x2(scratch);
+	uint8x16x2_t polyIn = vld1q_u8_x2_align(scratch, 32);
 #ifdef __aarch64__
 	uint8x16_t tbl_h[4], tbl_l[4];
 	tbl_l[0] = vuzp1q_u8(rl, rh);
@@ -183,7 +209,7 @@ void gf16_shuffle_muladd_neon(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_
 	
 	uint8x16_t loset = vdupq_n_u8(0xf);
 	
-	while (d16 < end16) {
+	for(long ptr = -(long)len; ptr; ptr += sizeof(uint8x16_t)*2) {
 		uint8x16x2_t va = vld2q_u8(_src+ptr);
 		uint8x16x2_t vb = vld2q_u8(_dst+ptr);
 
@@ -223,7 +249,7 @@ void* gf16_shuffle_init_arm(int polynomial) {
 		poly.val[0][i] = p & 0xff;
 		poly.val[1][i] = (p>>8) & 0xff;
 	}
-	vst1q_u8_x2(ret, poly);
+	vst1q_u8_x2_align(ret, poly);
 	return ret;
 	
 	/*
@@ -232,8 +258,8 @@ void* gf16_shuffle_init_arm(int polynomial) {
 	for(shift=0; shift<16; shift+=4) {
 		for(i=0; i<16; i++) {
 			int val = i << shift;
-			int val2 = GF_MULTBY_TWO(val);
-			int val4 = GF_MULTBY_TWO(val2);
+			int val2 = GF16_MULTBY_TWO(val);
+			int val4 = GF16_MULTBY_TWO(val2);
 			uint16x4_t tmp = {0, val, val2, val2 ^ val};
 			
 			uint16x8_t r = vcombine_u16(
@@ -242,7 +268,7 @@ void* gf16_shuffle_init_arm(int polynomial) {
 			);
 			
 			// put in *8 factor so we don't have to calculate it later
-			r = vsetq_lane_u16(GF_MULTBY_TWO(val4), r, 0);
+			r = vsetq_lane_u16(GF16_MULTBY_TWO(val4), r, 0);
 			vst1q_u16(multbl + ((shift*4 + i) << 3), r);
 		}
 	}

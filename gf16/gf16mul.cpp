@@ -13,6 +13,7 @@ extern "C" {
 #include "platform.h"
 #ifdef PLATFORM_X86
 # ifdef _MSC_VER
+	#include <intrin.h>
 	#define _cpuid __cpuid
 	#define _cpuidX __cpuidex
 	#if _MSC_VER >= 1600
