@@ -1,12 +1,15 @@
 
-#include "x86_jit.c"
-#include "../gf_w16.h"
+#include "gf16_xor_common.h"
 
-#if defined(INTEL_AVX512BW) && defined(INTEL_AVX512VL) && defined(AMD64)
-#include "xor.h"
-#include <immintrin.h>
+#if defined(__AVX512BW__) && defined(__AVX512VL__) && defined(PLATFORM_AMD64)
+# include <immintrin.h>
+int gf16_xor_available_avx512 = 1;
+#else
+int gf16_xor_available_avx512 = 0;
+#endif
 
 
+#if defined(__AVX512BW__) && defined(__AVX512VL__) && defined(PLATFORM_AMD64)
 static inline __m128i ssse3_popcnt_epi8(__m128i src) {
 	__m128i lmask = _mm_set1_epi8(0xf);
 	__m128i tbl = _mm_set_epi8(
@@ -97,13 +100,12 @@ static inline __m512i xor_avx512_main_part(int odd, int r, __m128i indicies) {
 	return _mm512_xor_si512(idx, inst);
 }
 
-static uint8_t* xor_write_jit_avx512(jit_t* jit, gf_val_32_t val, gf_w16_poly_struct* poly, int xor)
-{
-	FAST_U32 i, bit;
+static inline uint8_t* xor_write_jit_avx512(struct gf16_xor_scratch *HEDLEY_RESTRICT scratch, uint16_t val, int xor) {
+	uint_fast32_t i, bit;
 	
 	uint8_t* jitptr, *jitcode;
 #ifdef CPU_SLOW_SMC
-	ALIGN(64, uint8_t jitTemp[2048]);
+	ALIGN_TO(64, uint8_t jitTemp[2048]);
 	uint8_t* jitdst;
 #endif
 	
@@ -114,26 +116,26 @@ static uint8_t* xor_write_jit_avx512(jit_t* jit, gf_val_32_t val, gf_w16_poly_st
 		0, 0, 0, 0, 0, 0, 0, 0, 0x80, 0x40, 0x20, 0x10, 0x08, 0x04, 0x02, 0x01
 	);
 	
-	__m256i shuf = poly->p32;
+	__m256i shuf = _mm256_load_si256((__m256i*)scratch->poly);
 	
 	__m256i valtest = _mm256_set1_epi16(val);
 	__m256i addmask = _mm256_srai_epi16(valtest, 15);
 	__m256i depmask = _mm256_and_si256(addvals, addmask);
-    for(i=0; i<15; i++) {
-      /* rotate */
-      __m256i last = _mm256_shuffle_epi8(depmask, shuf);
-      depmask = _mm256_srli_si256(depmask, 1);
-      
-	  valtest = _mm256_add_epi16(valtest, valtest);
-	  addmask = _mm256_srai_epi16(valtest, 15);
-	  addmask = _mm256_and_si256(addvals, addmask);
-	  
-      /* XOR poly+addvals */
-      depmask = _mm256_ternarylogic_epi32(depmask, last, addmask, 0x96);
-	  
-	  // the above tactic seems to be a tad bit faster than the old one using the following:
-	  // depmask = _mm256_mask_xor_epi32(depmask, -((val & i)!=0), depmask, addvals);
-    }
+	for(i=0; i<15; i++) {
+		/* rotate */
+		__m256i last = _mm256_shuffle_epi8(depmask, shuf);
+		depmask = _mm256_srli_si256(depmask, 1);
+		
+		valtest = _mm256_add_epi16(valtest, valtest);
+		addmask = _mm256_srai_epi16(valtest, 15);
+		addmask = _mm256_and_si256(addvals, addmask);
+		
+		/* XOR poly+addvals */
+		depmask = _mm256_ternarylogic_epi32(depmask, last, addmask, 0x96);
+		
+		// the above tactic seems to be a tad bit faster than the old one using the following:
+		// depmask = _mm256_mask_xor_epi32(depmask, -((val & i)!=0), depmask, addvals);
+	}
 	
 	
 	/* interleave so that word pairs are split */
@@ -158,16 +160,16 @@ static uint8_t* xor_write_jit_avx512(jit_t* jit, gf_val_32_t val, gf_w16_poly_st
 	mask2 = _mm_xor_si128(mask2, common_mask);
 	
 	/* count bits */
-	ALIGN(16, uint16_t depC[8]);
-	ALIGN(16, uint16_t popcntC[8]);
+	ALIGN_TO(16, uint16_t depC[8]);
+	ALIGN_TO(16, uint16_t popcntC[8]);
 	_mm_store_si128((__m128i*)depC, common_mask);
 	_mm_store_si128((__m128i*)popcntC, ssse3_popcnt_epi16(common_mask));
-	ALIGN(16, uint16_t depA[8]);
-	ALIGN(16, uint16_t popcntA[8]);
+	ALIGN_TO(16, uint16_t depA[8]);
+	ALIGN_TO(16, uint16_t popcntA[8]);
 	_mm_store_si128((__m128i*)depA, mask1);
 	_mm_store_si128((__m128i*)popcntA, ssse3_popcnt_epi16(mask1));
-	ALIGN(16, uint16_t depB[8]);
-	ALIGN(16, uint16_t popcntB[8]);
+	ALIGN_TO(16, uint16_t depB[8]);
+	ALIGN_TO(16, uint16_t popcntB[8]);
 	_mm_store_si128((__m128i*)depB, mask2);
 	_mm_store_si128((__m128i*)popcntB, ssse3_popcnt_epi16(mask2));
 	
@@ -177,7 +179,7 @@ static uint8_t* xor_write_jit_avx512(jit_t* jit, gf_val_32_t val, gf_w16_poly_st
 	
 	
 	
-	jitptr = jit->pNorm;
+	jitptr = scratch->jitWrite;
 #ifdef CPU_SLOW_SMC
 	jitdst = jitptr;
 	if((uintptr_t)jitdst & 0x1F) {
@@ -190,7 +192,7 @@ static uint8_t* xor_write_jit_avx512(jit_t* jit, gf_val_32_t val, gf_w16_poly_st
 	else
 		jitptr = jitTemp;
 #endif
-	jitcode = jit->code;
+	jitcode = scratch->jitCode;
 	
 	
 	/* generate code */
@@ -319,7 +321,7 @@ static uint8_t* xor_write_jit_avx512(jit_t* jit, gf_val_32_t val, gf_w16_poly_st
 	}
 	
 	/* cmp/jcc */
-    *(uint64_t*)(jitptr) = 0x800FC03948 | (DX <<16) | (CX <<19) | ((uint64_t)JL <<32);
+	*(uint64_t*)(jitptr) = 0x800FC03948 | (DX <<16) | (CX <<19) | ((uint64_t)JL <<32);
 #ifdef CPU_SLOW_SMC
 	*(int32_t*)(jitptr +5) = (jitTemp - (jitdst - jitcode)) - jitptr -9;
 #else
@@ -330,7 +332,7 @@ static uint8_t* xor_write_jit_avx512(jit_t* jit, gf_val_32_t val, gf_w16_poly_st
 #ifdef CPU_SLOW_SMC
 	/* memcpy to destination */
 	/* AVX does result in fewer writes, but testing on Haswell seems to indicate minimal benefit over SSE2 */
-	for(i=0; i<(FAST_U32)(jitptr+10-jitTemp); i+=64) {
+	for(i=0; i<(uint_fast32_t)(jitptr+10-jitTemp); i+=64) {
 		__m256i ta = _mm256_load_si256((__m256i*)(jitTemp + i));
 		__m256i tb = _mm256_load_si256((__m256i*)(jitTemp + i + 32));
 		_mm256_store_si256((__m256i*)(jitdst + i), ta);
@@ -340,29 +342,44 @@ static uint8_t* xor_write_jit_avx512(jit_t* jit, gf_val_32_t val, gf_w16_poly_st
 	return jitcode;
 }
 
-void gf_w16_xor_lazy_jit_altmap_multiply_region_avx512(gf_t *gf, void *src, void *dest, gf_val_32_t val, int bytes, int xor)
-{
-  gf_region_data rd;
-  gf_internal_t *h = (gf_internal_t *) gf->scratch;
-  struct gf_w16_logtable_data* ltd = (struct gf_w16_logtable_data*)(h->private);
-  
-  GF_W16_SKIP_SIMPLE;
-  gf_w16_log_region_alignment(&rd, gf, src, dest, bytes, val, xor, 64, 1024);
-  
-  if(rd.d_start != rd.d_top) {
+#endif /* defined(__AVX512BW__) && defined(__AVX512VL__) && defined(PLATFORM_AMD64) */
+
+void gf16_xor_jit_mul_avx512(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient) {
+#if defined(__AVX512BW__) && defined(__AVX512VL__) && defined(PLATFORM_AMD64)
+	struct gf16_xor_scratch *HEDLEY_RESTRICT info = (struct gf16_xor_scratch *HEDLEY_RESTRICT)scratch;
+	
 #ifdef CPU_SLOW_SMC_CLR
-    memset(h->jit.pNorm, 0, 1536);
+	memset(info->jitCode, 0, 1536);
 #endif
-  
-    gf_w16_xor256_jit_stub(
-      (intptr_t)rd.s_start - 896,
-      (intptr_t)rd.d_top - 896,
-      (intptr_t)rd.d_start - 896,
-      xor_write_jit_avx512(&(h->jit), val, ltd->poly, xor)
-    );
-    
-    _mm256_zeroupper();
-  }
+	
+	gf16_xor256_jit_stub(
+		(intptr_t)src - 896,
+		(intptr_t)dst + len + 128,
+		(intptr_t)dst - 896,
+		xor_write_jit_avx512(info, coefficient, 0)
+	);
+	
+	_mm256_zeroupper();
+#endif
+}
+
+void gf16_xor_jit_muladd_avx512(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient) {
+#if defined(__AVX512BW__) && defined(__AVX512VL__) && defined(PLATFORM_AMD64)
+	struct gf16_xor_scratch *HEDLEY_RESTRICT info = (struct gf16_xor_scratch *HEDLEY_RESTRICT)scratch;
+	
+#ifdef CPU_SLOW_SMC_CLR
+	memset(info->jitCode, 0, 1536);
+#endif
+	
+	gf16_xor256_jit_stub(
+		(intptr_t)src - 896,
+		(intptr_t)dst + len + 128,
+		(intptr_t)dst - 896,
+		xor_write_jit_avx512(info, coefficient, 1)
+	);
+	
+	_mm256_zeroupper();
+#endif
 }
 
 
@@ -373,7 +390,11 @@ void gf_w16_xor_lazy_jit_altmap_multiply_region_avx512(gf_t *gf, void *src, void
 #define _FN(f) f ## _avx512
 #define _MM_END _mm256_zeroupper();
 
-#include "xor_common.c"
+#if defined(__AVX512BW__) && defined(__AVX512VL__)
+# define _AVAILABLE
+#endif
+#include "gf16_xor_common_funcs.h"
+#undef _AVAILABLE
 
 #undef MWORD_SIZE
 #undef _mword
@@ -383,24 +404,29 @@ void gf_w16_xor_lazy_jit_altmap_multiply_region_avx512(gf_t *gf, void *src, void
 #undef _MM_END
 
 
+#include "gf16_bitdep_init_avx2.h"
+
+void* gf16_xor_jit_init_avx512(int polynomial) {
+#if defined(__AVX512BW__) && defined(__AVX512VL__) && defined(PLATFORM_AMD64)
+	struct gf16_xor_scratch* ret;
+	uint8_t *jitCode = jit_alloc(XORDEP_JIT_SIZE);
+	
+	if(!jitCode) return NULL;
+	
+	ALIGN_ALLOC(ret, sizeof(struct gf16_xor_scratch), 32);
+	gf16_bitdep_init256(ret, polynomial);
+	ret->jitCode = jitCode;
+	
+	jitCode += _jit_add_i(jitCode, AX, 1024);
+	jitCode += _jit_add_i(jitCode, DX, 1024);
+	
+	/* only 64-bit supported*/
+	for(int i=0; i<16; i++) {
+		jitCode += _jit_vmovdqa32_load(jitCode, 16+i, AX, (i-2)<<6);
+	}
+	ret->jitWrite = jitCode;
+	return ret;
 #else
-void gf_w16_xor_lazy_jit_altmap_multiply_region_avx512(gf_t *gf, void *src, void *dest, gf_val_32_t val, int bytes, int xor)
-{
-	/* throw? */
-}
+	return NULL;
 #endif
-
-void gf_w16_xor_init_jit_avx512(jit_t* jit) {
-	int i;
-  
-	jit->pNorm = jit->code;
-	jit->pNorm += _jit_add_i(jit->pNorm, AX, 1024);
-	jit->pNorm += _jit_add_i(jit->pNorm, DX, 1024);
-    
-    /* only 64-bit supported*/
-    for(i=0; i<16; i++) {
-		jit->pNorm += _jit_vmovdqa32_load(jit->pNorm, 16+i, AX, (i-2)<<6);
-    }
 }
-
-void gf_w16_xor_create_jit_lut_avx512(void) {}

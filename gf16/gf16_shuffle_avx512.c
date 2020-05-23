@@ -1,9 +1,4 @@
 
-#include "../gf_complete.h"
-#include "../gf_int.h"
-#include "../gf_w16.h"
-
-#if defined(INTEL_AVX512BW)
 
 #define MWORD_SIZE 64
 #define _mword __m512i
@@ -13,7 +8,12 @@
 /* still called "mm256" even in AVX512? */
 #define _MM_END _mm256_zeroupper();
 
-#include "shuffle_common.c"
+#if defined(__AVX512BW__) && defined(__AVX512VL__)
+# define _AVAILABLE
+# include <immintrin.h>
+#endif
+#include "gf16_shuffle_x86.h"
+#undef _AVAILABLE
 
 #undef MWORD_SIZE
 #undef _mword
@@ -22,4 +22,3 @@
 #undef _FN
 #undef _MM_END
 
-#endif

@@ -1,8 +1,8 @@
-#ifndef __GFC_JIT__
-#define __GFC_JIT__
+#ifndef __GF_XOR_JIT__
+#define __GF_XOR_JIT__
 
-#include "../gf_int.h"
-#include "../platform.h"
+#include "gf16_global.h"
+#include "platform.h"
 
 /* registers */
 #define AX 0
@@ -28,7 +28,7 @@
 #endif
 
 static inline size_t _jit_rex_pref(uint8_t** jit, uint8_t xreg, uint8_t xreg2) {
-#ifdef AMD64
+#ifdef PLATFORM_AMD64
 	if(xreg > 7 || xreg2 > 7) {
 		*((*jit)++) = 0x40 | (xreg2 >>3) | ((xreg >>1)&4);
 		return 1;
@@ -38,7 +38,7 @@ static inline size_t _jit_rex_pref(uint8_t** jit, uint8_t xreg, uint8_t xreg2) {
 }
 
 static inline size_t _jit_rxx_pref(uint8_t** jit, uint8_t reg, uint8_t reg2) {
-#ifdef AMD64
+#ifdef PLATFORM_AMD64
 	*((*jit)++) = 0x48 | (reg >>3) | ((reg2 >>1)&4);
 	return 1;
 #endif
@@ -531,7 +531,7 @@ static inline size_t _jit_xor_rm(uint8_t* jit, uint8_t mreg, int32_t offs, uint8
 	}
 }
 static inline size_t _jit_mov_i(uint8_t* jit, uint8_t reg, intptr_t val) {
-#ifdef AMD64
+#ifdef PLATFORM_AMD64
 	_jit_rxx_pref(&jit, reg, 0);
 	reg &= 7;
 	if(val > 0x3fffffff || val < 0x40000000) {
@@ -625,4 +625,4 @@ static void jit_free(void* mem, size_t len) {
 }
 #endif
 
-#endif /*__GFC_JIT__*/
+#endif /*__GF_XOR_JIT__*/

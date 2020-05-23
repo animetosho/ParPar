@@ -1,9 +1,4 @@
 
-#include "../gf_complete.h"
-#include "../gf_int.h"
-#include "../gf_w16.h"
-
-#if defined(INTEL_AVX2)
 
 #define MWORD_SIZE 32
 #define _mword __m256i
@@ -12,7 +7,12 @@
 #define _FN(f) f ## _avx2
 #define _MM_END _mm256_zeroupper();
 
-#include "shuffle_common.c"
+#if defined(__AVX2__)
+# define _AVAILABLE
+# include <immintrin.h>
+#endif
+#include "gf16_shuffle_x86.h"
+#undef _AVAILABLE
 
 #undef MWORD_SIZE
 #undef _mword
@@ -21,4 +21,3 @@
 #undef _FN
 #undef _MM_END
 
-#endif

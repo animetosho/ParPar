@@ -2,8 +2,8 @@ IFDEF RAX
 
 .code
 
-PUBLIC  gf_w16_xor_jit_stub
-gf_w16_xor_jit_stub PROC
+PUBLIC  gf16_xor_jit_stub
+gf16_xor_jit_stub PROC
 	; setup stack
 	push rsi
 	lea rax, [rsp-16*12]
@@ -45,11 +45,11 @@ gf_w16_xor_jit_stub PROC
 	
 	pop rsi
 	ret
-gf_w16_xor_jit_stub    ENDP
+gf16_xor_jit_stub    ENDP
 
 IFDEF YMM0
-PUBLIC  gf_w16_xor256_jit_stub
-gf_w16_xor256_jit_stub PROC
+PUBLIC  gf16_xor256_jit_stub
+gf16_xor256_jit_stub PROC
 	; setup stack
 	push rsi
 	lea rax, [rsp-16*12]
@@ -91,7 +91,7 @@ gf_w16_xor256_jit_stub PROC
 	
 	pop rsi
 	ret
-gf_w16_xor256_jit_stub    ENDP
+gf16_xor256_jit_stub    ENDP
 ENDIF ; IFDEF YMM0
 
 ENDIF ; IFDEF RAX

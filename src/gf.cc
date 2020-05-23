@@ -12,7 +12,7 @@
 #include <malloc.h>
 #endif
 
-#include "../gf-complete/module.h"
+#include "../gf16/module.h"
 
 extern "C" {
 #ifdef _OPENMP
@@ -21,6 +21,7 @@ extern "C" {
 #include "../md5/md5.h"
 }
 
+static int MEM_ALIGN, MEM_STRIDE;
 
 #if defined(__cplusplus) && __cplusplus > 201100 && !(defined(_MSC_VER) && defined(__clang__)) && !defined(__APPLE__)
 	// C++11 method
@@ -178,7 +179,7 @@ FUNC(PrepInput) {
 	
 	if((uintptr_t)dest & (MEM_ALIGN-1))
 		RETURN_ERROR("Destination not aligned");
-	if(inputLen > destLen)
+	if(((inputLen + (MEM_STRIDE-1)) & ~(MEM_STRIDE-1)) > destLen)
 		RETURN_ERROR("Destination not large enough to hold input");
 	
 	ppgf_prep_input(destLen, inputLen, dest, src);
@@ -676,9 +677,8 @@ FUNC(SetMethod) {
 		RETURN_ERROR("Calculation already in progress");
 	
 	if(ppgf_set_method(
-		args.Length() >= 1 && !args[0]->IsUndefined() ? ARG_TO_INT(args[0]) : 0 /*GF_METHOD_DEFAULT*/,
-		args.Length() >= 2 ? ARG_TO_INT(args[1]) : 0,
-		args.Length() >= 3 ? ARG_TO_INT(args[2]) : 0
+		args.Length() >= 1 && !args[0]->IsUndefined() ? ARG_TO_INT(args[0]) : 0 /*GF_AUTO*/,
+		args.Length() >= 2 ? ARG_TO_INT(args[1]) : 0
 	))
 		RETURN_ERROR("Unknown method specified");
 	
@@ -689,14 +689,13 @@ FUNC(SetMethod) {
 	Local<Object> ret = Object::New();
 #endif
 	
-	int rMethod, rWord, wAlign;
+	int rMethod;
 	const char* rMethLong;
-	ppgf_get_method(&rMethod, &rWord, &rMethLong, &wAlign);
+	ppgf_get_method(&rMethod, &rMethLong, &MEM_ALIGN, &MEM_STRIDE);
 	
 	SET_OBJ(ret, "alignment", Integer::New(ISOLATE MEM_ALIGN));
-	SET_OBJ(ret, "alignment_width", Integer::New(ISOLATE wAlign));
+	SET_OBJ(ret, "alignment_width", Integer::New(ISOLATE MEM_STRIDE));
 	SET_OBJ(ret, "method", Integer::New(ISOLATE rMethod));
-	SET_OBJ(ret, "word_bits", Integer::New(ISOLATE rWord));
 	SET_OBJ(ret, "method_desc", NEW_STRING(rMethLong));
 	
 	
@@ -715,6 +714,10 @@ void parpar_gf_init(
 ) {
 	ppgf_init_constants();
 	ppgf_init_gf_module();
+	
+	int rMethod;
+	const char* rMethLong;
+	ppgf_get_method(&rMethod, &rMethLong, &MEM_ALIGN, &MEM_STRIDE);
 	
 	NODE_SET_METHOD(target, "md5_init", MD5Start);
 	NODE_SET_METHOD(target, "md5_final", MD5Finish);
