@@ -69,6 +69,8 @@ void gf16_affine_mul_gfni(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_REST
 		_mm_store_si128 ((__m128i*)(_dst + ptr), tph);
 		_mm_store_si128 ((__m128i*)(_dst + ptr) + 1, tpl);
 	}
+#else
+	UNUSED(scratch); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficient);
 #endif
 }
 
@@ -134,6 +136,8 @@ void gf16_affine_muladd_gfni(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_R
 		_mm_store_si128 ((__m128i*)(_dst + ptr), tph);
 		_mm_store_si128 ((__m128i*)(_dst + ptr)+1, tpl);
 	}
+#else
+	UNUSED(scratch); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficient);
 #endif
 }
 
@@ -145,6 +149,7 @@ void* gf16_affine_init_gfni(int polynomial) {
 	gf16_bitdep_init128(ret, polynomial);
 	return ret;
 #else
+	UNUSED(polynomial);
 	return NULL;
 #endif
 }

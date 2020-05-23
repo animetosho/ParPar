@@ -62,6 +62,8 @@ void gf16_affine_mul_avx512(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RE
 		_mm512_store_si512 ((__m512i*)(_dst + ptr) + 1, tpl);
 	}
 	_mm256_zeroupper();
+#else
+	UNUSED(scratch); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficient);
 #endif
 }
 
@@ -122,6 +124,8 @@ void gf16_affine_muladd_avx512(const void *HEDLEY_RESTRICT scratch, void *HEDLEY
 		_mm512_store_si512 ((__m512i*)(_dst + ptr)+1, tpl);
 	}
 	_mm256_zeroupper();
+#else
+	UNUSED(scratch); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficient);
 #endif
 }
 
@@ -133,6 +137,7 @@ void* gf16_affine_init_avx512(int polynomial) {
 	gf16_bitdep_init256(ret, polynomial);
 	return ret;
 #else
+	UNUSED(polynomial);
 	return NULL;
 #endif
 }

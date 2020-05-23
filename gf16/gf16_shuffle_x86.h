@@ -51,6 +51,8 @@ void _FN(gf16_shuffle_prepare)(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RES
 			_dst[dstWord+sizeof(_mword)] = _src[word*2];
 		}
 	}
+#else
+	UNUSED(dst); UNUSED(src); UNUSED(srcLen);
 #endif
 }
 
@@ -66,6 +68,8 @@ void _FN(gf16_shuffle_finish)(void *HEDLEY_RESTRICT dst, size_t len) {
 		_MMI(store) ((_mword*)(_dst+ptr) + 1, _MM(unpackhi_epi8)(tb, ta));
 	}
 	_MM_END
+#else
+	UNUSED(dst); UNUSED(len);
 #endif
 }
 
@@ -180,6 +184,8 @@ void _FN(gf16_shuffle_mul)(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RES
 		_MMI(store) ((_mword*)(_dst+ptr) + 1, tpl);
 	}
 	_MM_END
+#else
+	UNUSED(scratch); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(val);
 #endif
 }
 
@@ -256,6 +262,8 @@ void _FN(gf16_shuffle_muladd)(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_
 		_MMI(store) ((_mword*)(_dst+ptr) + 1, tpl);
 	}
 	_MM_END
+#else
+	UNUSED(scratch); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(val);
 #endif
 }
 

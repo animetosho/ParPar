@@ -69,6 +69,8 @@ void _FN(gf16_xor_prepare)(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRIC
 		memcpy(tmp, _src, remaining);
 		_FN(gf16_xor_prepare)(_dst, tmp, MWORD_SIZE*16);
 	}
+#else
+	UNUSED(dst); UNUSED(src); UNUSED(srcLen);
 #endif
 }
 
@@ -191,6 +193,8 @@ void _FN(gf16_xor_finish)(void *HEDLEY_RESTRICT dst, size_t len) {
 #endif
 		_dst += 128;
 	}
+#else
+	UNUSED(dst); UNUSED(len);
 #endif
 }
 

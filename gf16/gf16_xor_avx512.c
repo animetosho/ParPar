@@ -360,6 +360,8 @@ void gf16_xor_jit_mul_avx512(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_R
 	);
 	
 	_mm256_zeroupper();
+#else
+	UNUSED(scratch); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficient);
 #endif
 }
 
@@ -379,6 +381,8 @@ void gf16_xor_jit_muladd_avx512(const void *HEDLEY_RESTRICT scratch, void *HEDLE
 	);
 	
 	_mm256_zeroupper();
+#else
+	UNUSED(scratch); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficient);
 #endif
 }
 
@@ -427,6 +431,7 @@ void* gf16_xor_jit_init_avx512(int polynomial) {
 	ret->jitWrite = jitCode;
 	return ret;
 #else
+	UNUSED(polynomial);
 	return NULL;
 #endif
 }

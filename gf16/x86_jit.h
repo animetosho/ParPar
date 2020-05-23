@@ -609,18 +609,18 @@ static inline size_t _jit_ret(uint8_t* jit) {
 
 #if defined(_WINDOWS) || defined(__WINDOWS__) || defined(_WIN32) || defined(_WIN64)
 #include <windows.h>
-static void* jit_alloc(size_t len) {
+static inline void* jit_alloc(size_t len) {
 	return VirtualAlloc(NULL, len, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
 }
-static void jit_free(void* mem, size_t len) {
+static inline void jit_free(void* mem, size_t len) {
 	VirtualFree(mem, 0, MEM_RELEASE);
 }
 #else
 #include <sys/mman.h>
-static void* jit_alloc(size_t len) {
+static inline void* jit_alloc(size_t len) {
 	return mmap(NULL, len, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANON, -1, 0);
 }
-static void jit_free(void* mem, size_t len) {
+static inline void jit_free(void* mem, size_t len) {
 	munmap(mem, len); /* TODO: needs to be aligned?? */
 }
 #endif

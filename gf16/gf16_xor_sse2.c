@@ -814,6 +814,8 @@ void gf16_xor_jit_mul_sse2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RES
 		(intptr_t)dst - 128,
 		xor_write_jit_sse(info, coefficient, 0)
 	);
+#else
+	UNUSED(scratch); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficient);
 #endif
 }
 
@@ -830,6 +832,8 @@ void gf16_xor_jit_muladd_sse2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_
 		(intptr_t)dst - 128,
 		xor_write_jit_sse(info, coefficient, 1)
 	);
+#else
+	UNUSED(scratch); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficient);
 #endif
 }
 
@@ -929,6 +933,8 @@ void gf16_xor_mul_sse2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRIC
 		#undef STEP
 		sP += sizeof(__m128i)*16;
 	}
+#else
+	UNUSED(scratch); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(val);
 #endif
 }
 
@@ -1029,6 +1035,8 @@ void gf16_xor_muladd_sse2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_REST
 		#undef STEP
 		sP += sizeof(__m128i)*16;
 	}
+#else
+	UNUSED(scratch); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(val);
 #endif
 }
 
@@ -1087,6 +1095,7 @@ void* gf16_xor_jit_init_sse2(int polynomial) {
 	ret->jitWrite = jitCode;
 	return ret;
 #else
+	UNUSED(polynomial);
 	return NULL;
 #endif
 }
@@ -1104,6 +1113,7 @@ void* gf16_xor_init_sse2(int polynomial) {
 	gf16_bitdep_init128(ret, polynomial);
 	return ret;
 #else
+	UNUSED(polynomial);
 	return NULL;
 #endif
 }

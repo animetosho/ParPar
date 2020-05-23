@@ -19,6 +19,8 @@ int gf16_shuffle_available_neon = 0;
 #endif
 
 
+#if defined(__ARM_NEON)
+
 #ifdef _MSC_VER
 # define vld1_u8_align vld1_u8_ex
 # define vld1q_u8_align vld1q_u8_ex
@@ -43,6 +45,8 @@ HEDLEY_ALWAYS_INLINE void vst1q_u8_x2_align(uint8_t* p, uint8x16x2_t data) {
 	vst1q_u8(__builtin_assume_aligned(p+16, 16), data.val[1]);
 }
 #endif
+
+#endif /*defined(__ARM_NEON)*/
 
 void gf16_shuffle_mul_neon(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t val) {
 #if defined(__ARM_NEON)
@@ -141,6 +145,8 @@ void gf16_shuffle_mul_neon(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RES
 
 		vst2q_u8(_dst+ptr, va);
 	}
+#else
+	UNUSED(scratch); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(val);
 #endif
 }
 
@@ -230,6 +236,8 @@ void gf16_shuffle_muladd_neon(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_
 		va.val[1] = veorq_u8(va.val[1], vb.val[1]);
 		vst2q_u8(_dst+ptr, va);
 	}
+#else
+	UNUSED(scratch); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(val);
 #endif
 }
 
@@ -274,6 +282,7 @@ void* gf16_shuffle_init_arm(int polynomial) {
 	}
 	*/
 #else
+	UNUSED(polynomial);
 	return NULL;
 #endif
 }
