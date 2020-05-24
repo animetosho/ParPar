@@ -23,21 +23,6 @@ extern "C" {
 
 static int MEM_ALIGN, MEM_STRIDE;
 
-#if defined(__cplusplus) && __cplusplus >= 201100 && !(defined(_MSC_VER) && defined(__clang__)) && !defined(__APPLE__)
-	// C++11 method
-	// len needs to be a multiple of alignment, although it sometimes works if it isn't...
-	#include <cstdlib>
-	#define ALIGN_ALLOC(buf, len) *(void**)&(buf) = aligned_alloc(MEM_ALIGN, ((len) + MEM_ALIGN-1) & ~(MEM_ALIGN-1))
-	#define ALIGN_FREE free
-#elif defined(_MSC_VER)
-	#define ALIGN_ALLOC(buf, len) *(void**)&(buf) = _aligned_malloc((len), MEM_ALIGN)
-	#define ALIGN_FREE _aligned_free
-#else
-	#include <stdlib.h>
-	#define ALIGN_ALLOC(buf, len) if(posix_memalign((void**)&(buf), MEM_ALIGN, (len))) (buf) = NULL
-	#define ALIGN_FREE free
-#endif
-
 
 using namespace v8;
 
@@ -120,54 +105,6 @@ FUNC(GetNumThreads) {
 	FUNC_START;
 	RETURN_VAL(Integer::New(ISOLATE ppgf_get_num_threads()));
 }
-
-#if !NODE_VERSION_AT_LEAST(3, 0, 0)
-static void free_buffer(char* data, void* _size) {
-#if !NODE_VERSION_AT_LEAST(0, 11, 0)
-	int size = (int)(size_t)_size;
-	V8::AdjustAmountOfExternalAllocatedMemory(-size);
-#endif
-	ALIGN_FREE(data);
-}
-FUNC(AlignedBuffer) {
-	FUNC_START;
-	
-	if (args.Length() < 1)
-		RETURN_ERROR("Argument required");
-	
-	size_t len;
-	/*
-	bool hasString = false;
-	node::encoding enc = node::BINARY;
-	if(args[0]->IsString()) {
-		hasString = true;
-		if(args.Length() >= 2)
-			enc = node::ParseEncoding(ISOLATE args[1]->ToString());
-		len = node::StringBytes::Size(ISOLATE args[0]->ToString(), enc);
-	} else
-	*/
-		len = (size_t)ARG_TO_INT(args[0]);
-	
-	char* buf = NULL;
-	ALIGN_ALLOC(buf, len);
-	
-	if(!buf)
-		RETURN_ERROR("Out Of Memory");
-	
-	/*
-	if(hasString)
-		node::StringBytes::Write(ISOLATE buf, len, args[1]->ToString(), end);
-	*/
-	
-#if NODE_VERSION_AT_LEAST(0, 11, 0)
-	RETURN_VAL( BUFFER_NEW((char*)buf, len, free_buffer, (void*)len) );
-#else
-	RETURN_VAL(Local<Object>::New(
-		node::Buffer::New((char*)buf, len, free_buffer, (void*)len)->handle_
-	));
-#endif
-}
-#endif
 
 FUNC(PrepInput) {
 	FUNC_START;
@@ -744,12 +681,6 @@ void parpar_gf_init(
 	// int alignment_offset(Buffer buffer)
 	NODE_SET_METHOD(target, "alignment_offset", AlignmentOffset);
 	
-	// for some reason, creating our own Buffers is unreliable on node >=3, so fall back to emulation
-	// TODO: see reason why
-#if !NODE_VERSION_AT_LEAST(3, 0, 0)
-	// Buffer AlignedBuffer(int size)
-	NODE_SET_METHOD(target, "AlignedBuffer", AlignedBuffer);
-#endif
 	NODE_SET_METHOD(target, "copy", PrepInput);
 	NODE_SET_METHOD(target, "finish", Finish);
 	
