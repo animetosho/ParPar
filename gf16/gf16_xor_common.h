@@ -78,6 +78,5 @@ static inline void gf16_xor_jit_stub(intptr_t src, intptr_t dEnd, intptr_t dest,
 
 struct gf16_xor_scratch {
 	uint16_t poly[16];
-	void* jitCode;
-	void* jitWrite;
+	uint_fast8_t codeStart;
 };

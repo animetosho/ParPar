@@ -371,17 +371,8 @@ Galois16Mul::Galois16Mul(Galois16Methods method) {
 }
 
 Galois16Mul::~Galois16Mul() {
-	if(scratch) {
-		switch(_method) {
-			case GF16_XOR_JIT_SSE2:
-			case GF16_XOR_JIT_AVX2:
-			case GF16_XOR_JIT_AVX512:
-				gf16_xor_uninit(scratch);
-			break;
-			default:
-				ALIGN_FREE(scratch);
-		}
-	}
+	if(scratch)
+		ALIGN_FREE(scratch);
 }
 
 #if __cplusplus >= 201100
@@ -401,6 +392,30 @@ void Galois16Mul::move(Galois16Mul& other) {
 }
 #endif
 
+
+void* Galois16Mul::mutScratch_alloc() const {
+	switch(_method) {
+		case GF16_XOR_JIT_SSE2:
+			return gf16_xor_jit_init_mut_sse2();
+		case GF16_XOR_JIT_AVX2:
+			return gf16_xor_jit_init_mut_avx2();
+		case GF16_XOR_JIT_AVX512:
+			return gf16_xor_jit_init_mut_avx512();
+		break;
+		default:
+			return NULL;
+	}
+}
+void Galois16Mul::mutScratch_free(void* mutScratch) const {
+	switch(_method) {
+		case GF16_XOR_JIT_SSE2:
+		case GF16_XOR_JIT_AVX2:
+		case GF16_XOR_JIT_AVX512:
+			gf16_xor_jit_uninit(mutScratch);
+		break;
+		default: break;
+	}
+}
 
 Galois16Methods Galois16Mul::default_method(size_t regionSizeHint, unsigned /*outputs*/, unsigned /*threadCountHint*/) {
 	const CpuCap caps(true);
@@ -491,6 +506,6 @@ std::vector<Galois16Methods> Galois16Mul::availableMethods(bool checkCpuid) {
 	return ret;
 }
 
-unsigned Galois16Mul::_mul_add_multi_none(const void *HEDLEY_RESTRICT, unsigned, size_t, void *HEDLEY_RESTRICT, const void* *HEDLEY_RESTRICT, size_t, const uint16_t *HEDLEY_RESTRICT) {
+unsigned Galois16Mul::_mul_add_multi_none(const void *HEDLEY_RESTRICT, unsigned, size_t, void *HEDLEY_RESTRICT, const void* *HEDLEY_RESTRICT, size_t, const uint16_t *HEDLEY_RESTRICT, void *HEDLEY_RESTRICT) {
 	return 0;
 }

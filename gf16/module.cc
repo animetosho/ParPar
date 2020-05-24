@@ -37,6 +37,7 @@ static inline uint16_t calc_factor(uint_fast16_t inputBlock, uint_fast16_t recov
 }
 
 static Galois16Mul* gf = NULL;
+static std::vector<void*> gfScratch;
 static int CHUNK_SIZE = 0;
 
 static int maxNumThreads = 1, defaultNumThreads = 1;
@@ -51,9 +52,18 @@ void ppgf_omp_check_num_threads() {
 }
 
 static void setup_gf(Galois16Methods method = GF16_AUTO, size_t size_hint = 0) {
+	if(!gfScratch.empty()) {
+		for(unsigned i=0; i<gfScratch.size(); i++)
+			if(gfScratch[i])
+				gf->mutScratch_free(gfScratch[i]);
+		gfScratch.clear();
+	}
 	delete gf;
 	gf = new Galois16Mul(method);
 	
+	gfScratch.reserve(maxNumThreads);
+	for(int i=0; i<maxNumThreads; i++)
+		gfScratch.push_back(gf->mutScratch_alloc());
 	
 	// select a good chunk size
 	// TODO: this needs to be variable depending on the CPU cache size
@@ -162,16 +172,17 @@ void ppgf_multiply_mat(uint16_t** inputs, uint_fast16_t* iNums, unsigned int num
 		unsigned int out = loop % numOutputs;
 		int procSize = MIN(len-offset, chunkSize);
 #ifdef _OPENMP
-		uint16_t* vals = (uint16_t*)((uint8_t*)factors + factStride * omp_get_thread_num());
+		int threadNum = omp_get_thread_num();
 #else
-		uint16_t* vals = factors;
+		const int threadNum = 0;
 #endif
+		uint16_t* vals = (uint16_t*)((uint8_t*)factors + factStride * threadNum);
 		unsigned int i;
 		for(i=0; i<numInputs; i++)
 			vals[i] = calc_factor(iNums[i], oNums[out]);
 
 		if(!add) memset(((uint8_t*)outputs[out])+offset, 0, procSize);
-		gf->mul_add_multi(numInputs, offset, outputs[out], (const void**)inputs, procSize, vals);
+		gf->mul_add_multi(numInputs, offset, outputs[out], (const void**)inputs, procSize, vals, gfScratch[threadNum]);
 	}
 	
 	ALIGN_FREE(factors);
@@ -214,6 +225,11 @@ void ppgf_set_num_threads(int threads) {
 #ifdef _OPENMP
 	maxNumThreads = threads;
 	if(maxNumThreads < 1) maxNumThreads = defaultNumThreads;
+	if(gf && (unsigned)maxNumThreads > gfScratch.size()) {
+		gfScratch.reserve(maxNumThreads);
+		for(unsigned i=gfScratch.size(); i<(unsigned)maxNumThreads; i++)
+			gfScratch.push_back(gf->mutScratch_alloc());
+	}
 #endif
 }
 void ppgf_init_gf_module() {

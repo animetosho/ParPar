@@ -313,13 +313,13 @@ static inline uint_fast16_t xor_jit_bitpair3_nc_noxor(uint8_t* dest, uint_fast16
 
 
 
-static inline uint8_t* xor_write_jit_sse(struct gf16_xor_scratch *HEDLEY_RESTRICT scratch, uint16_t val, int xor) {
+static inline void xor_write_jit_sse(const struct gf16_xor_scratch *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT mutScratch, uint16_t val, int xor) {
 	uint_fast32_t i, bit;
 	__m128i depmask1, depmask2, polymask1, polymask2, addvals1, addvals2;
 	ALIGN_TO(16, uint32_t lumask[8]);
 
 
-	uint8_t* jitptr, *jitcode;
+	uint8_t* jitptr;
 #ifdef CPU_SLOW_SMC
 	ALIGN_TO(32, uint8_t jitTemp[XORDEP_JIT_SIZE]);
 	uint8_t* jitdst;
@@ -434,7 +434,7 @@ static inline uint8_t* xor_write_jit_sse(struct gf16_xor_scratch *HEDLEY_RESTRIC
 #endif
 	
 	
-	jitptr = scratch->jitWrite;
+	jitptr = (uint8_t*)mutScratch + scratch->codeStart;
 #ifdef CPU_SLOW_SMC
 	jitdst = jitptr;
 #if 0 // defined(__tune_corei7_avx__) || defined(__tune_core_avx2__)
@@ -456,7 +456,6 @@ static inline uint8_t* xor_write_jit_sse(struct gf16_xor_scratch *HEDLEY_RESTRIC
 	else
 		jitptr = jitTemp;
 #endif
-	jitcode = scratch->jitCode;
 	
 	//_jit_movaps_load(jit, reg, xreg, offs)
 	// (we just save a conditional by hardcoding this)
@@ -763,9 +762,9 @@ static inline uint8_t* xor_write_jit_sse(struct gf16_xor_scratch *HEDLEY_RESTRIC
 	jitptr += 4;
 #endif
 #ifdef CPU_SLOW_SMC
-	*(int32_t*)jitptr = (jitTemp - (jitdst - jitcode)) - jitptr -4;
+	*(int32_t*)jitptr = (jitTemp - (jitdst - (uint8_t*)mutScratch)) - jitptr -4;
 #else
-	*(int32_t*)jitptr = jitcode - jitptr -4;
+	*(int32_t*)jitptr = (uint8_t*)mutScratch - jitptr -4;
 #endif
 	jitptr[4] = 0xC3; /* ret */
 	
@@ -793,18 +792,17 @@ static inline uint8_t* xor_write_jit_sse(struct gf16_xor_scratch *HEDLEY_RESTRIC
 	}
 #endif
 #endif
-
-	return jitcode;
 }
 #endif /* defined(__SSE2__) */
 
-void gf16_xor_jit_mul_sse2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient) {
+void gf16_xor_jit_mul_sse2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch) {
 #ifdef __SSE2__
-	struct gf16_xor_scratch *HEDLEY_RESTRICT info = (struct gf16_xor_scratch *HEDLEY_RESTRICT)scratch;
+	const struct gf16_xor_scratch *HEDLEY_RESTRICT info = (const struct gf16_xor_scratch *HEDLEY_RESTRICT)scratch;
 #ifdef CPU_SLOW_SMC_CLR
 	memset(info->jitCode, 0, 1536);
 #endif
 	
+	xor_write_jit_sse(info, mutScratch, coefficient, 0);
 	// exec
 	/* adding 128 to the destination pointer allows the register offset to be coded in 1 byte
 	 * eg: 'movdqa xmm0, [rdx+0x90]' is 8 bytes, whilst 'movdqa xmm0, [rdx-0x60]' is 5 bytes */
@@ -812,32 +810,34 @@ void gf16_xor_jit_mul_sse2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RES
 		(intptr_t)src - 128,
 		(intptr_t)dst + len + 128,
 		(intptr_t)dst - 128,
-		xor_write_jit_sse(info, coefficient, 0)
+		mutScratch
 	);
 #else
 	UNUSED(scratch); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficient);
 #endif
 }
 
-void gf16_xor_jit_muladd_sse2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient) {
+void gf16_xor_jit_muladd_sse2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch) {
 #ifdef __SSE2__
-	struct gf16_xor_scratch *HEDLEY_RESTRICT info = (struct gf16_xor_scratch *HEDLEY_RESTRICT)scratch;
+	const struct gf16_xor_scratch *HEDLEY_RESTRICT info = (const struct gf16_xor_scratch *HEDLEY_RESTRICT)scratch;
 #ifdef CPU_SLOW_SMC_CLR
 	memset(info->jitCode, 0, 1536);
 #endif
 
+	xor_write_jit_sse(info, mutScratch, coefficient, 1);
 	gf16_xor_jit_stub(
 		(intptr_t)src - 128,
 		(intptr_t)dst + len + 128,
 		(intptr_t)dst - 128,
-		xor_write_jit_sse(info, coefficient, 1)
+		mutScratch
 	);
 #else
 	UNUSED(scratch); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficient);
 #endif
 }
 
-void gf16_xor_mul_sse2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t val) {
+void gf16_xor_mul_sse2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t val, void *HEDLEY_RESTRICT mutScratch) {
+	UNUSED(mutScratch);
 #ifdef __SSE2__
 	uint_fast32_t counts[16];
 	uintptr_t deptable[16][16];
@@ -939,7 +939,8 @@ void gf16_xor_mul_sse2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRIC
 }
 
 
-void gf16_xor_muladd_sse2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t val) {
+void gf16_xor_muladd_sse2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t val, void *HEDLEY_RESTRICT mutScratch) {
+	UNUSED(mutScratch);
 #ifdef __SSE2__
 	uint_fast32_t counts[16];
 	uintptr_t deptable[16][16];
@@ -1064,19 +1065,8 @@ void gf16_xor_muladd_sse2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_REST
 
 #include "gf16_bitdep_init_sse2.h"
 
-void* gf16_xor_jit_init_sse2(int polynomial) {
-#ifdef __SSE2__
-	struct gf16_xor_scratch* ret;
-	uint8_t *jitCode = jit_alloc(XORDEP_JIT_SIZE);
-	
-	if(!jitCode) return NULL;
-	
-	ALIGN_ALLOC(ret, sizeof(struct gf16_xor_scratch), 16);
-	gf16_bitdep_init128(ret, polynomial);
-	ret->jitCode = jitCode;
-	
-	gf16_xor_create_jit_lut_sse2();
-	
+static size_t xor_write_init_jit(uint8_t *jitCode) {
+	uint8_t *jitCodeStart = jitCode;
 	jitCode += _jit_add_i(jitCode, AX, 256);
 	jitCode += _jit_add_i(jitCode, DX, 256);
 	
@@ -1091,8 +1081,20 @@ void* gf16_xor_jit_init_sse2(int polynomial) {
 		jitCode += _jit_movaps_load(jitCode, i, AX, i<<4);
 	}
 #endif
+	return jitCode-jitCodeStart;
+}
+
+void* gf16_xor_jit_init_sse2(int polynomial) {
+#ifdef __SSE2__
+	struct gf16_xor_scratch* ret;
+	uint8_t tmpCode[XORDEP_JIT_SIZE];
 	
-	ret->jitWrite = jitCode;
+	ALIGN_ALLOC(ret, sizeof(struct gf16_xor_scratch), 16);
+	gf16_bitdep_init128(ret, polynomial);
+	
+	gf16_xor_create_jit_lut_sse2();
+	
+	ret->codeStart = (uint_fast8_t)xor_write_init_jit(tmpCode);
 	return ret;
 #else
 	UNUSED(polynomial);
@@ -1100,10 +1102,15 @@ void* gf16_xor_jit_init_sse2(int polynomial) {
 #endif
 }
 
-void gf16_xor_uninit(void* _scratch) {
-	struct gf16_xor_scratch* scratch = (struct gf16_xor_scratch*)_scratch;
-	jit_free(scratch->jitCode, XORDEP_JIT_SIZE);
-	ALIGN_FREE(scratch);
+void* gf16_xor_jit_init_mut_sse2() {
+	uint8_t *jitCode = jit_alloc(XORDEP_JIT_SIZE);
+	if(!jitCode) return NULL;
+	xor_write_init_jit(jitCode);
+	return jitCode;
+}
+
+void gf16_xor_jit_uninit(void* scratch) {
+	jit_free(scratch, XORDEP_JIT_SIZE);
 }
 
 void* gf16_xor_init_sse2(int polynomial) {

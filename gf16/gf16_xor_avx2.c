@@ -168,10 +168,10 @@ static inline int xor_write_avx_main_part(void* jitptr, uint8_t dep1, uint8_t de
 	return xor256_jit_len[dep];
 }
 
-static inline uint8_t* xor_write_jit_avx(struct gf16_xor_scratch *HEDLEY_RESTRICT scratch, uint16_t val, int xor) {
+static inline void xor_write_jit_avx(const struct gf16_xor_scratch *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT mutScratch, uint16_t val, int xor) {
 	uint_fast32_t i, bit;
 	
-	uint8_t* jitptr, *jitcode;
+	uint8_t* jitptr;
 #ifdef CPU_SLOW_SMC
 	ALIGN_TO(32, uint8_t jitTemp[XORDEP_JIT_SIZE]);
 	uint8_t* jitdst;
@@ -266,7 +266,7 @@ static inline uint8_t* xor_write_jit_avx(struct gf16_xor_scratch *HEDLEY_RESTRIC
 	_mm_store_si128((__m128i*)deps2, tmp4);
 	
 	
-	jitptr = scratch->jitWrite;
+	jitptr = (uint8_t*)mutScratch + scratch->codeStart;
 #ifdef CPU_SLOW_SMC
 	jitdst = jitptr;
 	if((uintptr_t)jitdst & 0x1F) {
@@ -279,7 +279,6 @@ static inline uint8_t* xor_write_jit_avx(struct gf16_xor_scratch *HEDLEY_RESTRIC
 	else
 		jitptr = jitTemp;
 #endif
-	jitcode = scratch->jitCode;
 	
 	// TODO: optimize these
 	#undef _LD_DQA
@@ -397,9 +396,9 @@ static inline uint8_t* xor_write_jit_avx(struct gf16_xor_scratch *HEDLEY_RESTRIC
 	/* cmp/jcc */
 	*(uint64_t*)(jitptr) = 0x800FC03948 | (DX <<16) | (CX <<19) | ((uint64_t)JL <<32);
 #ifdef CPU_SLOW_SMC
-	*(int32_t*)(jitptr +5) = (jitTemp - (jitdst - jitcode)) - jitptr -9;
+	*(int32_t*)(jitptr +5) = (jitTemp - (jitdst - (uint8_t*)mutScratch)) - jitptr -9;
 #else
-	*(int32_t*)(jitptr +5) = jitcode - jitptr -9;
+	*(int32_t*)(jitptr +5) = (uint8_t*)mutScratch - jitptr -9;
 #endif
 	jitptr[9] = 0xC3; /* ret */
 	
@@ -413,23 +412,23 @@ static inline uint8_t* xor_write_jit_avx(struct gf16_xor_scratch *HEDLEY_RESTRIC
 		_mm256_store_si256((__m256i*)(jitdst + i + 32), tb);
 	}
 #endif
-	return jitcode;
 }
 
 #endif /* defined(__AVX2__) && defined(PLATFORM_AMD64) */
 
-void gf16_xor_jit_mul_avx2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient) {
+void gf16_xor_jit_mul_avx2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch) {
 #if defined(__AVX2__) && defined(PLATFORM_AMD64)
-	struct gf16_xor_scratch *HEDLEY_RESTRICT info = (struct gf16_xor_scratch *HEDLEY_RESTRICT)scratch;
+	const struct gf16_xor_scratch *HEDLEY_RESTRICT info = (const struct gf16_xor_scratch *HEDLEY_RESTRICT)scratch;
 	
 #ifdef CPU_SLOW_SMC_CLR
 	memset(info->jitCode, 0, 1536);
 #endif
+	xor_write_jit_avx(info, mutScratch, coefficient, 0);
 	gf16_xor256_jit_stub(
 		(intptr_t)src - 384,
 		(intptr_t)dst + len + 128,
 		(intptr_t)dst - 384,
-		xor_write_jit_avx(info, coefficient, 0)
+		mutScratch
 	);
 	
 	_mm256_zeroupper();
@@ -438,18 +437,19 @@ void gf16_xor_jit_mul_avx2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RES
 #endif
 }
 
-void gf16_xor_jit_muladd_avx2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient) {
+void gf16_xor_jit_muladd_avx2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch) {
 #if defined(__AVX2__) && defined(PLATFORM_AMD64)
-	struct gf16_xor_scratch *HEDLEY_RESTRICT info = (struct gf16_xor_scratch *HEDLEY_RESTRICT)scratch;
+	const struct gf16_xor_scratch *HEDLEY_RESTRICT info = (const struct gf16_xor_scratch *HEDLEY_RESTRICT)scratch;
 	
 #ifdef CPU_SLOW_SMC_CLR
 	memset(info->jitCode, 0, 1536);
 #endif
+	xor_write_jit_avx(info, mutScratch, coefficient, 1);
 	gf16_xor256_jit_stub(
 		(intptr_t)src - 384,
 		(intptr_t)dst + len + 128,
 		(intptr_t)dst - 384,
-		xor_write_jit_avx(info, coefficient, 1)
+		mutScratch
 	);
 	
 	_mm256_zeroupper();
@@ -479,21 +479,9 @@ void gf16_xor_jit_muladd_avx2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_
 #undef _FN
 #undef _MM_END
 
-#include "gf16_bitdep_init_avx2.h"
 
-void* gf16_xor_jit_init_avx2(int polynomial) {
-#if defined(__AVX2__) && defined(PLATFORM_AMD64)
-	struct gf16_xor_scratch* ret;
-	uint8_t *jitCode = jit_alloc(XORDEP_JIT_SIZE);
-	
-	if(!jitCode) return NULL;
-	
-	ALIGN_ALLOC(ret, sizeof(struct gf16_xor_scratch), 32);
-	gf16_bitdep_init256(ret, polynomial);
-	ret->jitCode = jitCode;
-	
-	gf16_xor_create_jit_lut_avx2();
-	
+static size_t xor_write_init_jit(uint8_t *jitCode) {
+	uint8_t *jitCodeStart = jitCode;
 	jitCode += _jit_add_i(jitCode, AX, 512);
 	jitCode += _jit_add_i(jitCode, DX, 512);
 	
@@ -501,11 +489,34 @@ void* gf16_xor_jit_init_avx2(int polynomial) {
 	for(int i=3; i<16; i++) {
 		jitCode += _jit_vmovdqa_load(jitCode, i, AX, (i-4)<<5);
 	}
-	ret->jitWrite = jitCode;
+	return jitCode-jitCodeStart;
+}
+
+#include "gf16_bitdep_init_avx2.h"
+
+void* gf16_xor_jit_init_avx2(int polynomial) {
+#if defined(__AVX2__) && defined(PLATFORM_AMD64)
+	struct gf16_xor_scratch* ret;
+	uint8_t tmpCode[XORDEP_JIT_SIZE];
+	
+	ALIGN_ALLOC(ret, sizeof(struct gf16_xor_scratch), 32);
+	gf16_bitdep_init256(ret, polynomial);
+	
+	gf16_xor_create_jit_lut_avx2();
+	
+	ret->codeStart = (uint_fast8_t)xor_write_init_jit(tmpCode);
 	return ret;
 #else
 	UNUSED(polynomial);
 	return NULL;
 #endif
 }
+
+void* gf16_xor_jit_init_mut_avx2() {
+	uint8_t *jitCode = jit_alloc(XORDEP_JIT_SIZE);
+	if(!jitCode) return NULL;
+	xor_write_init_jit(jitCode);
+	return jitCode;
+}
+
 
