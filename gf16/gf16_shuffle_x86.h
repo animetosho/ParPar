@@ -47,7 +47,7 @@ void _FN(gf16_shuffle_prepare)(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RES
 					w -= sizeof(_mword)-8;
 				dstWord += w;
 			}
-			if(word*2 + 1 < srcLen)
+			if(word*2 + 1 < remaining)
 				_dst[dstWord] = _src[word*2 + 1];
 			_dst[dstWord+sizeof(_mword)] = _src[word*2];
 		}
