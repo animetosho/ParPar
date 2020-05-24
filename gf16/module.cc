@@ -182,10 +182,7 @@ void ppgf_prep_input(size_t destLen, size_t inputLen, char* dest, char* src) {
 	ppgf_maybe_setup_gf();
 	if(inputLen < destLen) {
 		// need to zero out empty space at end (for final block)
-		size_t inputLenZero = inputLen;
-		if(gf->needPrepare())
-			inputLenZero &= ~(gf->stride-1); // do whole of last stride as well, for safety
-		memset(dest + inputLenZero, 0, destLen - inputLenZero);
+		memset(dest + inputLen, 0, destLen - inputLen);
 	}
 	gf->prepare(dest, src, inputLen);
 }

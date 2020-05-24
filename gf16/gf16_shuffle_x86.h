@@ -38,6 +38,9 @@ void _FN(gf16_shuffle_prepare)(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RES
 	size_t remaining = srcLen & (sizeof(_mword)*2 - 1);
 	if(remaining) {
 		// handle misaligned part
+		_MMI(store)((_mword*)_dst, _MMI(setzero)());
+		_MMI(store)((_mword*)_dst + 1, _MMI(setzero)());
+		
 		for(unsigned word = 0; word < (remaining+1)>>1; word++) {
 			unsigned dstWord = word;
 			// handle lane shenanigans
