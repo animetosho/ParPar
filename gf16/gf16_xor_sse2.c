@@ -269,9 +269,9 @@ static inline void STOREU_XMM(void* dest, __m128i xmm) {
 	#define CMOV(c, d, s) if(c) (d) = (s)
 #endif
 
-static inline uint_fast16_t xor_jit_bitpair3(uint8_t* dest, uint_fast32_t mask, __m128i* tCode, uint16_t* tInfo, uint_fast16_t* posC, uint_fast8_t* movC, uint_fast8_t isR64) {
+static inline uint_fast16_t xor_jit_bitpair3(uint8_t* dest, uint_fast32_t mask, __m128i* tCode, uint16_t* tInfo, intptr_t* posC, uint_fast8_t* movC, uint_fast8_t isR64) {
 	uint_fast16_t info = tInfo[mask>>1];
-	uintptr_t pC = info >> 12;
+	intptr_t pC = info >> 12;
 	
 	// copy code segment
 	STOREU_XMM(dest, _mm_load_si128((__m128i*)((uint64_t*)tCode + mask)));
@@ -284,7 +284,7 @@ static inline uint_fast16_t xor_jit_bitpair3(uint8_t* dest, uint_fast32_t mask, 
 	return info;
 }
 
-static inline uint_fast16_t xor_jit_bitpair3_noxor(uint8_t* dest, uint_fast16_t info, uint_fast16_t* pos1, uint_fast8_t* mov1, uint_fast16_t* pos2, uint_fast8_t* mov2, int isR64) {
+static inline uint_fast16_t xor_jit_bitpair3_noxor(uint8_t* dest, uint_fast16_t info, intptr_t* pos1, uint_fast8_t* mov1, intptr_t* pos2, uint_fast8_t* mov2, int isR64) {
 	UNUSED(dest);
 	uintptr_t p1 = (info >> 4) & 0xF;
 	uintptr_t p2 = (info >> 8) & 0xF;
@@ -297,7 +297,7 @@ static inline uint_fast16_t xor_jit_bitpair3_noxor(uint8_t* dest, uint_fast16_t 
 	return info & 0xF;
 }
 
-static inline uint_fast16_t xor_jit_bitpair3_nc_noxor(uint8_t* dest, uint_fast16_t info, uint_fast16_t* pos1, uint_fast8_t* mov1, uint_fast16_t* pos2, uint_fast8_t* mov2, int isR64) {
+static inline uint_fast16_t xor_jit_bitpair3_nc_noxor(uint8_t* dest, uint_fast16_t info, intptr_t* pos1, uint_fast8_t* mov1, intptr_t* pos2, uint_fast8_t* mov2, int isR64) {
 	UNUSED(dest);
 	uintptr_t p1 = (info >> 8) & 0xF;
 	uintptr_t p2 = info >> 12;
@@ -596,7 +596,7 @@ static inline void xor_write_jit_sse(const struct gf16_xor_scratch *HEDLEY_RESTR
 			int destOffs = (bit<<5)-128;
 			int destOffs2 = destOffs+16;
 			uint_fast8_t movC = 0xFF;
-			uint_fast16_t posC = 0;
+			intptr_t posC = 0;
 			uint_fast32_t mask = lumask[bit];
 			_LD_APS(0, DX, destOffs);
 			_LD_DQA(1, DX, destOffs2);
@@ -670,7 +670,7 @@ static inline void xor_write_jit_sse(const struct gf16_xor_scratch *HEDLEY_RESTR
 			int destOffs2 = destOffs+16;
 			uint_fast8_t mov1 = 0xFF, mov2 = 0xFF,
 			             movC = 0xFF;
-			uint_fast16_t pos1 = 0, pos2 = 0, posC = 0;
+			intptr_t pos1 = 0, pos2 = 0, posC = 0;
 			uint_fast32_t mask = lumask[bit];
 			
 			if(no_common_mask & 1) {
