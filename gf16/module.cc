@@ -162,7 +162,7 @@ void ppgf_multiply_mat(uint16_t** inputs, uint_fast16_t* iNums, unsigned int num
 		unsigned int out = loop % numOutputs;
 		int procSize = MIN(len-offset, chunkSize);
 #ifdef _OPENMP
-		uint16_t* vals = (factors + factStride * omp_get_thread_num());
+		uint16_t* vals = (uint16_t*)((uint8_t*)factors + factStride * omp_get_thread_num());
 #else
 		uint16_t* vals = factors;
 #endif
