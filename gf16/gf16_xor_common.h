@@ -1,4 +1,5 @@
 #include "gf16_global.h"
+#include "platform.h"
 #ifdef PLATFORM_X86
 
 #include "x86_jit.h"

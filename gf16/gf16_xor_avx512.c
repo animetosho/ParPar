@@ -394,7 +394,7 @@ void gf16_xor_jit_muladd_avx512(const void *HEDLEY_RESTRICT scratch, void *HEDLE
 #define _FN(f) f ## _avx512
 #define _MM_END _mm256_zeroupper();
 
-#if defined(__AVX512BW__) && defined(__AVX512VL__)
+#if defined(__AVX512BW__) && defined(__AVX512VL__) && defined(PLATFORM_AMD64)
 # define _AVAILABLE
 #endif
 #include "gf16_xor_common_funcs.h"

@@ -466,7 +466,7 @@ void gf16_xor_jit_muladd_avx2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_
 #define _FN(f) f ## _avx2
 #define _MM_END _mm256_zeroupper();
 
-#if defined(__AVX2__)
+#if defined(__AVX2__) && defined(PLATFORM_AMD64)
 # define _AVAILABLE
 #endif
 #include "gf16_xor_common_funcs.h"

@@ -20,6 +20,7 @@
         ]
       }]
     ],
+    "cflags": ["-std=gnu99"],
     "msvs_settings": {"VCCLCompilerTool": {"Optimization": "MaxSpeed"}},
     "configurations": {"Release": {
       "cflags": ["-fomit-frame-pointer"],
