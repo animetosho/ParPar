@@ -409,6 +409,7 @@ void gf16_xor_jit_muladd_avx512(const void *HEDLEY_RESTRICT scratch, void *HEDLE
 
 
 static size_t xor_write_init_jit(uint8_t *jitCode) {
+#ifdef PLATFORM_AMD64
 	uint8_t *jitCodeStart = jitCode;
 	jitCode += _jit_add_i(jitCode, AX, 1024);
 	jitCode += _jit_add_i(jitCode, DX, 1024);
@@ -418,6 +419,9 @@ static size_t xor_write_init_jit(uint8_t *jitCode) {
 		jitCode += _jit_vmovdqa32_load(jitCode, 16+i, AX, (i-2)<<6);
 	}
 	return jitCode-jitCodeStart;
+#else
+	return 0;
+#endif
 }
 
 
@@ -440,8 +444,12 @@ void* gf16_xor_jit_init_avx512(int polynomial) {
 }
 
 void* gf16_xor_jit_init_mut_avx512() {
+#ifdef PLATFORM_AMD64
 	uint8_t *jitCode = jit_alloc(XORDEP_JIT_SIZE);
 	if(!jitCode) return NULL;
 	xor_write_init_jit(jitCode);
 	return jitCode;
+#else
+	return NULL;
+#endif
 }

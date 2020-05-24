@@ -1,3 +1,5 @@
+#include "gf16_global.h"
+#ifdef PLATFORM_X86
 
 #include "x86_jit.h"
 
@@ -80,3 +82,5 @@ struct gf16_xor_scratch {
 	uint16_t poly[16];
 	uint_fast8_t codeStart;
 };
+
+#endif /* PLATFORM_X86 */

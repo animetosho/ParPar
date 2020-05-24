@@ -34,14 +34,14 @@ int gf16_shuffle_available_neon = 0;
 
 // for compilers that lack these functions
 #if defined(__clang__) || (defined(__GNUC__) && (defined(__aarch64__) && __GNUC__ >= 8))
-# define vld1q_u8_x2_align(p, n) vld1q_u8_x2((uint8_t*)__builtin_assume_aligned(p, n))
-# define vst1q_u8_x2_align(p, data) vst1q_u8_x2((uint8_t*)__builtin_assume_aligned(p, 16), data)
+# define vld1q_u8_x2_align(p) vld1q_u8_x2((uint8_t*)__builtin_assume_aligned(p, 32))
+# define vst1q_u8_x2_align(p, data) vst1q_u8_x2((uint8_t*)__builtin_assume_aligned(p, 32), data)
 #else
-HEDLEY_ALWAYS_INLINE uint8x16x2_t vld1q_u8_x2_align(const uint8_t* p, int n) {
-	return (uint8x16x2_t){vld1q_u8_align(p, n), vld1q_u8_align(p+16, n-16)};
+HEDLEY_ALWAYS_INLINE uint8x16x2_t vld1q_u8_x2_align(const uint8_t* p) {
+	return (uint8x16x2_t){vld1q_u8_align(p, 32), vld1q_u8_align(p+16, 16)};
 }
 HEDLEY_ALWAYS_INLINE void vst1q_u8_x2_align(uint8_t* p, uint8x16x2_t data) {
-	vst1q_u8(__builtin_assume_aligned(p, 16), data.val[0]);
+	vst1q_u8(__builtin_assume_aligned(p, 32), data.val[0]);
 	vst1q_u8(__builtin_assume_aligned(p+16, 16), data.val[1]);
 }
 #endif
@@ -80,7 +80,7 @@ void gf16_shuffle_mul_neon(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RES
 	rh = vreinterpretq_u8_u16(factor8);
 	*/
 	
-	uint8x16x2_t polyIn = vld1q_u8_x2_align(scratch, 32);
+	uint8x16x2_t polyIn = vld1q_u8_x2_align(scratch);
 #ifdef __aarch64__
 	uint8x16_t tbl_h[4], tbl_l[4];
 	tbl_l[0] = vuzp1q_u8(rl, rh);
@@ -169,7 +169,7 @@ void gf16_shuffle_muladd_neon(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_
 		vreinterpretq_u8_u16(vdupq_n_u16(GF16_MULTBY_TWO(val4)))
 	);
 	
-	uint8x16x2_t polyIn = vld1q_u8_x2_align(scratch, 32);
+	uint8x16x2_t polyIn = vld1q_u8_x2_align(scratch);
 #ifdef __aarch64__
 	uint8x16_t tbl_h[4], tbl_l[4];
 	tbl_l[0] = vuzp1q_u8(rl, rh);
@@ -248,7 +248,7 @@ void* gf16_shuffle_init_arm(int polynomial) {
 #if defined(__ARM_NEON)
 	uint8x16x2_t poly;
 	uint8_t* ret;
-	ALIGN_ALLOC(ret, sizeof(uint8x16x2_t), 16);
+	ALIGN_ALLOC(ret, sizeof(uint8x16x2_t), 32);
 	for(int i=0; i<16; i++) {
 		int p = 0;
 		if(i & 8) p ^= polynomial << 3;

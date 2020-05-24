@@ -1066,22 +1066,26 @@ void gf16_xor_muladd_sse2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_REST
 #include "gf16_bitdep_init_sse2.h"
 
 static size_t xor_write_init_jit(uint8_t *jitCode) {
+#ifdef PLATFORM_X86
 	uint8_t *jitCodeStart = jitCode;
 	jitCode += _jit_add_i(jitCode, AX, 256);
 	jitCode += _jit_add_i(jitCode, DX, 256);
 	
-#ifdef PLATFORM_AMD64
+# ifdef PLATFORM_AMD64
 	/* preload upper 13 inputs into registers */
 	for(int i=3; i<16; i++) {
 		jitCode += _jit_movaps_load(jitCode, i, AX, (i-8)<<4);
 	}
-#else
+# else
 	/* can only fit 5 in 32-bit mode :( */
 	for(int i=3; i<8; i++) { /* despite appearances, we're actually loading the top 5, not mid 5 */
 		jitCode += _jit_movaps_load(jitCode, i, AX, i<<4);
 	}
-#endif
+# endif
 	return jitCode-jitCodeStart;
+#else
+	return 0;
+#endif
 }
 
 void* gf16_xor_jit_init_sse2(int polynomial) {
@@ -1103,14 +1107,20 @@ void* gf16_xor_jit_init_sse2(int polynomial) {
 }
 
 void* gf16_xor_jit_init_mut_sse2() {
+#ifdef PLATFORM_X86
 	uint8_t *jitCode = jit_alloc(XORDEP_JIT_SIZE);
 	if(!jitCode) return NULL;
 	xor_write_init_jit(jitCode);
 	return jitCode;
+#else
+	return NULL;
+#endif
 }
 
 void gf16_xor_jit_uninit(void* scratch) {
+#ifdef PLATFORM_X86
 	jit_free(scratch, XORDEP_JIT_SIZE);
+#endif
 }
 
 void* gf16_xor_init_sse2(int polynomial) {
