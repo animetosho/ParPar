@@ -426,7 +426,7 @@ void gf16_xor_jit_mul_avx2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RES
 	xor_write_jit_avx(info, mutScratch, coefficient, 0);
 	gf16_xor256_jit_stub(
 		(intptr_t)src - 384,
-		(intptr_t)dst + len + 128,
+		(intptr_t)dst + len - 384,
 		(intptr_t)dst - 384,
 		mutScratch
 	);
@@ -447,7 +447,7 @@ void gf16_xor_jit_muladd_avx2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_
 	xor_write_jit_avx(info, mutScratch, coefficient, 1);
 	gf16_xor256_jit_stub(
 		(intptr_t)src - 384,
-		(intptr_t)dst + len + 128,
+		(intptr_t)dst + len - 384,
 		(intptr_t)dst - 384,
 		mutScratch
 	);

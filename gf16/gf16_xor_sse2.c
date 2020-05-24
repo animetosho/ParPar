@@ -808,7 +808,7 @@ void gf16_xor_jit_mul_sse2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RES
 	 * eg: 'movdqa xmm0, [rdx+0x90]' is 8 bytes, whilst 'movdqa xmm0, [rdx-0x60]' is 5 bytes */
 	gf16_xor_jit_stub(
 		(intptr_t)src - 128,
-		(intptr_t)dst + len + 128,
+		(intptr_t)dst + len - 128,
 		(intptr_t)dst - 128,
 		mutScratch
 	);
@@ -827,7 +827,7 @@ void gf16_xor_jit_muladd_sse2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_
 	xor_write_jit_sse(info, mutScratch, coefficient, 1);
 	gf16_xor_jit_stub(
 		(intptr_t)src - 128,
-		(intptr_t)dst + len + 128,
+		(intptr_t)dst + len - 128,
 		(intptr_t)dst - 128,
 		mutScratch
 	);
