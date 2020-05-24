@@ -170,7 +170,7 @@ void ppgf_multiply_mat(uint16_t** inputs, uint_fast16_t* iNums, unsigned int num
 		for(i=0; i<numInputs; i++)
 			vals[i] = calc_factor(iNums[i], oNums[out]);
 
-		if(!add) memset(outputs[out], 0, procSize);
+		if(!add) memset(((uint8_t*)outputs[out])+offset, 0, procSize);
 		gf->mul_add_multi(numInputs, offset, outputs[out], (const void**)inputs, procSize, vals);
 	}
 	
@@ -180,12 +180,12 @@ void ppgf_multiply_mat(uint16_t** inputs, uint_fast16_t* iNums, unsigned int num
 
 void ppgf_prep_input(size_t destLen, size_t inputLen, char* dest, char* src) {
 	ppgf_maybe_setup_gf();
-	if(gf->needPrepare() && inputLen < destLen) {
-		// zero out misaligned region for safety
-		size_t inputLenAligned = inputLen & ~(gf->stride-1);
-		size_t clearSize = destLen - inputLenAligned;
-		if(clearSize > gf->stride) clearSize = gf->stride;
-		memset(dest + inputLenAligned, 0, clearSize);
+	if(inputLen < destLen) {
+		// need to zero out empty space at end (for final block)
+		size_t inputLenZero = inputLen;
+		if(gf->needPrepare())
+			inputLenZero &= ~(gf->stride-1); // do whole of last stride as well, for safety
+		memset(dest + inputLenZero, 0, destLen - inputLenZero);
 	}
 	gf->prepare(dest, src, inputLen);
 }

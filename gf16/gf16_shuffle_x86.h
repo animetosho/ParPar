@@ -38,7 +38,7 @@ void _FN(gf16_shuffle_prepare)(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RES
 	size_t remaining = srcLen & (sizeof(_mword)*2 - 1);
 	if(remaining) {
 		// handle misaligned part
-		for(unsigned word = 0; word < remaining>>1; word++) {
+		for(unsigned word = 0; word < (remaining+1)>>1; word++) {
 			unsigned dstWord = word;
 			// handle lane shenanigans
 			if(sizeof(_mword) >= 32) {
@@ -47,7 +47,8 @@ void _FN(gf16_shuffle_prepare)(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RES
 					w -= sizeof(_mword)-8;
 				dstWord += w;
 			}
-			_dst[dstWord] = _src[word*2 + 1];
+			if(word*2 + 1 < srcLen)
+				_dst[dstWord] = _src[word*2 + 1];
 			_dst[dstWord+sizeof(_mword)] = _src[word*2];
 		}
 	}
