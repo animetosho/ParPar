@@ -314,8 +314,7 @@ static inline uint_fast16_t xor_jit_bitpair3_nc_noxor(uint8_t* dest, uint_fast16
 
 
 static inline void xor_write_jit_sse(const struct gf16_xor_scratch *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT mutScratch, uint16_t val, int xor) {
-	uint_fast32_t i, bit;
-	__m128i depmask1, depmask2, polymask1, polymask2, addvals1, addvals2;
+	uint_fast32_t bit;
 	ALIGN_TO(16, uint32_t lumask[8]);
 
 
@@ -330,69 +329,28 @@ static inline void xor_write_jit_sse(const struct gf16_xor_scratch *HEDLEY_RESTR
 	int no_common_mask;
 #endif
 	
-	/* calculate dependent bits */
-	addvals1 = _mm_set_epi16(0x80, 0x40, 0x20, 0x10, 0x08, 0x04, 0x02, 0x01);
-	addvals2 = _mm_set_epi16(0x8000, 0x4000, 0x2000, 0x1000, 0x0800, 0x0400, 0x0200, 0x0100);
-	
-	polymask1 = _mm_load_si128((__m128i*)scratch->poly);
-	polymask2 = _mm_load_si128((__m128i*)scratch->poly + 1);
-	
-	__m128i valtest = _mm_set1_epi16(val);
-	__m128i addmask = _mm_srai_epi16(valtest, 15); /* _mm_cmpgt_epi16(_mm_setzero_si128(), valtest)  is an alternative, but GCC/Clang prefer the former, so trust the compiler */
-	depmask1 = _mm_and_si128(addvals1, addmask);
-	depmask2 = _mm_and_si128(addvals2, addmask);
-	for(i=0; i<15; i++) {
-		/* rotate */
-		__m128i last = _mm_shuffle_epi32(_mm_shufflelo_epi16(depmask1, 0), 0);
-		depmask1 = _mm_or_si128(
-			_mm_srli_si128(depmask1, 2),
-			_mm_slli_si128(depmask2, 14)
-		);
-		depmask2 = _mm_srli_si128(depmask2, 2);
-		
-		/* XOR poly */
-		depmask1 = _mm_xor_si128(depmask1, _mm_and_si128(polymask1, last));
-		depmask2 = _mm_xor_si128(depmask2, _mm_and_si128(polymask2, last));
-		
-		valtest = _mm_add_epi16(valtest, valtest);
-		addmask = _mm_srai_epi16(valtest, 15);
-		depmask1 = _mm_xor_si128(depmask1, _mm_and_si128(addvals1, addmask));
-		depmask2 = _mm_xor_si128(depmask2, _mm_and_si128(addvals2, addmask));
-	}
+	__m128i depmask1 = _mm_load_si128((__m128i*)(scratch->deps + ((val & 0xf) << 7)));
+	__m128i depmask2 = _mm_load_si128((__m128i*)(scratch->deps + ((val & 0xf) << 7)) +1);
+	depmask1 = _mm_xor_si128(depmask1, _mm_load_si128((__m128i*)(scratch->deps + ((val << 3) & 0x780)) + 1*2));
+	depmask2 = _mm_xor_si128(depmask2, _mm_load_si128((__m128i*)(scratch->deps + ((val << 3) & 0x780)) + 1*2 +1));
+	depmask1 = _mm_xor_si128(depmask1, _mm_load_si128((__m128i*)(scratch->deps + ((val >> 1) & 0x780)) + 2*2));
+	depmask2 = _mm_xor_si128(depmask2, _mm_load_si128((__m128i*)(scratch->deps + ((val >> 1) & 0x780)) + 2*2 +1));
+	depmask1 = _mm_xor_si128(depmask1, _mm_load_si128((__m128i*)(scratch->deps + ((val >> 5) & 0x780)) + 3*2));
+	depmask2 = _mm_xor_si128(depmask2, _mm_load_si128((__m128i*)(scratch->deps + ((val >> 5) & 0x780)) + 3*2 +1));
 	
 	
 #ifndef XORDEP_DISABLE_NO_COMMON
 	__m128i common_mask
 #endif
-	__m128i tmp1, tmp2, tmp3, tmp4, tmp3l, tmp3h, tmp4l, tmp4h;
+	__m128i tmp1, tmp2, tmp3l, tmp3h, tmp4l, tmp4h;
 	__m128i lmask = _mm_set1_epi8(0xF);
-	
-	/* emulate PACKUSDW (SSE4.1 only) with SSE2 shuffles */
-	/* 01234567 -> 02461357 */
-	tmp1 = _mm_shuffle_epi32(
-		_mm_shufflelo_epi16(
-			_mm_shufflehi_epi16(depmask1, 0xD8), /* 0xD8 == 0b11011000 */
-			0xD8
-		),
-		0xD8
-	);
-	tmp2 = _mm_shuffle_epi32(
-		_mm_shufflelo_epi16(
-			_mm_shufflehi_epi16(depmask2, 0xD8),
-			0xD8
-		),
-		0xD8
-	);
-	/* [02461357, 8ACE9BDF] -> [02468ACE, 13579BDF]*/
-	tmp3 = _mm_unpacklo_epi64(tmp1, tmp2);
-	tmp4 = _mm_unpackhi_epi64(tmp1, tmp2);
 	
 	
 	/* interleave bits for faster lookups */
-	tmp3l = _mm_and_si128(tmp3, lmask);
-	tmp3h = _mm_and_si128(_mm_srli_epi16(tmp3, 4), lmask);
-	tmp4l = _mm_and_si128(tmp4, lmask);
-	tmp4h = _mm_and_si128(_mm_srli_epi16(tmp4, 4), lmask);
+	tmp3l = _mm_and_si128(depmask1, lmask);
+	tmp3h = _mm_and_si128(_mm_srli_epi16(depmask1, 4), lmask);
+	tmp4l = _mm_and_si128(depmask2, lmask);
+	tmp4h = _mm_and_si128(_mm_srli_epi16(depmask2, 4), lmask);
 	/* expand bits: idea from https://graphics.stanford.edu/~seander/bithacks.html#InterleaveBMN */
 	#define EXPAND_ROUND(src, shift, mask) _mm_and_si128( \
 		_mm_or_si128(src, shift==1 ? _mm_add_epi16(src, src) : _mm_slli_epi16(src, shift)), \
@@ -420,7 +378,7 @@ static inline void xor_write_jit_sse(const struct gf16_xor_scratch *HEDLEY_RESTR
 #ifndef XORDEP_DISABLE_NO_COMMON
 	/* find cases where we don't wish to create the common queue - this is an optimisation to remove a single move operation when the common queue only contains one element */
 	/* we have the common elements between pairs, but it doesn't make sense to process a separate queue if there's only one common element (0 XORs), so find those */
-	common_mask = _mm_and_si128(tmp3, tmp4);
+	common_mask = _mm_and_si128(depmask1, depmask2);
 	common_mask = _mm_andnot_si128(
 		_mm_cmpeq_epi16(_mm_setzero_si128(), common_mask),
 		_mm_cmpeq_epi16(
@@ -844,36 +802,15 @@ void gf16_xor_mul_sse2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRIC
 	ALIGN_TO(16, uint16_t tmp_depmask[16]);
 	uintptr_t sP = (uintptr_t)src;
 	uint8_t* _dst = (uint8_t*)dst + len;
-
-	/* calculate dependent bits */
-	__m128i addvals1 = _mm_set_epi16(0x80, 0x40, 0x20, 0x10, 0x08, 0x04, 0x02, 0x01);
-	__m128i addvals2 = _mm_set_epi16(0x8000, 0x4000, 0x2000, 0x1000, 0x0800, 0x0400, 0x0200, 0x0100);
 	
-	__m128i polymask1 = _mm_load_si128((__m128i*)scratch);
-	__m128i polymask2 = _mm_load_si128((__m128i*)scratch + 1);
-	
-	__m128i valtest = _mm_set1_epi16(val);
-	__m128i addmask = _mm_srai_epi16(valtest, 15);
-	__m128i depmask1 = _mm_and_si128(addvals1, addmask);
-	__m128i depmask2 = _mm_and_si128(addvals2, addmask);
-	for(int i=0; i<15; i++) {
-		/* rotate */
-		__m128i last = _mm_shuffle_epi32(_mm_shufflelo_epi16(depmask1, 0), 0);
-		depmask1 = _mm_or_si128(
-			_mm_srli_si128(depmask1, 2),
-			_mm_slli_si128(depmask2, 14)
-		);
-		depmask2 = _mm_srli_si128(depmask2, 2);
-		
-		/* XOR poly */
-		depmask1 = _mm_xor_si128(depmask1, _mm_and_si128(polymask1, last));
-		depmask2 = _mm_xor_si128(depmask2, _mm_and_si128(polymask2, last));
-		
-		valtest = _mm_add_epi16(valtest, valtest);
-		addmask = _mm_srai_epi16(valtest, 15);
-		depmask1 = _mm_xor_si128(depmask1, _mm_and_si128(addvals1, addmask));
-		depmask2 = _mm_xor_si128(depmask2, _mm_and_si128(addvals2, addmask));
-	}
+	__m128i depmask1 = _mm_load_si128((__m128i*)(scratch + ((val & 0xf) << 7)));
+	__m128i depmask2 = _mm_load_si128((__m128i*)(scratch + ((val & 0xf) << 7)) +1);
+	depmask1 = _mm_xor_si128(depmask1, _mm_load_si128((__m128i*)(scratch + ((val << 3) & 0x780)) + 1*2));
+	depmask2 = _mm_xor_si128(depmask2, _mm_load_si128((__m128i*)(scratch + ((val << 3) & 0x780)) + 1*2 +1));
+	depmask1 = _mm_xor_si128(depmask1, _mm_load_si128((__m128i*)(scratch + ((val >> 1) & 0x780)) + 2*2));
+	depmask2 = _mm_xor_si128(depmask2, _mm_load_si128((__m128i*)(scratch + ((val >> 1) & 0x780)) + 2*2 +1));
+	depmask1 = _mm_xor_si128(depmask1, _mm_load_si128((__m128i*)(scratch + ((val >> 5) & 0x780)) + 3*2));
+	depmask2 = _mm_xor_si128(depmask2, _mm_load_si128((__m128i*)(scratch + ((val >> 5) & 0x780)) + 3*2 +1));
 	
 	
 	/* generate needed tables */
@@ -948,35 +885,14 @@ void gf16_xor_muladd_sse2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_REST
 	uintptr_t sP = (uintptr_t)src;
 	uint8_t* _dst = (uint8_t*)dst + len;
 
-	/* calculate dependent bits */
-	__m128i addvals1 = _mm_set_epi16(0x80, 0x40, 0x20, 0x10, 0x08, 0x04, 0x02, 0x01);
-	__m128i addvals2 = _mm_set_epi16(0x8000, 0x4000, 0x2000, 0x1000, 0x0800, 0x0400, 0x0200, 0x0100);
-	
-	__m128i polymask1 = _mm_load_si128((__m128i*)scratch);
-	__m128i polymask2 = _mm_load_si128((__m128i*)scratch + 1);
-	
-	__m128i valtest = _mm_set1_epi16(val);
-	__m128i addmask = _mm_srai_epi16(valtest, 15);
-	__m128i depmask1 = _mm_and_si128(addvals1, addmask);
-	__m128i depmask2 = _mm_and_si128(addvals2, addmask);
-	for(int i=0; i<15; i++) {
-		/* rotate */
-		__m128i last = _mm_shuffle_epi32(_mm_shufflelo_epi16(depmask1, 0), 0);
-		depmask1 = _mm_or_si128(
-			_mm_srli_si128(depmask1, 2),
-			_mm_slli_si128(depmask2, 14)
-		);
-		depmask2 = _mm_srli_si128(depmask2, 2);
-		
-		/* XOR poly */
-		depmask1 = _mm_xor_si128(depmask1, _mm_and_si128(polymask1, last));
-		depmask2 = _mm_xor_si128(depmask2, _mm_and_si128(polymask2, last));
-		
-		valtest = _mm_add_epi16(valtest, valtest);
-		addmask = _mm_srai_epi16(valtest, 15);
-		depmask1 = _mm_xor_si128(depmask1, _mm_and_si128(addvals1, addmask));
-		depmask2 = _mm_xor_si128(depmask2, _mm_and_si128(addvals2, addmask));
-	}
+	__m128i depmask1 = _mm_load_si128((__m128i*)(scratch + ((val & 0xf) << 7)));
+	__m128i depmask2 = _mm_load_si128((__m128i*)(scratch + ((val & 0xf) << 7)) +1);
+	depmask1 = _mm_xor_si128(depmask1, _mm_load_si128((__m128i*)(scratch + ((val << 3) & 0x780)) + 1*2));
+	depmask2 = _mm_xor_si128(depmask2, _mm_load_si128((__m128i*)(scratch + ((val << 3) & 0x780)) + 1*2 +1));
+	depmask1 = _mm_xor_si128(depmask1, _mm_load_si128((__m128i*)(scratch + ((val >> 1) & 0x780)) + 2*2));
+	depmask2 = _mm_xor_si128(depmask2, _mm_load_si128((__m128i*)(scratch + ((val >> 1) & 0x780)) + 2*2 +1));
+	depmask1 = _mm_xor_si128(depmask1, _mm_load_si128((__m128i*)(scratch + ((val >> 5) & 0x780)) + 3*2));
+	depmask2 = _mm_xor_si128(depmask2, _mm_load_si128((__m128i*)(scratch + ((val >> 5) & 0x780)) + 3*2 +1));
 	
 	
 	/* generate needed tables */
@@ -1094,7 +1010,7 @@ void* gf16_xor_jit_init_sse2(int polynomial) {
 	uint8_t tmpCode[XORDEP_JIT_SIZE];
 	
 	ALIGN_ALLOC(ret, sizeof(struct gf16_xor_scratch), 16);
-	gf16_bitdep_init128(ret, polynomial);
+	gf16_bitdep_init128(ret->deps, polynomial, GF16_BITDEP_INIT128_GEN_XORJIT);
 	
 	gf16_xor_create_jit_lut_sse2();
 	
@@ -1126,8 +1042,8 @@ void gf16_xor_jit_uninit(void* scratch) {
 void* gf16_xor_init_sse2(int polynomial) {
 #ifdef __SSE2__
 	void* ret;
-	ALIGN_ALLOC(ret, sizeof(__m128i)*2, 16);
-	gf16_bitdep_init128(ret, polynomial);
+	ALIGN_ALLOC(ret, sizeof(__m128i)*8*16, 16);
+	gf16_bitdep_init128(ret, polynomial, GF16_BITDEP_INIT128_GEN_XOR);
 	return ret;
 #else
 	UNUSED(polynomial);

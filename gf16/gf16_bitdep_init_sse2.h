@@ -1,10 +1,53 @@
 
 #include "../src/hedley.h"
+
+#define GF16_BITDEP_INIT128_GEN_XOR 0
+#define GF16_BITDEP_INIT128_GEN_XORJIT 1
+#define GF16_BITDEP_INIT128_GEN_AFFINE 2
+
+
 #ifdef __SSE2__
 # include <emmintrin.h>
+# ifdef __SSSE3__
+#  include <tmmintrin.h>
+# endif
+static inline void gf16_bitdep128_store(__m128i* dst, __m128i depmask1, __m128i depmask2, int genMode) {
+	if(genMode == GF16_BITDEP_INIT128_GEN_AFFINE) {
+# ifdef __SSSE3__
+		depmask1 = _mm_shuffle_epi8(depmask1, _mm_set_epi8(
+			14,12,10,8,6,4,2,0, 15,13,11,9,7,5,3,1
+		));
+		depmask2 = _mm_shuffle_epi8(depmask2, _mm_set_epi8(
+			14,12,10,8,6,4,2,0, 15,13,11,9,7,5,3,1
+		));
+# endif
+	} else if(genMode == GF16_BITDEP_INIT128_GEN_XORJIT) {
+		/* emulate PACKUSDW (SSE4.1 only) with SSE2 shuffles */
+		/* 01234567 -> 02461357 */
+		__m128i tmp1 = _mm_shuffle_epi32(
+			_mm_shufflelo_epi16(
+				_mm_shufflehi_epi16(depmask1, 0xD8), /* 0xD8 == 0b11011000 */
+				0xD8
+			),
+			0xD8
+		);
+		__m128i tmp2 = _mm_shuffle_epi32(
+			_mm_shufflelo_epi16(
+				_mm_shufflehi_epi16(depmask2, 0xD8),
+				0xD8
+			),
+			0xD8
+		);
+		/* [02461357, 8ACE9BDF] -> [02468ACE, 13579BDF]*/
+		depmask1 = _mm_unpacklo_epi64(tmp1, tmp2);
+		depmask2 = _mm_unpackhi_epi64(tmp1, tmp2);
+	}
+	_mm_store_si128((__m128i*)dst + 0, depmask1);
+	_mm_store_si128((__m128i*)dst + 1, depmask2);
+}
 #endif
 
-static void gf16_bitdep_init128(void* dst, int polynomial) {
+static void gf16_bitdep_init128(void* dst, int polynomial, int genMode) {
 #ifdef __SSE2__
 	__m128i polymask1, polymask2;
 	/* duplicate each bit in the polynomial 16 times */
@@ -14,7 +57,51 @@ static void gf16_bitdep_init128(void* dst, int polynomial) {
 	polymask1 = _mm_cmpeq_epi16(_mm_setzero_si128(), polymask1);
 	polymask2 = _mm_cmpeq_epi16(_mm_setzero_si128(), polymask2);
 	
-	_mm_store_si128((__m128i*)dst, _mm_xor_si128(polymask1, _mm_set1_epi8(0xff)));
-	_mm_store_si128((__m128i*)dst + 1, _mm_xor_si128(polymask2, _mm_set1_epi8(0xff)));
+	polymask1 = _mm_xor_si128(polymask1, _mm_set1_epi8(0xff));
+	polymask2 = _mm_xor_si128(polymask2, _mm_set1_epi8(0xff));
+	
+	// pre-generate lookup tables for getting bitdeps
+	__m128i addvals1 = genMode==GF16_BITDEP_INIT128_GEN_AFFINE ? _mm_set_epi16(0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80) : _mm_set_epi16(0x80, 0x40, 0x20, 0x10, 0x08, 0x04, 0x02, 0x01);
+	__m128i addvals2 = genMode==GF16_BITDEP_INIT128_GEN_AFFINE ? _mm_set_epi16(0x0100, 0x0200, 0x0400, 0x0800, 0x1000, 0x2000, 0x4000, 0x8000) : _mm_set_epi16(0x8000, 0x4000, 0x2000, 0x1000, 0x0800, 0x0400, 0x0200, 0x0100);
+	
+	for(int val=0; val<16; val++) {
+		__m128i valtest = _mm_set1_epi16(val << 12);
+		__m128i addmask = _mm_srai_epi16(valtest, 15); /* _mm_cmpgt_epi16(_mm_setzero_si128(), valtest)  is an alternative, but GCC/Clang prefer the former, so trust the compiler */
+		__m128i depmask1 = _mm_and_si128(addvals1, addmask);
+		__m128i depmask2 = _mm_and_si128(addvals2, addmask);
+		for(int i=0; i<3; i++) {
+			/* rotate */
+			__m128i last = _mm_shuffle_epi32(_mm_shufflelo_epi16(depmask1, 0), 0);
+			depmask1 = _mm_or_si128(
+				_mm_srli_si128(depmask1, 2),
+				_mm_slli_si128(depmask2, 14)
+			);
+			depmask2 = _mm_srli_si128(depmask2, 2);
+			
+			/* XOR poly */
+			depmask1 = _mm_xor_si128(depmask1, _mm_and_si128(polymask1, last));
+			depmask2 = _mm_xor_si128(depmask2, _mm_and_si128(polymask2, last));
+			
+			valtest = _mm_add_epi16(valtest, valtest);
+			addmask = _mm_srai_epi16(valtest, 15);
+			depmask1 = _mm_xor_si128(depmask1, _mm_and_si128(addvals1, addmask));
+			depmask2 = _mm_xor_si128(depmask2, _mm_and_si128(addvals2, addmask));
+		}
+		gf16_bitdep128_store((__m128i*)dst + (val*4+0)*2, depmask1, depmask2, genMode);
+		for(int j=1; j<4; j++) {
+			for(int i=0; i<4; i++) {
+				__m128i last = _mm_shuffle_epi32(_mm_shufflelo_epi16(depmask1, 0), 0);
+				depmask1 = _mm_or_si128(
+					_mm_srli_si128(depmask1, 2),
+					_mm_slli_si128(depmask2, 14)
+				);
+				depmask2 = _mm_srli_si128(depmask2, 2);
+				
+				depmask1 = _mm_xor_si128(depmask1, _mm_and_si128(polymask1, last));
+				depmask2 = _mm_xor_si128(depmask2, _mm_and_si128(polymask2, last));
+			}
+			gf16_bitdep128_store((__m128i*)dst + (val*4+j)*2, depmask1, depmask2, genMode);
+		}
+	}
 #endif
 }
