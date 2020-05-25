@@ -15,6 +15,7 @@ typedef void(*Galois16AddFunc) (void *HEDLEY_RESTRICT dst, const void *HEDLEY_RE
 enum Galois16Methods {
 	GF16_AUTO,
 	GF16_LOOKUP,
+	GF16_LOOKUP_SSE2,
 	GF16_SHUFFLE_NEON,
 	GF16_SHUFFLE_SSSE3,
 	GF16_SHUFFLE_AVX,
@@ -31,6 +32,7 @@ enum Galois16Methods {
 static const char* Galois16MethodsText[] = {
 	"Auto",
 	"LH Lookup",
+	"LH Lookup (SSE2)",
 	"Shuffle (NEON)",
 	"Shuffle (SSSE3)",
 	"Shuffle (AVX)",

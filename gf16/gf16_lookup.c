@@ -44,7 +44,7 @@ static inline void calc_table(uint16_t coefficient, uint16_t* lhtable) {
 		}
 		uint64_t tmp2 = coefficient4 & 0xffff0000ffff0000ULL; // [*0, *256, *0, *256]
 		coefficient4 = GF16_MULTBY_TWO_X4(coefficient4);      // [*512, *512, *512, *512]
-		lhtable64[64] = tmp2 ^ (coefficient4 & 0xffffffff00000000ULL); // [*0, *256, *512, *768]
+		lhtable64[64] = tmp2 ^ (coefficient4 << 32);          // [*0, *256, *512, *768]
 		coefficient4 = GF16_MULTBY_TWO_X4(coefficient4);      // [*1024, *1024, *1024, *1024]
 		for (j = 1; j < 64; j <<= 1) {
 			for (k = 0; k < j; k++) lhtable64[64 + k+j] = (coefficient4 ^ lhtable64[64 + k]);

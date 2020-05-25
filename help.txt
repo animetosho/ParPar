@@ -190,6 +190,7 @@ Performance Options:
                              can crash if CPU does not support selected method.
                              Choices are:
                                  lh_lookup: split 2x 8-bit scalar table lookup
+                                 lh_lookup-sse: SSE2 variant of above
                                  xor-sse: vector XOR bit dependencies (SSE2)
                                  xorjit-sse: JIT variant of above
                                  xorjit-avx2: AVX2 x64 variant of above

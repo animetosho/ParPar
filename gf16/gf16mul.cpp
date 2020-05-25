@@ -345,6 +345,13 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 			stride = alignment*16;
 		break;
 		
+		case GF16_LOOKUP_SSE2:
+			_mul = &gf16_lookup_mul_sse2;
+			_mul_add = &gf16_lookup_muladd_sse2;
+			alignment = 16;
+			stride = 16;
+		break;
+		
 		case GF16_LOOKUP:
 		default:
 			_mul = &gf16_lookup_mul;
@@ -485,8 +492,10 @@ std::vector<Galois16Methods> Galois16Mul::availableMethods(bool checkCpuid) {
 			ret.push_back(GF16_AFFINE_AVX512);
 	}
 	
-	if(gf16_xor_available_sse2 && caps.hasSSE2)
+	if(gf16_xor_available_sse2 && caps.hasSSE2) {
 		ret.push_back(GF16_XOR_SSE2);
+		ret.push_back(GF16_LOOKUP_SSE2);
+	}
 	if(caps.canMemWX) {
 		if(gf16_xor_available_sse2 && caps.hasSSE2)
 			ret.push_back(GF16_XOR_JIT_SSE2);

@@ -106,7 +106,8 @@
       "type": "static_library",
       "defines": ["NDEBUG"],
       "sources": [
-        "gf16/gf16_xor_sse2.c"
+        "gf16/gf16_xor_sse2.c",
+        "gf16/gf16_lookup_sse2.c"
       ],
       "cflags": ["-Wno-unused-function"],
       "xcode_settings": {
