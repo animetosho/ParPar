@@ -78,6 +78,14 @@ void _FN(gf16_shuffle_finish)(void *HEDLEY_RESTRICT dst, size_t len) {
 }
 
 
+#if MWORD_SIZE == 16 && defined(_AVAILABLE_XOP)
+	#define _MM_SRLI4_EPI8(v) _mm_shl_epi8(v, _mm_set1_epi8(-4))
+	#define _MM_SLLI4_EPI8(v) _mm_shl_epi8(v, _mm_set1_epi8(4))
+#else
+	#define _MM_SRLI4_EPI8(v) _MMI(and)(_MM(srli_epi16)(v, 4), _MM(set1_epi8)(0xf))
+	#define _MM_SLLI4_EPI8(v) _MMI(andnot)(_MM(set1_epi8)(0xf), _MM(slli_epi16)(v, 4))
+#endif
+
 #if MWORD_SIZE == 16
 	#define BCAST
 #endif
@@ -98,10 +106,10 @@ void _FN(gf16_shuffle_finish)(void *HEDLEY_RESTRICT dst, size_t len) {
 		high ##c = _MMI(xor)(tb, tph)
 #else
 	#define MUL16(p, c) \
-		ti = _MMI(and)(_MM(srli_epi16)(high ##p, 4), mask); \
-		ta = _MMI(andnot)(mask, _MM(slli_epi16)(low ##p, 4)); \
-		tb = _MMI(andnot)(mask, _MM(slli_epi16)(high ##p, 4)); \
-		tb = _MMI(or)(tb, _MMI(and)(_MM(srli_epi16)(low ##p, 4), mask)); \
+		ti = _MM_SRLI4_EPI8(high ##p); \
+		ta = _MM_SLLI4_EPI8(low ##p); \
+		tb = _MM_SLLI4_EPI8(high ##p); \
+		tb = _MMI(or)(tb, _MM_SRLI4_EPI8(low ##p)); \
 		tpl = _MM(shuffle_epi8)(polyl, ti); \
 		tph = _MM(shuffle_epi8)(polyh, ti); \
 		low ##c = _MMI(xor)(ta, tpl); \
@@ -168,7 +176,7 @@ void _FN(gf16_shuffle_mul)(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RES
 		tph = _MM(shuffle_epi8) (high0, ti);
 		tpl = _MM(shuffle_epi8) (low0, ti);
 
-		ti = _MMI(and) (mask, _MM(srli_epi16)(tb, 4));
+		ti = _MM_SRLI4_EPI8(tb);
 #if MWORD_SIZE == 64
 		_mword ti2 = _MMI(and) (mask, ta);
 		tpl = _mm512_ternarylogic_epi32(tpl, _MM(shuffle_epi8) (low1, ti), _MM(shuffle_epi8) (low2, ti2), 0x96);
@@ -181,7 +189,7 @@ void _FN(gf16_shuffle_mul)(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RES
 		tpl = _MMI(xor)(_MM(shuffle_epi8) (low2, ti), tpl);
 		tph = _MMI(xor)(_MM(shuffle_epi8) (high2, ti), tph);
 #endif
-		ti = _MMI(and) (mask, _MM(srli_epi16)(ta, 4));
+		ti = _MM_SRLI4_EPI8(ta);
 		tpl = _MMI(xor)(_MM(shuffle_epi8) (low3, ti), tpl);
 		tph = _MMI(xor)(_MM(shuffle_epi8) (high3, ti), tph);
 
@@ -238,7 +246,7 @@ void _FN(gf16_shuffle_muladd)(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_
 		tph = _MM(shuffle_epi8) (high0, ti);
 		tpl = _MM(shuffle_epi8) (low0, ti);
 
-		ti = _MMI(and) (mask, _MM(srli_epi16)(tb, 4));
+		ti = _MM_SRLI4_EPI8(tb);
 #if MWORD_SIZE == 64
 		tpl = _mm512_ternarylogic_epi32(tpl, _MM(shuffle_epi8) (low1, ti), _MMI(load)((_mword*)(_dst+ptr) + 1), 0x96);
 		tph = _mm512_ternarylogic_epi32(tph, _MM(shuffle_epi8) (high1, ti), _MMI(load)((_mword*)(_dst+ptr)), 0x96);
@@ -259,7 +267,7 @@ void _FN(gf16_shuffle_muladd)(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_
 		tpl = _MMI(xor)(_MM(shuffle_epi8) (low2, ti), tpl);
 		tph = _MMI(xor)(_MM(shuffle_epi8) (high2, ti), tph);
 
-		ti = _MMI(and) (mask, _MM(srli_epi16)(ta, 4));
+		ti = _MM_SRLI4_EPI8(ta);
 		tpl = _MMI(xor)(_MM(shuffle_epi8) (low3, ti), tpl);
 		tph = _MMI(xor)(_MM(shuffle_epi8) (high3, ti), tph);
 #endif
