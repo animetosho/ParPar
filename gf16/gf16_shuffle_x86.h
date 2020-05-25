@@ -42,7 +42,16 @@ static inline _mword partial_load(const void* ptr, size_t bytes) {
 
 void _FN(gf16_shuffle_prepare)(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen) {
 #ifdef _AVAILABLE
-	_mword lmask = _MM(set1_epi16) (0xff);
+	_mword shuf = _MM(set_epi32)(
+#if MWORD_SIZE >= 64
+		0x0f0d0b09, 0x07050301, 0x0e0c0a08, 0x06040200,
+		0x0f0d0b09, 0x07050301, 0x0e0c0a08, 0x06040200,
+#endif
+#if MWORD_SIZE >= 32
+		0x0f0d0b09, 0x07050301, 0x0e0c0a08, 0x06040200,
+#endif
+		0x0f0d0b09, 0x07050301, 0x0e0c0a08, 0x06040200
+	);
 	
 	size_t len = srcLen & ~(sizeof(_mword)*2 -1);
 	uint8_t* _src = (uint8_t*)src + len;
@@ -52,17 +61,14 @@ void _FN(gf16_shuffle_prepare)(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RES
 		_mword ta = _MMI(loadu)((_mword*)(_src+ptr));
 		_mword tb = _MMI(loadu)((_mword*)(_src+ptr) + 1);
 		
+		ta = _MM(shuffle_epi8)(ta, shuf);
+		tb = _MM(shuffle_epi8)(tb, shuf);
+		
 		_MMI(store) ((_mword*)(_dst+ptr),
-			_MM(packus_epi16)(
-				_MM(srli_epi16)(ta, 8),
-				_MM(srli_epi16)(tb, 8)
-			)
+			_MM(unpackhi_epi64)(ta, tb)
 		);
 		_MMI(store) ((_mword*)(_dst+ptr) + 1,
-			_MM(packus_epi16)(
-				_MMI(and)(ta, lmask),
-				_MMI(and)(tb, lmask)
-			)
+			_MM(unpacklo_epi64)(ta, tb)
 		);
 	}
 	
@@ -79,17 +85,14 @@ void _FN(gf16_shuffle_prepare)(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RES
 		else
 			tb = partial_load(_src + sizeof(_mword), remaining - sizeof(_mword));
 		
+		ta = _MM(shuffle_epi8)(ta, shuf);
+		tb = _MM(shuffle_epi8)(tb, shuf);
+		
 		_MMI(store) ((_mword*)_dst,
-			_MM(packus_epi16)(
-				_MM(srli_epi16)(ta, 8),
-				_MM(srli_epi16)(tb, 8)
-			)
+			_MM(unpackhi_epi64)(ta, tb)
 		);
 		_MMI(store) ((_mword*)_dst + 1,
-			_MM(packus_epi16)(
-				_MMI(and)(ta, lmask),
-				_MMI(and)(tb, lmask)
-			)
+			_MM(unpacklo_epi64)(ta, tb)
 		);
 	}
 	_MM_END
@@ -176,8 +179,10 @@ void _FN(gf16_shuffle_mul)(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RES
 		));
 		
 		__m128i tmp8 = _mm_xor_si128(tmp, _mm_set1_epi16(GF16_MULTBY_TWO(val4)));
-		low0 = BCAST(_mm_packus_epi16(_mm_and_si128(tmp, _mm_set1_epi16(0xff)), _mm_and_si128(tmp8, _mm_set1_epi16(0xff))));
-		high0 = BCAST(_mm_packus_epi16(_mm_srli_epi16(tmp, 8), _mm_srli_epi16(tmp8, 8)));
+		tmp  = _mm_shuffle_epi8(tmp , _mm_set_epi32(0x0f0d0b09, 0x07050301, 0x0e0c0a08, 0x06040200));
+		tmp8 = _mm_shuffle_epi8(tmp8, _mm_set_epi32(0x0f0d0b09, 0x07050301, 0x0e0c0a08, 0x06040200));
+		low0 = BCAST(_mm_unpacklo_epi64(tmp, tmp8));
+		high0 = BCAST(_mm_unpackhi_epi64(tmp, tmp8));
 		
 /* // although the following seems simpler, it doesn't actually seem to be faster, although I don't know why
 		__m128i* multbl = (__m128i*)(ltd->poly + 1);
@@ -262,8 +267,10 @@ void _FN(gf16_shuffle_muladd)(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_
 		));
 		
 		__m128i tmp8 = _mm_xor_si128(tmp, _mm_set1_epi16(GF16_MULTBY_TWO(val4)));
-		low0 = BCAST(_mm_packus_epi16(_mm_and_si128(tmp, _mm_set1_epi16(0xff)), _mm_and_si128(tmp8, _mm_set1_epi16(0xff))));
-		high0 = BCAST(_mm_packus_epi16(_mm_srli_epi16(tmp, 8), _mm_srli_epi16(tmp8, 8)));
+		tmp  = _mm_shuffle_epi8(tmp , _mm_set_epi32(0x0f0d0b09, 0x07050301, 0x0e0c0a08, 0x06040200));
+		tmp8 = _mm_shuffle_epi8(tmp8, _mm_set_epi32(0x0f0d0b09, 0x07050301, 0x0e0c0a08, 0x06040200));
+		low0 = BCAST(_mm_unpacklo_epi64(tmp, tmp8));
+		high0 = BCAST(_mm_unpackhi_epi64(tmp, tmp8));
 		
 		polyl = BCAST(_mm_load_si128((__m128i*)scratch));
 		polyh = BCAST(_mm_load_si128((__m128i*)scratch + 1));

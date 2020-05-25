@@ -5,15 +5,10 @@
 /* type returned by *movemask* function */
 #if MWORD_SIZE == 64
 # define umask_t uint64_t
-/* fix PACKUS not crossing lanes + reverse order for mask extraction */
-/* why isn't the reverse pattern: 2,0,6,4,3,1,7,5 ? */
-# define PERMUTE_FIX_REV(v) _mm512_permutexvar_epi64(_mm512_set_epi64(6,4,2,0,7,5,3,1), v)
 #elif MWORD_SIZE == 32
 # define umask_t uint32_t
-# define PERMUTE_FIX_REV(v) _mm256_permute4x64_epi64(v, 0x8D) /* 2,0,3,1 */
 #else
 # define umask_t uint16_t
-# define PERMUTE_FIX_REV(v) (v)
 #endif
 #if MWORD_SIZE == 64
 # define MOVMASK _mm512_movepi8_mask
@@ -23,7 +18,6 @@
 
 void _FN(gf16_xor_prepare)(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen) {
 #ifdef _AVAILABLE
-	_mword lmask = _MM(set1_epi16)(0xff);
 	uint8_t* _src = (uint8_t*)src;
 	umask_t* _dst = (umask_t*)dst;
 	
@@ -33,16 +27,51 @@ void _FN(gf16_xor_prepare)(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRIC
 			_mword tb = _MMI(loadu)((_mword*)_src + 1);
 			
 			/* split to high/low parts */
-			_mword th = _MM(packus_epi16)(
-				_MM(srli_epi16)(tb, 8),
-				_MM(srli_epi16)(ta, 8)
+#if MWORD_SIZE == 64
+			// arrange to hlhl...
+			_mword tmp1 = _mm512_shuffle_epi8(ta, _mm512_set_epi32(
+				0x0f0d0b09, 0x07050301, 0x0e0c0a08, 0x06040200,
+				0x0f0d0b09, 0x07050301, 0x0e0c0a08, 0x06040200,
+				0x0f0d0b09, 0x07050301, 0x0e0c0a08, 0x06040200,
+				0x0f0d0b09, 0x07050301, 0x0e0c0a08, 0x06040200
+			));
+			_mword tmp2 = _mm512_shuffle_epi8(tb, _mm512_set_epi32(
+				0x0f0d0b09, 0x07050301, 0x0e0c0a08, 0x06040200,
+				0x0f0d0b09, 0x07050301, 0x0e0c0a08, 0x06040200,
+				0x0f0d0b09, 0x07050301, 0x0e0c0a08, 0x06040200,
+				0x0f0d0b09, 0x07050301, 0x0e0c0a08, 0x06040200
+			));
+			_mword th = _mm512_permutex2var_epi64(tmp1, _mm512_set_epi64(
+				15, 13, 11, 9, 7, 5, 3, 1
+			), tmp2);
+			_mword tl = _mm512_permutex2var_epi64(tmp1, _mm512_set_epi64(
+				14, 12, 10, 8, 6, 4, 2, 0
+			), tmp2);
+#elif MWORD_SIZE == 32
+			// arrange to hhhhhhhhllllllllhhhhhhhhllllllll
+			_mword tmp1 = _mm256_shuffle_epi8(ta, _mm256_set_epi32(
+				0x0f0d0b09, 0x07050301, 0x0e0c0a08, 0x06040200,
+				0x0f0d0b09, 0x07050301, 0x0e0c0a08, 0x06040200
+			));
+			// arrange to llllllllhhhhhhhhllllllllhhhhhhhh
+			_mword tmp2 = _mm256_shuffle_epi8(tb, _mm256_set_epi32(
+				0x0e0c0a08, 0x06040200, 0x0f0d0b09, 0x07050301,
+				0x0e0c0a08, 0x06040200, 0x0f0d0b09, 0x07050301
+			));
+			_mword th = _mm256_blend_epi32(tmp1, tmp2, 0x33);
+			_mword tl = _mm256_blend_epi32(tmp2, tmp1, 0x33);
+			tl = _mm256_permute4x64_epi64(tl, _MM_SHUFFLE(3,1,2,0));
+			th = _mm256_permute4x64_epi64(th, _MM_SHUFFLE(2,0,3,1));
+#else
+			_mword th = _mm_packus_epi16(
+				_mm_srli_epi16(tb, 8),
+				_mm_srli_epi16(ta, 8)
 			);
-			_mword tl = _MM(packus_epi16)(
-				_MMI(and)(tb, lmask),
-				_MMI(and)(ta, lmask)
+			_mword tl = _mm_packus_epi16(
+				_mm_and_si128(tb, _mm_set1_epi16(0xff)),
+				_mm_and_si128(ta, _mm_set1_epi16(0xff))
 			);
-			tl = PERMUTE_FIX_REV(tl);
-			th = PERMUTE_FIX_REV(th);
+#endif
 			
 			/* save to dest by extracting masks */
 			_dst[0] = MOVMASK(th);
@@ -85,7 +114,6 @@ void _FN(gf16_xor_finish)(void *HEDLEY_RESTRICT dst, size_t len) {
 	
 	umask_t* _dst = (umask_t*)dst;
 	
-	_mword lmask = _MM(set1_epi16)(0xff);
 	for(; len; len -= sizeof(_mword)*16) {
 		for(int j=0; j<8; j++) {
 			/* load in pattern: [0011223344556677] [8899AABBCCDDEEFF] */
@@ -99,20 +127,58 @@ void _FN(gf16_xor_finish)(void *HEDLEY_RESTRICT dst, size_t len) {
 			th = _mm512_permutexvar_epi16(_mm512_set_epi32(_Q(3), _Q(2), _Q(1), _Q(0)), th);
 # undef _Q
 # undef _P
+			
+			// convert aabbccddeeffgghh -> abcdefghabcdefgh
+			tl = _mm512_shuffle_epi8(tl, _mm512_set_epi32(
+				0x0f0d0b09, 0x07050301, 0x0e0c0a08, 0x06040200,
+				0x0f0d0b09, 0x07050301, 0x0e0c0a08, 0x06040200,
+				0x0f0d0b09, 0x07050301, 0x0e0c0a08, 0x06040200,
+				0x0f0d0b09, 0x07050301, 0x0e0c0a08, 0x06040200
+			));
+			th = _mm512_shuffle_epi8(th, _mm512_set_epi32(
+				0x0f0d0b09, 0x07050301, 0x0e0c0a08, 0x06040200,
+				0x0f0d0b09, 0x07050301, 0x0e0c0a08, 0x06040200,
+				0x0f0d0b09, 0x07050301, 0x0e0c0a08, 0x06040200,
+				0x0f0d0b09, 0x07050301, 0x0e0c0a08, 0x06040200
+			));
+			// [abcdefghabcdefgh][ijklmnopijklmnop] -> [abcdefghijklmnop][abcdefghijklmnop]
+			tb = _mm512_unpacklo_epi64(tl, th);
+			ta = _mm512_unpackhi_epi64(tl, th);
 #elif MWORD_SIZE == 32
 			tl = _MM(i32gather_epi32)((int*)_dst, _MM(set_epi32)(32, 40, 48, 56, 96, 104, 112, 120), 4);
 			th = _MM(i32gather_epi32)((int*)_dst, _MM(set_epi32)(0, 8, 16, 24, 64, 72, 80, 88), 4);
-			/* 00001111 -> 00112233 */
-			ta = _MM(packus_epi32)(
-				_MMI(and)(tl, _MM(set1_epi32)(0xffff)),
-				_MMI(and)(th, _MM(set1_epi32)(0xffff))
-			);
-			tb = _MM(packus_epi32)(
-				_MM(srli_epi32)(tl, 16),
-				_MM(srli_epi32)(th, 16)
-			);
-			tl = ta;
-			th = tb;
+			// aaaabbbbccccdddd -> abcdabcdabcdabcd
+			tl = _mm256_shuffle_epi8(tl, _mm256_set_epi32(
+				0x0f0b0703, 0x0e0a0602, 0x0d090501, 0x0c080400,
+				0x0f0b0703, 0x0e0a0602, 0x0d090501, 0x0c080400
+			));
+			th = _mm256_shuffle_epi8(th, _mm256_set_epi32(
+				0x0f0b0703, 0x0e0a0602, 0x0d090501, 0x0c080400,
+				0x0f0b0703, 0x0e0a0602, 0x0d090501, 0x0c080400
+			));
+			
+# ifdef __tune_znver1__
+			// interleave: [abcdabcdabcdabcd][ijklijklijklijkl] -> [abcdijklabcdijkl][abcdijklabcdijkl]
+			ta = _mm256_unpacklo_epi32(tl, th);
+			tb = _mm256_unpackhi_epi32(tl, th);
+			
+			tl = _mm256_unpacklo_epi64(ta, tb);
+			th = _mm256_unpackhi_epi64(ta, tb);
+			
+			tb = _mm256_permute4x64_epi64(tl, _MM_SHUFFLE(3,1,2,0));
+			ta = _mm256_permute4x64_epi64(th, _MM_SHUFFLE(3,1,2,0));
+# else
+			// re-arrange: [abcdabcdabcdabcd|efghefghefghefgh] -> [abcdefghabcdefgh|...]
+			tl = _mm256_permutevar8x32_epi32(tl, _mm256_set_epi32(
+				7, 3, 6, 2, 5, 1, 4, 0
+			));
+			th = _mm256_permutevar8x32_epi32(th, _mm256_set_epi32(
+				7, 3, 6, 2, 5, 1, 4, 0
+			));
+			// [abcdefghabcdefgh][ijklmnopijklmnop] -> [abcdijklefghmnop][abcdijklefghmnop]
+			tb = _mm256_unpacklo_epi32(tl, th);
+			ta = _mm256_unpackhi_epi32(tl, th);
+# endif
 #else
 			/* MSVC _requires_ a constant so we have to manually unroll this loop */
 			#define MM_INSERT(i) \
@@ -127,20 +193,16 @@ void _FN(gf16_xor_finish)(void *HEDLEY_RESTRICT dst, size_t len) {
 			MM_INSERT(6);
 			MM_INSERT(7);
 			#undef MM_INSERT
-#endif
-			/* swizzle to [0123456789ABCDEF] [0123456789ABCDEF] */
-			ta = _MM(packus_epi16)(
-				_MM(srli_epi16)(tl, 8),
-				_MM(srli_epi16)(th, 8)
-			);
-			tb = _MM(packus_epi16)(
-				_MMI(and)(tl, lmask),
-				_MMI(and)(th, lmask)
-			);
 			
-#if MWORD_SIZE == 32
-			ta = _mm256_permute4x64_epi64(ta, 0xD8); /* 3,1,2,0 */
-			tb = _mm256_permute4x64_epi64(tb, 0xD8);
+			/* swizzle to [0123456789ABCDEF] [0123456789ABCDEF] */
+			ta = _mm_packus_epi16(
+				_mm_srli_epi16(tl, 8),
+				_mm_srli_epi16(th, 8)
+			);
+			tb = _mm_packus_epi16(
+				_mm_and_si128(tl, _mm_set1_epi16(0xff)),
+				_mm_and_si128(th, _mm_set1_epi16(0xff))
+			);
 #endif
 			
 			/* extract top bits */
@@ -199,7 +261,6 @@ void _FN(gf16_xor_finish)(void *HEDLEY_RESTRICT dst, size_t len) {
 }
 
 #undef umask_t
-#undef PERMUTE_FIX_REV
 #undef MOVMASK
 
 

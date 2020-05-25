@@ -43,8 +43,10 @@ void* gf16_shuffle_init_x86(int polynomial) {
 	}
 	tmp1 = _mm_loadu_si128((__m128i*)_poly);
 	tmp2 = _mm_loadu_si128((__m128i*)_poly + 1);
-	_mm_store_si128(ret, _mm_packus_epi16(_mm_and_si128(tmp1, _mm_set1_epi16(0xff)), _mm_and_si128(tmp2, _mm_set1_epi16(0xff))));
-	_mm_store_si128(ret + 1, _mm_packus_epi16(_mm_srli_epi16(tmp1, 8), _mm_srli_epi16(tmp2, 8)));
+	tmp1 = _mm_shuffle_epi8(tmp1, _mm_set_epi32(0x0f0d0b09, 0x07050301, 0x0e0c0a08, 0x06040200));
+	tmp2 = _mm_shuffle_epi8(tmp2, _mm_set_epi32(0x0f0d0b09, 0x07050301, 0x0e0c0a08, 0x06040200));
+	_mm_store_si128(ret, _mm_unpacklo_epi64(tmp1, tmp2));
+	_mm_store_si128(ret + 1, _mm_unpackhi_epi64(tmp1, tmp2));
 	return ret;
 #else
 	return NULL;
