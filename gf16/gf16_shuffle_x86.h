@@ -80,13 +80,15 @@ void _FN(gf16_shuffle_prepare)(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RES
 			ta = _MMI(loadu)((_mword*)_src);
 		else
 			ta = partial_load(_src, remaining);
-		if(remaining <= sizeof(_mword))
-			tb = _MMI(setzero)();
-		else
-			tb = partial_load(_src + sizeof(_mword), remaining - sizeof(_mword));
 		
 		ta = _MM(shuffle_epi8)(ta, shuf);
-		tb = _MM(shuffle_epi8)(tb, shuf);
+		
+		if(remaining <= sizeof(_mword))
+			tb = _MMI(setzero)();
+		else {
+			tb = partial_load(_src + sizeof(_mword), remaining - sizeof(_mword));
+			tb = _MM(shuffle_epi8)(tb, shuf);
+		}
 		
 		_MMI(store) ((_mword*)_dst,
 			_MM(unpackhi_epi64)(ta, tb)
