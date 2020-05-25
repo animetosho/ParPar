@@ -8,6 +8,38 @@ int _FN(gf16_shuffle_available) = 1;
 int _FN(gf16_shuffle_available) = 0;
 #endif
 
+#if MWORD_SIZE != 64
+ALIGN_TO(64, static char load_mask[64]) = {
+	-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
+	-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
+	 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+};
+#endif
+
+// load part of a vector, zeroing out remaining bytes
+static inline _mword partial_load(const void* ptr, size_t bytes) {
+#if MWORD_SIZE == 64
+	// AVX512 is easy - masked load does the trick
+	return _mm512_maskz_loadu_epi8((1ULL<<bytes)-1, ptr);
+#else
+	uintptr_t alignedPtr = ((uintptr_t)ptr & ~(sizeof(_mword)-1));
+	_mword result;
+	// does the load straddle across alignment boundary? (could check page boundary, but we'll be safer and only use vector alignment boundary)
+	if((((uintptr_t)ptr+bytes) & ~(sizeof(_mword)-1)) != alignedPtr)
+		result = _MMI(loadu)(ptr); // if so, unaligned load is safe
+	else {
+		// a shift could work, but painful on AVX2, so just give up and go through memory
+		ALIGN_TO(MWORD_SIZE, _mword tmp[2]);
+		_MMI(store)(tmp, _MMI(load)((_mword*)alignedPtr));
+		result = _MMI(loadu)((_mword*)((uint8_t*)tmp + ((uintptr_t)ptr & (sizeof(_mword)-1))));
+	}
+	// mask out junk
+	result = _MMI(and)(result, _MMI(loadu)((_mword*)( load_mask + 32 - bytes )));
+	return result;
+#endif
+}
+
 void _FN(gf16_shuffle_prepare)(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen) {
 #ifdef _AVAILABLE
 	_mword lmask = _MM(set1_epi16) (0xff);
@@ -33,28 +65,34 @@ void _FN(gf16_shuffle_prepare)(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RES
 			)
 		);
 	}
-	_MM_END
 	
 	size_t remaining = srcLen & (sizeof(_mword)*2 - 1);
 	if(remaining) {
 		// handle misaligned part
-		_MMI(store)((_mword*)_dst, _MMI(setzero)());
-		_MMI(store)((_mword*)_dst + 1, _MMI(setzero)());
+		_mword ta, tb;
+		if(remaining & sizeof(_mword))
+			ta = _MMI(loadu)((_mword*)_src);
+		else
+			ta = partial_load(_src, remaining);
+		if(remaining <= sizeof(_mword))
+			tb = _MMI(setzero)();
+		else
+			tb = partial_load(_src + sizeof(_mword), remaining - sizeof(_mword));
 		
-		for(unsigned word = 0; word < (remaining+1)>>1; word++) {
-			unsigned dstWord = word;
-			// handle lane shenanigans
-			if(sizeof(_mword) >= 32) {
-				int w = word & ~7;
-				if(w >= (int)(sizeof(_mword)/2))
-					w -= sizeof(_mword)-8;
-				dstWord += w;
-			}
-			if(word*2 + 1 < remaining)
-				_dst[dstWord] = _src[word*2 + 1];
-			_dst[dstWord+sizeof(_mword)] = _src[word*2];
-		}
+		_MMI(store) ((_mword*)_dst,
+			_MM(packus_epi16)(
+				_MM(srli_epi16)(ta, 8),
+				_MM(srli_epi16)(tb, 8)
+			)
+		);
+		_MMI(store) ((_mword*)_dst + 1,
+			_MM(packus_epi16)(
+				_MMI(and)(ta, lmask),
+				_MMI(and)(tb, lmask)
+			)
+		);
 	}
+	_MM_END
 #else
 	UNUSED(dst); UNUSED(src); UNUSED(srcLen);
 #endif
