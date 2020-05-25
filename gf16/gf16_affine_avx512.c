@@ -38,10 +38,12 @@ void gf16_affine_mul_avx512(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RE
 	
 		
 	__m512i mat_ll, mat_lh, mat_hl, mat_hh;
-	mat_lh = _mm512_permutexvar_epi64(_mm512_set1_epi64(1), _mm512_castsi256_si512(depmask));
-	mat_ll = _mm512_permutexvar_epi64(_mm512_set1_epi64(3), _mm512_castsi256_si512(depmask));
+	__m512i depmask2 = _mm512_castsi256_si512(depmask);
+	depmask2 = _mm512_shuffle_i64x2(depmask2, depmask2, _MM_SHUFFLE(0,1,0,1)); // reverse order to allow more abuse of VBROADCASTQ
+	mat_lh = _mm512_permutex_epi64(depmask2, _MM_SHUFFLE(3,3,3,3));
+	mat_ll = _mm512_permutex_epi64(depmask2, _MM_SHUFFLE(1,1,1,1));
 	mat_hh = _mm512_broadcastq_epi64(_mm256_castsi256_si128(depmask));
-	mat_hl = _mm512_permutexvar_epi64(_mm512_set1_epi64(2), _mm512_castsi256_si512(depmask));
+	mat_hl = _mm512_broadcastq_epi64(_mm512_castsi512_si128(depmask2));
 	
 	
 	uint8_t* _src = (uint8_t*)src + len;
@@ -96,10 +98,12 @@ void gf16_affine_muladd_avx512(const void *HEDLEY_RESTRICT scratch, void *HEDLEY
 	
 		
 	__m512i mat_ll, mat_lh, mat_hl, mat_hh;
-	mat_lh = _mm512_permutexvar_epi64(_mm512_set1_epi64(1), _mm512_castsi256_si512(depmask));
-	mat_ll = _mm512_permutexvar_epi64(_mm512_set1_epi64(3), _mm512_castsi256_si512(depmask));
+	__m512i depmask2 = _mm512_castsi256_si512(depmask);
+	depmask2 = _mm512_shuffle_i64x2(depmask2, depmask2, _MM_SHUFFLE(0,1,0,1)); // reverse order to allow more abuse of VBROADCASTQ
+	mat_lh = _mm512_permutex_epi64(depmask2, _MM_SHUFFLE(3,3,3,3));
+	mat_ll = _mm512_permutex_epi64(depmask2, _MM_SHUFFLE(1,1,1,1));
 	mat_hh = _mm512_broadcastq_epi64(_mm256_castsi256_si128(depmask));
-	mat_hl = _mm512_permutexvar_epi64(_mm512_set1_epi64(2), _mm512_castsi256_si512(depmask));
+	mat_hl = _mm512_broadcastq_epi64(_mm512_castsi512_si128(depmask2));
 	
 	
 	uint8_t* _src = (uint8_t*)src + len;
