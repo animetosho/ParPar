@@ -24,6 +24,21 @@ static inline __m128i ssse3_popcnt_epi16(__m128i src) {
 	return _mm_maddubs_epi16(ssse3_popcnt_epi8(src), _mm_set1_epi8(1));
 }
 
+static inline __m256i avx2_popcnt_epi8(__m256i src) {
+	__m256i lmask = _mm256_set1_epi8(0xf);
+	__m256i tbl = _mm256_set_epi8(
+		4, 3, 3, 2, 3, 2, 2, 1, 3, 2, 2, 1, 2, 1, 1, 0,
+		4, 3, 3, 2, 3, 2, 2, 1, 3, 2, 2, 1, 2, 1, 1, 0
+	);
+	return _mm256_add_epi8(
+		_mm256_shuffle_epi8(tbl, _mm256_and_si256(src, lmask)),
+		_mm256_shuffle_epi8(tbl, _mm256_and_si256(_mm256_srli_epi16(src, 4), lmask))
+	);
+}
+static inline __m256i avx_popcnt_epi16(__m256i src) {
+	return _mm256_maddubs_epi16(avx2_popcnt_epi8(src), _mm256_set1_epi8(1));
+}
+
 /* static inline __m128i sse_load_halves(void* lo, void* hi) {
 	return _mm_castps_si128(_mm_loadh_pi(
 		_mm_castsi128_ps(_mm_loadl_epi64((__m128i*)lo)),
@@ -122,12 +137,10 @@ static inline void xor_write_jit_avx512(const struct gf16_xor_scratch *HEDLEY_RE
 	);
 	
 	
-	/* interleave so that word pairs are split */
-	__m128i mask1 = _mm256_castsi256_si128(depmask);
-	__m128i mask2 = _mm256_extracti128_si256(depmask, 1);
-	
-
-	__m128i common_mask = _mm_and_si128(mask1, mask2);
+	__m128i common_mask = _mm_and_si128(
+		_mm256_castsi256_si128(depmask),
+		_mm256_extracti128_si256(depmask, 1)
+	);
 	/* eliminate pointless common_mask entries */
 	common_mask = _mm_andnot_si128(
 		_mm_cmpeq_epi16(
@@ -138,22 +151,17 @@ static inline void xor_write_jit_avx512(const struct gf16_xor_scratch *HEDLEY_RE
 		common_mask
 	);
 	
-	mask1 = _mm_xor_si128(mask1, common_mask);
-	mask2 = _mm_xor_si128(mask2, common_mask);
+	depmask = _mm256_xor_si256(depmask, _mm256_inserti128_si256(_mm256_castsi128_si256(common_mask), common_mask, 1));
 	
 	/* count bits */
 	ALIGN_TO(16, uint16_t depC[8]);
 	ALIGN_TO(16, uint16_t popcntC[8]);
 	_mm_store_si128((__m128i*)depC, common_mask);
 	_mm_store_si128((__m128i*)popcntC, ssse3_popcnt_epi16(common_mask));
-	ALIGN_TO(16, uint16_t depA[8]);
-	ALIGN_TO(16, uint16_t popcntA[8]);
-	_mm_store_si128((__m128i*)depA, mask1);
-	_mm_store_si128((__m128i*)popcntA, ssse3_popcnt_epi16(mask1));
-	ALIGN_TO(16, uint16_t depB[8]);
-	ALIGN_TO(16, uint16_t popcntB[8]);
-	_mm_store_si128((__m128i*)depB, mask2);
-	_mm_store_si128((__m128i*)popcntB, ssse3_popcnt_epi16(mask2));
+	ALIGN_TO(32, uint16_t depAB[16]);
+	ALIGN_TO(32, uint16_t popcntAB[16]);
+	_mm256_store_si256((__m256i*)depAB, depmask);
+	_mm256_store_si256((__m256i*)popcntAB, avx_popcnt_epi16(depmask));
 	
 	__m512i numbers = _mm512_set_epi32(
 		15,14,13,12,11,10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0
@@ -185,53 +193,53 @@ static inline void xor_write_jit_avx512(const struct gf16_xor_scratch *HEDLEY_RE
 			
 			/*
 			idxC = sse_load_halves(&xor256_jit_nums[depC[bit] & 0xff], &xor256_jit_nums[depC[bit] >> 8]);
-			idxA = sse_load_halves(&xor256_jit_nums[depA[bit] & 0xff], &xor256_jit_nums[depA[bit] >> 8]);
-			idxB = sse_load_halves(&xor256_jit_nums[depB[bit] & 0xff], &xor256_jit_nums[depB[bit] >> 8]);
+			idxA = sse_load_halves(&xor256_jit_nums[depAB[bit] & 0xff], &xor256_jit_nums[depAB[bit] >> 8]);
+			idxB = sse_load_halves(&xor256_jit_nums[depAB[8+bit] & 0xff], &xor256_jit_nums[depAB[8+bit] >> 8]);
 			// TODO: need to shuffle merge the halves!
 			*/
 			// TODO: above idea is probably faster, this is just easier to code
 			idxC = _mm512_cvtepi32_epi8(_mm512_maskz_compress_epi32(depC[bit], numbers));
-			idxA = _mm512_cvtepi32_epi8(_mm512_maskz_compress_epi32(depA[bit], numbers));
-			idxB = _mm512_cvtepi32_epi8(_mm512_maskz_compress_epi32(depB[bit], numbers));
+			idxA = _mm512_cvtepi32_epi8(_mm512_maskz_compress_epi32(depAB[bit], numbers));
+			idxB = _mm512_cvtepi32_epi8(_mm512_maskz_compress_epi32(depAB[8+bit], numbers));
 			
 			if(popcntC[bit]) { // popcntC[bit] cannot == 1 (eliminated above)
 				_mm512_storeu_si512((__m512i*)jitptr, xor_avx512_main_part((popcntC[bit] & 1), 3, idxC));
 				jitptr += ((popcntC[bit]-1) >> 1) * 7 + 6;
 				
 				// last xor of pipes A/B are a merge
-				if(popcntA[bit] == 0) {
+				if(popcntAB[bit] == 0) {
 					jitptr += _jit_vpxord_m(jitptr, 1, 3, DX, destOffs);
 				} else {
-					_mm512_storeu_si512((__m512i*)jitptr, xor_avx512_main_part((popcntA[bit] & 1), 1, idxA));
-					jitptr += ((popcntA[bit]-1) >> 1) * 7 + 6;
+					_mm512_storeu_si512((__m512i*)jitptr, xor_avx512_main_part((popcntAB[bit] & 1), 1, idxA));
+					jitptr += ((popcntAB[bit]-1) >> 1) * 7 + 6;
 					// TODO: perhaps ideally the load is done earlier?
 					jitptr += _jit_vpternlogd_m(jitptr, 1, 3, DX, destOffs, 0x96);
 				}
-				if(popcntB[bit] == 0) {
+				if(popcntAB[8+bit] == 0) {
 					jitptr += _jit_vpxord_m(jitptr, 2, 3, DX, destOffs2);
 				} else {
-					_mm512_storeu_si512((__m512i*)jitptr, xor_avx512_main_part((popcntB[bit] & 1), 2, idxB));
-					jitptr += ((popcntB[bit]-1) >> 1) * 7 + 6;
+					_mm512_storeu_si512((__m512i*)jitptr, xor_avx512_main_part((popcntAB[8+bit] & 1), 2, idxB));
+					jitptr += ((popcntAB[8+bit]-1) >> 1) * 7 + 6;
 					jitptr += _jit_vpternlogd_m(jitptr, 2, 3, DX, destOffs2, 0x96);
 				}
 			} else {
 				// if no common queue, popcntA/B assumed to be >= 1
-				if(popcntA[bit] == 1) {
+				if(popcntAB[bit] == 1) {
 					jitptr += _jit_vpxord_m(jitptr, 1, _mm_extract_epi8(idxA, 0)|16, DX, destOffs);
 				} else {
-					_mm512_storeu_si512((__m512i*)jitptr, xor_avx512_main_part((~popcntA[bit] & 1), 1, idxA));
-					jitptr += (popcntA[bit] >> 1) * 7 + 6;
+					_mm512_storeu_si512((__m512i*)jitptr, xor_avx512_main_part((~popcntAB[bit] & 1), 1, idxA));
+					jitptr += (popcntAB[bit] >> 1) * 7 + 6;
 					// patch final vpternlog to merge from memory
 					// TODO: optimize
 					*(jitptr-6) |= 24<<2; // clear zreg3 bits
 					*(uint32_t*)(jitptr-2) = ((1<<3) | DX | 0x40) | (0x96<<16) | ((destOffs<<(8-6)) & 0xff00);
 					jitptr++;
 				}
-				if(popcntB[bit] == 1) {
+				if(popcntAB[8+bit] == 1) {
 					jitptr += _jit_vpxord_m(jitptr, 2, _mm_extract_epi8(idxB, 0)|16, DX, destOffs2);
 				} else {
-					_mm512_storeu_si512((__m512i*)jitptr, xor_avx512_main_part((~popcntB[bit] & 1), 2, idxB));
-					jitptr += (popcntB[bit] >> 1) * 7 + 6;
+					_mm512_storeu_si512((__m512i*)jitptr, xor_avx512_main_part((~popcntAB[8+bit] & 1), 2, idxB));
+					jitptr += (popcntAB[8+bit] >> 1) * 7 + 6;
 					*(jitptr-6) |= 24<<2; // clear zreg3 bits
 					*(uint32_t*)(jitptr-2) = ((2<<3) | DX | 0x40) | (0x96<<16) | ((destOffs2<<(8-6)) & 0xff00);
 					jitptr++;
@@ -249,33 +257,33 @@ static inline void xor_write_jit_avx512(const struct gf16_xor_scratch *HEDLEY_RE
 			__m128i idxC, idxA, idxB;
 			
 			idxC = _mm512_cvtepi32_epi8(_mm512_maskz_compress_epi32(depC[bit], numbers));
-			idxA = _mm512_cvtepi32_epi8(_mm512_maskz_compress_epi32(depA[bit], numbers));
-			idxB = _mm512_cvtepi32_epi8(_mm512_maskz_compress_epi32(depB[bit], numbers));
+			idxA = _mm512_cvtepi32_epi8(_mm512_maskz_compress_epi32(depAB[bit], numbers));
+			idxB = _mm512_cvtepi32_epi8(_mm512_maskz_compress_epi32(depAB[8+bit], numbers));
 			
 			if(popcntC[bit]) { // popcntC[bit] cannot == 1 (eliminated above)
 				_mm512_storeu_si512((__m512i*)jitptr, xor_avx512_main_part((popcntC[bit] & 1), 3, idxC));
 				jitptr += ((popcntC[bit]-1) >> 1) * 7 + 6;
 				
 				// last xor of pipes A/B are a merge
-				if(popcntA[bit] == 0) {
+				if(popcntAB[bit] == 0) {
 					jitptr += _jit_vmovdqa32_store(jitptr, DX, destOffs, 3);
 				} else {
-					_mm512_storeu_si512((__m512i*)jitptr, xor_avx512_main_part((~popcntA[bit] & 1), 1, idxA));
-					jitptr += (popcntA[bit] >> 1) * 7 + 6;
+					_mm512_storeu_si512((__m512i*)jitptr, xor_avx512_main_part((~popcntAB[bit] & 1), 1, idxA));
+					jitptr += (popcntAB[bit] >> 1) * 7 + 6;
 					// patch final vpternlog/vpxor to merge from common mask
 					// TODO: optimize
-					uint8_t* ptr = (jitptr-6 + (popcntA[bit] == 1));
+					uint8_t* ptr = (jitptr-6 + (popcntAB[bit] == 1));
 					*ptr |= 24<<2; // clear zreg3 bits
 					*(ptr+4) = 0xC0 + 3 + (1<<3);
 					
 					jitptr += _jit_vmovdqa32_store(jitptr, DX, destOffs, 1);
 				}
-				if(popcntB[bit] == 0) {
+				if(popcntAB[8+bit] == 0) {
 					jitptr += _jit_vmovdqa32_store(jitptr, DX, destOffs2, 3);
 				} else {
-					_mm512_storeu_si512((__m512i*)jitptr, xor_avx512_main_part((~popcntB[bit] & 1), 2, idxB));
-					jitptr += (popcntB[bit] >> 1) * 7 + 6;
-					uint8_t* ptr = (jitptr-6 + (popcntB[bit] == 1));
+					_mm512_storeu_si512((__m512i*)jitptr, xor_avx512_main_part((~popcntAB[8+bit] & 1), 2, idxB));
+					jitptr += (popcntAB[8+bit] >> 1) * 7 + 6;
+					uint8_t* ptr = (jitptr-6 + (popcntAB[8+bit] == 1));
 					*ptr |= 24<<2;
 					*(ptr+4) = 0xC0 + 3 + (2<<3);
 					
@@ -283,18 +291,18 @@ static inline void xor_write_jit_avx512(const struct gf16_xor_scratch *HEDLEY_RE
 				}
 			} else {
 				// if no common queue, popcntA/B assumed to be >= 1
-				if(popcntA[bit] == 1) {
+				if(popcntAB[bit] == 1) {
 					jitptr += _jit_vmovdqa32_store(jitptr, DX, destOffs, _mm_extract_epi8(idxA, 0)|16);
 				} else {
-					_mm512_storeu_si512((__m512i*)jitptr, xor_avx512_main_part((popcntA[bit] & 1), 1, idxA));
-					jitptr += ((popcntA[bit]-1) >> 1) * 7 + 6;
+					_mm512_storeu_si512((__m512i*)jitptr, xor_avx512_main_part((popcntAB[bit] & 1), 1, idxA));
+					jitptr += ((popcntAB[bit]-1) >> 1) * 7 + 6;
 					jitptr += _jit_vmovdqa32_store(jitptr, DX, destOffs, 1);
 				}
-				if(popcntB[bit] == 1) {
+				if(popcntAB[8+bit] == 1) {
 					jitptr += _jit_vmovdqa32_store(jitptr, DX, destOffs2, _mm_extract_epi8(idxB, 0)|16);
 				} else {
-					_mm512_storeu_si512((__m512i*)jitptr, xor_avx512_main_part((popcntB[bit] & 1), 2, idxB));
-					jitptr += ((popcntB[bit]-1) >> 1) * 7 + 6;
+					_mm512_storeu_si512((__m512i*)jitptr, xor_avx512_main_part((popcntAB[8+bit] & 1), 2, idxB));
+					jitptr += ((popcntAB[8+bit]-1) >> 1) * 7 + 6;
 					jitptr += _jit_vmovdqa32_store(jitptr, DX, destOffs2, 2);
 				}
 			}
