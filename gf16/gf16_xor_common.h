@@ -80,7 +80,7 @@ static inline void gf16_xor_jit_stub(intptr_t src, intptr_t dEnd, intptr_t dest,
 
 
 struct gf16_xor_scratch {
-	uint16_t poly[16];
+	uint8_t deps[16*16*2*4];
 	uint_fast8_t codeStart;
 };
 

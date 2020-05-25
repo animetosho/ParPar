@@ -101,7 +101,7 @@ static inline __m512i xor_avx512_main_part(int odd, int r, __m128i indicies) {
 }
 
 static inline void xor_write_jit_avx512(const struct gf16_xor_scratch *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT mutScratch, uint16_t val, int xor) {
-	uint_fast32_t i, bit;
+	uint_fast32_t bit;
 	
 	uint8_t* jitptr;
 #ifdef CPU_SLOW_SMC
@@ -110,39 +110,21 @@ static inline void xor_write_jit_avx512(const struct gf16_xor_scratch *HEDLEY_RE
 #endif
 	
 	
-	
-	__m256i addvals = _mm256_set_epi8(
-		0x80, 0x40, 0x20, 0x10, 0x08, 0x04, 0x02, 0x01, 0, 0, 0, 0, 0, 0, 0, 0,
-		0, 0, 0, 0, 0, 0, 0, 0, 0x80, 0x40, 0x20, 0x10, 0x08, 0x04, 0x02, 0x01
+	__m256i depmask = _mm256_load_si256((__m256i*)scratch->deps + (val & 0xf)*4);
+	depmask = _mm256_xor_si256(depmask,
+		_mm256_load_si256((__m256i*)(scratch->deps + ((val << 3) & 0x780)) + 1)
 	);
-	
-	__m256i shuf = _mm256_load_si256((__m256i*)scratch->poly);
-	
-	__m256i valtest = _mm256_set1_epi16(val);
-	__m256i addmask = _mm256_srai_epi16(valtest, 15);
-	__m256i depmask = _mm256_and_si256(addvals, addmask);
-	for(i=0; i<15; i++) {
-		/* rotate */
-		__m256i last = _mm256_shuffle_epi8(depmask, shuf);
-		depmask = _mm256_srli_si256(depmask, 1);
-		
-		valtest = _mm256_add_epi16(valtest, valtest);
-		addmask = _mm256_srai_epi16(valtest, 15);
-		addmask = _mm256_and_si256(addvals, addmask);
-		
-		/* XOR poly+addvals */
-		depmask = _mm256_ternarylogic_epi32(depmask, last, addmask, 0x96);
-		
-		// the above tactic seems to be a tad bit faster than the old one using the following:
-		// depmask = _mm256_mask_xor_epi32(depmask, -((val & i)!=0), depmask, addvals);
-	}
+	depmask = _mm256_ternarylogic_epi32(
+		depmask,
+		_mm256_load_si256((__m256i*)(scratch->deps + ((val >> 1) & 0x780)) + 2),
+		_mm256_load_si256((__m256i*)(scratch->deps + ((val >> 5) & 0x780)) + 3),
+		0x96
+	);
 	
 	
 	/* interleave so that word pairs are split */
-	__m128i depmask1 = _mm256_castsi256_si128(depmask);
-	__m128i depmask2 = _mm256_extracti128_si256(depmask, 1);
-	__m128i mask1 = _mm_mask_blend_epi8(0x5555, _mm_slli_si128(depmask2, 1), depmask1);
-	__m128i mask2 = _mm_mask_blend_epi8(0x5555, depmask2, _mm_srli_si128(depmask1, 1));
+	__m128i mask1 = _mm256_castsi256_si128(depmask);
+	__m128i mask2 = _mm256_extracti128_si256(depmask, 1);
 	
 
 	__m128i common_mask = _mm_and_si128(mask1, mask2);
@@ -433,7 +415,7 @@ void* gf16_xor_jit_init_avx512(int polynomial) {
 	uint8_t tmpCode[XORDEP_JIT_SIZE];
 	
 	ALIGN_ALLOC(ret, sizeof(struct gf16_xor_scratch), 32);
-	gf16_bitdep_init256(ret, polynomial);
+	gf16_bitdep_init256(ret, polynomial, 0);
 	
 	ret->codeStart = (uint_fast8_t)xor_write_init_jit(tmpCode);
 	return ret;
