@@ -765,9 +765,8 @@ void gf16_xor_mul_sse2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRIC
 	UNUSED(mutScratch);
 #ifdef __SSE2__
 	uint_fast32_t counts[16];
-	uintptr_t deptable[16][16];
+	uintptr_t deptable[256];
 	ALIGN_TO(16, uint16_t tmp_depmask[16]);
-	uintptr_t sP = (uintptr_t)src;
 	uint8_t* _dst = (uint8_t*)dst + len;
 	
 	__m128i depmask1 = _mm_load_si128((__m128i*)(scratch + ((val & 0xf) << 7)));
@@ -787,7 +786,7 @@ void gf16_xor_mul_sse2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRIC
 		uint_fast32_t cnt = 0;
 		for(int i=0; i<16; i++) {
 			if(tmp_depmask[bit] & (1<<i)) {
-				deptable[bit][cnt++] = i<<4; /* pre-multiply because x86 addressing can't do a x16; this saves a shift operation later */
+				deptable[bit*16 + cnt++] = ((uintptr_t)src - (uintptr_t)dst) + (i<<4); // calculate full address offset from destination - this enables looping with just one counter
 			}
 		}
 		counts[bit] = cnt;
@@ -795,28 +794,29 @@ void gf16_xor_mul_sse2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRIC
 	
 	
 	for(long ptr = -(long)len; ptr; ptr += sizeof(__m128i)*16) {
+		uint8_t* p = _dst + ptr;
 		/* Note that we assume that all counts are at least 1; I don't think it's possible for that to be false */
 		#define STEP(bit, type, typev, typed) { \
-			uintptr_t* deps = deptable[bit]; \
-			typev tmp = _mm_load_ ## type((typed*)(sP + deps[ 0])); \
+			uintptr_t* deps = deptable + bit*16; \
+			typev tmp = _mm_load_ ## type((typed*)(p + deps[ 0])); \
 			switch(counts[bit]) { \
-				case 16: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[15])); /* FALLTHRU */ \
-				case 15: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[14])); /* FALLTHRU */ \
-				case 14: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[13])); /* FALLTHRU */ \
-				case 13: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[12])); /* FALLTHRU */ \
-				case 12: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[11])); /* FALLTHRU */ \
-				case 11: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[10])); /* FALLTHRU */ \
-				case 10: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 9])); /* FALLTHRU */ \
-				case  9: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 8])); /* FALLTHRU */ \
-				case  8: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 7])); /* FALLTHRU */ \
-				case  7: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 6])); /* FALLTHRU */ \
-				case  6: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 5])); /* FALLTHRU */ \
-				case  5: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 4])); /* FALLTHRU */ \
-				case  4: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 3])); /* FALLTHRU */ \
-				case  3: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 2])); /* FALLTHRU */ \
-				case  2: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 1])); /* FALLTHRU */ \
+				case 16: tmp = _mm_xor_ ## type(tmp, *(typev*)(p + deps[15])); /* FALLTHRU */ \
+				case 15: tmp = _mm_xor_ ## type(tmp, *(typev*)(p + deps[14])); /* FALLTHRU */ \
+				case 14: tmp = _mm_xor_ ## type(tmp, *(typev*)(p + deps[13])); /* FALLTHRU */ \
+				case 13: tmp = _mm_xor_ ## type(tmp, *(typev*)(p + deps[12])); /* FALLTHRU */ \
+				case 12: tmp = _mm_xor_ ## type(tmp, *(typev*)(p + deps[11])); /* FALLTHRU */ \
+				case 11: tmp = _mm_xor_ ## type(tmp, *(typev*)(p + deps[10])); /* FALLTHRU */ \
+				case 10: tmp = _mm_xor_ ## type(tmp, *(typev*)(p + deps[ 9])); /* FALLTHRU */ \
+				case  9: tmp = _mm_xor_ ## type(tmp, *(typev*)(p + deps[ 8])); /* FALLTHRU */ \
+				case  8: tmp = _mm_xor_ ## type(tmp, *(typev*)(p + deps[ 7])); /* FALLTHRU */ \
+				case  7: tmp = _mm_xor_ ## type(tmp, *(typev*)(p + deps[ 6])); /* FALLTHRU */ \
+				case  6: tmp = _mm_xor_ ## type(tmp, *(typev*)(p + deps[ 5])); /* FALLTHRU */ \
+				case  5: tmp = _mm_xor_ ## type(tmp, *(typev*)(p + deps[ 4])); /* FALLTHRU */ \
+				case  4: tmp = _mm_xor_ ## type(tmp, *(typev*)(p + deps[ 3])); /* FALLTHRU */ \
+				case  3: tmp = _mm_xor_ ## type(tmp, *(typev*)(p + deps[ 2])); /* FALLTHRU */ \
+				case  2: tmp = _mm_xor_ ## type(tmp, *(typev*)(p + deps[ 1])); /* FALLTHRU */ \
 			} \
-			_mm_store_ ## type((typed*)(_dst + ptr) + bit, tmp); \
+			_mm_store_ ## type((typed*)p + bit, tmp); \
 		}
 		STEP( 0, si128, __m128i, __m128i)
 		STEP( 1, si128, __m128i, __m128i)
@@ -835,7 +835,6 @@ void gf16_xor_mul_sse2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRIC
 		STEP(14, si128, __m128i, __m128i)
 		STEP(15, si128, __m128i, __m128i)
 		#undef STEP
-		sP += sizeof(__m128i)*16;
 	}
 #else
 	UNUSED(scratch); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(val);
@@ -847,9 +846,8 @@ void gf16_xor_muladd_sse2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_REST
 	UNUSED(mutScratch);
 #ifdef __SSE2__
 	uint_fast32_t counts[16];
-	uintptr_t deptable[16][16];
+	uintptr_t deptable[256];
 	ALIGN_TO(16, uint16_t tmp_depmask[16]);
-	uintptr_t sP = (uintptr_t)src;
 	uint8_t* _dst = (uint8_t*)dst + len;
 
 	__m128i depmask1 = _mm_load_si128((__m128i*)(scratch + ((val & 0xf) << 7)));
@@ -869,7 +867,7 @@ void gf16_xor_muladd_sse2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_REST
 		uint_fast32_t cnt = 0;
 		for(int i=0; i<16; i++) {
 			if(tmp_depmask[bit] & (1<<i)) {
-				deptable[bit][cnt++] = i<<4; /* pre-multiply because x86 addressing can't do a x16; this saves a shift operation later */
+				deptable[bit*16 + cnt++] = ((uintptr_t)src - (uintptr_t)dst) + (i<<4); // calculate full address offset from destination - this enables looping with just one counter
 			}
 		}
 		counts[bit] = cnt;
@@ -877,28 +875,29 @@ void gf16_xor_muladd_sse2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_REST
 	
 	
 	for(long ptr = -(long)len; ptr; ptr += sizeof(__m128i)*16) {
+		uint8_t* p = _dst + ptr;
 		#define STEP(bit, type, typev, typed) { \
-			uintptr_t* deps = deptable[bit]; \
-			typev tmp = _mm_load_ ## type((typed*)((typed*)(_dst + ptr) + bit)); \
+			uintptr_t* deps = deptable + bit*16; \
+			typev tmp = _mm_load_ ## type((typed*)((typed*)p + bit)); \
 			switch(counts[bit]) { \
-				case 16: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[15])); /* FALLTHRU */ \
-				case 15: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[14])); /* FALLTHRU */ \
-				case 14: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[13])); /* FALLTHRU */ \
-				case 13: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[12])); /* FALLTHRU */ \
-				case 12: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[11])); /* FALLTHRU */ \
-				case 11: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[10])); /* FALLTHRU */ \
-				case 10: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 9])); /* FALLTHRU */ \
-				case  9: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 8])); /* FALLTHRU */ \
-				case  8: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 7])); /* FALLTHRU */ \
-				case  7: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 6])); /* FALLTHRU */ \
-				case  6: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 5])); /* FALLTHRU */ \
-				case  5: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 4])); /* FALLTHRU */ \
-				case  4: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 3])); /* FALLTHRU */ \
-				case  3: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 2])); /* FALLTHRU */ \
-				case  2: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 1])); /* FALLTHRU */ \
-				case  1: tmp = _mm_xor_ ## type(tmp, *(typev*)(sP + deps[ 0])); /* FALLTHRU */ \
+				case 16: tmp = _mm_xor_ ## type(tmp, *(typev*)(p + deps[15])); /* FALLTHRU */ \
+				case 15: tmp = _mm_xor_ ## type(tmp, *(typev*)(p + deps[14])); /* FALLTHRU */ \
+				case 14: tmp = _mm_xor_ ## type(tmp, *(typev*)(p + deps[13])); /* FALLTHRU */ \
+				case 13: tmp = _mm_xor_ ## type(tmp, *(typev*)(p + deps[12])); /* FALLTHRU */ \
+				case 12: tmp = _mm_xor_ ## type(tmp, *(typev*)(p + deps[11])); /* FALLTHRU */ \
+				case 11: tmp = _mm_xor_ ## type(tmp, *(typev*)(p + deps[10])); /* FALLTHRU */ \
+				case 10: tmp = _mm_xor_ ## type(tmp, *(typev*)(p + deps[ 9])); /* FALLTHRU */ \
+				case  9: tmp = _mm_xor_ ## type(tmp, *(typev*)(p + deps[ 8])); /* FALLTHRU */ \
+				case  8: tmp = _mm_xor_ ## type(tmp, *(typev*)(p + deps[ 7])); /* FALLTHRU */ \
+				case  7: tmp = _mm_xor_ ## type(tmp, *(typev*)(p + deps[ 6])); /* FALLTHRU */ \
+				case  6: tmp = _mm_xor_ ## type(tmp, *(typev*)(p + deps[ 5])); /* FALLTHRU */ \
+				case  5: tmp = _mm_xor_ ## type(tmp, *(typev*)(p + deps[ 4])); /* FALLTHRU */ \
+				case  4: tmp = _mm_xor_ ## type(tmp, *(typev*)(p + deps[ 3])); /* FALLTHRU */ \
+				case  3: tmp = _mm_xor_ ## type(tmp, *(typev*)(p + deps[ 2])); /* FALLTHRU */ \
+				case  2: tmp = _mm_xor_ ## type(tmp, *(typev*)(p + deps[ 1])); /* FALLTHRU */ \
+				case  1: tmp = _mm_xor_ ## type(tmp, *(typev*)(p + deps[ 0])); /* FALLTHRU */ \
 			} \
-			_mm_store_ ## type((typed*)(_dst + ptr) + bit, tmp); \
+			_mm_store_ ## type((typed*)p + bit, tmp); \
 		}
 		STEP( 0, si128, __m128i, __m128i)
 		STEP( 1, si128, __m128i, __m128i)
@@ -917,7 +916,6 @@ void gf16_xor_muladd_sse2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_REST
 		STEP(14, si128, __m128i, __m128i)
 		STEP(15, si128, __m128i, __m128i)
 		#undef STEP
-		sP += sizeof(__m128i)*16;
 	}
 #else
 	UNUSED(scratch); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(val);
