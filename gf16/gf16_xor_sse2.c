@@ -317,16 +317,10 @@ static inline void xor_write_jit_sse(const struct gf16_xor_scratch *HEDLEY_RESTR
 	uint_fast32_t bit;
 	ALIGN_TO(16, uint32_t lumask[8]);
 
-
 	uint8_t* jitptr;
 #ifdef CPU_SLOW_SMC
 	ALIGN_TO(32, uint8_t jitTemp[XORDEP_JIT_SIZE]);
 	uint8_t* jitdst;
-#endif
-#ifdef XORDEP_DISABLE_NO_COMMON
-	#define no_common_mask 0
-#else
-	int no_common_mask;
 #endif
 	
 	__m128i depmask1 = _mm_load_si128((__m128i*)(scratch->deps + ((val & 0xf) << 7)));
@@ -338,57 +332,30 @@ static inline void xor_write_jit_sse(const struct gf16_xor_scratch *HEDLEY_RESTR
 	depmask1 = _mm_xor_si128(depmask1, _mm_load_si128((__m128i*)(scratch->deps + ((val >> 5) & 0x780)) + 3*2));
 	depmask2 = _mm_xor_si128(depmask2, _mm_load_si128((__m128i*)(scratch->deps + ((val >> 5) & 0x780)) + 3*2 +1));
 	
-	
-#ifndef XORDEP_DISABLE_NO_COMMON
-	__m128i common_mask
-#endif
-	__m128i tmp1, tmp2, tmp3l, tmp3h, tmp4l, tmp4h;
-	__m128i lmask = _mm_set1_epi8(0xF);
-	
-	
-	/* interleave bits for faster lookups */
-	tmp3l = _mm_and_si128(depmask1, lmask);
-	tmp3h = _mm_and_si128(_mm_srli_epi16(depmask1, 4), lmask);
-	tmp4l = _mm_and_si128(depmask2, lmask);
-	tmp4h = _mm_and_si128(_mm_srli_epi16(depmask2, 4), lmask);
-	/* expand bits: idea from https://graphics.stanford.edu/~seander/bithacks.html#InterleaveBMN */
-	#define EXPAND_ROUND(src, shift, mask) _mm_and_si128( \
-		_mm_or_si128(src, shift==1 ? _mm_add_epi16(src, src) : _mm_slli_epi16(src, shift)), \
-		_mm_set1_epi16(mask) \
-	)
-	/* 8-bit -> 16-bit convert, with 4-bit interleave */
-	tmp1 = _mm_unpacklo_epi8(tmp3l, tmp3h);
-	tmp2 = _mm_unpacklo_epi8(tmp4l, tmp4h);
-	tmp1 = EXPAND_ROUND(tmp1, 2, 0x3333);
-	tmp2 = EXPAND_ROUND(tmp2, 2, 0x3333);
-	tmp1 = EXPAND_ROUND(tmp1, 1, 0x5555);
-	tmp2 = EXPAND_ROUND(tmp2, 1, 0x5555);
-	_mm_store_si128((__m128i*)(lumask), _mm_or_si128(tmp1, _mm_add_epi16(tmp2, tmp2)));
-	
-	tmp1 = _mm_unpackhi_epi8(tmp3l, tmp3h);
-	tmp2 = _mm_unpackhi_epi8(tmp4l, tmp4h);
-	tmp1 = EXPAND_ROUND(tmp1, 2, 0x3333);
-	tmp2 = EXPAND_ROUND(tmp2, 2, 0x3333);
-	tmp1 = EXPAND_ROUND(tmp1, 1, 0x5555);
-	tmp2 = EXPAND_ROUND(tmp2, 1, 0x5555);
-	_mm_store_si128((__m128i*)(lumask + 4), _mm_or_si128(tmp1, _mm_add_epi16(tmp2, tmp2)));
-	
-	#undef EXPAND_ROUND
+	_mm_store_si128((__m128i*)(lumask), depmask1);
+	_mm_store_si128((__m128i*)(lumask + 4), depmask2);
 	
 #ifndef XORDEP_DISABLE_NO_COMMON
 	/* find cases where we don't wish to create the common queue - this is an optimisation to remove a single move operation when the common queue only contains one element */
 	/* we have the common elements between pairs, but it doesn't make sense to process a separate queue if there's only one common element (0 XORs), so find those */
-	common_mask = _mm_and_si128(depmask1, depmask2);
-	common_mask = _mm_andnot_si128(
-		_mm_cmpeq_epi16(_mm_setzero_si128(), common_mask),
-		_mm_cmpeq_epi16(
-			_mm_setzero_si128(),
-			/* "(v & (v-1)) == 0" is true if only zero/one bit is set in each word */
-			_mm_and_si128(common_mask, _mm_add_epi16(common_mask, _mm_set1_epi16(0xffff)))
-		)
+	__m128i common_mask1 = _mm_and_si128(depmask1, _mm_add_epi32(depmask1, depmask1));
+	common_mask1 = _mm_and_si128(common_mask1, _mm_set1_epi8(0xaa));
+	__m128i common_mask2 = _mm_and_si128(depmask2, _mm_add_epi32(depmask2, depmask2));
+	common_mask2 = _mm_and_si128(common_mask2, _mm_set1_epi8(0xaa));
+	
+	__m128i common_mask_packed = _mm_packs_epi32(common_mask1, common_mask2);
+	/* "(v & (v-1)) == 0" is true if only zero/one bit is set in each word */
+	common_mask1 = _mm_and_si128(common_mask1, _mm_add_epi32(common_mask1, _mm_set1_epi32(-1)));
+	common_mask2 = _mm_and_si128(common_mask2, _mm_add_epi32(common_mask2, _mm_set1_epi32(-1)));
+	__m128i common_mask = _mm_andnot_si128(
+		_mm_cmpeq_epi16(_mm_setzero_si128(), common_mask_packed),
+		_mm_cmpeq_epi16(_mm_setzero_si128(), _mm_packs_epi32(common_mask1, common_mask2))
 	);
 	/* now we have a 8x16 mask of one-bit common masks we wish to remove; pack into an int for easy dealing with */
-	no_common_mask = _mm_movemask_epi8(common_mask);
+	// TODO: if this is in a memory source, consider allowing the common mask
+	int no_common_mask = _mm_movemask_epi8(common_mask);
+#else
+	#define no_common_mask 0
 #endif
 	
 	

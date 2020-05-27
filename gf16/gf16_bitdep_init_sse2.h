@@ -41,6 +41,38 @@ static inline void gf16_bitdep128_store(__m128i* dst, __m128i depmask1, __m128i 
 		/* [02461357, 8ACE9BDF] -> [02468ACE, 13579BDF]*/
 		depmask1 = _mm_unpacklo_epi64(tmp1, tmp2);
 		depmask2 = _mm_unpackhi_epi64(tmp1, tmp2);
+		
+		
+		__m128i lmask = _mm_set1_epi8(0xF);
+		
+		/* interleave bits for faster lookups */
+		__m128i tmp3l = _mm_and_si128(depmask1, lmask);
+		__m128i tmp3h = _mm_and_si128(_mm_srli_epi16(depmask1, 4), lmask);
+		__m128i tmp4l = _mm_and_si128(depmask2, lmask);
+		__m128i tmp4h = _mm_and_si128(_mm_srli_epi16(depmask2, 4), lmask);
+		/* expand bits: idea from https://graphics.stanford.edu/~seander/bithacks.html#InterleaveBMN */
+		#define EXPAND_ROUND(src, shift, mask) _mm_and_si128( \
+			_mm_or_si128(src, shift==1 ? _mm_add_epi16(src, src) : _mm_slli_epi16(src, shift)), \
+			_mm_set1_epi16(mask) \
+		)
+		/* 8-bit -> 16-bit convert, with 4-bit interleave */
+		tmp1 = _mm_unpacklo_epi8(tmp3l, tmp3h);
+		tmp2 = _mm_unpacklo_epi8(tmp4l, tmp4h);
+		tmp1 = EXPAND_ROUND(tmp1, 2, 0x3333);
+		tmp2 = EXPAND_ROUND(tmp2, 2, 0x3333);
+		tmp1 = EXPAND_ROUND(tmp1, 1, 0x5555);
+		tmp2 = EXPAND_ROUND(tmp2, 1, 0x5555);
+		depmask1 = _mm_or_si128(tmp1, _mm_add_epi16(tmp2, tmp2));
+		
+		tmp1 = _mm_unpackhi_epi8(tmp3l, tmp3h);
+		tmp2 = _mm_unpackhi_epi8(tmp4l, tmp4h);
+		tmp1 = EXPAND_ROUND(tmp1, 2, 0x3333);
+		tmp2 = EXPAND_ROUND(tmp2, 2, 0x3333);
+		tmp1 = EXPAND_ROUND(tmp1, 1, 0x5555);
+		tmp2 = EXPAND_ROUND(tmp2, 1, 0x5555);
+		depmask2 = _mm_or_si128(tmp1, _mm_add_epi16(tmp2, tmp2));
+		
+		#undef EXPAND_ROUND
 	}
 	_mm_store_si128((__m128i*)dst + 0, depmask1);
 	_mm_store_si128((__m128i*)dst + 1, depmask2);
