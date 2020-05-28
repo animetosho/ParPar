@@ -15,17 +15,10 @@ static HEDLEY_ALWAYS_INLINE void calc_table(uint16_t val, uint16_t* lhtable) {
 	tmp0 = _mm_insert_epi16(tmp0, val2, 2);
 	tmp0 = _mm_insert_epi16(tmp0, val2 ^ val, 3);
 	
-	tmp0 = _mm_shuffle_epi32(tmp0, 0x44);
-	tmp0 = _mm_xor_si128(tmp0, _mm_shufflehi_epi16(
-		_mm_insert_epi16(_mm_setzero_si128(), val4, 4), 0
-	));
+	__m128i vval4 = _mm_set1_epi16(val4);
+	tmp0 = _mm_unpacklo_epi64(tmp0, _mm_xor_si128(tmp0, vval4));
 	
 	_mm_store_si128(_lhtable, tmp0);
-	
-	__m128i mul = _mm_set1_epi16(GF16_MULTBY_TWO(val4)); // *8
-	
-	__m128i tmp8 = _mm_xor_si128(tmp0, mul);
-	_mm_store_si128(_lhtable+1, tmp8);
 	
 	__m128i poly = _mm_set1_epi16(GF16_POLYNOMIAL & 0xffff);
 	#define MUL2(x) _mm_xor_si128( \
@@ -34,6 +27,10 @@ static HEDLEY_ALWAYS_INLINE void calc_table(uint16_t val, uint16_t* lhtable) {
 			_mm_setzero_si128(), x \
 		)) \
 	)
+	__m128i mul = MUL2(vval4); // *8
+	
+	__m128i tmp8 = _mm_xor_si128(tmp0, mul);
+	_mm_store_si128(_lhtable+1, tmp8);
 	
 	mul = MUL2(mul); // *16
 	for(j = 2; j < 32; j <<= 1) {

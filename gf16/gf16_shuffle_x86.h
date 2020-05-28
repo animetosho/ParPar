@@ -133,7 +133,7 @@ void _FN(gf16_shuffle_finish)(void *HEDLEY_RESTRICT dst, size_t len) {
 	#define BCAST
 #endif
 #if MWORD_SIZE == 32
-	#define BCAST _mm256_broadcastsi128_si256
+	#define BCAST(n) _mm256_inserti128_si256(_mm256_castsi128_si256(n), n, 1)
 #endif
 #if MWORD_SIZE == 64
 	#define BCAST(n) _mm512_shuffle_i32x4(_mm512_castsi128_si512(n), _mm512_castsi128_si512(n), 0)
@@ -175,27 +175,34 @@ void _FN(gf16_shuffle_mul)(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RES
 		__m128i tmp = _mm_cvtsi32_si128(val << 16);
 		tmp = _mm_insert_epi16(tmp, val2, 2);
 		tmp = _mm_insert_epi16(tmp, val2 ^ val, 3);
-		tmp = _mm_shuffle_epi32(tmp, 0x44);
-		tmp = _mm_xor_si128(tmp, _mm_shufflehi_epi16(
-			_mm_insert_epi16(_mm_setzero_si128(), val4, 4), 0
-		));
 		
-		__m128i tmp8 = _mm_xor_si128(tmp, _mm_set1_epi16(GF16_MULTBY_TWO(val4)));
+		__m128i vval4 = _mm_set1_epi16(val4);
+		tmp = _mm_unpacklo_epi64(tmp, _mm_xor_si128(tmp, vval4));
+		
+		// multiply by 2
+		__m128i vval8 = _mm_xor_si128(
+			_mm_add_epi16(vval4, vval4),
+			_mm_and_si128(_mm_set1_epi16(GF16_POLYNOMIAL & 0xffff), _mm_cmpgt_epi16(
+				_mm_setzero_si128(), vval4
+			))
+		);
+		
+		__m128i tmp8 = _mm_xor_si128(tmp, vval8);
 		tmp  = _mm_shuffle_epi8(tmp , _mm_set_epi32(0x0f0d0b09, 0x07050301, 0x0e0c0a08, 0x06040200));
 		tmp8 = _mm_shuffle_epi8(tmp8, _mm_set_epi32(0x0f0d0b09, 0x07050301, 0x0e0c0a08, 0x06040200));
 		low0 = BCAST(_mm_unpacklo_epi64(tmp, tmp8));
 		high0 = BCAST(_mm_unpackhi_epi64(tmp, tmp8));
 		
 /* // although the following seems simpler, it doesn't actually seem to be faster, although I don't know why
-		__m128i* multbl = (__m128i*)(ltd->poly + 1);
+		uint8_t* multbl = (uint8_t*)scratch + sizeof(__m128i)*2;
 		
-		__m128i factor0 = _mm_load_si128(multbl + (val & 0xf));
-		factor0 = _mm_xor_si128(factor0, _mm_load_si128(multbl + 16 + ((val & 0xf0) >> 4)));
-		factor0 = _mm_xor_si128(factor0, _mm_load_si128(multbl + 32 + ((val & 0xf00) >> 8)));
-		factor0 = _mm_xor_si128(factor0, _mm_load_si128(multbl + 48 + ((val & 0xf000) >> 12)));
+		__m128i factor0 = _mm_load_si128((__m128i*)multbl + (val & 0xf));
+		factor0 = _mm_xor_si128(factor0, _mm_load_si128((__m128i*)(multbl + (val & 0xf0)) + 16));
+		factor0 = _mm_xor_si128(factor0, _mm_load_si128((__m128i*)(multbl + ((val>>4) & 0xf0)) + 32));
+		factor0 = _mm_xor_si128(factor0, _mm_load_si128((__m128i*)(multbl + ((val>>8) & 0xf0)) + 48));
 		
-		__m128i factor8 = _mm_shuffle_epi8(factor0, _mm_set_epi32(0x08080808, 0x08080808, 0, 0));
-		factor0 = _mm_and_si128(factor0, _mm_set_epi32(-1, 0xffffff00, -1, 0xffffff00));
+		__m128i factor8 = _mm_shuffle_epi8(factor0, _mm_set_epi32(0x0f0f0f0f, 0x0f0f0f0f, 0x07070707, 0x07070707));
+		factor0 = _mm_slli_epi64(factor0, 8);
 		factor8 = _mm_xor_si128(factor0, factor8);
 		
 		low0 = BCAST(_mm_unpacklo_epi64(factor0, factor8));
@@ -263,12 +270,18 @@ void _FN(gf16_shuffle_muladd)(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_
 		__m128i tmp = _mm_cvtsi32_si128(val << 16);
 		tmp = _mm_insert_epi16(tmp, val2, 2);
 		tmp = _mm_insert_epi16(tmp, val2 ^ val, 3);
-		tmp = _mm_shuffle_epi32(tmp, 0x44);
-		tmp = _mm_xor_si128(tmp, _mm_shufflehi_epi16(
-			_mm_insert_epi16(_mm_setzero_si128(), val4, 4), 0
-		));
+		__m128i vval4 = _mm_set1_epi16(val4);
+		tmp = _mm_unpacklo_epi64(tmp, _mm_xor_si128(tmp, vval4));
 		
-		__m128i tmp8 = _mm_xor_si128(tmp, _mm_set1_epi16(GF16_MULTBY_TWO(val4)));
+		// multiply by 2
+		__m128i vval8 = _mm_xor_si128(
+			_mm_add_epi16(vval4, vval4),
+			_mm_and_si128(_mm_set1_epi16(GF16_POLYNOMIAL & 0xffff), _mm_cmpgt_epi16(
+				_mm_setzero_si128(), vval4
+			))
+		);
+		
+		__m128i tmp8 = _mm_xor_si128(tmp, vval8);
 		tmp  = _mm_shuffle_epi8(tmp , _mm_set_epi32(0x0f0d0b09, 0x07050301, 0x0e0c0a08, 0x06040200));
 		tmp8 = _mm_shuffle_epi8(tmp8, _mm_set_epi32(0x0f0d0b09, 0x07050301, 0x0e0c0a08, 0x06040200));
 		low0 = BCAST(_mm_unpacklo_epi64(tmp, tmp8));

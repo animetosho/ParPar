@@ -68,7 +68,8 @@ void* gf16_shuffle_init_x86(int polynomial) {
 			));
 			
 			// put in *8 factor so we don't have to calculate it later
-			tmp = _mm_insert_epi16(tmp, GF_MULTBY_TWO(val4), 0);
+			tmp = _mm_srli_si128(tmp, 2); // could be eliminated by byte shuffle below, if I really cared
+			tmp = _mm_insert_epi16(tmp, GF_MULTBY_TWO(val4), 7);
 			
 			_mm_store_si128(multbl + shift*4 + i, _mm_shuffle_epi8(tmp, _mm_set_epi8(15, 13, 11, 9, 7, 5, 3, 1, 14, 12, 10, 8, 6, 4, 2, 0)));
 		}
