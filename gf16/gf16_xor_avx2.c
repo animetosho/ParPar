@@ -66,7 +66,7 @@ static void gf16_xor_create_jit_lut_avx2(void) {
 	}
 }
 
-static inline __m128i ssse3_tzcnt_epi16(__m128i v) {
+static HEDLEY_ALWAYS_INLINE __m128i ssse3_tzcnt_epi16(__m128i v) {
 	__m128i lmask = _mm_set1_epi8(0xf);
 	__m128i low = _mm_shuffle_epi8(_mm_set_epi8(
 		0,1,0,2,0,1,0,3,0,1,0,2,0,1,0,16
@@ -79,7 +79,7 @@ static inline __m128i ssse3_tzcnt_epi16(__m128i v) {
 	high = _mm_srli_epi16(_mm_add_epi8(combined, _mm_set1_epi8(8)), 8);
 	return _mm_min_epu8(low, high);
 }
-static inline __m128i ssse3_lzcnt_epi16(__m128i v) {
+static HEDLEY_ALWAYS_INLINE __m128i ssse3_lzcnt_epi16(__m128i v) {
 	__m128i lmask = _mm_set1_epi8(0xf);
 	__m128i low = _mm_shuffle_epi8(_mm_set_epi8(
 		4,4,4,4,4,4,4,4,5,5,5,5,6,6,7,16
@@ -92,7 +92,7 @@ static inline __m128i ssse3_lzcnt_epi16(__m128i v) {
 	high = _mm_srli_epi16(combined, 8);
 	return _mm_min_epu8(low, high);
 }
-static inline __m128i sse4_lzcnt_to_mask_epi16(__m128i v) {
+static HEDLEY_ALWAYS_INLINE __m128i sse4_lzcnt_to_mask_epi16(__m128i v) {
 	__m128i zeroes = _mm_cmpeq_epi16(v, _mm_setzero_si128());
 	v = _mm_blendv_epi8(
 		v,
@@ -489,7 +489,7 @@ void* gf16_xor_jit_init_avx2(int polynomial) {
 	uint8_t tmpCode[XORDEP_JIT_SIZE];
 	
 	ALIGN_ALLOC(ret, sizeof(struct gf16_xor_scratch), 32);
-	gf16_bitdep_init256(ret, polynomial, 0);
+	gf16_bitdep_init256(ret->deps, polynomial, 0);
 	
 	gf16_xor_create_jit_lut_avx2();
 	

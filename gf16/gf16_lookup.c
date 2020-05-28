@@ -11,7 +11,7 @@
 )
 
 
-static inline void calc_table(uint16_t coefficient, uint16_t* lhtable) {
+static HEDLEY_ALWAYS_INLINE void calc_table(uint16_t coefficient, uint16_t* lhtable) {
 	int j, k;
 	
 	if(sizeof(uintptr_t) == 4) {

@@ -5,7 +5,7 @@
 #ifdef __SSE2__
 #include <emmintrin.h>
 
-static inline void calc_table(uint16_t val, uint16_t* lhtable) {
+static HEDLEY_ALWAYS_INLINE void calc_table(uint16_t val, uint16_t* lhtable) {
 	int j, k;
 	__m128i* _lhtable = (__m128i*)lhtable;
 	

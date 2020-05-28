@@ -11,7 +11,7 @@ int gf16_xor_available_sse2 = 0;
 #ifdef __SSE2__
 
 /* modified versions of PXOR/XORPS mem to have fixed sized instructions */
-static inline size_t _jit_pxor_mod(uint8_t* jit, uint8_t xreg, uint8_t mreg, int32_t offs) {
+static HEDLEY_ALWAYS_INLINE size_t _jit_pxor_mod(uint8_t* jit, uint8_t xreg, uint8_t mreg, int32_t offs) {
 	*(jit++) = 0x66;
 	size_t p = _jit_rex_pref(&jit, xreg, 0) +1;
 	xreg &= 7;
@@ -19,7 +19,7 @@ static inline size_t _jit_pxor_mod(uint8_t* jit, uint8_t xreg, uint8_t mreg, int
 	jit[3] = (uint8_t)offs;
 	return p+4;
 }
-static inline size_t _jit_xorps_mod(uint8_t* jit, uint8_t xreg, uint8_t mreg, int32_t offs) {
+static HEDLEY_ALWAYS_INLINE size_t _jit_xorps_mod(uint8_t* jit, uint8_t xreg, uint8_t mreg, int32_t offs) {
 	size_t p = _jit_rex_pref(&jit, xreg, 0);
 	xreg &= 7;
 	*(int32_t*)jit = 0x40570F | (xreg <<19) | (mreg <<16) | (offs <<24);
@@ -249,7 +249,7 @@ static void gf16_xor_create_jit_lut_sse2(void) {
 /* tune flags set by GCC; not ideal, but good enough I guess (note, I don't care about anything older than Core2) */
 #if defined(__tune_core2__) || defined(__tune_atom__)
 /* on pre-Nehalem Intel CPUs, it is faster to store unaligned XMM registers in halves */
-static inline void STOREU_XMM(void* dest, __m128i xmm) {
+static HEDLEY_ALWAYS_INLINE void STOREU_XMM(void* dest, __m128i xmm) {
 	_mm_storel_epi64((__m128i*)(dest), xmm);
 	_mm_storeh_pi(((__m64*)(dest) +1), _mm_castsi128_ps(xmm));
 }
@@ -269,7 +269,7 @@ static inline void STOREU_XMM(void* dest, __m128i xmm) {
 	#define CMOV(c, d, s) if(c) (d) = (s)
 #endif
 
-static inline uint_fast16_t xor_jit_bitpair3(uint8_t* dest, uint_fast32_t mask, __m128i* tCode, uint16_t* tInfo, intptr_t* posC, unsigned long* movC, uint_fast8_t isR64) {
+static HEDLEY_ALWAYS_INLINE uint_fast16_t xor_jit_bitpair3(uint8_t* dest, uint_fast32_t mask, __m128i* tCode, uint16_t* tInfo, intptr_t* posC, unsigned long* movC, uint_fast8_t isR64) {
 	uint_fast16_t info = tInfo[mask>>1];
 	intptr_t pC = info >> 12;
 	
@@ -284,7 +284,7 @@ static inline uint_fast16_t xor_jit_bitpair3(uint8_t* dest, uint_fast32_t mask, 
 	return info;
 }
 
-static inline uint_fast16_t xor_jit_bitpair3_noxor(uint8_t* dest, uint_fast16_t info, intptr_t* pos1, unsigned long* mov1, intptr_t* pos2, unsigned long* mov2, int isR64) {
+static HEDLEY_ALWAYS_INLINE uint_fast16_t xor_jit_bitpair3_noxor(uint8_t* dest, uint_fast16_t info, intptr_t* pos1, unsigned long* mov1, intptr_t* pos2, unsigned long* mov2, int isR64) {
 	UNUSED(dest);
 	uintptr_t p1 = (info >> 4) & 0xF;
 	uintptr_t p2 = (info >> 8) & 0xF;
@@ -297,7 +297,7 @@ static inline uint_fast16_t xor_jit_bitpair3_noxor(uint8_t* dest, uint_fast16_t 
 	return info & 0xF;
 }
 
-static inline uint_fast16_t xor_jit_bitpair3_nc_noxor(uint8_t* dest, uint_fast16_t info, intptr_t* pos1, unsigned long* mov1, intptr_t* pos2, unsigned long* mov2, int isR64) {
+static HEDLEY_ALWAYS_INLINE uint_fast16_t xor_jit_bitpair3_nc_noxor(uint8_t* dest, uint_fast16_t info, intptr_t* pos1, unsigned long* mov1, intptr_t* pos2, unsigned long* mov2, int isR64) {
 	UNUSED(dest);
 	uintptr_t p1 = (info >> 8) & 0xF;
 	uintptr_t p2 = info >> 12;

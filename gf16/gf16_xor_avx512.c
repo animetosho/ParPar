@@ -10,9 +10,16 @@ int gf16_xor_available_avx512 = 0;
 
 
 #if defined(__AVX512BW__) && defined(__AVX512VL__) && defined(PLATFORM_AMD64)
-static inline __m512i avx3_popcnt_epi8(__m512i src) {
+/* because some versions of GCC (e.g. 6.3.0) lack _mm512_set_epi8, emulate it */
+#define _P(e3,e2,e1,e0) ((((uint8_t)e3)<<24) | (((uint8_t)e2)<<16) | (((uint8_t)e1)<<8) | ((uint8_t)e0))
+static HEDLEY_ALWAYS_INLINE __m512i MM512_SET_BYTES(char e63, char e62, char e61, char e60, char e59, char e58, char e57, char e56, char e55, char e54, char e53, char e52, char e51, char e50, char e49, char e48, char e47, char e46, char e45, char e44, char e43, char e42, char e41, char e40, char e39, char e38, char e37, char e36, char e35, char e34, char e33, char e32, char e31, char e30, char e29, char e28, char e27, char e26, char e25, char e24, char e23, char e22, char e21, char e20, char e19, char e18, char e17, char e16, char e15, char e14, char e13, char e12, char e11, char e10, char e9, char e8, char e7, char e6, char e5, char e4, char e3, char e2, char e1, char e0) {
+	return _mm512_set_epi32(_P(e63,e62,e61,e60),_P(e59,e58,e57,e56),_P(e55,e54,e53,e52),_P(e51,e50,e49,e48),_P(e47,e46,e45,e44),_P(e43,e42,e41,e40),_P(e39,e38,e37,e36),_P(e35,e34,e33,e32),_P(e31,e30,e29,e28),_P(e27,e26,e25,e24),_P(e23,e22,e21,e20),_P(e19,e18,e17,e16),_P(e15,e14,e13,e12),_P(e11,e10,e9,e8),_P(e7,e6,e5,e4),_P(e3,e2,e1,e0));
+}
+#undef _P
+
+static HEDLEY_ALWAYS_INLINE __m512i avx3_popcnt_epi8(__m512i src) {
 	__m512i lmask = _mm512_set1_epi8(0xf);
-	__m512i tbl = _mm512_set_epi8(
+	__m512i tbl = MM512_SET_BYTES(
 		4, 3, 3, 2, 3, 2, 2, 1, 3, 2, 2, 1, 2, 1, 1, 0,
 		4, 3, 3, 2, 3, 2, 2, 1, 3, 2, 2, 1, 2, 1, 1, 0,
 		4, 3, 3, 2, 3, 2, 2, 1, 3, 2, 2, 1, 2, 1, 1, 0,
@@ -23,25 +30,18 @@ static inline __m512i avx3_popcnt_epi8(__m512i src) {
 		_mm512_shuffle_epi8(tbl, _mm512_and_si512(_mm512_srli_epi16(src, 4), lmask))
 	);
 }
-static inline __m512i avx3_popcnt_epi16(__m512i src) {
+static HEDLEY_ALWAYS_INLINE __m512i avx3_popcnt_epi16(__m512i src) {
 	return _mm512_maddubs_epi16(avx3_popcnt_epi8(src), _mm512_set1_epi8(1));
 }
 
-/* static inline __m128i sse_load_halves(void* lo, void* hi) {
+/* static HEDLEY_ALWAYS_INLINE __m128i sse_load_halves(void* lo, void* hi) {
 	return _mm_castps_si128(_mm_loadh_pi(
 		_mm_castsi128_ps(_mm_loadl_epi64((__m128i*)lo)),
 		hi
 	));
 } */
 
-/* because some versions of GCC (e.g. 6.3.0) lack _mm512_set_epi8, emulate it */
-#define _P(e3,e2,e1,e0) ((((uint8_t)e3)<<24) | (((uint8_t)e2)<<16) | (((uint8_t)e1)<<8) | ((uint8_t)e0))
-static inline __m512i MM512_SET_BYTES(char e63, char e62, char e61, char e60, char e59, char e58, char e57, char e56, char e55, char e54, char e53, char e52, char e51, char e50, char e49, char e48, char e47, char e46, char e45, char e44, char e43, char e42, char e41, char e40, char e39, char e38, char e37, char e36, char e35, char e34, char e33, char e32, char e31, char e30, char e29, char e28, char e27, char e26, char e25, char e24, char e23, char e22, char e21, char e20, char e19, char e18, char e17, char e16, char e15, char e14, char e13, char e12, char e11, char e10, char e9, char e8, char e7, char e6, char e5, char e4, char e3, char e2, char e1, char e0) {
-	return _mm512_set_epi32(_P(e63,e62,e61,e60),_P(e59,e58,e57,e56),_P(e55,e54,e53,e52),_P(e51,e50,e49,e48),_P(e47,e46,e45,e44),_P(e43,e42,e41,e40),_P(e39,e38,e37,e36),_P(e35,e34,e33,e32),_P(e31,e30,e29,e28),_P(e27,e26,e25,e24),_P(e23,e22,e21,e20),_P(e19,e18,e17,e16),_P(e15,e14,e13,e12),_P(e11,e10,e9,e8),_P(e7,e6,e5,e4),_P(e3,e2,e1,e0));
-}
-#undef _P
-
-static inline __m512i xor_avx512_main_part(int odd, int r, __m128i indicies) {
+static HEDLEY_ALWAYS_INLINE __m512i xor_avx512_main_part(int odd, int r, __m128i indicies) {
 	__m512i idx = _mm512_broadcast_i32x4(indicies);
 	r <<= 3;
 	
