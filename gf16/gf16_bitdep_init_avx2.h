@@ -2,20 +2,25 @@
 #include "../src/hedley.h"
 #ifdef __AVX2__
 # include <immintrin.h>
-static inline __m256i gf16_bitdep_xor_swap(__m256i v) {
-	// interleave so that word pairs are split
-	__m256i swapped = _mm256_shuffle_epi8(v, _mm256_set_epi32(
-		// first half -> slli_epi16(x, 8)
-		0x0e800c80, 0x0a800880, 0x06800480, 0x02800080,
-		// second half -> srli_epi16(x, 8)
-		0x800f800d, 0x800b8009, 0x80078005, 0x80038001
-	));
-	swapped = _mm256_permute2x128_si256(swapped, swapped, 0x01);
-	// interleave
-	return _mm256_blendv_epi8(v, swapped, _mm256_set_epi32(
-		0x00ff00ff, 0x00ff00ff, 0x00ff00ff, 0x00ff00ff,
-		0xff00ff00, 0xff00ff00, 0xff00ff00, 0xff00ff00
-	));
+static inline __m256i gf16_bitdep256_swap(__m256i v, int genAffine) {
+	if(genAffine) {
+		// swap for affine2x
+		return _mm256_permute4x64_epi64(v, _MM_SHUFFLE(1,2,0,3));
+	} else {
+		// interleave so that word pairs are split
+		__m256i swapped = _mm256_shuffle_epi8(v, _mm256_set_epi32(
+			// first half -> slli_epi16(x, 8)
+			0x0e800c80, 0x0a800880, 0x06800480, 0x02800080,
+			// second half -> srli_epi16(x, 8)
+			0x800f800d, 0x800b8009, 0x80078005, 0x80038001
+		));
+		swapped = _mm256_permute2x128_si256(swapped, swapped, 0x01);
+		// interleave
+		return _mm256_blendv_epi8(v, swapped, _mm256_set_epi32(
+			0x00ff00ff, 0x00ff00ff, 0x00ff00ff, 0x00ff00ff,
+			0xff00ff00, 0xff00ff00, 0xff00ff00, 0xff00ff00
+		));
+	}
 }
 #endif
 
@@ -66,14 +71,14 @@ static void gf16_bitdep_init256(void* dst, int polynomial, int genAffine) {
 			
 			depmask = _mm256_xor_si256(depmask, addmask);
 		}
-		_mm256_store_si256((__m256i*)dst + (val*4 + 0), genAffine ? depmask : gf16_bitdep_xor_swap(depmask));
+		_mm256_store_si256((__m256i*)dst + (val*4 + 0), gf16_bitdep256_swap(depmask, genAffine));
 		for(int j=1; j<4; j++) {
 			for(int i=0; i<4; i++) {
 				__m256i last = _mm256_shuffle_epi8(depmask, shuf2);
 				depmask = _mm256_srli_si256(depmask, 1);
 				depmask = _mm256_xor_si256(depmask, last);
 			}
-			_mm256_store_si256((__m256i*)dst + (val*4 + j), genAffine ? depmask : gf16_bitdep_xor_swap(depmask));
+			_mm256_store_si256((__m256i*)dst + (val*4 + j), gf16_bitdep256_swap(depmask, genAffine));
 		}
 	}
 #endif

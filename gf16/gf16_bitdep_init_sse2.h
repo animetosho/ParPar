@@ -14,12 +14,15 @@
 static inline void gf16_bitdep128_store(__m128i* dst, __m128i depmask1, __m128i depmask2, int genMode) {
 	if(genMode == GF16_BITDEP_INIT128_GEN_AFFINE) {
 # ifdef __SSSE3__
-		depmask1 = _mm_shuffle_epi8(depmask1, _mm_set_epi8(
+		__m128 tmp1 = _mm_castsi128_ps(_mm_shuffle_epi8(depmask1, _mm_set_epi8(
 			14,12,10,8,6,4,2,0, 15,13,11,9,7,5,3,1
-		));
-		depmask2 = _mm_shuffle_epi8(depmask2, _mm_set_epi8(
+		)));
+		__m128 tmp2 = _mm_castsi128_ps(_mm_shuffle_epi8(depmask2, _mm_set_epi8(
 			14,12,10,8,6,4,2,0, 15,13,11,9,7,5,3,1
-		));
+		)));
+		// swap around for affine2x
+		depmask1 = _mm_castps_si128(_mm_shuffle_ps(tmp2, tmp1, _MM_SHUFFLE(3,2,1,0)));
+		depmask2 = _mm_castps_si128(_mm_shuffle_ps(tmp1, tmp2, _MM_SHUFFLE(3,2,1,0)));
 # endif
 	} else if(genMode == GF16_BITDEP_INIT128_GEN_XORJIT) {
 		/* emulate PACKUSDW (SSE4.1 only) with SSE2 shuffles */

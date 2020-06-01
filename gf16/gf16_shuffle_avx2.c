@@ -13,6 +13,7 @@
 # include <immintrin.h>
 #endif
 #include "gf16_shuffle_x86.h"
+#include "gf16_shuffle2x_x86.h"
 #undef _AVAILABLE
 
 #undef MWORD_SIZE

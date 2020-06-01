@@ -21,12 +21,16 @@ enum Galois16Methods {
 	GF16_SHUFFLE_AVX,
 	GF16_SHUFFLE_AVX2,
 	GF16_SHUFFLE_AVX512,
+	GF16_SHUFFLE2X_AVX2,
+	GF16_SHUFFLE2X_AVX512,
 	GF16_XOR_SSE2,
 	GF16_XOR_JIT_SSE2,
 	GF16_XOR_JIT_AVX2,
 	GF16_XOR_JIT_AVX512,
 	GF16_AFFINE_GFNI,
-	GF16_AFFINE_AVX512
+	GF16_AFFINE_AVX512,
+	GF16_AFFINE2X_GFNI,
+	GF16_AFFINE2X_AVX512
 	// TODO: consider non-transforming shuffle/affine
 };
 static const char* Galois16MethodsText[] = {
@@ -38,12 +42,16 @@ static const char* Galois16MethodsText[] = {
 	"Shuffle (AVX)",
 	"Shuffle (AVX2)",
 	"Shuffle (AVX512)",
+	"Shuffle2x (AVX2)",
+	"Shuffle2x (AVX512)",
 	"Xor (SSE2)",
 	"Xor-Jit (SSE2)",
 	"Xor-Jit (AVX2)",
 	"Xor-Jit (AVX512)",
 	"Affine (GFNI)",
-	"Affine (GFNI+AVX512)"
+	"Affine (GFNI+AVX512)",
+	"Affine2x (GFNI)",
+	"Affine2x (GFNI+AVX512)"
 };
 
 class Galois16Mul {

@@ -225,6 +225,7 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 					}
 					_mul = &gf16_shuffle_mul_avx512;
 					_mul_add = &gf16_shuffle_muladd_avx512;
+					_mul_add_multi = &gf16_shuffle_muladd_multi2_avx512;
 					prepare = &gf16_shuffle_prepare_avx512;
 					finish = &gf16_shuffle_finish_avx512;
 					alignment = 64;
@@ -232,6 +233,33 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 				default: break; // for pedantic compilers
 			}
 			stride = alignment*2;
+		break;
+		
+		case GF16_SHUFFLE2X_AVX512:
+			scratch = gf16_shuffle_init_x86(GF16_POLYNOMIAL);
+			if(!gf16_shuffle_available_avx512) {
+				setupMethod(GF16_AUTO);
+				return;
+			}
+			_mul_add = &gf16_shuffle2x_muladd_avx512;
+			_mul_add_multi = &gf16_shuffle2x_muladd_multi_avx512;
+			prepare = &gf16_shuffle2x_prepare_avx512;
+			finish = &gf16_shuffle2x_finish_avx512;
+			alignment = 64;
+			stride = 64;
+		break;
+		case GF16_SHUFFLE2X_AVX2:
+			scratch = gf16_shuffle_init_x86(GF16_POLYNOMIAL);
+			if(!gf16_shuffle_available_avx2) {
+				setupMethod(GF16_AUTO);
+				return;
+			}
+			_mul_add = &gf16_shuffle2x_muladd_avx2;
+			_mul_add_multi = &gf16_shuffle2x_muladd_multi_avx2;
+			prepare = &gf16_shuffle2x_prepare_avx2;
+			finish = &gf16_shuffle2x_finish_avx2;
+			alignment = 32;
+			stride = 32;
 		break;
 		
 		case GF16_SHUFFLE_NEON:
@@ -274,6 +302,32 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 			_mul_add = &gf16_affine_muladd_gfni;
 			prepare = &gf16_shuffle_prepare_ssse3;
 			finish = &gf16_shuffle_finish_ssse3;
+		break;
+		
+		case GF16_AFFINE2X_AVX512:
+			scratch = gf16_affine_init_avx512(GF16_POLYNOMIAL);
+			alignment = 64;
+			stride = 64;
+			if(!gf16_affine_available_avx512 || !gf16_shuffle_available_avx512) {
+				setupMethod(GF16_AUTO);
+				return;
+			}
+			_mul_add = &gf16_affine2x_muladd_avx512;
+			prepare = &gf16_affine2x_prepare_avx512;
+			finish = &gf16_affine2x_finish_avx512;
+		break;
+		
+		case GF16_AFFINE2X_GFNI:
+			scratch = gf16_affine_init_gfni(GF16_POLYNOMIAL);
+			alignment = 16;
+			stride = 16;
+			if(!gf16_affine_available_gfni || !gf16_shuffle_available_ssse3) {
+				setupMethod(GF16_AUTO);
+				return;
+			}
+			_mul_add = &gf16_affine2x_muladd_gfni;
+			prepare = &gf16_affine2x_prepare_gfni;
+			finish = &gf16_affine2x_finish_gfni;
 		break;
 		
 		case GF16_XOR_JIT_AVX512:
@@ -480,16 +534,24 @@ std::vector<Galois16Methods> Galois16Mul::availableMethods(bool checkCpuid) {
 		ret.push_back(GF16_SHUFFLE_SSSE3);
 	if(gf16_shuffle_available_avx && caps.hasAVX)
 		ret.push_back(GF16_SHUFFLE_AVX);
-	if(gf16_shuffle_available_avx2 && caps.hasAVX2)
+	if(gf16_shuffle_available_avx2 && caps.hasAVX2) {
 		ret.push_back(GF16_SHUFFLE_AVX2);
-	if(gf16_shuffle_available_avx512 && caps.hasAVX512VLBW)
+		ret.push_back(GF16_SHUFFLE2X_AVX2);
+	}
+	if(gf16_shuffle_available_avx512 && caps.hasAVX512VLBW) {
 		ret.push_back(GF16_SHUFFLE_AVX512);
+		ret.push_back(GF16_SHUFFLE2X_AVX512);
+	}
 	
 	if(caps.hasGFNI) {
-		if(gf16_affine_available_gfni && gf16_shuffle_available_ssse3 && caps.hasSSSE3)
+		if(gf16_affine_available_gfni && gf16_shuffle_available_ssse3 && caps.hasSSSE3) {
 			ret.push_back(GF16_AFFINE_GFNI);
-		if(gf16_affine_available_avx512 && gf16_shuffle_available_avx512 && caps.hasAVX512VLBW)
+			ret.push_back(GF16_AFFINE2X_GFNI);
+		}
+		if(gf16_affine_available_avx512 && gf16_shuffle_available_avx512 && caps.hasAVX512VLBW) {
 			ret.push_back(GF16_AFFINE_AVX512);
+			ret.push_back(GF16_AFFINE2X_AVX512);
+		}
 	}
 	
 	if(gf16_xor_available_sse2 && caps.hasSSE2) {
