@@ -293,6 +293,9 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 			}
 			_mul = &gf16_affine_mul_avx512;
 			_mul_add = &gf16_affine_muladd_avx512;
+			#ifdef PLATFORM_AMD64
+			_mul_add_multi = &gf16_affine_muladd_multi_avx512;
+			#endif
 			prepare = &gf16_shuffle_prepare_avx512;
 			finish = &gf16_shuffle_finish_avx512;
 		break;
@@ -307,6 +310,9 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 			}
 			_mul = &gf16_affine_mul_gfni;
 			_mul_add = &gf16_affine_muladd_gfni;
+			#ifdef PLATFORM_AMD64
+			_mul_add_multi = &gf16_affine_muladd_multi_gfni;
+			#endif
 			prepare = &gf16_shuffle_prepare_ssse3;
 			finish = &gf16_shuffle_finish_ssse3;
 		break;
@@ -498,15 +504,15 @@ Galois16Methods Galois16Mul::default_method(size_t regionSizeHint, unsigned /*ou
 	if(caps.hasAVX2) {
 # ifndef PLATFORM_AMD64
 		if(gf16_shuffle_available_avx2 && !caps.propAVX128EU)
-			return GF16_SHUFFLE_AVX2;
+			return GF16_SHUFFLE2X_AVX2;
 # endif
 		if(gf16_shuffle_available_avx2 && caps.propHT) // Intel AVX2 CPU with HT - it seems that shuffle256 is roughly same as xor256 so prefer former
-			return GF16_SHUFFLE_AVX2;
+			return GF16_SHUFFLE2X_AVX2;
 # ifdef PLATFORM_AMD64
 		if(gf16_xor_available_avx2 && caps.canMemWX) // TODO: check size hint?
 			return GF16_XOR_JIT_AVX2;
 		if(gf16_shuffle_available_avx2)
-			return GF16_SHUFFLE_AVX2;
+			return GF16_SHUFFLE2X_AVX2;
 # endif
 	}
 	// TODO: add GFNI affine somewhere here

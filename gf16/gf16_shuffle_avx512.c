@@ -292,6 +292,7 @@ unsigned gf16_shuffle_muladd_multi_avx512(const void *HEDLEY_RESTRICT scratch, u
 }
 
 
+#if defined(_AVAILABLE)
 static HEDLEY_ALWAYS_INLINE void gf16_shuffle2x_avx512_round1(
 	__m512i* src, __m512i* result, __m512i* swapped,
 	__m512i shufNormLo, __m512i shufNormHi, __m512i shufSwapLo, __m512i shufSwapHi
@@ -563,6 +564,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle2x_muladd_x6_avx512(
 		_mm512_store_si512((__m512i*)(_dst+ptr), result);
 	}
 }
+#endif // defined(_AVAILABLE)
 
 
 unsigned gf16_shuffle2x_muladd_multi_avx512(const void *HEDLEY_RESTRICT scratch, unsigned regions, size_t offset, void *HEDLEY_RESTRICT dst, const void* *HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch) {
