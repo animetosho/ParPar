@@ -112,7 +112,7 @@ static HEDLEY_ALWAYS_INLINE _mword separate_low_high(_mword data) {
 	#define _MM_SLLI4_EPI8(v) _mm_shl_epi8(v, _mm_set1_epi8(4))
 #else
 	#define _MM_SRLI4_EPI8(v) _MMI(and)(_MM(srli_epi16)(v, 4), _MM(set1_epi8)(0xf))
-	#define _MM_SLLI4_EPI8(v) _MMI(andnot)(_MM(set1_epi8)(0xf), _MM(slli_epi16)(v, 4))
+	#define _MM_SLLI4_EPI8(v) _MM(slli_epi16)(_MMI(and)(v, _MM(set1_epi8)(0xf)), 4)
 #endif
 
 
@@ -143,8 +143,8 @@ static HEDLEY_ALWAYS_INLINE void mul16_vec(_mword mulLo, _mword mulHi, _mword sr
 #if MWORD_SIZE >= 32
 static HEDLEY_ALWAYS_INLINE void mul16_vec256(__m256i mulLo, __m256i mulHi, __m256i srcLo, __m256i srcHi, __m256i* dstLo, __m256i *dstHi) {
 	__m256i ti = _mm256_and_si256(_mm256_srli_epi16(srcHi, 4), _mm256_set1_epi8(0xf));
-	__m256i tl = _mm256_andnot_si256(_mm256_set1_epi8(0xf), _mm256_slli_epi16(srcLo, 4));
-	__m256i th = _mm256_andnot_si256(_mm256_set1_epi8(0xf), _mm256_slli_epi16(srcHi, 4));
+	__m256i tl = _mm256_slli_epi16(_mm256_and_si256(_mm256_set1_epi8(0xf), srcLo), 4);
+	__m256i th = _mm256_slli_epi16(_mm256_and_si256(_mm256_set1_epi8(0xf), srcHi), 4);
 	th = _mm256_or_si256(th, _mm256_and_si256(_mm256_srli_epi16(srcLo, 4), _mm256_set1_epi8(0xf)));
 	*dstLo = _mm256_xor_si256(tl, _mm256_shuffle_epi8(mulLo, ti));
 	*dstHi = _mm256_xor_si256(th, _mm256_shuffle_epi8(mulHi, ti));
@@ -156,7 +156,7 @@ static HEDLEY_ALWAYS_INLINE void mul16_vec256(__m256i mulLo, __m256i mulHi, __m2
 	#define _MM128_SLLI4_EPI8(v) _mm_shl_epi8(v, _mm_set1_epi8(4))
 #else
 	#define _MM128_SRLI4_EPI8(v) _mm_and_si128(_mm_srli_epi16(v, 4), _mm_set1_epi8(0xf))
-	#define _MM128_SLLI4_EPI8(v) _mm_andnot_si128(_mm_set1_epi8(0xf), _mm_slli_epi16(v, 4))
+	#define _MM128_SLLI4_EPI8(v) _mm_slli_epi16(_mm_and_si128(v, _mm_set1_epi8(0xf)), 4)
 #endif
 static HEDLEY_ALWAYS_INLINE void mul16_vec128(__m128i mulLo, __m128i mulHi, __m128i srcLo, __m128i srcHi, __m128i* dstLo, __m128i *dstHi) {
 	__m128i ti = _MM128_SRLI4_EPI8(srcHi);
