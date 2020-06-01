@@ -18,153 +18,97 @@
 
 
 
-unsigned _FN(gf16_shuffle_muladd_multi2)(const void *HEDLEY_RESTRICT scratch, unsigned regions, size_t offset, void *HEDLEY_RESTRICT dst, const void* *HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch) {
+static HEDLEY_ALWAYS_INLINE void gf16_shuffle_avx512_round(
+	__m512i* src, __m512i* tpl, __m512i* tph,
+	__m512i prodLo0, __m512i prodHi0, __m512i prodLo1, __m512i prodHi1, __m512i prodLo2, __m512i prodHi2, __m512i prodLo3, __m512i prodHi3
+) {
+	__m512i ta = _mm512_load_si512(src);
+	__m512i tb = _mm512_load_si512(src + 1);
+	
+	__m512i til = _mm512_and_si512(_mm512_set1_epi8(0x0f), tb);
+	__m512i tih = _mm512_and_si512(_mm512_set1_epi8(0x0f), _mm512_srli_epi16(tb, 4));
+	*tpl = _mm512_ternarylogic_epi32(_mm512_shuffle_epi8(prodLo0, til), _mm512_shuffle_epi8(prodLo1, tih), *tpl, 0x96);
+	*tph = _mm512_ternarylogic_epi32(_mm512_shuffle_epi8(prodHi0, til), _mm512_shuffle_epi8(prodHi1, tih), *tph, 0x96);
+	
+	til = _mm512_and_si512(_mm512_set1_epi8(0x0f), ta);
+	tih = _mm512_and_si512(_mm512_set1_epi8(0x0f), _mm512_srli_epi16(ta, 4));
+	
+	*tpl = _mm512_ternarylogic_epi32(*tpl, _mm512_shuffle_epi8(prodLo2, til), _mm512_shuffle_epi8(prodLo3, tih), 0x96);
+	*tph = _mm512_ternarylogic_epi32(*tph, _mm512_shuffle_epi8(prodHi2, til), _mm512_shuffle_epi8(prodHi3, tih), 0x96);
+}
+
+unsigned gf16_shuffle_muladd_multi2_avx512(const void *HEDLEY_RESTRICT scratch, unsigned regions, size_t offset, void *HEDLEY_RESTRICT dst, const void* *HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch) {
 	UNUSED(mutScratch);
 #ifdef _AVAILABLE
 	uint8_t* _dst = (uint8_t*)dst + offset + len;
-	_mword mask = _MM(set1_epi8) (0x0f);
-	_mword polyl = BCAST(_mm_load_si128((__m128i*)scratch));
-	_mword polyh = BCAST(_mm_load_si128((__m128i*)scratch + 1));
+	__m256i polyl = _mm256_broadcastsi128_si256(_mm_load_si128((__m128i*)scratch));
+	__m256i polyh = _mm256_broadcastsi128_si256(_mm_load_si128((__m128i*)scratch + 1));
 	
 	unsigned region = 0;
 	for(; region < (regions & ~1); region += 2) {
-		_mword lowA0, lowA1, lowA2, lowA3, highA0, highA1, highA2, highA3;
-		_mword lowB0, lowB1, lowB2, lowB3, highB0, highB1, highB2, highB3;
-		_mword ta, tb, ti, tpl, tph;
+		__m512i lowA0, lowA1, lowA2, lowA3, highA0, highA1, highA2, highA3;
+		__m512i lowB0, lowB1, lowB2, lowB3, highB0, highB1, highB2, highB3;
 		
-		// TODO: optimize this
-		{
-			uint16_t val = coefficients[region];
-			int val2 = GF16_MULTBY_TWO(val);
-			int val4 = GF16_MULTBY_TWO(val2);
-			__m128i tmp = _mm_cvtsi32_si128(val << 16);
-			tmp = _mm_insert_epi16(tmp, val2, 2);
-			tmp = _mm_insert_epi16(tmp, val2 ^ val, 3);
-			__m128i vval4 = _mm_set1_epi16(val4);
-			tmp = _mm_unpacklo_epi64(tmp, _mm_xor_si128(tmp, vval4));
-			
-			// multiply by 2
-			__m128i vval8 = _mm_xor_si128(
-				_mm_add_epi16(vval4, vval4),
-				_mm_and_si128(_mm_set1_epi16(GF16_POLYNOMIAL & 0xffff), _mm_cmpgt_epi16(
-					_mm_setzero_si128(), vval4
-				))
-			);
-			
-			__m128i tmp8 = _mm_xor_si128(tmp, vval8);
-			tmp  = _mm_shuffle_epi8(tmp , _mm_set_epi32(0x0f0d0b09, 0x07050301, 0x0e0c0a08, 0x06040200));
-			tmp8 = _mm_shuffle_epi8(tmp8, _mm_set_epi32(0x0f0d0b09, 0x07050301, 0x0e0c0a08, 0x06040200));
-			lowA0 = BCAST(_mm_unpacklo_epi64(tmp, tmp8));
-			highA0 = BCAST(_mm_unpackhi_epi64(tmp, tmp8));
-			
-			mul16_vec(polyl, polyh, lowA0, highA0, &lowA1, &highA1);
-			mul16_vec(polyl, polyh, lowA1, highA1, &lowA2, &highA2);
-			mul16_vec(polyl, polyh, lowA2, highA2, &lowA3, &highA3);
-		}
-		{
-			uint16_t val = coefficients[region+1];
-			int val2 = GF16_MULTBY_TWO(val);
-			int val4 = GF16_MULTBY_TWO(val2);
-			__m128i tmp = _mm_cvtsi32_si128(val << 16);
-			tmp = _mm_insert_epi16(tmp, val2, 2);
-			tmp = _mm_insert_epi16(tmp, val2 ^ val, 3);
-			__m128i vval4 = _mm_set1_epi16(val4);
-			tmp = _mm_unpacklo_epi64(tmp, _mm_xor_si128(tmp, vval4));
-			
-			// multiply by 2
-			__m128i vval8 = _mm_xor_si128(
-				_mm_add_epi16(vval4, vval4),
-				_mm_and_si128(_mm_set1_epi16(GF16_POLYNOMIAL & 0xffff), _mm_cmpgt_epi16(
-					_mm_setzero_si128(), vval4
-				))
-			);
-			
-			__m128i tmp8 = _mm_xor_si128(tmp, vval8);
-			tmp  = _mm_shuffle_epi8(tmp , _mm_set_epi32(0x0f0d0b09, 0x07050301, 0x0e0c0a08, 0x06040200));
-			tmp8 = _mm_shuffle_epi8(tmp8, _mm_set_epi32(0x0f0d0b09, 0x07050301, 0x0e0c0a08, 0x06040200));
-			lowB0 = BCAST(_mm_unpacklo_epi64(tmp, tmp8));
-			highB0 = BCAST(_mm_unpackhi_epi64(tmp, tmp8));
-			
-			mul16_vec(polyl, polyh, lowB0, highB0, &lowB1, &highB1);
-			mul16_vec(polyl, polyh, lowB1, highB1, &lowB2, &highB2);
-			mul16_vec(polyl, polyh, lowB2, highB2, &lowB3, &highB3);
-		}
+		__m256i prodLo0, prodHi0, prodLo1, prodHi1, prodLo2, prodHi2, prodLo3, prodHi3;
+		
+		__m128i prod0A, mul4A;
+		__m128i prod0B, mul4B;
+		initial_mul_vector(coefficients[region], &prod0A, &mul4A);
+		initial_mul_vector(coefficients[region+1], &prod0B, &mul4B);
+		
+		__m256i prod0 = _mm256_inserti128_si256(_mm256_castsi128_si256(prod0A), prod0B, 1);
+		__m256i mul4 = _mm256_inserti128_si256(_mm256_castsi128_si256(mul4A), mul4B, 1);
+		prod0 = _mm256_unpacklo_epi64(prod0, _mm256_xor_si256(prod0, mul4));
+		
+		// multiply by 2
+		__m256i mul8 = _mm256_xor_si256(
+			_mm256_add_epi16(mul4, mul4),
+			_mm256_and_si256(_mm256_set1_epi16(GF16_POLYNOMIAL & 0xffff), _mm256_cmpgt_epi16(
+				_mm256_setzero_si256(), mul4
+			))
+		);
+		
+		__m256i prod8 = _mm256_xor_si256(prod0, mul8);
+		__m256i shuf = _mm256_set_epi32(
+			0x0f0d0b09, 0x07050301, 0x0e0c0a08, 0x06040200,
+			0x0f0d0b09, 0x07050301, 0x0e0c0a08, 0x06040200
+		);
+		prod0 = _mm256_shuffle_epi8(prod0, shuf);
+		prod8 = _mm256_shuffle_epi8(prod8, shuf);
+		prodLo0 = _mm256_unpacklo_epi64(prod0, prod8);
+		prodHi0 = _mm256_unpackhi_epi64(prod0, prod8);
+		
+		mul16_vec256(polyl, polyh, prodLo0, prodHi0, &prodLo1, &prodHi1);
+		mul16_vec256(polyl, polyh, prodLo1, prodHi1, &prodLo2, &prodHi2);
+		mul16_vec256(polyl, polyh, prodLo2, prodHi2, &prodLo3, &prodHi3);
+		
+		
+		// generate final vecs
+		#define GEN_TABLE(n) \
+			lowA##n =  _mm512_shuffle_i32x4(_mm512_castsi256_si512(prodLo##n), _mm512_castsi256_si512(prodLo##n), _MM_SHUFFLE(0,0,0,0)); \
+			highA##n = _mm512_shuffle_i32x4(_mm512_castsi256_si512(prodHi##n), _mm512_castsi256_si512(prodHi##n), _MM_SHUFFLE(0,0,0,0)); \
+			lowB##n =  _mm512_shuffle_i32x4(_mm512_castsi256_si512(prodLo##n), _mm512_castsi256_si512(prodLo##n), _MM_SHUFFLE(1,1,1,1)); \
+			highB##n = _mm512_shuffle_i32x4(_mm512_castsi256_si512(prodHi##n), _mm512_castsi256_si512(prodHi##n), _MM_SHUFFLE(1,1,1,1))
+		GEN_TABLE(0);
+		GEN_TABLE(1);
+		GEN_TABLE(2);
+		GEN_TABLE(3);
+		#undef GEN_TABLE
+		
 		
 		uint8_t* _src1 = (uint8_t*)src[region] + offset + len;
 		uint8_t* _src2 = (uint8_t*)src[region+1] + offset + len;
 		
-		for(long ptr = -(long)len; ptr; ptr += sizeof(_mword)*2) {
-			ta = _MMI(load)((_mword*)(_src1+ptr));
-			tb = _MMI(load)((_mword*)(_src1+ptr) + 1);
-			
-			ti = _MMI(and) (mask, tb);
-			tph = _MM(shuffle_epi8) (highA0, ti);
-			tpl = _MM(shuffle_epi8) (lowA0, ti);
-			
-			ti = _MM_SRLI4_EPI8(tb);
-#if MWORD_SIZE == 64
-			_mword ti2;
-			tpl = _mm512_ternarylogic_epi32(tpl, _MM(shuffle_epi8) (lowA1, ti), _MMI(load)((_mword*)(_dst+ptr) + 1), 0x96);
-			tph = _mm512_ternarylogic_epi32(tph, _MM(shuffle_epi8) (highA1, ti), _MMI(load)((_mword*)(_dst+ptr)), 0x96);
-			
-			ti = _MMI(and) (mask, ta);
-			ti2 = _MMI(and) (mask, _MM(srli_epi16)(ta, 4));
-			
-			tpl = _mm512_ternarylogic_epi32(tpl, _MM(shuffle_epi8) (lowA2, ti), _MM(shuffle_epi8) (lowA3, ti2), 0x96);
-			tph = _mm512_ternarylogic_epi32(tph, _MM(shuffle_epi8) (highA2, ti), _MM(shuffle_epi8) (highA3, ti2), 0x96);
-#else
-			tpl = _MMI(xor)(_MM(shuffle_epi8) (lowA1, ti), tpl);
-			tph = _MMI(xor)(_MM(shuffle_epi8) (highA1, ti), tph);
-			
-			tph = _MMI(xor)(tph, _MMI(load)((_mword*)(_dst+ptr)));
-			tpl = _MMI(xor)(tpl, _MMI(load)((_mword*)(_dst+ptr) + 1));
-			
-			ti = _MMI(and) (mask, ta);
-			tpl = _MMI(xor)(_MM(shuffle_epi8) (lowA2, ti), tpl);
-			tph = _MMI(xor)(_MM(shuffle_epi8) (highA2, ti), tph);
-	
-			ti = _MM_SRLI4_EPI8(ta);
-			tpl = _MMI(xor)(_MM(shuffle_epi8) (lowA3, ti), tpl);
-			tph = _MMI(xor)(_MM(shuffle_epi8) (highA3, ti), tph);
-#endif
-			
-			
-			ta = _MMI(load)((_mword*)(_src2+ptr));
-			tb = _MMI(load)((_mword*)(_src2+ptr) + 1);
-			
-			ti = _MMI(and) (mask, tb);
-#if MWORD_SIZE == 64
-			ti2 = _MMI(and) (mask, _MM(srli_epi16)(tb, 4));
-			tpl = _mm512_ternarylogic_epi32(tpl, _MM(shuffle_epi8) (lowB1, ti2), _MM(shuffle_epi8) (lowB0, ti), 0x96);
-			tph = _mm512_ternarylogic_epi32(tph, _MM(shuffle_epi8) (highB1, ti2), _MM(shuffle_epi8) (highB0, ti), 0x96);
-			
-			ti = _MMI(and) (mask, ta);
-			ti2 = _MMI(and) (mask, _MM(srli_epi16)(ta, 4));
-			
-			tpl = _mm512_ternarylogic_epi32(tpl, _MM(shuffle_epi8) (lowB2, ti), _MM(shuffle_epi8) (lowB3, ti2), 0x96);
-			tph = _mm512_ternarylogic_epi32(tph, _MM(shuffle_epi8) (highB2, ti), _MM(shuffle_epi8) (highB3, ti2), 0x96);
-#else
-			tpl = _MMI(xor)(_MM(shuffle_epi8) (lowB0, ti), tpl);
-			tph = _MMI(xor)(_MM(shuffle_epi8) (highB0, ti), tph);
-			
-			ti = _MM_SRLI4_EPI8(tb);
-			tpl = _MMI(xor)(_MM(shuffle_epi8) (lowB1, ti), tpl);
-			tph = _MMI(xor)(_MM(shuffle_epi8) (highB1, ti), tph);
-			
-			ti = _MMI(and) (mask, ta);
-			tpl = _MMI(xor)(_MM(shuffle_epi8) (lowB2, ti), tpl);
-			tph = _MMI(xor)(_MM(shuffle_epi8) (highB2, ti), tph);
-	
-			ti = _MM_SRLI4_EPI8(ta);
-			tpl = _MMI(xor)(_MM(shuffle_epi8) (lowB3, ti), tpl);
-			tph = _MMI(xor)(_MM(shuffle_epi8) (highB3, ti), tph);
-#endif
-			
-			_MMI(store) ((_mword*)(_dst+ptr), tph);
-			_MMI(store) ((_mword*)(_dst+ptr) + 1, tpl);
+		for(long ptr = -(long)len; ptr; ptr += sizeof(__m512i)*2) {
+			__m512i tph = _mm512_load_si512((__m512i*)(_dst+ptr));
+			__m512i tpl = _mm512_load_si512((__m512i*)(_dst+ptr) + 1);
+			gf16_shuffle_avx512_round((__m512i*)(_src1+ptr), &tpl, &tph, lowA0, highA0, lowA1, highA1, lowA2, highA2, lowA3, highA3);
+			gf16_shuffle_avx512_round((__m512i*)(_src2+ptr), &tpl, &tph, lowB0, highB0, lowB1, highB1, lowB2, highB2, lowB3, highB3);
+			_mm512_store_si512((__m512i*)(_dst+ptr), tph);
+			_mm512_store_si512((__m512i*)(_dst+ptr) + 1, tpl);
 		}
 	}
-	_MM_END
+	_mm256_zeroupper();
 	return region;
 #else
 	UNUSED(scratch); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(val);
