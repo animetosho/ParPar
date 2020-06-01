@@ -326,6 +326,7 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 				return;
 			}
 			_mul_add = &gf16_affine2x_muladd_avx512;
+			_mul_add_multi = &gf16_affine2x_muladd_multi_avx512;
 			prepare = &gf16_affine2x_prepare_avx512;
 			finish = &gf16_affine2x_finish_avx512;
 		break;
@@ -339,6 +340,7 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 				return;
 			}
 			_mul_add = &gf16_affine2x_muladd_gfni;
+			_mul_add_multi = &gf16_affine2x_muladd_multi_gfni;
 			prepare = &gf16_affine2x_prepare_gfni;
 			finish = &gf16_affine2x_finish_gfni;
 		break;
