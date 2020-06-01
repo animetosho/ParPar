@@ -225,7 +225,10 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 					}
 					_mul = &gf16_shuffle_mul_avx512;
 					_mul_add = &gf16_shuffle_muladd_avx512;
-					_mul_add_multi = &gf16_shuffle_muladd_multi2_avx512;
+					#ifdef PLATFORM_AMD64
+					// if 32 registers are available, can do multi-region
+					_mul_add_multi = &gf16_shuffle_muladd_multi_avx512;
+					#endif
 					prepare = &gf16_shuffle_prepare_avx512;
 					finish = &gf16_shuffle_finish_avx512;
 					alignment = 64;
@@ -242,7 +245,9 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 				return;
 			}
 			_mul_add = &gf16_shuffle2x_muladd_avx512;
+			#ifdef PLATFORM_AMD64
 			_mul_add_multi = &gf16_shuffle2x_muladd_multi_avx512;
+			#endif
 			prepare = &gf16_shuffle2x_prepare_avx512;
 			finish = &gf16_shuffle2x_finish_avx512;
 			alignment = 64;
@@ -255,7 +260,9 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 				return;
 			}
 			_mul_add = &gf16_shuffle2x_muladd_avx2;
+			#ifdef PLATFORM_AMD64
 			_mul_add_multi = &gf16_shuffle2x_muladd_multi_avx2;
+			#endif
 			prepare = &gf16_shuffle2x_prepare_avx2;
 			finish = &gf16_shuffle2x_finish_avx2;
 			alignment = 32;

@@ -138,7 +138,7 @@ void _FN(gf16_shuffle2x_muladd)(const void *HEDLEY_RESTRICT scratch, void *HEDLE
 
 unsigned _FN(gf16_shuffle2x_muladd_multi)(const void *HEDLEY_RESTRICT scratch, unsigned regions, size_t offset, void *HEDLEY_RESTRICT dst, const void* *HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch) {
 	UNUSED(mutScratch);
-#ifdef _AVAILABLE
+#if defined(_AVAILABLE) && defined(PLATFORM_AMD64)
 	uint8_t* _dst = (uint8_t*)dst + offset + len;
 	_mword mask = _MM(set1_epi8) (0x0f);
 	__m256i polyl = _mm256_broadcastsi128_si256(_mm_load_si128((__m128i*)scratch));
