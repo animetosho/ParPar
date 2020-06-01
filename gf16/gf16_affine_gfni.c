@@ -12,14 +12,14 @@ int gf16_affine_available_gfni = 0;
 
 #if defined(__GFNI__) && defined(__SSSE3__)
 static HEDLEY_ALWAYS_INLINE void gf16_affine_load_matrix(const void *HEDLEY_RESTRICT scratch, uint16_t coefficient, __m128i* depmask1, __m128i* depmask2) {
-	*depmask1 = _mm_load_si128((__m128i*)(scratch + ((coefficient & 0xf) << 7)));
-	*depmask2 = _mm_load_si128((__m128i*)(scratch + ((coefficient & 0xf) << 7)) +1);
-	*depmask1 = _mm_xor_si128(*depmask1, _mm_load_si128((__m128i*)(scratch + ((coefficient << 3) & 0x780)) + 1*2));
-	*depmask2 = _mm_xor_si128(*depmask2, _mm_load_si128((__m128i*)(scratch + ((coefficient << 3) & 0x780)) + 1*2 +1));
-	*depmask1 = _mm_xor_si128(*depmask1, _mm_load_si128((__m128i*)(scratch + ((coefficient >> 1) & 0x780)) + 2*2));
-	*depmask2 = _mm_xor_si128(*depmask2, _mm_load_si128((__m128i*)(scratch + ((coefficient >> 1) & 0x780)) + 2*2 +1));
-	*depmask1 = _mm_xor_si128(*depmask1, _mm_load_si128((__m128i*)(scratch + ((coefficient >> 5) & 0x780)) + 3*2));
-	*depmask2 = _mm_xor_si128(*depmask2, _mm_load_si128((__m128i*)(scratch + ((coefficient >> 5) & 0x780)) + 3*2 +1));
+	*depmask1 = _mm_load_si128((__m128i*)((char*)scratch + ((coefficient & 0xf) << 7)));
+	*depmask2 = _mm_load_si128((__m128i*)((char*)scratch + ((coefficient & 0xf) << 7)) +1);
+	*depmask1 = _mm_xor_si128(*depmask1, _mm_load_si128((__m128i*)((char*)scratch + ((coefficient << 3) & 0x780)) + 1*2));
+	*depmask2 = _mm_xor_si128(*depmask2, _mm_load_si128((__m128i*)((char*)scratch + ((coefficient << 3) & 0x780)) + 1*2 +1));
+	*depmask1 = _mm_xor_si128(*depmask1, _mm_load_si128((__m128i*)((char*)scratch + ((coefficient >> 1) & 0x780)) + 2*2));
+	*depmask2 = _mm_xor_si128(*depmask2, _mm_load_si128((__m128i*)((char*)scratch + ((coefficient >> 1) & 0x780)) + 2*2 +1));
+	*depmask1 = _mm_xor_si128(*depmask1, _mm_load_si128((__m128i*)((char*)scratch + ((coefficient >> 5) & 0x780)) + 3*2));
+	*depmask2 = _mm_xor_si128(*depmask2, _mm_load_si128((__m128i*)((char*)scratch + ((coefficient >> 5) & 0x780)) + 3*2 +1));
 }
 #endif
 
@@ -185,7 +185,7 @@ unsigned gf16_affine_muladd_multi_gfni(const void *HEDLEY_RESTRICT scratch, unsi
 	}
 	return region;
 #else
-	UNUSED(scratch); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficient);
+	UNUSED(scratch); UNUSED(regions); UNUSED(offset); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficients);
 	return 0;
 #endif
 }
@@ -364,7 +364,7 @@ unsigned gf16_affine2x_muladd_multi_gfni(const void *HEDLEY_RESTRICT scratch, un
 #endif
 	return region;
 #else
-	UNUSED(scratch); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficient);
+	UNUSED(scratch); UNUSED(regions); UNUSED(offset); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficients);
 	return 0;
 #endif
 }

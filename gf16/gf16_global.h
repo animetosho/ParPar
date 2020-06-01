@@ -11,7 +11,8 @@
 #define UNUSED(...) (void)(__VA_ARGS__)
 
 #ifdef _MSC_VER
-#define inline __inline
+# define inline __inline
+# pragma warning (disable : 4146)
 #endif
 
 #endif

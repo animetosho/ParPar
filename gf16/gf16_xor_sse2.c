@@ -738,7 +738,7 @@ void gf16_xor_jit_mul_sse2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RES
 		mutScratch
 	);
 #else
-	UNUSED(scratch); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficient);
+	UNUSED(scratch); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficient); UNUSED(mutScratch);
 #endif
 }
 
@@ -757,7 +757,7 @@ void gf16_xor_jit_muladd_sse2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_
 		mutScratch
 	);
 #else
-	UNUSED(scratch); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficient);
+	UNUSED(scratch); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficient); UNUSED(mutScratch);
 #endif
 }
 
@@ -769,14 +769,14 @@ void gf16_xor_mul_sse2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRIC
 	ALIGN_TO(16, uint16_t tmp_depmask[16]);
 	uint8_t* _dst = (uint8_t*)dst + len;
 	
-	__m128i depmask1 = _mm_load_si128((__m128i*)(scratch + ((val & 0xf) << 7)));
-	__m128i depmask2 = _mm_load_si128((__m128i*)(scratch + ((val & 0xf) << 7)) +1);
-	depmask1 = _mm_xor_si128(depmask1, _mm_load_si128((__m128i*)(scratch + ((val << 3) & 0x780)) + 1*2));
-	depmask2 = _mm_xor_si128(depmask2, _mm_load_si128((__m128i*)(scratch + ((val << 3) & 0x780)) + 1*2 +1));
-	depmask1 = _mm_xor_si128(depmask1, _mm_load_si128((__m128i*)(scratch + ((val >> 1) & 0x780)) + 2*2));
-	depmask2 = _mm_xor_si128(depmask2, _mm_load_si128((__m128i*)(scratch + ((val >> 1) & 0x780)) + 2*2 +1));
-	depmask1 = _mm_xor_si128(depmask1, _mm_load_si128((__m128i*)(scratch + ((val >> 5) & 0x780)) + 3*2));
-	depmask2 = _mm_xor_si128(depmask2, _mm_load_si128((__m128i*)(scratch + ((val >> 5) & 0x780)) + 3*2 +1));
+	__m128i depmask1 = _mm_load_si128((__m128i*)((char*)scratch + ((val & 0xf) << 7)));
+	__m128i depmask2 = _mm_load_si128((__m128i*)((char*)scratch + ((val & 0xf) << 7)) +1);
+	depmask1 = _mm_xor_si128(depmask1, _mm_load_si128((__m128i*)((char*)scratch + ((val << 3) & 0x780)) + 1*2));
+	depmask2 = _mm_xor_si128(depmask2, _mm_load_si128((__m128i*)((char*)scratch + ((val << 3) & 0x780)) + 1*2 +1));
+	depmask1 = _mm_xor_si128(depmask1, _mm_load_si128((__m128i*)((char*)scratch + ((val >> 1) & 0x780)) + 2*2));
+	depmask2 = _mm_xor_si128(depmask2, _mm_load_si128((__m128i*)((char*)scratch + ((val >> 1) & 0x780)) + 2*2 +1));
+	depmask1 = _mm_xor_si128(depmask1, _mm_load_si128((__m128i*)((char*)scratch + ((val >> 5) & 0x780)) + 3*2));
+	depmask2 = _mm_xor_si128(depmask2, _mm_load_si128((__m128i*)((char*)scratch + ((val >> 5) & 0x780)) + 3*2 +1));
 	
 	
 	/* generate needed tables */
@@ -850,14 +850,14 @@ void gf16_xor_muladd_sse2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_REST
 	ALIGN_TO(16, uint16_t tmp_depmask[16]);
 	uint8_t* _dst = (uint8_t*)dst + len;
 
-	__m128i depmask1 = _mm_load_si128((__m128i*)(scratch + ((val & 0xf) << 7)));
-	__m128i depmask2 = _mm_load_si128((__m128i*)(scratch + ((val & 0xf) << 7)) +1);
-	depmask1 = _mm_xor_si128(depmask1, _mm_load_si128((__m128i*)(scratch + ((val << 3) & 0x780)) + 1*2));
-	depmask2 = _mm_xor_si128(depmask2, _mm_load_si128((__m128i*)(scratch + ((val << 3) & 0x780)) + 1*2 +1));
-	depmask1 = _mm_xor_si128(depmask1, _mm_load_si128((__m128i*)(scratch + ((val >> 1) & 0x780)) + 2*2));
-	depmask2 = _mm_xor_si128(depmask2, _mm_load_si128((__m128i*)(scratch + ((val >> 1) & 0x780)) + 2*2 +1));
-	depmask1 = _mm_xor_si128(depmask1, _mm_load_si128((__m128i*)(scratch + ((val >> 5) & 0x780)) + 3*2));
-	depmask2 = _mm_xor_si128(depmask2, _mm_load_si128((__m128i*)(scratch + ((val >> 5) & 0x780)) + 3*2 +1));
+	__m128i depmask1 = _mm_load_si128((__m128i*)((char*)scratch + ((val & 0xf) << 7)));
+	__m128i depmask2 = _mm_load_si128((__m128i*)((char*)scratch + ((val & 0xf) << 7)) +1);
+	depmask1 = _mm_xor_si128(depmask1, _mm_load_si128((__m128i*)((char*)scratch + ((val << 3) & 0x780)) + 1*2));
+	depmask2 = _mm_xor_si128(depmask2, _mm_load_si128((__m128i*)((char*)scratch + ((val << 3) & 0x780)) + 1*2 +1));
+	depmask1 = _mm_xor_si128(depmask1, _mm_load_si128((__m128i*)((char*)scratch + ((val >> 1) & 0x780)) + 2*2));
+	depmask2 = _mm_xor_si128(depmask2, _mm_load_si128((__m128i*)((char*)scratch + ((val >> 1) & 0x780)) + 2*2 +1));
+	depmask1 = _mm_xor_si128(depmask1, _mm_load_si128((__m128i*)((char*)scratch + ((val >> 5) & 0x780)) + 3*2));
+	depmask2 = _mm_xor_si128(depmask2, _mm_load_si128((__m128i*)((char*)scratch + ((val >> 5) & 0x780)) + 3*2 +1));
 	
 	
 	/* generate needed tables */

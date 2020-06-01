@@ -78,7 +78,7 @@
 # define ALIGN_TO(a, v) v __attribute__((aligned(a)))
 #endif
 
-#if defined(__cplusplus) && __cplusplus >= 201100 && !(defined(_MSC_VER) && defined(__clang__)) && !defined(__APPLE__)
+#if defined(__cplusplus) && __cplusplus >= 201100 && !(defined(_MSC_VER) && (defined(__clang__) || defined(PLATFORM_ARM))) && !defined(__APPLE__)
 	// C++11 method
 	// len needs to be a multiple of alignment, although it sometimes works if it isn't...
 	#include <cstdlib>

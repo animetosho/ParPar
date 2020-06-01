@@ -82,8 +82,8 @@ static inline void gf16_bitdep128_store(__m128i* dst, __m128i depmask1, __m128i 
 }
 #endif
 
-static void gf16_bitdep_init128(void* dst, int polynomial, int genMode) {
 #ifdef __SSE2__
+static void gf16_bitdep_init128(void* dst, int polynomial, int genMode) {
 	__m128i polymask1, polymask2;
 	/* duplicate each bit in the polynomial 16 times */
 	polymask2 = _mm_set1_epi16(polynomial & 0xFFFF); /* chop off top bit, although not really necessary */
@@ -138,5 +138,5 @@ static void gf16_bitdep_init128(void* dst, int polynomial, int genMode) {
 			gf16_bitdep128_store((__m128i*)dst + (val*4+j)*2, depmask1, depmask2, genMode);
 		}
 	}
-#endif
 }
+#endif

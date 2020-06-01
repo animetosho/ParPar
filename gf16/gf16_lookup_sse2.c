@@ -102,7 +102,7 @@ void gf16_lookup_mul_sse2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_REST
 		if(sizeof(uintptr_t) == 8)
 			input >>= 16;
 		else
-			input = *(uintptr_t*)(_src+ptr+4);
+			input = *(uintptr_t*)(_src+ptr+12);
 		lo2 = _mm_insert_epi16(lo2, lhtable[input & 0xff], 2);
 		hi2 = _mm_insert_epi16(hi2, lhtable[256 + ((input >> 8) & 0xff)], 2);
 		input >>= 16;
@@ -154,7 +154,7 @@ void gf16_lookup_muladd_sse2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_R
 		if(sizeof(uintptr_t) == 8)
 			input >>= 16;
 		else
-			input = *(uintptr_t*)(_src+ptr+4);
+			input = *(uintptr_t*)(_src+ptr+12);
 		lo2 = _mm_insert_epi16(lo2, lhtable[input & 0xff], 2);
 		hi2 = _mm_insert_epi16(hi2, lhtable[256 + ((input >> 8) & 0xff)], 2);
 		input >>= 16;

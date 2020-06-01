@@ -286,7 +286,7 @@ unsigned gf16_shuffle_muladd_multi_avx512(const void *HEDLEY_RESTRICT scratch, u
 	_mm256_zeroupper();
 	return region;
 #else
-	UNUSED(scratch); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(val);
+	UNUSED(scratch); UNUSED(regions); UNUSED(offset); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficients);
 	return 0;
 #endif
 }
@@ -636,7 +636,7 @@ unsigned gf16_shuffle2x_muladd_multi_avx512(const void *HEDLEY_RESTRICT scratch,
 	_mm256_zeroupper();
 	return region;
 #else
-	UNUSED(scratch); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(val);
+	UNUSED(scratch); UNUSED(regions); UNUSED(offset); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficients);
 	return 0;
 #endif
 }

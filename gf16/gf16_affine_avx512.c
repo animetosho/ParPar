@@ -14,12 +14,12 @@ int gf16_affine_available_avx512 = 0;
 static HEDLEY_ALWAYS_INLINE __m256i gf16_affine_load_matrix(const void *HEDLEY_RESTRICT scratch, uint16_t coefficient) {
 	__m256i depmask = _mm256_xor_si256(
 		_mm256_load_si256((__m256i*)scratch + (coefficient & 0xf)*4),
-		_mm256_load_si256((__m256i*)(scratch + ((coefficient << 3) & 0x780)) + 1)
+		_mm256_load_si256((__m256i*)((char*)scratch + ((coefficient << 3) & 0x780)) + 1)
 	);
 	depmask = _mm256_ternarylogic_epi32(
 		depmask,
-		_mm256_load_si256((__m256i*)(scratch + ((coefficient >> 1) & 0x780)) + 2),
-		_mm256_load_si256((__m256i*)(scratch + ((coefficient >> 5) & 0x780)) + 3),
+		_mm256_load_si256((__m256i*)((char*)scratch + ((coefficient >> 1) & 0x780)) + 2),
+		_mm256_load_si256((__m256i*)((char*)scratch + ((coefficient >> 5) & 0x780)) + 3),
 		0x96
 	);
 	return depmask;
@@ -32,21 +32,21 @@ static HEDLEY_ALWAYS_INLINE __m512i gf16_affine_load2_matrix(const void *HEDLEY_
 			1
 		),
 		_mm512_inserti64x4(
-			_mm512_castsi256_si512(_mm256_load_si256((__m256i*)(scratch + ((coeff1 << 3) & 0x780)) + 1)),
-			_mm256_load_si256((__m256i*)(scratch + ((coeff2 << 3) & 0x780)) + 1),
+			_mm512_castsi256_si512(_mm256_load_si256((__m256i*)((char*)scratch + ((coeff1 << 3) & 0x780)) + 1)),
+			_mm256_load_si256((__m256i*)((char*)scratch + ((coeff2 << 3) & 0x780)) + 1),
 			1
 		)
 	);
 	depmask = _mm512_ternarylogic_epi32(
 		depmask,
 		_mm512_inserti64x4(
-			_mm512_castsi256_si512(_mm256_load_si256((__m256i*)(scratch + ((coeff1 >> 1) & 0x780)) + 2)),
-			_mm256_load_si256((__m256i*)(scratch + ((coeff2 >> 1) & 0x780)) + 2),
+			_mm512_castsi256_si512(_mm256_load_si256((__m256i*)((char*)scratch + ((coeff1 >> 1) & 0x780)) + 2)),
+			_mm256_load_si256((__m256i*)((char*)scratch + ((coeff2 >> 1) & 0x780)) + 2),
 			1
 		),
 		_mm512_inserti64x4(
-			_mm512_castsi256_si512(_mm256_load_si256((__m256i*)(scratch + ((coeff1 >> 5) & 0x780)) + 3)),
-			_mm256_load_si256((__m256i*)(scratch + ((coeff2 >> 5) & 0x780)) + 3),
+			_mm512_castsi256_si512(_mm256_load_si256((__m256i*)((char*)scratch + ((coeff1 >> 5) & 0x780)) + 3)),
+			_mm256_load_si256((__m256i*)((char*)scratch + ((coeff2 >> 5) & 0x780)) + 3),
 			1
 		),
 		0x96
@@ -239,7 +239,7 @@ unsigned gf16_affine_muladd_multi_avx512(const void *HEDLEY_RESTRICT scratch, un
 	}
 	return region;
 #else
-	UNUSED(scratch); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficient);
+	UNUSED(scratch); UNUSED(regions); UNUSED(offset); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficients);
 	return 0;
 #endif
 }
@@ -455,7 +455,7 @@ unsigned gf16_affine2x_muladd_multi_avx512(const void *HEDLEY_RESTRICT scratch, 
 #endif
 	return region;
 #else
-	UNUSED(scratch); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficient);
+	UNUSED(scratch); UNUSED(regions); UNUSED(offset); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficients);
 	return 0;
 #endif
 }

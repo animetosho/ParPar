@@ -4,6 +4,9 @@
 #include "gf16_global.h"
 #include "platform.h"
 
+#ifdef _AVAILABLE
+
+
 #if MWORD_SIZE != 64
 ALIGN_TO(64, static char load_mask[64]) = {
 	-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
@@ -168,5 +171,5 @@ static HEDLEY_ALWAYS_INLINE void mul16_vec128(__m128i mulLo, __m128i mulHi, __m1
 }
 
 
-
+#endif // defined(_AVAILABLE)
 #endif // defined(_GF16_SHUFFLE_X86_COMMON_)

@@ -418,7 +418,7 @@ void gf16_xor_jit_mul_avx2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RES
 	
 	_mm256_zeroupper();
 #else
-	UNUSED(scratch); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficient);
+	UNUSED(scratch); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficient); UNUSED(mutScratch);
 #endif
 }
 
@@ -439,7 +439,7 @@ void gf16_xor_jit_muladd_avx2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_
 	
 	_mm256_zeroupper();
 #else
-	UNUSED(scratch); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficient);
+	UNUSED(scratch); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficient); UNUSED(mutScratch);
 #endif
 }
 

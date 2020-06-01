@@ -24,8 +24,8 @@ static inline __m256i gf16_bitdep256_swap(__m256i v, int genAffine) {
 }
 #endif
 
-static void gf16_bitdep_init256(void* dst, int polynomial, int genAffine) {
 #ifdef __AVX2__
+static void gf16_bitdep_init256(void* dst, int polynomial, int genAffine) {
 	// expand polynomial into vector
 	__m128i shuf = _mm_cmpeq_epi8(
 		_mm_setzero_si128(),
@@ -81,5 +81,5 @@ static void gf16_bitdep_init256(void* dst, int polynomial, int genAffine) {
 			_mm256_store_si256((__m256i*)dst + (val*4 + j), gf16_bitdep256_swap(depmask, genAffine));
 		}
 	}
-#endif
 }
+#endif
