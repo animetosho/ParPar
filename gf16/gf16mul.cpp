@@ -281,6 +281,10 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 			}
 			_mul = &gf16_shuffle_mul_neon;
 			_mul_add = &gf16_shuffle_muladd_neon;
+			#ifdef __aarch64__
+			// enable only if 32 registers available
+			_mul_add_multi = &gf16_shuffle_muladd_multi_neon;
+			#endif
 		break;
 		
 		case GF16_AFFINE_AVX512:
