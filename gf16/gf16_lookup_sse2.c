@@ -115,7 +115,7 @@ void gf16_lookup_mul_sse2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_REST
 		_mm_store_si128((__m128i*)(_dst+ptr), _mm_unpacklo_epi64(res1, res2));
 	}
 #else
-	UNUSED(scratch); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(val);
+	UNUSED(scratch); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficient);
 #endif
 }
 
@@ -170,6 +170,6 @@ void gf16_lookup_muladd_sse2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_R
 		_mm_store_si128((__m128i*)(_dst+ptr), res1);
 	}
 #else
-	UNUSED(scratch); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(val);
+	UNUSED(scratch); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficient);
 #endif
 }

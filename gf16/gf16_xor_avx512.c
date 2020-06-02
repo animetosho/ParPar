@@ -384,8 +384,8 @@ void gf16_xor_jit_muladd_avx512(const void *HEDLEY_RESTRICT scratch, void *HEDLE
 #undef _MM_END
 
 
-static size_t xor_write_init_jit(uint8_t *jitCode) {
 #ifdef PLATFORM_AMD64
+static size_t xor_write_init_jit(uint8_t *jitCode) {
 	uint8_t *jitCodeStart = jitCode;
 	jitCode += _jit_add_i(jitCode, AX, 1024);
 	jitCode += _jit_add_i(jitCode, DX, 1024);
@@ -395,10 +395,8 @@ static size_t xor_write_init_jit(uint8_t *jitCode) {
 		jitCode += _jit_vmovdqa32_load(jitCode, 16+i, AX, (i-2)<<6);
 	}
 	return jitCode-jitCodeStart;
-#else
-	return 0;
-#endif
 }
+#endif
 
 
 #include "gf16_bitdep_init_avx2.h"

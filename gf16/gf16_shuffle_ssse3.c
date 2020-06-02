@@ -49,6 +49,7 @@ void* gf16_shuffle_init_x86(int polynomial) {
 	_mm_store_si128(ret + 1, _mm_unpackhi_epi64(tmp1, tmp2));
 	return ret;
 #else
+	UNUSED(polynomial);
 	return NULL;
 #endif
 	/* factor tables - currently not used

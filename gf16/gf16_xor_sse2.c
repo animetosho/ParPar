@@ -946,8 +946,8 @@ void gf16_xor_muladd_sse2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_REST
 
 #include "gf16_bitdep_init_sse2.h"
 
-static size_t xor_write_init_jit(uint8_t *jitCode) {
 #ifdef PLATFORM_X86
+static size_t xor_write_init_jit(uint8_t *jitCode) {
 	uint8_t *jitCodeStart = jitCode;
 	jitCode += _jit_add_i(jitCode, AX, 256);
 	jitCode += _jit_add_i(jitCode, DX, 256);
@@ -964,10 +964,8 @@ static size_t xor_write_init_jit(uint8_t *jitCode) {
 	}
 # endif
 	return jitCode-jitCodeStart;
-#else
-	return 0;
-#endif
 }
+#endif
 
 void* gf16_xor_jit_init_sse2(int polynomial) {
 #ifdef __SSE2__
@@ -1001,6 +999,8 @@ void* gf16_xor_jit_init_mut_sse2() {
 void gf16_xor_jit_uninit(void* scratch) {
 #ifdef PLATFORM_X86
 	jit_free(scratch, XORDEP_JIT_SIZE);
+#else
+	UNUSED(scratch);
 #endif
 }
 
