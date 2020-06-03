@@ -923,6 +923,67 @@ void gf16_xor_muladd_sse2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_REST
 }
 
 
+
+void gf16_xor_finish_sse2(void *HEDLEY_RESTRICT dst, size_t len) {
+#ifdef __SSE2__
+	__m128i ta, tb;
+	ALIGN_TO(16, uint16_t dtmp[128]);
+	
+	/*shut up compiler warning*/
+	__m128i th = _mm_setzero_si128();
+	__m128i tl = _mm_setzero_si128();
+	
+	uint16_t* _dst = (uint16_t*)dst;
+	
+	for(; len; len -= sizeof(__m128i)*16) {
+		for(int j=0; j<8; j++) {
+			/* load in pattern: [0011223344556677] [8899AABBCCDDEEFF] */
+			/* MSVC _requires_ a constant so we have to manually unroll this loop */
+			#define MM_INSERT(i) \
+				tl = _mm_insert_epi16(tl, _dst[120 - i*8], i); \
+				th = _mm_insert_epi16(th, _dst[ 56 - i*8], i)
+			MM_INSERT(0);
+			MM_INSERT(1);
+			MM_INSERT(2);
+			MM_INSERT(3);
+			MM_INSERT(4);
+			MM_INSERT(5);
+			MM_INSERT(6);
+			MM_INSERT(7);
+			#undef MM_INSERT
+			
+			/* swizzle to [0123456789ABCDEF] [0123456789ABCDEF] */
+			ta = _mm_packus_epi16(
+				_mm_srli_epi16(tl, 8),
+				_mm_srli_epi16(th, 8)
+			);
+			tb = _mm_packus_epi16(
+				_mm_and_si128(tl, _mm_set1_epi16(0xff)),
+				_mm_and_si128(th, _mm_set1_epi16(0xff))
+			);
+			
+			/* extract top bits */
+			dtmp[j*16 + 7] = _mm_movemask_epi8(ta);
+			dtmp[j*16 + 15] = _mm_movemask_epi8(tb);
+			for(int i=1; i<8; i++) {
+				ta = _mm_add_epi8(ta, ta);
+				tb = _mm_add_epi8(tb, tb);
+				dtmp[j*16 + 7-i] = _mm_movemask_epi8(ta);
+				dtmp[j*16 + 15-i] = _mm_movemask_epi8(tb);
+			}
+			_dst++;
+		}
+		_dst -= 8;
+		/* we only really need to copy temp -> dest if src==dest */
+		memcpy(_dst, dtmp, sizeof(dtmp));
+		_dst += 128;
+	}
+#else
+	UNUSED(dst); UNUSED(len);
+#endif
+}
+
+
 #define MWORD_SIZE 16
 #define _mword __m128i
 #define _MM(f) _mm_ ## f
