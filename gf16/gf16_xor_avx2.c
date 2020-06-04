@@ -446,84 +446,145 @@ void gf16_xor_jit_muladd_avx2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_
 
 void gf16_xor_finish_avx2(void *HEDLEY_RESTRICT dst, size_t len) {
 #if defined(__AVX2__) && defined(PLATFORM_AMD64)
-	__m256i ta, tb;
-	ALIGN_TO(32, uint32_t dtmp[128]);
-	
-	/*shut up compiler warning*/
-	__m256i th = _mm256_setzero_si256();
-	__m256i tl = _mm256_setzero_si256();
-	
 	uint32_t* _dst = (uint32_t*)dst;
 	
 	for(; len; len -= sizeof(__m256i)*16) {
-		for(int j=0; j<8; j++) {
-			/* load in pattern: [0011223344556677] [8899AABBCCDDEEFF] */
-			tl = _mm256_i32gather_epi32((int*)_dst, _mm256_set_epi32(32, 40, 48, 56, 96, 104, 112, 120), 4);
-			th = _mm256_i32gather_epi32((int*)_dst, _mm256_set_epi32(0, 8, 16, 24, 64, 72, 80, 88), 4);
-			// aaaabbbbccccdddd -> abcdabcdabcdabcd
-			tl = _mm256_shuffle_epi8(tl, _mm256_set_epi32(
-				0x0f0b0703, 0x0e0a0602, 0x0d090501, 0x0c080400,
-				0x0f0b0703, 0x0e0a0602, 0x0d090501, 0x0c080400
-			));
-			th = _mm256_shuffle_epi8(th, _mm256_set_epi32(
-				0x0f0b0703, 0x0e0a0602, 0x0d090501, 0x0c080400,
-				0x0f0b0703, 0x0e0a0602, 0x0d090501, 0x0c080400
-			));
-			
-# ifdef __tune_znver1__
-			// interleave: [abcdabcdabcdabcd][ijklijklijklijkl] -> [abcdijklabcdijkl][abcdijklabcdijkl]
-			ta = _mm256_unpacklo_epi32(tl, th);
-			tb = _mm256_unpackhi_epi32(tl, th);
-			
-			tl = _mm256_unpacklo_epi64(ta, tb);
-			th = _mm256_unpackhi_epi64(ta, tb);
-			
-			tb = _mm256_permute4x64_epi64(tl, _MM_SHUFFLE(3,1,2,0));
-			ta = _mm256_permute4x64_epi64(th, _MM_SHUFFLE(3,1,2,0));
-# else
-			// re-arrange: [abcdabcdabcdabcd|efghefghefghefgh] -> [abcdefghabcdefgh|...]
-			tl = _mm256_permutevar8x32_epi32(tl, _mm256_set_epi32(
-				7, 3, 6, 2, 5, 1, 4, 0
-			));
-			th = _mm256_permutevar8x32_epi32(th, _mm256_set_epi32(
-				7, 3, 6, 2, 5, 1, 4, 0
-			));
-			// [abcdefghabcdefgh][ijklmnopijklmnop] -> [abcdijklefghmnop][abcdijklefghmnop]
-			tb = _mm256_unpacklo_epi32(tl, th);
-			ta = _mm256_unpackhi_epi32(tl, th);
-# endif
-			
-			/* extract top bits */
-			dtmp[j*16 + 7] = _mm256_movemask_epi8(ta);
-			dtmp[j*16 + 15] = _mm256_movemask_epi8(tb);
-			for(int i=1; i<8; i++) {
-				ta = _mm256_add_epi8(ta, ta);
-				tb = _mm256_add_epi8(tb, tb);
-				dtmp[j*16 + 7-i] = _mm256_movemask_epi8(ta);
-				dtmp[j*16 + 15-i] = _mm256_movemask_epi8(tb);
-			}
-			_dst++;
+		
+		#define LOAD_HALVES(a, b, upper) \
+			_mm256_inserti128_si256( \
+				_mm256_castsi128_si256(_mm_load_si128((__m128i*)(_dst + 120 + upper*4 - (a)*8))), \
+				_mm_load_si128((__m128i*)(_dst + 120 + upper*4 - (b)*8)), \
+				1 \
+			)
+		#define LOAD_X4(offs, dst1, dst2, dst3, dst4, upper) { \
+			__m256i in1 = LOAD_HALVES(offs+0, offs+8, upper); /* 88888888 00000000 */ \
+			__m256i in2 = LOAD_HALVES(offs+1, offs+9, upper); /* 99999999 11111111 */ \
+			__m256i src01a = _mm256_unpacklo_epi8(in1, in2); /* 98989898 10101010 */ \
+			__m256i src01b = _mm256_unpackhi_epi8(in1, in2); \
+			in1 = LOAD_HALVES(offs+2, offs+10, upper); /* aaaaaaaa 22222222 */ \
+			in2 = LOAD_HALVES(offs+3, offs+11, upper); /* bbbbbbbb 33333333 */ \
+			__m256i src23a = _mm256_unpacklo_epi8(in1, in2); /* babababa 32323232 */ \
+			__m256i src23b = _mm256_unpackhi_epi8(in1, in2); \
+			dst1 = _mm256_unpacklo_epi16(src01a, src23a); /* ba98ba98 32103210 */ \
+			dst2 = _mm256_unpackhi_epi16(src01a, src23a); \
+			dst3 = _mm256_unpacklo_epi16(src01b, src23b); \
+			dst4 = _mm256_unpackhi_epi16(src01b, src23b); \
 		}
-		_dst -= 8;
-		/* we only really need to copy temp -> dest if src==dest */
-		/* ...but since we're copying anyway, may as well fix data arrangement! */
-		for(int j=0; j<16; j+=2) {
-			ta = _mm256_load_si256((__m256i*)dtmp +j);
-			tb = _mm256_load_si256((__m256i*)dtmp +1 +j);
-			/* TODO: it should be possible to eliminate some permutes by storing things more efficiently */
-			tl = _mm256_permute2x128_si256(ta, tb, 0x02);
-			th = _mm256_permute2x128_si256(ta, tb, 0x13);
-			ta = _mm256_packus_epi32(
-				_mm256_and_si256(tl, _mm256_set1_epi32(0xffff)),
-				_mm256_and_si256(th, _mm256_set1_epi32(0xffff))
-			);
-			tb = _mm256_packus_epi32(
-				_mm256_srli_epi32(tl, 16),
-				_mm256_srli_epi32(th, 16)
-			);
-			_mm256_store_si256((__m256i*)_dst +j, ta);
-			_mm256_store_si256((__m256i*)_dst +1 +j, tb);
+		
+		#define UNPACK_VECTS \
+			srcQa = _mm256_unpacklo_epi32(srcD0a, srcD4a); /* fedcba98 76543210 */ \
+			srcQb = _mm256_unpackhi_epi32(srcD0a, srcD4a); \
+			srcQc = _mm256_unpacklo_epi32(srcD0b, srcD4b); \
+			srcQd = _mm256_unpackhi_epi32(srcD0b, srcD4b); \
+			srcQe = _mm256_unpacklo_epi32(srcD0c, srcD4c); \
+			srcQf = _mm256_unpackhi_epi32(srcD0c, srcD4c); \
+			srcQg = _mm256_unpacklo_epi32(srcD0d, srcD4d); \
+			srcQh = _mm256_unpackhi_epi32(srcD0d, srcD4d); \
+			 \
+			srcQa = _mm256_permute4x64_epi64(srcQa, _MM_SHUFFLE(3,1,2,0)); /* fedcba9876543210 fedcba9876543210 */ \
+			srcQb = _mm256_permute4x64_epi64(srcQb, _MM_SHUFFLE(3,1,2,0)); \
+			srcQc = _mm256_permute4x64_epi64(srcQc, _MM_SHUFFLE(3,1,2,0)); \
+			srcQd = _mm256_permute4x64_epi64(srcQd, _MM_SHUFFLE(3,1,2,0)); \
+			srcQe = _mm256_permute4x64_epi64(srcQe, _MM_SHUFFLE(3,1,2,0)); \
+			srcQf = _mm256_permute4x64_epi64(srcQf, _MM_SHUFFLE(3,1,2,0)); \
+			srcQg = _mm256_permute4x64_epi64(srcQg, _MM_SHUFFLE(3,1,2,0)); \
+			srcQh = _mm256_permute4x64_epi64(srcQh, _MM_SHUFFLE(3,1,2,0))
+		
+		__m256i srcD0a, srcD0b, srcD0c, srcD0d, srcD4a, srcD4b, srcD4c, srcD4d;
+		__m256i srcQa, srcQb, srcQc, srcQd, srcQe, srcQf, srcQg, srcQh;
+		__m256i dstA, dstB, dstC, dstD;
+		
+		// load 16x 128-bit inputs
+		LOAD_X4(0, srcD0a, srcD0b, srcD0c, srcD0d, 0)
+		LOAD_X4(4, srcD4a, srcD4b, srcD4c, srcD4d, 0)
+		
+		// interleave bytes in all 8 vectors
+		UNPACK_VECTS;
+		
+		// extract top bits; interleaving of 16-bit words needed due to byte arrangement
+		#define EXTRACT_BITS_NIBBLE(targVec, srcVec) { \
+			uint32_t mskA, mskB, mskC, mskD; \
+			mskD = _mm256_movemask_epi8(srcVec); \
+			srcVec = _mm256_add_epi8(srcVec, srcVec); \
+			mskC = _mm256_movemask_epi8(srcVec); \
+			srcVec = _mm256_add_epi8(srcVec, srcVec); \
+			mskB = _mm256_movemask_epi8(srcVec); \
+			srcVec = _mm256_add_epi8(srcVec, srcVec); \
+			mskA = _mm256_movemask_epi8(srcVec); \
+			targVec = _mm_cvtsi32_si128(mskA); \
+			targVec = _mm_insert_epi32(targVec, mskB, 1); \
+			targVec = _mm_insert_epi32(targVec, mskC, 2); \
+			targVec = _mm_insert_epi32(targVec, mskD, 3); \
 		}
+		#define EXTRACT_ROUND(target, targVec, srcVec) { \
+			__m128i words1, words2; \
+			EXTRACT_BITS_NIBBLE(words1, srcVec) \
+			srcVec = _mm256_add_epi8(srcVec, srcVec); \
+			EXTRACT_BITS_NIBBLE(words2, srcVec) \
+			words1 = _mm_shuffle_epi8(words1, _mm_set_epi32(0x0f0e0b0a, 0x07060302, 0x0d0c0908, 0x05040100)); \
+			words2 = _mm_shuffle_epi8(words2, _mm_set_epi32(0x0f0e0b0a, 0x07060302, 0x0d0c0908, 0x05040100)); \
+			_mm_store_si128((__m128i*)(target), _mm_unpacklo_epi64(words2, words1)); \
+			targVec = _mm_unpackhi_epi64(words2, words1); \
+		}
+		__m128i tmp1, tmp2;
+		EXTRACT_ROUND(_dst +  0, tmp1, srcQa)
+		EXTRACT_ROUND(_dst +  8, tmp2, srcQb)
+		dstA = _mm256_inserti128_si256(_mm256_castsi128_si256(tmp1), tmp2, 1);
+		EXTRACT_ROUND(_dst + 16, tmp1, srcQc)
+		EXTRACT_ROUND(_dst + 24, tmp2, srcQd)
+		dstB = _mm256_inserti128_si256(_mm256_castsi128_si256(tmp1), tmp2, 1);
+		EXTRACT_ROUND(_dst + 32, tmp1, srcQe)
+		EXTRACT_ROUND(_dst + 40, tmp2, srcQf)
+		dstC = _mm256_inserti128_si256(_mm256_castsi128_si256(tmp1), tmp2, 1);
+		EXTRACT_ROUND(_dst + 48, tmp1, srcQg)
+		EXTRACT_ROUND(_dst + 56, tmp2, srcQh)
+		dstD = _mm256_inserti128_si256(_mm256_castsi128_si256(tmp1), tmp2, 1);
+		#undef EXTRACT_ROUND
+		
+		
+		// load second half
+		LOAD_X4(0, srcD0a, srcD0b, srcD0c, srcD0d, 1)
+		LOAD_X4(4, srcD4a, srcD4b, srcD4c, srcD4d, 1)
+		
+		// store saved data that wasn't stored earlier to avoid overwriting needed data
+		// TODO: consider just holding temp state in XMM registers, as there's probably enough
+		_mm_store_si128((__m128i*)(_dst +  4), _mm256_castsi256_si128(dstA));
+		_mm_store_si128((__m128i*)(_dst + 12), _mm256_extracti128_si256(dstA, 1));
+		_mm_store_si128((__m128i*)(_dst + 20), _mm256_castsi256_si128(dstB));
+		_mm_store_si128((__m128i*)(_dst + 28), _mm256_extracti128_si256(dstB, 1));
+		_mm_store_si128((__m128i*)(_dst + 36), _mm256_castsi256_si128(dstC));
+		_mm_store_si128((__m128i*)(_dst + 44), _mm256_extracti128_si256(dstC, 1));
+		_mm_store_si128((__m128i*)(_dst + 52), _mm256_castsi256_si128(dstD));
+		_mm_store_si128((__m128i*)(_dst + 60), _mm256_extracti128_si256(dstD, 1));
+		
+		
+		UNPACK_VECTS;
+		
+		#define EXTRACT_ROUND2(target, srcVec) { \
+			__m128i words1, words2; \
+			EXTRACT_BITS_NIBBLE(words1, srcVec) \
+			srcVec = _mm256_add_epi8(srcVec, srcVec); \
+			EXTRACT_BITS_NIBBLE(words2, srcVec) \
+			__m256i words = _mm256_inserti128_si256(_mm256_castsi128_si256(words2), words1, 1); \
+			words = _mm256_shuffle_epi8(words, _mm256_set_epi32(0x0f0e0b0a, 0x07060302, 0x0d0c0908, 0x05040100, 0x0f0e0b0a, 0x07060302, 0x0d0c0908, 0x05040100)); \
+			_mm256_store_si256((__m256i*)(target), _mm256_permute4x64_epi64(words, _MM_SHUFFLE(3,1,2,0))); \
+		}
+		EXTRACT_ROUND2(_dst + 64 +  0, srcQa)
+		EXTRACT_ROUND2(_dst + 64 +  8, srcQb)
+		EXTRACT_ROUND2(_dst + 64 + 16, srcQc)
+		EXTRACT_ROUND2(_dst + 64 + 24, srcQd)
+		EXTRACT_ROUND2(_dst + 64 + 32, srcQe)
+		EXTRACT_ROUND2(_dst + 64 + 40, srcQf)
+		EXTRACT_ROUND2(_dst + 64 + 48, srcQg)
+		EXTRACT_ROUND2(_dst + 64 + 56, srcQh)
+		#undef EXTRACT_ROUND2
+		
+		
+		#undef EXTRACT_BITS_NIBBLE
+		#undef UNPACK_VECTS
+		#undef LOAD_HALVES
+		#undef LOAD_X4
+		
 		_dst += 128;
 	}
 #else
