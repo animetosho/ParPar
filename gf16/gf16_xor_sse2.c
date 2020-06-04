@@ -926,23 +926,82 @@ void gf16_xor_muladd_sse2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_REST
 
 void gf16_xor_finish_sse2(void *HEDLEY_RESTRICT dst, size_t len) {
 #ifdef __SSE2__
-	__m128i ta, tb;
 	ALIGN_TO(16, uint16_t dtmp[128]);
-	
-	/*shut up compiler warning*/
-	__m128i th = _mm_setzero_si128();
-	__m128i tl = _mm_setzero_si128();
 	
 	uint16_t* _dst = (uint16_t*)dst;
 	
 	for(; len; len -= sizeof(__m128i)*16) {
+		for(int j=0; j<2; j++) {
+			#define LOAD_HALVES(a, b) \
+				_mm_castps_si128(_mm_loadh_pi( \
+					_mm_castpd_ps(_mm_load_sd((double*)(_dst + 120 - (a)*8))), \
+					(__m64*)(_dst + 120 - (b)*8) \
+				))
+			#define LOAD_X4(offs, dst1, dst2) { \
+				__m128i src02 = LOAD_HALVES(offs+0, offs+2); /* 22222222 00000000 */ \
+				__m128i src13 = LOAD_HALVES(offs+1, offs+3); /* 33333333 11111111 */ \
+				__m128i src01 = _mm_unpacklo_epi8(src02, src13); /* 10101010 10101010 */ \
+				__m128i src23 = _mm_unpackhi_epi8(src02, src13); /* 32323232 32323232 */ \
+				dst1 = _mm_unpacklo_epi16(src01, src23); /* 32103210 32103210 */ \
+				dst2 = _mm_unpackhi_epi16(src01, src23); /* 32103210 32103210 */ \
+			}
+			
+			__m128i srcD0a, srcD0b, srcD4a, srcD4b, srcD8a, srcD8b, srcD12a, srcD12b;
+			LOAD_X4( 0, srcD0a , srcD0b)
+			LOAD_X4( 4, srcD4a , srcD4b)
+			LOAD_X4( 8, srcD8a , srcD8b)
+			LOAD_X4(12, srcD12a, srcD12b)
+			#undef LOAD_HALVES
+			#undef LOAD_X4
+			
+			__m128i srcQ0a = _mm_unpacklo_epi32(srcD0a, srcD4a); // 76543210 76543210
+			__m128i srcQ0b = _mm_unpackhi_epi32(srcD0a, srcD4a);
+			__m128i srcQ0c = _mm_unpacklo_epi32(srcD0b, srcD4b);
+			__m128i srcQ0d = _mm_unpackhi_epi32(srcD0b, srcD4b);
+			__m128i srcQ8a = _mm_unpacklo_epi32(srcD8a, srcD12a);
+			__m128i srcQ8b = _mm_unpackhi_epi32(srcD8a, srcD12a);
+			__m128i srcQ8c = _mm_unpacklo_epi32(srcD8b, srcD12b);
+			__m128i srcQ8d = _mm_unpackhi_epi32(srcD8b, srcD12b);
+			
+			__m128i srcDQa = _mm_unpacklo_epi64(srcQ0a, srcQ8a);
+			__m128i srcDQb = _mm_unpackhi_epi64(srcQ0a, srcQ8a);
+			__m128i srcDQc = _mm_unpacklo_epi64(srcQ0b, srcQ8b);
+			__m128i srcDQd = _mm_unpackhi_epi64(srcQ0b, srcQ8b);
+			__m128i srcDQe = _mm_unpacklo_epi64(srcQ0c, srcQ8c);
+			__m128i srcDQf = _mm_unpackhi_epi64(srcQ0c, srcQ8c);
+			__m128i srcDQg = _mm_unpacklo_epi64(srcQ0d, srcQ8d);
+			__m128i srcDQh = _mm_unpackhi_epi64(srcQ0d, srcQ8d);
+			
+			/* extract top bits */
+			#define EXTRACT_BITS(target, srcVec) \
+				(target)[7] = _mm_movemask_epi8(srcVec); \
+				for(int i=6; i>=0; i--) { \
+					srcVec = _mm_add_epi8(srcVec, srcVec); \
+					(target)[i] = _mm_movemask_epi8(srcVec); \
+				}
+			// TODO: can probably avoid the tmp write by storing every second one to a register
+			EXTRACT_BITS(dtmp + j*64 +  8, srcDQa)
+			EXTRACT_BITS(dtmp + j*64 +  0, srcDQb)
+			EXTRACT_BITS(dtmp + j*64 + 24, srcDQc)
+			EXTRACT_BITS(dtmp + j*64 + 16, srcDQd)
+			EXTRACT_BITS(dtmp + j*64 + 40, srcDQe)
+			EXTRACT_BITS(dtmp + j*64 + 32, srcDQf)
+			EXTRACT_BITS(dtmp + j*64 + 56, srcDQg)
+			EXTRACT_BITS(dtmp + j*64 + 48, srcDQh)
+			#undef EXTRACT_BITS
+			_dst += 4;
+		}
+		
+		/* this avoids register spilling on 32-bit, but still doesn't seem to be worth it
 		for(int j=0; j<8; j++) {
-			/* load in pattern: [0011223344556677] [8899AABBCCDDEEFF] */
-			/* MSVC _requires_ a constant so we have to manually unroll this loop */
+			__m128i ta, tb;
+			// load in pattern: [0011223344556677] [8899AABBCCDDEEFF]
+			__m128i tl = _mm_cvtsi32_si128(_dst[120 - 0*8]);
+			__m128i th = _mm_cvtsi32_si128(_dst[ 56 - 0*8]);
+			// MSVC _requires_ a constant so we have to manually unroll this loop
 			#define MM_INSERT(i) \
 				tl = _mm_insert_epi16(tl, _dst[120 - i*8], i); \
 				th = _mm_insert_epi16(th, _dst[ 56 - i*8], i)
-			MM_INSERT(0);
 			MM_INSERT(1);
 			MM_INSERT(2);
 			MM_INSERT(3);
@@ -952,7 +1011,7 @@ void gf16_xor_finish_sse2(void *HEDLEY_RESTRICT dst, size_t len) {
 			MM_INSERT(7);
 			#undef MM_INSERT
 			
-			/* swizzle to [0123456789ABCDEF] [0123456789ABCDEF] */
+			// swizzle to [0123456789ABCDEF] [0123456789ABCDEF]
 			ta = _mm_packus_epi16(
 				_mm_srli_epi16(tl, 8),
 				_mm_srli_epi16(th, 8)
@@ -962,7 +1021,7 @@ void gf16_xor_finish_sse2(void *HEDLEY_RESTRICT dst, size_t len) {
 				_mm_and_si128(th, _mm_set1_epi16(0xff))
 			);
 			
-			/* extract top bits */
+			// extract top bits
 			dtmp[j*16 + 7] = _mm_movemask_epi8(ta);
 			dtmp[j*16 + 15] = _mm_movemask_epi8(tb);
 			for(int i=1; i<8; i++) {
@@ -973,6 +1032,7 @@ void gf16_xor_finish_sse2(void *HEDLEY_RESTRICT dst, size_t len) {
 			}
 			_dst++;
 		}
+		*/
 		_dst -= 8;
 		/* we only really need to copy temp -> dest if src==dest */
 		memcpy(_dst, dtmp, sizeof(dtmp));
