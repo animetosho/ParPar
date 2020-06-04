@@ -926,116 +926,133 @@ void gf16_xor_muladd_sse2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_REST
 
 void gf16_xor_finish_sse2(void *HEDLEY_RESTRICT dst, size_t len) {
 #ifdef __SSE2__
-	ALIGN_TO(16, uint16_t dtmp[128]);
-	
 	uint16_t* _dst = (uint16_t*)dst;
 	
 	for(; len; len -= sizeof(__m128i)*16) {
-		for(int j=0; j<2; j++) {
-			#define LOAD_HALVES(a, b) \
-				_mm_castps_si128(_mm_loadh_pi( \
-					_mm_castpd_ps(_mm_load_sd((double*)(_dst + 120 - (a)*8))), \
-					(__m64*)(_dst + 120 - (b)*8) \
-				))
-			#define LOAD_X4(offs, dst1, dst2) { \
-				__m128i src02 = LOAD_HALVES(offs+0, offs+2); /* 22222222 00000000 */ \
-				__m128i src13 = LOAD_HALVES(offs+1, offs+3); /* 33333333 11111111 */ \
-				__m128i src01 = _mm_unpacklo_epi8(src02, src13); /* 10101010 10101010 */ \
-				__m128i src23 = _mm_unpackhi_epi8(src02, src13); /* 32323232 32323232 */ \
-				dst1 = _mm_unpacklo_epi16(src01, src23); /* 32103210 32103210 */ \
-				dst2 = _mm_unpackhi_epi16(src01, src23); /* 32103210 32103210 */ \
-			}
-			
-			__m128i srcD0a, srcD0b, srcD4a, srcD4b, srcD8a, srcD8b, srcD12a, srcD12b;
-			LOAD_X4( 0, srcD0a , srcD0b)
-			LOAD_X4( 4, srcD4a , srcD4b)
-			LOAD_X4( 8, srcD8a , srcD8b)
-			LOAD_X4(12, srcD12a, srcD12b)
-			#undef LOAD_HALVES
-			#undef LOAD_X4
-			
-			__m128i srcQ0a = _mm_unpacklo_epi32(srcD0a, srcD4a); // 76543210 76543210
-			__m128i srcQ0b = _mm_unpackhi_epi32(srcD0a, srcD4a);
-			__m128i srcQ0c = _mm_unpacklo_epi32(srcD0b, srcD4b);
-			__m128i srcQ0d = _mm_unpackhi_epi32(srcD0b, srcD4b);
-			__m128i srcQ8a = _mm_unpacklo_epi32(srcD8a, srcD12a);
-			__m128i srcQ8b = _mm_unpackhi_epi32(srcD8a, srcD12a);
-			__m128i srcQ8c = _mm_unpacklo_epi32(srcD8b, srcD12b);
-			__m128i srcQ8d = _mm_unpackhi_epi32(srcD8b, srcD12b);
-			
-			__m128i srcDQa = _mm_unpacklo_epi64(srcQ0a, srcQ8a);
-			__m128i srcDQb = _mm_unpackhi_epi64(srcQ0a, srcQ8a);
-			__m128i srcDQc = _mm_unpacklo_epi64(srcQ0b, srcQ8b);
-			__m128i srcDQd = _mm_unpackhi_epi64(srcQ0b, srcQ8b);
-			__m128i srcDQe = _mm_unpacklo_epi64(srcQ0c, srcQ8c);
-			__m128i srcDQf = _mm_unpackhi_epi64(srcQ0c, srcQ8c);
-			__m128i srcDQg = _mm_unpacklo_epi64(srcQ0d, srcQ8d);
-			__m128i srcDQh = _mm_unpackhi_epi64(srcQ0d, srcQ8d);
-			
-			/* extract top bits */
-			#define EXTRACT_BITS(target, srcVec) \
-				(target)[7] = _mm_movemask_epi8(srcVec); \
-				for(int i=6; i>=0; i--) { \
-					srcVec = _mm_add_epi8(srcVec, srcVec); \
-					(target)[i] = _mm_movemask_epi8(srcVec); \
-				}
-			// TODO: can probably avoid the tmp write by storing every second one to a register
-			EXTRACT_BITS(dtmp + j*64 +  8, srcDQa)
-			EXTRACT_BITS(dtmp + j*64 +  0, srcDQb)
-			EXTRACT_BITS(dtmp + j*64 + 24, srcDQc)
-			EXTRACT_BITS(dtmp + j*64 + 16, srcDQd)
-			EXTRACT_BITS(dtmp + j*64 + 40, srcDQe)
-			EXTRACT_BITS(dtmp + j*64 + 32, srcDQf)
-			EXTRACT_BITS(dtmp + j*64 + 56, srcDQg)
-			EXTRACT_BITS(dtmp + j*64 + 48, srcDQh)
-			#undef EXTRACT_BITS
-			_dst += 4;
+		#define LOAD_HALVES(a, b, upper) \
+			_mm_castps_si128(_mm_loadh_pi( \
+				_mm_castpd_ps(_mm_load_sd((double*)(_dst + 120 + upper*4 - (a)*8))), \
+				(__m64*)(_dst + 120 + upper*4 - (b)*8) \
+			))
+		#define LOAD_X4(offs, dst1, dst2, upper) { \
+			__m128i src02 = LOAD_HALVES(offs+0, offs+2, upper); /* 22222222 00000000 */ \
+			__m128i src13 = LOAD_HALVES(offs+1, offs+3, upper); /* 33333333 11111111 */ \
+			__m128i src01 = _mm_unpacklo_epi8(src02, src13); /* 10101010 10101010 */ \
+			__m128i src23 = _mm_unpackhi_epi8(src02, src13); /* 32323232 32323232 */ \
+			dst1 = _mm_unpacklo_epi16(src01, src23); /* 32103210 32103210 */ \
+			dst2 = _mm_unpackhi_epi16(src01, src23); /* 32103210 32103210 */ \
 		}
 		
-		/* this avoids register spilling on 32-bit, but still doesn't seem to be worth it
-		for(int j=0; j<8; j++) {
-			__m128i ta, tb;
-			// load in pattern: [0011223344556677] [8899AABBCCDDEEFF]
-			__m128i tl = _mm_cvtsi32_si128(_dst[120 - 0*8]);
-			__m128i th = _mm_cvtsi32_si128(_dst[ 56 - 0*8]);
-			// MSVC _requires_ a constant so we have to manually unroll this loop
-			#define MM_INSERT(i) \
-				tl = _mm_insert_epi16(tl, _dst[120 - i*8], i); \
-				th = _mm_insert_epi16(th, _dst[ 56 - i*8], i)
-			MM_INSERT(1);
-			MM_INSERT(2);
-			MM_INSERT(3);
-			MM_INSERT(4);
-			MM_INSERT(5);
-			MM_INSERT(6);
-			MM_INSERT(7);
-			#undef MM_INSERT
-			
-			// swizzle to [0123456789ABCDEF] [0123456789ABCDEF]
-			ta = _mm_packus_epi16(
-				_mm_srli_epi16(tl, 8),
-				_mm_srli_epi16(th, 8)
-			);
-			tb = _mm_packus_epi16(
-				_mm_and_si128(tl, _mm_set1_epi16(0xff)),
-				_mm_and_si128(th, _mm_set1_epi16(0xff))
-			);
-			
-			// extract top bits
-			dtmp[j*16 + 7] = _mm_movemask_epi8(ta);
-			dtmp[j*16 + 15] = _mm_movemask_epi8(tb);
-			for(int i=1; i<8; i++) {
-				ta = _mm_add_epi8(ta, ta);
-				tb = _mm_add_epi8(tb, tb);
-				dtmp[j*16 + 7-i] = _mm_movemask_epi8(ta);
-				dtmp[j*16 + 15-i] = _mm_movemask_epi8(tb);
-			}
-			_dst++;
+		#define UNPACK_VECTS \
+			srcQ0a = _mm_unpacklo_epi32(srcD0a, srcD4a); /* 76543210 76543210 */ \
+			srcQ0b = _mm_unpackhi_epi32(srcD0a, srcD4a); \
+			srcQ0c = _mm_unpacklo_epi32(srcD0b, srcD4b); \
+			srcQ0d = _mm_unpackhi_epi32(srcD0b, srcD4b); \
+			srcQ8a = _mm_unpacklo_epi32(srcD8a, srcD12a); \
+			srcQ8b = _mm_unpackhi_epi32(srcD8a, srcD12a); \
+			srcQ8c = _mm_unpacklo_epi32(srcD8b, srcD12b); \
+			srcQ8d = _mm_unpackhi_epi32(srcD8b, srcD12b); \
+			 \
+			srcDQa = _mm_unpacklo_epi64(srcQ0a, srcQ8a); \
+			srcDQb = _mm_unpackhi_epi64(srcQ0a, srcQ8a); \
+			srcDQc = _mm_unpacklo_epi64(srcQ0b, srcQ8b); \
+			srcDQd = _mm_unpackhi_epi64(srcQ0b, srcQ8b); \
+			srcDQe = _mm_unpacklo_epi64(srcQ0c, srcQ8c); \
+			srcDQf = _mm_unpackhi_epi64(srcQ0c, srcQ8c); \
+			srcDQg = _mm_unpacklo_epi64(srcQ0d, srcQ8d); \
+			srcDQh = _mm_unpackhi_epi64(srcQ0d, srcQ8d)
+		
+		__m128i srcD0a, srcD0b, srcD4a, srcD4b, srcD8a, srcD8b, srcD12a, srcD12b;
+		__m128i srcQ0a, srcQ0b, srcQ0c, srcQ0d, srcQ8a, srcQ8b, srcQ8c, srcQ8d;
+		__m128i srcDQa, srcDQb, srcDQc, srcDQd, srcDQe, srcDQf, srcDQg, srcDQh;
+		__m128i dstA, dstB, dstC, dstD;
+		
+		// load 16x 64-bit inputs
+		LOAD_X4( 0, srcD0a , srcD0b, 0)
+		LOAD_X4( 4, srcD4a , srcD4b, 0)
+		LOAD_X4( 8, srcD8a , srcD8b, 0)
+		LOAD_X4(12, srcD12a, srcD12b,0)
+		
+		// interleave bytes in all 8 vectors
+		UNPACK_VECTS;
+		
+		// write half of these vectors, and store the other half for later
+		#define EXTRACT_BITS_HALF(target, targVec, vecUpper, srcVec) { \
+			uint16_t mskA, mskB, mskC, mskD; \
+			mskD = _mm_movemask_epi8(srcVec); \
+			srcVec = _mm_add_epi8(srcVec, srcVec); \
+			mskC = _mm_movemask_epi8(srcVec); \
+			srcVec = _mm_add_epi8(srcVec, srcVec); \
+			mskB = _mm_movemask_epi8(srcVec); \
+			srcVec = _mm_add_epi8(srcVec, srcVec); \
+			mskA = _mm_movemask_epi8(srcVec); \
+			targVec = vecUpper ? _mm_insert_epi16(targVec, mskA, 4) : _mm_cvtsi32_si128(mskA); \
+			targVec = _mm_insert_epi16(targVec, mskB, 1 + vecUpper*4); \
+			targVec = _mm_insert_epi16(targVec, mskC, 2 + vecUpper*4); \
+			targVec = _mm_insert_epi16(targVec, mskD, 3 + vecUpper*4); \
+			srcVec = _mm_add_epi8(srcVec, srcVec); \
+			(target)[3] = _mm_movemask_epi8(srcVec); \
+			srcVec = _mm_add_epi8(srcVec, srcVec); \
+			(target)[2] = _mm_movemask_epi8(srcVec); \
+			srcVec = _mm_add_epi8(srcVec, srcVec); \
+			(target)[1] = _mm_movemask_epi8(srcVec); \
+			srcVec = _mm_add_epi8(srcVec, srcVec); \
+			(target)[0] = _mm_movemask_epi8(srcVec); \
 		}
-		*/
-		_dst -= 8;
-		/* we only really need to copy temp -> dest if src==dest */
-		memcpy(_dst, dtmp, sizeof(dtmp));
+		EXTRACT_BITS_HALF(_dst +  0, dstA, 0, srcDQb)
+		EXTRACT_BITS_HALF(_dst +  8, dstA, 1, srcDQa)
+		EXTRACT_BITS_HALF(_dst + 16, dstB, 0, srcDQd)
+		EXTRACT_BITS_HALF(_dst + 24, dstB, 1, srcDQc)
+		EXTRACT_BITS_HALF(_dst + 32, dstC, 0, srcDQf)
+		EXTRACT_BITS_HALF(_dst + 40, dstC, 1, srcDQe)
+		EXTRACT_BITS_HALF(_dst + 48, dstD, 0, srcDQh)
+		EXTRACT_BITS_HALF(_dst + 56, dstD, 1, srcDQg)
+		
+		
+		
+		
+		// load second half & write saved output once source has been read
+		LOAD_X4(12, srcD12a, srcD12b,1)
+		_mm_storel_epi64((__m128i*)(_dst +  4), dstA);
+		_mm_storeh_pi((__m64*)(_dst + 12), _mm_castsi128_ps(dstA));
+		_mm_storel_epi64((__m128i*)(_dst + 20), dstB);
+		_mm_storeh_pi((__m64*)(_dst + 28), _mm_castsi128_ps(dstB));
+		
+		LOAD_X4( 8, srcD8a , srcD8b, 1)
+		_mm_storel_epi64((__m128i*)(_dst + 36), dstC);
+		_mm_storeh_pi((__m64*)(_dst + 44), _mm_castsi128_ps(dstC));
+		_mm_storel_epi64((__m128i*)(_dst + 52), dstD);
+		_mm_storeh_pi((__m64*)(_dst + 60), _mm_castsi128_ps(dstD));
+		
+		LOAD_X4( 4, srcD4a , srcD4b, 1)
+		LOAD_X4( 0, srcD0a , srcD0b, 1)
+		
+		UNPACK_VECTS;
+		
+		// extract & write all bits
+		// TODO: consider saving some to a register to reduce write ops
+		#define EXTRACT_BITS(target, srcVec) \
+			(target)[7] = _mm_movemask_epi8(srcVec); \
+			for(int i=6; i>=0; i--) { \
+				srcVec = _mm_add_epi8(srcVec, srcVec); \
+				(target)[i] = _mm_movemask_epi8(srcVec); \
+			}
+		EXTRACT_BITS(_dst + 64 +  0, srcDQb)
+		EXTRACT_BITS(_dst + 64 +  8, srcDQa)
+		EXTRACT_BITS(_dst + 64 + 16, srcDQd)
+		EXTRACT_BITS(_dst + 64 + 24, srcDQc)
+		EXTRACT_BITS(_dst + 64 + 32, srcDQf)
+		EXTRACT_BITS(_dst + 64 + 40, srcDQe)
+		EXTRACT_BITS(_dst + 64 + 48, srcDQh)
+		EXTRACT_BITS(_dst + 64 + 56, srcDQg)
+		
+		
+		#undef EXTRACT_BITS
+		#undef EXTRACT_BITS_HALF
+		#undef UNPACK_VECTS
+		#undef LOAD_HALVES
+		#undef LOAD_X4
+		
 		_dst += 128;
 	}
 #else
