@@ -365,74 +365,100 @@ void gf16_xor_jit_muladd_avx512(const void *HEDLEY_RESTRICT scratch, void *HEDLE
 
 void gf16_xor_finish_avx512(void *HEDLEY_RESTRICT dst, size_t len) {
 #if defined(__AVX512BW__) && defined(__AVX512VL__) && defined(PLATFORM_AMD64)
-	__m512i ta, tb;
-	ALIGN_TO(64, uint64_t dtmp[128]);
-	
-	/*shut up compiler warning*/
-	__m512i th = _mm512_setzero_si512();
-	__m512i tl = _mm512_setzero_si512();
-	
 	uint64_t* _dst = (uint64_t*)dst;
 	
 	for(; len; len -= sizeof(__m512i)*16) {
-		for(int j=0; j<8; j++) {
-			/* load in pattern: [0011223344556677] [8899AABBCCDDEEFF] */
-			tl = _mm512_i32gather_epi64(_mm256_set_epi32(64, 72, 80, 88, 96, 104, 112, 120), (const void*)_dst, 8);
-			th = _mm512_i32gather_epi64(_mm256_set_epi32(0, 8, 16, 24, 32, 40, 48, 56), (const void*)_dst, 8);
-			
-# define _P(a,b) (((a)<<16)|(b))
-# define _Q(n) _P(28+n,24+n), _P(20+n,16+n), _P(12+n,8+n), _P(4+n,0+n)
-			tl = _mm512_permutexvar_epi16(_mm512_set_epi32(_Q(3), _Q(2), _Q(1), _Q(0)), tl);
-			th = _mm512_permutexvar_epi16(_mm512_set_epi32(_Q(3), _Q(2), _Q(1), _Q(0)), th);
-# undef _Q
-# undef _P
-			
-			// convert aabbccddeeffgghh -> abcdefghabcdefgh
-			tl = _mm512_shuffle_epi8(tl, _mm512_set_epi32(
-				0x0f0d0b09, 0x07050301, 0x0e0c0a08, 0x06040200,
-				0x0f0d0b09, 0x07050301, 0x0e0c0a08, 0x06040200,
-				0x0f0d0b09, 0x07050301, 0x0e0c0a08, 0x06040200,
-				0x0f0d0b09, 0x07050301, 0x0e0c0a08, 0x06040200
-			));
-			th = _mm512_shuffle_epi8(th, _mm512_set_epi32(
-				0x0f0d0b09, 0x07050301, 0x0e0c0a08, 0x06040200,
-				0x0f0d0b09, 0x07050301, 0x0e0c0a08, 0x06040200,
-				0x0f0d0b09, 0x07050301, 0x0e0c0a08, 0x06040200,
-				0x0f0d0b09, 0x07050301, 0x0e0c0a08, 0x06040200
-			));
-			// [abcdefghabcdefgh][ijklmnopijklmnop] -> [abcdefghijklmnop][abcdefghijklmnop]
-			tb = _mm512_unpacklo_epi64(tl, th);
-			ta = _mm512_unpackhi_epi64(tl, th);
-			
-			/* extract top bits */
-			dtmp[j*16 + 7] = _mm512_movepi8_mask(ta);
-			dtmp[j*16 + 15] = _mm512_movepi8_mask(tb);
-			for(int i=1; i<8; i++) {
-				ta = _mm512_add_epi8(ta, ta);
-				tb = _mm512_add_epi8(tb, tb);
-				dtmp[j*16 + 7-i] = _mm512_movepi8_mask(ta);
-				dtmp[j*16 + 15-i] = _mm512_movepi8_mask(tb);
-			}
-			_dst++;
+		// 32 registers available, so load entire block
+		__m512i src[16];
+		for(int i=0; i<16; i++)
+			src[i] = _mm512_load_si512(_dst + 120 - i*8);
+		
+		// interleave to words, dwords, qwords etc
+		__m512i srcW[16];
+		for(int i=0; i<16; i+=2) {
+			srcW[i+0] = _mm512_unpacklo_epi8(src[i], src[i+1]);
+			srcW[i+1] = _mm512_unpackhi_epi8(src[i], src[i+1]);
 		}
-		_dst -= 8;
-		/* we only really need to copy temp -> dest if src==dest */
-		/* ...but since we're copying anyway, may as well fix data arrangement! */
-		for(int j=0; j<16; j+=2) {
-			ta = _mm512_load_si512((__m512i*)dtmp +j);
-			tb = _mm512_load_si512((__m512i*)dtmp +1 +j);
-# define _P(a,b) (((a)<<16)|(b))
-# define _Q(n) _P(28+n,24+n), _P(20+n,16+n), _P(12+n,8+n), _P(4+n,0+n)
-			/* TODO: see if we can avoid permuting across both vectors by re-arranging earlier stuff */
-			tl = _mm512_permutex2var_epi16(tb, _mm512_set_epi32(_Q(33), _Q(1), _Q(32), _Q(0)), ta);
-			th = _mm512_permutex2var_epi16(tb, _mm512_set_epi32(_Q(35), _Q(3), _Q(34), _Q(2)), ta);
-			ta = tl;
-			tb = th;
-# undef _Q
-# undef _P
-			_mm512_store_si512((__m512i*)_dst +j, ta);
-			_mm512_store_si512((__m512i*)_dst +1 +j, tb);
+		
+		__m512i srcD[16];
+		for(int i=0; i<16; i+=4) {
+			srcD[i+0] = _mm512_unpacklo_epi16(srcW[i+0], srcW[i+2]);
+			srcD[i+1] = _mm512_unpackhi_epi16(srcW[i+0], srcW[i+2]);
+			srcD[i+2] = _mm512_unpacklo_epi16(srcW[i+1], srcW[i+3]);
+			srcD[i+3] = _mm512_unpackhi_epi16(srcW[i+1], srcW[i+3]);
 		}
+		
+		__m512i srcQ[16];
+		for(int i=0; i<16; i+=8) {
+			srcQ[i+0] = _mm512_unpacklo_epi32(srcD[i+0], srcD[i+4]);
+			srcQ[i+1] = _mm512_unpackhi_epi32(srcD[i+0], srcD[i+4]);
+			srcQ[i+2] = _mm512_unpacklo_epi32(srcD[i+1], srcD[i+5]);
+			srcQ[i+3] = _mm512_unpackhi_epi32(srcD[i+1], srcD[i+5]);
+			srcQ[i+4] = _mm512_unpacklo_epi32(srcD[i+2], srcD[i+6]);
+			srcQ[i+5] = _mm512_unpackhi_epi32(srcD[i+2], srcD[i+6]);
+			srcQ[i+6] = _mm512_unpacklo_epi32(srcD[i+3], srcD[i+7]);
+			srcQ[i+7] = _mm512_unpackhi_epi32(srcD[i+3], srcD[i+7]);
+		}
+		
+		__m512i srcDQ[16];
+		for(int i=0; i<8; i++) {
+			srcDQ[i*2+0] = _mm512_unpacklo_epi64(srcQ[i], srcQ[i+8]);
+			srcDQ[i*2+1] = _mm512_unpackhi_epi64(srcQ[i], srcQ[i+8]);
+		}
+		
+		// now we need to interleave lanes
+		// if we take the same approach as above, per vector, it'd take 2x cross-lane ops (128b+256b unpack) + 1x vpermw + 1x store
+		// alternatively, don't interleave at all, and offload this to the store operation; this results in the most ops but least shuffle-port pressure (per vector: 1x vpermw + 4x 128b store)
+		// instead, try a compromise - do a 256b unpack and store in 256b granularity (per vector: 1x cross-lane op + 1x vpermw + 2x 256b stores)
+		__m512i srcQQ[16];
+		for(int i=0; i<16; i+=2) {
+			srcQQ[i+0] = _mm512_inserti64x4(srcDQ[i], _mm512_castsi512_si256(srcDQ[i+1]), 1);
+			srcQQ[i+1] = _mm512_shuffle_i32x4(srcDQ[i], srcDQ[i+1], _MM_SHUFFLE(3,2,3,2));
+		}
+		// now extract bits & re-arrange
+		__m512i result[16];
+		for(int i=0; i<16; i++) {
+			// TODO: k-reg -> GPR -> vector is kinda slow - maybe storing to memory and reloading is faster? or is there some way to avoid the need to put back into a vector?
+			__m512i curSrc = srcQQ[i];
+			__m128i tmp = _mm_cvtsi64_si128(_mm512_movepi8_mask(curSrc));
+			curSrc = _mm512_add_epi8(curSrc, curSrc);
+			tmp = _mm_insert_epi64(tmp, _mm512_movepi8_mask(curSrc), 1);
+			curSrc = _mm512_add_epi8(curSrc, curSrc);
+			result[i] = _mm512_castsi128_si512(tmp);
+			
+			tmp = _mm_cvtsi64_si128(_mm512_movepi8_mask(curSrc));
+			curSrc = _mm512_add_epi8(curSrc, curSrc);
+			tmp = _mm_insert_epi64(tmp, _mm512_movepi8_mask(curSrc), 1);
+			curSrc = _mm512_add_epi8(curSrc, curSrc);
+			result[i] = _mm512_inserti32x4(result[i], tmp, 1);
+			
+			tmp = _mm_cvtsi64_si128(_mm512_movepi8_mask(curSrc));
+			curSrc = _mm512_add_epi8(curSrc, curSrc);
+			tmp = _mm_insert_epi64(tmp, _mm512_movepi8_mask(curSrc), 1);
+			curSrc = _mm512_add_epi8(curSrc, curSrc);
+			result[i] = _mm512_inserti32x4(result[i], tmp, 2);
+			
+			tmp = _mm_cvtsi64_si128(_mm512_movepi8_mask(curSrc));
+			curSrc = _mm512_add_epi8(curSrc, curSrc);
+			tmp = _mm_insert_epi64(tmp, _mm512_movepi8_mask(curSrc), 1);
+			result[i] = _mm512_inserti32x4(result[i], tmp, 3);
+			
+			// permute words into place
+			result[i] = _mm512_permutexvar_epi16(_mm512_set_epi16(
+				 3,  7, 11, 15, 19, 23, 27, 31,
+				 1,  5,  9, 13, 17, 21, 25, 29,
+				 2,  6, 10, 14, 18, 22, 26, 30,
+				 0,  4,  8, 12, 16, 20, 24, 28
+			), result[i]);
+		}
+		// store 256b parts out
+		for(int i=0; i<16; i+=2) {
+			_mm256_store_si256((__m256i*)(_dst + i*2 +  0), _mm512_castsi512_si256(result[i]));
+			_mm256_store_si256((__m256i*)(_dst + i*2 + 32), _mm512_extracti64x4_epi64(result[i], 1));
+			_mm256_store_si256((__m256i*)(_dst + i*2 + 64), _mm512_castsi512_si256(result[i+1]));
+			_mm256_store_si256((__m256i*)(_dst + i*2 + 96), _mm512_extracti64x4_epi64(result[i+1], 1));
+		}
+		
 		_dst += 128;
 	}
 #else
