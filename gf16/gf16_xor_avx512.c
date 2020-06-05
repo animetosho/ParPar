@@ -363,6 +363,43 @@ void gf16_xor_jit_muladd_avx512(const void *HEDLEY_RESTRICT scratch, void *HEDLE
 }
 
 
+#if defined(__AVX512BW__) && defined(__AVX512VL__) && defined(PLATFORM_AMD64)
+static HEDLEY_ALWAYS_INLINE __m512i gf16_xor_finish_bit_extract(__m512i src) {
+	// TODO: k-reg -> GPR -> vector is kinda slow - maybe storing to memory and reloading is faster? or is there some way to avoid the need to put back into a vector?
+	__m128i tmp = _mm_cvtsi64_si128(_mm512_movepi8_mask(src));
+	src = _mm512_add_epi8(src, src);
+	tmp = _mm_insert_epi64(tmp, _mm512_movepi8_mask(src), 1);
+	src = _mm512_add_epi8(src, src);
+	__m512i result = _mm512_castsi128_si512(tmp);
+	
+	tmp = _mm_cvtsi64_si128(_mm512_movepi8_mask(src));
+	src = _mm512_add_epi8(src, src);
+	tmp = _mm_insert_epi64(tmp, _mm512_movepi8_mask(src), 1);
+	src = _mm512_add_epi8(src, src);
+	result = _mm512_inserti32x4(result, tmp, 1);
+	
+	tmp = _mm_cvtsi64_si128(_mm512_movepi8_mask(src));
+	src = _mm512_add_epi8(src, src);
+	tmp = _mm_insert_epi64(tmp, _mm512_movepi8_mask(src), 1);
+	src = _mm512_add_epi8(src, src);
+	result = _mm512_inserti32x4(result, tmp, 2);
+	
+	tmp = _mm_cvtsi64_si128(_mm512_movepi8_mask(src));
+	src = _mm512_add_epi8(src, src);
+	tmp = _mm_insert_epi64(tmp, _mm512_movepi8_mask(src), 1);
+	result = _mm512_inserti32x4(result, tmp, 3);
+	
+	// permute words into place
+	result = _mm512_permutexvar_epi16(_mm512_set_epi16(
+		 3,  7, 11, 15, 19, 23, 27, 31,
+		 1,  5,  9, 13, 17, 21, 25, 29,
+		 2,  6, 10, 14, 18, 22, 26, 30,
+		 0,  4,  8, 12, 16, 20, 24, 28
+	), result);
+	return result;
+}
+#endif
+
 void gf16_xor_finish_avx512(void *HEDLEY_RESTRICT dst, size_t len) {
 #if defined(__AVX512BW__) && defined(__AVX512VL__) && defined(PLATFORM_AMD64)
 	uint64_t* _dst = (uint64_t*)dst;
@@ -415,48 +452,14 @@ void gf16_xor_finish_avx512(void *HEDLEY_RESTRICT dst, size_t len) {
 			srcQQ[i+0] = _mm512_inserti64x4(srcDQ[i], _mm512_castsi512_si256(srcDQ[i+1]), 1);
 			srcQQ[i+1] = _mm512_shuffle_i32x4(srcDQ[i], srcDQ[i+1], _MM_SHUFFLE(3,2,3,2));
 		}
-		// now extract bits & re-arrange
-		__m512i result[16];
-		for(int i=0; i<16; i++) {
-			// TODO: k-reg -> GPR -> vector is kinda slow - maybe storing to memory and reloading is faster? or is there some way to avoid the need to put back into a vector?
-			__m512i curSrc = srcQQ[i];
-			__m128i tmp = _mm_cvtsi64_si128(_mm512_movepi8_mask(curSrc));
-			curSrc = _mm512_add_epi8(curSrc, curSrc);
-			tmp = _mm_insert_epi64(tmp, _mm512_movepi8_mask(curSrc), 1);
-			curSrc = _mm512_add_epi8(curSrc, curSrc);
-			result[i] = _mm512_castsi128_si512(tmp);
-			
-			tmp = _mm_cvtsi64_si128(_mm512_movepi8_mask(curSrc));
-			curSrc = _mm512_add_epi8(curSrc, curSrc);
-			tmp = _mm_insert_epi64(tmp, _mm512_movepi8_mask(curSrc), 1);
-			curSrc = _mm512_add_epi8(curSrc, curSrc);
-			result[i] = _mm512_inserti32x4(result[i], tmp, 1);
-			
-			tmp = _mm_cvtsi64_si128(_mm512_movepi8_mask(curSrc));
-			curSrc = _mm512_add_epi8(curSrc, curSrc);
-			tmp = _mm_insert_epi64(tmp, _mm512_movepi8_mask(curSrc), 1);
-			curSrc = _mm512_add_epi8(curSrc, curSrc);
-			result[i] = _mm512_inserti32x4(result[i], tmp, 2);
-			
-			tmp = _mm_cvtsi64_si128(_mm512_movepi8_mask(curSrc));
-			curSrc = _mm512_add_epi8(curSrc, curSrc);
-			tmp = _mm_insert_epi64(tmp, _mm512_movepi8_mask(curSrc), 1);
-			result[i] = _mm512_inserti32x4(result[i], tmp, 3);
-			
-			// permute words into place
-			result[i] = _mm512_permutexvar_epi16(_mm512_set_epi16(
-				 3,  7, 11, 15, 19, 23, 27, 31,
-				 1,  5,  9, 13, 17, 21, 25, 29,
-				 2,  6, 10, 14, 18, 22, 26, 30,
-				 0,  4,  8, 12, 16, 20, 24, 28
-			), result[i]);
-		}
-		// store 256b parts out
+		// now extract bits & re-arrange & store
 		for(int i=0; i<16; i+=2) {
-			_mm256_store_si256((__m256i*)(_dst + i*2 +  0), _mm512_castsi512_si256(result[i]));
-			_mm256_store_si256((__m256i*)(_dst + i*2 + 32), _mm512_extracti64x4_epi64(result[i], 1));
-			_mm256_store_si256((__m256i*)(_dst + i*2 + 64), _mm512_castsi512_si256(result[i+1]));
-			_mm256_store_si256((__m256i*)(_dst + i*2 + 96), _mm512_extracti64x4_epi64(result[i+1], 1));
+			__m512i result1 = gf16_xor_finish_bit_extract(srcQQ[i]);
+			_mm256_store_si256((__m256i*)(_dst + i*2 +  0), _mm512_castsi512_si256(result1));
+			_mm256_store_si256((__m256i*)(_dst + i*2 + 32), _mm512_extracti64x4_epi64(result1, 1));
+			__m512i result2 = gf16_xor_finish_bit_extract(srcQQ[i+1]);
+			_mm256_store_si256((__m256i*)(_dst + i*2 + 64), _mm512_castsi512_si256(result2));
+			_mm256_store_si256((__m256i*)(_dst + i*2 + 96), _mm512_extracti64x4_epi64(result2, 1));
 		}
 		
 		_dst += 128;
