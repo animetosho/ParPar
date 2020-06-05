@@ -473,6 +473,27 @@ static HEDLEY_ALWAYS_INLINE __m256i gf16_xor_finish_extract_bits(__m256i src) {
 	return _mm256_permute4x64_epi64(words, _MM_SHUFFLE(3,1,2,0));
 	#undef EXTRACT_BITS_NIBBLE
 }
+
+static HEDLEY_ALWAYS_INLINE void gf16_xor_finish_extract_bits_store(uint32_t* dst, __m256i src) {
+	__m256i srcShifted = _mm256_add_epi8(src, src);
+	__m256i lane = _mm256_inserti128_si256(srcShifted, _mm256_castsi256_si128(src), 1);
+	dst[3] = _mm256_movemask_epi8(lane);
+	lane = _mm256_slli_epi16(lane, 2);
+	dst[2] = _mm256_movemask_epi8(lane);
+	lane = _mm256_slli_epi16(lane, 2);
+	dst[1] = _mm256_movemask_epi8(lane);
+	lane = _mm256_slli_epi16(lane, 2);
+	dst[0] = _mm256_movemask_epi8(lane);
+	
+	lane = _mm256_permute2x128_si256(srcShifted, src, 0x31);
+	dst[7] = _mm256_movemask_epi8(lane);
+	lane = _mm256_slli_epi16(lane, 2);
+	dst[6] = _mm256_movemask_epi8(lane);
+	lane = _mm256_slli_epi16(lane, 2);
+	dst[5] = _mm256_movemask_epi8(lane);
+	lane = _mm256_slli_epi16(lane, 2);
+	dst[4] = _mm256_movemask_epi8(lane);
+}
 #endif
 
 void gf16_xor_finish_avx2(void *HEDLEY_RESTRICT dst, size_t len) {
@@ -562,14 +583,14 @@ void gf16_xor_finish_avx2(void *HEDLEY_RESTRICT dst, size_t len) {
 		
 		UNPACK_VECTS;
 		
-		_mm256_store_si256((__m256i*)(_dst + 64 +  0), gf16_xor_finish_extract_bits(srcQa));
-		_mm256_store_si256((__m256i*)(_dst + 64 +  8), gf16_xor_finish_extract_bits(srcQb));
-		_mm256_store_si256((__m256i*)(_dst + 64 + 16), gf16_xor_finish_extract_bits(srcQc));
-		_mm256_store_si256((__m256i*)(_dst + 64 + 24), gf16_xor_finish_extract_bits(srcQd));
-		_mm256_store_si256((__m256i*)(_dst + 64 + 32), gf16_xor_finish_extract_bits(srcQe));
-		_mm256_store_si256((__m256i*)(_dst + 64 + 40), gf16_xor_finish_extract_bits(srcQf));
-		_mm256_store_si256((__m256i*)(_dst + 64 + 48), gf16_xor_finish_extract_bits(srcQg));
-		_mm256_store_si256((__m256i*)(_dst + 64 + 56), gf16_xor_finish_extract_bits(srcQh));
+		gf16_xor_finish_extract_bits_store(_dst + 64 +  0, srcQa);
+		gf16_xor_finish_extract_bits_store(_dst + 64 +  8, srcQb);
+		gf16_xor_finish_extract_bits_store(_dst + 64 + 16, srcQc);
+		gf16_xor_finish_extract_bits_store(_dst + 64 + 24, srcQd);
+		gf16_xor_finish_extract_bits_store(_dst + 64 + 32, srcQe);
+		gf16_xor_finish_extract_bits_store(_dst + 64 + 40, srcQf);
+		gf16_xor_finish_extract_bits_store(_dst + 64 + 48, srcQg);
+		gf16_xor_finish_extract_bits_store(_dst + 64 + 56, srcQh);
 		
 		
 		#undef UNPACK_VECTS
