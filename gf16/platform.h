@@ -69,6 +69,21 @@
 #endif /* _MSC_VER */
 
 
+// x86 vector upcasts, where upper is defined to be 0
+#if (defined(__clang__) && __clang_major__ >= 5 && (!defined(__APPLE__) || __clang_major__ >= 7)) || (defined(__GNUC__) && __GNUC__ >= 10)
+// intrinsic unsupported in GCC 9 and MSVC < 2017
+# define zext128_256 _mm256_zextsi128_si256
+# define zext256_512 _mm512_zextsi256_si512
+# define zext128_512 _mm512_zextsi128_si512
+#else
+// technically a cast is incorrect, due to upper 128 bits being undefined, but should usually work fine
+// alternative may be `_mm256_set_m128i(_mm_setzero_si128(), v)` but unsupported on GCC < 7, and most compilers generate a VINSERTF128 instruction for it
+# define zext128_256 _mm256_castsi128_si256
+# define zext256_512 _mm512_castsi256_si512
+# define zext128_512 _mm512_castsi128_si512
+#endif
+
+
 
 // alignment
 

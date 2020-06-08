@@ -140,8 +140,8 @@ static inline void xor_write_jit_avx512(const struct gf16_xor_scratch *HEDLEY_RE
 	);
 	
 	__m512i common_mask384 = _mm512_castsi128_si512(common_mask);
-	common_mask384 = _mm512_shuffle_i32x4(common_mask384, common_mask384, _MM_SHUFFLE(1,0,0,0));
-	__m512i depmask384 = _mm512_xor_si512(_mm512_castsi256_si512(depmask), common_mask384);
+	common_mask384 = _mm512_shuffle_i32x4(common_mask384, common_mask384, _MM_SHUFFLE(0,0,0,0));
+	__m512i depmask384 = _mm512_xor_si512(zext256_512(depmask), common_mask384);
 	
 	/* count bits */
 	ALIGN_TO(64, uint16_t depABC[32]); // only first 24 elements are used for these two arrays, the rest is needed for 512-bit stores to work
