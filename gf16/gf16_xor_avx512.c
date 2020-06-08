@@ -405,62 +405,134 @@ void gf16_xor_finish_avx512(void *HEDLEY_RESTRICT dst, size_t len) {
 	
 	for(; len; len -= sizeof(__m512i)*16) {
 		// 32 registers available, so load entire block
-		__m512i src[16];
-		for(int i=0; i<16; i++)
-			src[i] = _mm512_load_si512(_dst + 120 - i*8);
+		
+		// Clang doesn't seem to like arrays (always spills them to memory), so write out everything
+		__m512i src0 = _mm512_load_si512(_dst + 120 - 0*8);
+		__m512i src1 = _mm512_load_si512(_dst + 120 - 1*8);
+		__m512i src2 = _mm512_load_si512(_dst + 120 - 2*8);
+		__m512i src3 = _mm512_load_si512(_dst + 120 - 3*8);
+		__m512i src4 = _mm512_load_si512(_dst + 120 - 4*8);
+		__m512i src5 = _mm512_load_si512(_dst + 120 - 5*8);
+		__m512i src6 = _mm512_load_si512(_dst + 120 - 6*8);
+		__m512i src7 = _mm512_load_si512(_dst + 120 - 7*8);
+		__m512i src8 = _mm512_load_si512(_dst + 120 - 8*8);
+		__m512i src9 = _mm512_load_si512(_dst + 120 - 9*8);
+		__m512i src10 = _mm512_load_si512(_dst + 120 - 10*8);
+		__m512i src11 = _mm512_load_si512(_dst + 120 - 11*8);
+		__m512i src12 = _mm512_load_si512(_dst + 120 - 12*8);
+		__m512i src13 = _mm512_load_si512(_dst + 120 - 13*8);
+		__m512i src14 = _mm512_load_si512(_dst + 120 - 14*8);
+		__m512i src15 = _mm512_load_si512(_dst + 120 - 15*8);
 		
 		// interleave to words, dwords, qwords etc
-		__m512i srcW[16];
-		for(int i=0; i<16; i+=2) {
-			srcW[i+0] = _mm512_unpacklo_epi8(src[i], src[i+1]);
-			srcW[i+1] = _mm512_unpackhi_epi8(src[i], src[i+1]);
-		}
+		__m512i srcW0 = _mm512_unpacklo_epi8(src0, src1);
+		__m512i srcW1 = _mm512_unpackhi_epi8(src0, src1);
+		__m512i srcW2 = _mm512_unpacklo_epi8(src2, src3);
+		__m512i srcW3 = _mm512_unpackhi_epi8(src2, src3);
+		__m512i srcW4 = _mm512_unpacklo_epi8(src4, src5);
+		__m512i srcW5 = _mm512_unpackhi_epi8(src4, src5);
+		__m512i srcW6 = _mm512_unpacklo_epi8(src6, src7);
+		__m512i srcW7 = _mm512_unpackhi_epi8(src6, src7);
+		__m512i srcW8 = _mm512_unpacklo_epi8(src8, src9);
+		__m512i srcW9 = _mm512_unpackhi_epi8(src8, src9);
+		__m512i srcW10 = _mm512_unpacklo_epi8(src10, src11);
+		__m512i srcW11 = _mm512_unpackhi_epi8(src10, src11);
+		__m512i srcW12 = _mm512_unpacklo_epi8(src12, src13);
+		__m512i srcW13 = _mm512_unpackhi_epi8(src12, src13);
+		__m512i srcW14 = _mm512_unpacklo_epi8(src14, src15);
+		__m512i srcW15 = _mm512_unpackhi_epi8(src14, src15);
 		
-		__m512i srcD[16];
-		for(int i=0; i<16; i+=4) {
-			srcD[i+0] = _mm512_unpacklo_epi16(srcW[i+0], srcW[i+2]);
-			srcD[i+1] = _mm512_unpackhi_epi16(srcW[i+0], srcW[i+2]);
-			srcD[i+2] = _mm512_unpacklo_epi16(srcW[i+1], srcW[i+3]);
-			srcD[i+3] = _mm512_unpackhi_epi16(srcW[i+1], srcW[i+3]);
-		}
+		__m512i srcD0 = _mm512_unpacklo_epi16(srcW0, srcW2);
+		__m512i srcD1 = _mm512_unpackhi_epi16(srcW0, srcW2);
+		__m512i srcD2 = _mm512_unpacklo_epi16(srcW1, srcW3);
+		__m512i srcD3 = _mm512_unpackhi_epi16(srcW1, srcW3);
+		__m512i srcD4 = _mm512_unpacklo_epi16(srcW4, srcW6);
+		__m512i srcD5 = _mm512_unpackhi_epi16(srcW4, srcW6);
+		__m512i srcD6 = _mm512_unpacklo_epi16(srcW5, srcW7);
+		__m512i srcD7 = _mm512_unpackhi_epi16(srcW5, srcW7);
+		__m512i srcD8 = _mm512_unpacklo_epi16(srcW8, srcW10);
+		__m512i srcD9 = _mm512_unpackhi_epi16(srcW8, srcW10);
+		__m512i srcD10 = _mm512_unpacklo_epi16(srcW9, srcW11);
+		__m512i srcD11 = _mm512_unpackhi_epi16(srcW9, srcW11);
+		__m512i srcD12 = _mm512_unpacklo_epi16(srcW12, srcW14);
+		__m512i srcD13 = _mm512_unpackhi_epi16(srcW12, srcW14);
+		__m512i srcD14 = _mm512_unpacklo_epi16(srcW13, srcW15);
+		__m512i srcD15 = _mm512_unpackhi_epi16(srcW13, srcW15);
 		
-		__m512i srcQ[16];
-		for(int i=0; i<16; i+=8) {
-			srcQ[i+0] = _mm512_unpacklo_epi32(srcD[i+0], srcD[i+4]);
-			srcQ[i+1] = _mm512_unpackhi_epi32(srcD[i+0], srcD[i+4]);
-			srcQ[i+2] = _mm512_unpacklo_epi32(srcD[i+1], srcD[i+5]);
-			srcQ[i+3] = _mm512_unpackhi_epi32(srcD[i+1], srcD[i+5]);
-			srcQ[i+4] = _mm512_unpacklo_epi32(srcD[i+2], srcD[i+6]);
-			srcQ[i+5] = _mm512_unpackhi_epi32(srcD[i+2], srcD[i+6]);
-			srcQ[i+6] = _mm512_unpacklo_epi32(srcD[i+3], srcD[i+7]);
-			srcQ[i+7] = _mm512_unpackhi_epi32(srcD[i+3], srcD[i+7]);
-		}
+		__m512i srcQ0 = _mm512_unpacklo_epi32(srcD0, srcD4);
+		__m512i srcQ1 = _mm512_unpackhi_epi32(srcD0, srcD4);
+		__m512i srcQ2 = _mm512_unpacklo_epi32(srcD1, srcD5);
+		__m512i srcQ3 = _mm512_unpackhi_epi32(srcD1, srcD5);
+		__m512i srcQ4 = _mm512_unpacklo_epi32(srcD2, srcD6);
+		__m512i srcQ5 = _mm512_unpackhi_epi32(srcD2, srcD6);
+		__m512i srcQ6 = _mm512_unpacklo_epi32(srcD3, srcD7);
+		__m512i srcQ7 = _mm512_unpackhi_epi32(srcD3, srcD7);
+		__m512i srcQ8 = _mm512_unpacklo_epi32(srcD8, srcD12);
+		__m512i srcQ9 = _mm512_unpackhi_epi32(srcD8, srcD12);
+		__m512i srcQ10 = _mm512_unpacklo_epi32(srcD9, srcD13);
+		__m512i srcQ11 = _mm512_unpackhi_epi32(srcD9, srcD13);
+		__m512i srcQ12 = _mm512_unpacklo_epi32(srcD10, srcD14);
+		__m512i srcQ13 = _mm512_unpackhi_epi32(srcD10, srcD14);
+		__m512i srcQ14 = _mm512_unpacklo_epi32(srcD11, srcD15);
+		__m512i srcQ15 = _mm512_unpackhi_epi32(srcD11, srcD15);
 		
-		__m512i srcDQ[16];
-		for(int i=0; i<8; i++) {
-			srcDQ[i*2+0] = _mm512_unpacklo_epi64(srcQ[i], srcQ[i+8]);
-			srcDQ[i*2+1] = _mm512_unpackhi_epi64(srcQ[i], srcQ[i+8]);
-		}
+		__m512i srcDQ0 = _mm512_unpacklo_epi64(srcQ0, srcQ8);
+		__m512i srcDQ1 = _mm512_unpackhi_epi64(srcQ0, srcQ8);
+		__m512i srcDQ2 = _mm512_unpacklo_epi64(srcQ1, srcQ9);
+		__m512i srcDQ3 = _mm512_unpackhi_epi64(srcQ1, srcQ9);
+		__m512i srcDQ4 = _mm512_unpacklo_epi64(srcQ2, srcQ10);
+		__m512i srcDQ5 = _mm512_unpackhi_epi64(srcQ2, srcQ10);
+		__m512i srcDQ6 = _mm512_unpacklo_epi64(srcQ3, srcQ11);
+		__m512i srcDQ7 = _mm512_unpackhi_epi64(srcQ3, srcQ11);
+		__m512i srcDQ8 = _mm512_unpacklo_epi64(srcQ4, srcQ12);
+		__m512i srcDQ9 = _mm512_unpackhi_epi64(srcQ4, srcQ12);
+		__m512i srcDQ10 = _mm512_unpacklo_epi64(srcQ5, srcQ13);
+		__m512i srcDQ11 = _mm512_unpackhi_epi64(srcQ5, srcQ13);
+		__m512i srcDQ12 = _mm512_unpacklo_epi64(srcQ6, srcQ14);
+		__m512i srcDQ13 = _mm512_unpackhi_epi64(srcQ6, srcQ14);
+		__m512i srcDQ14 = _mm512_unpacklo_epi64(srcQ7, srcQ15);
+		__m512i srcDQ15 = _mm512_unpackhi_epi64(srcQ7, srcQ15);
 		
 		
 		// now we need to interleave lanes
 		// we could take the same approach as above, but it appears to bench rather slow (per vector: 2x cross-lane ops (128b+256b unpack) + 1x vpermw + 1x store) - high shuffle-port pressure maybe?
 		// alternatively, don't interleave at all, and offload this to the store operation; this results in the most ops but least shuffle-port pressure (per vector: 1x vpermw + 4x 128b store)
 		// instead, try a compromise - do a 256b unpack and store in 256b granularity (per vector: 1x cross-lane op + 1x vpermw + 2x 256b stores)
-		__m512i srcQQ[16];
-		for(int i=0; i<16; i+=2) {
-			srcQQ[i+0] = _mm512_inserti64x4(srcDQ[i], _mm512_castsi512_si256(srcDQ[i+1]), 1);
-			srcQQ[i+1] = _mm512_shuffle_i32x4(srcDQ[i], srcDQ[i+1], _MM_SHUFFLE(3,2,3,2));
-		}
+		__m512i srcQQ0 = _mm512_inserti64x4(srcDQ0, _mm512_castsi512_si256(srcDQ1), 1);
+		__m512i srcQQ1 = _mm512_shuffle_i32x4(srcDQ0, srcDQ1, _MM_SHUFFLE(3,2,3,2));
+		__m512i srcQQ2 = _mm512_inserti64x4(srcDQ2, _mm512_castsi512_si256(srcDQ3), 1);
+		__m512i srcQQ3 = _mm512_shuffle_i32x4(srcDQ2, srcDQ3, _MM_SHUFFLE(3,2,3,2));
+		__m512i srcQQ4 = _mm512_inserti64x4(srcDQ4, _mm512_castsi512_si256(srcDQ5), 1);
+		__m512i srcQQ5 = _mm512_shuffle_i32x4(srcDQ4, srcDQ5, _MM_SHUFFLE(3,2,3,2));
+		__m512i srcQQ6 = _mm512_inserti64x4(srcDQ6, _mm512_castsi512_si256(srcDQ7), 1);
+		__m512i srcQQ7 = _mm512_shuffle_i32x4(srcDQ6, srcDQ7, _MM_SHUFFLE(3,2,3,2));
+		__m512i srcQQ8 = _mm512_inserti64x4(srcDQ8, _mm512_castsi512_si256(srcDQ9), 1);
+		__m512i srcQQ9 = _mm512_shuffle_i32x4(srcDQ8, srcDQ9, _MM_SHUFFLE(3,2,3,2));
+		__m512i srcQQ10 = _mm512_inserti64x4(srcDQ10, _mm512_castsi512_si256(srcDQ11), 1);
+		__m512i srcQQ11 = _mm512_shuffle_i32x4(srcDQ10, srcDQ11, _MM_SHUFFLE(3,2,3,2));
+		__m512i srcQQ12 = _mm512_inserti64x4(srcDQ12, _mm512_castsi512_si256(srcDQ13), 1);
+		__m512i srcQQ13 = _mm512_shuffle_i32x4(srcDQ12, srcDQ13, _MM_SHUFFLE(3,2,3,2));
+		__m512i srcQQ14 = _mm512_inserti64x4(srcDQ14, _mm512_castsi512_si256(srcDQ15), 1);
+		__m512i srcQQ15 = _mm512_shuffle_i32x4(srcDQ14, srcDQ15, _MM_SHUFFLE(3,2,3,2));
+		
 		// now extract bits & re-arrange & store
-		for(int i=0; i<16; i+=2) {
-			__m512i result1 = gf16_xor_finish_bit_extract(srcQQ[i]);
-			_mm256_store_si256((__m256i*)(_dst + i*2 +  0), _mm512_castsi512_si256(result1));
-			_mm256_store_si256((__m256i*)(_dst + i*2 + 32), _mm512_extracti64x4_epi64(result1, 1));
-			__m512i result2 = gf16_xor_finish_bit_extract(srcQQ[i+1]);
-			_mm256_store_si256((__m256i*)(_dst + i*2 + 64), _mm512_castsi512_si256(result2));
-			_mm256_store_si256((__m256i*)(_dst + i*2 + 96), _mm512_extracti64x4_epi64(result2, 1));
-		}
+		__m512i result1, result2;
+		#define _X(a, b) \
+			result1 = gf16_xor_finish_bit_extract(srcQQ##a); \
+			_mm256_store_si256((__m256i*)(_dst + a*2 +  0), _mm512_castsi512_si256(result1)); \
+			_mm256_store_si256((__m256i*)(_dst + a*2 + 32), _mm512_extracti64x4_epi64(result1, 1)); \
+			result2 = gf16_xor_finish_bit_extract(srcQQ##b); \
+			_mm256_store_si256((__m256i*)(_dst + a*2 + 64), _mm512_castsi512_si256(result2)); \
+			_mm256_store_si256((__m256i*)(_dst + a*2 + 96), _mm512_extracti64x4_epi64(result2, 1))
+		_X(0, 1);
+		_X(2, 3);
+		_X(4, 5);
+		_X(6, 7);
+		_X(8, 9);
+		_X(10, 11);
+		_X(12, 13);
+		_X(14, 15);
+		#undef _X
 		
 		// alternative approach, which avoids the slow process of needing to move the extracted mask back to a vector
 		// for each vector, broadcast each lane, and use a variable shift to line up the bits. This allows the movemask to pull the bits in the right order, and can be stored straight to memory
