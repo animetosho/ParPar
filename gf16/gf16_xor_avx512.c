@@ -364,38 +364,30 @@ void gf16_xor_jit_muladd_avx512(const void *HEDLEY_RESTRICT scratch, void *HEDLE
 
 
 #if defined(__AVX512BW__) && defined(__AVX512VL__) && defined(PLATFORM_AMD64)
-static HEDLEY_ALWAYS_INLINE __m512i gf16_xor_finish_bit_extract(__m512i src) {
-	__m128i tmp = _mm_cvtsi64_si128(_mm512_movepi8_mask(src));
-	src = _mm512_add_epi8(src, src);
-	tmp = _mm_insert_epi64(tmp, _mm512_movepi8_mask(src), 1);
-	src = _mm512_add_epi8(src, src);
-	__m512i result = _mm512_castsi128_si512(tmp);
+static HEDLEY_ALWAYS_INLINE void gf16_xor_finish_bit_extract(uint64_t* dst, __m512i src) {
+	__m512i lane = _mm512_shuffle_i32x4(src, src, _MM_SHUFFLE(0,0,0,0));
+	lane = _mm512_sllv_epi64(lane, _mm512_set_epi64(0,0,1,1,2,2,3,3));
+	dst[1] = _mm512_movepi8_mask(lane);
+	lane = _mm512_slli_epi64(lane, 4);
+	dst[0] = _mm512_movepi8_mask(lane);
 	
-	tmp = _mm_cvtsi64_si128(_mm512_movepi8_mask(src));
-	src = _mm512_add_epi8(src, src);
-	tmp = _mm_insert_epi64(tmp, _mm512_movepi8_mask(src), 1);
-	src = _mm512_add_epi8(src, src);
-	result = _mm512_inserti32x4(result, tmp, 1);
+	lane = _mm512_shuffle_i32x4(src, src, _MM_SHUFFLE(1,1,1,1));
+	lane = _mm512_sllv_epi64(lane, _mm512_set_epi64(0,0,1,1,2,2,3,3));
+	dst[32 +1] = _mm512_movepi8_mask(lane);
+	lane = _mm512_slli_epi64(lane, 4);
+	dst[32 +0] = _mm512_movepi8_mask(lane);
 	
-	tmp = _mm_cvtsi64_si128(_mm512_movepi8_mask(src));
-	src = _mm512_add_epi8(src, src);
-	tmp = _mm_insert_epi64(tmp, _mm512_movepi8_mask(src), 1);
-	src = _mm512_add_epi8(src, src);
-	result = _mm512_inserti32x4(result, tmp, 2);
+	lane = _mm512_shuffle_i32x4(src, src, _MM_SHUFFLE(2,2,2,2));
+	lane = _mm512_sllv_epi64(lane, _mm512_set_epi64(0,0,1,1,2,2,3,3));
+	dst[64 +1] = _mm512_movepi8_mask(lane);
+	lane = _mm512_slli_epi64(lane, 4);
+	dst[64 +0] = _mm512_movepi8_mask(lane);
 	
-	tmp = _mm_cvtsi64_si128(_mm512_movepi8_mask(src));
-	src = _mm512_add_epi8(src, src);
-	tmp = _mm_insert_epi64(tmp, _mm512_movepi8_mask(src), 1);
-	result = _mm512_inserti32x4(result, tmp, 3);
-	
-	// permute words into place
-	result = _mm512_permutexvar_epi16(_mm512_set_epi16(
-		 3,  7, 11, 15, 19, 23, 27, 31,
-		 1,  5,  9, 13, 17, 21, 25, 29,
-		 2,  6, 10, 14, 18, 22, 26, 30,
-		 0,  4,  8, 12, 16, 20, 24, 28
-	), result);
-	return result;
+	lane = _mm512_shuffle_i32x4(src, src, _MM_SHUFFLE(3,3,3,3));
+	lane = _mm512_sllv_epi64(lane, _mm512_set_epi64(0,0,1,1,2,2,3,3));
+	dst[96 +1] = _mm512_movepi8_mask(lane);
+	lane = _mm512_slli_epi64(lane, 4);
+	dst[96 +0] = _mm512_movepi8_mask(lane);
 }
 #endif
 
@@ -494,76 +486,24 @@ void gf16_xor_finish_avx512(void *HEDLEY_RESTRICT dst, size_t len) {
 		__m512i srcDQ15 = _mm512_unpackhi_epi64(srcQ7, srcQ15);
 		
 		
-		// now we need to interleave lanes
-		// we could take the same approach as above, but it appears to bench rather slow (per vector: 2x cross-lane ops (128b+256b unpack) + 1x vpermw + 1x store) - high shuffle-port pressure maybe?
-		// alternatively, don't interleave at all, and offload this to the store operation; this results in the most ops but least shuffle-port pressure (per vector: 1x vpermw + 4x 128b store)
-		// instead, try a compromise - do a 256b unpack and store in 256b granularity (per vector: 1x cross-lane op + 1x vpermw + 2x 256b stores)
-		__m512i srcQQ0 = _mm512_inserti64x4(srcDQ0, _mm512_castsi512_si256(srcDQ1), 1);
-		__m512i srcQQ1 = _mm512_shuffle_i32x4(srcDQ0, srcDQ1, _MM_SHUFFLE(3,2,3,2));
-		__m512i srcQQ2 = _mm512_inserti64x4(srcDQ2, _mm512_castsi512_si256(srcDQ3), 1);
-		__m512i srcQQ3 = _mm512_shuffle_i32x4(srcDQ2, srcDQ3, _MM_SHUFFLE(3,2,3,2));
-		__m512i srcQQ4 = _mm512_inserti64x4(srcDQ4, _mm512_castsi512_si256(srcDQ5), 1);
-		__m512i srcQQ5 = _mm512_shuffle_i32x4(srcDQ4, srcDQ5, _MM_SHUFFLE(3,2,3,2));
-		__m512i srcQQ6 = _mm512_inserti64x4(srcDQ6, _mm512_castsi512_si256(srcDQ7), 1);
-		__m512i srcQQ7 = _mm512_shuffle_i32x4(srcDQ6, srcDQ7, _MM_SHUFFLE(3,2,3,2));
-		__m512i srcQQ8 = _mm512_inserti64x4(srcDQ8, _mm512_castsi512_si256(srcDQ9), 1);
-		__m512i srcQQ9 = _mm512_shuffle_i32x4(srcDQ8, srcDQ9, _MM_SHUFFLE(3,2,3,2));
-		__m512i srcQQ10 = _mm512_inserti64x4(srcDQ10, _mm512_castsi512_si256(srcDQ11), 1);
-		__m512i srcQQ11 = _mm512_shuffle_i32x4(srcDQ10, srcDQ11, _MM_SHUFFLE(3,2,3,2));
-		__m512i srcQQ12 = _mm512_inserti64x4(srcDQ12, _mm512_castsi512_si256(srcDQ13), 1);
-		__m512i srcQQ13 = _mm512_shuffle_i32x4(srcDQ12, srcDQ13, _MM_SHUFFLE(3,2,3,2));
-		__m512i srcQQ14 = _mm512_inserti64x4(srcDQ14, _mm512_castsi512_si256(srcDQ15), 1);
-		__m512i srcQQ15 = _mm512_shuffle_i32x4(srcDQ14, srcDQ15, _MM_SHUFFLE(3,2,3,2));
-		
-		// now extract bits & re-arrange & store
-		__m512i result1, result2;
-		#define _X(a, b) \
-			result1 = gf16_xor_finish_bit_extract(srcQQ##a); \
-			_mm256_store_si256((__m256i*)(_dst + a*2 +  0), _mm512_castsi512_si256(result1)); \
-			_mm256_store_si256((__m256i*)(_dst + a*2 + 32), _mm512_extracti64x4_epi64(result1, 1)); \
-			result2 = gf16_xor_finish_bit_extract(srcQQ##b); \
-			_mm256_store_si256((__m256i*)(_dst + a*2 + 64), _mm512_castsi512_si256(result2)); \
-			_mm256_store_si256((__m256i*)(_dst + a*2 + 96), _mm512_extracti64x4_epi64(result2, 1))
-		_X(0, 1);
-		_X(2, 3);
-		_X(4, 5);
-		_X(6, 7);
-		_X(8, 9);
-		_X(10, 11);
-		_X(12, 13);
-		_X(14, 15);
-		#undef _X
-		
-		// alternative approach, which avoids the slow process of needing to move the extracted mask back to a vector
 		// for each vector, broadcast each lane, and use a variable shift to line up the bits. This allows the movemask to pull the bits in the right order, and can be stored straight to memory
-		// unfortunately, GCC 9.2 insists on moving the mask back to a vector register, even if the `_store_mask64` intrinsic is used, so this doesn't perform too well. Probably is a win if the compiler doesn't mess us up there
-		/*
-		for(int i=0; i<16; i++) {
-			__m512i lane = _mm512_shuffle_i32x4(srcDQ[i], srcDQ[i], _MM_SHUFFLE(0,0,0,0));
-			lane = _mm512_sllv_epi64(lane, _mm512_set_epi64(0,0,1,1,2,2,3,3));
-			_dst[i*2 +1] = _mm512_movepi8_mask(lane);
-			lane = _mm512_slli_epi64(lane, 4);
-			_dst[i*2 +0] = _mm512_movepi8_mask(lane);
-			
-			lane = _mm512_shuffle_i32x4(srcDQ[i], srcDQ[i], _MM_SHUFFLE(1,1,1,1));
-			lane = _mm512_sllv_epi64(lane, _mm512_set_epi64(0,0,1,1,2,2,3,3));
-			_dst[i*2+32 +1] = _mm512_movepi8_mask(lane);
-			lane = _mm512_slli_epi64(lane, 4);
-			_dst[i*2+32 +0] = _mm512_movepi8_mask(lane);
-			
-			lane = _mm512_shuffle_i32x4(srcDQ[i], srcDQ[i], _MM_SHUFFLE(2,2,2,2));
-			lane = _mm512_sllv_epi64(lane, _mm512_set_epi64(0,0,1,1,2,2,3,3));
-			_dst[i*2+64 +1] = _mm512_movepi8_mask(lane);
-			lane = _mm512_slli_epi64(lane, 4);
-			_dst[i*2+64 +0] = _mm512_movepi8_mask(lane);
-			
-			lane = _mm512_shuffle_i32x4(srcDQ[i], srcDQ[i], _MM_SHUFFLE(3,3,3,3));
-			lane = _mm512_sllv_epi64(lane, _mm512_set_epi64(0,0,1,1,2,2,3,3));
-			_dst[i*2+96 +1] = _mm512_movepi8_mask(lane);
-			lane = _mm512_slli_epi64(lane, 4);
-			_dst[i*2+96 +0] = _mm512_movepi8_mask(lane);
-		}
-		*/
+		// unfortunately, GCC 9.2 insists on moving the mask back to a vector register, even if the `_store_mask64` intrinsic is used, so this doesn't perform too well. But still seems to bench better than the previous code, which tried to move masks to a vector register to shuffle the words into place. Not an issue on Clang 9.
+		gf16_xor_finish_bit_extract(_dst +  0, srcDQ0);
+		gf16_xor_finish_bit_extract(_dst +  2, srcDQ1);
+		gf16_xor_finish_bit_extract(_dst +  4, srcDQ2);
+		gf16_xor_finish_bit_extract(_dst +  6, srcDQ3);
+		gf16_xor_finish_bit_extract(_dst +  8, srcDQ4);
+		gf16_xor_finish_bit_extract(_dst + 10, srcDQ5);
+		gf16_xor_finish_bit_extract(_dst + 12, srcDQ6);
+		gf16_xor_finish_bit_extract(_dst + 14, srcDQ7);
+		gf16_xor_finish_bit_extract(_dst + 16, srcDQ8);
+		gf16_xor_finish_bit_extract(_dst + 18, srcDQ9);
+		gf16_xor_finish_bit_extract(_dst + 20, srcDQ10);
+		gf16_xor_finish_bit_extract(_dst + 22, srcDQ11);
+		gf16_xor_finish_bit_extract(_dst + 24, srcDQ12);
+		gf16_xor_finish_bit_extract(_dst + 26, srcDQ13);
+		gf16_xor_finish_bit_extract(_dst + 28, srcDQ14);
+		gf16_xor_finish_bit_extract(_dst + 30, srcDQ15);
 		
 		_dst += 128;
 	}
