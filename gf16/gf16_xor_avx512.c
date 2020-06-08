@@ -365,29 +365,33 @@ void gf16_xor_jit_muladd_avx512(const void *HEDLEY_RESTRICT scratch, void *HEDLE
 
 #if defined(__AVX512BW__) && defined(__AVX512VL__) && defined(PLATFORM_AMD64)
 static HEDLEY_ALWAYS_INLINE void gf16_xor_finish_bit_extract(uint64_t* dst, __m512i src) {
+	__m512i lo_nibble_test = _mm512_set_epi32(
+		0x08080808, 0x08080808, 0x08080808, 0x08080808,
+		0x04040404, 0x04040404, 0x04040404, 0x04040404,
+		0x02020202, 0x02020202, 0x02020202, 0x02020202,
+		0x01010101, 0x01010101, 0x01010101, 0x01010101
+	);
+	__m512i hi_nibble_test = _mm512_set_epi32(
+		0x80808080, 0x80808080, 0x80808080, 0x80808080,
+		0x40404040, 0x40404040, 0x40404040, 0x40404040,
+		0x20202020, 0x20202020, 0x20202020, 0x20202020,
+		0x10101010, 0x10101010, 0x10101010, 0x10101010
+	);
 	__m512i lane = _mm512_shuffle_i32x4(src, src, _MM_SHUFFLE(0,0,0,0));
-	lane = _mm512_sllv_epi64(lane, _mm512_set_epi64(0,0,1,1,2,2,3,3));
-	dst[1] = _mm512_movepi8_mask(lane);
-	lane = _mm512_slli_epi64(lane, 4);
-	dst[0] = _mm512_movepi8_mask(lane);
+	dst[0] = _mm512_test_epi8_mask(lane, lo_nibble_test);
+	dst[1] = _mm512_test_epi8_mask(lane, hi_nibble_test);
 	
 	lane = _mm512_shuffle_i32x4(src, src, _MM_SHUFFLE(1,1,1,1));
-	lane = _mm512_sllv_epi64(lane, _mm512_set_epi64(0,0,1,1,2,2,3,3));
-	dst[32 +1] = _mm512_movepi8_mask(lane);
-	lane = _mm512_slli_epi64(lane, 4);
-	dst[32 +0] = _mm512_movepi8_mask(lane);
+	dst[32 +0] = _mm512_test_epi8_mask(lane, lo_nibble_test);
+	dst[32 +1] = _mm512_test_epi8_mask(lane, hi_nibble_test);
 	
 	lane = _mm512_shuffle_i32x4(src, src, _MM_SHUFFLE(2,2,2,2));
-	lane = _mm512_sllv_epi64(lane, _mm512_set_epi64(0,0,1,1,2,2,3,3));
-	dst[64 +1] = _mm512_movepi8_mask(lane);
-	lane = _mm512_slli_epi64(lane, 4);
-	dst[64 +0] = _mm512_movepi8_mask(lane);
+	dst[64 +0] = _mm512_test_epi8_mask(lane, lo_nibble_test);
+	dst[64 +1] = _mm512_test_epi8_mask(lane, hi_nibble_test);
 	
 	lane = _mm512_shuffle_i32x4(src, src, _MM_SHUFFLE(3,3,3,3));
-	lane = _mm512_sllv_epi64(lane, _mm512_set_epi64(0,0,1,1,2,2,3,3));
-	dst[96 +1] = _mm512_movepi8_mask(lane);
-	lane = _mm512_slli_epi64(lane, 4);
-	dst[96 +0] = _mm512_movepi8_mask(lane);
+	dst[96 +0] = _mm512_test_epi8_mask(lane, lo_nibble_test);
+	dst[96 +1] = _mm512_test_epi8_mask(lane, hi_nibble_test);
 }
 #endif
 
@@ -486,7 +490,7 @@ void gf16_xor_finish_avx512(void *HEDLEY_RESTRICT dst, size_t len) {
 		__m512i srcDQ15 = _mm512_unpackhi_epi64(srcQ7, srcQ15);
 		
 		
-		// for each vector, broadcast each lane, and use a variable shift to line up the bits. This allows the movemask to pull the bits in the right order, and can be stored straight to memory
+		// for each vector, broadcast each lane, and use a testmb to pull the bits in the right order. These can be stored straight to memory
 		// unfortunately, GCC 9.2 insists on moving the mask back to a vector register, even if the `_store_mask64` intrinsic is used, so this doesn't perform too well. But still seems to bench better than the previous code, which tried to move masks to a vector register to shuffle the words into place. Not an issue on Clang 9.
 		gf16_xor_finish_bit_extract(_dst +  0, srcDQ0);
 		gf16_xor_finish_bit_extract(_dst +  2, srcDQ1);
