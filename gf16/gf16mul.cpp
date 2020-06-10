@@ -521,8 +521,10 @@ Galois16Methods Galois16Mul::default_method(size_t regionSizeHint, unsigned /*ou
 			return GF16_SHUFFLE2X_AVX2;
 # endif
 	}
-	// TODO: add GFNI affine somewhere here
+	if(gf16_affine_available_gfni && caps.hasGFNI && gf16_shuffle_available_ssse3 && caps.hasSSSE3)
+		return GF16_AFFINE_GFNI; // presumably this beats XOR-JIT
 	if(!regionSizeHint || regionSizeHint > caps.propPrefShuffleThresh) {
+		// TODO: if only a few recovery slices being made (e.g. 3), prefer shuffle
 		//if(gf16_xor_available_avx && caps.hasAVX && caps.canMemWX)
 		//	return GF16_XOR_JIT_AVX;
 		if(gf16_xor_available_sse2 && caps.hasSSE2 && caps.canMemWX)
