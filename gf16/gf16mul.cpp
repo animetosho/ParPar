@@ -408,6 +408,7 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 					scratch = gf16_xor_jit_init_avx512(GF16_POLYNOMIAL);
 					_mul = &gf16_xor_jit_mul_avx512;
 					_mul_add = &gf16_xor_jit_muladd_avx512;
+					_mul_add_multi = &gf16_xor_jit_muladd_multi_avx512;
 					prepare = &gf16_xor_prepare_avx512;
 					finish = &gf16_xor_finish_avx512;
 					alignment = 64;
