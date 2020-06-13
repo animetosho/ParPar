@@ -79,6 +79,7 @@ static void setup_gf(Galois16Methods method = GF16_AUTO, size_t size_hint = 0) {
 				break;
 			case GF16_LOOKUP:
 			case GF16_LOOKUP_SSE2:
+			case GF16_LOOKUP3:
 			case GF16_XOR_SSE2:
 				CHUNK_SIZE = 96*1024; // 2* L1 data cache size ?
 				minChunkTarget = 64*1024; // keep in range 64-128KB

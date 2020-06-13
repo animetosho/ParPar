@@ -180,7 +180,7 @@ void gf16_lookup_mul(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT 
 	}
 }
 
-void gf16_lookup_mul_add(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch) {
+void gf16_lookup_muladd(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch) {
 	UNUSED(scratch); UNUSED(mutScratch);
 	uint16_t lhtable[512];
 	calc_table(coefficient, lhtable);
@@ -220,4 +220,122 @@ size_t gf16_lookup_stride() {
 		return 8;
 	else
 		return 2;
+}
+
+
+
+struct gf16_lookup3_tables {
+	uint16_t table1[2048]; // bits  0-10
+	uint32_t table2[1024]; // bits 11-20
+	uint16_t table3[2048]; // bits 21-31
+};
+static HEDLEY_ALWAYS_INLINE void calc_3table(uint16_t coefficient, struct gf16_lookup3_tables* lookup) {
+	uint16_t val = coefficient;
+	lookup->table1[0] = 0;
+	int j, k;
+	for (j = 1; j < 2048; j <<= 1) {
+		for (k = 0; k < j; k++)
+			lookup->table1[k+j] = (val ^ lookup->table1[k]);
+		val = GF16_MULTBY_TWO(val);
+	}
+	
+	lookup->table2[0] = 0;
+	for (j = 1; j < 32; j <<= 1) {
+		for (k = 0; k < j; k++)
+			lookup->table2[k+j] = (val ^ lookup->table2[k]);
+		val = GF16_MULTBY_TWO(val);
+	}
+	val = coefficient;
+	for (j = 32; j < 1024; j <<= 1) {
+		for (k = 0; k < j; k++)
+			lookup->table2[k+j] = (((uint32_t)val<<16) ^ lookup->table2[k]);
+		val = GF16_MULTBY_TWO(val);
+	}
+	
+	lookup->table3[0] = 0;
+	for (j = 1; j < 2048; j <<= 1) {
+		for (k = 0; k < j; k++) lookup->table3[k+j] = (val ^ lookup->table3[k]);
+		val = GF16_MULTBY_TWO(val);
+	}
+}
+
+void gf16_lookup3_mul(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch) {
+	UNUSED(scratch); UNUSED(mutScratch);
+	struct gf16_lookup3_tables lookup;
+	calc_3table(coefficient, &lookup);
+	
+	uint8_t* _src = (uint8_t*)src + len;
+	uint8_t* _dst = (uint8_t*)dst + len;
+	
+	if(sizeof(uintptr_t) >= 8) { // assume 64-bit CPU
+		for(long ptr = -(long)len; ptr; ptr+=8) {
+			uint64_t data = *(uint64_t*)(_src + ptr);
+			uint32_t data2 = data >> 32;
+			*(uint64_t*)(_dst + ptr) = (
+				(uint32_t)lookup.table1[data & 0x7ff] ^
+				lookup.table2[(data & 0x1ff800) >> 11] ^
+				((uint32_t)lookup.table3[(data & 0xffe00000) >> 21] << 16)
+			) ^ ((uint64_t)(
+				lookup.table1[data2 & 0x7ff] ^
+				lookup.table2[(data2 & 0x1ff800) >> 11]
+			) << 32) ^
+			((uint64_t)lookup.table3[data2 >> 21] << 48);
+		}
+	}
+	else {
+		for(long ptr = -(long)len; ptr; ptr+=4) {
+			uint32_t data = *(uint32_t*)(_src + ptr);
+			*(uint32_t*)(_dst + ptr) = 
+				(uint32_t)lookup.table1[data & 0x7ff] ^
+				lookup.table2[(data & 0x1ff800) >> 11] ^
+				((uint32_t)lookup.table3[data >> 21] << 16);
+		}
+	}
+}
+
+void gf16_lookup3_muladd(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch) {
+	UNUSED(scratch); UNUSED(mutScratch);
+	struct gf16_lookup3_tables lookup;
+	calc_3table(coefficient, &lookup);
+	
+	uint8_t* _src = (uint8_t*)src + len;
+	uint8_t* _dst = (uint8_t*)dst + len;
+	
+	if(sizeof(uintptr_t) >= 8) { // assume 64-bit CPU
+		for(long ptr = -(long)len; ptr; ptr+=8) {
+			uint64_t data = *(uint64_t*)(_src + ptr);
+			uint32_t data2 = data >> 32;
+			*(uint64_t*)(_dst + ptr) ^= (
+				(uint32_t)lookup.table1[data & 0x7ff] ^
+				lookup.table2[(data & 0x1ff800) >> 11] ^
+				((uint32_t)lookup.table3[(data & 0xffe00000) >> 21] << 16)
+			) ^ ((uint64_t)(
+				((uint64_t)lookup.table1[data2 & 0x7ff] << 32) ^
+				lookup.table2[(data2 & 0x1ff800) >> 11]
+			) << 32) ^
+			((uint64_t)lookup.table3[data2 >> 21] << 48);
+		}
+	}
+	else {
+		for(long ptr = -(long)len; ptr; ptr+=4) {
+			uint32_t data = *(uint32_t*)(_src + ptr);
+			*(uint32_t*)(_dst + ptr) ^= 
+				(uint32_t)lookup.table1[data & 0x7ff] ^
+				lookup.table2[(data & 0x1ff800) >> 11] ^
+				((uint32_t)lookup.table3[data >> 21] << 16);
+		}
+	}
+}
+
+
+size_t gf16_lookup3_stride() {
+#if __BYTE_ORDER__ != __ORDER_BIG_ENDIAN__
+	// we only support this technique on little endian for now
+	if(sizeof(uintptr_t) == 8)
+		return 8;
+	else if(sizeof(uintptr_t) >= 4)
+		return 4;
+	else
+#endif
+		return 0;
 }

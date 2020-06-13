@@ -425,10 +425,18 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 			stride = 16;
 		break;
 		
+		case GF16_LOOKUP3:
+			_mul = &gf16_lookup3_mul;
+			_mul_add = &gf16_lookup3_muladd;
+			stride = gf16_lookup3_stride();
+			alignment = stride; // assume platform doesn't like misalignment
+			if(stride)
+				break;
+			// else fallthrough
 		case GF16_LOOKUP:
 		default:
 			_mul = &gf16_lookup_mul;
-			_mul_add = &gf16_lookup_mul_add;
+			_mul_add = &gf16_lookup_muladd;
 			stride = gf16_lookup_stride();
 			alignment = stride; // assume platform doesn't like misalignment
 		break;
@@ -548,6 +556,8 @@ Galois16Methods Galois16Mul::default_method(size_t regionSizeHint, unsigned /*ou
 std::vector<Galois16Methods> Galois16Mul::availableMethods(bool checkCpuid) {
 	std::vector<Galois16Methods> ret;
 	ret.push_back(GF16_LOOKUP);
+	if(gf16_lookup3_stride())
+		ret.push_back(GF16_LOOKUP3);
 	
 	const CpuCap caps(checkCpuid);
 #ifdef PLATFORM_X86
