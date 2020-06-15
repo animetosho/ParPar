@@ -310,7 +310,7 @@ void gf16_lookup3_muladd(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTR
 				lookup.table2[(data & 0x1ff800) >> 11] ^
 				((uint32_t)lookup.table3[(data & 0xffe00000) >> 21] << 16)
 			) ^ ((uint64_t)(
-				((uint64_t)lookup.table1[data2 & 0x7ff] << 32) ^
+				(uint64_t)lookup.table1[data2 & 0x7ff] ^
 				lookup.table2[(data2 & 0x1ff800) >> 11]
 			) << 32) ^
 			((uint64_t)lookup.table3[data2 >> 21] << 48);
