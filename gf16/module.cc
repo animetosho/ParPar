@@ -38,7 +38,6 @@ static inline uint16_t calc_factor(uint_fast16_t inputBlock, uint_fast16_t recov
 
 static Galois16Mul* gf = NULL;
 static std::vector<void*> gfScratch;
-static int CHUNK_SIZE = 0;
 
 static int maxNumThreads = 1, defaultNumThreads = 1;
 
@@ -64,40 +63,6 @@ static void setup_gf(Galois16Methods method = GF16_AUTO, size_t size_hint = 0) {
 	gfScratch.reserve(maxNumThreads);
 	for(int i=0; i<maxNumThreads; i++)
 		gfScratch.push_back(gf->mutScratch_alloc());
-	
-	// select a good chunk size
-	// TODO: this needs to be variable depending on the CPU cache size
-	// although these defaults are pretty good across most CPUs
-	if(!CHUNK_SIZE) {
-		unsigned int minChunkTarget;
-		switch(gf->method()) {
-			case GF16_XOR_JIT_SSE2: /* JIT is a little slow, so larger blocks make things faster */
-			case GF16_XOR_JIT_AVX2:
-			case GF16_XOR_JIT_AVX512:
-				CHUNK_SIZE = 128*1024; // half L2 cache?
-				minChunkTarget = 96*1024; // keep in range 96-192KB
-				break;
-			case GF16_LOOKUP:
-			case GF16_LOOKUP_SSE2:
-			case GF16_LOOKUP3:
-			case GF16_XOR_SSE2:
-				CHUNK_SIZE = 96*1024; // 2* L1 data cache size ?
-				minChunkTarget = 64*1024; // keep in range 64-128KB
-				break;
-			default: // Shuffle/Affine
-				CHUNK_SIZE = 48*1024; // ~=L1 * 1-2 data cache size seems to be efficient
-				minChunkTarget = 32*1024; // keep in range 32-64KB
-				break;
-		}
-		
-		if(size_hint) {
-			/* try to keep in range */
-			unsigned int numChunks = (size_hint / CHUNK_SIZE) + ((size_hint % CHUNK_SIZE) ? 1 : 0);
-			if(size_hint / numChunks < minChunkTarget) {
-				CHUNK_SIZE = size_hint / (numChunks-1) + 1;
-			}
-		}
-	}
 }
 void ppgf_maybe_setup_gf() {
 	if(!gf) setup_gf();
@@ -106,6 +71,7 @@ void ppgf_maybe_setup_gf() {
 
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 #define CEIL_DIV(a, b) (((a) + (b)-1) / (b))
+#define ROUND_DIV(a, b) (((a) + ((b)>>1)) / (b))
 
 #if defined(__cplusplus) && __cplusplus >= 201100 && !(defined(_MSC_VER) && defined(__clang__)) && !defined(__APPLE__)
 	// C++11 method
@@ -161,8 +127,8 @@ void ppgf_multiply_mat(uint16_t** inputs, uint_fast16_t* iNums, unsigned int num
 	ALIGN_ALLOC(factors, factStride * maxNumThreads, CACHELINE_SIZE);
 	
 	// break the slice into smaller chunks so that we maximise CPU cache usage
-	int numChunks = (len / CHUNK_SIZE) + ((len % CHUNK_SIZE) ? 1 : 0);
-	unsigned int alignMask = gf->stride-1;
+	int numChunks = ROUND_DIV(len, gf->info().idealChunkSize);
+	unsigned int alignMask = gf->info().stride-1;
 	unsigned int chunkSize = (CEIL_DIV(len, numChunks) + alignMask) & ~alignMask; // we'll assume that input chunks are memory aligned here
 	
 	// avoid nested loop issues by combining chunk & output loop into one
@@ -210,10 +176,11 @@ void ppgf_finish_input(unsigned int numInputs, uint16_t** inputs, size_t len) {
 
 void ppgf_get_method(int* rMethod, const char** rMethLong, int* align, int* stride) {
 	ppgf_maybe_setup_gf();
-	*rMethod = gf->method();
-	*rMethLong = gf->methodText();
-	*align = gf->alignment;
-	*stride = gf->stride;
+	const Galois16MethodInfo& info = gf->info();
+	*rMethod = info.id;
+	*rMethLong = info.name;
+	*align = info.alignment;
+	*stride = info.stride;
 }
 
 int ppgf_get_num_threads() {
@@ -235,8 +202,6 @@ void ppgf_set_num_threads(int threads) {
 #endif
 }
 void ppgf_init_gf_module() {
-	CHUNK_SIZE = 0;
-	
 #ifdef _OPENMP
 	maxNumThreads = omp_get_num_procs();
 	if(maxNumThreads < 1) maxNumThreads = 1;

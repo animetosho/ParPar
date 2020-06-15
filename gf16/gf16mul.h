@@ -57,9 +57,18 @@ static const char* Galois16MethodsText[] = {
 	"Affine2x (GFNI+AVX512)"
 };
 
+typedef struct {
+	Galois16Methods id;
+	const char* name;
+	size_t alignment;
+	size_t stride;
+	size_t idealChunkSize;
+} Galois16MethodInfo;
+
 class Galois16Mul {
 private:
 	void* scratch;
+	Galois16MethodInfo _info;
 	
 	static void addGeneric(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len);
 	Galois16MulFunc _mul;
@@ -101,10 +110,6 @@ public:
 	}
 #endif
 	
-	// these are read-only
-	size_t alignment;
-	size_t stride;
-	
 	inline bool needPrepare() const {
 		return prepare != &Galois16Mul::_prepare_none;
 	};
@@ -115,15 +120,13 @@ public:
 		return _pow_add != NULL;
 	};
 	
-	inline Galois16Methods method() const {
-		return _method;
-	}
-	inline const char* methodText() const {
-		return Galois16MethodsText[(int)_method];
-	}
 	static std::vector<Galois16Methods> availableMethods(bool checkCpuid);
 	static inline const char* methodToText(Galois16Methods m) {
 		return Galois16MethodsText[(int)m];
+	}
+	
+	inline const Galois16MethodInfo& info() const {
+		return _info;
 	}
 	
 	Galois16MulTransform prepare;
@@ -133,9 +136,9 @@ public:
 	void mutScratch_free(void* mutScratch) const;
 	
 	inline void mul(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch) const {
-		assert(((uintptr_t)dst & (alignment-1)) == 0);
-		assert(((uintptr_t)src & (alignment-1)) == 0);
-		assert((len & (stride-1)) == 0);
+		assert(((uintptr_t)dst & (_info.alignment-1)) == 0);
+		assert(((uintptr_t)src & (_info.alignment-1)) == 0);
+		assert((len & (_info.stride-1)) == 0);
 		assert(len > 0);
 		
 		if(!(coefficient & 0xfffe)) {
@@ -152,9 +155,9 @@ public:
 		}
 	}
 	inline void mul_add(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch) const {
-		assert(((uintptr_t)dst & (alignment-1)) == 0);
-		assert(((uintptr_t)src & (alignment-1)) == 0);
-		assert((len & (stride-1)) == 0);
+		assert(((uintptr_t)dst & (_info.alignment-1)) == 0);
+		assert(((uintptr_t)src & (_info.alignment-1)) == 0);
+		assert((len & (_info.stride-1)) == 0);
 		assert(len > 0);
 		
 		if(!(coefficient & 0xfffe)) {
@@ -168,7 +171,7 @@ public:
 	}
 	
 	inline void pow(unsigned outputs, size_t offset, void **HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch) const {
-		assert((len & (stride-1)) == 0);
+		assert((len & (_info.stride-1)) == 0);
 		assert(len > 0);
 		assert(outputs > 0);
 		
@@ -207,7 +210,7 @@ public:
 		}
 	}
 	inline void pow_add(unsigned outputs, size_t offset, void **HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch) const {
-		assert((len & (stride-1)) == 0);
+		assert((len & (_info.stride-1)) == 0);
 		assert(len > 0);
 		assert(outputs > 0);
 		
@@ -223,7 +226,7 @@ public:
 	}
 	
 	inline void mul_add_multi(unsigned regions, size_t offset, void *HEDLEY_RESTRICT dst, const void* *HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch) const {
-		assert((len & (stride-1)) == 0);
+		assert((len & (_info.stride-1)) == 0);
 		assert(len > 0);
 		assert(regions > 0);
 		
