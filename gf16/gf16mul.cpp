@@ -437,6 +437,7 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 		default:
 			_mul = &gf16_lookup_mul;
 			_mul_add = &gf16_lookup_muladd;
+			_pow_add = &gf16_lookup_powadd;
 			stride = gf16_lookup_stride();
 			alignment = stride; // assume platform doesn't like misalignment
 		break;
@@ -454,6 +455,9 @@ Galois16Mul::Galois16Mul(Galois16Methods method) {
 	_mul = NULL;
 	_add = &Galois16Mul::addGeneric;
 	_mul_add_multi = &Galois16Mul::_mul_add_multi_none;
+	
+	_pow = NULL;
+	_pow_add = NULL;
 	
 	setupMethod(method);
 }
@@ -476,6 +480,8 @@ void Galois16Mul::move(Galois16Mul& other) {
 	_add = other._add;
 	_mul_add = other._mul_add;
 	_mul_add_multi = other._mul_add_multi;
+	_pow = other._pow;
+	_pow_add = other._pow_add;
 	_method = other._method;
 }
 #endif

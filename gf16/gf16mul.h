@@ -7,6 +7,7 @@
 typedef void(*Galois16MulTransform) (void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen);
 typedef void(*Galois16MulUntransform) (void *HEDLEY_RESTRICT dst, size_t len);
 typedef void(*Galois16MulFunc) (const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch);
+typedef void(*Galois16PowFunc) (const void *HEDLEY_RESTRICT scratch, unsigned outputs, size_t offset, void **HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch);
 typedef unsigned(*Galois16MulMultiFunc) (const void *HEDLEY_RESTRICT scratch, unsigned regions, size_t offset, void *HEDLEY_RESTRICT dst, const void* *HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch);
 typedef void(*Galois16AddFunc) (void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len);
 
@@ -64,6 +65,8 @@ private:
 	Galois16MulFunc _mul;
 	Galois16MulFunc _mul_add;
 	Galois16AddFunc _add;
+	Galois16PowFunc _pow;
+	Galois16PowFunc _pow_add;
 	Galois16MulMultiFunc _mul_add_multi;
 	
 	static unsigned _mul_add_multi_none(const void *HEDLEY_RESTRICT scratch, unsigned regions, size_t offset, void *HEDLEY_RESTRICT dst, const void* *HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch);
@@ -107,6 +110,9 @@ public:
 	};
 	inline bool hasMultiMulAdd() const {
 		return _mul_add_multi != &Galois16Mul::_mul_add_multi_none;
+	};
+	inline bool hasPowAdd() const {
+		return _pow_add != NULL;
 	};
 	
 	inline Galois16Methods method() const {
@@ -159,6 +165,61 @@ public:
 		}
 		else
 			_mul_add(scratch, dst, src, len, coefficient, mutScratch);
+	}
+	
+	inline void pow(unsigned outputs, size_t offset, void **HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch) const {
+		assert((len & (stride-1)) == 0);
+		assert(len > 0);
+		assert(outputs > 0);
+		
+		if(!(coefficient & 0xfffe)) {
+			if(coefficient == 0) {
+				for(unsigned output = 0; output < outputs; output++)
+					memset((uint8_t*)dst[output] + offset, 0, len);
+			} else {
+				for(unsigned output = 0; output < outputs; output++)
+					memcpy((uint8_t*)dst[output] + offset, (uint8_t*)src + offset, len);
+			}
+		}
+		else if(_pow)
+			_pow(scratch, outputs, offset, dst, src, len, coefficient, mutScratch);
+		else if(_pow_add) {
+			for(unsigned output = 0; output < outputs; output++)
+				memset((uint8_t*)dst[output] + offset, 0, len);
+			_pow_add(scratch, outputs, offset, dst, src, len, coefficient, mutScratch);
+		}
+		else if(_mul) {
+			void* prev = (uint8_t*)src + offset;
+			for(unsigned output = 0; output < outputs; output++) {
+				void* cur = (uint8_t*)dst[output] + offset;
+				_mul(scratch, cur, prev, len, coefficient, mutScratch);
+				prev = cur;
+			}
+		}
+		else {
+			void* prev = (uint8_t*)src + offset;
+			for(unsigned output = 0; output < outputs; output++) {
+				void* cur = (uint8_t*)dst[output] + offset;
+				memset(cur, 0, len);
+				_mul_add(scratch, cur, prev, len, coefficient, mutScratch);
+				prev = cur;
+			}
+		}
+	}
+	inline void pow_add(unsigned outputs, size_t offset, void **HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch) const {
+		assert((len & (stride-1)) == 0);
+		assert(len > 0);
+		assert(outputs > 0);
+		
+		if(!(coefficient & 0xfffe)) {
+			if(coefficient == 0)
+				return;
+			else
+				for(unsigned output = 0; output < outputs; output++)
+					_add((uint8_t*)dst[output] + offset, (uint8_t*)src + offset, len);
+		}
+		else
+			_pow_add(scratch, outputs, offset, dst, src, len, coefficient, mutScratch);
 	}
 	
 	inline void mul_add_multi(unsigned regions, size_t offset, void *HEDLEY_RESTRICT dst, const void* *HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch) const {

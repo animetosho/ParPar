@@ -19,9 +19,11 @@
 #if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
 # define PACK_2X16(a, b) (((uint32_t)(a) << 16) | (b))
 # define PACK_4X16(a, b, c, d) (((uint64_t)(a) << 48) | ((uint64_t)(b) << 32) | ((uint64_t)(c) << 16) | (uint64_t)(d))
+# define XTRACT_BITS(a, s, c) (((a) >> (sizeof(a) - s - c)) & ((1 << c)-1))
 #else
 # define PACK_2X16(a, b) (((uint32_t)(b) << 16) | (a))
 # define PACK_4X16(a, b, c, d) (((uint64_t)(d) << 48) | ((uint64_t)(c) << 32) | ((uint64_t)(b) << 16) | (uint64_t)(a))
+# define XTRACT_BITS(a, s, c) (((a) >> s) & ((1 << c)-1))
 #endif
 
 #if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
@@ -209,6 +211,57 @@ void gf16_lookup_muladd(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRI
 	else { // use 2 byte wordsize
 		for(long ptr = -(long)len; ptr; ptr+=2) {
 			*(uint16_t*)(_dst + ptr) ^= lhtable[_src[ptr]] ^ lhtable[256 + _src[ptr + 1]];
+		}
+	}
+}
+
+void gf16_lookup_powadd(const void *HEDLEY_RESTRICT scratch, unsigned outputs, size_t offset, void **HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch) {
+	UNUSED(scratch); UNUSED(mutScratch);
+	uint16_t lhtable[512];
+	calc_table(coefficient, lhtable);
+	
+	uint8_t* _src = (uint8_t*)src + len + offset;
+	size_t lenPlusOffset = len + offset; // TODO: consider pre-computing this to all dst pointers
+	
+	if(sizeof(uintptr_t) == 4) { // assume 32-bit CPU
+		for(long ptr = -(long)len; ptr; ptr+=4) {
+			size_t dstPtr = ptr + lenPlusOffset;
+			uint16_t res1 = lhtable[_src[ptr]] ^ lhtable[256 + _src[ptr + 1]];
+			uint16_t res2 = lhtable[_src[ptr + 2]] ^ lhtable[256 + _src[ptr + 3]];
+			*(uint32_t*)((uint8_t*)dst[0] + dstPtr) ^= PACK_2X16(res1, res2);
+			for(unsigned output = 1; output < outputs; output++) {
+				res1 = lhtable[XTRACT_BITS(res1, 0, 8)] ^ lhtable[256 + XTRACT_BITS(res1, 8, 8)];
+				res2 = lhtable[XTRACT_BITS(res2, 0, 8)] ^ lhtable[256 + XTRACT_BITS(res2, 8, 8)];
+				*(uint32_t*)((uint8_t*)dst[output] + dstPtr) ^= PACK_2X16(res1, res2);
+			}
+			
+		}
+	}
+	else if(sizeof(uintptr_t) >= 8) { // process in 64-bit
+		for(long ptr = -(long)len; ptr; ptr+=8) {
+			size_t dstPtr = ptr + lenPlusOffset;
+			uint16_t res1 = lhtable[_src[ptr]] ^ lhtable[256 + _src[ptr + 1]];
+			uint16_t res2 = lhtable[_src[ptr + 2]] ^ lhtable[256 + _src[ptr + 3]];
+			uint16_t res3 = lhtable[_src[ptr + 4]] ^ lhtable[256 + _src[ptr + 5]];
+			uint16_t res4 = lhtable[_src[ptr + 6]] ^ lhtable[256 + _src[ptr + 7]];
+			*(uint64_t*)((uint8_t*)dst[0] + dstPtr) ^= PACK_4X16(res1, res2, res3, res4);
+			for(unsigned output = 1; output < outputs; output++) {
+				res1 = lhtable[XTRACT_BITS(res1, 0, 8)] ^ lhtable[256 + XTRACT_BITS(res1, 8, 8)];
+				res2 = lhtable[XTRACT_BITS(res2, 0, 8)] ^ lhtable[256 + XTRACT_BITS(res2, 8, 8)];
+				res3 = lhtable[XTRACT_BITS(res3, 0, 8)] ^ lhtable[256 + XTRACT_BITS(res3, 8, 8)];
+				res4 = lhtable[XTRACT_BITS(res4, 0, 8)] ^ lhtable[256 + XTRACT_BITS(res4, 8, 8)];
+				*(uint64_t*)((uint8_t*)dst[output] + dstPtr) ^= PACK_4X16(res1, res2, res3, res4);
+			}
+		}
+	}
+	else { // use 2 byte wordsize
+		for(long ptr = -(long)len; ptr; ptr+=2) {
+			size_t dstPtr = ptr + lenPlusOffset;
+			uint16_t data = *(uint16_t*)(_src + ptr);
+			for(unsigned output = 0; output < outputs; output++) {
+				data = lhtable[XTRACT_BITS(data, 0, 8)] ^ lhtable[256 + XTRACT_BITS(data, 8, 8)];
+				*(uint16_t*)((uint8_t*)dst[output] + dstPtr) ^= data;
+			}
 		}
 	}
 }
