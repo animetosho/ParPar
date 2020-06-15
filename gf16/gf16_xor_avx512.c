@@ -538,7 +538,7 @@ void gf16_xor_finish_avx512(void *HEDLEY_RESTRICT dst, size_t len) {
 #undef _MM_END
 
 
-#ifdef PLATFORM_AMD64
+#if defined(__AVX512BW__) && defined(__AVX512VL__) && defined(PLATFORM_AMD64)
 static size_t xor_write_init_jit(uint8_t *jitCode) {
 	uint8_t *jitCodeStart = jitCode;
 	jitCode += _jit_add_i(jitCode, AX, 1024);
@@ -550,10 +550,11 @@ static size_t xor_write_init_jit(uint8_t *jitCode) {
 	}
 	return jitCode-jitCodeStart;
 }
+
+# include "gf16_bitdep_init_avx2.h"
 #endif
 
 
-#include "gf16_bitdep_init_avx2.h"
 
 void* gf16_xor_jit_init_avx512(int polynomial) {
 #if defined(__AVX512BW__) && defined(__AVX512VL__) && defined(PLATFORM_AMD64)
@@ -572,7 +573,7 @@ void* gf16_xor_jit_init_avx512(int polynomial) {
 }
 
 void* gf16_xor_jit_init_mut_avx512() {
-#ifdef PLATFORM_AMD64
+#if defined(__AVX512BW__) && defined(__AVX512VL__) && defined(PLATFORM_AMD64)
 	uint8_t *jitCode = jit_alloc(XORDEP_JIT_SIZE);
 	if(!jitCode) return NULL;
 	xor_write_init_jit(jitCode);

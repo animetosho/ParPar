@@ -33,6 +33,8 @@ static inline size_t _jit_rex_pref(uint8_t** jit, uint8_t xreg, uint8_t xreg2) {
 		*((*jit)++) = 0x40 | (xreg2 >>3) | ((xreg >>1)&4);
 		return 1;
 	}
+#else
+	UNUSED(jit); UNUSED(xreg); UNUSED(xreg2);
 #endif
 	return 0;
 }
@@ -41,6 +43,8 @@ static inline size_t _jit_rxx_pref(uint8_t** jit, uint8_t reg, uint8_t reg2) {
 #ifdef PLATFORM_AMD64
 	*((*jit)++) = 0x48 | (reg >>3) | ((reg2 >>1)&4);
 	return 1;
+#else
+	UNUSED(jit); UNUSED(reg); UNUSED(reg2);
 #endif
 	return 0;
 }
