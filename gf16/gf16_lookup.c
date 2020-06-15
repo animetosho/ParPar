@@ -16,6 +16,22 @@
 	) \
 )
 
+#define GF16_MULTBY_TWO_UPPER(p) ((((p) << 1) & 0xffffffff) ^ (((GF16_POLYNOMIAL&0xffff) << 16) & -((p) >> 31)))
+#define GF16_MULTBY_TWO_UPPER_X2(p) ( \
+	(((p) << 1) & 0xffffffffffffffffULL) ^ \
+	( \
+		((((uint64_t)GF16_POLYNOMIAL) << 16) ^ (((uint64_t)(GF16_POLYNOMIAL&0xffff)) << 48)) & \
+		-((p) >> 63) \
+	) \
+)
+#define GF16_MULTBY_TWO_LOWER_X2(p) ( \
+	(((p) << 1) & 0xffffffffffffffffULL) ^ \
+	( \
+		(GF16_POLYNOMIAL ^ (((uint64_t)GF16_POLYNOMIAL) << 32)) & \
+		-((p) >> 47) \
+	) \
+)
+
 #if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
 # define PACK_2X16(a, b) (((uint32_t)(a) << 16) | (b))
 # define PACK_4X16(a, b, c, d) (((uint64_t)(a) << 48) | ((uint64_t)(b) << 32) | ((uint64_t)(c) << 16) | (uint64_t)(d))
@@ -283,32 +299,85 @@ struct gf16_lookup3_tables {
 	uint16_t table3[2048]; // bits 21-31
 };
 static HEDLEY_ALWAYS_INLINE void calc_3table(uint16_t coefficient, struct gf16_lookup3_tables* lookup) {
-	uint16_t val = coefficient;
-	lookup->table1[0] = 0;
-	int j, k;
-	for (j = 1; j < 2048; j <<= 1) {
-		for (k = 0; k < j; k++)
-			lookup->table1[k+j] = (val ^ lookup->table1[k]);
-		val = GF16_MULTBY_TWO(val);
-	}
-	
-	lookup->table2[0] = 0;
-	for (j = 1; j < 32; j <<= 1) {
-		for (k = 0; k < j; k++)
-			lookup->table2[k+j] = (val ^ lookup->table2[k]);
-		val = GF16_MULTBY_TWO(val);
-	}
-	val = coefficient;
-	for (j = 32; j < 1024; j <<= 1) {
-		for (k = 0; k < j; k++)
-			lookup->table2[k+j] = (((uint32_t)val<<16) ^ lookup->table2[k]);
-		val = GF16_MULTBY_TWO(val);
-	}
-	
-	lookup->table3[0] = 0;
-	for (j = 1; j < 2048; j <<= 1) {
-		for (k = 0; k < j; k++) lookup->table3[k+j] = (val ^ lookup->table3[k]);
-		val = GF16_MULTBY_TWO(val);
+	if(sizeof(uintptr_t) >= 8) {
+		uint64_t* tbl = (uint64_t*)lookup->table1;
+		uint32_t coefficient2 = ((uint32_t)coefficient << 16);
+		uint32_t tmp = coefficient2 | coefficient;
+		tmp = GF16_MULTBY_TWO_X2(tmp);
+		tbl[0] = coefficient2 | ((uint64_t)(tmp^coefficient2) << 32);
+		uint64_t coefficient4 = tmp | ((uint64_t)tmp << 32);
+		coefficient4 = GF16_MULTBY_TWO_X4(coefficient4);
+		int j, k;
+		for (j = 1; j < 512; j <<= 1) {
+			for (k = 0; k < j; k++)
+				tbl[k+j] = coefficient4 ^ tbl[k];
+			coefficient4 = GF16_MULTBY_TWO_X4(coefficient4);
+		}
+		
+		tbl = (uint64_t*)lookup->table2;
+		tbl[0] = coefficient4 & 0xffff00000000ULL;
+		coefficient4 = GF16_MULTBY_TWO_X4(coefficient4);
+		coefficient4 &= 0xffff0000ffffULL;
+		for (j = 1; j < 16; j <<= 1) {
+			for (k = 0; k < j; k++)
+				tbl[k+j] = coefficient4 ^ tbl[k];
+			coefficient4 = GF16_MULTBY_TWO_LOWER_X2(coefficient4);
+		}
+		coefficient4 = (uint64_t)coefficient << 48;
+		coefficient4 |= (uint32_t)coefficient << 16;
+		for (j = 16; j < 512; j <<= 1) {
+			for (k = 0; k < j; k++)
+				tbl[k+j] = coefficient4 ^ tbl[k];
+			coefficient4 = GF16_MULTBY_TWO_UPPER_X2(coefficient4);
+		}
+		
+		tbl = (uint64_t*)lookup->table3;
+		uint64_t tmp2 = coefficient4;
+		coefficient4 |= coefficient4 >> 16;
+		coefficient4 = GF16_MULTBY_TWO_X4(coefficient4);
+		tbl[0] = tmp2 ^ (coefficient4 << 32);
+		coefficient4 = GF16_MULTBY_TWO_X4(coefficient4);
+		for (j = 1; j < 512; j <<= 1) {
+			for (k = 0; k < j; k++)
+				tbl[k+j] = coefficient4 ^ tbl[k];
+			coefficient4 = GF16_MULTBY_TWO_X4(coefficient4);
+		}
+	} else {
+		uint32_t* tbl = (uint32_t*)lookup->table1;
+		uint32_t coefficient2 = ((uint32_t)coefficient << 16);
+		tbl[0] = coefficient2;
+		coefficient2 |= coefficient;
+		coefficient2 = GF16_MULTBY_TWO_X2(coefficient2);
+		int j, k;
+		for (j = 1; j < 1024; j <<= 1) {
+			for (k = 0; k < j; k++)
+				tbl[k+j] = coefficient2 ^ tbl[k];
+			coefficient2 = GF16_MULTBY_TWO_X2(coefficient2);
+		}
+		
+		lookup->table2[0] = 0;
+		uint16_t val = coefficient2 & 0xffff;
+		for (j = 1; j < 32; j <<= 1) {
+			for (k = 0; k < j; k++)
+				lookup->table2[k+j] = val ^ lookup->table2[k];
+			val = GF16_MULTBY_TWO(val);
+		}
+		coefficient2 = (uint32_t)coefficient << 16;
+		for (j = 32; j < 1024; j <<= 1) {
+			for (k = 0; k < j; k++)
+				lookup->table2[k+j] = coefficient2 ^ lookup->table2[k];
+			coefficient2 = GF16_MULTBY_TWO_UPPER(coefficient2);
+		}
+		
+		tbl = (uint32_t*)lookup->table3;
+		tbl[0] = coefficient2;
+		coefficient2 |= coefficient2>>16;
+		coefficient2 = GF16_MULTBY_TWO_X2(coefficient2);
+		for (j = 1; j < 1024; j <<= 1) {
+			for (k = 0; k < j; k++)
+				tbl[k+j] = coefficient2 ^ tbl[k];
+			coefficient2 = GF16_MULTBY_TWO_X2(coefficient2);
+		}
 	}
 }
 
