@@ -931,7 +931,7 @@ void gf16_xor_finish_sse2(void *HEDLEY_RESTRICT dst, size_t len) {
 	for(; len; len -= sizeof(__m128i)*16) {
 		#define LOAD_HALVES(a, b, upper) \
 			_mm_castps_si128(_mm_loadh_pi( \
-				_mm_castpd_ps(_mm_load_sd((double*)(_dst + 120 + upper*4 - (a)*8))), \
+				_mm_castsi128_ps(_mm_loadl_epi64((__m128i*)(_dst + 120 + upper*4 - (a)*8))), \
 				(__m64*)(_dst + 120 + upper*4 - (b)*8) \
 			))
 		#define LOAD_X4(offs, dst1, dst2, upper) { \
