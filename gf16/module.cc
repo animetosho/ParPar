@@ -41,15 +41,6 @@ static std::vector<void*> gfScratch;
 
 static int maxNumThreads = 1, defaultNumThreads = 1;
 
-void ppgf_omp_check_num_threads() {
-#ifdef _OPENMP
-	int max_threads = omp_get_max_threads();
-	if(max_threads != maxNumThreads)
-		// handle the possibility that some other module changes this
-		omp_set_num_threads(maxNumThreads);
-#endif
-}
-
 static void setup_gf(Galois16Methods method = GF16_AUTO, size_t size_hint = 0) {
 	if(!gfScratch.empty()) {
 		for(unsigned i=0; i<gfScratch.size(); i++)
@@ -97,7 +88,6 @@ void ppgf_maybe_setup_gf() {
    - number of outputs and scales is same and == numOutputs
 */
 void ppgf_multiply_mat(uint16_t** inputs, uint_fast16_t* iNums, unsigned int numInputs, size_t len, uint16_t** outputs, uint_fast16_t* oNums, unsigned int numOutputs, int add) {
-	ppgf_omp_check_num_threads();
 	
 	/*
 	if(gf->needPrepare()) {
@@ -134,7 +124,7 @@ void ppgf_multiply_mat(uint16_t** inputs, uint_fast16_t* iNums, unsigned int num
 	// avoid nested loop issues by combining chunk & output loop into one
 	// the loop goes through outputs before chunks
 	int loop = 0;
-	#pragma omp parallel for
+	#pragma omp parallel for num_threads(maxNumThreads)
 	for(loop = 0; loop < (int)(numOutputs * numChunks); loop++) {
 		size_t offset = (loop / numOutputs) * chunkSize;
 		unsigned int out = loop % numOutputs;
