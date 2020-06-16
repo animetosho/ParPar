@@ -819,25 +819,23 @@ void gf16_xor_mul_sse2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRIC
 			// full unpack strategy might be better? (7 ops vs 9, but all unpacks)
 			#define STORE_TBL(storetype, offs, data) \
 				_mm_##storetype##_si128((__m128i*)(deptable + bit*16 +offs), _mm_add_epi64( \
-					_mm_and_si128(data, _mm_set1_epi64x(0xff)), addr \
+					data, addr \
 			))
-			idx = _mm_unpacklo_epi64(idx, _mm_srli_epi16(idx, 8)); // _7_5_3_1 76543210
-			STORE_TBL(store, 0, idx);
-			idx = _mm_srli_epi64(idx, 16); // ___7_5_3 __765432
-			STORE_TBL(store, 2, idx);
-			idx = _mm_srli_epi64(idx, 16); // _____7_5 ____7654
-			STORE_TBL(store, 4, idx);
-			idx = _mm_srli_epi64(idx, 16); // _______7 ______76
-			STORE_TBL(store, 6, idx);
+			idx = _mm_unpacklo_epi8(idx, _mm_setzero_si128());
+			__m128i tmp1 = _mm_unpacklo_epi16(idx, _mm_setzero_si128());
+			__m128i tmp2 = _mm_unpackhi_epi16(idx, _mm_setzero_si128());
+			STORE_TBL(store, 0, _mm_unpacklo_epi32(tmp1, _mm_setzero_si128()));
+			STORE_TBL(store, 2, _mm_unpackhi_epi32(tmp1, _mm_setzero_si128()));
+			STORE_TBL(store, 4, _mm_unpacklo_epi32(tmp2, _mm_setzero_si128()));
+			STORE_TBL(store, 6, _mm_unpackhi_epi32(tmp2, _mm_setzero_si128()));
 			
-			idx2 = _mm_unpacklo_epi64(idx2, _mm_srli_epi16(idx2, 8)); // _7_5_3_1 76543210
-			STORE_TBL(storeu, cnt+0, idx2);
-			idx2 = _mm_srli_epi64(idx2, 16); // ___7_5_3 __765432
-			STORE_TBL(storeu, cnt+2, idx2);
-			idx2 = _mm_srli_epi64(idx2, 16); // _____7_5 ____7654
-			STORE_TBL(storeu, cnt+4, idx2);
-			idx2 = _mm_srli_epi64(idx2, 16); // _______7 ______76
-			STORE_TBL(storeu, cnt+6, idx2);
+			idx2 = _mm_unpacklo_epi8(idx2, _mm_setzero_si128());
+			tmp1 = _mm_unpacklo_epi16(idx2, _mm_setzero_si128());
+			tmp2 = _mm_unpackhi_epi16(idx2, _mm_setzero_si128());
+			STORE_TBL(storeu, cnt+0, _mm_unpacklo_epi32(tmp1, _mm_setzero_si128()));
+			STORE_TBL(storeu, cnt+2, _mm_unpackhi_epi32(tmp1, _mm_setzero_si128()));
+			STORE_TBL(storeu, cnt+4, _mm_unpacklo_epi32(tmp2, _mm_setzero_si128()));
+			STORE_TBL(storeu, cnt+6, _mm_unpackhi_epi32(tmp2, _mm_setzero_si128()));
 			#undef STORE_TBL
 		} else { // 32-bit
 			__m128i addr = _mm_set1_epi32((uintptr_t)src - (uintptr_t)dst);
@@ -959,25 +957,23 @@ void gf16_xor_muladd_sse2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_REST
 			// full unpack strategy might be better? (7 ops vs 9, but all unpacks)
 			#define STORE_TBL(storetype, offs, data) \
 				_mm_##storetype##_si128((__m128i*)(deptable + bit*16 +offs), _mm_add_epi64( \
-					_mm_and_si128(data, _mm_set1_epi64x(0xff)), addr \
+					data, addr \
 			))
-			idx = _mm_unpacklo_epi64(idx, _mm_srli_epi16(idx, 8)); // _7_5_3_1 76543210
-			STORE_TBL(store, 0, idx);
-			idx = _mm_srli_epi64(idx, 16); // ___7_5_3 __765432
-			STORE_TBL(store, 2, idx);
-			idx = _mm_srli_epi64(idx, 16); // _____7_5 ____7654
-			STORE_TBL(store, 4, idx);
-			idx = _mm_srli_epi64(idx, 16); // _______7 ______76
-			STORE_TBL(store, 6, idx);
+			idx = _mm_unpacklo_epi8(idx, _mm_setzero_si128());
+			__m128i tmp1 = _mm_unpacklo_epi16(idx, _mm_setzero_si128());
+			__m128i tmp2 = _mm_unpackhi_epi16(idx, _mm_setzero_si128());
+			STORE_TBL(store, 0, _mm_unpacklo_epi32(tmp1, _mm_setzero_si128()));
+			STORE_TBL(store, 2, _mm_unpackhi_epi32(tmp1, _mm_setzero_si128()));
+			STORE_TBL(store, 4, _mm_unpacklo_epi32(tmp2, _mm_setzero_si128()));
+			STORE_TBL(store, 6, _mm_unpackhi_epi32(tmp2, _mm_setzero_si128()));
 			
-			idx2 = _mm_unpacklo_epi64(idx2, _mm_srli_epi16(idx2, 8)); // _7_5_3_1 76543210
-			STORE_TBL(storeu, cnt+0, idx2);
-			idx2 = _mm_srli_epi64(idx2, 16); // ___7_5_3 __765432
-			STORE_TBL(storeu, cnt+2, idx2);
-			idx2 = _mm_srli_epi64(idx2, 16); // _____7_5 ____7654
-			STORE_TBL(storeu, cnt+4, idx2);
-			idx2 = _mm_srli_epi64(idx2, 16); // _______7 ______76
-			STORE_TBL(storeu, cnt+6, idx2);
+			idx2 = _mm_unpacklo_epi8(idx2, _mm_setzero_si128());
+			tmp1 = _mm_unpacklo_epi16(idx2, _mm_setzero_si128());
+			tmp2 = _mm_unpackhi_epi16(idx2, _mm_setzero_si128());
+			STORE_TBL(storeu, cnt+0, _mm_unpacklo_epi32(tmp1, _mm_setzero_si128()));
+			STORE_TBL(storeu, cnt+2, _mm_unpackhi_epi32(tmp1, _mm_setzero_si128()));
+			STORE_TBL(storeu, cnt+4, _mm_unpacklo_epi32(tmp2, _mm_setzero_si128()));
+			STORE_TBL(storeu, cnt+6, _mm_unpackhi_epi32(tmp2, _mm_setzero_si128()));
 			#undef STORE_TBL
 		} else { // 32-bit
 			__m128i addr = _mm_set1_epi32((uintptr_t)src - (uintptr_t)dst);
