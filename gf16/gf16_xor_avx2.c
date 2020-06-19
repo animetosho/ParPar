@@ -76,9 +76,22 @@ static HEDLEY_ALWAYS_INLINE __m128i ssse3_tzcnt_epi16(__m128i v) {
 	), _mm_and_si128(_mm_srli_epi16(v, 4), lmask));
 	__m128i combined = _mm_min_epu8(low, high);
 	low = combined;
-	high = _mm_srli_epi16(_mm_add_epi8(combined, _mm_set1_epi8(8)), 8);
+	high = _mm_srli_epi16(_mm_or_si128(combined, _mm_set1_epi8(8)), 8);
 	return _mm_min_epu8(low, high);
 }
+/* TODO: explore the following idea
+__m128i ssse3_tzcnt_epi16(__m128i v) { // if v==0, returns 0xffff instead of 16
+	// isolate lowest bit
+	__m128i lbit = _mm_andnot_si128(_mm_add_epi16(v, _mm_set1_epi16(-1)), v);
+	// sequence from https://www.chessprogramming.org/De_Bruijn_Sequence#B.282.2C_4.29
+	// might also be able to use a reversed bit sequence (0xf4b0) with mulhi+and instead of mullo+shift
+	__m128i seq = _mm_srli_epi16(_mm_mullo_epi16(lbit, _mm_set1_epi16(0x0d2f)), 12);
+	__m128i ans = _mm_shuffle_epi8(_mm_set_epi8(
+		12, 13, 4, 14, 10, 5, 7, 15, 11, 3, 9, 6, 2, 8, 1, 0
+	), seq);
+	return _mm_or_si128(ans, _mm_cmpeq_epi16(_mm_setzero_si128(), v));
+}
+*/
 static HEDLEY_ALWAYS_INLINE __m128i ssse3_lzcnt_epi16(__m128i v) {
 	__m128i lmask = _mm_set1_epi8(0xf);
 	__m128i low = _mm_shuffle_epi8(_mm_set_epi8(
@@ -88,7 +101,7 @@ static HEDLEY_ALWAYS_INLINE __m128i ssse3_lzcnt_epi16(__m128i v) {
 		0,0,0,0,0,0,0,0,1,1,1,1,2,2,3,16
 	), _mm_and_si128(_mm_srli_epi16(v, 4), lmask));
 	__m128i combined = _mm_min_epu8(low, high);
-	low = _mm_add_epi8(combined, _mm_set1_epi16(8));
+	low = _mm_or_si128(combined, _mm_set1_epi16(8));
 	high = _mm_srli_epi16(combined, 8);
 	return _mm_min_epu8(low, high);
 }
