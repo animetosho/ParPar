@@ -30,14 +30,14 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle_calc2x_table(const uint16_t* coeff
 	prod0 = _mm256_unpacklo_epi64(prod0, _mm256_xor_si256(prod0, mul4));
 	
 	// multiply by 2
-	__m256i mul8 = _mm256_xor_si256(
+	__m256i prod8 = _mm256_ternarylogic_epi32(
 		_mm256_add_epi16(mul4, mul4),
+		prod0,
 		_mm256_and_si256(_mm256_set1_epi16(GF16_POLYNOMIAL & 0xffff), _mm256_cmpgt_epi16(
 			_mm256_setzero_si256(), mul4
-		))
+		)),
+		0x96
 	);
-	
-	__m256i prod8 = _mm256_xor_si256(prod0, mul8);
 	__m256i shuf = _mm256_set_epi32(
 		0x0f0d0b09, 0x07050301, 0x0e0c0a08, 0x06040200,
 		0x0f0d0b09, 0x07050301, 0x0e0c0a08, 0x06040200
@@ -112,15 +112,15 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle_calc4x_table(const uint16_t* coeff
 	prod0 = _mm512_unpacklo_epi64(prod0, _mm512_xor_si512(prod0, mul4));
 	
 	// multiply by 2
-	__m512i mul8 = _mm512_xor_si512(
+	__m512i prod8 = _mm512_ternarylogic_epi32(
 		_mm512_add_epi16(mul4, mul4),
+		prod0,
 		_mm512_and_si512(
 			_mm512_set1_epi16(GF16_POLYNOMIAL & 0xffff),
 			_mm512_srai_epi16(mul4, 15)
-		)
+		),
+		0x96
 	);
-	
-	__m512i prod8 = _mm512_xor_si512(prod0, mul8);
 	__m512i shuf = _mm512_set_epi32(
 		0x0f0d0b09, 0x07050301, 0x0e0c0a08, 0x06040200,
 		0x0f0d0b09, 0x07050301, 0x0e0c0a08, 0x06040200,
