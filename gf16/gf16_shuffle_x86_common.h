@@ -39,14 +39,19 @@ static inline _mword partial_load(const void* ptr, size_t bytes) {
 #endif
 }
 
+#define GF16_MULTBY_TWO_X2(p) ((((p) << 1) & 0xffffffff) ^ ((GF16_POLYNOMIAL ^ ((GF16_POLYNOMIAL&0xffff) << 16)) & -((p) >> 31)))
 
 static HEDLEY_ALWAYS_INLINE void initial_mul_vector(uint16_t val, __m128i* prod, __m128i* prod4) {
-	int val2 = GF16_MULTBY_TWO(val);
-	int val4 = GF16_MULTBY_TWO(val2);
-	__m128i tmp = _mm_cvtsi32_si128(val << 16);
-	tmp = _mm_insert_epi16(tmp, val2, 2);
-	*prod = _mm_insert_epi16(tmp, val2 ^ val, 3);
-	*prod4 = _mm_set1_epi16(val4);
+	uint32_t val1 = val << 16;
+	uint32_t val2 = val1 | val;
+	val2 = GF16_MULTBY_TWO_X2(val2);
+	__m128i tmp = _mm_cvtsi32_si128(val1);
+#if MWORD_SIZE >= 32 /* TODO: enable this in AVX as well */
+	*prod = _mm_insert_epi32(tmp, val2 ^ val1, 1);
+#else
+	*prod = _mm_unpacklo_epi32(tmp, _mm_cvtsi32_si128(val2 ^ val1));
+#endif
+	*prod4 = _mm_set1_epi32(GF16_MULTBY_TWO_X2(val2));
 }
 
 static HEDLEY_ALWAYS_INLINE void shuf0_vector(uint16_t val, __m128i* prod0, __m128i* prod8) {
