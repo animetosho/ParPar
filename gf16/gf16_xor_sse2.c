@@ -782,24 +782,17 @@ int main(void) {
 */
 	0x0ULL,0x0ULL,0x10ULL,0x1000ULL,0x20ULL,0x2000ULL,0x2010ULL,0x201000ULL,0x30ULL,0x3000ULL,0x3010ULL,0x301000ULL,0x3020ULL,0x302000ULL,0x302010ULL,0x30201000ULL,0x40ULL,0x4000ULL,0x4010ULL,0x401000ULL,0x4020ULL,0x402000ULL,0x402010ULL,0x40201000ULL,0x4030ULL,0x403000ULL,0x403010ULL,0x40301000ULL,0x403020ULL,0x40302000ULL,0x40302010ULL,0x4030201000ULL,0x50ULL,0x5000ULL,0x5010ULL,0x501000ULL,0x5020ULL,0x502000ULL,0x502010ULL,0x50201000ULL,0x5030ULL,0x503000ULL,0x503010ULL,0x50301000ULL,0x503020ULL,0x50302000ULL,0x50302010ULL,0x5030201000ULL,0x5040ULL,0x504000ULL,0x504010ULL,0x50401000ULL,0x504020ULL,0x50402000ULL,0x50402010ULL,0x5040201000ULL,0x504030ULL,0x50403000ULL,0x50403010ULL,0x5040301000ULL,0x50403020ULL,0x5040302000ULL,0x5040302010ULL,0x504030201000ULL,0x60ULL,0x6000ULL,0x6010ULL,0x601000ULL,0x6020ULL,0x602000ULL,0x602010ULL,0x60201000ULL,0x6030ULL,0x603000ULL,0x603010ULL,0x60301000ULL,0x603020ULL,0x60302000ULL,0x60302010ULL,0x6030201000ULL,0x6040ULL,0x604000ULL,0x604010ULL,0x60401000ULL,0x604020ULL,0x60402000ULL,0x60402010ULL,0x6040201000ULL,0x604030ULL,0x60403000ULL,0x60403010ULL,0x6040301000ULL,0x60403020ULL,0x6040302000ULL,0x6040302010ULL,0x604030201000ULL,0x6050ULL,0x605000ULL,0x605010ULL,0x60501000ULL,0x605020ULL,0x60502000ULL,0x60502010ULL,0x6050201000ULL,0x605030ULL,0x60503000ULL,0x60503010ULL,0x6050301000ULL,0x60503020ULL,0x6050302000ULL,0x6050302010ULL,0x605030201000ULL,0x605040ULL,0x60504000ULL,0x60504010ULL,0x6050401000ULL,0x60504020ULL,0x6050402000ULL,0x6050402010ULL,0x605040201000ULL,0x60504030ULL,0x6050403000ULL,0x6050403010ULL,0x605040301000ULL,0x6050403020ULL,0x605040302000ULL,0x605040302010ULL,0x60504030201000ULL,0x70ULL,0x7000ULL,0x7010ULL,0x701000ULL,0x7020ULL,0x702000ULL,0x702010ULL,0x70201000ULL,0x7030ULL,0x703000ULL,0x703010ULL,0x70301000ULL,0x703020ULL,0x70302000ULL,0x70302010ULL,0x7030201000ULL,0x7040ULL,0x704000ULL,0x704010ULL,0x70401000ULL,0x704020ULL,0x70402000ULL,0x70402010ULL,0x7040201000ULL,0x704030ULL,0x70403000ULL,0x70403010ULL,0x7040301000ULL,0x70403020ULL,0x7040302000ULL,0x7040302010ULL,0x704030201000ULL,0x7050ULL,0x705000ULL,0x705010ULL,0x70501000ULL,0x705020ULL,0x70502000ULL,0x70502010ULL,0x7050201000ULL,0x705030ULL,0x70503000ULL,0x70503010ULL,0x7050301000ULL,0x70503020ULL,0x7050302000ULL,0x7050302010ULL,0x705030201000ULL,0x705040ULL,0x70504000ULL,0x70504010ULL,0x7050401000ULL,0x70504020ULL,0x7050402000ULL,0x7050402010ULL,0x705040201000ULL,0x70504030ULL,0x7050403000ULL,0x7050403010ULL,0x705040301000ULL,0x7050403020ULL,0x705040302000ULL,0x705040302010ULL,0x70504030201000ULL,0x7060ULL,0x706000ULL,0x706010ULL,0x70601000ULL,0x706020ULL,0x70602000ULL,0x70602010ULL,0x7060201000ULL,0x706030ULL,0x70603000ULL,0x70603010ULL,0x7060301000ULL,0x70603020ULL,0x7060302000ULL,0x7060302010ULL,0x706030201000ULL,0x706040ULL,0x70604000ULL,0x70604010ULL,0x7060401000ULL,0x70604020ULL,0x7060402000ULL,0x7060402010ULL,0x706040201000ULL,0x70604030ULL,0x7060403000ULL,0x7060403010ULL,0x706040301000ULL,0x7060403020ULL,0x706040302000ULL,0x706040302010ULL,0x70604030201000ULL,0x706050ULL,0x70605000ULL,0x70605010ULL,0x7060501000ULL,0x70605020ULL,0x7060502000ULL,0x7060502010ULL,0x706050201000ULL,0x70605030ULL,0x7060503000ULL,0x7060503010ULL,0x706050301000ULL,0x7060503020ULL,0x706050302000ULL,0x706050302010ULL,0x70605030201000ULL,0x70605040ULL,0x7060504000ULL,0x7060504010ULL,0x706050401000ULL,0x7060504020ULL,0x706050402000ULL,0x706050402010ULL,0x70605040201000ULL,0x7060504030ULL,0x706050403000ULL,0x706050403010ULL,0x70605040301000ULL,0x706050403020ULL,0x70605040302000ULL,0x70605040302010ULL,0x7060504030201000ULL
 };
-#endif
 
-void gf16_xor_mul_sse2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t val, void *HEDLEY_RESTRICT mutScratch) {
-	UNUSED(mutScratch);
-#ifdef __SSE2__
-	uint_fast32_t counts[16];
-	ALIGN_TO(16, uintptr_t deptable[256]);
+static HEDLEY_ALWAYS_INLINE void gf16_xor_write_deptable(uintptr_t *HEDLEY_RESTRICT deptable, uint_fast32_t *HEDLEY_RESTRICT counts, const uint8_t *HEDLEY_RESTRICT scratch, uint16_t val, uintptr_t dstSrcOffset) {
 	ALIGN_TO(16, uint16_t tmp_depmask[16]);
-	uint8_t* _dst = (uint8_t*)dst + len;
-	
-	__m128i depmask1 = _mm_load_si128((__m128i*)((char*)scratch + ((val & 0xf) << 7)));
-	__m128i depmask2 = _mm_load_si128((__m128i*)((char*)scratch + ((val & 0xf) << 7)) +1);
-	depmask1 = _mm_xor_si128(depmask1, _mm_load_si128((__m128i*)((char*)scratch + ((val << 3) & 0x780)) + 1*2));
-	depmask2 = _mm_xor_si128(depmask2, _mm_load_si128((__m128i*)((char*)scratch + ((val << 3) & 0x780)) + 1*2 +1));
-	depmask1 = _mm_xor_si128(depmask1, _mm_load_si128((__m128i*)((char*)scratch + ((val >> 1) & 0x780)) + 2*2));
-	depmask2 = _mm_xor_si128(depmask2, _mm_load_si128((__m128i*)((char*)scratch + ((val >> 1) & 0x780)) + 2*2 +1));
-	depmask1 = _mm_xor_si128(depmask1, _mm_load_si128((__m128i*)((char*)scratch + ((val >> 5) & 0x780)) + 3*2));
-	depmask2 = _mm_xor_si128(depmask2, _mm_load_si128((__m128i*)((char*)scratch + ((val >> 5) & 0x780)) + 3*2 +1));
+	__m128i depmask1 = _mm_load_si128((__m128i*)(scratch + ((val & 0xf) << 7)));
+	__m128i depmask2 = _mm_load_si128((__m128i*)(scratch + ((val & 0xf) << 7)) +1);
+	depmask1 = _mm_xor_si128(depmask1, _mm_load_si128((__m128i*)(scratch + ((val << 3) & 0x780)) + 1*2));
+	depmask2 = _mm_xor_si128(depmask2, _mm_load_si128((__m128i*)(scratch + ((val << 3) & 0x780)) + 1*2 +1));
+	depmask1 = _mm_xor_si128(depmask1, _mm_load_si128((__m128i*)(scratch + ((val >> 1) & 0x780)) + 2*2));
+	depmask2 = _mm_xor_si128(depmask2, _mm_load_si128((__m128i*)(scratch + ((val >> 1) & 0x780)) + 2*2 +1));
+	depmask1 = _mm_xor_si128(depmask1, _mm_load_si128((__m128i*)(scratch + ((val >> 5) & 0x780)) + 3*2));
+	depmask2 = _mm_xor_si128(depmask2, _mm_load_si128((__m128i*)(scratch + ((val >> 5) & 0x780)) + 3*2 +1));
 	
 	
 	/* generate needed tables */
@@ -815,7 +808,7 @@ void gf16_xor_mul_sse2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRIC
 		);
 		counts[bit] = cnt + BitsSetTable256[tmp_depmask[bit] >> 8] -1;
 		if(sizeof(uintptr_t) == 8) {
-			__m128i addr = _mm_set1_epi64x((uintptr_t)src - (uintptr_t)dst);
+			__m128i addr = _mm_set1_epi64x(dstSrcOffset);
 			#define STORE_TBL(storetype, offs, data) \
 				_mm_##storetype##_si128((__m128i*)(deptable + bit*16 +offs), _mm_add_epi64( \
 					data, addr \
@@ -837,7 +830,7 @@ void gf16_xor_mul_sse2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRIC
 			STORE_TBL(storeu, cnt+6, _mm_unpackhi_epi32(tmp2, _mm_setzero_si128()));
 			#undef STORE_TBL
 		} else { // 32-bit
-			__m128i addr = _mm_set1_epi32((uintptr_t)src - (uintptr_t)dst);
+			__m128i addr = _mm_set1_epi32(dstSrcOffset);
 			idx = _mm_unpacklo_epi8(idx, _mm_setzero_si128());
 			_mm_store_si128((__m128i*)(deptable + bit*16 +0), _mm_add_epi32(
 				_mm_unpacklo_epi16(idx, _mm_setzero_si128()), addr
@@ -869,6 +862,17 @@ void gf16_xor_mul_sse2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRIC
 		);
 		*/
 	}
+}
+#endif
+
+void gf16_xor_mul_sse2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t val, void *HEDLEY_RESTRICT mutScratch) {
+	UNUSED(mutScratch);
+#ifdef __SSE2__
+	uint_fast32_t counts[16];
+	ALIGN_TO(16, uintptr_t deptable[256]);
+	uint8_t* _dst = (uint8_t*)dst + len;
+	
+	gf16_xor_write_deptable(deptable, counts, (uint8_t*)scratch, val, (uintptr_t)src - (uintptr_t)dst);
 	
 	for(long ptr = -(long)len; ptr; ptr += sizeof(__m128i)*16) {
 		uint8_t* p = _dst + ptr;
@@ -925,73 +929,9 @@ void gf16_xor_muladd_sse2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_REST
 #ifdef __SSE2__
 	uint_fast32_t counts[16];
 	ALIGN_TO(16, uintptr_t deptable[256]);
-	ALIGN_TO(16, uint16_t tmp_depmask[16]);
 	uint8_t* _dst = (uint8_t*)dst + len;
 
-	__m128i depmask1 = _mm_load_si128((__m128i*)((char*)scratch + ((val & 0xf) << 7)));
-	__m128i depmask2 = _mm_load_si128((__m128i*)((char*)scratch + ((val & 0xf) << 7)) +1);
-	depmask1 = _mm_xor_si128(depmask1, _mm_load_si128((__m128i*)((char*)scratch + ((val << 3) & 0x780)) + 1*2));
-	depmask2 = _mm_xor_si128(depmask2, _mm_load_si128((__m128i*)((char*)scratch + ((val << 3) & 0x780)) + 1*2 +1));
-	depmask1 = _mm_xor_si128(depmask1, _mm_load_si128((__m128i*)((char*)scratch + ((val >> 1) & 0x780)) + 2*2));
-	depmask2 = _mm_xor_si128(depmask2, _mm_load_si128((__m128i*)((char*)scratch + ((val >> 1) & 0x780)) + 2*2 +1));
-	depmask1 = _mm_xor_si128(depmask1, _mm_load_si128((__m128i*)((char*)scratch + ((val >> 5) & 0x780)) + 3*2));
-	depmask2 = _mm_xor_si128(depmask2, _mm_load_si128((__m128i*)((char*)scratch + ((val >> 5) & 0x780)) + 3*2 +1));
-	
-	
-	/* generate needed tables */
-	_mm_store_si128((__m128i*)(tmp_depmask), depmask1);
-	_mm_store_si128((__m128i*)(tmp_depmask + 8), depmask2);
-	for(int bit=0; bit<16; bit++) {
-		uint_fast32_t cnt = BitsSetTable256[tmp_depmask[bit] & 0xff];
-		
-		__m128i idx = _mm_loadl_epi64((__m128i*)(BitsIndexTable + (tmp_depmask[bit] & 0xff)));
-		__m128i idx2 = _mm_or_si128(
-			_mm_set1_epi8(8U<<4),
-			_mm_loadl_epi64((__m128i*)(BitsIndexTable + (tmp_depmask[bit] >> 8)))
-		);
-		counts[bit] = cnt + BitsSetTable256[tmp_depmask[bit] >> 8] -1;
-		if(sizeof(uintptr_t) == 8) {
-			__m128i addr = _mm_set1_epi64x((uintptr_t)src - (uintptr_t)dst);
-			#define STORE_TBL(storetype, offs, data) \
-				_mm_##storetype##_si128((__m128i*)(deptable + bit*16 +offs), _mm_add_epi64( \
-					data, addr \
-			))
-			idx = _mm_unpacklo_epi8(idx, _mm_setzero_si128());
-			__m128i tmp1 = _mm_unpacklo_epi16(idx, _mm_setzero_si128());
-			__m128i tmp2 = _mm_unpackhi_epi16(idx, _mm_setzero_si128());
-			STORE_TBL(store, 0, _mm_unpacklo_epi32(tmp1, _mm_setzero_si128()));
-			STORE_TBL(store, 2, _mm_unpackhi_epi32(tmp1, _mm_setzero_si128()));
-			STORE_TBL(store, 4, _mm_unpacklo_epi32(tmp2, _mm_setzero_si128()));
-			STORE_TBL(store, 6, _mm_unpackhi_epi32(tmp2, _mm_setzero_si128()));
-			
-			idx2 = _mm_unpacklo_epi8(idx2, _mm_setzero_si128());
-			tmp1 = _mm_unpacklo_epi16(idx2, _mm_setzero_si128());
-			tmp2 = _mm_unpackhi_epi16(idx2, _mm_setzero_si128());
-			STORE_TBL(storeu, cnt+0, _mm_unpacklo_epi32(tmp1, _mm_setzero_si128()));
-			STORE_TBL(storeu, cnt+2, _mm_unpackhi_epi32(tmp1, _mm_setzero_si128()));
-			STORE_TBL(storeu, cnt+4, _mm_unpacklo_epi32(tmp2, _mm_setzero_si128()));
-			STORE_TBL(storeu, cnt+6, _mm_unpackhi_epi32(tmp2, _mm_setzero_si128()));
-			#undef STORE_TBL
-		} else { // 32-bit
-			__m128i addr = _mm_set1_epi32((uintptr_t)src - (uintptr_t)dst);
-			idx = _mm_unpacklo_epi8(idx, _mm_setzero_si128());
-			_mm_store_si128((__m128i*)(deptable + bit*16 +0), _mm_add_epi32(
-				_mm_unpacklo_epi16(idx, _mm_setzero_si128()), addr
-			));
-			_mm_store_si128((__m128i*)(deptable + bit*16 +4), _mm_add_epi32(
-				_mm_unpackhi_epi16(idx, _mm_setzero_si128()), addr
-			));
-			
-			idx2 = _mm_unpacklo_epi8(idx2, _mm_setzero_si128());
-			_mm_storeu_si128((__m128i*)(deptable + bit*16 +cnt+0), _mm_add_epi32(
-				_mm_unpacklo_epi16(idx2, _mm_setzero_si128()), addr
-			));
-			_mm_storeu_si128((__m128i*)(deptable + bit*16 +cnt+4), _mm_add_epi32(
-				_mm_unpackhi_epi16(idx2, _mm_setzero_si128()), addr
-			));
-		}
-	}
-	
+	gf16_xor_write_deptable(deptable, counts, (uint8_t*)scratch, val, (uintptr_t)src - (uintptr_t)dst);
 	
 	for(long ptr = -(long)len; ptr; ptr += sizeof(__m128i)*16) {
 		uint8_t* p = _dst + ptr;
