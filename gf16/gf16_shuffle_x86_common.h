@@ -52,15 +52,22 @@ static HEDLEY_ALWAYS_INLINE void initial_mul_vector(uint16_t val, __m128i* prod,
 static HEDLEY_ALWAYS_INLINE void shuf0_vector(uint16_t val, __m128i* prod0, __m128i* prod8) {
 	__m128i tmp, vval4;
 	initial_mul_vector(val, &tmp, &vval4);
-	tmp = _mm_unpacklo_epi64(tmp, _mm_xor_si128(tmp, vval4));
+	*prod0 = _mm_unpacklo_epi64(tmp, _mm_xor_si128(tmp, vval4));
 	
-	// multiply by 2
-	__m128i vval8 = _mm_xor_si128(
-		_mm_add_epi16(vval4, vval4),
-		_mm_and_si128(_mm_set1_epi16(GF16_POLYNOMIAL & 0xffff), _mm_cmpgt_epi16(
-			_mm_setzero_si128(), vval4
-		))
+	// multiply by 2 and add prod0 to give prod8
+	__m128i poly = _mm_and_si128(_mm_set1_epi16(GF16_POLYNOMIAL & 0xffff), _mm_cmpgt_epi16(
+		_mm_setzero_si128(), vval4
+	));
+#if MWORD_SIZE == 64
+	*prod8 = _mm_ternarylogic_epi32(
+		_mm_add_epi16(vval4, vval4), poly, *prod0, 0x96
 	);
+#else
+	*prod8 = _mm_xor_si128(
+		_mm_add_epi16(vval4, vval4),
+		_mm_xor_si128(*prod0, poly)
+	);
+#endif
 	
 /* // although the following seems simpler, it doesn't actually seem to be faster, although I don't know why
 		uint8_t* multbl = (uint8_t*)scratch + sizeof(__m128i)*2;
@@ -77,9 +84,6 @@ static HEDLEY_ALWAYS_INLINE void shuf0_vector(uint16_t val, __m128i* prod0, __m1
 		low0 = BCAST(_mm_unpacklo_epi64(factor0, factor8));
 		high0 = BCAST(_mm_unpackhi_epi64(factor0, factor8));
 */
-	
-	*prod0 = tmp;
-	*prod8 = _mm_xor_si128(tmp, vval8);
 }
 
 
