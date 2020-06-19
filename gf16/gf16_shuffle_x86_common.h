@@ -119,10 +119,10 @@ static HEDLEY_ALWAYS_INLINE _mword separate_low_high(_mword data) {
 #endif
 
 
-static HEDLEY_ALWAYS_INLINE void mul16_vec(_mword mulLo, _mword mulHi, _mword srcLo, _mword srcHi, _mword* dstLo, _mword *dstHi) {
-	_mword ti = _MM_SRLI4_EPI8(srcHi);
-#if MWORD_SIZE == 64
-	_mword th = _mm512_ternarylogic_epi32(
+#if MWORD_SIZE >= 64
+static HEDLEY_ALWAYS_INLINE void mul16_vec512(__m512i mulLo, __m512i mulHi, __m512i srcLo, __m512i srcHi, __m512i* dstLo, __m512i *dstHi) {
+	__m512i ti = _mm512_and_si512(_mm512_srli_epi16(srcHi, 4), _mm512_set1_epi8(0xf));
+	__m512i th = _mm512_ternarylogic_epi32(
 		_mm512_srli_epi16(srcLo, 4),
 		_mm512_set1_epi8(0xf),
 		_mm512_slli_epi16(srcHi, 4),
@@ -134,24 +134,52 @@ static HEDLEY_ALWAYS_INLINE void mul16_vec(_mword mulLo, _mword mulHi, _mword sr
 		_mm512_slli_epi16(srcLo, 4),
 		0xD2
 	);
-#else
-	_mword tl = _MM_SLLI4_EPI8(srcLo);
-	_mword th = _MM_SLLI4_EPI8(srcHi);
-	th = _MMI(or)(th, _MM_SRLI4_EPI8(srcLo));
-	*dstLo = _MMI(xor)(tl, _MM(shuffle_epi8)(mulLo, ti));
-#endif
-	*dstHi = _MMI(xor)(th, _MM(shuffle_epi8)(mulHi, ti));
+	*dstHi = _mm512_xor_si512(th, _mm512_shuffle_epi8(mulHi, ti));
 }
+#endif
 
 #if MWORD_SIZE >= 32
 static HEDLEY_ALWAYS_INLINE void mul16_vec256(__m256i mulLo, __m256i mulHi, __m256i srcLo, __m256i srcHi, __m256i* dstLo, __m256i *dstHi) {
 	__m256i ti = _mm256_and_si256(_mm256_srli_epi16(srcHi, 4), _mm256_set1_epi8(0xf));
+#if MWORD_SIZE == 64
+	__m256i th = _mm256_ternarylogic_epi32(
+		_mm256_srli_epi16(srcLo, 4),
+		_mm256_set1_epi8(0xf),
+		_mm256_slli_epi16(srcHi, 4),
+		0xE2
+	);
+	*dstLo = _mm256_ternarylogic_epi32(
+		_mm256_shuffle_epi8(mulLo, ti),
+		_mm256_set1_epi8(0xf),
+		_mm256_slli_epi16(srcLo, 4),
+		0xD2
+	);
+#else
 	__m256i tl = _mm256_slli_epi16(_mm256_and_si256(_mm256_set1_epi8(0xf), srcLo), 4);
 	__m256i th = _mm256_slli_epi16(_mm256_and_si256(_mm256_set1_epi8(0xf), srcHi), 4);
 	th = _mm256_or_si256(th, _mm256_and_si256(_mm256_srli_epi16(srcLo, 4), _mm256_set1_epi8(0xf)));
 	*dstLo = _mm256_xor_si256(tl, _mm256_shuffle_epi8(mulLo, ti));
+#endif
 	*dstHi = _mm256_xor_si256(th, _mm256_shuffle_epi8(mulHi, ti));
 }
+static HEDLEY_ALWAYS_INLINE __m256i mul16_vec256_single(__m256i poly, __m256i src) {
+	__m256i prodHi = _mm256_and_si256(_mm256_set1_epi8(0xf), _mm256_srli_epi16(src, 4));
+	__m256i idx = _mm256_inserti128_si256(prodHi, _mm256_castsi256_si128(prodHi), 1);
+#if MWORD_SIZE == 64
+	src = _mm256_ternarylogic_epi32(
+		zext128_256(_mm256_extracti128_si256(prodHi, 1)),
+		_mm256_set1_epi8(0xf),
+		_mm256_slli_epi16(src, 4),
+		0xF2
+	);
+#else
+	__m256i prodLo = _mm256_slli_epi16(_mm256_and_si256(_mm256_set1_epi8(0xf), src), 4);
+	src = _mm256_or_si256(prodLo, zext128_256(_mm256_extracti128_si256(prodHi, 1)));
+#endif
+	return _mm256_xor_si256(src, _mm256_shuffle_epi8(poly, idx));
+	// another idea with AVX512 is to keep each 4-bit part of the 16-bit results in a 128-bit lane, and shuffle lanes to handle the shift
+}
+
 #endif
 
 #if defined(_AVAILABLE_XOP)
@@ -163,10 +191,25 @@ static HEDLEY_ALWAYS_INLINE void mul16_vec256(__m256i mulLo, __m256i mulHi, __m2
 #endif
 static HEDLEY_ALWAYS_INLINE void mul16_vec128(__m128i mulLo, __m128i mulHi, __m128i srcLo, __m128i srcHi, __m128i* dstLo, __m128i *dstHi) {
 	__m128i ti = _MM128_SRLI4_EPI8(srcHi);
+#if MWORD_SIZE == 64
+	__m128i th = _mm_ternarylogic_epi32(
+		_mm_srli_epi16(srcLo, 4),
+		_mm_set1_epi8(0xf),
+		_mm_slli_epi16(srcHi, 4),
+		0xE2
+	);
+	*dstLo = _mm_ternarylogic_epi32(
+		_mm_shuffle_epi8(mulLo, ti),
+		_mm_set1_epi8(0xf),
+		_mm_slli_epi16(srcLo, 4),
+		0xD2
+	);
+#else
 	__m128i tl = _MM128_SLLI4_EPI8(srcLo);
 	__m128i th = _MM128_SLLI4_EPI8(srcHi);
 	th = _mm_or_si128(th, _MM128_SRLI4_EPI8(srcLo));
 	*dstLo = _mm_xor_si128(tl, _mm_shuffle_epi8(mulLo, ti));
+#endif
 	*dstHi = _mm_xor_si128(th, _mm_shuffle_epi8(mulHi, ti));
 }
 

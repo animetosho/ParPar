@@ -76,6 +76,14 @@ void _FN(gf16_shuffle_finish)(void *HEDLEY_RESTRICT dst, size_t len) {
 #endif
 }
 
+#if MWORD_SIZE == 64
+# define BCAST_HI(v) _mm512_shuffle_i32x4(_mm512_castsi256_si512(v), _mm512_castsi256_si512(v), _MM_SHUFFLE(1,1,1,1))
+# define BCAST_LO(v) _mm512_shuffle_i32x4(_mm512_castsi256_si512(v), _mm512_castsi256_si512(v), _MM_SHUFFLE(0,0,0,0))
+#else
+# define BCAST_HI(v) _mm256_permute4x64_epi64(v, _MM_SHUFFLE(3,2,3,2))
+# define BCAST_LO(v) _mm256_inserti128_si256(v, _mm256_castsi256_si128(v), 1)
+#endif
+
 
 void _FN(gf16_shuffle_mul)(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t val, void *HEDLEY_RESTRICT mutScratch) {
 	UNUSED(mutScratch);
@@ -88,12 +96,29 @@ void _FN(gf16_shuffle_mul)(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RES
 	low0 = BCAST(pd0);
 	high0 = BCAST(pd1);
 	
-	_mword polyl = BCAST(_mm_load_si128((__m128i*)scratch));
-	_mword polyh = BCAST(_mm_load_si128((__m128i*)scratch + 1));
+#if MWORD_SIZE >= 32
+	__m256i poly = _mm256_load_si256((__m256i*)scratch);
+	poly = _mm256_permute4x64_epi64(poly, _MM_SHUFFLE(1,0,3,2));
+	__m256i prod = _mm256_inserti128_si256(_mm256_castsi128_si256(pd1), pd0, 1);
+
+	prod = mul16_vec256_single(poly, prod);
+	low1  = BCAST_HI(prod);
+	high1 = BCAST_LO(prod);
 	
-	mul16_vec(polyl, polyh, low0, high0, &low1, &high1);
-	mul16_vec(polyl, polyh, low1, high1, &low2, &high2);
-	mul16_vec(polyl, polyh, low2, high2, &low3, &high3);
+	prod = mul16_vec256_single(poly, prod);
+	low2  = BCAST_HI(prod);
+	high2 = BCAST_LO(prod);
+	
+	prod = mul16_vec256_single(poly, prod);
+	low3  = BCAST_HI(prod);
+	high3 = BCAST_LO(prod);
+#else
+	__m128i polyl = _mm_load_si128((__m128i*)scratch);
+	__m128i polyh = _mm_load_si128((__m128i*)scratch + 1);
+	mul16_vec128(polyl, polyh, low0, high0, &low1, &high1);
+	mul16_vec128(polyl, polyh, low1, high1, &low2, &high2);
+	mul16_vec128(polyl, polyh, low2, high2, &low3, &high3);
+#endif
 	
 	_mword mask = _MM(set1_epi8) (0x0f);
 	uint8_t* _src = (uint8_t*)src + len;
@@ -145,12 +170,29 @@ void _FN(gf16_shuffle_muladd)(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_
 	low0 = BCAST(pd0);
 	high0 = BCAST(pd1);
 	
-	_mword polyl = BCAST(_mm_load_si128((__m128i*)scratch));
-	_mword polyh = BCAST(_mm_load_si128((__m128i*)scratch + 1));
+#if MWORD_SIZE >= 32
+	__m256i poly = _mm256_load_si256((__m256i*)scratch);
+	poly = _mm256_permute4x64_epi64(poly, _MM_SHUFFLE(1,0,3,2));
+	__m256i prod = _mm256_inserti128_si256(_mm256_castsi128_si256(pd1), pd0, 1);
+
+	prod = mul16_vec256_single(poly, prod);
+	low1  = BCAST_HI(prod);
+	high1 = BCAST_LO(prod);
 	
-	mul16_vec(polyl, polyh, low0, high0, &low1, &high1);
-	mul16_vec(polyl, polyh, low1, high1, &low2, &high2);
-	mul16_vec(polyl, polyh, low2, high2, &low3, &high3);
+	prod = mul16_vec256_single(poly, prod);
+	low2  = BCAST_HI(prod);
+	high2 = BCAST_LO(prod);
+	
+	prod = mul16_vec256_single(poly, prod);
+	low3  = BCAST_HI(prod);
+	high3 = BCAST_LO(prod);
+#else
+	__m128i polyl = _mm_load_si128((__m128i*)scratch);
+	__m128i polyh = _mm_load_si128((__m128i*)scratch + 1);
+	mul16_vec128(polyl, polyh, low0, high0, &low1, &high1);
+	mul16_vec128(polyl, polyh, low1, high1, &low2, &high2);
+	mul16_vec128(polyl, polyh, low2, high2, &low3, &high3);
+#endif
 	
 	_mword mask = _MM(set1_epi8) (0x0f);
 	uint8_t* _src = (uint8_t*)src + len;

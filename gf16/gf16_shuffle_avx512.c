@@ -115,9 +115,9 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle_calc4x_table(const uint16_t* coeff
 	*prodLo0 = _mm512_unpacklo_epi64(prod0, prod8);
 	*prodHi0 = _mm512_unpackhi_epi64(prod0, prod8);
 	
-	mul16_vec(polyl, polyh, *prodLo0, *prodHi0, prodLo1, prodHi1);
-	mul16_vec(polyl, polyh, *prodLo1, *prodHi1, prodLo2, prodHi2);
-	mul16_vec(polyl, polyh, *prodLo2, *prodHi2, prodLo3, prodHi3);
+	mul16_vec512(polyl, polyh, *prodLo0, *prodHi0, prodLo1, prodHi1);
+	mul16_vec512(polyl, polyh, *prodLo1, *prodHi1, prodLo2, prodHi2);
+	mul16_vec512(polyl, polyh, *prodLo2, *prodHi2, prodLo3, prodHi3);
 }
 
 static HEDLEY_ALWAYS_INLINE void gf16_shuffle_avx512_round(

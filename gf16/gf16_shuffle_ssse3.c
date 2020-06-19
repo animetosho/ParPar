@@ -30,7 +30,7 @@ void* gf16_shuffle_init_x86(int polynomial) {
 	uint16_t _poly[16];
 	__m128i tmp1, tmp2;
 	__m128i* ret;
-	ALIGN_ALLOC(ret, sizeof(__m128i)*2, 16);
+	ALIGN_ALLOC(ret, sizeof(__m128i)*2, 32);
 	
 	for(int i=0; i<16; i++) {
 		int p = 0;
