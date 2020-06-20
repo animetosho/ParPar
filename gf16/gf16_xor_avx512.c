@@ -579,7 +579,7 @@ static inline void xor_write_jit_avx512(const struct gf16_xor_scratch *HEDLEY_RE
 
 // TODO: merge this into above
 // note: xor can be 3 values: 0=clear, 1=xor (merge), 2=xor (load)
-static inline void* xor_write_jit_avx512_multi(const struct gf16_xor_scratch *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT jitptr, int memreg, uint16_t val, int xor) {
+static void* xor_write_jit_avx512_multi(const struct gf16_xor_scratch *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT jitptr, int memreg, uint16_t val, int xor) {
 	__m256i depmask = _mm256_load_si256((__m256i*)scratch->deps + (val & 0xf)*4);
 	depmask = _mm256_xor_si256(depmask,
 		_mm256_load_si256((__m256i*)(scratch->deps + ((val << 3) & 0x780)) + 1)
@@ -806,17 +806,18 @@ void gf16_xor_jit_muladd_avx512(const void *HEDLEY_RESTRICT scratch, void *HEDLE
 
 
 
-//#define XOR512_REGIONX_MERGE_REGS 11 // other used: dest, end point, SP, one source, BX is wasted
-#define XOR512_REGIONX_MERGE_REGS 0
+//#define XOR512_MULTI_REGIONS 11 // other used: dest (0), end point (1), SP (4), one source (3), BX (2) is wasted; GCC doesn't like overriding BP (5) so skip that too
+#define XOR512_MULTI_REGIONS 2
 
 unsigned gf16_xor_jit_muladd_multi_avx512(const void *HEDLEY_RESTRICT scratch, unsigned regions, size_t offset, void *HEDLEY_RESTRICT dst, const void* *HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch) {
 #if defined(__AVX512BW__) && defined(__AVX512VL__) && defined(PLATFORM_AMD64)
 	const struct gf16_xor_scratch *HEDLEY_RESTRICT info = (const struct gf16_xor_scratch *HEDLEY_RESTRICT)scratch;
-	uint8_t* jitCode = (uint8_t*)mutScratch;
+	uint8_t* jitCode = (uint8_t*)mutScratch + info->codeStart;
+	ALIGN_TO(32, const void* srcPtr[XOR512_MULTI_REGIONS]);
 	
-	for(unsigned region=0; region<regions; region += XOR512_REGIONX_MERGE_REGS+1) {
+	for(unsigned region=0; region<regions; region += XOR512_MULTI_REGIONS) {
 		unsigned numRegions = regions - region;
-		if(numRegions > XOR512_REGIONX_MERGE_REGS+1) numRegions = XOR512_REGIONX_MERGE_REGS+1;
+		if(numRegions > XOR512_MULTI_REGIONS) numRegions = XOR512_MULTI_REGIONS;
 		
 #ifdef CPU_SLOW_SMC_CLR
 		memset(jitCode + info->codeStart, 0, XORDEP_JIT_SIZE-512);
@@ -843,13 +844,6 @@ unsigned gf16_xor_jit_muladd_multi_avx512(const void *HEDLEY_RESTRICT scratch, u
 #endif
 		
 		
-		jitptr += _jit_add_i(jitptr, AX, 1024);
-		jitptr += _jit_add_i(jitptr, DX, 1024); // TODO: consider using a counter and avoiding this
-		for(int i=1; i<16; i++) {
-			jitptr += _jit_vmovdqa32_load(jitptr, 16+i, DX, i<<6);
-		}
-		
-		
 #if 0 // for testing xor-merge
 		for(int i=0; i<16; i+=2) {
 			jitptr += _jit_vmovdqa32_load(jitptr, i>>1, AX, i<<6);
@@ -860,17 +854,18 @@ unsigned gf16_xor_jit_muladd_multi_avx512(const void *HEDLEY_RESTRICT scratch, u
 		jitptr = xor_write_jit_avx512_multi(info, jitptr, DX, coefficients[region], 2);
 #endif
 		
-		/* need to update stub to load additional sources into registers
-		for(unsigned in = 1; in < numRegions+1; in++) {
+		srcPtr[0] = (char*)src[region] + offset - 1024;
+		
+		for(unsigned in = 1; in < numRegions; in++) {
 			// load + run
-			int reg = in+4; // avoid overwriting SP (==4)
+			int reg = in+5; // avoid overwriting SP (==4) and BP (==5)
 			jitptr += _jit_add_i(jitptr, reg, 1024);
-			for(i=1; i<16; i++) {
+			for(int i=1; i<16; i++) {
 				jitptr += _jit_vmovdqa32_load(jitptr, 16+i, reg, i<<6);
 			}
 			jitptr = xor_write_jit_avx512_multi(info, jitptr, reg, coefficients[region+in], 1);
+			srcPtr[in] = (char*)src[region+in] + offset - 1024;
 		}
-		*/
 		
 		
 		// write out registers
@@ -882,9 +877,9 @@ unsigned gf16_xor_jit_muladd_multi_avx512(const void *HEDLEY_RESTRICT scratch, u
 		/* cmp/jcc */
 		*(uint64_t*)(jitptr) = 0x800FC03948 | (AX <<16) | (CX <<19) | ((uint64_t)JL <<32);
 #ifdef CPU_SLOW_SMC
-		*(int32_t*)(jitptr +5) = (jitTemp - (jitdst - jitCode)) - jitptr -9;
+		*(int32_t*)(jitptr +5) = (jitTemp - (jitdst - (uint8_t*)mutScratch)) - jitptr -9;
 #else
-		*(int32_t*)(jitptr +5) = jitCode - jitptr -9;
+		*(int32_t*)(jitptr +5) = (uint8_t*)mutScratch - jitptr -9;
 #endif
 		jitptr[9] = 0xC3; /* ret */
 		
@@ -900,12 +895,21 @@ unsigned gf16_xor_jit_muladd_multi_avx512(const void *HEDLEY_RESTRICT scratch, u
 #endif
 		
 		
-		gf16_xor256_jit_stub(
-			(intptr_t)dst + offset - 1024,
-			(intptr_t)dst + offset + len - 1024,
-			(intptr_t)src[region] + offset - 1024,
-			mutScratch
-		);
+		if(numRegions > 1) {
+			gf16_xor256_jit_multi_stub(
+				(intptr_t)dst + offset - 1024,
+				(intptr_t)dst + offset + len - 1024,
+				srcPtr,
+				mutScratch
+			);
+		} else {
+			gf16_xor256_jit_stub(
+				(intptr_t)dst + offset - 1024,
+				(intptr_t)dst + offset + len - 1024,
+				(intptr_t)srcPtr[0],
+				mutScratch
+			);
+		}
 	}
 	
 	_mm256_zeroupper();
