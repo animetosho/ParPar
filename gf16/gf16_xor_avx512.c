@@ -368,7 +368,7 @@ static inline void xor_write_jit_avx512(const struct gf16_xor_scratch *HEDLEY_RE
 	
 	uint8_t* jitptr;
 #ifdef CPU_SLOW_SMC
-	ALIGN_TO(64, uint8_t jitTemp[2048]);
+	ALIGN_TO(64, uint8_t jitTemp[XORDEP_JIT_SIZE]);
 	uint8_t* jitdst;
 #endif
 	
@@ -765,7 +765,7 @@ void gf16_xor_jit_mul_avx512(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_R
 	const struct gf16_xor_scratch *HEDLEY_RESTRICT info = (const struct gf16_xor_scratch *HEDLEY_RESTRICT)scratch;
 	
 #ifdef CPU_SLOW_SMC_CLR
-	memset((char*)mutScratch + info->codeStart, 0, XORDEP_JIT_SIZE-512);
+	memset((char*)mutScratch + info->codeStart, 0, XORDEP_JIT_CODE_SIZE);
 #endif
 	
 	xor_write_jit_avx512(info, mutScratch, coefficient, 0);
@@ -787,7 +787,7 @@ void gf16_xor_jit_muladd_avx512(const void *HEDLEY_RESTRICT scratch, void *HEDLE
 	const struct gf16_xor_scratch *HEDLEY_RESTRICT info = (const struct gf16_xor_scratch *HEDLEY_RESTRICT)scratch;
 	
 #ifdef CPU_SLOW_SMC_CLR
-	memset((char*)mutScratch + info->codeStart, 0, XORDEP_JIT_SIZE-512);
+	memset((char*)mutScratch + info->codeStart, 0, XORDEP_JIT_CODE_SIZE);
 #endif
 	
 	xor_write_jit_avx512(info, mutScratch, coefficient, 1);
@@ -807,7 +807,7 @@ void gf16_xor_jit_muladd_avx512(const void *HEDLEY_RESTRICT scratch, void *HEDLE
 
 
 //#define XOR512_MULTI_REGIONS 10 // other used: dest (0), end point (1), SP (4), one source (3), R12/R13 is avoided due to different encoding length; GCC doesn't like overriding BP (5) so skip that too
-#define XOR512_MULTI_REGIONS 2
+#define XOR512_MULTI_REGIONS 3
 
 unsigned gf16_xor_jit_muladd_multi_avx512(const void *HEDLEY_RESTRICT scratch, unsigned regions, size_t offset, void *HEDLEY_RESTRICT dst, const void* *HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch) {
 #if defined(__AVX512BW__) && defined(__AVX512VL__) && defined(PLATFORM_AMD64)
@@ -820,12 +820,12 @@ unsigned gf16_xor_jit_muladd_multi_avx512(const void *HEDLEY_RESTRICT scratch, u
 		if(numRegions > XOR512_MULTI_REGIONS) numRegions = XOR512_MULTI_REGIONS;
 		
 #ifdef CPU_SLOW_SMC_CLR
-		memset(jitCode + info->codeStart, 0, XORDEP_JIT_SIZE-512);
+		memset(jitCode + info->codeStart, 0, XORDEP_JIT_SIZE-256);
 #endif
 		
 		uint8_t* jitptr;
 #ifdef CPU_SLOW_SMC
-		ALIGN_TO(64, uint8_t jitTemp[2048]);
+		ALIGN_TO(64, uint8_t jitTemp[XORDEP_JIT_SIZE]);
 		uint8_t* jitdst;
 #endif
 		
@@ -844,16 +844,7 @@ unsigned gf16_xor_jit_muladd_multi_avx512(const void *HEDLEY_RESTRICT scratch, u
 #endif
 		
 		
-#if 0 // for testing xor-merge
-		for(int i=0; i<16; i+=2) {
-			jitptr += _jit_vmovdqa32_load(jitptr, i>>1, AX, i<<6);
-			jitptr += _jit_vmovdqa32_load(jitptr, (i>>1)+8, AX, (i+1)<<6);
-		}
-		jitptr = xor_write_jit_avx512_multi(info, jitptr, DX, coefficients[region], 1);
-#else
 		jitptr = xor_write_jit_avx512_multi(info, jitptr, DX, coefficients[region], 2);
-#endif
-		
 		srcPtr[0] = (char*)src[region] + offset - 1024;
 		
 		for(unsigned in = 1; in < numRegions; in++) {
@@ -1093,7 +1084,7 @@ void gf16_xor_finish_avx512(void *HEDLEY_RESTRICT dst, size_t len) {
 void* gf16_xor_jit_init_avx512(int polynomial) {
 #if defined(__AVX512BW__) && defined(__AVX512VL__) && defined(PLATFORM_AMD64)
 	struct gf16_xor_scratch* ret;
-	uint8_t tmpCode[XORDEP_JIT_SIZE];
+	uint8_t tmpCode[XORDEP_JIT_CODE_SIZE];
 	
 	ALIGN_ALLOC(ret, sizeof(struct gf16_xor_scratch), 32);
 	gf16_bitdep_init256(ret->deps, polynomial, 0);

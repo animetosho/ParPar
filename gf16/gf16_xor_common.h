@@ -4,7 +4,8 @@
 
 #include "x86_jit.h"
 
-#define XORDEP_JIT_SIZE 2048
+#define XORDEP_JIT_SIZE 4096
+#define XORDEP_JIT_CODE_SIZE 1280
 
 // hacks for CPUs with uop caches?
 #if defined(__tune_corei7__) || defined(__tune_corei7_avx__)
