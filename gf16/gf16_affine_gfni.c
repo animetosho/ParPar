@@ -272,41 +272,28 @@ void gf16_affine2x_muladd_gfni(const void *HEDLEY_RESTRICT scratch, void *HEDLEY
 }
 
 #if defined(__GFNI__) && defined(__SSSE3__)
-static HEDLEY_ALWAYS_INLINE void gf16_affine2x_muladd_x2_gfni(
+static HEDLEY_ALWAYS_INLINE void gf16_affine2x_muladd_x_gfni(
 	const void *HEDLEY_RESTRICT scratch,
-	uint8_t *HEDLEY_RESTRICT _dst, const uint8_t *HEDLEY_RESTRICT _src1, const uint8_t *HEDLEY_RESTRICT _src2, size_t len,
-	const uint16_t *HEDLEY_RESTRICT coefficients
-) {
-	__m128i matNormA, matSwapA;
-	__m128i matNormB, matSwapB;
-	gf16_affine_load_matrix(scratch, coefficients[0], &matNormA, &matSwapA);
-	gf16_affine_load_matrix(scratch, coefficients[1], &matNormB, &matSwapB);
-	
-	for(long ptr = -(long)len; ptr; ptr += sizeof(__m128i)) {
-		__m128i data = _mm_load_si128((__m128i*)(_src1 + ptr));
-		__m128i result1 = _mm_gf2p8affine_epi64_epi8(data, matNormA, 0);
-		__m128i result2 = _mm_gf2p8affine_epi64_epi8(data, matSwapA, 0);
-		
-		data = _mm_load_si128((__m128i*)(_src2 + ptr));
-		result1 = _mm_xor_si128(result1, _mm_gf2p8affine_epi64_epi8(data, matNormB, 0));
-		result2 = _mm_xor_si128(result2, _mm_gf2p8affine_epi64_epi8(data, matSwapB, 0));
-		
-		result1 = _mm_xor_si128(result1, _mm_load_si128((__m128i*)(_dst + ptr)));
-		result1 = _mm_xor_si128(result1, _mm_shuffle_epi32(result2, _MM_SHUFFLE(1,0,3,2)));
-		_mm_store_si128((__m128i*)(_dst + ptr), result1);
-	}
-}
-static HEDLEY_ALWAYS_INLINE void gf16_affine2x_muladd_x3_gfni(
-	const void *HEDLEY_RESTRICT scratch,
-	uint8_t *HEDLEY_RESTRICT _dst, const uint8_t *HEDLEY_RESTRICT _src1, const uint8_t *HEDLEY_RESTRICT _src2, const uint8_t *HEDLEY_RESTRICT _src3, size_t len,
-	const uint16_t *HEDLEY_RESTRICT coefficients
+	uint8_t *HEDLEY_RESTRICT _dst, const int srcCount,
+	const uint8_t *HEDLEY_RESTRICT _src1, const uint8_t *HEDLEY_RESTRICT _src2, const uint8_t *HEDLEY_RESTRICT _src3, const uint8_t *HEDLEY_RESTRICT _src4, const uint8_t *HEDLEY_RESTRICT _src5, const uint8_t *HEDLEY_RESTRICT _src6,
+	size_t len, const uint16_t *HEDLEY_RESTRICT coefficients
 ) {
 	__m128i matNormA, matSwapA;
 	__m128i matNormB, matSwapB;
 	__m128i matNormC, matSwapC;
+	__m128i matNormD, matSwapD;
+	__m128i matNormE, matSwapE;
+	__m128i matNormF, matSwapF;
 	gf16_affine_load_matrix(scratch, coefficients[0], &matNormA, &matSwapA);
 	gf16_affine_load_matrix(scratch, coefficients[1], &matNormB, &matSwapB);
-	gf16_affine_load_matrix(scratch, coefficients[2], &matNormC, &matSwapC);
+	if(srcCount >= 3)
+		gf16_affine_load_matrix(scratch, coefficients[2], &matNormC, &matSwapC);
+	if(srcCount >= 4)
+		gf16_affine_load_matrix(scratch, coefficients[3], &matNormD, &matSwapD);
+	if(srcCount >= 5)
+		gf16_affine_load_matrix(scratch, coefficients[4], &matNormE, &matSwapE);
+	if(srcCount >= 6)
+		gf16_affine_load_matrix(scratch, coefficients[5], &matNormF, &matSwapF);
 	
 	for(long ptr = -(long)len; ptr; ptr += sizeof(__m128i)) {
 		__m128i data = _mm_load_si128((__m128i*)(_src1 + ptr));
@@ -317,9 +304,26 @@ static HEDLEY_ALWAYS_INLINE void gf16_affine2x_muladd_x3_gfni(
 		result1 = _mm_xor_si128(result1, _mm_gf2p8affine_epi64_epi8(data, matNormB, 0));
 		result2 = _mm_xor_si128(result2, _mm_gf2p8affine_epi64_epi8(data, matSwapB, 0));
 		
-		data = _mm_load_si128((__m128i*)(_src3 + ptr));
-		result1 = _mm_xor_si128(result1, _mm_gf2p8affine_epi64_epi8(data, matNormC, 0));
-		result2 = _mm_xor_si128(result2, _mm_gf2p8affine_epi64_epi8(data, matSwapC, 0));
+		if(srcCount >= 3) {
+			data = _mm_load_si128((__m128i*)(_src3 + ptr));
+			result1 = _mm_xor_si128(result1, _mm_gf2p8affine_epi64_epi8(data, matNormC, 0));
+			result2 = _mm_xor_si128(result2, _mm_gf2p8affine_epi64_epi8(data, matSwapC, 0));
+		}
+		if(srcCount >= 4) {
+			data = _mm_load_si128((__m128i*)(_src4 + ptr));
+			result1 = _mm_xor_si128(result1, _mm_gf2p8affine_epi64_epi8(data, matNormD, 0));
+			result2 = _mm_xor_si128(result2, _mm_gf2p8affine_epi64_epi8(data, matSwapD, 0));
+		}
+		if(srcCount >= 5) {
+			data = _mm_load_si128((__m128i*)(_src5 + ptr));
+			result1 = _mm_xor_si128(result1, _mm_gf2p8affine_epi64_epi8(data, matNormE, 0));
+			result2 = _mm_xor_si128(result2, _mm_gf2p8affine_epi64_epi8(data, matSwapE, 0));
+		}
+		if(srcCount >= 6) {
+			data = _mm_load_si128((__m128i*)(_src6 + ptr));
+			result1 = _mm_xor_si128(result1, _mm_gf2p8affine_epi64_epi8(data, matNormF, 0));
+			result2 = _mm_xor_si128(result2, _mm_gf2p8affine_epi64_epi8(data, matSwapF, 0));
+		}
 		
 		result1 = _mm_xor_si128(result1, _mm_load_si128((__m128i*)(_dst + ptr)));
 		result1 = _mm_xor_si128(result1, _mm_shuffle_epi32(result2, _MM_SHUFFLE(1,0,3,2)));
@@ -335,29 +339,61 @@ unsigned gf16_affine2x_muladd_multi_gfni(const void *HEDLEY_RESTRICT scratch, un
 	
 	unsigned region = 0;
 #ifdef PLATFORM_AMD64
-	// TODO: support up to 6 regions?
-	if(regions > 2) do {
-		gf16_affine2x_muladd_x3_gfni(
-			scratch, _dst,
+	if(regions > 5) do {
+		gf16_affine2x_muladd_x_gfni(
+			scratch, _dst, 6,
 			(const uint8_t* HEDLEY_RESTRICT)src[region] + offset + len, (const uint8_t* HEDLEY_RESTRICT)src[region+1] + offset + len, (const uint8_t* HEDLEY_RESTRICT)src[region+2] + offset + len,
+			(const uint8_t* HEDLEY_RESTRICT)src[region+3] + offset + len, (const uint8_t* HEDLEY_RESTRICT)src[region+4] + offset + len, (const uint8_t* HEDLEY_RESTRICT)src[region+5] + offset + len,
 			len, coefficients + region
 		);
-		region += 3;
-	} while(region < regions-2);
-	if(region < regions-1) {
-		gf16_affine2x_muladd_x2_gfni(
-			scratch, _dst,
-			(const uint8_t* HEDLEY_RESTRICT)src[region] + offset + len, (const uint8_t* HEDLEY_RESTRICT)src[region+1] + offset + len,
-			len, coefficients + region
-		);
-		region += 2;
+		region += 6;
+	} while(region < regions-5);
+	switch(regions - region) {
+		case 5:
+			gf16_affine2x_muladd_x_gfni(
+				scratch, _dst, 5,
+				(const uint8_t* HEDLEY_RESTRICT)src[region] + offset + len, (const uint8_t* HEDLEY_RESTRICT)src[region+1] + offset + len, (const uint8_t* HEDLEY_RESTRICT)src[region+2] + offset + len,
+				(const uint8_t* HEDLEY_RESTRICT)src[region+3] + offset + len, (const uint8_t* HEDLEY_RESTRICT)src[region+4] + offset + len, NULL,
+				len, coefficients + region
+			);
+			region += 5;
+		break;
+		case 4:
+			gf16_affine2x_muladd_x_gfni(
+				scratch, _dst, 4,
+				(const uint8_t* HEDLEY_RESTRICT)src[region] + offset + len, (const uint8_t* HEDLEY_RESTRICT)src[region+1] + offset + len, (const uint8_t* HEDLEY_RESTRICT)src[region+2] + offset + len,
+				(const uint8_t* HEDLEY_RESTRICT)src[region+3] + offset + len, NULL, NULL,
+				len, coefficients + region
+			);
+			region += 4;
+		break;
+		case 3:
+			gf16_affine2x_muladd_x_gfni(
+				scratch, _dst, 3,
+				(const uint8_t* HEDLEY_RESTRICT)src[region] + offset + len, (const uint8_t* HEDLEY_RESTRICT)src[region+1] + offset + len, (const uint8_t* HEDLEY_RESTRICT)src[region+2] + offset + len,
+				NULL, NULL, NULL,
+				len, coefficients + region
+			);
+			region += 3;
+		break;
+		case 2:
+			gf16_affine2x_muladd_x_gfni(
+				scratch, _dst, 2,
+				(const uint8_t* HEDLEY_RESTRICT)src[region] + offset + len, (const uint8_t* HEDLEY_RESTRICT)src[region+1] + offset + len,
+				NULL, NULL, NULL, NULL,
+				len, coefficients + region
+			);
+			region += 2;
+		break;
+		default: break;
 	}
 #else
 	// if only 8 registers available, only allow 2 parallel regions
-	for(; region < regions & ~1; region+=2) {
-		gf16_affine2x_muladd_x2_gfni(
-			scratch, _dst,
+	for(; region < (regions & ~1); region+=2) {
+		gf16_affine2x_muladd_x_gfni(
+			scratch, _dst, 2,
 			(const uint8_t* HEDLEY_RESTRICT)src[region] + offset + len, (const uint8_t* HEDLEY_RESTRICT)src[region+1] + offset + len,
+			NULL, NULL, NULL, NULL,
 			len, coefficients + region
 		);
 	}

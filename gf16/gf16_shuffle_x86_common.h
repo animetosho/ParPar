@@ -39,28 +39,40 @@ static inline _mword partial_load(const void* ptr, size_t bytes) {
 #endif
 }
 
+#define GF16_MULTBY_TWO_X2(p) ((((p) << 1) & 0xffffffff) ^ ((GF16_POLYNOMIAL ^ ((GF16_POLYNOMIAL&0xffff) << 16)) & -((p) >> 31)))
 
 static HEDLEY_ALWAYS_INLINE void initial_mul_vector(uint16_t val, __m128i* prod, __m128i* prod4) {
-	int val2 = GF16_MULTBY_TWO(val);
-	int val4 = GF16_MULTBY_TWO(val2);
-	__m128i tmp = _mm_cvtsi32_si128(val << 16);
-	tmp = _mm_insert_epi16(tmp, val2, 2);
-	*prod = _mm_insert_epi16(tmp, val2 ^ val, 3);
-	*prod4 = _mm_set1_epi16(val4);
+	uint32_t val1 = val << 16;
+	uint32_t val2 = val1 | val;
+	val2 = GF16_MULTBY_TWO_X2(val2);
+	__m128i tmp = _mm_cvtsi32_si128(val1);
+#if MWORD_SIZE >= 32 /* TODO: enable this in AVX as well */
+	*prod = _mm_insert_epi32(tmp, val2 ^ val1, 1);
+#else
+	*prod = _mm_unpacklo_epi32(tmp, _mm_cvtsi32_si128(val2 ^ val1));
+#endif
+	*prod4 = _mm_set1_epi32(GF16_MULTBY_TWO_X2(val2));
 }
 
-static HEDLEY_ALWAYS_INLINE void shuf0_vector(uint16_t val, __m128i* prodLo0, __m128i* prodHi0) {
+static HEDLEY_ALWAYS_INLINE void shuf0_vector(uint16_t val, __m128i* prod0, __m128i* prod8) {
 	__m128i tmp, vval4;
 	initial_mul_vector(val, &tmp, &vval4);
-	tmp = _mm_unpacklo_epi64(tmp, _mm_xor_si128(tmp, vval4));
+	*prod0 = _mm_unpacklo_epi64(tmp, _mm_xor_si128(tmp, vval4));
 	
-	// multiply by 2
-	__m128i vval8 = _mm_xor_si128(
-		_mm_add_epi16(vval4, vval4),
-		_mm_and_si128(_mm_set1_epi16(GF16_POLYNOMIAL & 0xffff), _mm_cmpgt_epi16(
-			_mm_setzero_si128(), vval4
-		))
+	// multiply by 2 and add prod0 to give prod8
+	__m128i poly = _mm_and_si128(_mm_set1_epi16(GF16_POLYNOMIAL & 0xffff), _mm_cmpgt_epi16(
+		_mm_setzero_si128(), vval4
+	));
+#if MWORD_SIZE == 64
+	*prod8 = _mm_ternarylogic_epi32(
+		_mm_add_epi16(vval4, vval4), poly, *prod0, 0x96
 	);
+#else
+	*prod8 = _mm_xor_si128(
+		_mm_add_epi16(vval4, vval4),
+		_mm_xor_si128(*prod0, poly)
+	);
+#endif
 	
 /* // although the following seems simpler, it doesn't actually seem to be faster, although I don't know why
 		uint8_t* multbl = (uint8_t*)scratch + sizeof(__m128i)*2;
@@ -77,12 +89,6 @@ static HEDLEY_ALWAYS_INLINE void shuf0_vector(uint16_t val, __m128i* prodLo0, __
 		low0 = BCAST(_mm_unpacklo_epi64(factor0, factor8));
 		high0 = BCAST(_mm_unpackhi_epi64(factor0, factor8));
 */
-	
-	__m128i tmp8 = _mm_xor_si128(tmp, vval8);
-	tmp  = _mm_shuffle_epi8(tmp , _mm_set_epi32(0x0f0d0b09, 0x07050301, 0x0e0c0a08, 0x06040200));
-	tmp8 = _mm_shuffle_epi8(tmp8, _mm_set_epi32(0x0f0d0b09, 0x07050301, 0x0e0c0a08, 0x06040200));
-	*prodLo0 = _mm_unpacklo_epi64(tmp, tmp8);
-	*prodHi0 = _mm_unpackhi_epi64(tmp, tmp8);
 }
 
 
@@ -100,16 +106,6 @@ static HEDLEY_ALWAYS_INLINE _mword separate_low_high(_mword data) {
 }
 
 
-#if MWORD_SIZE == 16
-	#define BCAST
-#endif
-#if MWORD_SIZE == 32
-	#define BCAST(n) _mm256_inserti128_si256(_mm256_castsi128_si256(n), n, 1)
-#endif
-#if MWORD_SIZE == 64
-	#define BCAST(n) _mm512_shuffle_i32x4(_mm512_castsi128_si512(n), _mm512_castsi128_si512(n), 0)
-	/* MSVC seems to crash when _mm512_broadcast_i32x4 is used for 32-bit compiles, so be explicit in what we want */
-#endif
 #if MWORD_SIZE == 16 && defined(_AVAILABLE_XOP)
 	#define _MM_SRLI4_EPI8(v) _mm_shl_epi8(v, _mm_set1_epi8(-4))
 	#define _MM_SLLI4_EPI8(v) _mm_shl_epi8(v, _mm_set1_epi8(4))
@@ -119,37 +115,28 @@ static HEDLEY_ALWAYS_INLINE _mword separate_low_high(_mword data) {
 #endif
 
 
-static HEDLEY_ALWAYS_INLINE void mul16_vec(_mword mulLo, _mword mulHi, _mword srcLo, _mword srcHi, _mword* dstLo, _mword *dstHi) {
-	_mword ti = _MM_SRLI4_EPI8(srcHi);
+#if MWORD_SIZE >= 32
+static HEDLEY_ALWAYS_INLINE void mul16_vec2x(__m256i mulLo, __m256i mulHi, __m256i srcLo, __m256i srcHi, __m256i* dstLo, __m256i *dstHi) {
+	__m256i ti = _mm256_and_si256(_mm256_srli_epi16(srcHi, 4), _mm256_set1_epi8(0xf));
 #if MWORD_SIZE == 64
-	_mword th = _mm512_ternarylogic_epi32(
-		_mm512_srli_epi16(srcLo, 4),
-		_mm512_set1_epi8(0xf),
-		_mm512_slli_epi16(srcHi, 4),
+	__m256i th = _mm256_ternarylogic_epi32(
+		_mm256_srli_epi16(srcLo, 4),
+		_mm256_set1_epi8(0xf),
+		_mm256_slli_epi16(srcHi, 4),
 		0xE2
 	);
-	*dstLo = _mm512_ternarylogic_epi32(
-		_mm512_shuffle_epi8(mulLo, ti),
-		_mm512_set1_epi8(0xf),
-		_mm512_slli_epi16(srcLo, 4),
+	*dstLo = _mm256_ternarylogic_epi32(
+		_mm256_shuffle_epi8(mulLo, ti),
+		_mm256_set1_epi8(0xf),
+		_mm256_slli_epi16(srcLo, 4),
 		0xD2
 	);
 #else
-	_mword tl = _MM_SLLI4_EPI8(srcLo);
-	_mword th = _MM_SLLI4_EPI8(srcHi);
-	th = _MMI(or)(th, _MM_SRLI4_EPI8(srcLo));
-	*dstLo = _MMI(xor)(tl, _MM(shuffle_epi8)(mulLo, ti));
-#endif
-	*dstHi = _MMI(xor)(th, _MM(shuffle_epi8)(mulHi, ti));
-}
-
-#if MWORD_SIZE >= 32
-static HEDLEY_ALWAYS_INLINE void mul16_vec256(__m256i mulLo, __m256i mulHi, __m256i srcLo, __m256i srcHi, __m256i* dstLo, __m256i *dstHi) {
-	__m256i ti = _mm256_and_si256(_mm256_srli_epi16(srcHi, 4), _mm256_set1_epi8(0xf));
 	__m256i tl = _mm256_slli_epi16(_mm256_and_si256(_mm256_set1_epi8(0xf), srcLo), 4);
 	__m256i th = _mm256_slli_epi16(_mm256_and_si256(_mm256_set1_epi8(0xf), srcHi), 4);
 	th = _mm256_or_si256(th, _mm256_and_si256(_mm256_srli_epi16(srcLo, 4), _mm256_set1_epi8(0xf)));
 	*dstLo = _mm256_xor_si256(tl, _mm256_shuffle_epi8(mulLo, ti));
+#endif
 	*dstHi = _mm256_xor_si256(th, _mm256_shuffle_epi8(mulHi, ti));
 }
 #endif
@@ -163,10 +150,25 @@ static HEDLEY_ALWAYS_INLINE void mul16_vec256(__m256i mulLo, __m256i mulHi, __m2
 #endif
 static HEDLEY_ALWAYS_INLINE void mul16_vec128(__m128i mulLo, __m128i mulHi, __m128i srcLo, __m128i srcHi, __m128i* dstLo, __m128i *dstHi) {
 	__m128i ti = _MM128_SRLI4_EPI8(srcHi);
+#if MWORD_SIZE == 64
+	__m128i th = _mm_ternarylogic_epi32(
+		_mm_srli_epi16(srcLo, 4),
+		_mm_set1_epi8(0xf),
+		_mm_slli_epi16(srcHi, 4),
+		0xE2
+	);
+	*dstLo = _mm_ternarylogic_epi32(
+		_mm_shuffle_epi8(mulLo, ti),
+		_mm_set1_epi8(0xf),
+		_mm_slli_epi16(srcLo, 4),
+		0xD2
+	);
+#else
 	__m128i tl = _MM128_SLLI4_EPI8(srcLo);
 	__m128i th = _MM128_SLLI4_EPI8(srcHi);
 	th = _mm_or_si128(th, _MM128_SRLI4_EPI8(srcLo));
 	*dstLo = _mm_xor_si128(tl, _mm_shuffle_epi8(mulLo, ti));
+#endif
 	*dstHi = _mm_xor_si128(th, _mm_shuffle_epi8(mulHi, ti));
 }
 

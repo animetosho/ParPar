@@ -455,9 +455,8 @@ FUNC(Finish) {
 	// TODO: make this stuff async
 	ppgf_finish_input(numInputs, inputs, bufLen);
 	if(calcMd5) {
-		ppgf_omp_check_num_threads();
 		int i=0;
-		#pragma omp parallel for
+		#pragma omp parallel for num_threads(ppgf_get_num_threads())
 		for(i=0; i<(int)numInputs; i+=MD5_SIMD_NUM) {
 			md5_multi_update(md5 + i, (const void**)(inputs + i), len);
 		}

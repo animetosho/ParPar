@@ -24,8 +24,8 @@ unsigned gf16_shuffle2x_muladd_multi_avx2(const void *HEDLEY_RESTRICT scratch, u
 #if defined(_AVAILABLE) && defined(PLATFORM_AMD64)
 	uint8_t* _dst = (uint8_t*)dst + offset + len;
 	__m256i mask = _mm256_set1_epi8(0x0f);
-	__m256i polyl = _mm256_broadcastsi128_si256(_mm_load_si128((__m128i*)scratch));
-	__m256i polyh = _mm256_broadcastsi128_si256(_mm_load_si128((__m128i*)scratch + 1));
+	__m256i polyl = _mm256_broadcastsi128_si256(_mm_load_si128((__m128i*)scratch + 1));
+	__m256i polyh = _mm256_broadcastsi128_si256(_mm_load_si128((__m128i*)scratch));
 	
 	unsigned region = 0;
 	for(; region < (regions & ~1); region += 2) {
@@ -58,9 +58,9 @@ unsigned gf16_shuffle2x_muladd_multi_avx2(const void *HEDLEY_RESTRICT scratch, u
 		prodLo0 = _mm256_unpacklo_epi64(prod0, prod8);
 		prodHi0 = _mm256_unpackhi_epi64(prod0, prod8);
 		
-		mul16_vec256(polyl, polyh, prodLo0, prodHi0, &prodLo1, &prodHi1);
-		mul16_vec256(polyl, polyh, prodLo1, prodHi1, &prodLo2, &prodHi2);
-		mul16_vec256(polyl, polyh, prodLo2, prodHi2, &prodLo3, &prodHi3);
+		mul16_vec2x(polyl, polyh, prodLo0, prodHi0, &prodLo1, &prodHi1);
+		mul16_vec2x(polyl, polyh, prodLo1, prodHi1, &prodLo2, &prodHi2);
+		mul16_vec2x(polyl, polyh, prodLo2, prodHi2, &prodLo3, &prodHi3);
 		
 		// mix vectors
 #define JOIN_VEC(a, b, i) _mm256_permute2x128_si256(a, b, 0x20 + i*0x11)

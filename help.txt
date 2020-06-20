@@ -191,6 +191,7 @@ Performance Options:
                              Choices are:
                                  lh_lookup: split 2x 8-bit scalar table lookup
                                  lh_lookup-sse: SSE2 variant of above
+                                 3p_lookup: split 3x 11/10-bit scalar table lookup
                                  xor-sse: vector XOR bit dependencies (SSE2)
                                  xorjit-sse: JIT variant of above
                                  xorjit-avx2: AVX2 x64 variant of above

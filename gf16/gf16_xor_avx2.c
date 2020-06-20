@@ -76,9 +76,22 @@ static HEDLEY_ALWAYS_INLINE __m128i ssse3_tzcnt_epi16(__m128i v) {
 	), _mm_and_si128(_mm_srli_epi16(v, 4), lmask));
 	__m128i combined = _mm_min_epu8(low, high);
 	low = combined;
-	high = _mm_srli_epi16(_mm_add_epi8(combined, _mm_set1_epi8(8)), 8);
+	high = _mm_srli_epi16(_mm_or_si128(combined, _mm_set1_epi8(8)), 8);
 	return _mm_min_epu8(low, high);
 }
+/* TODO: explore the following idea
+__m128i ssse3_tzcnt_epi16(__m128i v) { // if v==0, returns 0xffff instead of 16
+	// isolate lowest bit
+	__m128i lbit = _mm_andnot_si128(_mm_add_epi16(v, _mm_set1_epi16(-1)), v);
+	// sequence from https://www.chessprogramming.org/De_Bruijn_Sequence#B.282.2C_4.29
+	// might also be able to use a reversed bit sequence (0xf4b0) with mulhi+and instead of mullo+shift
+	__m128i seq = _mm_srli_epi16(_mm_mullo_epi16(lbit, _mm_set1_epi16(0x0d2f)), 12);
+	__m128i ans = _mm_shuffle_epi8(_mm_set_epi8(
+		12, 13, 4, 14, 10, 5, 7, 15, 11, 3, 9, 6, 2, 8, 1, 0
+	), seq);
+	return _mm_or_si128(ans, _mm_cmpeq_epi16(_mm_setzero_si128(), v));
+}
+*/
 static HEDLEY_ALWAYS_INLINE __m128i ssse3_lzcnt_epi16(__m128i v) {
 	__m128i lmask = _mm_set1_epi8(0xf);
 	__m128i low = _mm_shuffle_epi8(_mm_set_epi8(
@@ -88,7 +101,7 @@ static HEDLEY_ALWAYS_INLINE __m128i ssse3_lzcnt_epi16(__m128i v) {
 		0,0,0,0,0,0,0,0,1,1,1,1,2,2,3,16
 	), _mm_and_si128(_mm_srli_epi16(v, 4), lmask));
 	__m128i combined = _mm_min_epu8(low, high);
-	low = _mm_add_epi8(combined, _mm_set1_epi16(8));
+	low = _mm_or_si128(combined, _mm_set1_epi16(8));
 	high = _mm_srli_epi16(combined, 8);
 	return _mm_min_epu8(low, high);
 }
@@ -390,7 +403,7 @@ static inline void xor_write_jit_avx(const struct gf16_xor_scratch *HEDLEY_RESTR
 #ifdef CPU_SLOW_SMC
 	/* memcpy to destination */
 	/* AVX does result in fewer writes, but testing on Haswell seems to indicate minimal benefit over SSE2 */
-	for(i=0; i<(uint_fast32_t)(jitptr+10-jitTemp); i+=64) {
+	for(uint_fast32_t i=0; i<(uint_fast32_t)(jitptr+10-jitTemp); i+=64) {
 		__m256i ta = _mm256_load_si256((__m256i*)(jitTemp + i));
 		__m256i tb = _mm256_load_si256((__m256i*)(jitTemp + i + 32));
 		_mm256_store_si256((__m256i*)(jitdst + i), ta);
@@ -406,7 +419,7 @@ void gf16_xor_jit_mul_avx2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RES
 	const struct gf16_xor_scratch *HEDLEY_RESTRICT info = (const struct gf16_xor_scratch *HEDLEY_RESTRICT)scratch;
 	
 #ifdef CPU_SLOW_SMC_CLR
-	memset(info->jitCode, 0, 1536);
+	memset((char*)mutScratch + info->codeStart, 0, XORDEP_JIT_SIZE-512);
 #endif
 	xor_write_jit_avx(info, mutScratch, coefficient, 0);
 	gf16_xor256_jit_stub(
@@ -427,7 +440,7 @@ void gf16_xor_jit_muladd_avx2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_
 	const struct gf16_xor_scratch *HEDLEY_RESTRICT info = (const struct gf16_xor_scratch *HEDLEY_RESTRICT)scratch;
 	
 #ifdef CPU_SLOW_SMC_CLR
-	memset(info->jitCode, 0, 1536);
+	memset((char*)mutScratch + info->codeStart, 0, XORDEP_JIT_SIZE-512);
 #endif
 	xor_write_jit_avx(info, mutScratch, coefficient, 1);
 	gf16_xor256_jit_stub(
@@ -626,7 +639,7 @@ void gf16_xor_finish_avx2(void *HEDLEY_RESTRICT dst, size_t len) {
 #undef _MM_END
 
 
-#ifdef PLATFORM_AMD64
+#if defined(__AVX2__) && defined(PLATFORM_AMD64)
 static size_t xor_write_init_jit(uint8_t *jitCode) {
 	uint8_t *jitCodeStart = jitCode;
 	jitCode += _jit_add_i(jitCode, AX, 512);
@@ -638,9 +651,10 @@ static size_t xor_write_init_jit(uint8_t *jitCode) {
 	}
 	return jitCode-jitCodeStart;
 }
+
+# include "gf16_bitdep_init_avx2.h"
 #endif
 
-#include "gf16_bitdep_init_avx2.h"
 
 void* gf16_xor_jit_init_avx2(int polynomial) {
 #if defined(__AVX2__) && defined(PLATFORM_AMD64)
@@ -661,7 +675,7 @@ void* gf16_xor_jit_init_avx2(int polynomial) {
 }
 
 void* gf16_xor_jit_init_mut_avx2() {
-#ifdef PLATFORM_AMD64
+#if defined(__AVX2__) && defined(PLATFORM_AMD64)
 	uint8_t *jitCode = jit_alloc(XORDEP_JIT_SIZE);
 	if(!jitCode) return NULL;
 	xor_write_init_jit(jitCode);

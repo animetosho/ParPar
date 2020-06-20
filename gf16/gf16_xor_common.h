@@ -32,7 +32,7 @@ extern void gf16_xor256_jit_stub(intptr_t src, intptr_t dEnd, intptr_t dest, voi
 #  ifdef DBG_XORDEP
 #   include <stdio.h>
 #  endif
-static inline void gf16_xor_jit_stub(intptr_t src, intptr_t dEnd, intptr_t dest, void* fn) {
+static HEDLEY_ALWAYS_INLINE void gf16_xor_jit_stub(intptr_t src, intptr_t dEnd, intptr_t dest, void* fn) {
 #ifdef DBG_XORDEP
 	FILE* fp = fopen("code.bin", "wb");
 	fwrite(fn, 2048, 1, fp);
@@ -53,7 +53,7 @@ static inline void gf16_xor_jit_stub(intptr_t src, intptr_t dEnd, intptr_t dest,
 # endif
 #else
 # ifdef _MSC_VER
-static inline void gf16_xor_jit_stub(intptr_t src, intptr_t dEnd, intptr_t dest, void* fn) {
+static HEDLEY_ALWAYS_INLINE void gf16_xor_jit_stub(intptr_t src, intptr_t dEnd, intptr_t dest, void* fn) {
 	__asm {
 		push esi
 		lea esi, [esp-4]
@@ -66,7 +66,7 @@ static inline void gf16_xor_jit_stub(intptr_t src, intptr_t dEnd, intptr_t dest,
 	}
 }
 # else
-static inline void gf16_xor_jit_stub(intptr_t src, intptr_t dEnd, intptr_t dest, void* fn) {
+static HEDLEY_ALWAYS_INLINE void gf16_xor_jit_stub(intptr_t src, intptr_t dEnd, intptr_t dest, void* fn) {
 	asm volatile(
 		"leal -4(%%esp), %%esi\n"
 		"andl $0xFFFFFFF0, %%esi\n"

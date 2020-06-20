@@ -158,8 +158,8 @@ struct CpuCap {
 
 void Galois16Mul::addGeneric(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len) {
 	assert((len & 1) == 0);
-	//assert(((uintptr_t)dst & (alignment-1)) == 0);
-	//assert(((uintptr_t)src & (alignment-1)) == 0);
+	//assert(((uintptr_t)dst & (_info.alignment-1)) == 0);
+	//assert(((uintptr_t)src & (_info.alignment-1)) == 0);
 	assert(len > 0);
 	
 	
@@ -182,7 +182,7 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 		case GF16_SHUFFLE_AVX2:
 		case GF16_SHUFFLE_AVX:
 		case GF16_SHUFFLE_SSSE3:
-			alignment = 16;
+			_info.alignment = 16;
 			scratch = gf16_shuffle_init_x86(GF16_POLYNOMIAL);
 			// TODO: set _add
 			
@@ -216,7 +216,7 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 					_mul_add = &gf16_shuffle_muladd_avx2;
 					prepare = &gf16_shuffle_prepare_avx2;
 					finish = &gf16_shuffle_finish_avx2;
-					alignment = 32;
+					_info.alignment = 32;
 				break;
 				case GF16_SHUFFLE_AVX512:
 					if(!gf16_shuffle_available_avx512) {
@@ -231,11 +231,11 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 					#endif
 					prepare = &gf16_shuffle_prepare_avx512;
 					finish = &gf16_shuffle_finish_avx512;
-					alignment = 64;
+					_info.alignment = 64;
 				break;
 				default: break; // for pedantic compilers
 			}
-			stride = alignment*2;
+			_info.stride = _info.alignment*2;
 		break;
 		
 		case GF16_SHUFFLE2X_AVX512:
@@ -250,8 +250,8 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 			#endif
 			prepare = &gf16_shuffle2x_prepare_avx512;
 			finish = &gf16_shuffle2x_finish_avx512;
-			alignment = 64;
-			stride = 64;
+			_info.alignment = 64;
+			_info.stride = 64;
 		break;
 		case GF16_SHUFFLE2X_AVX2:
 			scratch = gf16_shuffle_init_x86(GF16_POLYNOMIAL);
@@ -265,13 +265,13 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 			#endif
 			prepare = &gf16_shuffle2x_prepare_avx2;
 			finish = &gf16_shuffle2x_finish_avx2;
-			alignment = 32;
-			stride = 32;
+			_info.alignment = 32;
+			_info.stride = 32;
 		break;
 		
 		case GF16_SHUFFLE_NEON:
-			alignment = 16;
-			stride = 32;
+			_info.alignment = 16;
+			_info.stride = 32;
 			scratch = gf16_shuffle_init_arm(GF16_POLYNOMIAL);
 			// TODO: set _add
 			
@@ -289,8 +289,8 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 		
 		case GF16_AFFINE_AVX512:
 			scratch = gf16_affine_init_avx512(GF16_POLYNOMIAL);
-			alignment = 64;
-			stride = 128;
+			_info.alignment = 64;
+			_info.stride = 128;
 			if(!gf16_affine_available_avx512 || !gf16_shuffle_available_avx512) {
 				setupMethod(GF16_AUTO);
 				return;
@@ -306,8 +306,8 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 		
 		case GF16_AFFINE_GFNI:
 			scratch = gf16_affine_init_gfni(GF16_POLYNOMIAL);
-			alignment = 16;
-			stride = 32;
+			_info.alignment = 16;
+			_info.stride = 32;
 			if(!gf16_affine_available_gfni || !gf16_shuffle_available_ssse3) {
 				setupMethod(GF16_AUTO);
 				return;
@@ -323,8 +323,8 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 		
 		case GF16_AFFINE2X_AVX512:
 			scratch = gf16_affine_init_avx512(GF16_POLYNOMIAL);
-			alignment = 64;
-			stride = 64;
+			_info.alignment = 64;
+			_info.stride = 64;
 			if(!gf16_affine_available_avx512 || !gf16_shuffle_available_avx512) {
 				setupMethod(GF16_AUTO);
 				return;
@@ -337,8 +337,8 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 		
 		case GF16_AFFINE2X_GFNI:
 			scratch = gf16_affine_init_gfni(GF16_POLYNOMIAL);
-			alignment = 16;
-			stride = 16;
+			_info.alignment = 16;
+			_info.stride = 16;
 			if(!gf16_affine_available_gfni || !gf16_shuffle_available_ssse3) {
 				setupMethod(GF16_AUTO);
 				return;
@@ -354,7 +354,7 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 		//case GF16_XOR_JIT_AVX:
 		case GF16_XOR_JIT_SSE2:
 		case GF16_XOR_SSE2:
-			alignment = 16;
+			_info.alignment = 16;
 			
 			switch(method) {
 				case GF16_XOR_JIT_SSE2:
@@ -398,7 +398,7 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 					_mul_add = &gf16_xor_jit_muladd_avx2;
 					prepare = &gf16_xor_prepare_avx2;
 					finish = &gf16_xor_finish_avx2;
-					alignment = 32;
+					_info.alignment = 32;
 				break;
 				case GF16_XOR_JIT_AVX512:
 					if(!gf16_xor_available_avx512) {
@@ -411,42 +411,74 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 					_mul_add_multi = &gf16_xor_jit_muladd_multi_avx512;
 					prepare = &gf16_xor_prepare_avx512;
 					finish = &gf16_xor_finish_avx512;
-					alignment = 64;
+					_info.alignment = 64;
 				break;
 				default: break; // for pedantic compilers
 			}
 			
-			stride = alignment*16;
+			_info.stride = _info.alignment*16;
 		break;
 		
 		case GF16_LOOKUP_SSE2:
 			_mul = &gf16_lookup_mul_sse2;
 			_mul_add = &gf16_lookup_muladd_sse2;
-			alignment = 16;
-			stride = 16;
+			_info.alignment = 16;
+			_info.stride = 16;
 		break;
 		
+		case GF16_LOOKUP3:
+			_mul = &gf16_lookup3_mul;
+			_mul_add = &gf16_lookup3_muladd;
+			_info.stride = gf16_lookup3_stride();
+			_info.alignment = _info.stride; // assume platform doesn't like misalignment
+			if(_info.stride)
+				break;
+			// else fallthrough
 		case GF16_LOOKUP:
 		default:
 			_mul = &gf16_lookup_mul;
-			_mul_add = &gf16_lookup_mul_add;
-			stride = gf16_lookup_stride();
-			alignment = stride; // assume platform doesn't like misalignment
+			_mul_add = &gf16_lookup_muladd;
+			_pow_add = &gf16_lookup_powadd;
+			_info.stride = gf16_lookup_stride();
+			_info.alignment = _info.stride; // assume platform doesn't like misalignment
 		break;
 	}
-	_method = method;
+	_info.id = method;
+	_info.name = Galois16MethodsText[(int)method];
+	
+	// TODO: improve these?
+	// TODO: this probably needs to be variable depending on the CPU cache size
+	// although these defaults are pretty good across most CPUs
+	switch(method) {
+		case GF16_XOR_JIT_SSE2: // JIT is a little slow, so larger blocks make things faster
+		case GF16_XOR_JIT_AVX2:
+		case GF16_XOR_JIT_AVX512:
+			_info.idealChunkSize = 128*1024; // half L2 cache?
+		break;
+		case GF16_LOOKUP:
+		case GF16_LOOKUP_SSE2:
+		case GF16_LOOKUP3:
+		case GF16_XOR_SSE2:
+			_info.idealChunkSize = 96*1024; // 2* L1 data cache size ?
+		break;
+		default: // Shuffle/Affine
+			_info.idealChunkSize = 48*1024; // ~=L1 * 1-2 data cache size seems to be efficient
+	}
 }
 
 Galois16Mul::Galois16Mul(Galois16Methods method) {
 	scratch = NULL;
 	prepare = &Galois16Mul::_prepare_none;
 	finish = &Galois16Mul::_finish_none;
-	alignment = 2;
-	stride = 2;
+	_info.alignment = 2;
+	_info.stride = 2;
 	
 	_mul = NULL;
 	_add = &Galois16Mul::addGeneric;
 	_mul_add_multi = &Galois16Mul::_mul_add_multi_none;
+	
+	_pow = NULL;
+	_pow_add = NULL;
 	
 	setupMethod(method);
 }
@@ -463,19 +495,19 @@ void Galois16Mul::move(Galois16Mul& other) {
 	
 	prepare = other.prepare;
 	finish = other.finish;
-	alignment = other.alignment;
-	stride = other.stride;
+	_info = other._info;
 	_mul = other._mul;
 	_add = other._add;
 	_mul_add = other._mul_add;
 	_mul_add_multi = other._mul_add_multi;
-	_method = other._method;
+	_pow = other._pow;
+	_pow_add = other._pow_add;
 }
 #endif
 
 
 void* Galois16Mul::mutScratch_alloc() const {
-	switch(_method) {
+	switch(_info.id) {
 		case GF16_XOR_JIT_SSE2:
 			return gf16_xor_jit_init_mut_sse2();
 		case GF16_XOR_JIT_AVX2:
@@ -488,7 +520,7 @@ void* Galois16Mul::mutScratch_alloc() const {
 	}
 }
 void Galois16Mul::mutScratch_free(void* mutScratch) const {
-	switch(_method) {
+	switch(_info.id) {
 		case GF16_XOR_JIT_SSE2:
 		case GF16_XOR_JIT_AVX2:
 		case GF16_XOR_JIT_AVX512:
@@ -549,6 +581,8 @@ Galois16Methods Galois16Mul::default_method(size_t regionSizeHint, unsigned /*ou
 std::vector<Galois16Methods> Galois16Mul::availableMethods(bool checkCpuid) {
 	std::vector<Galois16Methods> ret;
 	ret.push_back(GF16_LOOKUP);
+	if(gf16_lookup3_stride())
+		ret.push_back(GF16_LOOKUP3);
 	
 	const CpuCap caps(checkCpuid);
 #ifdef PLATFORM_X86

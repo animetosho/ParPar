@@ -76,10 +76,15 @@ void _FN(gf16_shuffle2x_muladd)(const void *HEDLEY_RESTRICT scratch, void *HEDLE
 	UNUSED(mutScratch);
 #ifdef _AVAILABLE
 	__m128i prodLo0, prodHi0, prodLo1, prodHi1, prodLo2, prodHi2, prodLo3, prodHi3;
-	shuf0_vector(val, &prodLo0, &prodHi0);
+	__m128i pd0, pd1;
+	shuf0_vector(val, &pd0, &pd1);
+	pd0 = _mm_shuffle_epi8(pd0, _mm_set_epi32(0x0f0d0b09, 0x07050301, 0x0e0c0a08, 0x06040200));
+	pd1 = _mm_shuffle_epi8(pd1, _mm_set_epi32(0x0f0d0b09, 0x07050301, 0x0e0c0a08, 0x06040200));
+	prodLo0 = _mm_unpacklo_epi64(pd0, pd1);
+	prodHi0 = _mm_unpackhi_epi64(pd0, pd1);
 	
-	__m128i polyl = _mm_load_si128((__m128i*)scratch);
-	__m128i polyh = _mm_load_si128((__m128i*)scratch + 1);
+	__m128i polyl = _mm_load_si128((__m128i*)scratch + 1);
+	__m128i polyh = _mm_load_si128((__m128i*)scratch);
 	
 	mul16_vec128(polyl, polyh, prodLo0, prodHi0, &prodLo1, &prodHi1);
 	mul16_vec128(polyl, polyh, prodLo1, prodHi1, &prodLo2, &prodHi2);
