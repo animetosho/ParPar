@@ -8,7 +8,8 @@ int gf16_xor_available_avx512 = 1;
 int gf16_xor_available_avx512 = 0;
 #endif
 
-#ifdef PLATFORM_AMD64
+
+#if defined(__AVX512BW__) && defined(__AVX512VL__) && defined(PLATFORM_AMD64)
 static size_t xor_write_init_jit(uint8_t *jitCode) {
 	uint8_t *jitCodeStart = jitCode;
 	jitCode += _jit_add_i(jitCode, AX, 1024);
@@ -20,11 +21,10 @@ static size_t xor_write_init_jit(uint8_t *jitCode) {
 	}
 	return jitCode-jitCodeStart;
 }
-#endif
+
+# include "gf16_bitdep_init_avx2.h"
 
 
-
-#if defined(__AVX512BW__) && defined(__AVX512VL__) && defined(PLATFORM_AMD64)
 /* because some versions of GCC (e.g. 6.3.0) lack _mm512_set_epi8, emulate it */
 #define _P(e3,e2,e1,e0) ((((uint8_t)e3)<<24) | (((uint8_t)e2)<<16) | (((uint8_t)e1)<<8) | ((uint8_t)e0))
 static HEDLEY_ALWAYS_INLINE __m512i MM512_SET_BYTES(char e63, char e62, char e61, char e60, char e59, char e58, char e57, char e56, char e55, char e54, char e53, char e52, char e51, char e50, char e49, char e48, char e47, char e46, char e45, char e44, char e43, char e42, char e41, char e40, char e39, char e38, char e37, char e36, char e35, char e34, char e33, char e32, char e31, char e30, char e29, char e28, char e27, char e26, char e25, char e24, char e23, char e22, char e21, char e20, char e19, char e18, char e17, char e16, char e15, char e14, char e13, char e12, char e11, char e10, char e9, char e8, char e7, char e6, char e5, char e4, char e3, char e2, char e1, char e0) {
@@ -819,12 +819,12 @@ unsigned gf16_xor_jit_muladd_multi_avx512(const void *HEDLEY_RESTRICT scratch, u
 		if(numRegions > XOR512_REGIONX_MERGE_REGS+1) numRegions = XOR512_REGIONX_MERGE_REGS+1;
 		
 #ifdef CPU_SLOW_SMC_CLR
-		memset(info->jitCode, 0, 1536);
+		memset(jitCode + info->codeStart, 0, XORDEP_JIT_SIZE-512);
 #endif
 		
 		uint8_t* jitptr;
 #ifdef CPU_SLOW_SMC
-		ALIGN(64, uint8_t jitTemp[2048]);
+		ALIGN_TO(64, uint8_t jitTemp[2048]);
 		uint8_t* jitdst;
 #endif
 		
@@ -891,7 +891,7 @@ unsigned gf16_xor_jit_muladd_multi_avx512(const void *HEDLEY_RESTRICT scratch, u
 #ifdef CPU_SLOW_SMC
 		/* memcpy to destination */
 		/* AVX does result in fewer writes, but testing on Haswell seems to indicate minimal benefit over SSE2 */
-		for(i=0; i<(uint_fast32_t)(jitptr+10-jitTemp); i+=64) {
+		for(uint_fast32_t i=0; i<(uint_fast32_t)(jitptr+10-jitTemp); i+=64) {
 			__m256i ta = _mm256_load_si256((__m256i*)(jitTemp + i));
 			__m256i tb = _mm256_load_si256((__m256i*)(jitTemp + i + 32));
 			_mm256_store_si256((__m256i*)(jitdst + i), ta);
@@ -1091,22 +1091,6 @@ void gf16_xor_finish_avx512(void *HEDLEY_RESTRICT dst, size_t len) {
 #undef _FN
 #undef _MM_END
 
-
-#if defined(__AVX512BW__) && defined(__AVX512VL__) && defined(PLATFORM_AMD64)
-static size_t xor_write_init_jit(uint8_t *jitCode) {
-	uint8_t *jitCodeStart = jitCode;
-	jitCode += _jit_add_i(jitCode, AX, 1024);
-	jitCode += _jit_add_i(jitCode, DX, 1024);
-	
-	/* only 64-bit supported*/
-	for(int i=0; i<16; i++) {
-		jitCode += _jit_vmovdqa32_load(jitCode, 16+i, AX, (i-2)<<6);
-	}
-	return jitCode-jitCodeStart;
-}
-
-# include "gf16_bitdep_init_avx2.h"
-#endif
 
 
 void* gf16_xor_jit_init_avx512(int polynomial) {
