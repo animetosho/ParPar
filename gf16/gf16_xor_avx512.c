@@ -769,7 +769,7 @@ void gf16_xor_jit_mul_avx512(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_R
 #endif
 	
 	xor_write_jit_avx512(info, mutScratch, coefficient, 0);
-	gf16_xor256_jit_stub(
+	gf16_xor512_jit_stub(
 		(intptr_t)dst - 1024,
 		(intptr_t)dst + len - 1024,
 		(intptr_t)src - 1024,
@@ -791,7 +791,7 @@ void gf16_xor_jit_muladd_avx512(const void *HEDLEY_RESTRICT scratch, void *HEDLE
 #endif
 	
 	xor_write_jit_avx512(info, mutScratch, coefficient, 1);
-	gf16_xor256_jit_stub(
+	gf16_xor512_jit_stub(
 		(intptr_t)dst - 1024,
 		(intptr_t)dst + len - 1024,
 		(intptr_t)src - 1024,
@@ -897,21 +897,12 @@ unsigned gf16_xor_jit_muladd_multi_avx512(const void *HEDLEY_RESTRICT scratch, u
 #endif
 		
 		
-		if(numRegions > 1) {
-			gf16_xor256_jit_multi_stub(
-				(intptr_t)dst + offset - 1024,
-				(intptr_t)dst + offset + len - 1024,
-				srcPtr,
-				mutScratch
-			);
-		} else {
-			gf16_xor256_jit_stub(
-				(intptr_t)dst + offset - 1024,
-				(intptr_t)dst + offset + len - 1024,
-				(intptr_t)srcPtr[0],
-				mutScratch
-			);
-		}
+		gf16_xor512_jit_multi_stub(
+			(intptr_t)dst + offset - 1024,
+			(intptr_t)dst + offset + len - 1024,
+			srcPtr,
+			mutScratch
+		);
 	}
 	
 	_mm256_zeroupper();
