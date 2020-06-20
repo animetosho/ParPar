@@ -182,7 +182,7 @@ static HEDLEY_ALWAYS_INLINE __m512i xor_avx512_main_part_frommem(int odd, int r,
 	return _mm512_ternarylogic_epi32(idx, inst, zext128_512(sr), 0x96);
 }
 
-static HEDLEY_ALWAYS_INLINE int xor_avx512_main_part(uint8_t* jitptr, int popcnt, int odd, int r, int memreg, __m128i indicies) {
+static HEDLEY_ALWAYS_INLINE int xor_avx512_main_part(uint8_t *HEDLEY_RESTRICT jitptr, int popcnt, int odd, int r, int memreg, __m128i indicies) {
 	__m512i result;
 	if(_mm_extract_epi8(indicies, 0) == 0)
 		result = xor_avx512_main_part_frommem(odd, r, memreg, indicies);
@@ -350,7 +350,7 @@ static HEDLEY_ALWAYS_INLINE __m512i xor_avx512_merge_part_frommem(int odd, int r
 	return _mm512_ternarylogic_epi32(idx, inst, zext128_512(sr), 0x96);
 }
 
-static HEDLEY_ALWAYS_INLINE int xor_avx512_merge_part(uint8_t* jitptr, int popcnt, int odd, int r, int memreg, __m128i indicies) {
+static HEDLEY_ALWAYS_INLINE int xor_avx512_merge_part(uint8_t *HEDLEY_RESTRICT jitptr, int popcnt, int odd, int r, int memreg, __m128i indicies) {
 	
 	__m512i result;
 	if(_mm_extract_epi8(indicies, 0) == 0)
@@ -579,7 +579,7 @@ static inline void xor_write_jit_avx512(const struct gf16_xor_scratch *HEDLEY_RE
 
 // TODO: merge this into above
 // note: xor can be 3 values: 0=clear, 1=xor (merge), 2=xor (load)
-static void* xor_write_jit_avx512_multi(const struct gf16_xor_scratch *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT jitptr, int memreg, uint16_t val, int xor) {
+static void* xor_write_jit_avx512_multi(const struct gf16_xor_scratch *HEDLEY_RESTRICT scratch, uint8_t *HEDLEY_RESTRICT jitptr, int memreg, uint16_t val, int xor) {
 	__m256i depmask = _mm256_load_si256((__m256i*)scratch->deps + (val & 0xf)*4);
 	depmask = _mm256_xor_si256(depmask,
 		_mm256_load_si256((__m256i*)(scratch->deps + ((val << 3) & 0x780)) + 1)
