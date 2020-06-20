@@ -59,7 +59,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_xor_jit_multi_stub(
 ) {
 #ifdef DBG_XORDEP
 	FILE* fp = fopen("code.bin", "wb");
-	fwrite(fn, 2048, 1, fp);
+	fwrite(fn, 12*1024, 1, fp);
 	fclose(fp);
 	// disassemble with `objdump -b binary -D -m i386:x86-64 -M intel code.bin|less`
 #endif
@@ -70,15 +70,14 @@ static HEDLEY_ALWAYS_INLINE void gf16_xor_jit_multi_stub(
 		"movq 32(%%rdx), %%r9\n"
 		"movq 40(%%rdx), %%r10\n"
 		"movq 48(%%rdx), %%r11\n"
-		"movq 56(%%rdx), %%r12\n"
-		"movq 64(%%rdx), %%r13\n"
-		"movq 72(%%rdx), %%r14\n"
-		"movq 80(%%rdx), %%r15\n"
+		"movq 56(%%rdx), %%rbx\n"
+		"movq 64(%%rdx), %%r14\n"
+		"movq 72(%%rdx), %%r15\n"
 		"movq (%%rdx), %%rdx\n"
 		"callq *%[f]\n"
 		: "+a"(dst), "+d"(src)
-		: "c"(dstEnd), [f]"b"(fn)
-		: "%rsi", "%rdi", "%r8", "%r9", "%r10", "%r11", "%r12", "%r13", "%r14", "%r15", "%xmm0", "%xmm1", "%xmm2", "%xmm3", "%xmm4", "%xmm5", "%xmm6", "%xmm7", "%xmm8", "%xmm9", "%xmm10", "%xmm11", "%xmm12", "%xmm13", "%xmm14", "%xmm15", "memory"
+		: "c"(dstEnd), [f]"r"(fn)
+		: "%rbx", "%rsi", "%rdi", "%r8", "%r9", "%r10", "%r11", "%r14", "%r15", "%xmm0", "%xmm1", "%xmm2", "%xmm3", "%xmm4", "%xmm5", "%xmm6", "%xmm7", "%xmm8", "%xmm9", "%xmm10", "%xmm11", "%xmm12", "%xmm13", "%xmm14", "%xmm15", "memory"
 	);
 }
 # endif

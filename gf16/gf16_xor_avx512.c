@@ -806,7 +806,7 @@ void gf16_xor_jit_muladd_avx512(const void *HEDLEY_RESTRICT scratch, void *HEDLE
 
 
 
-//#define XOR512_MULTI_REGIONS 11 // other used: dest (0), end point (1), SP (4), one source (3), BX (2) is wasted; GCC doesn't like overriding BP (5) so skip that too
+//#define XOR512_MULTI_REGIONS 10 // other used: dest (0), end point (1), SP (4), one source (3), R12/R13 is avoided due to different encoding length; GCC doesn't like overriding BP (5) so skip that too
 #define XOR512_MULTI_REGIONS 2
 
 unsigned gf16_xor_jit_muladd_multi_avx512(const void *HEDLEY_RESTRICT scratch, unsigned regions, size_t offset, void *HEDLEY_RESTRICT dst, const void* *HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch) {
@@ -859,6 +859,8 @@ unsigned gf16_xor_jit_muladd_multi_avx512(const void *HEDLEY_RESTRICT scratch, u
 		for(unsigned in = 1; in < numRegions; in++) {
 			// load + run
 			int reg = in+5; // avoid overwriting SP (==4) and BP (==5)
+			if(reg == 12) reg = BX; // substitute problematic R12 with unused RBX
+			if(reg >= 13) reg++; // R13 has a required offset, which changes length, so skip it
 			jitptr += _jit_add_i(jitptr, reg, 1024);
 			for(int i=1; i<16; i++) {
 				jitptr += _jit_vmovdqa32_load(jitptr, 16+i, reg, i<<6);

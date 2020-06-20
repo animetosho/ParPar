@@ -100,7 +100,6 @@ gf16_xor256_jit_multi_stub PROC
 	push rdi
 	push rbx
 	push r12
-	push r13
 	push r14
 	push r15
 	push rbp
@@ -125,7 +124,7 @@ gf16_xor256_jit_multi_stub PROC
 	; move registers to what we need them as
 	mov rax, rcx ; dst
 	mov rcx, rdx ; dstEnd
-	mov rbx, r9  ; fn
+	mov r12, r9  ; fn
 	
 	; load src pointers into registers
 	mov rdx, [r8]
@@ -134,14 +133,13 @@ gf16_xor256_jit_multi_stub PROC
 	mov r9 , [r8+32]
 	mov r10, [r8+40]
 	mov r11, [r8+48]
-	mov r12, [r8+56]
-	mov r13, [r8+64]
-	mov r14, [r8+72]
-	mov r15, [r8+80]
+	mov rbx, [r8+56]
+	mov r14, [r8+64]
+	mov r15, [r8+72]
 	mov r8 , [r8+24]
 	
 	; run JIT code
-	call rbx
+	call r12
 	
 	; restore XMM registers
 	vmovaps xmm6, [rbp+16*1]
@@ -158,7 +156,6 @@ gf16_xor256_jit_multi_stub PROC
 	pop rbp
 	pop r15
 	pop r14
-	pop r13
 	pop r12
 	pop rbx
 	pop rdi
