@@ -186,7 +186,7 @@ static inline void xor_write_jit_avx(const struct gf16_xor_scratch *HEDLEY_RESTR
 	
 	uint8_t* jitptr;
 #ifdef CPU_SLOW_SMC
-	ALIGN_TO(32, uint8_t jitTemp[XORDEP_JIT_SIZE]);
+	ALIGN_TO(32, uint8_t jitTemp[XORDEP_JIT_CODE_SIZE]);
 	uint8_t* jitdst;
 #endif
 	

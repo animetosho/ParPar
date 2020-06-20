@@ -72,7 +72,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_xor512_jit_stub(intptr_t src, intptr_t dEn
 static HEDLEY_ALWAYS_INLINE void gf16_xor512_jit_multi_stub(
 	intptr_t dst, intptr_t dstEnd, const void** src, void* fn
 ) {
-	WRITE_JIT(12*1024)
+	WRITE_JIT(8192)
 	asm volatile(
 		"movq 8(%%rdx), %%rsi\n"
 		"movq 16(%%rdx), %%rdi\n"

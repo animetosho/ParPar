@@ -523,8 +523,10 @@ void Galois16Mul::mutScratch_free(void* mutScratch) const {
 	switch(_info.id) {
 		case GF16_XOR_JIT_SSE2:
 		case GF16_XOR_JIT_AVX2:
-		case GF16_XOR_JIT_AVX512:
 			gf16_xor_jit_uninit(mutScratch);
+		break;
+		case GF16_XOR_JIT_AVX512:
+			gf16_xor_jit_uninit_avx512(mutScratch);
 		break;
 		default: break;
 	}

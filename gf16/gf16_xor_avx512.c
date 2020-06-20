@@ -368,7 +368,7 @@ static inline void xor_write_jit_avx512(const struct gf16_xor_scratch *HEDLEY_RE
 	
 	uint8_t* jitptr;
 #ifdef CPU_SLOW_SMC
-	ALIGN_TO(64, uint8_t jitTemp[XORDEP_JIT_SIZE]);
+	ALIGN_TO(64, uint8_t jitTemp[XORDEP_JIT_CODE_SIZE]);
 	uint8_t* jitdst;
 #endif
 	
@@ -806,8 +806,8 @@ void gf16_xor_jit_muladd_avx512(const void *HEDLEY_RESTRICT scratch, void *HEDLE
 
 
 
-//#define XOR512_MULTI_REGIONS 10 // other used: dest (0), end point (1), SP (4), one source (3), R12/R13 is avoided due to different encoding length; GCC doesn't like overriding BP (5) so skip that too
-#define XOR512_MULTI_REGIONS 3
+#define XOR512_MULTI_REGIONS 6 // we support up to 10, but 6 seems more optimal (cache associativity reasons?)
+// other registers used (hence 10 supported): dest (0), end point (1), SP (4), one source (3), R12/R13 is avoided due to different encoding length; GCC doesn't like overriding BP (5) so skip that too
 
 unsigned gf16_xor_jit_muladd_multi_avx512(const void *HEDLEY_RESTRICT scratch, unsigned regions, size_t offset, void *HEDLEY_RESTRICT dst, const void* *HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch) {
 #if defined(__AVX512BW__) && defined(__AVX512VL__) && defined(PLATFORM_AMD64)
@@ -1099,11 +1099,19 @@ void* gf16_xor_jit_init_avx512(int polynomial) {
 
 void* gf16_xor_jit_init_mut_avx512() {
 #if defined(__AVX512BW__) && defined(__AVX512VL__) && defined(PLATFORM_AMD64)
-	uint8_t *jitCode = jit_alloc(XORDEP_JIT_SIZE);
+	uint8_t *jitCode = jit_alloc(XORDEP_JIT_SIZE*2);
 	if(!jitCode) return NULL;
 	xor_write_init_jit(jitCode);
 	return jitCode;
 #else
 	return NULL;
+#endif
+}
+
+void gf16_xor_jit_uninit_avx512(void* scratch) {
+#ifdef PLATFORM_X86
+	jit_free(scratch, XORDEP_JIT_SIZE*2);
+#else
+	UNUSED(scratch);
 #endif
 }

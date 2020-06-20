@@ -19,6 +19,7 @@ FUNCS(avx512);
 unsigned gf16_xor_jit_muladd_multi_avx512(const void *HEDLEY_RESTRICT scratch, unsigned regions, size_t offset, void *HEDLEY_RESTRICT dst, const void* *HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch);
 
 void gf16_xor_jit_uninit(void* scratch);
+void gf16_xor_jit_uninit_avx512(void* scratch);
 
 // non-JIT version
 void* gf16_xor_init_sse2(int polynomial);
