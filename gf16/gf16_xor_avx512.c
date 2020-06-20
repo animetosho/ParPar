@@ -307,7 +307,7 @@ static inline void xor_write_jit_avx512(const struct gf16_xor_scratch *HEDLEY_RE
 #ifdef CPU_SLOW_SMC
 	/* memcpy to destination */
 	/* AVX does result in fewer writes, but testing on Haswell seems to indicate minimal benefit over SSE2 */
-	for(i=0; i<(uint_fast32_t)(jitptr+10-jitTemp); i+=64) {
+	for(uint_fast32_t i=0; i<(uint_fast32_t)(jitptr+10-jitTemp); i+=64) {
 		__m256i ta = _mm256_load_si256((__m256i*)(jitTemp + i));
 		__m256i tb = _mm256_load_si256((__m256i*)(jitTemp + i + 32));
 		_mm256_store_si256((__m256i*)(jitdst + i), ta);
@@ -323,7 +323,7 @@ void gf16_xor_jit_mul_avx512(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_R
 	const struct gf16_xor_scratch *HEDLEY_RESTRICT info = (const struct gf16_xor_scratch *HEDLEY_RESTRICT)scratch;
 	
 #ifdef CPU_SLOW_SMC_CLR
-	memset(info->jitCode, 0, 1536);
+	memset((char*)mutScratch + info->codeStart, 0, XORDEP_JIT_SIZE-512);
 #endif
 	
 	xor_write_jit_avx512(info, mutScratch, coefficient, 0);
@@ -345,7 +345,7 @@ void gf16_xor_jit_muladd_avx512(const void *HEDLEY_RESTRICT scratch, void *HEDLE
 	const struct gf16_xor_scratch *HEDLEY_RESTRICT info = (const struct gf16_xor_scratch *HEDLEY_RESTRICT)scratch;
 	
 #ifdef CPU_SLOW_SMC_CLR
-	memset(info->jitCode, 0, 1536);
+	memset((char*)mutScratch + info->codeStart, 0, XORDEP_JIT_SIZE-512);
 #endif
 	
 	xor_write_jit_avx512(info, mutScratch, coefficient, 1);
