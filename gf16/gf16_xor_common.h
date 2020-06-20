@@ -43,14 +43,9 @@ static HEDLEY_ALWAYS_INLINE void gf16_xor_jit_stub(intptr_t src, intptr_t dEnd, 
 	// disassemble with `objdump -b binary -D -m i386:x86-64 -M intel code.bin|less`
 #endif
 	asm volatile(
-		"leaq -8(%%rsp), %%r10\n"
-		"movq %%r10, %%rsi\n"
-		/* we can probably assume that rsp mod 16 == 8, but will always realign for extra safety(tm) */
-		"andq $0xF, %%r10\n"
-		"subq %%r10, %%rsi\n"
 		"callq *%[f]\n"
 		: "+a"(src), "+d"(dest) : "c"(dEnd), [f]"r"(fn)
-		: "%rsi", "%r10", "%xmm0", "%xmm1", "%xmm2", "%xmm3", "%xmm4", "%xmm5", "%xmm6", "%xmm7", "%xmm8", "%xmm9", "%xmm10", "%xmm11", "%xmm12", "%xmm13", "%xmm14", "%xmm15", "memory"
+		: "%xmm0", "%xmm1", "%xmm2", "%xmm3", "%xmm4", "%xmm5", "%xmm6", "%xmm7", "%xmm8", "%xmm9", "%xmm10", "%xmm11", "%xmm12", "%xmm13", "%xmm14", "%xmm15", "memory"
 		// TODO: for AVX512, need to indicate zmm16-31 as clobbered
 	);
 }
@@ -85,24 +80,18 @@ static HEDLEY_ALWAYS_INLINE void gf16_xor_jit_multi_stub(
 # ifdef _MSC_VER
 static HEDLEY_ALWAYS_INLINE void gf16_xor_jit_stub(intptr_t src, intptr_t dEnd, intptr_t dest, void* fn) {
 	__asm {
-		push esi
-		lea esi, [esp-4]
-		and esi, 0FFFFFFF0h
 		mov eax, src
 		mov ecx, dEnd
 		mov edx, dest
 		call fn
-		pop esi
 	}
 }
 # else
 static HEDLEY_ALWAYS_INLINE void gf16_xor_jit_stub(intptr_t src, intptr_t dEnd, intptr_t dest, void* fn) {
 	asm volatile(
-		"leal -4(%%esp), %%esi\n"
-		"andl $0xFFFFFFF0, %%esi\n"
 		"calll *%[f]\n"
 		: "+a"(src), "+d"(dest) : "c"(dEnd), [f]"r"(fn)
-		: "%esi", "%xmm0", "%xmm1", "%xmm2", "%xmm3", "%xmm4", "%xmm5", "%xmm6", "%xmm7", "memory"
+		: "%xmm0", "%xmm1", "%xmm2", "%xmm3", "%xmm4", "%xmm5", "%xmm6", "%xmm7", "memory"
 	);
 }
 # endif
