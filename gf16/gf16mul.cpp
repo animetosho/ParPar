@@ -408,6 +408,7 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 					scratch = gf16_xor_jit_init_avx512(GF16_POLYNOMIAL);
 					_mul = &gf16_xor_jit_mul_avx512;
 					_mul_add = &gf16_xor_jit_muladd_avx512;
+					_mul_add_multi = &gf16_xor_jit_muladd_multi_avx512;
 					prepare = &gf16_xor_prepare_avx512;
 					finish = &gf16_xor_finish_avx512;
 					_info.alignment = 64;
@@ -522,8 +523,10 @@ void Galois16Mul::mutScratch_free(void* mutScratch) const {
 	switch(_info.id) {
 		case GF16_XOR_JIT_SSE2:
 		case GF16_XOR_JIT_AVX2:
-		case GF16_XOR_JIT_AVX512:
 			gf16_xor_jit_uninit(mutScratch);
+		break;
+		case GF16_XOR_JIT_AVX512:
+			gf16_xor_jit_uninit_avx512(mutScratch);
 		break;
 		default: break;
 	}
