@@ -101,10 +101,10 @@ public:
 	~Galois16Mul();
 	
 #if __cplusplus >= 201100
-	Galois16Mul(Galois16Mul&& other) {
+	Galois16Mul(Galois16Mul&& other) noexcept {
 		move(other);
 	}
-	Galois16Mul& operator=(Galois16Mul&& other) {
+	Galois16Mul& operator=(Galois16Mul&& other) noexcept {
 		move(other);
 		return *this;
 	}

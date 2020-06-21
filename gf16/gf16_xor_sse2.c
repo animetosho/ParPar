@@ -687,9 +687,9 @@ static inline void xor_write_jit_sse(const struct gf16_xor_scratch *HEDLEY_RESTR
 	jitptr += 4;
 #endif
 #ifdef CPU_SLOW_SMC
-	*(int32_t*)jitptr = (jitTemp - (jitdst - (uint8_t*)mutScratch)) - jitptr -4;
+	*(int32_t*)jitptr = (int32_t)((jitTemp - (jitdst - (uint8_t*)mutScratch)) - jitptr -4);
 #else
-	*(int32_t*)jitptr = (uint8_t*)mutScratch - jitptr -4;
+	*(int32_t*)jitptr = (int32_t)((uint8_t*)mutScratch - jitptr -4);
 #endif
 	jitptr[4] = 0xC3; /* ret */
 	
@@ -830,7 +830,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_xor_write_deptable(uintptr_t *HEDLEY_RESTR
 			STORE_TBL(storeu, cnt+6, _mm_unpackhi_epi32(tmp2, _mm_setzero_si128()));
 			#undef STORE_TBL
 		} else { // 32-bit
-			__m128i addr = _mm_set1_epi32(dstSrcOffset);
+			__m128i addr = _mm_set1_epi32((int)dstSrcOffset);
 			idx = _mm_unpacklo_epi8(idx, _mm_setzero_si128());
 			_mm_store_si128((__m128i*)(deptable + bit*16 +0), _mm_add_epi32(
 				_mm_unpacklo_epi16(idx, _mm_setzero_si128()), addr

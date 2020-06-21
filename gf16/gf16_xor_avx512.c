@@ -559,9 +559,9 @@ static inline void xor_write_jit_avx512(const struct gf16_xor_scratch *HEDLEY_RE
 	/* cmp/jcc */
 	*(uint64_t*)(jitptr) = 0x800FC03948 | (AX <<16) | (CX <<19) | ((uint64_t)JL <<32);
 #ifdef CPU_SLOW_SMC
-	*(int32_t*)(jitptr +5) = (jitTemp - (jitdst - (uint8_t*)mutScratch)) - jitptr -9;
+	*(int32_t*)(jitptr +5) = (int32_t)((jitTemp - (jitdst - (uint8_t*)mutScratch)) - jitptr -9);
 #else
-	*(int32_t*)(jitptr +5) = (uint8_t*)mutScratch - jitptr -9;
+	*(int32_t*)(jitptr +5) = (int32_t)((uint8_t*)mutScratch - jitptr -9);
 #endif
 	jitptr[9] = 0xC3; /* ret */
 	
@@ -870,9 +870,9 @@ unsigned gf16_xor_jit_muladd_multi_avx512(const void *HEDLEY_RESTRICT scratch, u
 		/* cmp/jcc */
 		*(uint64_t*)(jitptr) = 0x800FC03948 | (AX <<16) | (CX <<19) | ((uint64_t)JL <<32);
 #ifdef CPU_SLOW_SMC
-		*(int32_t*)(jitptr +5) = (jitTemp - (jitdst - (uint8_t*)mutScratch)) - jitptr -9;
+		*(int32_t*)(jitptr +5) = (int32_t)((jitTemp - (jitdst - (uint8_t*)mutScratch)) - jitptr -9);
 #else
-		*(int32_t*)(jitptr +5) = (uint8_t*)mutScratch - jitptr -9;
+		*(int32_t*)(jitptr +5) = (int32_t)((uint8_t*)mutScratch - jitptr -9);
 #endif
 		jitptr[9] = 0xC3; /* ret */
 		
