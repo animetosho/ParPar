@@ -93,13 +93,7 @@
 # define ALIGN_TO(a, v) v __attribute__((aligned(a)))
 #endif
 
-#if defined(__cplusplus) && __cplusplus >= 201100 && !(defined(_MSC_VER) && (defined(__clang__) || defined(PLATFORM_ARM))) && !defined(__APPLE__)
-	// C++11 method
-	// len needs to be a multiple of alignment, although it sometimes works if it isn't...
-	#include <cstdlib>
-	#define ALIGN_ALLOC(buf, len, align) *(void**)&(buf) = aligned_alloc(align, ((len) + (align)-1) & ~((align)-1))
-	#define ALIGN_FREE free
-#elif defined(_MSC_VER)
+#if defined(_MSC_VER)
 	#define ALIGN_ALLOC(buf, len, align) *(void**)&(buf) = _aligned_malloc((len), align)
 	#define ALIGN_FREE _aligned_free
 #else
