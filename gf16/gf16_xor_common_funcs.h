@@ -21,18 +21,8 @@ static HEDLEY_ALWAYS_INLINE void gf16_xor_prep_write(_mword ta, _mword tb, umask
 	/* split to high/low parts */
 #if MWORD_SIZE == 64
 	// arrange to hlhl...
-	_mword tmp1 = _mm512_shuffle_epi8(ta, _mm512_set_epi32(
-		0x0f0d0b09, 0x07050301, 0x0e0c0a08, 0x06040200,
-		0x0f0d0b09, 0x07050301, 0x0e0c0a08, 0x06040200,
-		0x0f0d0b09, 0x07050301, 0x0e0c0a08, 0x06040200,
-		0x0f0d0b09, 0x07050301, 0x0e0c0a08, 0x06040200
-	));
-	_mword tmp2 = _mm512_shuffle_epi8(tb, _mm512_set_epi32(
-		0x0f0d0b09, 0x07050301, 0x0e0c0a08, 0x06040200,
-		0x0f0d0b09, 0x07050301, 0x0e0c0a08, 0x06040200,
-		0x0f0d0b09, 0x07050301, 0x0e0c0a08, 0x06040200,
-		0x0f0d0b09, 0x07050301, 0x0e0c0a08, 0x06040200
-	));
+	_mword tmp1 = _mm512_shuffle_epi8(ta, _mm512_set4_epi32(0x0f0d0b09, 0x07050301, 0x0e0c0a08, 0x06040200));
+	_mword tmp2 = _mm512_shuffle_epi8(tb, _mm512_set4_epi32(0x0f0d0b09, 0x07050301, 0x0e0c0a08, 0x06040200));
 	_mword th = _mm512_permutex2var_epi64(tmp1, _mm512_set_epi64(
 		15, 13, 11, 9, 7, 5, 3, 1
 	), tmp2);

@@ -296,12 +296,7 @@ void* gf16_affine_init_avx512(int polynomial) {
 
 void gf16_affine2x_prepare_avx512(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen) {
 #if defined(__GFNI__) && defined(__AVX512BW__) && defined(__AVX512VL__)
-	__m512i shuf = _mm512_set_epi32(
-		0x0f0d0b09, 0x07050301, 0x0e0c0a08, 0x06040200,
-		0x0f0d0b09, 0x07050301, 0x0e0c0a08, 0x06040200,
-		0x0f0d0b09, 0x07050301, 0x0e0c0a08, 0x06040200,
-		0x0f0d0b09, 0x07050301, 0x0e0c0a08, 0x06040200
-	);
+	__m512i shuf = _mm512_set4_epi32(0x0f0d0b09, 0x07050301, 0x0e0c0a08, 0x06040200);
 	
 	size_t len = srcLen & ~(sizeof(__m512i) -1);
 	uint8_t* _src = (uint8_t*)src + len;
@@ -331,12 +326,7 @@ void gf16_affine2x_finish_avx512(void *HEDLEY_RESTRICT dst, size_t len) {
 	uint8_t* _dst = (uint8_t*)dst + len;
 	for(long ptr = -(long)len; ptr; ptr += sizeof(__m512i)) {
 		__m512i data = _mm512_load_si512((__m512i*)(_dst+ptr));
-		data = _mm512_shuffle_epi8(data, _mm512_set_epi32(
-			0x0f070e06, 0x0d050c04, 0x0b030a02, 0x09010800,
-			0x0f070e06, 0x0d050c04, 0x0b030a02, 0x09010800,
-			0x0f070e06, 0x0d050c04, 0x0b030a02, 0x09010800,
-			0x0f070e06, 0x0d050c04, 0x0b030a02, 0x09010800
-		));
+		data = _mm512_shuffle_epi8(data, _mm512_set4_epi32(0x0f070e06, 0x0d050c04, 0x0b030a02, 0x09010800));
 		_mm512_store_si512((__m512i*)(_dst+ptr), data);
 	}
 	_mm256_zeroupper();

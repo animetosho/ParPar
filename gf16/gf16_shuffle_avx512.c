@@ -121,12 +121,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle_calc4x_table(const uint16_t* coeff
 		),
 		0x96
 	);
-	__m512i shuf = _mm512_set_epi32(
-		0x0f0d0b09, 0x07050301, 0x0e0c0a08, 0x06040200,
-		0x0f0d0b09, 0x07050301, 0x0e0c0a08, 0x06040200,
-		0x0f0d0b09, 0x07050301, 0x0e0c0a08, 0x06040200,
-		0x0f0d0b09, 0x07050301, 0x0e0c0a08, 0x06040200
-	);
+	__m512i shuf = _mm512_set4_epi32(0x0f0d0b09, 0x07050301, 0x0e0c0a08, 0x06040200);
 	prod0 = _mm512_shuffle_epi8(prod0, shuf);
 	prod8 = _mm512_shuffle_epi8(prod8, shuf);
 	*prodLo0 = _mm512_unpacklo_epi64(prod0, prod8);
