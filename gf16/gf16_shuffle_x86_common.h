@@ -4,6 +4,22 @@
 #include "gf16_global.h"
 #include "platform.h"
 
+#define GF16_MULTBY_TWO_X2(p) ((((p) << 1) & 0xffffffff) ^ ((GF16_POLYNOMIAL ^ ((GF16_POLYNOMIAL&0xffff) << 16)) & -((p) >> 31)))
+#ifdef __SSSE3__
+static HEDLEY_ALWAYS_INLINE void initial_mul_vector(uint16_t val, __m128i* prod, __m128i* prod4) {
+	uint32_t val1 = val << 16;
+	uint32_t val2 = val1 | val;
+	val2 = GF16_MULTBY_TWO_X2(val2);
+	__m128i tmp = _mm_cvtsi32_si128(val1);
+#if defined(_AVAILABLE_AVX) || MWORD_SIZE >= 32
+	*prod = _mm_insert_epi32(tmp, val2 ^ val1, 1);
+#else
+	*prod = _mm_unpacklo_epi32(tmp, _mm_cvtsi32_si128(val2 ^ val1));
+#endif
+	*prod4 = _mm_set1_epi32(GF16_MULTBY_TWO_X2(val2));
+}
+#endif
+
 #ifdef _AVAILABLE
 
 
@@ -37,21 +53,6 @@ static inline _mword partial_load(const void* ptr, size_t bytes) {
 	result = _MMI(and)(result, _MMI(loadu)((_mword*)( load_mask + 32 - bytes )));
 	return result;
 #endif
-}
-
-#define GF16_MULTBY_TWO_X2(p) ((((p) << 1) & 0xffffffff) ^ ((GF16_POLYNOMIAL ^ ((GF16_POLYNOMIAL&0xffff) << 16)) & -((p) >> 31)))
-
-static HEDLEY_ALWAYS_INLINE void initial_mul_vector(uint16_t val, __m128i* prod, __m128i* prod4) {
-	uint32_t val1 = val << 16;
-	uint32_t val2 = val1 | val;
-	val2 = GF16_MULTBY_TWO_X2(val2);
-	__m128i tmp = _mm_cvtsi32_si128(val1);
-#if MWORD_SIZE >= 32 /* TODO: enable this in AVX as well */
-	*prod = _mm_insert_epi32(tmp, val2 ^ val1, 1);
-#else
-	*prod = _mm_unpacklo_epi32(tmp, _mm_cvtsi32_si128(val2 ^ val1));
-#endif
-	*prod4 = _mm_set1_epi32(GF16_MULTBY_TWO_X2(val2));
 }
 
 static HEDLEY_ALWAYS_INLINE void shuf0_vector(uint16_t val, __m128i* prod0, __m128i* prod8) {
@@ -174,4 +175,24 @@ static HEDLEY_ALWAYS_INLINE void mul16_vec128(__m128i mulLo, __m128i mulHi, __m1
 
 
 #endif // defined(_AVAILABLE)
+
+#ifdef __AVX512BW__
+static HEDLEY_ALWAYS_INLINE void mul16_vec4x(__m512i mulLo, __m512i mulHi, __m512i srcLo, __m512i srcHi, __m512i* dstLo, __m512i *dstHi) {
+	__m512i ti = _mm512_and_si512(_mm512_srli_epi16(srcHi, 4), _mm512_set1_epi8(0xf));
+	__m512i th = _mm512_ternarylogic_epi32(
+		_mm512_srli_epi16(srcLo, 4),
+		_mm512_set1_epi8(0xf),
+		_mm512_slli_epi16(srcHi, 4),
+		0xE2
+	);
+	*dstLo = _mm512_ternarylogic_epi32(
+		_mm512_shuffle_epi8(mulLo, ti),
+		_mm512_set1_epi8(0xf),
+		_mm512_slli_epi16(srcLo, 4),
+		0xD2
+	);
+	*dstHi = _mm512_xor_si512(th, _mm512_shuffle_epi8(mulHi, ti));
+}
+#endif
+
 #endif // defined(_GF16_SHUFFLE_X86_COMMON_)

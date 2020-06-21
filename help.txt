@@ -200,9 +200,10 @@ Performance Options:
                                  shuffle-avx: AVX variant of above
                                  shuffle-avx2: AVX2 variant of above
                                  shuffle-avx512: AVX512BW variant of above
+                                 shuffle-vbmi: AVX512VBMI variant of above
+                                 shuffle-neon: NEON variant of above
                                  shuffle2x-avx2: half width variant of shuffle-avx2
                                  shuffle2x-avx512: half width variant of shuffle-avx512
-                                 shuffle-neon: NEON variant of above
                                  affine-sse: split 2x 8-bit vector XOR dependencies (GFNI)
                                  affine-avx512: AVX512BW + GFNI variant of above
                                  affine2x-sse: half width variant of affine-sse

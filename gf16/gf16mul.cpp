@@ -34,7 +34,7 @@ extern "C" {
 # endif
 # include "x86_jit.h"
 struct CpuCap {
-	bool hasSSE2, hasSSSE3, hasAVX, hasAVX2, hasAVX512VLBW, hasGFNI;
+	bool hasSSE2, hasSSSE3, hasAVX, hasAVX2, hasAVX512VLBW, hasAVX512VBMI, hasGFNI;
 	size_t propPrefShuffleThresh;
 	bool propAVX128EU, propHT;
 	bool canMemWX;
@@ -44,6 +44,7 @@ struct CpuCap {
 	  hasAVX(true),
 	  hasAVX2(true),
 	  hasAVX512VLBW(true),
+	  hasAVX512VBMI(true),
 	  hasGFNI(true),
 	  propPrefShuffleThresh(0),
 	  propAVX128EU(false),
@@ -88,7 +89,7 @@ struct CpuCap {
 			|| (family == 6 && model == 0xf) // Centaur/Zhaoxin; overlaps with Intel Core 2, but they don't support AVX
 		);
 		
-		hasAVX = false; hasAVX2 = false; hasAVX512VLBW = false; hasGFNI = false;
+		hasAVX = false; hasAVX2 = false; hasAVX512VLBW = false; hasAVX512VBMI = false; hasGFNI = false;
 #if !defined(_MSC_VER) || _MSC_VER >= 1600
 		_cpuidX(cpuInfoX, 7, 0);
 		if(cpuInfo[2] & 0x8000000) { // has OSXSAVE
@@ -96,8 +97,11 @@ struct CpuCap {
 			if((xcr & 6) == 6) { // AVX enabled
 				hasAVX = cpuInfo[2] & 0x800000;
 				hasAVX2 = cpuInfoX[1] & 0x20;
-				// checks AVX512BW + AVX512VL + AVX512F
-				hasAVX512VLBW = ((cpuInfoX[1] & 0xC0010000) == 0xC0010000) && ((xcr & 0xE0) == 0xE0);
+				if((xcr & 0xE0) == 0xE0) {
+					// checks AVX512BW + AVX512VL + AVX512F
+					hasAVX512VLBW = ((cpuInfoX[1] & 0xC0010000) == 0xC0010000);
+					hasAVX512VBMI = ((cpuInfoX[2] & 2) == 2 && hasAVX512VLBW);
+				}
 			}
 		}
 		hasGFNI = (cpuInfoX[2] & 0x100) == 0x100;
@@ -237,7 +241,19 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 			}
 			_info.stride = _info.alignment*2;
 		break;
-		
+		case GF16_SHUFFLE_VBMI:
+			if(!gf16_shuffle_available_vbmi) {
+				setupMethod(GF16_AUTO);
+				return;
+			}
+			scratch = gf16_shuffle_init_vbmi(GF16_POLYNOMIAL);
+			_mul = &gf16_shuffle_mul_vbmi;
+			_mul_add = &gf16_shuffle_muladd_vbmi;
+			prepare = &gf16_shuffle_prepare_avx512;
+			finish = &gf16_shuffle_finish_avx512;
+			_info.alignment = 64;
+			_info.stride = 128;
+		break;
 		case GF16_SHUFFLE2X_AVX512:
 			scratch = gf16_shuffle_init_x86(GF16_POLYNOMIAL);
 			if(!gf16_shuffle_available_avx512) {
@@ -539,6 +555,8 @@ Galois16Methods Galois16Mul::default_method(size_t regionSizeHint, unsigned /*ou
 	if(caps.hasAVX512VLBW) {
 		if(gf16_affine_available_avx512 && caps.hasGFNI)
 			return GF16_AFFINE_AVX512;
+		if(gf16_shuffle_available_vbmi)
+			return GF16_SHUFFLE_VBMI;
 		if(gf16_shuffle_available_avx512)
 			return GF16_SHUFFLE_AVX512;
 	}
@@ -599,6 +617,9 @@ std::vector<Galois16Methods> Galois16Mul::availableMethods(bool checkCpuid) {
 	if(gf16_shuffle_available_avx512 && caps.hasAVX512VLBW) {
 		ret.push_back(GF16_SHUFFLE_AVX512);
 		ret.push_back(GF16_SHUFFLE2X_AVX512);
+	}
+	if(gf16_shuffle_available_vbmi && caps.hasAVX512VBMI) {
+		ret.push_back(GF16_SHUFFLE_VBMI);
 	}
 	
 	if(caps.hasGFNI) {

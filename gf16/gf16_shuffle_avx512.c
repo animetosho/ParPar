@@ -52,24 +52,6 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle_calc2x_table(const uint16_t* coeff
 	mul16_vec2x(polyl, polyh, *prodLo2, *prodHi2, prodLo3, prodHi3);
 }
 
-
-static HEDLEY_ALWAYS_INLINE void mul16_vec4x(__m512i mulLo, __m512i mulHi, __m512i srcLo, __m512i srcHi, __m512i* dstLo, __m512i *dstHi) {
-	__m512i ti = _mm512_and_si512(_mm512_srli_epi16(srcHi, 4), _mm512_set1_epi8(0xf));
-	__m512i th = _mm512_ternarylogic_epi32(
-		_mm512_srli_epi16(srcLo, 4),
-		_mm512_set1_epi8(0xf),
-		_mm512_slli_epi16(srcHi, 4),
-		0xE2
-	);
-	*dstLo = _mm512_ternarylogic_epi32(
-		_mm512_shuffle_epi8(mulLo, ti),
-		_mm512_set1_epi8(0xf),
-		_mm512_slli_epi16(srcLo, 4),
-		0xD2
-	);
-	*dstHi = _mm512_xor_si512(th, _mm512_shuffle_epi8(mulHi, ti));
-}
-
 static HEDLEY_ALWAYS_INLINE void gf16_shuffle_calc4x_table(const uint16_t* coefficients, int do4, __m512i polyl, __m512i polyh, __m512i* prodLo0, __m512i* prodHi0, __m512i* prodLo1, __m512i* prodHi1, __m512i* prodLo2, __m512i* prodHi2, __m512i* prodLo3, __m512i* prodHi3) {
 	__m128i prod0A, mul4A;
 	__m128i prod0B, mul4B;

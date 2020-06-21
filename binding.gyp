@@ -34,7 +34,7 @@
   "targets": [
     {
       "target_name": "parpar_gf",
-      "dependencies": ["gf16", "gf16_sse2", "gf16_ssse3", "gf16_avx", "gf16_avx2", "gf16_avx512", "gf16_gfni", "gf16_gfni_avx512", "gf16_neon", "multi_md5"],
+      "dependencies": ["gf16", "gf16_sse2", "gf16_ssse3", "gf16_avx", "gf16_avx2", "gf16_avx512", "gf16_vbmi", "gf16_gfni", "gf16_gfni_avx512", "gf16_neon", "multi_md5"],
       "sources": ["src/gf.cc", "gf16/module.cc", "src/gyp_warnings.cc"],
       "include_dirs": ["gf16"],
       "conditions": [
@@ -254,6 +254,41 @@
         }],
         ['OS=="win" and target_arch=="x64"', {
           "sources": ["gf16/xor_jit_stub_masm64.asm"]
+        }]
+      ]
+    },
+    {
+      "target_name": "gf16_vbmi",
+      "type": "static_library",
+      "defines": ["NDEBUG"],
+      "sources": [
+        "gf16/gf16_shuffle_vbmi.c"
+      ],
+      "cflags": ["-Wno-unused-function"],
+      "xcode_settings": {
+        "OTHER_CFLAGS": ["-Wno-unused-function"],
+        "OTHER_CFLAGS!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"]
+      },
+      "cflags!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"],
+      "msvs_settings": {"VCCLCompilerTool": {"BufferSecurityCheck": "false"}},
+      "conditions": [
+        ['target_arch in "ia32 x64" and OS!="win"', {
+          "variables": {"supports_vbmi%": "<!(<!(echo ${CC_target:-${CC:-cc}}) -MM -E gf16/gf16_shuffle_vbmi.c -mavx512vl -mavx512vbmi 2>/dev/null || true)"},
+          "conditions": [
+            ['supports_vbmi!=""', {
+              "cflags": ["-mavx512vl", "-mavx512vbmi"],
+              "cxxflags": ["-mavx512vl", "-mavx512vbmi"],
+              "xcode_settings": {
+                "OTHER_CFLAGS": ["-mavx512vl", "-mavx512vbmi"],
+                "OTHER_CXXFLAGS": ["-mavx512vl", "-mavx512vbmi"],
+              }
+            }]
+          ]
+        }],
+        ['target_arch in "ia32 x64" and OS=="win"', {
+          "msvs_settings": {
+            "VCCLCompilerTool": {"AdditionalOptions": ["/arch:AVX512"], "EnableEnhancedInstructionSet": "0"}
+          }
         }]
       ]
     },

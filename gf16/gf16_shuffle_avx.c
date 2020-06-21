@@ -10,10 +10,12 @@
 
 #if defined(__AVX__)
 # define _AVAILABLE
+# define _AVAILABLE_AVX
 # include <tmmintrin.h>
 #endif
 #include "gf16_shuffle_x86.h"
 #undef _AVAILABLE
+#undef _AVAILABLE_AVX
 
 #undef MWORD_SIZE
 #undef _mword
