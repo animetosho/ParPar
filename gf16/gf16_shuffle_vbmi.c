@@ -269,6 +269,31 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle_mul_vbmi_round(__m512i ta, __m512i
 		0x96
 	);
 }
+static HEDLEY_ALWAYS_INLINE void gf16_shuffle_mul_vbmi_round_merge(__m512i ta, __m512i tb, __m512i lo0, __m512i hi0, __m512i lo1, __m512i hi1, __m512i lo2, __m512i hi2, __m512i* tpl, __m512i* tph, __m512i* tl, __m512i* th) {
+	// get straddled component (bottom 2 bits of ta, followed by top 2 bits from tb)
+	__m512i ti = _mm512_ternarylogic_epi32(
+		_mm512_srli_epi16(tb, 4),
+		ta,
+		_mm512_set1_epi8(3),
+		0xd8 // bit-select: ((b&c) | (a&~c))
+	);
+	ta = _mm512_srli_epi16(ta, 2);
+	
+	*tph = _mm512_ternarylogic_epi32(
+		*tph,
+		_mm512_permutexvar_epi8(tb, hi0),
+		_mm512_permutexvar_epi8(ti, hi1),
+		0x96 // double-XOR: (a^b^c)
+	);
+	*tpl = _mm512_ternarylogic_epi32(
+		*tpl,
+		_mm512_permutexvar_epi8(tb, lo0),
+		_mm512_permutexvar_epi8(ti, lo1),
+		0x96
+	);
+	*th = _mm512_permutexvar_epi8(ta, hi2);
+	*tl = _mm512_permutexvar_epi8(ta, lo2);
+}
 #else
 int gf16_shuffle_available_vbmi = 0;
 #endif
@@ -380,34 +405,62 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle_muladd_x_vbmi(
 			&tpl, &tph
 		);
 		
-		__m512i tpl2, tph2;
-		gf16_shuffle_mul_vbmi_round(
+		__m512i tl, th;
+		gf16_shuffle_mul_vbmi_round_merge(
 			_mm512_load_si512((__m512i*)(_src2+ptr)), _mm512_load_si512((__m512i*)(_src2+ptr) +1),
 			loB0, hiB0, loB1, hiB1, loB2, hiB2,
-			&tpl2, &tph2
+			&tpl, &tph, &tl, &th
 		);
 		
-		tph = _mm512_ternarylogic_epi32(tph, tph2, _mm512_load_si512((__m512i*)(_dst+ptr)), 0x96);
-		tpl = _mm512_ternarylogic_epi32(tpl, tpl2, _mm512_load_si512((__m512i*)(_dst+ptr) + 1), 0x96);
+		tph = _mm512_ternarylogic_epi32(tph, th, _mm512_load_si512((__m512i*)(_dst+ptr)), 0x96);
+		tpl = _mm512_ternarylogic_epi32(tpl, tl, _mm512_load_si512((__m512i*)(_dst+ptr) + 1), 0x96);
 		
 		if(srcCount > 2) {
-			gf16_shuffle_mul_vbmi_round(
+			gf16_shuffle_mul_vbmi_round_merge(
 				_mm512_load_si512((__m512i*)(_src3+ptr)), _mm512_load_si512((__m512i*)(_src3+ptr) +1),
 				loC0, hiC0, loC1, hiC1, loC2, hiC2,
-				&tpl2, &tph2
+				&tpl, &tph, &tl, &th
 			);
 			if(srcCount > 3) {
-				__m512i tpl3, tph3;
-				gf16_shuffle_mul_vbmi_round(
-					_mm512_load_si512((__m512i*)(_src4+ptr)), _mm512_load_si512((__m512i*)(_src4+ptr) +1),
-					loD0, hiD0, loD1, hiD1, loD2, hiD2,
-					&tpl3, &tph3
+				__m512i ta = _mm512_load_si512((__m512i*)(_src4+ptr));
+				__m512i tb = _mm512_load_si512((__m512i*)(_src4+ptr) +1);
+				
+				tph = _mm512_ternarylogic_epi32(
+					tph,
+					th,
+					_mm512_permutexvar_epi8(tb, hiD0),
+					0x96 // double-XOR: (a^b^c)
 				);
-				tpl = _mm512_ternarylogic_epi32(tpl, tpl2, tpl3, 0x96);
-				tph = _mm512_ternarylogic_epi32(tph, tph2, tph3, 0x96);
+				tpl = _mm512_ternarylogic_epi32(
+					tpl,
+					tl,
+					_mm512_permutexvar_epi8(tb, loD0),
+					0x96
+				);
+				
+				__m512i ti = _mm512_ternarylogic_epi32(
+					_mm512_srli_epi16(tb, 4),
+					ta,
+					_mm512_set1_epi8(3),
+					0xd8 // bit-select: ((b&c) | (a&~c))
+				);
+				ta = _mm512_srli_epi16(ta, 2);
+				
+				tpl = _mm512_ternarylogic_epi32(
+					tpl,
+					_mm512_permutexvar_epi8(ti, loD1),
+					_mm512_permutexvar_epi8(ta, loD2),
+					0x96
+				);
+				tph = _mm512_ternarylogic_epi32(
+					tph,
+					_mm512_permutexvar_epi8(ti, hiD1),
+					_mm512_permutexvar_epi8(ta, hiD2),
+					0x96
+				);
 			} else {
-				tpl = _mm512_xor_si512(tpl, tpl2);
-				tph = _mm512_xor_si512(tph, tph2);
+				tpl = _mm512_xor_si512(tpl, tl);
+				tph = _mm512_xor_si512(tph, th);
 			}
 		}
 		_mm512_store_si512((__m512i*)(_dst+ptr), tph);
