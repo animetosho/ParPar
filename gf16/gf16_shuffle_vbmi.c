@@ -431,8 +431,8 @@ unsigned gf16_shuffle_muladd_multi_vbmi(const void *HEDLEY_RESTRICT scratch, uns
 			len, coefficients + region
 		);
 		region += 4;
-	} while(region < regions-3);
-	if(region < regions-2) {
+	} while(region+3 < regions);
+	if(region+2 < regions) {
 		gf16_shuffle_muladd_x_vbmi(
 			mulLo, mulHi, _dst, 3,
 			(const uint8_t* HEDLEY_RESTRICT)src[region] + offset + len, (const uint8_t* HEDLEY_RESTRICT)src[region+1] + offset + len, (const uint8_t* HEDLEY_RESTRICT)src[region+2] + offset + len, NULL,
@@ -440,7 +440,7 @@ unsigned gf16_shuffle_muladd_multi_vbmi(const void *HEDLEY_RESTRICT scratch, uns
 		);
 		region += 3;
 	}
-	else if(region < regions-1) {
+	else if(region+1 < regions) {
 		gf16_shuffle_muladd_x_vbmi(
 			mulLo, mulHi, _dst, 2,
 			(const uint8_t* HEDLEY_RESTRICT)src[region] + offset + len, (const uint8_t* HEDLEY_RESTRICT)src[region+1] + offset + len, NULL, NULL,

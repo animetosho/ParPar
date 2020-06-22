@@ -246,8 +246,8 @@ unsigned gf16_shuffle_muladd_multi_avx512(const void *HEDLEY_RESTRICT scratch, u
 			len, coefficients + region
 		);
 		region += 3;
-	} while(region < regions-2);
-	if(region < regions-1) {
+	} while(region+2 < regions);
+	if(region+1 < regions) {
 		gf16_shuffle_muladd_x2_avx512(
 			_mm512_castsi512_si256(polyl), _mm512_castsi512_si256(polyh), _dst,
 			(const uint8_t* HEDLEY_RESTRICT)src[region] + offset + len, (const uint8_t* HEDLEY_RESTRICT)src[region+1] + offset + len,
@@ -560,7 +560,7 @@ unsigned gf16_shuffle2x_muladd_multi_avx512(const void *HEDLEY_RESTRICT scratch,
 			len, coefficients + region
 		);
 		region += 6;
-	} while(region < regions-5);
+	} while(region+5 < regions);
 	switch(regions - region) {
 		case 5:
 			gf16_shuffle2x_muladd_x5_avx512(

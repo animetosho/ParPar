@@ -231,7 +231,7 @@ unsigned gf16_affine_muladd_multi_avx512(const void *HEDLEY_RESTRICT scratch, un
 			len, coefficients + region
 		);
 		region += 6;
-	} while(region < regions-5);
+	} while(region+5 < regions);
 	switch(regions - region) {
 		case 5:
 			gf16_affine_muladd_x_avx512(
@@ -567,7 +567,7 @@ unsigned gf16_affine2x_muladd_multi_avx512(const void *HEDLEY_RESTRICT scratch, 
 			len, coefficients + region
 		);
 		region += 9;
-	} while(region < regions-8);
+	} while(region+8 < regions);
 	switch(regions - region) {
 		case 8:
 			gf16_affine2x_muladd_x_avx512(

@@ -268,8 +268,8 @@ unsigned gf16_shuffle_muladd_multi_neon(const void *HEDLEY_RESTRICT scratch, uns
 			len, coefficients + region
 		);
 		region += 3;
-	} while(region < regions-2);
-	if(region < regions-1) {
+	} while(region+2 < regions);
+	if(region+1 < regions) {
 		gf16_shuffle_muladd_x2_neon(
 			poly, _dst,
 			(const uint8_t* HEDLEY_RESTRICT)src[region] + offset + len, (const uint8_t* HEDLEY_RESTRICT)src[region+1] + offset + len,
