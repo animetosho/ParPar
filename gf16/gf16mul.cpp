@@ -249,6 +249,9 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 			scratch = gf16_shuffle_init_vbmi(GF16_POLYNOMIAL);
 			_mul = &gf16_shuffle_mul_vbmi;
 			_mul_add = &gf16_shuffle_muladd_vbmi;
+			#ifdef PLATFORM_AMD64
+			_mul_add_multi = &gf16_shuffle_muladd_multi_vbmi;
+			#endif
 			prepare = &gf16_shuffle_prepare_avx512;
 			finish = &gf16_shuffle_finish_avx512;
 			_info.alignment = 64;

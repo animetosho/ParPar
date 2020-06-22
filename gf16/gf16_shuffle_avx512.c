@@ -65,31 +65,11 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle_calc4x_table(const uint16_t* coeff
 	
 	__m512i prod0, mul4;
 	if(do4) {
-		prod0 = _mm512_inserti64x4(
-			_mm512_castsi256_si512(
-				_mm256_inserti128_si256(_mm256_castsi128_si256(prod0A), prod0B, 1)
-			),
-			_mm256_inserti128_si256(_mm256_castsi128_si256(prod0C), prod0D, 1),
-			1
-		);
-		mul4 = _mm512_inserti64x4(
-			_mm512_castsi256_si512(
-				_mm256_inserti128_si256(_mm256_castsi128_si256(mul4A), mul4B, 1)
-			),
-			_mm256_inserti128_si256(_mm256_castsi128_si256(mul4C), mul4D, 1),
-			1
-		);
+		prod0 = gf16_mm512_set_si128(prod0D, prod0C, prod0B, prod0A);
+		mul4 = gf16_mm512_set_si128(mul4D, mul4C, mul4B, mul4A);
 	} else {
-		prod0 = _mm512_inserti32x4(
-			_mm512_castsi256_si512(
-				_mm256_inserti128_si256(_mm256_castsi128_si256(prod0A), prod0B, 1)
-			), prod0C, 2
-		);
-		mul4 = _mm512_inserti32x4(
-			_mm512_castsi256_si512(
-				_mm256_inserti128_si256(_mm256_castsi128_si256(mul4A), mul4B, 1)
-			), mul4C, 2
-		);
+		prod0 = gf16_mm512_set_3si128(prod0C, prod0B, prod0A);
+		mul4 = gf16_mm512_set_3si128(mul4C, mul4B, mul4A);
 	}
 	prod0 = _mm512_unpacklo_epi64(prod0, _mm512_xor_si512(prod0, mul4));
 	
@@ -103,9 +83,8 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle_calc4x_table(const uint16_t* coeff
 		),
 		0x96
 	);
-	__m512i shuf = _mm512_set4_epi32(0x0f0d0b09, 0x07050301, 0x0e0c0a08, 0x06040200);
-	prod0 = _mm512_shuffle_epi8(prod0, shuf);
-	prod8 = _mm512_shuffle_epi8(prod8, shuf);
+	prod0 = separate_low_high512(prod0);
+	prod8 = separate_low_high512(prod8);
 	*prodLo0 = _mm512_unpacklo_epi64(prod0, prod8);
 	*prodHi0 = _mm512_unpackhi_epi64(prod0, prod8);
 	

@@ -19,6 +19,22 @@ static HEDLEY_ALWAYS_INLINE __m128i gf16_vec128_mul2(__m128i v) {
 		0x78 // (a^(b&c))
 	);
 }
+static HEDLEY_ALWAYS_INLINE __m256i gf16_vec256_mul2(__m256i v) {
+	return _mm256_ternarylogic_epi32(
+		_mm256_add_epi16(v, v),
+		_mm256_cmpgt_epi16(_mm256_setzero_si256(), v),
+		_mm256_set1_epi16(GF16_POLYNOMIAL & 0xffff),
+		0x78 // (a^(b&c))
+	);
+}
+static HEDLEY_ALWAYS_INLINE __m512i gf16_vec512_mul2(__m512i v) {
+	return _mm512_ternarylogic_epi32(
+		_mm512_add_epi16(v, v),
+		_mm512_srai_epi16(v, 15),
+		_mm512_set1_epi16(GF16_POLYNOMIAL & 0xffff),
+		0x78 // (a^(b&c))
+	);
+}
 static HEDLEY_ALWAYS_INLINE void mul64_vec(__m512i mulLo, __m512i mulHi, __m512i srcLo, __m512i srcHi, __m512i* dstLo, __m512i *dstHi) {
 	__m512i ti = _mm512_srli_epi16(srcHi, 2);
 	__m512i th = _mm512_ternarylogic_epi32(
@@ -79,6 +95,136 @@ static HEDLEY_ALWAYS_INLINE void generate_first_lookup(uint16_t val, __m512i* lo
 	
 	// extract low/high pairs
 	deinterleave_bytes(tmp4, tmp4b, lo0, hi0);
+}
+static HEDLEY_ALWAYS_INLINE void generate_first_lookup_x2(const uint16_t* coefficients, __m512i* lo0A, __m512i* hi0A, __m512i* lo0B, __m512i* hi0B) {
+	__m128i prod0A, mul4A;
+	__m128i prod0B, mul4B;
+	initial_mul_vector(coefficients[0], &prod0A, &mul4A);
+	initial_mul_vector(coefficients[1], &prod0B, &mul4B);
+	
+	__m256i prod0 = _mm256_inserti128_si256(
+		_mm256_castsi128_si256(prod0A),
+		prod0B,
+		1
+	);
+	__m256i mul4 = _mm256_inserti128_si256(
+		_mm256_castsi128_si256(mul4A),
+		mul4B,
+		1
+	);
+	
+	prod0 = _mm256_unpacklo_epi64(prod0, _mm256_xor_si256(prod0, mul4)); // products 0-7
+	
+	// 4*2 = 8
+	__m256i mul8 = gf16_vec256_mul2(mul4);
+	__m256i prod8 = _mm256_xor_si256(mul8, prod0); // products 8-15
+	
+	__m512i prod08 = _mm512_inserti64x4( // products 0-7,0-7,8-15,8-15
+		_mm512_castsi256_si512(prod0), prod8, 1
+	);
+	
+	// 8*2 = 16
+	__m256i mul16 = gf16_vec256_mul2(mul8);
+	__m512i mul16b = _mm512_inserti64x4(_mm512_castsi256_si512(mul16), mul16, 1);
+	
+	__m512i prod16 = _mm512_xor_si512(prod08, mul16b); // products 16-23,16-23,24-31,24-31
+	
+	// 16*2 = 32
+	__m512i mul32 = gf16_vec512_mul2(mul16b);
+	__m512i prod32 = _mm512_xor_si512(prod08, mul32); // products 32-39 (x2),40-47 (x2)
+	__m512i prod48 = _mm512_xor_si512(prod16, mul32); // products 48-55 (x2),56-63 (x2)
+	
+	// mix to get desired output
+	prod08 = separate_low_high512(prod08);
+	prod16 = separate_low_high512(prod16);
+	prod32 = separate_low_high512(prod32);
+	prod48 = separate_low_high512(prod48);
+	__m512i prod0Lo = _mm512_unpacklo_epi64(prod08, prod16); // 0-7,16-23 | 0-7,16-23 | 8-15,24-31 | 8-15,24-31
+	__m512i prod0Hi = _mm512_unpackhi_epi64(prod08, prod16);
+	__m512i prod32Lo = _mm512_unpacklo_epi64(prod32, prod48);
+	__m512i prod32Hi = _mm512_unpackhi_epi64(prod32, prod48);
+	
+	__m512i idx0 = _mm512_set_epi64(13,9,12,8,5,1,4,0);
+	__m512i idx1 = _mm512_set_epi64(15,11,14,10,7,3,6,2);
+	*lo0A = _mm512_permutex2var_epi64(prod0Lo, idx0, prod32Lo);
+	*hi0A = _mm512_permutex2var_epi64(prod0Hi, idx0, prod32Hi);
+	*lo0B = _mm512_permutex2var_epi64(prod0Lo, idx1, prod32Lo);
+	*hi0B = _mm512_permutex2var_epi64(prod0Hi, idx1, prod32Hi);
+}
+static HEDLEY_ALWAYS_INLINE void generate_first_lookup_x4(const uint16_t* coefficients, int do4, __m512i* lo0A, __m512i* hi0A, __m512i* lo0B, __m512i* hi0B, __m512i* lo0C, __m512i* hi0C, __m512i* lo0D, __m512i* hi0D) {
+	__m128i prod0A, mul4A;
+	__m128i prod0B, mul4B;
+	__m128i prod0C, mul4C;
+	__m128i prod0D, mul4D;
+	initial_mul_vector(coefficients[0], &prod0A, &mul4A);
+	initial_mul_vector(coefficients[1], &prod0B, &mul4B);
+	initial_mul_vector(coefficients[2], &prod0C, &mul4C);
+	if(do4)
+		initial_mul_vector(coefficients[3], &prod0D, &mul4D);
+	
+	__m512i prod0, mul4;
+	if(do4) {
+		prod0 = gf16_mm512_set_si128(prod0D, prod0C, prod0B, prod0A);
+		mul4 = gf16_mm512_set_si128(mul4D, mul4C, mul4B, mul4A);
+	} else {
+		prod0 = gf16_mm512_set_3si128(prod0C, prod0B, prod0A);
+		mul4 = gf16_mm512_set_3si128(mul4C, mul4B, mul4A);
+	}
+	prod0 = _mm512_unpacklo_epi64(prod0, _mm512_xor_si512(prod0, mul4)); // products 0-7
+	
+	// 4*2 = 8
+	__m512i mul8 = gf16_vec512_mul2(mul4);
+	__m512i prod8 = _mm512_xor_si512(mul8, prod0); // products 8-15
+	
+	// 8*2 = 16
+	__m512i mul16 = gf16_vec512_mul2(mul8);
+	__m512i prod16 = _mm512_xor_si512(prod0, mul16); // products 16-23
+	__m512i prod24 = _mm512_xor_si512(prod8, mul16); // products 24-31
+	
+	// 16*2 = 32
+	__m512i mul32 = gf16_vec512_mul2(mul16);
+	__m512i prod32 = _mm512_xor_si512(prod0, mul32);
+	__m512i prod40 = _mm512_xor_si512(prod8, mul32);
+	__m512i prod48 = _mm512_xor_si512(prod16, mul32);
+	__m512i prod56 = _mm512_xor_si512(prod24, mul32);
+	
+	// mix to get desired output
+	prod0  = separate_low_high512(prod0);
+	prod8  = separate_low_high512(prod8);
+	prod16 = separate_low_high512(prod16);
+	prod24 = separate_low_high512(prod24);
+	prod32 = separate_low_high512(prod32);
+	prod40 = separate_low_high512(prod40);
+	prod48 = separate_low_high512(prod48);
+	prod56 = separate_low_high512(prod56);
+	__m512i prod0Lo = _mm512_unpacklo_epi64(prod0, prod8);
+	__m512i prod0Hi = _mm512_unpackhi_epi64(prod0, prod8);
+	__m512i prod16Lo = _mm512_unpacklo_epi64(prod16, prod24);
+	__m512i prod16Hi = _mm512_unpackhi_epi64(prod16, prod24);
+	__m512i prod32Lo = _mm512_unpacklo_epi64(prod32, prod40);
+	__m512i prod32Hi = _mm512_unpackhi_epi64(prod32, prod40);
+	__m512i prod48Lo = _mm512_unpacklo_epi64(prod48, prod56);
+	__m512i prod48Hi = _mm512_unpackhi_epi64(prod48, prod56);
+	
+	__m512i prod0LoA = _mm512_shuffle_i32x4(prod0Lo, prod16Lo, _MM_SHUFFLE(2,0,2,0));
+	__m512i prod0LoB = _mm512_shuffle_i32x4(prod0Lo, prod16Lo, _MM_SHUFFLE(3,1,3,1));
+	__m512i prod0HiA = _mm512_shuffle_i32x4(prod0Hi, prod16Hi, _MM_SHUFFLE(2,0,2,0));
+	__m512i prod0HiB = _mm512_shuffle_i32x4(prod0Hi, prod16Hi, _MM_SHUFFLE(3,1,3,1));
+	__m512i prod32LoA = _mm512_shuffle_i32x4(prod32Lo, prod48Lo, _MM_SHUFFLE(2,0,2,0));
+	__m512i prod32LoB = _mm512_shuffle_i32x4(prod32Lo, prod48Lo, _MM_SHUFFLE(3,1,3,1));
+	__m512i prod32HiA = _mm512_shuffle_i32x4(prod32Hi, prod48Hi, _MM_SHUFFLE(2,0,2,0));
+	__m512i prod32HiB = _mm512_shuffle_i32x4(prod32Hi, prod48Hi, _MM_SHUFFLE(3,1,3,1));
+	
+	*lo0A = _mm512_shuffle_i32x4(prod0LoA, prod32LoA, _MM_SHUFFLE(2,0,2,0));
+	*hi0A = _mm512_shuffle_i32x4(prod0HiA, prod32HiA, _MM_SHUFFLE(2,0,2,0));
+	*lo0B = _mm512_shuffle_i32x4(prod0LoB, prod32LoB, _MM_SHUFFLE(2,0,2,0));
+	*hi0B = _mm512_shuffle_i32x4(prod0HiB, prod32HiB, _MM_SHUFFLE(2,0,2,0));
+	*lo0C = _mm512_shuffle_i32x4(prod0LoA, prod32LoA, _MM_SHUFFLE(3,1,3,1));
+	*hi0C = _mm512_shuffle_i32x4(prod0HiA, prod32HiA, _MM_SHUFFLE(3,1,3,1));
+	if(do4) {
+		*lo0D = _mm512_shuffle_i32x4(prod0LoB, prod32LoB, _MM_SHUFFLE(3,1,3,1));
+		*hi0D = _mm512_shuffle_i32x4(prod0HiB, prod32HiB, _MM_SHUFFLE(3,1,3,1));
+	}
 }
 static HEDLEY_ALWAYS_INLINE void generate_remaining_lookup(__m512i mulLo, __m512i mulHi, __m512i lo0, __m512i hi0, __m512i* lo1, __m512i* hi1, __m512i* lo2, __m512i* hi2) {
 	// multiply by 64 to get 0,64,128..960 repeated; will need some rearrangement
@@ -197,6 +343,120 @@ void gf16_shuffle_muladd_vbmi(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_
 	UNUSED(scratch); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(val);
 #endif
 }
+
+
+#if defined(__AVX512VBMI__) && defined(__AVX512VL__) && defined(PLATFORM_AMD64)
+static HEDLEY_ALWAYS_INLINE void gf16_shuffle_muladd_x_vbmi(
+	__m512i mulLo, __m512i mulHi, uint8_t *HEDLEY_RESTRICT _dst, const int srcCount,
+	const uint8_t *HEDLEY_RESTRICT _src1, const uint8_t *HEDLEY_RESTRICT _src2, const uint8_t *HEDLEY_RESTRICT _src3, const uint8_t *HEDLEY_RESTRICT _src4,
+	size_t len, const uint16_t *HEDLEY_RESTRICT coefficients
+) {
+	__m512i loA0, loA1, loA2, hiA0, hiA1, hiA2;
+	__m512i loB0, loB1, loB2, hiB0, hiB1, hiB2;
+	__m512i loC0, loC1, loC2, hiC0, hiC1, hiC2;
+	__m512i loD0, loD1, loD2, hiD0, hiD1, hiD2;
+	
+	// get first lookup
+	if(srcCount == 4)
+		generate_first_lookup_x4(coefficients, 1, &loA0, &hiA0, &loB0, &hiB0, &loC0, &hiC0, &loD0, &hiD0);
+	else if(srcCount == 3)
+		generate_first_lookup_x4(coefficients, 0, &loA0, &hiA0, &loB0, &hiB0, &loC0, &hiC0, NULL, NULL);
+	else // srcCount == 2
+		generate_first_lookup_x2(coefficients, &loA0, &hiA0, &loB0, &hiB0);
+	
+	// multiply by 64/16 to get remaining lookups
+	generate_remaining_lookup(mulLo, mulHi, loA0, hiA0, &loA1, &hiA1, &loA2, &hiA2);
+	generate_remaining_lookup(mulLo, mulHi, loB0, hiB0, &loB1, &hiB1, &loB2, &hiB2);
+	if(srcCount > 2)
+		generate_remaining_lookup(mulLo, mulHi, loC0, hiC0, &loC1, &hiC1, &loC2, &hiC2);
+	if(srcCount > 3)
+		generate_remaining_lookup(mulLo, mulHi, loD0, hiD0, &loD1, &hiD1, &loD2, &hiD2);
+	
+	for(long ptr = -(long)len; ptr; ptr += sizeof(__m512i)*2) {
+		__m512i tpl, tph;
+		gf16_shuffle_mul_vbmi_round(
+			_mm512_load_si512((__m512i*)(_src1+ptr)), _mm512_load_si512((__m512i*)(_src1+ptr) +1),
+			loA0, hiA0, loA1, hiA1, loA2, hiA2,
+			&tpl, &tph
+		);
+		
+		__m512i tpl2, tph2;
+		gf16_shuffle_mul_vbmi_round(
+			_mm512_load_si512((__m512i*)(_src2+ptr)), _mm512_load_si512((__m512i*)(_src2+ptr) +1),
+			loB0, hiB0, loB1, hiB1, loB2, hiB2,
+			&tpl2, &tph2
+		);
+		
+		tph = _mm512_ternarylogic_epi32(tph, tph2, _mm512_load_si512((__m512i*)(_dst+ptr)), 0x96);
+		tpl = _mm512_ternarylogic_epi32(tpl, tpl2, _mm512_load_si512((__m512i*)(_dst+ptr) + 1), 0x96);
+		
+		if(srcCount > 2) {
+			gf16_shuffle_mul_vbmi_round(
+				_mm512_load_si512((__m512i*)(_src3+ptr)), _mm512_load_si512((__m512i*)(_src3+ptr) +1),
+				loC0, hiC0, loC1, hiC1, loC2, hiC2,
+				&tpl2, &tph2
+			);
+			if(srcCount > 3) {
+				__m512i tpl3, tph3;
+				gf16_shuffle_mul_vbmi_round(
+					_mm512_load_si512((__m512i*)(_src4+ptr)), _mm512_load_si512((__m512i*)(_src4+ptr) +1),
+					loD0, hiD0, loD1, hiD1, loD2, hiD2,
+					&tpl3, &tph3
+				);
+				tpl = _mm512_ternarylogic_epi32(tpl, tpl2, tpl3, 0x96);
+				tph = _mm512_ternarylogic_epi32(tph, tph2, tph3, 0x96);
+			} else {
+				tpl = _mm512_xor_si512(tpl, tpl2);
+				tph = _mm512_xor_si512(tph, tph2);
+			}
+		}
+		_mm512_store_si512((__m512i*)(_dst+ptr), tph);
+		_mm512_store_si512((__m512i*)(_dst+ptr) + 1, tpl);
+	}
+}
+#endif
+
+unsigned gf16_shuffle_muladd_multi_vbmi(const void *HEDLEY_RESTRICT scratch, unsigned regions, size_t offset, void *HEDLEY_RESTRICT dst, const void* *HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch) {
+	UNUSED(mutScratch);
+#if defined(__AVX512VBMI__) && defined(__AVX512VL__) && defined(PLATFORM_AMD64)
+	uint8_t* _dst = (uint8_t*)dst + offset + len;
+	__m512i mulLo = _mm512_load_si512((__m512i*)scratch + 1);
+	__m512i mulHi = _mm512_load_si512((__m512i*)scratch);
+	
+	unsigned region = 0;
+	if(regions > 3) do {
+		gf16_shuffle_muladd_x_vbmi(
+			mulLo, mulHi, _dst, 4,
+			(const uint8_t* HEDLEY_RESTRICT)src[region] + offset + len, (const uint8_t* HEDLEY_RESTRICT)src[region+1] + offset + len, (const uint8_t* HEDLEY_RESTRICT)src[region+2] + offset + len, (const uint8_t* HEDLEY_RESTRICT)src[region+3] + offset + len,
+			len, coefficients + region
+		);
+		region += 4;
+	} while(region < regions-3);
+	if(region < regions-2) {
+		gf16_shuffle_muladd_x_vbmi(
+			mulLo, mulHi, _dst, 3,
+			(const uint8_t* HEDLEY_RESTRICT)src[region] + offset + len, (const uint8_t* HEDLEY_RESTRICT)src[region+1] + offset + len, (const uint8_t* HEDLEY_RESTRICT)src[region+2] + offset + len, NULL,
+			len, coefficients + region
+		);
+		region += 3;
+	}
+	else if(region < regions-1) {
+		gf16_shuffle_muladd_x_vbmi(
+			mulLo, mulHi, _dst, 2,
+			(const uint8_t* HEDLEY_RESTRICT)src[region] + offset + len, (const uint8_t* HEDLEY_RESTRICT)src[region+1] + offset + len, NULL, NULL,
+			len, coefficients + region
+		);
+		region += 2;
+	}
+	
+	_mm256_zeroupper();
+	return region;
+#else
+	UNUSED(scratch); UNUSED(regions); UNUSED(offset); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficients);
+	return 0;
+#endif
+}
+
 
 void* gf16_shuffle_init_vbmi(int polynomial) {
 #if defined(__AVX512VBMI__) && defined(__AVX512VL__)

@@ -193,6 +193,25 @@ static HEDLEY_ALWAYS_INLINE void mul16_vec4x(__m512i mulLo, __m512i mulHi, __m51
 	);
 	*dstHi = _mm512_xor_si512(th, _mm512_shuffle_epi8(mulHi, ti));
 }
+static HEDLEY_ALWAYS_INLINE __m512i gf16_mm512_set_si128(__m128i a, __m128i b, __m128i c, __m128i d) {
+	return _mm512_inserti64x4(
+		_mm512_castsi256_si512(
+			_mm256_inserti128_si256(_mm256_castsi128_si256(d), c, 1)
+		),
+		_mm256_inserti128_si256(_mm256_castsi128_si256(b), a, 1),
+		1
+	);
+}
+static HEDLEY_ALWAYS_INLINE __m512i gf16_mm512_set_3si128(__m128i a, __m128i b, __m128i c) {
+	return _mm512_inserti32x4(
+		zext256_512(
+			_mm256_inserti128_si256(_mm256_castsi128_si256(c), b, 1)
+		), a, 2
+	);
+}
+static HEDLEY_ALWAYS_INLINE __m512i separate_low_high512(__m512i v) {
+	return _mm512_shuffle_epi8(v, _mm512_set4_epi32(0x0f0d0b09, 0x07050301, 0x0e0c0a08, 0x06040200));
+}
 #endif
 
 #endif // defined(_GF16_SHUFFLE_X86_COMMON_)
