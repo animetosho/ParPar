@@ -87,7 +87,7 @@ void ppgf_maybe_setup_gf() {
    - input and length of each output is the same and == len
    - number of outputs and scales is same and == numOutputs
 */
-void ppgf_multiply_mat(const void** inputs, uint_fast16_t* iNums, unsigned int numInputs, size_t len, void** outputs, uint_fast16_t* oNums, unsigned int numOutputs, int add) {
+void ppgf_multiply_mat(const void* const* inputs, uint_fast16_t* iNums, unsigned int numInputs, size_t len, void** outputs, uint_fast16_t* oNums, unsigned int numOutputs, int add) {
 	
 	/*
 	if(gf->needPrepare()) {

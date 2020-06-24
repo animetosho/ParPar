@@ -469,7 +469,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle_muladd_x_vbmi(
 }
 #endif
 
-unsigned gf16_shuffle_muladd_multi_vbmi(const void *HEDLEY_RESTRICT scratch, unsigned regions, size_t offset, void *HEDLEY_RESTRICT dst, const void* *HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch) {
+unsigned gf16_shuffle_muladd_multi_vbmi(const void *HEDLEY_RESTRICT scratch, unsigned regions, size_t offset, void *HEDLEY_RESTRICT dst, const void* const*HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch) {
 	UNUSED(mutScratch);
 #if defined(__AVX512VBMI__) && defined(__AVX512VL__) && defined(PLATFORM_AMD64)
 	uint8_t* _dst = (uint8_t*)dst + offset + len;

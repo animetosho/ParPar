@@ -808,7 +808,7 @@ void gf16_xor_jit_muladd_avx512(const void *HEDLEY_RESTRICT scratch, void *HEDLE
 #define XOR512_MULTI_REGIONS 6 // we support up to 10, but 6 seems more optimal (cache associativity reasons?)
 // other registers used (hence 10 supported): dest (0), end point (1), SP (4), one source (3), R12/R13 is avoided due to different encoding length; GCC doesn't like overriding BP (5) so skip that too
 
-unsigned gf16_xor_jit_muladd_multi_avx512(const void *HEDLEY_RESTRICT scratch, unsigned regions, size_t offset, void *HEDLEY_RESTRICT dst, const void* *HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch) {
+unsigned gf16_xor_jit_muladd_multi_avx512(const void *HEDLEY_RESTRICT scratch, unsigned regions, size_t offset, void *HEDLEY_RESTRICT dst, const void* const*HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch) {
 #if defined(__AVX512BW__) && defined(__AVX512VL__) && defined(PLATFORM_AMD64)
 	const struct gf16_xor_scratch *HEDLEY_RESTRICT info = (const struct gf16_xor_scratch *HEDLEY_RESTRICT)scratch;
 	uint8_t* jitCode = (uint8_t*)mutScratch + info->codeStart;

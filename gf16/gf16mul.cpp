@@ -659,6 +659,6 @@ std::vector<Galois16Methods> Galois16Mul::availableMethods(bool checkCpuid) {
 	return ret;
 }
 
-unsigned Galois16Mul::_mul_add_multi_none(const void *HEDLEY_RESTRICT, unsigned, size_t, void *HEDLEY_RESTRICT, const void* *HEDLEY_RESTRICT, size_t, const uint16_t *HEDLEY_RESTRICT, void *HEDLEY_RESTRICT) {
+unsigned Galois16Mul::_mul_add_multi_none(const void *HEDLEY_RESTRICT, unsigned, size_t, void *HEDLEY_RESTRICT, const void* const*HEDLEY_RESTRICT, size_t, const uint16_t *HEDLEY_RESTRICT, void *HEDLEY_RESTRICT) {
 	return 0;
 }

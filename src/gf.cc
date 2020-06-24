@@ -169,11 +169,11 @@ struct MMRequest {
 	Persistent<Object> obj_;
 	uv_work_t work_req_;
 	
-	uint16_t** inputs;
+	const void* const* inputs;
 	uint_fast16_t* iNums;
 	unsigned int numInputs;
 	size_t len;
-	uint16_t** outputs;
+	void** outputs;
 	uint_fast16_t* oNums;
 	unsigned int numOutputs;
 	bool add;
@@ -235,12 +235,12 @@ FUNC(MultiplyMulti) {
 	
 	Local<Object> oInputs = ARG_TO_OBJ(args[0]);
 	Local<Object> oIBNums = ARG_TO_OBJ(args[1]);
-	uint16_t** inputs = new uint16_t*[numInputs];
+	void** inputs = new void*[numInputs];
 	uint_fast16_t* iNums = new uint_fast16_t[numInputs];
 	
 	Local<Object> oOutputs = ARG_TO_OBJ(args[2]);
 	Local<Object> oRBNums = ARG_TO_OBJ(args[3]);
-	uint16_t** outputs = new uint16_t*[numOutputs];
+	void** outputs = new void*[numOutputs];
 	uint_fast16_t* oNums = new uint_fast16_t[numOutputs];
 	
 	#define RTN_ERROR(m) { \
@@ -254,7 +254,7 @@ FUNC(MultiplyMulti) {
 		if (!node::Buffer::HasInstance(input))
 			RTN_ERROR("All inputs must be Buffers");
 		
-		inputs[i] = (uint16_t*)node::Buffer::Data(input);
+		inputs[i] = node::Buffer::Data(input);
 		uintptr_t inputAddr = (uintptr_t)inputs[i];
 		if (inputAddr & (MEM_ALIGN-1))
 			RTN_ERROR("All input buffers must be address aligned");
@@ -282,7 +282,7 @@ FUNC(MultiplyMulti) {
 		if (node::Buffer::Length(output) < len)
 			RTN_ERROR("All outputs' length must equal or greater than the input's length");
 		// the length of output buffers should all be equal, but I'm too lazy to check for that :P
-		outputs[i] = (uint16_t*)node::Buffer::Data(output);
+		outputs[i] = node::Buffer::Data(output);
 		if ((uintptr_t)outputs[i] & (MEM_ALIGN-1))
 			RTN_ERROR("All output buffers must be address aligned");
 		int rbNum = ARG_TO_INT(GET_ARR(oRBNums, i));

@@ -216,7 +216,7 @@ void gf16_affine_muladd_avx512(const void *HEDLEY_RESTRICT scratch, void *HEDLEY
 #endif
 }
 
-unsigned gf16_affine_muladd_multi_avx512(const void *HEDLEY_RESTRICT scratch, unsigned regions, size_t offset, void *HEDLEY_RESTRICT dst, const void* *HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch) {
+unsigned gf16_affine_muladd_multi_avx512(const void *HEDLEY_RESTRICT scratch, unsigned regions, size_t offset, void *HEDLEY_RESTRICT dst, const void* const*HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch) {
 	UNUSED(mutScratch);
 #if defined(__GFNI__) && defined(__AVX512BW__) && defined(__AVX512VL__) && defined(PLATFORM_AMD64)
 	uint8_t* _dst = (uint8_t*)dst + offset + len;
@@ -549,7 +549,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_affine2x_muladd_x_avx512(
 }
 #endif /*defined(__GFNI__) && defined(__AVX512BW__) && defined(__AVX512VL__)*/
 
-unsigned gf16_affine2x_muladd_multi_avx512(const void *HEDLEY_RESTRICT scratch, unsigned regions, size_t offset, void *HEDLEY_RESTRICT dst, const void* *HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch) {
+unsigned gf16_affine2x_muladd_multi_avx512(const void *HEDLEY_RESTRICT scratch, unsigned regions, size_t offset, void *HEDLEY_RESTRICT dst, const void* const*HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch) {
 	UNUSED(mutScratch);
 #if defined(__GFNI__) && defined(__AVX512BW__) && defined(__AVX512VL__)
 	uint8_t* _dst = (uint8_t*)dst + offset + len;
