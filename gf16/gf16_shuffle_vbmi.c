@@ -151,7 +151,7 @@ static HEDLEY_ALWAYS_INLINE void generate_first_lookup_x2(const uint16_t* coeffi
 	*lo0B = _mm512_permutex2var_epi64(prod0Lo, idx1, prod32Lo);
 	*hi0B = _mm512_permutex2var_epi64(prod0Hi, idx1, prod32Hi);
 }
-static HEDLEY_ALWAYS_INLINE void generate_first_lookup_x4(const uint16_t* coefficients, int do4, __m512i* lo0A, __m512i* hi0A, __m512i* lo0B, __m512i* hi0B, __m512i* lo0C, __m512i* hi0C, __m512i* lo0D, __m512i* hi0D) {
+static HEDLEY_ALWAYS_INLINE void generate_first_lookup_x4(const uint16_t* coefficients, const int do4, __m512i* lo0A, __m512i* hi0A, __m512i* lo0B, __m512i* hi0B, __m512i* lo0C, __m512i* hi0C, __m512i* lo0D, __m512i* hi0D) {
 	__m128i prod0A, mul4A;
 	__m128i prod0B, mul4B;
 	__m128i prod0C, mul4C;
@@ -254,6 +254,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle_mul_vbmi_round(__m512i ta, __m512i
 		0xd8 // bit-select: ((b&c) | (a&~c))
 	);
 	// can replace 2x vpermb with 2x vpshufb if an AND is applied to ti
+	// this does, however, require an additional register; we can avoid this by changing the bit arrangement from 6+4+6 to 6+6+4, since the 0xf mask can be used twice in this case
 	ta = _mm512_srli_epi16(ta, 2);
 	
 	*tph = _mm512_ternarylogic_epi32(
