@@ -1,7 +1,7 @@
 
 #include "../src/hedley.h"
+#include "platform.h"
 #ifdef __AVX2__
-# include <immintrin.h>
 static inline __m256i gf16_bitdep256_swap(__m256i v, int genAffine) {
 	if(genAffine) {
 		// swap for affine2x

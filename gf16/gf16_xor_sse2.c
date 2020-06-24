@@ -2,7 +2,6 @@
 #include "gf16_xor_common.h"
 #include <string.h>
 #ifdef __SSE2__
-# include <emmintrin.h>
 int gf16_xor_available_sse2 = 1;
 #else
 int gf16_xor_available_sse2 = 0;

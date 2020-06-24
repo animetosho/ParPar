@@ -3,7 +3,6 @@
 #include <string.h>
 
 #if defined(__AVX2__) && defined(PLATFORM_AMD64)
-# include <immintrin.h>
 int gf16_xor_available_avx2 = 1;
 #else
 int gf16_xor_available_avx2 = 0;

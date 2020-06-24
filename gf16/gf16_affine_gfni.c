@@ -4,7 +4,6 @@
 #include <string.h>
 
 #if defined(__GFNI__) && defined(__SSSE3__)
-# include <immintrin.h>
 int gf16_affine_available_gfni = 1;
 #else
 int gf16_affine_available_gfni = 0;

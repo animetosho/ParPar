@@ -10,7 +10,6 @@
 
 #if defined(__SSSE3__)
 # define _AVAILABLE
-# include <tmmintrin.h>
 #endif
 #include "gf16_shuffle_x86.h"
 #undef _AVAILABLE

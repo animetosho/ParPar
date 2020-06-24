@@ -73,6 +73,19 @@
 #endif /* _MSC_VER */
 
 
+#ifdef __SSE2__
+# include <emmintrin.h>
+#endif
+#ifdef __SSSE3__
+# include <tmmintrin.h>
+#endif
+#if defined(__AVX__) || defined(__GFNI__)
+# include <immintrin.h>
+#endif
+
+
+
+
 // x86 vector upcasts, where upper is defined to be 0
 #if (defined(__clang__) && __clang_major__ >= 5 && (!defined(__APPLE__) || __clang_major__ >= 7)) || (defined(__GNUC__) && __GNUC__ >= 10)
 // intrinsic unsupported in GCC 9 and MSVC < 2017

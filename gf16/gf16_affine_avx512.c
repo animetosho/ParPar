@@ -3,7 +3,6 @@
 #include "platform.h"
 
 #if defined(__GFNI__) && defined(__AVX512BW__) && defined(__AVX512VL__)
-# include <immintrin.h>
 int gf16_affine_available_avx512 = 1;
 #else
 int gf16_affine_available_avx512 = 0;

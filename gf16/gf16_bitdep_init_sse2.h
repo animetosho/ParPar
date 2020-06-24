@@ -1,5 +1,6 @@
 
 #include "../src/hedley.h"
+#include "platform.h"
 
 #define GF16_BITDEP_INIT128_GEN_XOR 0
 #define GF16_BITDEP_INIT128_GEN_XORJIT 1
@@ -7,10 +8,6 @@
 
 
 #ifdef __SSE2__
-# include <emmintrin.h>
-# ifdef __SSSE3__
-#  include <tmmintrin.h>
-# endif
 static inline void gf16_bitdep128_store(__m128i* dst, __m128i depmask1, __m128i depmask2, int genMode) {
 	if(genMode == GF16_BITDEP_INIT128_GEN_AFFINE) {
 # ifdef __SSSE3__

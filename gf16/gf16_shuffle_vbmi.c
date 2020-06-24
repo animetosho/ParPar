@@ -3,7 +3,6 @@
 #include "platform.h"
 
 #if defined(__AVX512VBMI__) && defined(__AVX512VL__)
-# include <immintrin.h>
 
 # define _AVAILABLE_AVX 1
 # include "gf16_shuffle_x86_common.h"

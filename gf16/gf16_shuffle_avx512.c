@@ -11,7 +11,6 @@
 
 #if defined(__AVX512BW__) && defined(__AVX512VL__)
 # define _AVAILABLE
-# include <immintrin.h>
 #endif
 #include "gf16_shuffle_x86.h"
 #include "gf16_shuffle2x_x86.h"

@@ -2,7 +2,6 @@
 #include "gf16_xor_common.h"
 
 #if defined(__AVX512BW__) && defined(__AVX512VL__) && defined(PLATFORM_AMD64)
-# include <immintrin.h>
 int gf16_xor_available_avx512 = 1;
 #else
 int gf16_xor_available_avx512 = 0;
