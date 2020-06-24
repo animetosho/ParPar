@@ -70,7 +70,7 @@ void ppgf_maybe_setup_gf() {
 	#include <cstdlib>
 	#define ALIGN_ALLOC(buf, len, align) *(void**)&(buf) = aligned_alloc(align, ((len) + (align)-1) & ~((align)-1))
 	#define ALIGN_FREE free
-#elif defined(_MSC_VER)
+#elif defined(_MSC_VER) || defined(__MINGW32__) || defined(__MINGW64__)
 	#define ALIGN_ALLOC(buf, len, align) *(void**)&(buf) = _aligned_malloc((len), align)
 	#define ALIGN_FREE _aligned_free
 #else
@@ -87,7 +87,7 @@ void ppgf_maybe_setup_gf() {
    - input and length of each output is the same and == len
    - number of outputs and scales is same and == numOutputs
 */
-void ppgf_multiply_mat(uint16_t** inputs, uint_fast16_t* iNums, unsigned int numInputs, size_t len, uint16_t** outputs, uint_fast16_t* oNums, unsigned int numOutputs, int add) {
+void ppgf_multiply_mat(const void** inputs, uint_fast16_t* iNums, unsigned int numInputs, size_t len, void** outputs, uint_fast16_t* oNums, unsigned int numOutputs, int add) {
 	
 	/*
 	if(gf->needPrepare()) {
@@ -118,6 +118,7 @@ void ppgf_multiply_mat(uint16_t** inputs, uint_fast16_t* iNums, unsigned int num
 	
 	// break the slice into smaller chunks so that we maximise CPU cache usage
 	int numChunks = ROUND_DIV(len, gf->info().idealChunkSize);
+	if(numChunks < 1) numChunks = 1;
 	unsigned int alignMask = gf->info().stride-1;
 	unsigned int chunkSize = (CEIL_DIV(len, numChunks) + alignMask) & ~alignMask; // we'll assume that input chunks are memory aligned here
 	
@@ -140,7 +141,7 @@ void ppgf_multiply_mat(uint16_t** inputs, uint_fast16_t* iNums, unsigned int num
 			vals[i] = calc_factor(iNums[i], oNums[out]);
 
 		if(!add) memset(((uint8_t*)outputs[out])+offset, 0, procSize);
-		gf->mul_add_multi(numInputs, offset, outputs[out], (const void**)inputs, procSize, vals, gfScratch[threadNum]);
+		gf->mul_add_multi(numInputs, offset, outputs[out], inputs, procSize, vals, gfScratch[threadNum]);
 	}
 	
 	ALIGN_FREE(factors);

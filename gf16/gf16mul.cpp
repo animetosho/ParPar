@@ -558,7 +558,7 @@ Galois16Methods Galois16Mul::default_method(size_t regionSizeHint, unsigned /*ou
 	if(caps.hasAVX512VLBW) {
 		if(gf16_affine_available_avx512 && caps.hasGFNI)
 			return GF16_AFFINE_AVX512;
-		if(gf16_shuffle_available_vbmi)
+		if(gf16_shuffle_available_vbmi && caps.hasAVX512VBMI)
 			return GF16_SHUFFLE_VBMI;
 		if(gf16_shuffle_available_avx512)
 			return GF16_SHUFFLE_AVX512;

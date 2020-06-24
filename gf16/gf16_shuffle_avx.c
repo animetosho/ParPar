@@ -11,7 +11,7 @@
 #if defined(__AVX__)
 # define _AVAILABLE
 # define _AVAILABLE_AVX
-# include <tmmintrin.h>
+# include <immintrin.h>
 #endif
 #include "gf16_shuffle_x86.h"
 #undef _AVAILABLE

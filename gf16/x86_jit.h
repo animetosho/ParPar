@@ -678,6 +678,7 @@ static inline void* jit_alloc(size_t len) {
 	return VirtualAlloc(NULL, len, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
 }
 static inline void jit_free(void* mem, size_t len) {
+	UNUSED(len);
 	VirtualFree(mem, 0, MEM_RELEASE);
 }
 #else

@@ -97,7 +97,7 @@
 # define ALIGN_TO(a, v) v __attribute__((aligned(a)))
 #endif
 
-#if defined(_MSC_VER)
+#if defined(_MSC_VER) || defined(__MINGW32__) || defined(__MINGW64__)
 	#define ALIGN_ALLOC(buf, len, align) *(void**)&(buf) = _aligned_malloc((len), align)
 	#define ALIGN_FREE _aligned_free
 #else
