@@ -101,6 +101,13 @@
 #endif
 
 
+// AVX on mingw-gcc is just broken - don't do it...
+#if defined(__GNUC__) && !defined(__clang__) && !defined(__INTEL_COMPILER) && (defined(__MINGW32__) || defined(__MINGW64__)) && defined(__AVX2__)
+# include "../src/hedley.h"
+HEDLEY_WARNING("Compiling AVX code on MinGW GCC may cause crashing due to stack alignment bugs [https://gcc.gnu.org/bugzilla/show_bug.cgi?id=54412]");
+// as of writing, GCC 10.1 still has this problem, and it doesn't look like it'll be fixed any time soon
+// ...so if you're reading this, try Clang instead
+#endif
 
 // alignment
 

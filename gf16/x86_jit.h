@@ -595,7 +595,7 @@ static inline size_t _jit_mov_i(uint8_t* jit, uint8_t reg, intptr_t val) {
 #ifdef PLATFORM_AMD64
 	_jit_rxx_pref(&jit, reg, 0);
 	reg &= 7;
-	if(val > 0x3fffffff || val < 0x40000000) {
+	if(val > 0x3fffffffLL || val < -0x40000000LL) {
 		*(int16_t*)jit = 0xB8 | reg;
 		*(int64_t*)(jit +2) = val;
 		return 10;

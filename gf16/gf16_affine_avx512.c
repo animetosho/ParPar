@@ -277,8 +277,9 @@ unsigned gf16_affine_muladd_multi_avx512(const void *HEDLEY_RESTRICT scratch, un
 #endif
 }
 
-
-#include "gf16_bitdep_init_avx2.h"
+#if defined(__GFNI__) && defined(__AVX512BW__) && defined(__AVX512VL__)
+# include "gf16_bitdep_init_avx2.h"
+#endif
 void* gf16_affine_init_avx512(int polynomial) {
 #if defined(__GFNI__) && defined(__AVX512BW__) && defined(__AVX512VL__)
 	__m128i* ret;
