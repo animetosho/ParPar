@@ -579,6 +579,22 @@ static inline void xor_write_jit_avx512(const struct gf16_xor_scratch *HEDLEY_RE
 // TODO: merge this into above
 // note: xor can be 3 values: 0=clear, 1=xor (merge), 2=xor (load)
 static void* xor_write_jit_avx512_multi(const struct gf16_xor_scratch *HEDLEY_RESTRICT scratch, uint8_t *HEDLEY_RESTRICT jitptr, int memreg, uint16_t val, int xor) {
+	// explicitly special case multiply by 0
+	if(val == 0) {
+		if(xor == 1) return jitptr;
+		for(int bit=0; bit<8; bit++) {
+			if(xor == 0) {
+				jitptr += _jit_vpxord_r(jitptr, bit, bit, bit);
+				jitptr += _jit_vpxord_r(jitptr, bit+8, bit+8, bit+8);
+			}
+			if(xor == 2) {
+				jitptr += _jit_vmovdqa32_load(jitptr, bit, AX, bit<<7);
+				jitptr += _jit_vmovdqa32_load(jitptr, bit+8, AX, (bit<<7) + 64);
+			}
+		}
+		return jitptr;
+	}
+	
 	__m256i depmask = _mm256_load_si256((__m256i*)scratch->deps + (val & 0xf)*4);
 	depmask = _mm256_xor_si256(depmask,
 		_mm256_load_si256((__m256i*)(scratch->deps + ((val << 3) & 0x780)) + 1)
