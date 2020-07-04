@@ -1,5 +1,8 @@
 
+#define _GF16_XORJIT_COPY_ALIGN 16
 #include "gf16_xor_common.h"
+#undef _GF16_XORJIT_COPY_ALIGN
+
 #include <string.h>
 #ifdef __SSE2__
 int gf16_xor_available_sse2 = 1;
@@ -661,48 +664,8 @@ static inline void* xor_write_jit_sse(const struct gf16_xor_scratch *HEDLEY_REST
 }
 
 static HEDLEY_ALWAYS_INLINE void gf16_xor_jit_mul_sse2_base(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch, int add) {
-	const struct gf16_xor_scratch *HEDLEY_RESTRICT info = (const struct gf16_xor_scratch *HEDLEY_RESTRICT)scratch;
 	jit_wx_pair* jit = (jit_wx_pair*)mutScratch;
-	
-	uint8_t* jitptr = (uint8_t*)jit->w + info->codeStart;
-	
-#ifdef CPU_SLOW_SMC_CLR
-	memset(jitptr, 0, XORDEP_JIT_CODE_SIZE);
-#endif
-	
-#ifdef CPU_SLOW_SMC
-	ALIGN_TO(16, uint8_t jitTemp[XORDEP_JIT_CODE_SIZE]);
-	uintptr_t copyOffset = info->codeStart;
-	if((uintptr_t)jitptr & 0xF) {
-		// copy unaligned part
-		_mm_store_si128((__m128i*)jitTemp, _mm_load_si128((__m128i*)((uintptr_t)jitptr & ~0xF)));
-		copyOffset -= (uintptr_t)jitptr & 0xF;
-		jitptr = jitTemp + ((uintptr_t)jitptr & 0xF);
-	}
-	else
-		jitptr = jitTemp;
-	
-	jitptr = xor_write_jit_sse(info, jitptr, coefficient, add);
-	*(int32_t*)jitptr = (int32_t)(jitTemp - copyOffset - jitptr -4);
-	jitptr[4] = 0xC3; /* ret */
-	
-	/* memcpy to destination */
-	uint8_t* jitdst = (uint8_t*)jit->w + copyOffset;
-	for(uint_fast32_t i=0; i<(uint_fast32_t)(jitptr+5-jitTemp); i+=64) {
-		__m128i ta = _mm_load_si128((__m128i*)(jitTemp + i));
-		__m128i tb = _mm_load_si128((__m128i*)(jitTemp + i + 16));
-		__m128i tc = _mm_load_si128((__m128i*)(jitTemp + i + 32));
-		__m128i td = _mm_load_si128((__m128i*)(jitTemp + i + 48));
-		_mm_store_si128((__m128i*)(jitdst + i), ta);
-		_mm_store_si128((__m128i*)(jitdst + i + 16), tb);
-		_mm_store_si128((__m128i*)(jitdst + i + 32), tc);
-		_mm_store_si128((__m128i*)(jitdst + i + 48), td);
-	}
-#else
-	jitptr = xor_write_jit_sse(info, jitptr, coefficient, add);
-	*(int32_t*)jitptr = (int32_t)((uint8_t*)jit->w - jitptr -4);
-	jitptr[4] = 0xC3; /* ret */
-#endif
+	gf16_xorjit_write_jit(scratch, coefficient, jit->w, add, &xor_write_jit_sse);
 	
 	// exec
 	/* adding 128 to the destination pointer allows the register offset to be coded in 1 byte
@@ -1146,6 +1109,7 @@ void* gf16_xor_jit_init_sse2(int polynomial) {
 	
 	gf16_xor_create_jit_lut_sse2();
 	
+	ret->jitOptStrat = 0;
 	ret->codeStart = (uint_fast8_t)xor_write_init_jit(tmpCode);
 	return ret;
 #else

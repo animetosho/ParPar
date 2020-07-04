@@ -7,17 +7,6 @@
 #define XORDEP_JIT_SIZE 4096
 #define XORDEP_JIT_CODE_SIZE 1280
 
-// hacks for CPUs with uop caches?
-#if defined(__tune_corei7__) || defined(__tune_corei7_avx__)
-  /* Nehalem and later Intel CPUs have a weird Self-Modifying Code slowdown when writing executable code, observed in Nehalem-Haswell, but not on Core2, Silvermont/Goldmont, AMD K10, Piledriver or Jaguar */
-  #define CPU_SLOW_SMC 1
-#endif
-#if defined(__tune_core_avx2__) || defined(__tune_znver1__)
-  /* For some reason, on Haswell/Skylake and Zen, clearing memory with memset is faster than the memcpy hack above; not observed on IvyBridge (despite ERMS support), and Piledriver */
-  #define CPU_SLOW_SMC_CLR 1
-  #include <string.h> /* memset */
-#endif
-
 
 /* we support MSVC and GCC style ASM */
 #ifdef PLATFORM_AMD64
@@ -115,9 +104,88 @@ static HEDLEY_ALWAYS_INLINE void gf16_xor_jit_stub(intptr_t src, intptr_t dEnd, 
 #endif
 
 
+#define GF16_XOR_JIT_STRAT_NONE 0
+#define GF16_XOR_JIT_STRAT_COPYNT 1
+#define GF16_XOR_JIT_STRAT_COPY 2
+#define GF16_XOR_JIT_STRAT_CLR 3
 struct gf16_xor_scratch {
 	uint8_t deps[16*16*2*4];
+	int jitOptStrat; // GF16_XOR_JIT_STRAT_*
 	uint_fast8_t codeStart;
 };
+
+
+typedef void*(*gf16_xorjit_write_func)(const struct gf16_xor_scratch *HEDLEY_RESTRICT scratch, uint8_t *HEDLEY_RESTRICT jitptr, uint16_t val, int xor);
+static HEDLEY_ALWAYS_INLINE void gf16_xorjit_write_jit(const void *HEDLEY_RESTRICT scratch, uint16_t coefficient, jit_wx_pair* jitWriteMem, const int add, gf16_xorjit_write_func writeFunc) {
+	const struct gf16_xor_scratch *HEDLEY_RESTRICT info = (const struct gf16_xor_scratch *HEDLEY_RESTRICT)scratch;
+	uint8_t* jitptr = (uint8_t*)jitWriteMem + info->codeStart;
+	
+	if(info->jitOptStrat == GF16_XOR_JIT_STRAT_COPYNT || info->jitOptStrat == GF16_XOR_JIT_STRAT_COPY) {
+		ALIGN_TO(_GF16_XORJIT_COPY_ALIGN, uint8_t jitTemp[XORDEP_JIT_CODE_SIZE]);
+		uintptr_t copyOffset = info->codeStart;
+		if((uintptr_t)jitptr & (_GF16_XORJIT_COPY_ALIGN-1)) {
+			// copy unaligned part
+#if _GF16_XORJIT_COPY_ALIGN == 32
+			_mm256_store_si256((__m256i*)jitTemp, _mm256_load_si256((__m256i*)((uintptr_t)jitptr & ~(_GF16_XORJIT_COPY_ALIGN-1))));
+#else
+			_mm_store_si128((__m128i*)jitTemp, _mm_load_si128((__m128i*)((uintptr_t)jitptr & ~(_GF16_XORJIT_COPY_ALIGN-1))));
+#endif
+			copyOffset -= (uintptr_t)jitptr & (_GF16_XORJIT_COPY_ALIGN-1);
+			jitptr = jitTemp + ((uintptr_t)jitptr & (_GF16_XORJIT_COPY_ALIGN-1));
+		}
+		else
+			jitptr = jitTemp;
+		
+		jitptr = writeFunc(info, jitptr, coefficient, add);
+		*(int32_t*)jitptr = (int32_t)(jitTemp - copyOffset - jitptr -4);
+		jitptr[4] = 0xC3; /* ret */
+		
+		/* memcpy to destination */
+		uint8_t* jitdst = (uint8_t*)jitWriteMem + copyOffset;
+		if(info->jitOptStrat == GF16_XOR_JIT_STRAT_COPYNT) {
+			// 256-bit NT copies never seem to be better, so just stick to 128-bit
+			for(uint_fast32_t i=0; i<(uint_fast32_t)(jitptr+5-jitTemp); i+=64) {
+				__m128i ta = _mm_load_si128((__m128i*)(jitTemp + i));
+				__m128i tb = _mm_load_si128((__m128i*)(jitTemp + i + 16));
+				__m128i tc = _mm_load_si128((__m128i*)(jitTemp + i + 32));
+				__m128i td = _mm_load_si128((__m128i*)(jitTemp + i + 48));
+				_mm_stream_si128((__m128i*)(jitdst + i), ta);
+				_mm_stream_si128((__m128i*)(jitdst + i + 16), tb);
+				_mm_stream_si128((__m128i*)(jitdst + i + 32), tc);
+				_mm_stream_si128((__m128i*)(jitdst + i + 48), td);
+			}
+		} else {
+			// GCC probably turns these into memcpy calls anyway...
+#if _GF16_XORJIT_COPY_ALIGN == 32
+			for(uint_fast32_t i=0; i<(uint_fast32_t)(jitptr+10-jitTemp); i+=64) {
+				__m256i ta = _mm256_load_si256((__m256i*)(jitTemp + i));
+				__m256i tb = _mm256_load_si256((__m256i*)(jitTemp + i + 32));
+				_mm256_store_si256((__m256i*)(jitdst + i), ta);
+				_mm256_store_si256((__m256i*)(jitdst + i + 32), tb);
+			}
+#else
+			for(uint_fast32_t i=0; i<(uint_fast32_t)(jitptr+5-jitTemp); i+=64) {
+				__m128i ta = _mm_load_si128((__m128i*)(jitTemp + i));
+				__m128i tb = _mm_load_si128((__m128i*)(jitTemp + i + 16));
+				__m128i tc = _mm_load_si128((__m128i*)(jitTemp + i + 32));
+				__m128i td = _mm_load_si128((__m128i*)(jitTemp + i + 48));
+				_mm_store_si128((__m128i*)(jitdst + i), ta);
+				_mm_store_si128((__m128i*)(jitdst + i + 16), tb);
+				_mm_store_si128((__m128i*)(jitdst + i + 32), tc);
+				_mm_store_si128((__m128i*)(jitdst + i + 48), td);
+			}
+#endif
+		}
+	} else {
+		if(info->jitOptStrat == GF16_XOR_JIT_STRAT_CLR) {
+			// clear 1 byte per cacheline
+			for(int i=0; i<XORDEP_JIT_CODE_SIZE; i+=64)
+				jitptr[i] = 0;
+		}
+		jitptr = writeFunc(info, jitptr, coefficient, add);
+		*(int32_t*)jitptr = (int32_t)((uint8_t*)jitWriteMem - jitptr -4);
+		jitptr[4] = 0xC3; /* ret */
+	}
+}
 
 #endif /* PLATFORM_X86 */

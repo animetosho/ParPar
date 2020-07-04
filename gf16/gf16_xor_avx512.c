@@ -1,5 +1,7 @@
 
+#define _GF16_XORJIT_COPY_ALIGN 32
 #include "gf16_xor_common.h"
+#undef _GF16_XORJIT_COPY_ALIGN
 
 #if defined(__AVX512BW__) && defined(__AVX512VL__) && defined(PLATFORM_AMD64)
 int gf16_xor_available_avx512 = 1;
@@ -536,7 +538,7 @@ static inline void* xor_write_jit_avx512(const struct gf16_xor_scratch *HEDLEY_R
 	
 	/* cmp/jcc */
 	*(uint64_t*)(jitptr) = 0x800FC03948 | (AX <<16) | (CX <<19) | ((uint64_t)JL <<32);
-	return jitptr;
+	return jitptr+5;
 }
 
 // TODO: merge this into above
@@ -737,45 +739,8 @@ static void* xor_write_jit_avx512_multi(const struct gf16_xor_scratch *HEDLEY_RE
 }
 
 static HEDLEY_ALWAYS_INLINE void gf16_xor_jit_mul_avx512_base(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch, int add) {
-	const struct gf16_xor_scratch *HEDLEY_RESTRICT info = (const struct gf16_xor_scratch *HEDLEY_RESTRICT)scratch;
 	jit_wx_pair* jit = (jit_wx_pair*)mutScratch;
-	
-	uint8_t* jitptr = (uint8_t*)jit->w + info->codeStart;
-	
-#ifdef CPU_SLOW_SMC_CLR
-	memset(jitptr, 0, XORDEP_JIT_CODE_SIZE);
-#endif
-	
-#ifdef CPU_SLOW_SMC
-	ALIGN_TO(64, uint8_t jitTemp[XORDEP_JIT_CODE_SIZE]);
-	uintptr_t copyOffset = info->codeStart;
-	if((uintptr_t)jitptr & 0x1F) {
-		// copy unaligned part
-		_mm256_store_si256((__m256i*)jitTemp, _mm256_load_si256((__m256i*)((uintptr_t)jitptr & ~0x1F)));
-		copyOffset -= (uintptr_t)jitptr & 0x1F;
-		jitptr = jitTemp + ((uintptr_t)jitptr & 0x1F);
-	}
-	else
-		jitptr = jitTemp;
-	
-	jitptr = xor_write_jit_avx512(info, jitptr, coefficient, add);
-	*(int32_t*)(jitptr +5) = (int32_t)(jitTemp - copyOffset - jitptr -9);
-	jitptr[9] = 0xC3; /* ret */
-	
-	/* memcpy to destination */
-	/* AVX does result in fewer writes, but testing on Haswell seems to indicate minimal benefit over SSE2 */
-	uint8_t* jitdst = (uint8_t*)jit->w + copyOffset;
-	for(uint_fast32_t i=0; i<(uint_fast32_t)(jitptr+10-jitTemp); i+=64) {
-		__m256i ta = _mm256_load_si256((__m256i*)(jitTemp + i));
-		__m256i tb = _mm256_load_si256((__m256i*)(jitTemp + i + 32));
-		_mm256_store_si256((__m256i*)(jitdst + i), ta);
-		_mm256_store_si256((__m256i*)(jitdst + i + 32), tb);
-	}
-#else
-	jitptr = xor_write_jit_avx512(info, jitptr, coefficient, add);
-	*(int32_t*)(jitptr +5) = (int32_t)((uint8_t*)jit->w - jitptr -9);
-	jitptr[9] = 0xC3; /* ret */
-#endif
+	gf16_xorjit_write_jit(scratch, coefficient, jit->w, add, &xor_write_jit_avx512);
 	
 	gf16_xor512_jit_stub(
 		(intptr_t)dst - 1024,
@@ -815,6 +780,8 @@ unsigned gf16_xor_jit_muladd_multi_avx512(const void *HEDLEY_RESTRICT scratch, u
 	const struct gf16_xor_scratch *HEDLEY_RESTRICT info = (const struct gf16_xor_scratch *HEDLEY_RESTRICT)scratch;
 	jit_wx_pair* jit = (jit_wx_pair*)mutScratch;
 	
+	ALIGN_TO(64, uint8_t jitTemp[XORDEP_JIT_SIZE]); // for copying only
+	
 	uint8_t* jitCode = (uint8_t*)jit->w + info->codeStart;
 	ALIGN_TO(32, const void* srcPtr[XOR512_MULTI_REGIONS]);
 	
@@ -822,27 +789,22 @@ unsigned gf16_xor_jit_muladd_multi_avx512(const void *HEDLEY_RESTRICT scratch, u
 		unsigned numRegions = regions - region;
 		if(numRegions > XOR512_MULTI_REGIONS) numRegions = XOR512_MULTI_REGIONS;
 		
-#ifdef CPU_SLOW_SMC_CLR
-		memset(jitCode, 0, XORDEP_JIT_SIZE-256);
-#endif
-		
 		uint8_t* jitptr = jitCode;
-#ifdef CPU_SLOW_SMC
-		ALIGN_TO(64, uint8_t jitTemp[XORDEP_JIT_SIZE]);
-		uint8_t* jitdst;
-		
-		jitdst = jitptr;
-		if((uintptr_t)jitdst & 0x1F) {
-			/* copy unaligned part (might not be worth it for these CPUs, but meh) */
-			_mm_store_si128((__m128i*)jitTemp, _mm_load_si128((__m128i*)((uintptr_t)jitptr & ~0x1F)));
-			_mm_store_si128((__m128i*)(jitTemp+16), _mm_load_si128((__m128i*)((uintptr_t)jitptr & ~0x1F) +1));
-			jitptr = jitTemp + ((uintptr_t)jitdst & 0x1F);
-			jitdst -= (uintptr_t)jitdst & 0x1F;
+		uint8_t* jitdst = jitptr;
+		if(info->jitOptStrat == GF16_XOR_JIT_STRAT_COPYNT || info->jitOptStrat == GF16_XOR_JIT_STRAT_COPY) {
+			if((uintptr_t)jitdst & 0x1F) {
+				/* copy unaligned part (might not be worth it for these CPUs, but meh) */
+				_mm256_store_si256((__m256i*)jitTemp, _mm256_load_si256((__m256i*)((uintptr_t)jitptr & ~0x1F)));
+				jitptr = jitTemp + ((uintptr_t)jitdst & 0x1F);
+				jitdst -= (uintptr_t)jitdst & 0x1F;
+			}
+			else
+				jitptr = jitTemp;
 		}
-		else
-			jitptr = jitTemp;
-#endif
-		
+		else if(info->jitOptStrat == GF16_XOR_JIT_STRAT_CLR) {
+			for(int i=0; i<XORDEP_JIT_CODE_SIZE-256; i+=64)
+				jitptr[i] = 0;
+		}
 		
 		jitptr = xor_write_jit_avx512_multi(info, jitptr, DX, coefficients[region], 2);
 		srcPtr[0] = (char*)src[region] + offset - 1024;
@@ -869,24 +831,35 @@ unsigned gf16_xor_jit_muladd_multi_avx512(const void *HEDLEY_RESTRICT scratch, u
 		
 		/* cmp/jcc */
 		*(uint64_t*)(jitptr) = 0x800FC03948 | (AX <<16) | (CX <<19) | ((uint64_t)JL <<32);
-#ifdef CPU_SLOW_SMC
-		*(int32_t*)(jitptr +5) = (int32_t)((jitTemp - (jitdst - (uint8_t*)jit->w)) - jitptr -9);
-#else
-		*(int32_t*)(jitptr +5) = (int32_t)((uint8_t*)jit->w - jitptr -9);
-#endif
-		jitptr[9] = 0xC3; /* ret */
-		
-#ifdef CPU_SLOW_SMC
-		/* memcpy to destination */
-		/* AVX does result in fewer writes, but testing on Haswell seems to indicate minimal benefit over SSE2 */
-		for(uint_fast32_t i=0; i<(uint_fast32_t)(jitptr+10-jitTemp); i+=64) {
-			__m256i ta = _mm256_load_si256((__m256i*)(jitTemp + i));
-			__m256i tb = _mm256_load_si256((__m256i*)(jitTemp + i + 32));
-			_mm256_store_si256((__m256i*)(jitdst + i), ta);
-			_mm256_store_si256((__m256i*)(jitdst + i + 32), tb);
+		if(info->jitOptStrat == GF16_XOR_JIT_STRAT_COPYNT || info->jitOptStrat == GF16_XOR_JIT_STRAT_COPY) {
+			*(int32_t*)(jitptr +5) = (int32_t)((jitTemp - (jitdst - (uint8_t*)jit->w)) - jitptr -9);
+			jitptr[9] = 0xC3; /* ret */
+			/* memcpy to destination */
+			if(info->jitOptStrat == GF16_XOR_JIT_STRAT_COPYNT) {
+				// 256-bit NT copies never seem to be better, so just stick to 128-bit
+				for(uint_fast32_t i=0; i<(uint_fast32_t)(jitptr+5-jitTemp); i+=64) {
+					__m128i ta = _mm_load_si128((__m128i*)(jitTemp + i));
+					__m128i tb = _mm_load_si128((__m128i*)(jitTemp + i + 16));
+					__m128i tc = _mm_load_si128((__m128i*)(jitTemp + i + 32));
+					__m128i td = _mm_load_si128((__m128i*)(jitTemp + i + 48));
+					_mm_stream_si128((__m128i*)(jitdst + i), ta);
+					_mm_stream_si128((__m128i*)(jitdst + i + 16), tb);
+					_mm_stream_si128((__m128i*)(jitdst + i + 32), tc);
+					_mm_stream_si128((__m128i*)(jitdst + i + 48), td);
+				}
+			} else {
+				/* AVX does result in fewer writes, but testing on Haswell seems to indicate minimal benefit over SSE2 */
+				for(uint_fast32_t i=0; i<(uint_fast32_t)(jitptr+10-jitTemp); i+=64) {
+					__m256i ta = _mm256_load_si256((__m256i*)(jitTemp + i));
+					__m256i tb = _mm256_load_si256((__m256i*)(jitTemp + i + 32));
+					_mm256_store_si256((__m256i*)(jitdst + i), ta);
+					_mm256_store_si256((__m256i*)(jitdst + i + 32), tb);
+				}
+			}
+		} else {
+			*(int32_t*)(jitptr +5) = (int32_t)((uint8_t*)jit->w - jitptr -9);
+			jitptr[9] = 0xC3; /* ret */
 		}
-#endif
-		
 		
 		gf16_xor512_jit_multi_stub(
 			(intptr_t)dst + offset - 1024,
@@ -1089,6 +1062,7 @@ void* gf16_xor_jit_init_avx512(int polynomial) {
 	ALIGN_ALLOC(ret, sizeof(struct gf16_xor_scratch), 32);
 	gf16_bitdep_init256(ret->deps, polynomial, 0);
 	
+	ret->jitOptStrat = 0;
 	ret->codeStart = (uint_fast8_t)xor_write_init_jit(tmpCode);
 	return ret;
 #else
