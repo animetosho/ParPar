@@ -122,9 +122,9 @@ struct CpuCap {
 		}
 		
 		// test for JIT capability
-		void* jitTest = jit_alloc(256);
+		jit_wx_pair* jitTest = jit_alloc(256);
 		canMemWX = (jitTest != NULL);
-		if(jitTest) jit_free(jitTest, 256);
+		if(jitTest) jit_free(jitTest);
 	}
 };
 #endif
@@ -542,10 +542,8 @@ void Galois16Mul::mutScratch_free(void* mutScratch) const {
 	switch(_info.id) {
 		case GF16_XOR_JIT_SSE2:
 		case GF16_XOR_JIT_AVX2:
-			gf16_xor_jit_uninit(mutScratch);
-		break;
 		case GF16_XOR_JIT_AVX512:
-			gf16_xor_jit_uninit_avx512(mutScratch);
+			gf16_xor_jit_uninit(mutScratch);
 		break;
 		default: break;
 	}

@@ -672,22 +672,91 @@ static inline size_t _jit_ret(uint8_t* jit) {
 }
 
 
+typedef struct {
+	void* w; // write pointer
+	void* x; // execute pointer
+	size_t len;
+} jit_wx_pair;
+
 #if defined(_WINDOWS) || defined(__WINDOWS__) || defined(_WIN32) || defined(_WIN64)
-#include <windows.h>
-static inline void* jit_alloc(size_t len) {
-	return VirtualAlloc(NULL, len, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+# include <windows.h>
+static inline jit_wx_pair* jit_alloc(size_t len) {
+	void* mem = VirtualAlloc(NULL, len, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+	if(!mem) return NULL;
+	if((uintptr_t)mem & 63) { // allocated page not cacheline aligned? something's not right...
+		VirtualFree(mem, 0, MEM_RELEASE);
+		return NULL;
+	}
+	jit_wx_pair* ret = (jit_wx_pair*)malloc(sizeof(jit_wx_pair));
+	if(!ret) {
+		VirtualFree(mem, 0, MEM_RELEASE);
+		return NULL;
+	}
+	ret->x = mem;
+	ret->w = mem;
+	ret->len = len;
+	return ret;
 }
-static inline void jit_free(void* mem, size_t len) {
-	UNUSED(len);
-	VirtualFree(mem, 0, MEM_RELEASE);
+static inline void jit_free(void* mem) {
+	jit_wx_pair* pair = (jit_wx_pair*)mem;
+	VirtualFree(pair->w, 0, MEM_RELEASE);
+	free(mem);
 }
 #else
-#include <sys/mman.h>
-static inline void* jit_alloc(size_t len) {
-	return mmap(NULL, len, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANON, -1, 0);
+# include <sys/mman.h>
+# ifdef GF16_XORJIT_ENABLE_DUAL_MAPPING
+#  include <fcntl.h>
+#  include <unistd.h>
+#  include <sys/stat.h>
+# endif
+static inline jit_wx_pair* jit_alloc(size_t len) {
+	jit_wx_pair* ret = (jit_wx_pair*)malloc(sizeof(jit_wx_pair));
+	if(!ret) return NULL;
+	
+	ret->len = len;
+	void* mem = mmap(NULL, len, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANON, -1, 0);
+	if(mem) {
+		if((uintptr_t)mem & 63) { // page not cacheline aligned? something's gone wrong...
+			munmap(mem, len);
+			free(ret);
+			return NULL;
+		}
+		ret->w = mem;
+		ret->x = mem;
+		return ret;
+	}
+	
+	// couldn't map W+X page, try dual mapping trick (map aliased W and X pages)
+	#ifdef GF16_XORJIT_ENABLE_DUAL_MAPPING
+	// shm_open requires linking with librt, and seems to import some threading references, so try not to include if not needed
+	char path[128];
+	snprintf(path, sizeof(path), "/gf16_xorjit_shm_alloc(%lu)", (long)getpid());
+	int fd = shm_open(path, O_RDWR | O_CREAT | O_EXCL, 0700);
+	if(fd != -1) {
+		shm_unlink(path);
+		if(ftruncate(fd, len) != -1) {
+			ret->w = mmap(NULL, len, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+			ret->x = mmap(NULL, len, PROT_READ | PROT_EXEC, MAP_SHARED, fd, 0);
+			if(ret->w && ret->x && (uintptr_t)(ret->w) & 63 == 0 && (uintptr_t)(ret->x) & 63 == 0) {
+				// success
+				close(fd);
+				return ret;
+			}
+			if(ret->w) munmap(ret->w, len);
+			if(ret->x) munmap(ret->x, len);
+		}
+		close(fd);
+	}
+	#endif
+	free(ret);
+	return NULL;
 }
-static inline void jit_free(void* mem, size_t len) {
-	munmap(mem, len); /* TODO: needs to be aligned?? */
+static inline void jit_free(void* mem) {
+	jit_wx_pair* pair = (jit_wx_pair*)mem;
+	if(pair->w != pair->x)
+		munmap(pair->x, pair->len);
+	munmap(pair->w, pair->len);
+	free(mem);
 }
 #endif
 

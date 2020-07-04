@@ -180,15 +180,8 @@ static inline int xor_write_avx_main_part(void* jitptr, uint8_t dep1, uint8_t de
 	return xor256_jit_len[dep];
 }
 
-static inline void xor_write_jit_avx(const struct gf16_xor_scratch *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT mutScratch, uint16_t val, int xor) {
+static inline void* xor_write_jit_avx(const struct gf16_xor_scratch *HEDLEY_RESTRICT scratch, uint8_t* jitptr, uint16_t val, int xor) {
 	uint_fast32_t bit;
-	
-	uint8_t* jitptr;
-#ifdef CPU_SLOW_SMC
-	ALIGN_TO(32, uint8_t jitTemp[XORDEP_JIT_CODE_SIZE]);
-	uint8_t* jitdst;
-#endif
-	
 	
 	__m256i depmask = _mm256_load_si256((__m256i*)scratch->deps + (val & 0xf)*4);
 	depmask = _mm256_xor_si256(depmask,
@@ -262,20 +255,6 @@ static inline void xor_write_jit_avx(const struct gf16_xor_scratch *HEDLEY_RESTR
 	_mm_store_si128((__m128i*)deps1, tmp3);
 	_mm_store_si128((__m128i*)deps2, tmp4);
 	
-	
-	jitptr = (uint8_t*)mutScratch + scratch->codeStart;
-#ifdef CPU_SLOW_SMC
-	jitdst = jitptr;
-	if((uintptr_t)jitdst & 0x1F) {
-		/* copy unaligned part (might not be worth it for these CPUs, but meh) */
-		_mm_store_si128((__m128i*)jitTemp, _mm_load_si128((__m128i*)((uintptr_t)jitptr & ~0x1F)));
-		_mm_store_si128((__m128i*)(jitTemp+16), _mm_load_si128((__m128i*)((uintptr_t)jitptr & ~0x1F) +1));
-		jitptr = jitTemp + ((uintptr_t)jitdst & 0x1F);
-		jitdst -= (uintptr_t)jitdst & 0x1F;
-	}
-	else
-		jitptr = jitTemp;
-#endif
 	
 	// TODO: optimize these
 	#undef _LD_DQA
@@ -392,43 +371,64 @@ static inline void xor_write_jit_avx(const struct gf16_xor_scratch *HEDLEY_RESTR
 	
 	/* cmp/jcc */
 	*(uint64_t*)(jitptr) = 0x800FC03948 | (DX <<16) | (CX <<19) | ((uint64_t)JL <<32);
-#ifdef CPU_SLOW_SMC
-	*(int32_t*)(jitptr +5) = (int32_t)((jitTemp - (jitdst - (uint8_t*)mutScratch)) - jitptr -9);
-#else
-	*(int32_t*)(jitptr +5) = (int32_t)((uint8_t*)mutScratch - jitptr -9);
+	return jitptr;
+}
+
+static HEDLEY_ALWAYS_INLINE void gf16_xor_jit_mul_avx2_base(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch, int add) {
+	const struct gf16_xor_scratch *HEDLEY_RESTRICT info = (const struct gf16_xor_scratch *HEDLEY_RESTRICT)scratch;
+	jit_wx_pair* jit = (jit_wx_pair*)mutScratch;
+	
+	uint8_t* jitptr = (uint8_t*)jit->w + info->codeStart;
+	
+#ifdef CPU_SLOW_SMC_CLR
+	memset(jitptr, 0, XORDEP_JIT_CODE_SIZE);
 #endif
-	jitptr[9] = 0xC3; /* ret */
 	
 #ifdef CPU_SLOW_SMC
+	ALIGN_TO(32, uint8_t jitTemp[XORDEP_JIT_CODE_SIZE]);
+	uintptr_t copyOffset = info->codeStart;
+	if((uintptr_t)jitptr & 0x1F) {
+		// copy unaligned part
+		_mm256_store_si256((__m256i*)jitTemp, _mm256_load_si256((__m256i*)((uintptr_t)jitptr & ~0x1F)));
+		copyOffset -= (uintptr_t)jitptr & 0x1F;
+		jitptr = jitTemp + ((uintptr_t)jitptr & 0x1F);
+	}
+	else
+		jitptr = jitTemp;
+	
+	jitptr = xor_write_jit_avx(info, jitptr, coefficient, add);
+	*(int32_t*)(jitptr +5) = (int32_t)(jitTemp - copyOffset - jitptr -9);
+	jitptr[9] = 0xC3; /* ret */
+	
 	/* memcpy to destination */
 	/* AVX does result in fewer writes, but testing on Haswell seems to indicate minimal benefit over SSE2 */
+	uint8_t* jitdst = (uint8_t*)jit->w + copyOffset;
 	for(uint_fast32_t i=0; i<(uint_fast32_t)(jitptr+10-jitTemp); i+=64) {
 		__m256i ta = _mm256_load_si256((__m256i*)(jitTemp + i));
 		__m256i tb = _mm256_load_si256((__m256i*)(jitTemp + i + 32));
 		_mm256_store_si256((__m256i*)(jitdst + i), ta);
 		_mm256_store_si256((__m256i*)(jitdst + i + 32), tb);
 	}
+#else
+	jitptr = xor_write_jit_avx(info, jitptr, coefficient, add);
+	*(int32_t*)(jitptr +5) = (int32_t)((uint8_t*)jit->w - jitptr -9);
+	jitptr[9] = 0xC3; /* ret */
 #endif
-}
-
-#endif /* defined(__AVX2__) && defined(PLATFORM_AMD64) */
-
-void gf16_xor_jit_mul_avx2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch) {
-#if defined(__AVX2__) && defined(PLATFORM_AMD64)
-	const struct gf16_xor_scratch *HEDLEY_RESTRICT info = (const struct gf16_xor_scratch *HEDLEY_RESTRICT)scratch;
 	
-#ifdef CPU_SLOW_SMC_CLR
-	memset((char*)mutScratch + info->codeStart, 0, XORDEP_JIT_CODE_SIZE);
-#endif
-	xor_write_jit_avx(info, mutScratch, coefficient, 0);
 	gf16_xor256_jit_stub(
 		(intptr_t)src - 384,
 		(intptr_t)dst + len - 384,
 		(intptr_t)dst - 384,
-		mutScratch
+		jit->x
 	);
 	
 	_mm256_zeroupper();
+}
+#endif /* defined(__AVX2__) && defined(PLATFORM_AMD64) */
+
+void gf16_xor_jit_mul_avx2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch) {
+#if defined(__AVX2__) && defined(PLATFORM_AMD64)
+	gf16_xor_jit_mul_avx2_base(scratch, dst, src, len, coefficient, mutScratch, 0);
 #else
 	UNUSED(scratch); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficient); UNUSED(mutScratch);
 #endif
@@ -436,20 +436,7 @@ void gf16_xor_jit_mul_avx2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RES
 
 void gf16_xor_jit_muladd_avx2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch) {
 #if defined(__AVX2__) && defined(PLATFORM_AMD64)
-	const struct gf16_xor_scratch *HEDLEY_RESTRICT info = (const struct gf16_xor_scratch *HEDLEY_RESTRICT)scratch;
-	
-#ifdef CPU_SLOW_SMC_CLR
-	memset((char*)mutScratch + info->codeStart, 0, XORDEP_JIT_CODE_SIZE);
-#endif
-	xor_write_jit_avx(info, mutScratch, coefficient, 1);
-	gf16_xor256_jit_stub(
-		(intptr_t)src - 384,
-		(intptr_t)dst + len - 384,
-		(intptr_t)dst - 384,
-		mutScratch
-	);
-	
-	_mm256_zeroupper();
+	gf16_xor_jit_mul_avx2_base(scratch, dst, src, len, coefficient, mutScratch, 1);
 #else
 	UNUSED(scratch); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficient); UNUSED(mutScratch);
 #endif
@@ -675,9 +662,9 @@ void* gf16_xor_jit_init_avx2(int polynomial) {
 
 void* gf16_xor_jit_init_mut_avx2() {
 #if defined(__AVX2__) && defined(PLATFORM_AMD64)
-	uint8_t *jitCode = jit_alloc(XORDEP_JIT_SIZE);
+	jit_wx_pair *jitCode = jit_alloc(XORDEP_JIT_SIZE);
 	if(!jitCode) return NULL;
-	xor_write_init_jit(jitCode);
+	xor_write_init_jit(jitCode->w);
 	return jitCode;
 #else
 	return NULL;

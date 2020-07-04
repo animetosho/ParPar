@@ -312,15 +312,9 @@ static HEDLEY_ALWAYS_INLINE uint_fast16_t xor_jit_bitpair3_nc_noxor(uint8_t* des
 
 
 
-static inline void xor_write_jit_sse(const struct gf16_xor_scratch *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT mutScratch, uint16_t val, int xor) {
+static inline void* xor_write_jit_sse(const struct gf16_xor_scratch *HEDLEY_RESTRICT scratch, uint8_t *HEDLEY_RESTRICT jitptr, uint16_t val, int xor) {
 	uint_fast32_t bit;
 	ALIGN_TO(16, uint32_t lumask[8]);
-
-	uint8_t* jitptr;
-#ifdef CPU_SLOW_SMC
-	ALIGN_TO(32, uint8_t jitTemp[XORDEP_JIT_CODE_SIZE]);
-	uint8_t* jitdst;
-#endif
 	
 	__m128i depmask1 = _mm_load_si128((__m128i*)(scratch->deps + ((val & 0xf) << 7)));
 	__m128i depmask2 = _mm_load_si128((__m128i*)(scratch->deps + ((val & 0xf) << 7)) +1);
@@ -357,29 +351,6 @@ static inline void xor_write_jit_sse(const struct gf16_xor_scratch *HEDLEY_RESTR
 	#define no_common_mask 0
 #endif
 	
-	
-	jitptr = (uint8_t*)mutScratch + scratch->codeStart;
-#ifdef CPU_SLOW_SMC
-	jitdst = jitptr;
-#if 0 // defined(__tune_corei7_avx__) || defined(__tune_core_avx2__)
-	if((uintptr_t)jitdst & 0x1F) {
-		/* copy unaligned part (might not be worth it for these CPUs, but meh) */
-		_mm_store_si128((__m128i*)jitTemp, _mm_load_si128((__m128i*)((uintptr_t)jitptr & ~0x1F)));
-		_mm_store_si128((__m128i*)(jitTemp+16), _mm_load_si128((__m128i*)((uintptr_t)jitptr & ~0x1F) +1));
-		jitptr = jitTemp + ((uintptr_t)jitdst & 0x1F);
-		jitdst -= (uintptr_t)jitdst & 0x1F;
-	}
-#else
-	if((uintptr_t)jitdst & 0xF) {
-		/* copy unaligned part (might not be worth it for these CPUs, but meh) */
-		_mm_store_si128((__m128i*)jitTemp, _mm_load_si128((__m128i*)((uintptr_t)jitptr & ~0xF)));
-		jitptr = jitTemp + ((uintptr_t)jitdst & 0xF);
-		jitdst -= (uintptr_t)jitdst & 0xF;
-	}
-#endif
-	else
-		jitptr = jitTemp;
-#endif
 	
 	//_jit_movaps_load(jit, reg, xreg, offs)
 	// (we just save a conditional by hardcoding this)
@@ -677,7 +648,7 @@ static inline void xor_write_jit_sse(const struct gf16_xor_scratch *HEDLEY_RESTR
 		}
 	}
 	
-	/* cmp/jcc */
+	/* cmp */
 #ifdef PLATFORM_AMD64
 	*(uint64_t*)(jitptr) = 0x800FC03948 | (DX <<16) | (CX <<19) | ((uint64_t)JL <<32);
 	jitptr += 5;
@@ -685,25 +656,38 @@ static inline void xor_write_jit_sse(const struct gf16_xor_scratch *HEDLEY_RESTR
 	*(uint32_t*)(jitptr) = 0x800FC039 | (DX <<8) | (CX <<11) | (JL <<24);
 	jitptr += 4;
 #endif
-#ifdef CPU_SLOW_SMC
-	*(int32_t*)jitptr = (int32_t)((jitTemp - (jitdst - (uint8_t*)mutScratch)) - jitptr -4);
-#else
-	*(int32_t*)jitptr = (int32_t)((uint8_t*)mutScratch - jitptr -4);
+	
+	return jitptr;
+}
+
+static HEDLEY_ALWAYS_INLINE void gf16_xor_jit_mul_sse2_base(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch, int add) {
+	const struct gf16_xor_scratch *HEDLEY_RESTRICT info = (const struct gf16_xor_scratch *HEDLEY_RESTRICT)scratch;
+	jit_wx_pair* jit = (jit_wx_pair*)mutScratch;
+	
+	uint8_t* jitptr = (uint8_t*)jit->w + info->codeStart;
+	
+#ifdef CPU_SLOW_SMC_CLR
+	memset(jitptr, 0, XORDEP_JIT_CODE_SIZE);
 #endif
-	jitptr[4] = 0xC3; /* ret */
 	
 #ifdef CPU_SLOW_SMC
-	/* memcpy to destination */
-	/* AVX does result in fewer writes, but testing on Haswell seems to indicate minimal benefit over SSE2 */
-#if 0 // defined(__tune_corei7_avx__) || defined(__tune_core_avx2__)
-	for(uint_fast32_t i=0; i<jitptr+5-jitTemp; i+=64) {
-		__m256i ta = _mm256_load_si256((__m256i*)(jitTemp + i));
-		__m256i tb = _mm256_load_si256((__m256i*)(jitTemp + i + 32));
-		_mm256_store_si256((__m256i*)(jitdst + i), ta);
-		_mm256_store_si256((__m256i*)(jitdst + i + 32), tb);
+	ALIGN_TO(16, uint8_t jitTemp[XORDEP_JIT_CODE_SIZE]);
+	uintptr_t copyOffset = info->codeStart;
+	if((uintptr_t)jitptr & 0xF) {
+		// copy unaligned part
+		_mm_store_si128((__m128i*)jitTemp, _mm_load_si128((__m128i*)((uintptr_t)jitptr & ~0xF)));
+		copyOffset -= (uintptr_t)jitptr & 0xF;
+		jitptr = jitTemp + ((uintptr_t)jitptr & 0xF);
 	}
-	_mm256_zeroupper();
-#else
+	else
+		jitptr = jitTemp;
+	
+	jitptr = xor_write_jit_sse(info, jitptr, coefficient, add);
+	*(int32_t*)jitptr = (int32_t)(jitTemp - copyOffset - jitptr -4);
+	jitptr[4] = 0xC3; /* ret */
+	
+	/* memcpy to destination */
+	uint8_t* jitdst = (uint8_t*)jit->w + copyOffset;
 	for(uint_fast32_t i=0; i<(uint_fast32_t)(jitptr+5-jitTemp); i+=64) {
 		__m128i ta = _mm_load_si128((__m128i*)(jitTemp + i));
 		__m128i tb = _mm_load_si128((__m128i*)(jitTemp + i + 16));
@@ -714,19 +698,12 @@ static inline void xor_write_jit_sse(const struct gf16_xor_scratch *HEDLEY_RESTR
 		_mm_store_si128((__m128i*)(jitdst + i + 32), tc);
 		_mm_store_si128((__m128i*)(jitdst + i + 48), td);
 	}
-#endif
-#endif
-}
-#endif /* defined(__SSE2__) */
-
-void gf16_xor_jit_mul_sse2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch) {
-#ifdef __SSE2__
-	const struct gf16_xor_scratch *HEDLEY_RESTRICT info = (const struct gf16_xor_scratch *HEDLEY_RESTRICT)scratch;
-#ifdef CPU_SLOW_SMC_CLR
-	memset((char*)mutScratch + info->codeStart, 0, XORDEP_JIT_CODE_SIZE);
+#else
+	jitptr = xor_write_jit_sse(info, jitptr, coefficient, add);
+	*(int32_t*)jitptr = (int32_t)((uint8_t*)jit->w - jitptr -4);
+	jitptr[4] = 0xC3; /* ret */
 #endif
 	
-	xor_write_jit_sse(info, mutScratch, coefficient, 0);
 	// exec
 	/* adding 128 to the destination pointer allows the register offset to be coded in 1 byte
 	 * eg: 'movdqa xmm0, [rdx+0x90]' is 8 bytes, whilst 'movdqa xmm0, [rdx-0x60]' is 5 bytes */
@@ -734,8 +711,14 @@ void gf16_xor_jit_mul_sse2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RES
 		(intptr_t)src - 128,
 		(intptr_t)dst + len - 128,
 		(intptr_t)dst - 128,
-		mutScratch
+		jit->x
 	);
+}
+#endif /* defined(__SSE2__) */
+
+void gf16_xor_jit_mul_sse2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch) {
+#ifdef __SSE2__
+	gf16_xor_jit_mul_sse2_base(scratch, dst, src, len, coefficient, mutScratch, 0);
 #else
 	UNUSED(scratch); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficient); UNUSED(mutScratch);
 #endif
@@ -743,18 +726,7 @@ void gf16_xor_jit_mul_sse2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RES
 
 void gf16_xor_jit_muladd_sse2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch) {
 #ifdef __SSE2__
-	const struct gf16_xor_scratch *HEDLEY_RESTRICT info = (const struct gf16_xor_scratch *HEDLEY_RESTRICT)scratch;
-#ifdef CPU_SLOW_SMC_CLR
-	memset((char*)mutScratch + info->codeStart, 0, XORDEP_JIT_CODE_SIZE);
-#endif
-
-	xor_write_jit_sse(info, mutScratch, coefficient, 1);
-	gf16_xor_jit_stub(
-		(intptr_t)src - 128,
-		(intptr_t)dst + len - 128,
-		(intptr_t)dst - 128,
-		mutScratch
-	);
+	gf16_xor_jit_mul_sse2_base(scratch, dst, src, len, coefficient, mutScratch, 1);
 #else
 	UNUSED(scratch); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficient); UNUSED(mutScratch);
 #endif
@@ -1184,9 +1156,9 @@ void* gf16_xor_jit_init_sse2(int polynomial) {
 
 void* gf16_xor_jit_init_mut_sse2() {
 #ifdef PLATFORM_X86
-	uint8_t *jitCode = jit_alloc(XORDEP_JIT_SIZE);
+	jit_wx_pair *jitCode = jit_alloc(XORDEP_JIT_SIZE);
 	if(!jitCode) return NULL;
-	xor_write_init_jit(jitCode);
+	xor_write_init_jit(jitCode->w);
 	return jitCode;
 #else
 	return NULL;
@@ -1195,7 +1167,7 @@ void* gf16_xor_jit_init_mut_sse2() {
 
 void gf16_xor_jit_uninit(void* scratch) {
 #ifdef PLATFORM_X86
-	jit_free(scratch, XORDEP_JIT_SIZE);
+	jit_free(scratch);
 #else
 	UNUSED(scratch);
 #endif
