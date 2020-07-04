@@ -607,7 +607,7 @@ static size_t xor_write_init_jit(uint8_t *jitCode) {
 #endif
 
 
-void* gf16_xor_jit_init_avx2(int polynomial) {
+void* gf16_xor_jit_init_avx2(int polynomial, int jitOptStrat) {
 #if defined(__AVX2__) && defined(PLATFORM_AMD64)
 	struct gf16_xor_scratch* ret;
 	uint8_t tmpCode[XORDEP_JIT_CODE_SIZE];
@@ -617,11 +617,11 @@ void* gf16_xor_jit_init_avx2(int polynomial) {
 	
 	gf16_xor_create_jit_lut_avx2();
 	
-	ret->jitOptStrat = 0;
+	ret->jitOptStrat = jitOptStrat;
 	ret->codeStart = (uint_fast8_t)xor_write_init_jit(tmpCode);
 	return ret;
 #else
-	UNUSED(polynomial);
+	UNUSED(polynomial); UNUSED(jitOptStrat);
 	return NULL;
 #endif
 }

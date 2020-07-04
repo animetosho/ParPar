@@ -38,6 +38,7 @@ struct CpuCap {
 	size_t propPrefShuffleThresh;
 	bool propAVX128EU, propHT;
 	bool canMemWX;
+	int jitOptStrat;
 	CpuCap(bool detect) :
 	  hasSSE2(true),
 	  hasSSSE3(true),
@@ -49,7 +50,8 @@ struct CpuCap {
 	  propPrefShuffleThresh(0),
 	  propAVX128EU(false),
 	  propHT(false),
-	  canMemWX(true)
+	  canMemWX(true),
+	  jitOptStrat(GF16_XOR_JIT_STRAT_NONE)
 	{
 		if(!detect) return;
 		
@@ -66,16 +68,50 @@ struct CpuCap {
 		
 		propPrefShuffleThresh = 131072; // it seems like XOR JIT is always faster than shuffle at ~128KB sizes
 		
+		bool isAtom = false, isCore2 = false, isICoreOld = false, isICoreNew = false;
 		if(family == 6) {
 			/* from handy table at http://a4lg.com/tech/x86/database/x86-families-and-models.en.html */
 			if(model == 0x1C || model == 0x26 || model == 0x27 || model == 0x35 || model == 0x36 || model == 0x37 || model == 0x4A || model == 0x4C || model == 0x4D || model == 0x5A || model == 0x5D) {
 				/* we have a Bonnell/Silvermont CPU with a really slow pshufb instruction; pretend SSSE3 doesn't exist, as XOR_DEPENDS is much faster */
 				propPrefShuffleThresh = 2048;
+				isAtom = true;
 			}
 			if(model == 0x0F || model == 0x16) {
 				/* Conroe CPU with relatively slow pshufb; pretend SSSE3 doesn't exist, as XOR_DEPENDS is generally faster */
 				propPrefShuffleThresh = 16384;
+				isCore2 = true;
 			}
+			
+			if(model == 0x17 || model == 0x1D) isCore2 = true; // Penryn
+			if((model == 0x1A || model == 0x1E || model == 0x2E) /*Nehalem*/
+			|| (model == 0x25 || model == 0x2C || model == 0x2F) /*Westmere*/
+			|| (model == 0x2A || model == 0x2D) /*Sandy Bridge*/
+			|| (model == 0x3A || model == 0x3E) /*Ivy Bridge*/
+			|| (model == 0x3C || model == 0x3F || model == 0x45 || model == 0x46) /*Haswell*/
+			|| (model == 0x3D || model == 0x47 || model == 0x4F || model == 0x56) /*Broadwell*/
+			|| (model == 0x4E || model == 0x5E || model == 0x8E || model == 0x9E || model == 0xA5 || model == 0xA6) /*Skylake*/
+			|| (model == 0x55) /*Skylake-X/Cascadelake/Cooper*/
+			|| (model == 0x66) /*Cannonlake*/
+			|| (model == 0x67) /*Skylake/Cannonlake?*/
+			)
+				isICoreOld = true;
+			
+			if((model == 0x7E || model == 0x7D || model == 0x6A || model == 0x6C) // Icelake client/server
+			|| (model == 0xA7) // Rocketlake
+			|| (model == 0x8C || model == 0x8D || model == 0x8F) // Tigerlake/SapphireRapids
+			)
+				isICoreNew = true;
+			
+			if(model == 0x8A) { // Lakefield
+				isICoreNew = true;
+				isAtom = true;
+			}
+			
+			if((model == 0x5C || model == 0x5F) // Goldmont
+			|| (model == 0x7A) // Goldmont Plus
+			|| (model == 0x86 || model == 0x96 || model == 0x9C) // Tremont
+			)
+				isAtom = true;
 		}
 		if((family == 0x5f && (model == 0 || model == 1 || model == 2)) || (family == 0x6f && (model == 0 || model == 0x10 || model == 0x20 || model == 0x30))) {
 			/* Jaguar has a slow shuffle instruction and XOR is much faster; presumably the same for Bobcat/Puma */
@@ -125,6 +161,18 @@ struct CpuCap {
 		jit_wx_pair* jitTest = jit_alloc(256);
 		canMemWX = (jitTest != NULL);
 		if(jitTest) jit_free(jitTest);
+		
+		// optimal JIT strategy
+		if(isICoreOld)
+			jitOptStrat = GF16_XOR_JIT_STRAT_CLR;
+		else if(isAtom || isCore2 || isICoreNew || family == 0x6f /*AMDfam15*/ || family == 0x1f /*K10*/)
+			jitOptStrat = GF16_XOR_JIT_STRAT_COPYNT;
+		else if(family == 0x8f /*AMDfam17*/ || family == 0x9f /*Hygon*/ || family == 0xaf /*AMDfam19*/)
+			// despite tests, clearing seems to work better than copying
+			// GF16_XOR_JIT_STRAT_COPY seems to perform slightly worse than doing nothing, COPYNT is *much* worse, whereas clearing is slightly better
+			jitOptStrat = GF16_XOR_JIT_STRAT_CLR;
+		else // AMDfam16 or unknown
+			jitOptStrat = GF16_XOR_JIT_STRAT_NONE;
 	}
 };
 #endif
@@ -372,8 +420,9 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 		case GF16_XOR_JIT_AVX2:
 		//case GF16_XOR_JIT_AVX:
 		case GF16_XOR_JIT_SSE2:
-		case GF16_XOR_SSE2:
+		case GF16_XOR_SSE2: {
 			_info.alignment = 16;
+			int jitOptStrat = CpuCap(true).jitOptStrat;
 			
 			switch(method) {
 				case GF16_XOR_JIT_SSE2:
@@ -387,7 +436,7 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 						_mul = &gf16_xor_mul_sse2;
 						_mul_add = &gf16_xor_muladd_sse2;
 					} else {
-						scratch = gf16_xor_jit_init_sse2(GF16_POLYNOMIAL);
+						scratch = gf16_xor_jit_init_sse2(GF16_POLYNOMIAL, jitOptStrat);
 						_mul = &gf16_xor_jit_mul_sse2;
 						_mul_add = &gf16_xor_jit_muladd_sse2;
 					}
@@ -400,7 +449,7 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 						setupMethod(GF16_AUTO);
 						return;
 					}
-					scratch = gf16_xor_jit_init_sse2(GF16_POLYNOMIAL);
+					scratch = gf16_xor_jit_init_sse2(GF16_POLYNOMIAL, jitOptStrat);
 					_mul = &gf16_xor_jit_mul_avx;
 					_mul_add = &gf16_xor_jit_muladd_avx;
 					prepare = &gf16_xor_prepare_avx;
@@ -412,7 +461,7 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 						setupMethod(GF16_AUTO);
 						return;
 					}
-					scratch = gf16_xor_jit_init_avx2(GF16_POLYNOMIAL);
+					scratch = gf16_xor_jit_init_avx2(GF16_POLYNOMIAL, jitOptStrat);
 					_mul = &gf16_xor_jit_mul_avx2;
 					_mul_add = &gf16_xor_jit_muladd_avx2;
 					prepare = &gf16_xor_prepare_avx2;
@@ -424,7 +473,7 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 						setupMethod(GF16_AUTO);
 						return;
 					}
-					scratch = gf16_xor_jit_init_avx512(GF16_POLYNOMIAL);
+					scratch = gf16_xor_jit_init_avx512(GF16_POLYNOMIAL, jitOptStrat);
 					_mul = &gf16_xor_jit_mul_avx512;
 					_mul_add = &gf16_xor_jit_muladd_avx512;
 					_mul_add_multi = &gf16_xor_jit_muladd_multi_avx512;
@@ -436,7 +485,7 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 			}
 			
 			_info.stride = _info.alignment*16;
-		break;
+		} break;
 		
 		case GF16_LOOKUP_SSE2:
 			_mul = &gf16_lookup_mul_sse2;

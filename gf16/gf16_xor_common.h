@@ -3,6 +3,7 @@
 #ifdef PLATFORM_X86
 
 #include "x86_jit.h"
+#include "gf16_xor.h"
 
 #define XORDEP_JIT_SIZE 4096
 #define XORDEP_JIT_CODE_SIZE 1280
@@ -104,10 +105,6 @@ static HEDLEY_ALWAYS_INLINE void gf16_xor_jit_stub(intptr_t src, intptr_t dEnd, 
 #endif
 
 
-#define GF16_XOR_JIT_STRAT_NONE 0
-#define GF16_XOR_JIT_STRAT_COPYNT 1
-#define GF16_XOR_JIT_STRAT_COPY 2
-#define GF16_XOR_JIT_STRAT_CLR 3
 struct gf16_xor_scratch {
 	uint8_t deps[16*16*2*4];
 	int jitOptStrat; // GF16_XOR_JIT_STRAT_*
@@ -115,6 +112,7 @@ struct gf16_xor_scratch {
 };
 
 
+#ifdef __SSE2__
 typedef void*(*gf16_xorjit_write_func)(const struct gf16_xor_scratch *HEDLEY_RESTRICT scratch, uint8_t *HEDLEY_RESTRICT jitptr, uint16_t val, int xor);
 static HEDLEY_ALWAYS_INLINE void gf16_xorjit_write_jit(const void *HEDLEY_RESTRICT scratch, uint16_t coefficient, jit_wx_pair* jitWriteMem, const int add, gf16_xorjit_write_func writeFunc) {
 	const struct gf16_xor_scratch *HEDLEY_RESTRICT info = (const struct gf16_xor_scratch *HEDLEY_RESTRICT)scratch;
@@ -125,7 +123,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_xorjit_write_jit(const void *HEDLEY_RESTRI
 		uintptr_t copyOffset = info->codeStart;
 		if((uintptr_t)jitptr & (_GF16_XORJIT_COPY_ALIGN-1)) {
 			// copy unaligned part
-#if _GF16_XORJIT_COPY_ALIGN == 32
+#if _GF16_XORJIT_COPY_ALIGN == 32 && defined(__AVX2__)
 			_mm256_store_si256((__m256i*)jitTemp, _mm256_load_si256((__m256i*)((uintptr_t)jitptr & ~(_GF16_XORJIT_COPY_ALIGN-1))));
 #else
 			_mm_store_si128((__m128i*)jitTemp, _mm_load_si128((__m128i*)((uintptr_t)jitptr & ~(_GF16_XORJIT_COPY_ALIGN-1))));
@@ -139,12 +137,13 @@ static HEDLEY_ALWAYS_INLINE void gf16_xorjit_write_jit(const void *HEDLEY_RESTRI
 		jitptr = writeFunc(info, jitptr, coefficient, add);
 		*(int32_t*)jitptr = (int32_t)(jitTemp - copyOffset - jitptr -4);
 		jitptr[4] = 0xC3; /* ret */
+		jitptr += 5;
 		
 		/* memcpy to destination */
 		uint8_t* jitdst = (uint8_t*)jitWriteMem + copyOffset;
 		if(info->jitOptStrat == GF16_XOR_JIT_STRAT_COPYNT) {
 			// 256-bit NT copies never seem to be better, so just stick to 128-bit
-			for(uint_fast32_t i=0; i<(uint_fast32_t)(jitptr+5-jitTemp); i+=64) {
+			for(uint_fast32_t i=0; i<(uint_fast32_t)(jitptr-jitTemp); i+=64) {
 				__m128i ta = _mm_load_si128((__m128i*)(jitTemp + i));
 				__m128i tb = _mm_load_si128((__m128i*)(jitTemp + i + 16));
 				__m128i tc = _mm_load_si128((__m128i*)(jitTemp + i + 32));
@@ -156,15 +155,15 @@ static HEDLEY_ALWAYS_INLINE void gf16_xorjit_write_jit(const void *HEDLEY_RESTRI
 			}
 		} else {
 			// GCC probably turns these into memcpy calls anyway...
-#if _GF16_XORJIT_COPY_ALIGN == 32
-			for(uint_fast32_t i=0; i<(uint_fast32_t)(jitptr+10-jitTemp); i+=64) {
+#if _GF16_XORJIT_COPY_ALIGN == 32 && defined(__AVX2__)
+			for(uint_fast32_t i=0; i<(uint_fast32_t)(jitptr-jitTemp); i+=64) {
 				__m256i ta = _mm256_load_si256((__m256i*)(jitTemp + i));
 				__m256i tb = _mm256_load_si256((__m256i*)(jitTemp + i + 32));
 				_mm256_store_si256((__m256i*)(jitdst + i), ta);
 				_mm256_store_si256((__m256i*)(jitdst + i + 32), tb);
 			}
 #else
-			for(uint_fast32_t i=0; i<(uint_fast32_t)(jitptr+5-jitTemp); i+=64) {
+			for(uint_fast32_t i=0; i<(uint_fast32_t)(jitptr-jitTemp); i+=64) {
 				__m128i ta = _mm_load_si128((__m128i*)(jitTemp + i));
 				__m128i tb = _mm_load_si128((__m128i*)(jitTemp + i + 16));
 				__m128i tc = _mm_load_si128((__m128i*)(jitTemp + i + 32));
@@ -187,5 +186,6 @@ static HEDLEY_ALWAYS_INLINE void gf16_xorjit_write_jit(const void *HEDLEY_RESTRI
 		jitptr[4] = 0xC3; /* ret */
 	}
 }
+#endif
 
 #endif /* PLATFORM_X86 */

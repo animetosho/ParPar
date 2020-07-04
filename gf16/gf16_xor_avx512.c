@@ -872,7 +872,7 @@ unsigned gf16_xor_jit_muladd_multi_avx512(const void *HEDLEY_RESTRICT scratch, u
 	_mm256_zeroupper();
 	return regions;
 #else
-	UNUSED(scratch); UNUSED(regions); UNUSED(offset); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficients);
+	UNUSED(scratch); UNUSED(regions); UNUSED(offset); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficients); UNUSED(mutScratch);
 	return 0;
 #endif
 }
@@ -1054,7 +1054,7 @@ void gf16_xor_finish_avx512(void *HEDLEY_RESTRICT dst, size_t len) {
 
 
 
-void* gf16_xor_jit_init_avx512(int polynomial) {
+void* gf16_xor_jit_init_avx512(int polynomial, int jitOptStrat) {
 #if defined(__AVX512BW__) && defined(__AVX512VL__) && defined(PLATFORM_AMD64)
 	struct gf16_xor_scratch* ret;
 	uint8_t tmpCode[XORDEP_JIT_CODE_SIZE];
@@ -1062,11 +1062,11 @@ void* gf16_xor_jit_init_avx512(int polynomial) {
 	ALIGN_ALLOC(ret, sizeof(struct gf16_xor_scratch), 32);
 	gf16_bitdep_init256(ret->deps, polynomial, 0);
 	
-	ret->jitOptStrat = 0;
+	ret->jitOptStrat = jitOptStrat;
 	ret->codeStart = (uint_fast8_t)xor_write_init_jit(tmpCode);
 	return ret;
 #else
-	UNUSED(polynomial);
+	UNUSED(polynomial); UNUSED(jitOptStrat);
 	return NULL;
 #endif
 }
