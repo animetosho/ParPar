@@ -68,7 +68,7 @@ struct CpuCap {
 		
 		propPrefShuffleThresh = 131072; // it seems like XOR JIT is always faster than shuffle at ~128KB sizes
 		
-		bool isAtom = false, isCore2 = false, isICoreOld = false, isICoreNew = false;
+		bool isAtom = false, isICoreOld = false, isICoreNew = false;
 		if(family == 6) {
 			/* from handy table at http://a4lg.com/tech/x86/database/x86-families-and-models.en.html */
 			if(model == 0x1C || model == 0x26 || model == 0x27 || model == 0x35 || model == 0x36 || model == 0x37 || model == 0x4A || model == 0x4C || model == 0x4D || model == 0x5A || model == 0x5D) {
@@ -79,10 +79,8 @@ struct CpuCap {
 			if(model == 0x0F || model == 0x16) {
 				/* Conroe CPU with relatively slow pshufb; pretend SSSE3 doesn't exist, as XOR_DEPENDS is generally faster */
 				propPrefShuffleThresh = 16384;
-				isCore2 = true;
 			}
 			
-			if(model == 0x17 || model == 0x1D) isCore2 = true; // Penryn
 			if((model == 0x1A || model == 0x1E || model == 0x2E) /*Nehalem*/
 			|| (model == 0x25 || model == 0x2C || model == 0x2F) /*Westmere*/
 			|| (model == 0x2A || model == 0x2D) /*Sandy Bridge*/
@@ -165,13 +163,13 @@ struct CpuCap {
 		// optimal JIT strategy
 		if(isICoreOld)
 			jitOptStrat = GF16_XOR_JIT_STRAT_CLR;
-		else if(isAtom || isCore2 || isICoreNew || family == 0x6f /*AMDfam15*/ || family == 0x1f /*K10*/)
+		else if(isAtom || isICoreNew || family == 0x6f /*AMDfam15*/ || family == 0x1f /*K10*/)
 			jitOptStrat = GF16_XOR_JIT_STRAT_COPYNT;
 		else if(family == 0x8f /*AMDfam17*/ || family == 0x9f /*Hygon*/ || family == 0xaf /*AMDfam19*/)
 			// despite tests, clearing seems to work better than copying
 			// GF16_XOR_JIT_STRAT_COPY seems to perform slightly worse than doing nothing, COPYNT is *much* worse, whereas clearing is slightly better
 			jitOptStrat = GF16_XOR_JIT_STRAT_CLR;
-		else // AMDfam16 or unknown
+		else // AMDfam16, Core2 or unknown
 			jitOptStrat = GF16_XOR_JIT_STRAT_NONE;
 	}
 };

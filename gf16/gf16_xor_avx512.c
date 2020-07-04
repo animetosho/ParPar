@@ -837,7 +837,7 @@ unsigned gf16_xor_jit_muladd_multi_avx512(const void *HEDLEY_RESTRICT scratch, u
 			/* memcpy to destination */
 			if(info->jitOptStrat == GF16_XOR_JIT_STRAT_COPYNT) {
 				// 256-bit NT copies never seem to be better, so just stick to 128-bit
-				for(uint_fast32_t i=0; i<(uint_fast32_t)(jitptr+5-jitTemp); i+=64) {
+				for(uint_fast32_t i=0; i<(uint_fast32_t)(jitptr+10-jitTemp); i+=64) {
 					__m128i ta = _mm_load_si128((__m128i*)(jitTemp + i));
 					__m128i tb = _mm_load_si128((__m128i*)(jitTemp + i + 16));
 					__m128i tc = _mm_load_si128((__m128i*)(jitTemp + i + 32));
