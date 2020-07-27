@@ -378,7 +378,7 @@ static inline void* xor_write_jit_avx(const struct gf16_xor_scratch *HEDLEY_REST
 
 static HEDLEY_ALWAYS_INLINE void gf16_xor_jit_mul_avx2_base(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch, int add) {
 	jit_wx_pair* jit = (jit_wx_pair*)mutScratch;
-	gf16_xorjit_write_jit(scratch, coefficient, jit->w, add, &xor_write_jit_avx);
+	gf16_xorjit_write_jit(scratch, coefficient, jit, add, &xor_write_jit_avx);
 	
 	gf16_xor256_jit_stub(
 		(intptr_t)src - 384,

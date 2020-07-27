@@ -740,7 +740,7 @@ static void* xor_write_jit_avx512_multi(const struct gf16_xor_scratch *HEDLEY_RE
 
 static HEDLEY_ALWAYS_INLINE void gf16_xor_jit_mul_avx512_base(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch, int add) {
 	jit_wx_pair* jit = (jit_wx_pair*)mutScratch;
-	gf16_xorjit_write_jit(scratch, coefficient, jit->w, add, &xor_write_jit_avx512);
+	gf16_xorjit_write_jit(scratch, coefficient, jit, add, &xor_write_jit_avx512);
 	
 	gf16_xor512_jit_stub(
 		(intptr_t)dst - 1024,
@@ -861,6 +861,11 @@ unsigned gf16_xor_jit_muladd_multi_avx512(const void *HEDLEY_RESTRICT scratch, u
 			jitptr[9] = 0xC3; /* ret */
 		}
 		
+		#ifdef GF16_XORJIT_ENABLE_DUAL_MAPPING
+		if(jit->w != jit->x) {
+			// TODO: need to serialize?
+		}
+		#endif
 		gf16_xor512_jit_multi_stub(
 			(intptr_t)dst + offset - 1024,
 			(intptr_t)dst + offset + len - 1024,

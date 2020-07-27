@@ -117,9 +117,9 @@ struct gf16_xor_scratch {
 
 #ifdef __SSE2__
 typedef void*(*gf16_xorjit_write_func)(const struct gf16_xor_scratch *HEDLEY_RESTRICT scratch, uint8_t *HEDLEY_RESTRICT jitptr, uint16_t val, int xor);
-static HEDLEY_ALWAYS_INLINE void gf16_xorjit_write_jit(const void *HEDLEY_RESTRICT scratch, uint16_t coefficient, jit_wx_pair* jitWriteMem, const int add, gf16_xorjit_write_func writeFunc) {
+static HEDLEY_ALWAYS_INLINE void gf16_xorjit_write_jit(const void *HEDLEY_RESTRICT scratch, uint16_t coefficient, jit_wx_pair* jit, const int add, gf16_xorjit_write_func writeFunc) {
 	const struct gf16_xor_scratch *HEDLEY_RESTRICT info = (const struct gf16_xor_scratch *HEDLEY_RESTRICT)scratch;
-	uint8_t* jitptr = (uint8_t*)jitWriteMem + info->codeStart;
+	uint8_t* jitptr = (uint8_t*)jit->w + info->codeStart;
 	
 	if(info->jitOptStrat == GF16_XOR_JIT_STRAT_COPYNT || info->jitOptStrat == GF16_XOR_JIT_STRAT_COPY) {
 		ALIGN_TO(_GF16_XORJIT_COPY_ALIGN, uint8_t jitTemp[XORDEP_JIT_CODE_SIZE]);
@@ -143,7 +143,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_xorjit_write_jit(const void *HEDLEY_RESTRI
 		jitptr += 5;
 		
 		/* memcpy to destination */
-		uint8_t* jitdst = (uint8_t*)jitWriteMem + copyOffset;
+		uint8_t* jitdst = (uint8_t*)jit->w + copyOffset;
 		if(info->jitOptStrat == GF16_XOR_JIT_STRAT_COPYNT) {
 			// 256-bit NT copies never seem to be better, so just stick to 128-bit
 			for(uint_fast32_t i=0; i<(uint_fast32_t)(jitptr-jitTemp); i+=64) {
@@ -185,9 +185,14 @@ static HEDLEY_ALWAYS_INLINE void gf16_xorjit_write_jit(const void *HEDLEY_RESTRI
 				jitptr[i] = 0;
 		}
 		jitptr = writeFunc(info, jitptr, coefficient, add);
-		*(int32_t*)jitptr = (int32_t)((uint8_t*)jitWriteMem - jitptr -4);
+		*(int32_t*)jitptr = (int32_t)((uint8_t*)jit->w - jitptr -4);
 		jitptr[4] = 0xC3; /* ret */
 	}
+	#ifdef GF16_XORJIT_ENABLE_DUAL_MAPPING
+	if(jit->w != jit->x) {
+		// TODO: need to serialize?
+	}
+	#endif
 }
 #endif
 

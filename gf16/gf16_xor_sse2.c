@@ -665,7 +665,7 @@ static inline void* xor_write_jit_sse(const struct gf16_xor_scratch *HEDLEY_REST
 
 static HEDLEY_ALWAYS_INLINE void gf16_xor_jit_mul_sse2_base(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch, int add) {
 	jit_wx_pair* jit = (jit_wx_pair*)mutScratch;
-	gf16_xorjit_write_jit(scratch, coefficient, jit->w, add, &xor_write_jit_sse);
+	gf16_xorjit_write_jit(scratch, coefficient, jit, add, &xor_write_jit_sse);
 	
 	// exec
 	/* adding 128 to the destination pointer allows the register offset to be coded in 1 byte
