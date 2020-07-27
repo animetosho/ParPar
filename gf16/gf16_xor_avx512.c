@@ -913,128 +913,120 @@ static HEDLEY_ALWAYS_INLINE void gf16_xor_finish_bit_extract(uint64_t* dst, __m5
 	dst[96 +0] = _mm512_test_epi8_mask(lane, lo_nibble_test);
 	dst[96 +1] = _mm512_test_epi8_mask(lane, hi_nibble_test);
 }
-#endif
 
-void gf16_xor_finish_avx512(void *HEDLEY_RESTRICT dst, size_t len) {
-#if defined(__AVX512BW__) && defined(__AVX512VL__) && defined(PLATFORM_AMD64)
+void gf16_xor_finish_block_avx512(void *HEDLEY_RESTRICT dst) {
 	uint64_t* _dst = (uint64_t*)dst;
 	
-	for(; len; len -= sizeof(__m512i)*16) {
-		// 32 registers available, so load entire block
-		
-		// Clang doesn't seem to like arrays (always spills them to memory), so write out everything
-		__m512i src0 = _mm512_load_si512(_dst + 120 - 0*8);
-		__m512i src1 = _mm512_load_si512(_dst + 120 - 1*8);
-		__m512i src2 = _mm512_load_si512(_dst + 120 - 2*8);
-		__m512i src3 = _mm512_load_si512(_dst + 120 - 3*8);
-		__m512i src4 = _mm512_load_si512(_dst + 120 - 4*8);
-		__m512i src5 = _mm512_load_si512(_dst + 120 - 5*8);
-		__m512i src6 = _mm512_load_si512(_dst + 120 - 6*8);
-		__m512i src7 = _mm512_load_si512(_dst + 120 - 7*8);
-		__m512i src8 = _mm512_load_si512(_dst + 120 - 8*8);
-		__m512i src9 = _mm512_load_si512(_dst + 120 - 9*8);
-		__m512i src10 = _mm512_load_si512(_dst + 120 - 10*8);
-		__m512i src11 = _mm512_load_si512(_dst + 120 - 11*8);
-		__m512i src12 = _mm512_load_si512(_dst + 120 - 12*8);
-		__m512i src13 = _mm512_load_si512(_dst + 120 - 13*8);
-		__m512i src14 = _mm512_load_si512(_dst + 120 - 14*8);
-		__m512i src15 = _mm512_load_si512(_dst + 120 - 15*8);
-		
-		// interleave to words, dwords, qwords etc
-		__m512i srcW0 = _mm512_unpacklo_epi8(src0, src1);
-		__m512i srcW1 = _mm512_unpackhi_epi8(src0, src1);
-		__m512i srcW2 = _mm512_unpacklo_epi8(src2, src3);
-		__m512i srcW3 = _mm512_unpackhi_epi8(src2, src3);
-		__m512i srcW4 = _mm512_unpacklo_epi8(src4, src5);
-		__m512i srcW5 = _mm512_unpackhi_epi8(src4, src5);
-		__m512i srcW6 = _mm512_unpacklo_epi8(src6, src7);
-		__m512i srcW7 = _mm512_unpackhi_epi8(src6, src7);
-		__m512i srcW8 = _mm512_unpacklo_epi8(src8, src9);
-		__m512i srcW9 = _mm512_unpackhi_epi8(src8, src9);
-		__m512i srcW10 = _mm512_unpacklo_epi8(src10, src11);
-		__m512i srcW11 = _mm512_unpackhi_epi8(src10, src11);
-		__m512i srcW12 = _mm512_unpacklo_epi8(src12, src13);
-		__m512i srcW13 = _mm512_unpackhi_epi8(src12, src13);
-		__m512i srcW14 = _mm512_unpacklo_epi8(src14, src15);
-		__m512i srcW15 = _mm512_unpackhi_epi8(src14, src15);
-		
-		__m512i srcD0 = _mm512_unpacklo_epi16(srcW0, srcW2);
-		__m512i srcD1 = _mm512_unpackhi_epi16(srcW0, srcW2);
-		__m512i srcD2 = _mm512_unpacklo_epi16(srcW1, srcW3);
-		__m512i srcD3 = _mm512_unpackhi_epi16(srcW1, srcW3);
-		__m512i srcD4 = _mm512_unpacklo_epi16(srcW4, srcW6);
-		__m512i srcD5 = _mm512_unpackhi_epi16(srcW4, srcW6);
-		__m512i srcD6 = _mm512_unpacklo_epi16(srcW5, srcW7);
-		__m512i srcD7 = _mm512_unpackhi_epi16(srcW5, srcW7);
-		__m512i srcD8 = _mm512_unpacklo_epi16(srcW8, srcW10);
-		__m512i srcD9 = _mm512_unpackhi_epi16(srcW8, srcW10);
-		__m512i srcD10 = _mm512_unpacklo_epi16(srcW9, srcW11);
-		__m512i srcD11 = _mm512_unpackhi_epi16(srcW9, srcW11);
-		__m512i srcD12 = _mm512_unpacklo_epi16(srcW12, srcW14);
-		__m512i srcD13 = _mm512_unpackhi_epi16(srcW12, srcW14);
-		__m512i srcD14 = _mm512_unpacklo_epi16(srcW13, srcW15);
-		__m512i srcD15 = _mm512_unpackhi_epi16(srcW13, srcW15);
-		
-		__m512i srcQ0 = _mm512_unpacklo_epi32(srcD0, srcD4);
-		__m512i srcQ1 = _mm512_unpackhi_epi32(srcD0, srcD4);
-		__m512i srcQ2 = _mm512_unpacklo_epi32(srcD1, srcD5);
-		__m512i srcQ3 = _mm512_unpackhi_epi32(srcD1, srcD5);
-		__m512i srcQ4 = _mm512_unpacklo_epi32(srcD2, srcD6);
-		__m512i srcQ5 = _mm512_unpackhi_epi32(srcD2, srcD6);
-		__m512i srcQ6 = _mm512_unpacklo_epi32(srcD3, srcD7);
-		__m512i srcQ7 = _mm512_unpackhi_epi32(srcD3, srcD7);
-		__m512i srcQ8 = _mm512_unpacklo_epi32(srcD8, srcD12);
-		__m512i srcQ9 = _mm512_unpackhi_epi32(srcD8, srcD12);
-		__m512i srcQ10 = _mm512_unpacklo_epi32(srcD9, srcD13);
-		__m512i srcQ11 = _mm512_unpackhi_epi32(srcD9, srcD13);
-		__m512i srcQ12 = _mm512_unpacklo_epi32(srcD10, srcD14);
-		__m512i srcQ13 = _mm512_unpackhi_epi32(srcD10, srcD14);
-		__m512i srcQ14 = _mm512_unpacklo_epi32(srcD11, srcD15);
-		__m512i srcQ15 = _mm512_unpackhi_epi32(srcD11, srcD15);
-		
-		__m512i srcDQ0 = _mm512_unpacklo_epi64(srcQ0, srcQ8);
-		__m512i srcDQ1 = _mm512_unpackhi_epi64(srcQ0, srcQ8);
-		__m512i srcDQ2 = _mm512_unpacklo_epi64(srcQ1, srcQ9);
-		__m512i srcDQ3 = _mm512_unpackhi_epi64(srcQ1, srcQ9);
-		__m512i srcDQ4 = _mm512_unpacklo_epi64(srcQ2, srcQ10);
-		__m512i srcDQ5 = _mm512_unpackhi_epi64(srcQ2, srcQ10);
-		__m512i srcDQ6 = _mm512_unpacklo_epi64(srcQ3, srcQ11);
-		__m512i srcDQ7 = _mm512_unpackhi_epi64(srcQ3, srcQ11);
-		__m512i srcDQ8 = _mm512_unpacklo_epi64(srcQ4, srcQ12);
-		__m512i srcDQ9 = _mm512_unpackhi_epi64(srcQ4, srcQ12);
-		__m512i srcDQ10 = _mm512_unpacklo_epi64(srcQ5, srcQ13);
-		__m512i srcDQ11 = _mm512_unpackhi_epi64(srcQ5, srcQ13);
-		__m512i srcDQ12 = _mm512_unpacklo_epi64(srcQ6, srcQ14);
-		__m512i srcDQ13 = _mm512_unpackhi_epi64(srcQ6, srcQ14);
-		__m512i srcDQ14 = _mm512_unpacklo_epi64(srcQ7, srcQ15);
-		__m512i srcDQ15 = _mm512_unpackhi_epi64(srcQ7, srcQ15);
-		
-		
-		// for each vector, broadcast each lane, and use a testmb to pull the bits in the right order. These can be stored straight to memory
-		// unfortunately, GCC 9.2 insists on moving the mask back to a vector register, even if the `_store_mask64` intrinsic is used, so this doesn't perform too well. But still seems to bench better than the previous code, which tried to move masks to a vector register to shuffle the words into place. Not an issue on Clang 9.
-		gf16_xor_finish_bit_extract(_dst +  0, srcDQ0);
-		gf16_xor_finish_bit_extract(_dst +  2, srcDQ1);
-		gf16_xor_finish_bit_extract(_dst +  4, srcDQ2);
-		gf16_xor_finish_bit_extract(_dst +  6, srcDQ3);
-		gf16_xor_finish_bit_extract(_dst +  8, srcDQ4);
-		gf16_xor_finish_bit_extract(_dst + 10, srcDQ5);
-		gf16_xor_finish_bit_extract(_dst + 12, srcDQ6);
-		gf16_xor_finish_bit_extract(_dst + 14, srcDQ7);
-		gf16_xor_finish_bit_extract(_dst + 16, srcDQ8);
-		gf16_xor_finish_bit_extract(_dst + 18, srcDQ9);
-		gf16_xor_finish_bit_extract(_dst + 20, srcDQ10);
-		gf16_xor_finish_bit_extract(_dst + 22, srcDQ11);
-		gf16_xor_finish_bit_extract(_dst + 24, srcDQ12);
-		gf16_xor_finish_bit_extract(_dst + 26, srcDQ13);
-		gf16_xor_finish_bit_extract(_dst + 28, srcDQ14);
-		gf16_xor_finish_bit_extract(_dst + 30, srcDQ15);
-		
-		_dst += 128;
-	}
-#else
-	UNUSED(dst); UNUSED(len);
-#endif
+	// 32 registers available, so load entire block
+	
+	// Clang doesn't seem to like arrays (always spills them to memory), so write out everything
+	__m512i src0 = _mm512_load_si512(_dst + 120 - 0*8);
+	__m512i src1 = _mm512_load_si512(_dst + 120 - 1*8);
+	__m512i src2 = _mm512_load_si512(_dst + 120 - 2*8);
+	__m512i src3 = _mm512_load_si512(_dst + 120 - 3*8);
+	__m512i src4 = _mm512_load_si512(_dst + 120 - 4*8);
+	__m512i src5 = _mm512_load_si512(_dst + 120 - 5*8);
+	__m512i src6 = _mm512_load_si512(_dst + 120 - 6*8);
+	__m512i src7 = _mm512_load_si512(_dst + 120 - 7*8);
+	__m512i src8 = _mm512_load_si512(_dst + 120 - 8*8);
+	__m512i src9 = _mm512_load_si512(_dst + 120 - 9*8);
+	__m512i src10 = _mm512_load_si512(_dst + 120 - 10*8);
+	__m512i src11 = _mm512_load_si512(_dst + 120 - 11*8);
+	__m512i src12 = _mm512_load_si512(_dst + 120 - 12*8);
+	__m512i src13 = _mm512_load_si512(_dst + 120 - 13*8);
+	__m512i src14 = _mm512_load_si512(_dst + 120 - 14*8);
+	__m512i src15 = _mm512_load_si512(_dst + 120 - 15*8);
+	
+	// interleave to words, dwords, qwords etc
+	__m512i srcW0 = _mm512_unpacklo_epi8(src0, src1);
+	__m512i srcW1 = _mm512_unpackhi_epi8(src0, src1);
+	__m512i srcW2 = _mm512_unpacklo_epi8(src2, src3);
+	__m512i srcW3 = _mm512_unpackhi_epi8(src2, src3);
+	__m512i srcW4 = _mm512_unpacklo_epi8(src4, src5);
+	__m512i srcW5 = _mm512_unpackhi_epi8(src4, src5);
+	__m512i srcW6 = _mm512_unpacklo_epi8(src6, src7);
+	__m512i srcW7 = _mm512_unpackhi_epi8(src6, src7);
+	__m512i srcW8 = _mm512_unpacklo_epi8(src8, src9);
+	__m512i srcW9 = _mm512_unpackhi_epi8(src8, src9);
+	__m512i srcW10 = _mm512_unpacklo_epi8(src10, src11);
+	__m512i srcW11 = _mm512_unpackhi_epi8(src10, src11);
+	__m512i srcW12 = _mm512_unpacklo_epi8(src12, src13);
+	__m512i srcW13 = _mm512_unpackhi_epi8(src12, src13);
+	__m512i srcW14 = _mm512_unpacklo_epi8(src14, src15);
+	__m512i srcW15 = _mm512_unpackhi_epi8(src14, src15);
+	
+	__m512i srcD0 = _mm512_unpacklo_epi16(srcW0, srcW2);
+	__m512i srcD1 = _mm512_unpackhi_epi16(srcW0, srcW2);
+	__m512i srcD2 = _mm512_unpacklo_epi16(srcW1, srcW3);
+	__m512i srcD3 = _mm512_unpackhi_epi16(srcW1, srcW3);
+	__m512i srcD4 = _mm512_unpacklo_epi16(srcW4, srcW6);
+	__m512i srcD5 = _mm512_unpackhi_epi16(srcW4, srcW6);
+	__m512i srcD6 = _mm512_unpacklo_epi16(srcW5, srcW7);
+	__m512i srcD7 = _mm512_unpackhi_epi16(srcW5, srcW7);
+	__m512i srcD8 = _mm512_unpacklo_epi16(srcW8, srcW10);
+	__m512i srcD9 = _mm512_unpackhi_epi16(srcW8, srcW10);
+	__m512i srcD10 = _mm512_unpacklo_epi16(srcW9, srcW11);
+	__m512i srcD11 = _mm512_unpackhi_epi16(srcW9, srcW11);
+	__m512i srcD12 = _mm512_unpacklo_epi16(srcW12, srcW14);
+	__m512i srcD13 = _mm512_unpackhi_epi16(srcW12, srcW14);
+	__m512i srcD14 = _mm512_unpacklo_epi16(srcW13, srcW15);
+	__m512i srcD15 = _mm512_unpackhi_epi16(srcW13, srcW15);
+	
+	__m512i srcQ0 = _mm512_unpacklo_epi32(srcD0, srcD4);
+	__m512i srcQ1 = _mm512_unpackhi_epi32(srcD0, srcD4);
+	__m512i srcQ2 = _mm512_unpacklo_epi32(srcD1, srcD5);
+	__m512i srcQ3 = _mm512_unpackhi_epi32(srcD1, srcD5);
+	__m512i srcQ4 = _mm512_unpacklo_epi32(srcD2, srcD6);
+	__m512i srcQ5 = _mm512_unpackhi_epi32(srcD2, srcD6);
+	__m512i srcQ6 = _mm512_unpacklo_epi32(srcD3, srcD7);
+	__m512i srcQ7 = _mm512_unpackhi_epi32(srcD3, srcD7);
+	__m512i srcQ8 = _mm512_unpacklo_epi32(srcD8, srcD12);
+	__m512i srcQ9 = _mm512_unpackhi_epi32(srcD8, srcD12);
+	__m512i srcQ10 = _mm512_unpacklo_epi32(srcD9, srcD13);
+	__m512i srcQ11 = _mm512_unpackhi_epi32(srcD9, srcD13);
+	__m512i srcQ12 = _mm512_unpacklo_epi32(srcD10, srcD14);
+	__m512i srcQ13 = _mm512_unpackhi_epi32(srcD10, srcD14);
+	__m512i srcQ14 = _mm512_unpacklo_epi32(srcD11, srcD15);
+	__m512i srcQ15 = _mm512_unpackhi_epi32(srcD11, srcD15);
+	
+	__m512i srcDQ0 = _mm512_unpacklo_epi64(srcQ0, srcQ8);
+	__m512i srcDQ1 = _mm512_unpackhi_epi64(srcQ0, srcQ8);
+	__m512i srcDQ2 = _mm512_unpacklo_epi64(srcQ1, srcQ9);
+	__m512i srcDQ3 = _mm512_unpackhi_epi64(srcQ1, srcQ9);
+	__m512i srcDQ4 = _mm512_unpacklo_epi64(srcQ2, srcQ10);
+	__m512i srcDQ5 = _mm512_unpackhi_epi64(srcQ2, srcQ10);
+	__m512i srcDQ6 = _mm512_unpacklo_epi64(srcQ3, srcQ11);
+	__m512i srcDQ7 = _mm512_unpackhi_epi64(srcQ3, srcQ11);
+	__m512i srcDQ8 = _mm512_unpacklo_epi64(srcQ4, srcQ12);
+	__m512i srcDQ9 = _mm512_unpackhi_epi64(srcQ4, srcQ12);
+	__m512i srcDQ10 = _mm512_unpacklo_epi64(srcQ5, srcQ13);
+	__m512i srcDQ11 = _mm512_unpackhi_epi64(srcQ5, srcQ13);
+	__m512i srcDQ12 = _mm512_unpacklo_epi64(srcQ6, srcQ14);
+	__m512i srcDQ13 = _mm512_unpackhi_epi64(srcQ6, srcQ14);
+	__m512i srcDQ14 = _mm512_unpacklo_epi64(srcQ7, srcQ15);
+	__m512i srcDQ15 = _mm512_unpackhi_epi64(srcQ7, srcQ15);
+	
+	
+	// for each vector, broadcast each lane, and use a testmb to pull the bits in the right order. These can be stored straight to memory
+	// unfortunately, GCC 9.2 insists on moving the mask back to a vector register, even if the `_store_mask64` intrinsic is used, so this doesn't perform too well. But still seems to bench better than the previous code, which tried to move masks to a vector register to shuffle the words into place. Not an issue on Clang 9.
+	gf16_xor_finish_bit_extract(_dst +  0, srcDQ0);
+	gf16_xor_finish_bit_extract(_dst +  2, srcDQ1);
+	gf16_xor_finish_bit_extract(_dst +  4, srcDQ2);
+	gf16_xor_finish_bit_extract(_dst +  6, srcDQ3);
+	gf16_xor_finish_bit_extract(_dst +  8, srcDQ4);
+	gf16_xor_finish_bit_extract(_dst + 10, srcDQ5);
+	gf16_xor_finish_bit_extract(_dst + 12, srcDQ6);
+	gf16_xor_finish_bit_extract(_dst + 14, srcDQ7);
+	gf16_xor_finish_bit_extract(_dst + 16, srcDQ8);
+	gf16_xor_finish_bit_extract(_dst + 18, srcDQ9);
+	gf16_xor_finish_bit_extract(_dst + 20, srcDQ10);
+	gf16_xor_finish_bit_extract(_dst + 22, srcDQ11);
+	gf16_xor_finish_bit_extract(_dst + 24, srcDQ12);
+	gf16_xor_finish_bit_extract(_dst + 26, srcDQ13);
+	gf16_xor_finish_bit_extract(_dst + 28, srcDQ14);
+	gf16_xor_finish_bit_extract(_dst + 30, srcDQ15);
 }
+#endif
 
 
 #define MWORD_SIZE 64

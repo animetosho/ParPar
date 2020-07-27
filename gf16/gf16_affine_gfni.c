@@ -203,31 +203,31 @@ void* gf16_affine_init_gfni(int polynomial) {
 }
 
 
+#if defined(__GFNI__) && defined(__SSSE3__)
+void gf16_affine2x_prepare_block_gfni(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src) {
+	__m128i data = _mm_loadu_si128((__m128i*)src);
+	data = _mm_shuffle_epi8(data, _mm_set_epi32(0x0f0d0b09, 0x07050301, 0x0e0c0a08, 0x06040200));
+	_mm_store_si128((__m128i*)dst, data);
+}
+void gf16_affine2x_prepare_blocku_gfni(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t remaining) {
+	__m128i data = _mm_setzero_si128();
+	memcpy(&data, src, remaining);
+	data = _mm_shuffle_epi8(data, _mm_set_epi32(0x0f0d0b09, 0x07050301, 0x0e0c0a08, 0x06040200));
+	_mm_store_si128((__m128i*)dst, data);
+}
+void gf16_affine2x_finish_block_gfni(void *HEDLEY_RESTRICT dst) {
+	__m128i data = _mm_load_si128((__m128i*)dst);
+	data = _mm_shuffle_epi8(data, _mm_set_epi32(
+		0x0f070e06, 0x0d050c04, 0x0b030a02, 0x09010800
+	));
+	_mm_store_si128((__m128i*)dst, data);
+}
+#endif
+
 
 void gf16_affine2x_prepare_gfni(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen) {
 #if defined(__GFNI__) && defined(__SSSE3__)
-	__m128i shuf = _mm_set_epi32(
-		0x0f0d0b09, 0x07050301, 0x0e0c0a08, 0x06040200
-	);
-	
-	size_t len = srcLen & ~(sizeof(__m128i) -1);
-	uint8_t* _src = (uint8_t*)src + len;
-	uint8_t* _dst = (uint8_t*)dst + len;
-	
-	for(long ptr = -(long)len; ptr; ptr += sizeof(__m128i)) {
-		__m128i data = _mm_loadu_si128((__m128i*)(_src+ptr));
-		data = _mm_shuffle_epi8(data, shuf);
-		_mm_store_si128((__m128i*)(_dst+ptr), data);
-	}
-	
-	size_t remaining = srcLen & (sizeof(__m128i) - 1);
-	if(remaining) {
-		// handle misaligned part
-		__m128i data = _mm_setzero_si128();
-		memcpy(&data, _src, remaining);
-		data = _mm_shuffle_epi8(data, shuf);
-		_mm_store_si128((__m128i*)_dst, data);
-	}
+	gf16_prepare(dst, src, srcLen, sizeof(__m128i), &gf16_affine2x_prepare_block_gfni, &gf16_affine2x_prepare_blocku_gfni);
 #else
 	UNUSED(dst); UNUSED(src); UNUSED(srcLen);
 #endif
@@ -235,14 +235,7 @@ void gf16_affine2x_prepare_gfni(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RE
 
 void gf16_affine2x_finish_gfni(void *HEDLEY_RESTRICT dst, size_t len) {
 #if defined(__GFNI__) && defined(__SSSE3__)
-	uint8_t* _dst = (uint8_t*)dst + len;
-	for(long ptr = -(long)len; ptr; ptr += sizeof(__m128i)) {
-		__m128i data = _mm_load_si128((__m128i*)(_dst+ptr));
-		data = _mm_shuffle_epi8(data, _mm_set_epi32(
-			0x0f070e06, 0x0d050c04, 0x0b030a02, 0x09010800
-		));
-		_mm_store_si128((__m128i*)(_dst+ptr), data);
-	}
+	gf16_finish(dst, len, sizeof(__m128i), &gf16_affine2x_finish_block_gfni);
 #else
 	UNUSED(dst); UNUSED(len);
 #endif

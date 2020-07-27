@@ -67,129 +67,47 @@ static HEDLEY_ALWAYS_INLINE void gf16_xor_prep_write(_mword ta, _mword tb, umask
 		_dst[64+i*8] = MOVMASK(tl);
 	}
 }
+
+static HEDLEY_ALWAYS_INLINE void _FN(gf16_xor_prepare_block)(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src) {
+	uint8_t* _src = (uint8_t*)src;
+	umask_t* _dst = (umask_t*)dst;
+	for(int j=0; j<8; j++) {
+		gf16_xor_prep_write(
+			_MMI(loadu)((_mword*)_src),
+			_MMI(loadu)((_mword*)_src + 1),
+			_dst
+		);
+		_src += sizeof(_mword)*2;
+		_dst++;
+	}
+}
+static HEDLEY_ALWAYS_INLINE void _FN(gf16_xor_prepare_blocku)(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t remaining) {
+	// handle unaligned area with a simple copy and repeat
+	uint8_t tmp[MWORD_SIZE*16] = {0};
+	memcpy(tmp, src, remaining);
+	_FN(gf16_xor_prepare_block)(dst, tmp);
+}
 #endif
+
+
 
 void _FN(gf16_xor_prepare)(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen) {
 #ifdef _AVAILABLE
-	uint8_t* _src = (uint8_t*)src;
-	umask_t* _dst = (umask_t*)dst;
-	
-#if MWORD_SIZE == 16 && 0
-	// older CPUs have bad misalignment handling, so try to cater for common alignments (AVX supporting CPUs deal with it better, so don't bother there)
-	// HOWEVER: testing on a Core 2 CPU shows that this doesn't appear to be advantageous; keeping here in case it ever becomes beneficial
-	if(((uintptr_t)src & (sizeof(_mword)-1)) == 0) {
-		// fully aligned
-		for(size_t len = srcLen & ~(sizeof(_mword)*16 - 1); len; len -= sizeof(_mword)*16) {
-			for(int j=0; j<8; j++) {
-				gf16_xor_prep_write(
-					_MMI(load)((_mword*)_src),
-					_MMI(load)((_mword*)_src + 1),
-					_dst
-				);
-				_src += sizeof(_mword)*2;
-				_dst++;
-			}
-			_dst += 128 - 8;
-		}
-	} else if(((uintptr_t)src & 3) == 0) {
-		// aligned to 4 bytes
-		int offset = ((uintptr_t)src & 12);
-		_src += 16-offset;
-		if(offset == 4) {
-			__m128i previous = _mm_load_si128((__m128i*)_src - 1);
-			previous = _mm_srli_si128(previous, 4);
-			for(size_t len = srcLen & ~(sizeof(_mword)*16 - 1); len; len -= sizeof(_mword)*16) {
-				for(int j=0; j<8; j++) {
-					__m128i current = _mm_load_si128((__m128i*)_src);
-					__m128i next    = _mm_load_si128((__m128i*)_src + 1);
-					
-					gf16_xor_prep_write(
-						_mm_or_si128(previous, _mm_slli_si128(current, 12)),
-						_mm_or_si128(
-							_mm_srli_si128(current, 4),
-							_mm_slli_si128(next, 12)
-						),
-						_dst
-					);
-					previous = _mm_srli_si128(next, 4);
-					_src += sizeof(_mword)*2;
-					_dst++;
-				}
-				_dst += 128 - 8;
-			}
-		}
-		else if(offset == 12) {
-			__m128i previous = _mm_load_si128((__m128i*)_src - 1);
-			previous = _mm_srli_si128(previous, 12);
-			for(size_t len = srcLen & ~(sizeof(_mword)*16 - 1); len; len -= sizeof(_mword)*16) {
-				for(int j=0; j<8; j++) {
-					__m128i current = _mm_load_si128((__m128i*)_src);
-					__m128i next    = _mm_load_si128((__m128i*)_src + 1);
-					
-					gf16_xor_prep_write(
-						_mm_or_si128(previous, _mm_slli_si128(current, 4)),
-						_mm_or_si128(
-							_mm_srli_si128(current, 12),
-							_mm_slli_si128(next, 4)
-						),
-						_dst
-					);
-					previous = _mm_srli_si128(next, 12);
-					_src += sizeof(_mword)*2;
-					_dst++;
-				}
-				_dst += 128 - 8;
-			}
-		}
-		else {
-			// offset by 8 bytes
-			__m128 previous = _mm_load_ps((float*)(_src - sizeof(__m128)));
-			for(size_t len = srcLen & ~(sizeof(_mword)*16 - 1); len; len -= sizeof(_mword)*16) {
-				for(int j=0; j<8; j++) {
-					__m128 current = _mm_load_ps((float*)_src);
-					__m128 next    = _mm_load_ps((float*)(_src + sizeof(__m128)));
-					
-					gf16_xor_prep_write(
-						_mm_castps_si128(_mm_shuffle_ps(previous, current, _MM_SHUFFLE(1,0,2,3))),
-						_mm_castps_si128(_mm_shuffle_ps(current, next, _MM_SHUFFLE(1,0,2,3))),
-						_dst
-					);
-					previous = next;
-					_src += sizeof(_mword)*2;
-					_dst++;
-				}
-				_dst += 128 - 8;
-			}
-		}
-		_src -= 16-offset;
-	}
-	else
-#endif
-	for(size_t len = srcLen & ~(sizeof(_mword)*16 - 1); len; len -= sizeof(_mword)*16) {
-		for(int j=0; j<8; j++) {
-			gf16_xor_prep_write(
-				_MMI(loadu)((_mword*)_src),
-				_MMI(loadu)((_mword*)_src + 1),
-				_dst
-			);
-			_src += sizeof(_mword)*2;
-			_dst++;
-		}
-		_dst += 128 - 8;
-	}
+	gf16_prepare(dst, src, srcLen, sizeof(_mword)*16, &_FN(gf16_xor_prepare_block), &_FN(gf16_xor_prepare_blocku));
 	_MM_END
-	
-	size_t remaining = srcLen & (sizeof(_mword)*16 - 1);
-	if(remaining) {
-		// handle unaligned area with a simple copy and repeat
-		uint8_t tmp[MWORD_SIZE*16] = {0};
-		memcpy(tmp, _src, remaining);
-		_FN(gf16_xor_prepare)(_dst, tmp, MWORD_SIZE*16);
-	}
 #else
 	UNUSED(dst); UNUSED(src); UNUSED(srcLen);
 #endif
 }
+void _FN(gf16_xor_finish)(void *HEDLEY_RESTRICT dst, size_t len) {
+#ifdef _AVAILABLE
+	gf16_finish(dst, len, sizeof(_mword)*16, &_FN(gf16_xor_finish_block));
+	_MM_END
+#else
+	UNUSED(dst); UNUSED(len);
+#endif
+}
+
 
 
 #undef umask_t

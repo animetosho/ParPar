@@ -1,5 +1,6 @@
 
 #include "gf16_shuffle_x86_common.h"
+#include "gf16_global.h"
 
 #ifdef _AVAILABLE
 int _FN(gf16_shuffle_available) = 1;
@@ -7,52 +8,58 @@ int _FN(gf16_shuffle_available) = 1;
 int _FN(gf16_shuffle_available) = 0;
 #endif
 
+#ifdef _AVAILABLE
+static HEDLEY_ALWAYS_INLINE void _FN(gf16_shuffle_prepare_block)(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src) {
+	_mword ta = _MMI(loadu)((_mword*)src);
+	_mword tb = _MMI(loadu)((_mword*)src + 1);
+	
+	ta = separate_low_high(ta);
+	tb = separate_low_high(tb);
+	
+	_MMI(store)((_mword*)dst,
+		_MM(unpackhi_epi64)(ta, tb)
+	);
+	_MMI(store)((_mword*)dst + 1,
+		_MM(unpacklo_epi64)(ta, tb)
+	);
+}
+// final block
+static HEDLEY_ALWAYS_INLINE void _FN(gf16_shuffle_prepare_blocku)(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t remaining) {
+	_mword ta, tb;
+	if(remaining & sizeof(_mword))
+		ta = _MMI(loadu)((_mword*)src);
+	else
+		ta = partial_load(src, remaining);
+	
+	ta = separate_low_high(ta);
+	
+	if(remaining <= sizeof(_mword))
+		tb = _MMI(setzero)();
+	else {
+		tb = partial_load((char*)src + sizeof(_mword), remaining - sizeof(_mword));
+		tb = separate_low_high(tb);
+	}
+	
+	_MMI(store)((_mword*)dst,
+		_MM(unpackhi_epi64)(ta, tb)
+	);
+	_MMI(store)((_mword*)dst + 1,
+		_MM(unpacklo_epi64)(ta, tb)
+	);
+}
+
+static HEDLEY_ALWAYS_INLINE void _FN(gf16_shuffle_finish_block)(void *HEDLEY_RESTRICT dst) {
+	_mword ta = _MMI(load)((_mword*)dst);
+	_mword tb = _MMI(load)((_mword*)dst + 1);
+
+	_MMI(store)((_mword*)dst, _MM(unpacklo_epi8)(tb, ta));
+	_MMI(store)((_mword*)dst + 1, _MM(unpackhi_epi8)(tb, ta));
+}
+#endif
+
 void _FN(gf16_shuffle_prepare)(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen) {
 #ifdef _AVAILABLE
-	size_t len = srcLen & ~(sizeof(_mword)*2 -1);
-	uint8_t* _src = (uint8_t*)src + len;
-	uint8_t* _dst = (uint8_t*)dst + len;
-	
-	for(long ptr = -(long)len; ptr; ptr += sizeof(_mword)*2) {
-		_mword ta = _MMI(loadu)((_mword*)(_src+ptr));
-		_mword tb = _MMI(loadu)((_mword*)(_src+ptr) + 1);
-		
-		ta = separate_low_high(ta);
-		tb = separate_low_high(tb);
-		
-		_MMI(store) ((_mword*)(_dst+ptr),
-			_MM(unpackhi_epi64)(ta, tb)
-		);
-		_MMI(store) ((_mword*)(_dst+ptr) + 1,
-			_MM(unpacklo_epi64)(ta, tb)
-		);
-	}
-	
-	size_t remaining = srcLen & (sizeof(_mword)*2 - 1);
-	if(remaining) {
-		// handle misaligned part
-		_mword ta, tb;
-		if(remaining & sizeof(_mword))
-			ta = _MMI(loadu)((_mword*)_src);
-		else
-			ta = partial_load(_src, remaining);
-		
-		ta = separate_low_high(ta);
-		
-		if(remaining <= sizeof(_mword))
-			tb = _MMI(setzero)();
-		else {
-			tb = partial_load(_src + sizeof(_mword), remaining - sizeof(_mword));
-			tb = separate_low_high(tb);
-		}
-		
-		_MMI(store) ((_mword*)_dst,
-			_MM(unpackhi_epi64)(ta, tb)
-		);
-		_MMI(store) ((_mword*)_dst + 1,
-			_MM(unpacklo_epi64)(ta, tb)
-		);
-	}
+	gf16_prepare(dst, src, srcLen, sizeof(_mword)*2, &_FN(gf16_shuffle_prepare_block), &_FN(gf16_shuffle_prepare_blocku));
 	_MM_END
 #else
 	UNUSED(dst); UNUSED(src); UNUSED(srcLen);
@@ -61,15 +68,7 @@ void _FN(gf16_shuffle_prepare)(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RES
 
 void _FN(gf16_shuffle_finish)(void *HEDLEY_RESTRICT dst, size_t len) {
 #ifdef _AVAILABLE
-	uint8_t* _dst = (uint8_t*)dst + len;
-	
-	for(long ptr = -(long)len; ptr; ptr += sizeof(_mword)*2) {
-		_mword ta = _MMI(load)((_mword*)(_dst+ptr));
-		_mword tb = _MMI(load)((_mword*)(_dst+ptr) + 1);
-
-		_MMI(store) ((_mword*)(_dst+ptr), _MM(unpacklo_epi8)(tb, ta));
-		_MMI(store) ((_mword*)(_dst+ptr) + 1, _MM(unpackhi_epi8)(tb, ta));
-	}
+	gf16_finish(dst, len, sizeof(_mword)*2, &_FN(gf16_shuffle_finish_block));
 	_MM_END
 #else
 	UNUSED(dst); UNUSED(len);
