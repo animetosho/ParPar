@@ -319,6 +319,15 @@ void gf16_affine2x_prepare_avx512(void *HEDLEY_RESTRICT dst, const void *HEDLEY_
 #endif
 }
 
+void gf16_affine2x_prepare_packed_avx512(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen, size_t sliceLen, unsigned inputPackSize, unsigned inputNum, size_t chunkLen) {
+#ifdef _AVAILABLE
+	gf16_prepare_packed(dst, src, srcLen, sliceLen, sizeof(__m512i), &gf16_affine2x_prepare_block_avx512, &gf16_affine2x_prepare_blocku_avx512, inputPackSize, inputNum, chunkLen, 1);
+	_MM_END
+#else
+	UNUSED(dst); UNUSED(src); UNUSED(srcLen); UNUSED(sliceLen); UNUSED(inputPackSize); UNUSED(inputNum); UNUSED(chunkLen);
+#endif
+}
+
 void gf16_affine2x_finish_avx512(void *HEDLEY_RESTRICT dst, size_t len) {
 #if defined(__GFNI__) && defined(__AVX512BW__) && defined(__AVX512VL__)
 	gf16_finish(dst, len, sizeof(__m512i), &gf16_affine2x_finish_block_avx512);

@@ -233,6 +233,15 @@ void gf16_affine2x_prepare_gfni(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RE
 #endif
 }
 
+void gf16_affine2x_prepare_packed_gfni(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen, size_t sliceLen, unsigned inputPackSize, unsigned inputNum, size_t chunkLen) {
+#ifdef _AVAILABLE
+	gf16_prepare_packed(dst, src, srcLen, sliceLen, sizeof(__m128i), &gf16_affine2x_prepare_block_gfni, &gf16_affine2x_prepare_blocku_gfni, inputPackSize, inputNum, chunkLen, 1);
+	_MM_END
+#else
+	UNUSED(dst); UNUSED(src); UNUSED(srcLen); UNUSED(sliceLen); UNUSED(inputPackSize); UNUSED(inputNum); UNUSED(chunkLen);
+#endif
+}
+
 void gf16_affine2x_finish_gfni(void *HEDLEY_RESTRICT dst, size_t len) {
 #if defined(__GFNI__) && defined(__SSSE3__)
 	gf16_finish(dst, len, sizeof(__m128i), &gf16_affine2x_finish_block_gfni);

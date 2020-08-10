@@ -245,6 +245,7 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 					_mul = &gf16_shuffle_mul_ssse3;
 					_mul_add = &gf16_shuffle_muladd_ssse3;
 					prepare = &gf16_shuffle_prepare_ssse3;
+					prepare_packed = &gf16_shuffle_prepare_packed_ssse3;
 					finish = &gf16_shuffle_finish_ssse3;
 				break;
 				case GF16_SHUFFLE_AVX:
@@ -255,6 +256,7 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 					_mul = &gf16_shuffle_mul_avx;
 					_mul_add = &gf16_shuffle_muladd_avx;
 					prepare = &gf16_shuffle_prepare_avx;
+					prepare_packed = &gf16_shuffle_prepare_packed_avx;
 					finish = &gf16_shuffle_finish_avx;
 				break;
 				case GF16_SHUFFLE_AVX2:
@@ -265,6 +267,7 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 					_mul = &gf16_shuffle_mul_avx2;
 					_mul_add = &gf16_shuffle_muladd_avx2;
 					prepare = &gf16_shuffle_prepare_avx2;
+					prepare_packed = &gf16_shuffle_prepare_packed_avx2;
 					finish = &gf16_shuffle_finish_avx2;
 					_info.alignment = 32;
 				break;
@@ -280,6 +283,7 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 					_mul_add_multi = &gf16_shuffle_muladd_multi_avx512;
 					#endif
 					prepare = &gf16_shuffle_prepare_avx512;
+					prepare_packed = &gf16_shuffle_prepare_packed_avx512;
 					finish = &gf16_shuffle_finish_avx512;
 					_info.alignment = 64;
 				break;
@@ -299,6 +303,7 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 			_mul_add_multi = &gf16_shuffle_muladd_multi_vbmi;
 			#endif
 			prepare = &gf16_shuffle_prepare_avx512;
+			prepare_packed = &gf16_shuffle_prepare_packed_avx512;
 			finish = &gf16_shuffle_finish_avx512;
 			_info.alignment = 64;
 			_info.stride = 128;
@@ -314,6 +319,7 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 			_mul_add_multi = &gf16_shuffle2x_muladd_multi_avx512;
 			#endif
 			prepare = &gf16_shuffle2x_prepare_avx512;
+			prepare_packed = &gf16_shuffle2x_prepare_packed_avx512;
 			finish = &gf16_shuffle2x_finish_avx512;
 			_info.alignment = 64;
 			_info.stride = 64;
@@ -329,6 +335,7 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 			_mul_add_multi = &gf16_shuffle2x_muladd_multi_avx2;
 			#endif
 			prepare = &gf16_shuffle2x_prepare_avx2;
+			prepare_packed = &gf16_shuffle2x_prepare_packed_avx2;
 			finish = &gf16_shuffle2x_finish_avx2;
 			_info.alignment = 32;
 			_info.stride = 32;
@@ -366,6 +373,7 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 			_mul_add_multi = &gf16_affine_muladd_multi_avx512;
 			#endif
 			prepare = &gf16_shuffle_prepare_avx512;
+			prepare_packed = &gf16_shuffle_prepare_packed_avx512;
 			finish = &gf16_shuffle_finish_avx512;
 		break;
 		
@@ -383,6 +391,7 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 			_mul_add_multi = &gf16_affine_muladd_multi_gfni;
 			#endif
 			prepare = &gf16_shuffle_prepare_ssse3;
+			prepare_packed = &gf16_shuffle_prepare_packed_ssse3;
 			finish = &gf16_shuffle_finish_ssse3;
 		break;
 		
@@ -397,6 +406,7 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 			_mul_add = &gf16_affine2x_muladd_avx512;
 			_mul_add_multi = &gf16_affine2x_muladd_multi_avx512;
 			prepare = &gf16_affine2x_prepare_avx512;
+			prepare_packed = &gf16_affine2x_prepare_packed_avx512;
 			finish = &gf16_affine2x_finish_avx512;
 		break;
 		
@@ -411,6 +421,7 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 			_mul_add = &gf16_affine2x_muladd_gfni;
 			_mul_add_multi = &gf16_affine2x_muladd_multi_gfni;
 			prepare = &gf16_affine2x_prepare_gfni;
+			prepare_packed = &gf16_affine2x_prepare_packed_gfni;
 			finish = &gf16_affine2x_finish_gfni;
 		break;
 		
@@ -439,6 +450,7 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 						_mul_add = &gf16_xor_jit_muladd_sse2;
 					}
 					prepare = &gf16_xor_prepare_sse2;
+					prepare_packed = &gf16_xor_prepare_packed_sse2;
 					finish = &gf16_xor_finish_sse2;
 				break;
 				/*
@@ -451,6 +463,7 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 					_mul = &gf16_xor_jit_mul_avx;
 					_mul_add = &gf16_xor_jit_muladd_avx;
 					prepare = &gf16_xor_prepare_avx;
+					prepare_packed = &gf16_xor_prepare_packed_avx;
 					finish = &gf16_xor_finish_avx;
 				break;
 				*/
@@ -463,6 +476,7 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 					_mul = &gf16_xor_jit_mul_avx2;
 					_mul_add = &gf16_xor_jit_muladd_avx2;
 					prepare = &gf16_xor_prepare_avx2;
+					prepare_packed = &gf16_xor_prepare_packed_avx2;
 					finish = &gf16_xor_finish_avx2;
 					_info.alignment = 32;
 				break;
@@ -476,6 +490,7 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 					_mul_add = &gf16_xor_jit_muladd_avx512;
 					_mul_add_multi = &gf16_xor_jit_muladd_multi_avx512;
 					prepare = &gf16_xor_prepare_avx512;
+					prepare_packed = &gf16_xor_prepare_packed_avx512;
 					finish = &gf16_xor_finish_avx512;
 					_info.alignment = 64;
 				break;
@@ -535,6 +550,7 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 Galois16Mul::Galois16Mul(Galois16Methods method) {
 	scratch = NULL;
 	prepare = &Galois16Mul::_prepare_none;
+	prepare_packed = &Galois16Mul::_prepare_packed_none;
 	finish = &Galois16Mul::_finish_none;
 	_info.alignment = 2;
 	_info.stride = 2;
@@ -560,6 +576,7 @@ void Galois16Mul::move(Galois16Mul& other) {
 	other.scratch = NULL;
 	
 	prepare = other.prepare;
+	prepare_packed = other.prepare_packed;
 	finish = other.finish;
 	_info = other._info;
 	_mul = other._mul;
@@ -706,4 +723,45 @@ std::vector<Galois16Methods> Galois16Mul::availableMethods(bool checkCpuid) {
 
 unsigned Galois16Mul::_mul_add_multi_none(const void *HEDLEY_RESTRICT, unsigned, size_t, void *HEDLEY_RESTRICT, const void* const*HEDLEY_RESTRICT, size_t, const uint16_t *HEDLEY_RESTRICT, void *HEDLEY_RESTRICT) {
 	return 0;
+}
+
+void Galois16Mul::_prepare_packed_none(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen, size_t sliceLen, unsigned inputPackSize, unsigned inputNum, size_t chunkLen) {
+	assert(inputNum < inputPackSize);
+	assert(srcLen <= sliceLen);
+	assert(chunkLen <= sliceLen);
+	
+	uint8_t* dstBase = (uint8_t*)dst + inputNum * chunkLen;
+	unsigned fullChunks = srcLen/chunkLen;
+	size_t chunkStride = chunkLen * inputPackSize;
+	for(unsigned chunk=0; chunk<fullChunks; chunk++) {
+		memcpy(dstBase + chunkStride*chunk, (uint8_t*)src + chunkLen*chunk, chunkLen);
+	}
+	
+	size_t remaining = srcLen % chunkLen;
+	if(remaining) {
+		size_t lastChunkLen = chunkLen;
+		if(srcLen > (sliceLen/chunkLen) * chunkLen) { // if this is the last chunk, the length may be shorter
+			lastChunkLen = sliceLen % chunkLen; // this will be block aligned, as both sliceLen and chunkLen must be block aligned
+			if(lastChunkLen == 0) lastChunkLen = chunkLen; // if sliceLen is divisible by chunkLen, the last chunk will be chunkLen
+		}
+		
+		uint8_t* dstPtr = (uint8_t*)dst + chunkStride * fullChunks + lastChunkLen*inputNum;
+		memcpy(dstPtr, (uint8_t*)src + chunkLen*fullChunks, remaining);
+		memset(dstPtr + remaining, 0, lastChunkLen - remaining);
+		
+		if(lastChunkLen != chunkLen) return; // we processed an unevenly sized last chunk = we're done (we may be done otherwise, but the rest of the code below handles that)
+		fullChunks++;
+	}
+	
+	// zero fill remaining full blocks
+	unsigned sliceFullChunks = sliceLen/chunkLen;
+	for(unsigned chunk=fullChunks; chunk<sliceFullChunks; chunk++) {
+		memset(dstBase + chunkStride*chunk, 0, chunkLen);
+	}
+	
+	// zero fill last block
+	remaining = sliceLen % chunkLen;
+	if(remaining) {
+		memset((uint8_t*)dst + chunkStride * sliceFullChunks + remaining*inputNum, 0, remaining);
+	}
 }

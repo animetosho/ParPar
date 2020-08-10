@@ -5,6 +5,7 @@
 #include <cstring>
 
 typedef void(*Galois16MulTransform) (void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen);
+typedef void(*Galois16MulTransformPacked) (void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen, size_t sliceLen, unsigned inputPackSize, unsigned inputNum, size_t chunkLen);
 typedef void(*Galois16MulUntransform) (void *HEDLEY_RESTRICT dst, size_t len);
 typedef void(*Galois16MulFunc) (const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch);
 typedef void(*Galois16PowFunc) (const void *HEDLEY_RESTRICT scratch, unsigned outputs, size_t offset, void **HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch);
@@ -85,6 +86,7 @@ private:
 		memcpy(dst, src, srcLen);
 	}
 	static void _finish_none(void *HEDLEY_RESTRICT, size_t) {}
+	static void _prepare_packed_none(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen, size_t sliceLen, unsigned inputPackSize, unsigned inputNum, size_t chunkLen);
 	
 	Galois16Methods _method;
 	void setupMethod(Galois16Methods method);
@@ -132,6 +134,7 @@ public:
 	}
 	
 	Galois16MulTransform prepare;
+	Galois16MulTransformPacked prepare_packed;
 	Galois16MulUntransform finish;
 	
 	void* mutScratch_alloc() const;
@@ -239,6 +242,23 @@ public:
 		// process remaining regions
 		for(; region<regions; region++) {
 			mul_add((uint8_t*)dst+offset, ((uint8_t*)src[region])+offset, len, coefficients[region], mutScratch);
+		}
+	}
+	
+	inline void mul_add_multi_packed(unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch) const {
+		assert((len & (_info.stride-1)) == 0);
+		assert(len > 0);
+		assert(regions > 0);
+		
+		unsigned region = 0;
+		
+		// TODO: mul by 1?
+		// TODO: add per-method processing
+		
+		// process remaining regions
+		for(; region<regions; region++) {
+			if(coefficients[region])
+				_mul_add(scratch, dst, (uint8_t*)src + region*len, len, coefficients[region], mutScratch);
 		}
 	}
 	
