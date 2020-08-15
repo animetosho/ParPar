@@ -4,57 +4,9 @@
 
 #ifdef _AVAILABLE
 int _FN(gf16_shuffle_available) = 1;
+#include "gf16_shuffle_x86_prepare.h"
 #else
 int _FN(gf16_shuffle_available) = 0;
-#endif
-
-#ifdef _AVAILABLE
-static HEDLEY_ALWAYS_INLINE void _FN(gf16_shuffle_prepare_block)(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src) {
-	_mword ta = _MMI(loadu)((_mword*)src);
-	_mword tb = _MMI(loadu)((_mword*)src + 1);
-	
-	ta = separate_low_high(ta);
-	tb = separate_low_high(tb);
-	
-	_MMI(store)((_mword*)dst,
-		_MM(unpackhi_epi64)(ta, tb)
-	);
-	_MMI(store)((_mword*)dst + 1,
-		_MM(unpacklo_epi64)(ta, tb)
-	);
-}
-// final block
-static HEDLEY_ALWAYS_INLINE void _FN(gf16_shuffle_prepare_blocku)(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t remaining) {
-	_mword ta, tb;
-	if(remaining & sizeof(_mword))
-		ta = _MMI(loadu)((_mword*)src);
-	else
-		ta = partial_load(src, remaining);
-	
-	ta = separate_low_high(ta);
-	
-	if(remaining <= sizeof(_mword))
-		tb = _MMI(setzero)();
-	else {
-		tb = partial_load((char*)src + sizeof(_mword), remaining - sizeof(_mword));
-		tb = separate_low_high(tb);
-	}
-	
-	_MMI(store)((_mword*)dst,
-		_MM(unpackhi_epi64)(ta, tb)
-	);
-	_MMI(store)((_mword*)dst + 1,
-		_MM(unpacklo_epi64)(ta, tb)
-	);
-}
-
-static HEDLEY_ALWAYS_INLINE void _FN(gf16_shuffle_finish_block)(void *HEDLEY_RESTRICT dst) {
-	_mword ta = _MMI(load)((_mword*)dst);
-	_mword tb = _MMI(load)((_mword*)dst + 1);
-
-	_MMI(store)((_mword*)dst, _MM(unpacklo_epi8)(tb, ta));
-	_MMI(store)((_mword*)dst + 1, _MM(unpackhi_epi8)(tb, ta));
-}
 #endif
 
 void _FN(gf16_shuffle_prepare)(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen) {
@@ -68,7 +20,13 @@ void _FN(gf16_shuffle_prepare)(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RES
 
 void _FN(gf16_shuffle_prepare_packed)(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen, size_t sliceLen, unsigned inputPackSize, unsigned inputNum, size_t chunkLen) {
 #ifdef _AVAILABLE
-	gf16_prepare_packed(dst, src, srcLen, sliceLen, sizeof(_mword)*2, &_FN(gf16_shuffle_prepare_block), &_FN(gf16_shuffle_prepare_blocku), inputPackSize, inputNum, chunkLen, 1);
+	gf16_prepare_packed(dst, src, srcLen, sliceLen, sizeof(_mword)*2, &_FN(gf16_shuffle_prepare_block), &_FN(gf16_shuffle_prepare_blocku), inputPackSize, inputNum, chunkLen,
+#if MWORD_SIZE==64 && defined(PLATFORM_AMD64)
+		3
+#else
+		1
+#endif
+	);
 	_MM_END
 #else
 	UNUSED(dst); UNUSED(src); UNUSED(srcLen); UNUSED(sliceLen); UNUSED(inputPackSize); UNUSED(inputNum); UNUSED(chunkLen);

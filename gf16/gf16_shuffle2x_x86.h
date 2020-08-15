@@ -61,7 +61,15 @@ void _FN(gf16_shuffle2x_prepare)(void *HEDLEY_RESTRICT dst, const void *HEDLEY_R
 
 void _FN(gf16_shuffle2x_prepare_packed)(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen, size_t sliceLen, unsigned inputPackSize, unsigned inputNum, size_t chunkLen) {
 #ifdef _AVAILABLE
-	gf16_prepare_packed(dst, src, srcLen, sliceLen, sizeof(_mword), &_FN(gf16_shuffle2x_prepare_block), &_FN(gf16_shuffle2x_prepare_blocku), inputPackSize, inputNum, chunkLen, 1);
+	gf16_prepare_packed(dst, src, srcLen, sliceLen, sizeof(_mword), &_FN(gf16_shuffle2x_prepare_block), &_FN(gf16_shuffle2x_prepare_blocku), inputPackSize, inputNum, chunkLen,
+#if MWORD_SIZE==64 && defined(PLATFORM_AMD64)
+		6
+#elif defined(PLATFORM_AMD64)
+		2
+#else
+		1
+#endif
+	);
 	_MM_END
 #else
 	UNUSED(dst); UNUSED(src); UNUSED(srcLen); UNUSED(sliceLen); UNUSED(inputPackSize); UNUSED(inputNum); UNUSED(chunkLen);

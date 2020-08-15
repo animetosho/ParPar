@@ -112,8 +112,8 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle_avx512_round(
 }
 
 static HEDLEY_ALWAYS_INLINE void gf16_shuffle_muladd_x_avx512(
-	__m512i polyl, __m512i polyh, uint8_t *HEDLEY_RESTRICT _dst, const int srcCount,
-	const uint8_t *HEDLEY_RESTRICT _src1, const uint8_t *HEDLEY_RESTRICT _src2, const uint8_t *HEDLEY_RESTRICT _src3, const uint8_t *HEDLEY_RESTRICT _src4, size_t len,
+	__m512i polyl, __m512i polyh, uint8_t *HEDLEY_RESTRICT _dst, const unsigned srcScale, const int srcCount,
+	const uint8_t* _src1, const uint8_t* _src2, const uint8_t* _src3, const uint8_t* _src4, size_t len,
 	const uint16_t *HEDLEY_RESTRICT coefficients
 ) {
 	__m512i lowA0, lowA1, lowA2, lowA3, highA0, highA1, highA2, highA3;
@@ -170,15 +170,29 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle_muladd_x_avx512(
 	for(long ptr = -(long)len; ptr; ptr += sizeof(__m512i)*2) {
 		__m512i tph = _mm512_load_si512((__m512i*)(_dst+ptr));
 		__m512i tpl = _mm512_load_si512((__m512i*)(_dst+ptr) + 1);
-		gf16_shuffle_avx512_round((__m512i*)(_src1+ptr), &tpl, &tph, lowA0, highA0, lowA1, highA1, lowA2, highA2, lowA3, highA3);
-		gf16_shuffle_avx512_round((__m512i*)(_src2+ptr), &tpl, &tph, lowB0, highB0, lowB1, highB1, lowB2, highB2, lowB3, highB3);
+		gf16_shuffle_avx512_round((__m512i*)(_src1+ptr*srcScale), &tpl, &tph, lowA0, highA0, lowA1, highA1, lowA2, highA2, lowA3, highA3);
+		gf16_shuffle_avx512_round((__m512i*)(_src2+ptr*srcScale), &tpl, &tph, lowB0, highB0, lowB1, highB1, lowB2, highB2, lowB3, highB3);
 		if(srcCount >= 3)
-			gf16_shuffle_avx512_round((__m512i*)(_src3+ptr), &tpl, &tph, lowC0, highC0, lowC1, highC1, lowC2, highC2, lowC3, highC3);
+			gf16_shuffle_avx512_round((__m512i*)(_src3+ptr*srcScale), &tpl, &tph, lowC0, highC0, lowC1, highC1, lowC2, highC2, lowC3, highC3);
 		if(srcCount >= 4)
-			gf16_shuffle_avx512_round((__m512i*)(_src4+ptr), &tpl, &tph, lowD0, highD0, lowD1, highD1, lowD2, highD2, lowD3, highD3);
+			gf16_shuffle_avx512_round((__m512i*)(_src4+ptr*srcScale), &tpl, &tph, lowD0, highD0, lowD1, highD1, lowD2, highD2, lowD3, highD3);
 		_mm512_store_si512((__m512i*)(_dst+ptr), tph);
 		_mm512_store_si512((__m512i*)(_dst+ptr) + 1, tpl);
 	}
+}
+static HEDLEY_ALWAYS_INLINE void gf16_shuffle_muladd_packed_x_avx512(
+	__m512i polyl, __m512i polyh, uint8_t *HEDLEY_RESTRICT _dst, const int srcCount,
+	const uint8_t *HEDLEY_RESTRICT _src, size_t len,
+	const uint16_t *HEDLEY_RESTRICT coefficients
+) {
+	gf16_shuffle_muladd_x_avx512(
+		polyl, polyh, _dst, srcCount, srcCount,
+		_src + len*srcCount,
+		_src + len*srcCount + sizeof(__m512i)*2,
+		_src + len*srcCount + sizeof(__m512i)*4,
+		_src + len*srcCount + sizeof(__m512i)*6,
+		len, coefficients
+	);
 }
 #endif // defined(_AVAILABLE)
 
@@ -192,7 +206,7 @@ unsigned gf16_shuffle_muladd_multi_avx512(const void *HEDLEY_RESTRICT scratch, u
 	unsigned region = 0;
 	if(regions > 2) do {
 		gf16_shuffle_muladd_x_avx512(
-			polyl, polyh, _dst, 3,
+			polyl, polyh, _dst, 1, 3,
 			(const uint8_t* HEDLEY_RESTRICT)src[region] + offset + len, (const uint8_t* HEDLEY_RESTRICT)src[region+1] + offset + len, (const uint8_t* HEDLEY_RESTRICT)src[region+2] + offset + len,
 			NULL,
 			len, coefficients + region
@@ -201,7 +215,7 @@ unsigned gf16_shuffle_muladd_multi_avx512(const void *HEDLEY_RESTRICT scratch, u
 	} while(region+2 < regions);
 	if(region+1 < regions) {
 		gf16_shuffle_muladd_x_avx512(
-			polyl, polyh, _dst, 2,
+			polyl, polyh, _dst, 1, 2,
 			(const uint8_t* HEDLEY_RESTRICT)src[region] + offset + len, (const uint8_t* HEDLEY_RESTRICT)src[region+1] + offset + len,
 			NULL, NULL,
 			len, coefficients + region
@@ -213,6 +227,40 @@ unsigned gf16_shuffle_muladd_multi_avx512(const void *HEDLEY_RESTRICT scratch, u
 	return region;
 #else
 	UNUSED(scratch); UNUSED(regions); UNUSED(offset); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficients);
+	return 0;
+#endif
+}
+
+unsigned gf16_shuffle_muladd_multi_packed_avx512(const void *HEDLEY_RESTRICT scratch, unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch) {
+	UNUSED(mutScratch);
+#if defined(_AVAILABLE) && defined(PLATFORM_AMD64)
+	uint8_t* _dst = (uint8_t*)dst + len;
+	uint8_t* _src = (uint8_t*)src;
+	__m512i polyl = _mm512_broadcast_i32x4(_mm_load_si128((__m128i*)scratch + 1));
+	__m512i polyh = _mm512_broadcast_i32x4(_mm_load_si128((__m128i*)scratch));
+	
+	unsigned region = 0;
+	if(regions > 2) do {
+		gf16_shuffle_muladd_packed_x_avx512(
+			polyl, polyh, _dst, 3,
+			_src + region * len,
+			len, coefficients + region
+		);
+		region += 3;
+	} while(region+2 < regions);
+	if(region+1 < regions) {
+		gf16_shuffle_muladd_packed_x_avx512(
+			polyl, polyh, _dst, 2,
+			_src + region * len,
+			len, coefficients + region
+		);
+		region += 2;
+	}
+	
+	_mm256_zeroupper();
+	return region;
+#else
+	UNUSED(scratch); UNUSED(regions); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficients);
 	return 0;
 #endif
 }
@@ -261,8 +309,8 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle2x_avx512_round(
 }
 
 static HEDLEY_ALWAYS_INLINE void gf16_shuffle2x_muladd_x_avx512(
-	__m512i polyl, __m512i polyh, uint8_t *HEDLEY_RESTRICT _dst, const int srcCount,
-	const uint8_t *HEDLEY_RESTRICT _src1, const uint8_t *HEDLEY_RESTRICT _src2, const uint8_t *HEDLEY_RESTRICT _src3, const uint8_t *HEDLEY_RESTRICT _src4, const uint8_t *HEDLEY_RESTRICT _src5, const uint8_t *HEDLEY_RESTRICT _src6, size_t len,
+	__m512i polyl, __m512i polyh, uint8_t *HEDLEY_RESTRICT _dst, const unsigned srcScale, const int srcCount,
+	const uint8_t* _src1, const uint8_t* _src2, const uint8_t* _src3, const uint8_t* _src4, const uint8_t* _src5, const uint8_t* _src6, size_t len,
 	const uint16_t *HEDLEY_RESTRICT coefficients
 ) {
 	__m512i shufNormLoA, shufNormHiA, shufSwapLoA, shufSwapHiA;
@@ -338,22 +386,38 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle2x_muladd_x_avx512(
 	
 	for(long ptr = -(long)len; ptr; ptr += sizeof(__m512i)) {
 		__m512i swapped, result = _mm512_load_si512((__m512i*)(_dst+ptr));
-		gf16_shuffle2x_avx512_round1((__m512i*)(_src1+ptr), &result, &swapped, shufNormLoA, shufNormHiA, shufSwapLoA, shufSwapHiA);
-		gf16_shuffle2x_avx512_round((__m512i*)(_src2+ptr), &result, &swapped, shufNormLoB, shufNormHiB, shufSwapLoB, shufSwapHiB);
+		gf16_shuffle2x_avx512_round1((__m512i*)(_src1+ptr*srcScale), &result, &swapped, shufNormLoA, shufNormHiA, shufSwapLoA, shufSwapHiA);
+		gf16_shuffle2x_avx512_round((__m512i*)(_src2+ptr*srcScale), &result, &swapped, shufNormLoB, shufNormHiB, shufSwapLoB, shufSwapHiB);
 		if(srcCount >= 3)
-			gf16_shuffle2x_avx512_round((__m512i*)(_src3+ptr), &result, &swapped, shufNormLoC, shufNormHiC, shufSwapLoC, shufSwapHiC);
+			gf16_shuffle2x_avx512_round((__m512i*)(_src3+ptr*srcScale), &result, &swapped, shufNormLoC, shufNormHiC, shufSwapLoC, shufSwapHiC);
 		if(srcCount >= 4)
-			gf16_shuffle2x_avx512_round((__m512i*)(_src4+ptr), &result, &swapped, shufNormLoD, shufNormHiD, shufSwapLoD, shufSwapHiD);
+			gf16_shuffle2x_avx512_round((__m512i*)(_src4+ptr*srcScale), &result, &swapped, shufNormLoD, shufNormHiD, shufSwapLoD, shufSwapHiD);
 		if(srcCount >= 5)
-			gf16_shuffle2x_avx512_round((__m512i*)(_src5+ptr), &result, &swapped, shufNormLoE, shufNormHiE, shufSwapLoE, shufSwapHiE);
+			gf16_shuffle2x_avx512_round((__m512i*)(_src5+ptr*srcScale), &result, &swapped, shufNormLoE, shufNormHiE, shufSwapLoE, shufSwapHiE);
 		if(srcCount >= 6)
-			gf16_shuffle2x_avx512_round((__m512i*)(_src6+ptr), &result, &swapped, shufNormLoF, shufNormHiF, shufSwapLoF, shufSwapHiF);
+			gf16_shuffle2x_avx512_round((__m512i*)(_src6+ptr*srcScale), &result, &swapped, shufNormLoF, shufNormHiF, shufSwapLoF, shufSwapHiF);
 		
 		swapped = _mm512_shuffle_i32x4(swapped, swapped, _MM_SHUFFLE(1,0,3,2));
 		result = _mm512_xor_si512(result, swapped);
 		
 		_mm512_store_si512((__m512i*)(_dst+ptr), result);
 	}
+}
+static HEDLEY_ALWAYS_INLINE void gf16_shuffle2x_muladd_packed_x_avx512(
+	__m512i polyl, __m512i polyh, uint8_t *HEDLEY_RESTRICT _dst, const int srcCount,
+	const uint8_t *HEDLEY_RESTRICT _src, size_t len,
+	const uint16_t *HEDLEY_RESTRICT coefficients
+) {
+	gf16_shuffle2x_muladd_x_avx512(
+		polyl, polyh, _dst, srcCount, srcCount,
+		_src + len*srcCount,
+		_src + len*srcCount + sizeof(__m512i)*1,
+		_src + len*srcCount + sizeof(__m512i)*2,
+		_src + len*srcCount + sizeof(__m512i)*3,
+		_src + len*srcCount + sizeof(__m512i)*4,
+		_src + len*srcCount + sizeof(__m512i)*5,
+		len, coefficients
+	);
 }
 #endif // defined(_AVAILABLE)
 
@@ -368,7 +432,7 @@ unsigned gf16_shuffle2x_muladd_multi_avx512(const void *HEDLEY_RESTRICT scratch,
 	unsigned region = 0;
 	if(regions > 5) do {
 		gf16_shuffle2x_muladd_x_avx512(
-			polyl, polyh, _dst, 6,
+			polyl, polyh, _dst, 1, 6,
 			(const uint8_t* HEDLEY_RESTRICT)src[region] + offset + len,
 			(const uint8_t* HEDLEY_RESTRICT)src[region+1] + offset + len,
 			(const uint8_t* HEDLEY_RESTRICT)src[region+2] + offset + len,
@@ -382,7 +446,7 @@ unsigned gf16_shuffle2x_muladd_multi_avx512(const void *HEDLEY_RESTRICT scratch,
 	switch(regions - region) {
 		case 5:
 			gf16_shuffle2x_muladd_x_avx512(
-				polyl, polyh, _dst, 5,
+				polyl, polyh, _dst, 1, 5,
 				(const uint8_t* HEDLEY_RESTRICT)src[region] + offset + len,
 				(const uint8_t* HEDLEY_RESTRICT)src[region+1] + offset + len,
 				(const uint8_t* HEDLEY_RESTRICT)src[region+2] + offset + len,
@@ -395,7 +459,7 @@ unsigned gf16_shuffle2x_muladd_multi_avx512(const void *HEDLEY_RESTRICT scratch,
 		break;
 		case 4:
 			gf16_shuffle2x_muladd_x_avx512(
-				polyl, polyh, _dst, 4,
+				polyl, polyh, _dst, 1, 4,
 				(const uint8_t* HEDLEY_RESTRICT)src[region] + offset + len,
 				(const uint8_t* HEDLEY_RESTRICT)src[region+1] + offset + len,
 				(const uint8_t* HEDLEY_RESTRICT)src[region+2] + offset + len,
@@ -407,7 +471,7 @@ unsigned gf16_shuffle2x_muladd_multi_avx512(const void *HEDLEY_RESTRICT scratch,
 		break;
 		case 3:
 			gf16_shuffle2x_muladd_x_avx512(
-				polyl, polyh, _dst, 3,
+				polyl, polyh, _dst, 1, 3,
 				(const uint8_t* HEDLEY_RESTRICT)src[region] + offset + len,
 				(const uint8_t* HEDLEY_RESTRICT)src[region+1] + offset + len,
 				(const uint8_t* HEDLEY_RESTRICT)src[region+2] + offset + len,
@@ -418,7 +482,7 @@ unsigned gf16_shuffle2x_muladd_multi_avx512(const void *HEDLEY_RESTRICT scratch,
 		break;
 		case 2:
 			gf16_shuffle2x_muladd_x_avx512(
-				polyl, polyh, _dst, 2,
+				polyl, polyh, _dst, 1, 2,
 				(const uint8_t* HEDLEY_RESTRICT)src[region] + offset + len,
 				(const uint8_t* HEDLEY_RESTRICT)src[region+1] + offset + len,
 				NULL, NULL, NULL, NULL,
@@ -435,6 +499,67 @@ unsigned gf16_shuffle2x_muladd_multi_avx512(const void *HEDLEY_RESTRICT scratch,
 	return 0;
 #endif
 }
+
+unsigned gf16_shuffle2x_muladd_multi_packed_avx512(const void *HEDLEY_RESTRICT scratch, unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch) {
+	UNUSED(mutScratch);
+#if defined(_AVAILABLE) && defined(PLATFORM_AMD64)
+	uint8_t* _dst = (uint8_t*)dst + len;
+	uint8_t* _src = (uint8_t*)src;
+	__m512i polyl = _mm512_broadcast_i32x4(_mm_load_si128((__m128i*)scratch + 1));
+	__m512i polyh = _mm512_broadcast_i32x4(_mm_load_si128((__m128i*)scratch));
+	
+	unsigned region = 0;
+	if(regions > 5) do {
+		gf16_shuffle2x_muladd_packed_x_avx512(
+			polyl, polyh, _dst, 6,
+			_src + region * len,
+			len, coefficients + region
+		);
+		region += 6;
+	} while(region+5 < regions);
+	switch(regions - region) {
+		case 5:
+			gf16_shuffle2x_muladd_packed_x_avx512(
+				polyl, polyh, _dst, 5,
+				_src + region * len,
+				len, coefficients + region
+			);
+			region += 5;
+		break;
+		case 4:
+			gf16_shuffle2x_muladd_packed_x_avx512(
+				polyl, polyh, _dst, 4,
+				_src + region * len,
+				len, coefficients + region
+			);
+			region += 4;
+		break;
+		case 3:
+			gf16_shuffle2x_muladd_packed_x_avx512(
+				polyl, polyh, _dst, 3,
+				_src + region * len,
+				len, coefficients + region
+			);
+			region += 3;
+		break;
+		case 2:
+			gf16_shuffle2x_muladd_packed_x_avx512(
+				polyl, polyh, _dst, 2,
+				_src + region * len,
+				len, coefficients + region
+			);
+			region += 2;
+		break;
+		default: break;
+	}
+	_mm256_zeroupper();
+	return region;
+#else
+	UNUSED(scratch); UNUSED(regions); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficients);
+	return 0;
+#endif
+}
+
 
 
 #undef _AVAILABLE

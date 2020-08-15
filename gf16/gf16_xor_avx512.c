@@ -882,6 +882,106 @@ unsigned gf16_xor_jit_muladd_multi_avx512(const void *HEDLEY_RESTRICT scratch, u
 #endif
 }
 
+unsigned gf16_xor_jit_muladd_multi_packed_avx512(const void *HEDLEY_RESTRICT scratch, unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch) {
+#if defined(__AVX512BW__) && defined(__AVX512VL__) && defined(PLATFORM_AMD64)
+	const struct gf16_xor_scratch *HEDLEY_RESTRICT info = (const struct gf16_xor_scratch *HEDLEY_RESTRICT)scratch;
+	jit_wx_pair* jit = (jit_wx_pair*)mutScratch;
+	
+	ALIGN_TO(64, uint8_t jitTemp[XORDEP_JIT_SIZE]); // for copying only
+	uint8_t* jitCode = (uint8_t*)jit->w + info->codeStart;
+	
+	for(unsigned region=0; region<regions; region += XOR512_MULTI_REGIONS) {
+		unsigned numRegions = regions - region;
+		if(numRegions > XOR512_MULTI_REGIONS) numRegions = XOR512_MULTI_REGIONS;
+		
+		uint8_t* jitptr = jitCode;
+		uint8_t* jitdst = jitptr;
+		if(info->jitOptStrat == GF16_XOR_JIT_STRAT_COPYNT || info->jitOptStrat == GF16_XOR_JIT_STRAT_COPY) {
+			if((uintptr_t)jitdst & 0x1F) {
+				/* copy unaligned part (might not be worth it for these CPUs, but meh) */
+				_mm256_store_si256((__m256i*)jitTemp, _mm256_load_si256((__m256i*)((uintptr_t)jitptr & ~0x1F)));
+				jitptr = jitTemp + ((uintptr_t)jitdst & 0x1F);
+				jitdst -= (uintptr_t)jitdst & 0x1F;
+			}
+			else
+				jitptr = jitTemp;
+		}
+		else if(info->jitOptStrat == GF16_XOR_JIT_STRAT_CLR) {
+			for(int i=0; i<XORDEP_JIT_CODE_SIZE-256; i+=64)
+				jitptr[i] = 0;
+		}
+		
+		jitptr = xor_write_jit_avx512_multi(info, jitptr, DX, coefficients[region], 2);
+		
+		for(unsigned in = 1; in < numRegions; in++) {
+			// load + run
+			jitptr += _jit_add_i(jitptr, DX, 1024); // TODO: consider eliminating these adds
+			for(int i=1; i<16; i++) {
+				jitptr += _jit_vmovdqa32_load(jitptr, 16+i, DX, i<<6);
+			}
+			jitptr = xor_write_jit_avx512_multi(info, jitptr, DX, coefficients[region+in], 1);
+		}
+		
+		
+		// write out registers
+		for(int i=0; i<16; i+=2) {
+			jitptr += _jit_vmovdqa32_store(jitptr, AX, i<<6, i>>1);
+			jitptr += _jit_vmovdqa32_store(jitptr, AX, (i+1)<<6, (i>>1)+8);
+		}
+		
+		/* cmp/jcc */
+		*(uint64_t*)(jitptr) = 0x800FC03948 | (AX <<16) | (CX <<19) | ((uint64_t)JL <<32);
+		if(info->jitOptStrat == GF16_XOR_JIT_STRAT_COPYNT || info->jitOptStrat == GF16_XOR_JIT_STRAT_COPY) {
+			*(int32_t*)(jitptr +5) = (int32_t)((jitTemp - (jitdst - (uint8_t*)jit->w)) - jitptr -9);
+			jitptr[9] = 0xC3; /* ret */
+			/* memcpy to destination */
+			if(info->jitOptStrat == GF16_XOR_JIT_STRAT_COPYNT) {
+				// 256-bit NT copies never seem to be better, so just stick to 128-bit
+				for(uint_fast32_t i=0; i<(uint_fast32_t)(jitptr+10-jitTemp); i+=64) {
+					__m128i ta = _mm_load_si128((__m128i*)(jitTemp + i));
+					__m128i tb = _mm_load_si128((__m128i*)(jitTemp + i + 16));
+					__m128i tc = _mm_load_si128((__m128i*)(jitTemp + i + 32));
+					__m128i td = _mm_load_si128((__m128i*)(jitTemp + i + 48));
+					_mm_stream_si128((__m128i*)(jitdst + i), ta);
+					_mm_stream_si128((__m128i*)(jitdst + i + 16), tb);
+					_mm_stream_si128((__m128i*)(jitdst + i + 32), tc);
+					_mm_stream_si128((__m128i*)(jitdst + i + 48), td);
+				}
+			} else {
+				/* AVX does result in fewer writes, but testing on Haswell seems to indicate minimal benefit over SSE2 */
+				for(uint_fast32_t i=0; i<(uint_fast32_t)(jitptr+10-jitTemp); i+=64) {
+					__m256i ta = _mm256_load_si256((__m256i*)(jitTemp + i));
+					__m256i tb = _mm256_load_si256((__m256i*)(jitTemp + i + 32));
+					_mm256_store_si256((__m256i*)(jitdst + i), ta);
+					_mm256_store_si256((__m256i*)(jitdst + i + 32), tb);
+				}
+			}
+		} else {
+			*(int32_t*)(jitptr +5) = (int32_t)((uint8_t*)jit->w - jitptr -9);
+			jitptr[9] = 0xC3; /* ret */
+		}
+		
+		#ifdef GF16_XORJIT_ENABLE_DUAL_MAPPING
+		if(jit->w != jit->x) {
+			// TODO: need to serialize?
+		}
+		#endif
+		gf16_xor512_jit_stub(
+			(intptr_t)dst - 1024,
+			(intptr_t)dst + len - 1024,
+			(intptr_t)src + len*region - 1024,
+			jit->x
+		);
+	}
+	
+	_mm256_zeroupper();
+	return regions;
+#else
+	UNUSED(scratch); UNUSED(regions); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficients); UNUSED(mutScratch);
+	return 0;
+#endif
+}
+
 
 #if defined(__AVX512BW__) && defined(__AVX512VL__) && defined(PLATFORM_AMD64)
 static HEDLEY_ALWAYS_INLINE void gf16_xor_finish_bit_extract(uint64_t* dst, __m512i src) {

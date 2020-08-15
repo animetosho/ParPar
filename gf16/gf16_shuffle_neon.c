@@ -18,7 +18,7 @@ int gf16_shuffle_available_neon = 0;
 
 #ifndef __aarch64__
 #define vqtbl1q_u8(tbl, v) vcombine_u8(vtbl2_u8(tbl, vget_low_u8(v)),   \
-				                               vtbl2_u8(tbl, vget_high_u8(v)))
+                                       vtbl2_u8(tbl, vget_high_u8(v)))
 typedef uint8x8x2_t qtbl_t;
 #else
 typedef uint8x16_t qtbl_t;
@@ -123,9 +123,8 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle_neon_calc_tables(uint8x16x2_t poly
 	#undef MUL16
 }
 
-static HEDLEY_ALWAYS_INLINE void gf16_shuffle_neon_round1(const void* src, uint8x16_t* rl, uint8x16_t* rh, qtbl_t* tbl_l, qtbl_t* tbl_h) {
+static HEDLEY_ALWAYS_INLINE void gf16_shuffle_neon_round1(uint8x16x2_t va, uint8x16_t* rl, uint8x16_t* rh, qtbl_t* tbl_l, qtbl_t* tbl_h) {
 	uint8x16_t loset = vdupq_n_u8(0xf);
-	uint8x16x2_t va = vld2q_u8(src);
 	
 	uint8x16_t tmp = vandq_u8(va.val[0], loset);
 	*rl = vqtbl1q_u8(tbl_l[0], tmp);
@@ -142,9 +141,8 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle_neon_round1(const void* src, uint8
 	*rl = veorq_u8(*rl, vqtbl1q_u8(tbl_l[3], va.val[1]));
 	*rh = veorq_u8(*rh, vqtbl1q_u8(tbl_h[3], va.val[1]));
 }
-static HEDLEY_ALWAYS_INLINE void gf16_shuffle_neon_round(const void* src, uint8x16_t* rl, uint8x16_t* rh, qtbl_t* tbl_l, qtbl_t* tbl_h) {
+static HEDLEY_ALWAYS_INLINE void gf16_shuffle_neon_round(uint8x16x2_t va, uint8x16_t* rl, uint8x16_t* rh, qtbl_t* tbl_l, qtbl_t* tbl_h) {
 	uint8x16_t loset = vdupq_n_u8(0xf);
-	uint8x16x2_t va = vld2q_u8(src);
 	
 	uint8x16_t tmp = vandq_u8(va.val[0], loset);
 	*rl = veorq_u8(*rl, vqtbl1q_u8(tbl_l[0], tmp));
@@ -174,7 +172,7 @@ void gf16_shuffle_mul_neon(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RES
 	
 	for(long ptr = -(long)len; ptr; ptr += sizeof(uint8x16_t)*2) {
 		uint8x16x2_t r;
-		gf16_shuffle_neon_round1(_src+ptr, &r.val[0], &r.val[1], tbl_l, tbl_h);
+		gf16_shuffle_neon_round1(vld2q_u8(_src+ptr), &r.val[0], &r.val[1], tbl_l, tbl_h);
 		vst2q_u8(_dst+ptr, r);
 	}
 #else
@@ -194,7 +192,7 @@ void gf16_shuffle_muladd_neon(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_
 	for(long ptr = -(long)len; ptr; ptr += sizeof(uint8x16_t)*2) {
 		uint8x16_t rl, rh;
 		uint8x16x2_t vb = vld2q_u8(_dst+ptr);
-		gf16_shuffle_neon_round1(_src+ptr, &rl, &rh, tbl_l, tbl_h);
+		gf16_shuffle_neon_round1(vld2q_u8(_src+ptr), &rl, &rh, tbl_l, tbl_h);
 		vb.val[0] = veorq_u8(rl, vb.val[0]);
 		vb.val[1] = veorq_u8(rh, vb.val[1]);
 		vst2q_u8(_dst+ptr, vb);
@@ -217,8 +215,8 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle_muladd_x2_neon(
 
 	for(long ptr = -(long)len; ptr; ptr += sizeof(uint8x16_t)*2) {
 		uint8x16_t rl, rh;
-		gf16_shuffle_neon_round1(_src1+ptr, &rl, &rh, tbl_Al, tbl_Ah);
-		gf16_shuffle_neon_round(_src2+ptr, &rl, &rh, tbl_Bl, tbl_Bh);
+		gf16_shuffle_neon_round1(vld2q_u8(_src1+ptr), &rl, &rh, tbl_Al, tbl_Ah);
+		gf16_shuffle_neon_round(vld2q_u8(_src2+ptr), &rl, &rh, tbl_Bl, tbl_Bh);
 		uint8x16x2_t vb = vld2q_u8(_dst+ptr);
 		vb.val[0] = veorq_u8(rl, vb.val[0]);
 		vb.val[1] = veorq_u8(rh, vb.val[1]);
@@ -241,9 +239,9 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle_muladd_x3_neon(
 
 	for(long ptr = -(long)len; ptr; ptr += sizeof(uint8x16_t)*2) {
 		uint8x16_t rl, rh;
-		gf16_shuffle_neon_round1(_src1+ptr, &rl, &rh, tbl_Al, tbl_Ah);
-		gf16_shuffle_neon_round(_src2+ptr, &rl, &rh, tbl_Bl, tbl_Bh);
-		gf16_shuffle_neon_round(_src3+ptr, &rl, &rh, tbl_Cl, tbl_Ch);
+		gf16_shuffle_neon_round1(vld2q_u8(_src1+ptr), &rl, &rh, tbl_Al, tbl_Ah);
+		gf16_shuffle_neon_round(vld2q_u8(_src2+ptr), &rl, &rh, tbl_Bl, tbl_Bh);
+		gf16_shuffle_neon_round(vld2q_u8(_src3+ptr), &rl, &rh, tbl_Cl, tbl_Ch);
 		uint8x16x2_t vb = vld2q_u8(_dst+ptr);
 		vb.val[0] = veorq_u8(rl, vb.val[0]);
 		vb.val[1] = veorq_u8(rh, vb.val[1]);
@@ -251,6 +249,27 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle_muladd_x3_neon(
 	}
 }
 */
+
+static HEDLEY_ALWAYS_INLINE void gf16_shuffle_muladd_packed_x2_neon(
+	uint8x16x2_t poly,
+	uint8_t *HEDLEY_RESTRICT _dst, const uint8_t *HEDLEY_RESTRICT _src, size_t len,
+	const uint16_t *HEDLEY_RESTRICT coefficients
+) {
+	qtbl_t tbl_Ah[4], tbl_Al[4];
+	qtbl_t tbl_Bh[4], tbl_Bl[4];
+	gf16_shuffle_neon_calc_tables(poly, coefficients[0], tbl_Al, tbl_Ah);
+	gf16_shuffle_neon_calc_tables(poly, coefficients[1], tbl_Bl, tbl_Bh);
+
+	for(long ptr = -(long)len; ptr; ptr += sizeof(uint8x16_t)*2) {
+		uint8x16_t rl, rh;
+		gf16_shuffle_neon_round1(vld2q_u8(_src+ptr*2), &rl, &rh, tbl_Al, tbl_Ah);
+		gf16_shuffle_neon_round(vld2q_u8(_src+ptr*2 + sizeof(uint8x16x2_t)), &rl, &rh, tbl_Bl, tbl_Bh);
+		uint8x16x2_t vb = vld2q_u8(_dst+ptr);
+		vb.val[0] = veorq_u8(rl, vb.val[0]);
+		vb.val[1] = veorq_u8(rh, vb.val[1]);
+		vst2q_u8(_dst+ptr, vb);
+	}
+}
 #endif
 
 unsigned gf16_shuffle_muladd_multi_neon(const void *HEDLEY_RESTRICT scratch, unsigned regions, size_t offset, void *HEDLEY_RESTRICT dst, const void* const*HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch) {
@@ -290,6 +309,48 @@ unsigned gf16_shuffle_muladd_multi_neon(const void *HEDLEY_RESTRICT scratch, uns
 #else
 	UNUSED(scratch); UNUSED(regions); UNUSED(offset); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficients);
 	return 0;
+#endif
+}
+
+unsigned gf16_shuffle_muladd_multi_packed_neon(const void *HEDLEY_RESTRICT scratch, unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch) {
+	UNUSED(mutScratch);
+#if defined(__ARM_NEON) && defined(__aarch64__)
+	uint8_t* _dst = (uint8_t*)dst + len;
+	uint8_t* _src = (uint8_t*)src;
+	uint8x16x2_t poly = vld1q_u8_x2_align(scratch);
+	
+	unsigned region = 0;
+	for(; region < (regions & ~1); region += 2) {
+		gf16_shuffle_muladd_packed_x2_neon(
+			poly, _dst,
+			_src + region * len + len*2,
+			len, coefficients + region
+		);
+	}
+	return region;
+#else
+	UNUSED(scratch); UNUSED(regions); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficients);
+	return 0;
+#endif
+}
+
+
+#if defined(__ARM_NEON) && defined(__aarch64__)
+static HEDLEY_ALWAYS_INLINE void gf16_shuffle_prepare_block_neon(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src) {
+	vst1q_u8_x2_align(dst, vld1q_u8_x2_align(src));
+}
+// final block
+static HEDLEY_ALWAYS_INLINE void gf16_shuffle_prepare_blocku_neon(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t remaining) {
+	memcpy(dst, src, remaining);
+	memset(dst + remaining, 0, sizeof(uint8x16x2_t) - remaining);
+}
+#endif
+
+void gf16_shuffle_prepare_packed_neon(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen, size_t sliceLen, unsigned inputPackSize, unsigned inputNum, size_t chunkLen) {
+#if defined(__ARM_NEON) && defined(__aarch64__)
+	gf16_prepare_packed(dst, src, srcLen, sliceLen, sizeof(uint8x16x2_t), &gf16_shuffle_prepare_block_neon, &gf16_shuffle_prepare_blocku_neon, inputPackSize, inputNum, chunkLen, 2);
+#else
+	UNUSED(dst); UNUSED(src); UNUSED(srcLen); UNUSED(sliceLen); UNUSED(inputPackSize); UNUSED(inputNum); UNUSED(chunkLen);
 #endif
 }
 

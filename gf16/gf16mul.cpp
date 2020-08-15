@@ -281,6 +281,7 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 					#ifdef PLATFORM_AMD64
 					// if 32 registers are available, can do multi-region
 					_mul_add_multi = &gf16_shuffle_muladd_multi_avx512;
+					_mul_add_multi_packed = &gf16_shuffle_muladd_multi_packed_avx512;
 					#endif
 					prepare = &gf16_shuffle_prepare_avx512;
 					prepare_packed = &gf16_shuffle_prepare_packed_avx512;
@@ -301,9 +302,10 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 			_mul_add = &gf16_shuffle_muladd_vbmi;
 			#ifdef PLATFORM_AMD64
 			_mul_add_multi = &gf16_shuffle_muladd_multi_vbmi;
+			_mul_add_multi_packed = &gf16_shuffle_muladd_multi_packed_vbmi;
 			#endif
 			prepare = &gf16_shuffle_prepare_avx512;
-			prepare_packed = &gf16_shuffle_prepare_packed_avx512;
+			prepare_packed = &gf16_shuffle_prepare_packed_vbmi;
 			finish = &gf16_shuffle_finish_avx512;
 			_info.alignment = 64;
 			_info.stride = 128;
@@ -317,6 +319,7 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 			_mul_add = &gf16_shuffle2x_muladd_avx512;
 			#ifdef PLATFORM_AMD64
 			_mul_add_multi = &gf16_shuffle2x_muladd_multi_avx512;
+			_mul_add_multi_packed = &gf16_shuffle2x_muladd_multi_packed_avx512;
 			#endif
 			prepare = &gf16_shuffle2x_prepare_avx512;
 			prepare_packed = &gf16_shuffle2x_prepare_packed_avx512;
@@ -333,6 +336,7 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 			_mul_add = &gf16_shuffle2x_muladd_avx2;
 			#ifdef PLATFORM_AMD64
 			_mul_add_multi = &gf16_shuffle2x_muladd_multi_avx2;
+			_mul_add_multi_packed = &gf16_shuffle2x_muladd_multi_packed_avx2;
 			#endif
 			prepare = &gf16_shuffle2x_prepare_avx2;
 			prepare_packed = &gf16_shuffle2x_prepare_packed_avx2;
@@ -342,7 +346,7 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 		break;
 		
 		case GF16_SHUFFLE_NEON:
-			_info.alignment = 16;
+			_info.alignment = 32; // presumably double-loads work best when aligned to 32 instead of 16?
 			_info.stride = 32;
 			scratch = gf16_shuffle_init_arm(GF16_POLYNOMIAL);
 			// TODO: set _add
@@ -356,6 +360,8 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 			#ifdef __aarch64__
 			// enable only if 32 registers available
 			_mul_add_multi = &gf16_shuffle_muladd_multi_neon;
+			_mul_add_multi_packed = &gf16_shuffle_muladd_multi_packed_neon;
+			prepare_packed = &gf16_shuffle_prepare_packed_neon;
 			#endif
 		break;
 		
@@ -371,9 +377,10 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 			_mul_add = &gf16_affine_muladd_avx512;
 			#ifdef PLATFORM_AMD64
 			_mul_add_multi = &gf16_affine_muladd_multi_avx512;
+			_mul_add_multi_packed = &gf16_affine_muladd_multi_packed_avx512;
 			#endif
 			prepare = &gf16_shuffle_prepare_avx512;
-			prepare_packed = &gf16_shuffle_prepare_packed_avx512;
+			prepare_packed = &gf16_affine_prepare_packed_avx512;
 			finish = &gf16_shuffle_finish_avx512;
 		break;
 		
@@ -389,9 +396,10 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 			_mul_add = &gf16_affine_muladd_gfni;
 			#ifdef PLATFORM_AMD64
 			_mul_add_multi = &gf16_affine_muladd_multi_gfni;
+			_mul_add_multi_packed = &gf16_affine_muladd_multi_packed_gfni;
 			#endif
 			prepare = &gf16_shuffle_prepare_ssse3;
-			prepare_packed = &gf16_shuffle_prepare_packed_ssse3;
+			prepare_packed = &gf16_affine_prepare_packed_gfni;
 			finish = &gf16_shuffle_finish_ssse3;
 		break;
 		
@@ -405,6 +413,7 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 			}
 			_mul_add = &gf16_affine2x_muladd_avx512;
 			_mul_add_multi = &gf16_affine2x_muladd_multi_avx512;
+			_mul_add_multi_packed = &gf16_affine2x_muladd_multi_packed_avx512;
 			prepare = &gf16_affine2x_prepare_avx512;
 			prepare_packed = &gf16_affine2x_prepare_packed_avx512;
 			finish = &gf16_affine2x_finish_avx512;
@@ -420,6 +429,7 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 			}
 			_mul_add = &gf16_affine2x_muladd_gfni;
 			_mul_add_multi = &gf16_affine2x_muladd_multi_gfni;
+			_mul_add_multi_packed = &gf16_affine2x_muladd_multi_packed_gfni;
 			prepare = &gf16_affine2x_prepare_gfni;
 			prepare_packed = &gf16_affine2x_prepare_packed_gfni;
 			finish = &gf16_affine2x_finish_gfni;
@@ -430,6 +440,7 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 		//case GF16_XOR_JIT_AVX:
 		case GF16_XOR_JIT_SSE2:
 		case GF16_XOR_SSE2: {
+#ifdef PLATFORM_X86
 			_info.alignment = 16;
 			int jitOptStrat = CpuCap(true).jitOptStrat;
 			
@@ -489,6 +500,7 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 					_mul = &gf16_xor_jit_mul_avx512;
 					_mul_add = &gf16_xor_jit_muladd_avx512;
 					_mul_add_multi = &gf16_xor_jit_muladd_multi_avx512;
+					_mul_add_multi_packed = &gf16_xor_jit_muladd_multi_packed_avx512;
 					prepare = &gf16_xor_prepare_avx512;
 					prepare_packed = &gf16_xor_prepare_packed_avx512;
 					finish = &gf16_xor_finish_avx512;
@@ -498,6 +510,10 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 			}
 			
 			_info.stride = _info.alignment*16;
+#else
+			setupMethod(GF16_AUTO);
+			return;
+#endif
 		} break;
 		
 		case GF16_LOOKUP_SSE2:
@@ -558,6 +574,7 @@ Galois16Mul::Galois16Mul(Galois16Methods method) {
 	_mul = NULL;
 	_add = &Galois16Mul::addGeneric;
 	_mul_add_multi = &Galois16Mul::_mul_add_multi_none;
+	_mul_add_multi_packed = NULL;
 	
 	_pow = NULL;
 	_pow_add = NULL;
@@ -583,6 +600,7 @@ void Galois16Mul::move(Galois16Mul& other) {
 	_add = other._add;
 	_mul_add = other._mul_add;
 	_mul_add_multi = other._mul_add_multi;
+	_mul_add_multi_packed = other._mul_add_multi_packed;
 	_pow = other._pow;
 	_pow_add = other._pow_add;
 }
