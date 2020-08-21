@@ -48,6 +48,26 @@ static HEDLEY_ALWAYS_INLINE void _FN(gf16_shuffle2x_finish_block)(void *HEDLEY_R
 	
 	_MMI(store)((_mword*)dst, data);
 }
+static HEDLEY_ALWAYS_INLINE void _FN(gf16_shuffle2x_finish_copy_block)(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src) {
+	_mword shuf = _MM(set_epi32)(
+#if MWORD_SIZE >= 64
+		0x0f070e06, 0x0d050c04, 0x0b030a02, 0x09010800,
+		0x0f070e06, 0x0d050c04, 0x0b030a02, 0x09010800,
+#endif
+		0x0f070e06, 0x0d050c04, 0x0b030a02, 0x09010800,
+		0x0f070e06, 0x0d050c04, 0x0b030a02, 0x09010800
+	);	
+	_mword data = _MMI(load)((_mword*)src);
+	
+#if MWORD_SIZE >= 64
+	data = _mm512_permutexvar_epi64(_mm512_set_epi64(7,3, 6,2, 5,1, 4,0), data);
+#else
+	data = _mm256_permute4x64_epi64(data, _MM_SHUFFLE(3,1,2,0));
+#endif
+	data = _MM(shuffle_epi8)(data, shuf);
+	
+	_MMI(store)((_mword*)dst, data);
+}
 #endif
 
 void _FN(gf16_shuffle2x_prepare)(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen) {
@@ -82,6 +102,15 @@ void _FN(gf16_shuffle2x_finish)(void *HEDLEY_RESTRICT dst, size_t len) {
 	_MM_END
 #else
 	UNUSED(dst); UNUSED(len);
+#endif
+}
+
+void _FN(gf16_shuffle2x_finish_packed)(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t sliceLen, unsigned numOutputs, unsigned outputNum, size_t chunkLen) {
+#ifdef _AVAILABLE
+	gf16_finish_packed(dst, src, sliceLen, sizeof(_mword), &_FN(gf16_shuffle2x_finish_copy_block), numOutputs, outputNum, chunkLen, 1);
+	_MM_END
+#else
+	UNUSED(dst); UNUSED(src); UNUSED(sliceLen); UNUSED(numOutputs); UNUSED(outputNum); UNUSED(chunkLen);
 #endif
 }
 

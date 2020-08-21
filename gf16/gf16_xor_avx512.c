@@ -1014,28 +1014,29 @@ static HEDLEY_ALWAYS_INLINE void gf16_xor_finish_bit_extract(uint64_t* dst, __m5
 	dst[96 +1] = _mm512_test_epi8_mask(lane, hi_nibble_test);
 }
 
-void gf16_xor_finish_block_avx512(void *HEDLEY_RESTRICT dst) {
+static HEDLEY_ALWAYS_INLINE void _gf16_xor_finish_copy_block_avx512(void* dst, const void* src) {
+	uint64_t* _src = (uint64_t*)src;
 	uint64_t* _dst = (uint64_t*)dst;
 	
 	// 32 registers available, so load entire block
 	
 	// Clang doesn't seem to like arrays (always spills them to memory), so write out everything
-	__m512i src0 = _mm512_load_si512(_dst + 120 - 0*8);
-	__m512i src1 = _mm512_load_si512(_dst + 120 - 1*8);
-	__m512i src2 = _mm512_load_si512(_dst + 120 - 2*8);
-	__m512i src3 = _mm512_load_si512(_dst + 120 - 3*8);
-	__m512i src4 = _mm512_load_si512(_dst + 120 - 4*8);
-	__m512i src5 = _mm512_load_si512(_dst + 120 - 5*8);
-	__m512i src6 = _mm512_load_si512(_dst + 120 - 6*8);
-	__m512i src7 = _mm512_load_si512(_dst + 120 - 7*8);
-	__m512i src8 = _mm512_load_si512(_dst + 120 - 8*8);
-	__m512i src9 = _mm512_load_si512(_dst + 120 - 9*8);
-	__m512i src10 = _mm512_load_si512(_dst + 120 - 10*8);
-	__m512i src11 = _mm512_load_si512(_dst + 120 - 11*8);
-	__m512i src12 = _mm512_load_si512(_dst + 120 - 12*8);
-	__m512i src13 = _mm512_load_si512(_dst + 120 - 13*8);
-	__m512i src14 = _mm512_load_si512(_dst + 120 - 14*8);
-	__m512i src15 = _mm512_load_si512(_dst + 120 - 15*8);
+	__m512i src0 = _mm512_load_si512(_src + 120 - 0*8);
+	__m512i src1 = _mm512_load_si512(_src + 120 - 1*8);
+	__m512i src2 = _mm512_load_si512(_src + 120 - 2*8);
+	__m512i src3 = _mm512_load_si512(_src + 120 - 3*8);
+	__m512i src4 = _mm512_load_si512(_src + 120 - 4*8);
+	__m512i src5 = _mm512_load_si512(_src + 120 - 5*8);
+	__m512i src6 = _mm512_load_si512(_src + 120 - 6*8);
+	__m512i src7 = _mm512_load_si512(_src + 120 - 7*8);
+	__m512i src8 = _mm512_load_si512(_src + 120 - 8*8);
+	__m512i src9 = _mm512_load_si512(_src + 120 - 9*8);
+	__m512i src10 = _mm512_load_si512(_src + 120 - 10*8);
+	__m512i src11 = _mm512_load_si512(_src + 120 - 11*8);
+	__m512i src12 = _mm512_load_si512(_src + 120 - 12*8);
+	__m512i src13 = _mm512_load_si512(_src + 120 - 13*8);
+	__m512i src14 = _mm512_load_si512(_src + 120 - 14*8);
+	__m512i src15 = _mm512_load_si512(_src + 120 - 15*8);
 	
 	// interleave to words, dwords, qwords etc
 	__m512i srcW0 = _mm512_unpacklo_epi8(src0, src1);
@@ -1126,7 +1127,23 @@ void gf16_xor_finish_block_avx512(void *HEDLEY_RESTRICT dst) {
 	gf16_xor_finish_bit_extract(_dst + 28, srcDQ14);
 	gf16_xor_finish_bit_extract(_dst + 30, srcDQ15);
 }
+
+void gf16_xor_finish_block_avx512(void *HEDLEY_RESTRICT dst) {
+	_gf16_xor_finish_copy_block_avx512(dst, dst);
+}
+void gf16_xor_finish_copy_block_avx512(void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src) {
+	_gf16_xor_finish_copy_block_avx512(dst, src);
+}
 #endif
+
+void gf16_xor_finish_packed_avx512(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t sliceLen, unsigned numOutputs, unsigned outputNum, size_t chunkLen) {
+#if defined(__AVX512BW__) && defined(__AVX512VL__) && defined(PLATFORM_AMD64)
+	gf16_finish_packed(dst, src, sliceLen, sizeof(__m512i)*16, &gf16_xor_finish_copy_block_avx512, numOutputs, outputNum, chunkLen, 1);
+	_mm256_zeroupper();
+#else
+	UNUSED(dst); UNUSED(src); UNUSED(sliceLen); UNUSED(numOutputs); UNUSED(outputNum); UNUSED(chunkLen);
+#endif
+}
 
 
 #define MWORD_SIZE 64

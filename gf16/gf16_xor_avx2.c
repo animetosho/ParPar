@@ -459,49 +459,49 @@ static HEDLEY_ALWAYS_INLINE void gf16_xor_finish_extract_bits_store(uint32_t* ds
 	dst[4] = _mm256_movemask_epi8(lane);
 }
 
+#define LOAD_HALVES(a, b, upper) \
+	_mm256_inserti128_si256( \
+		_mm256_castsi128_si256(_mm_load_si128((__m128i*)(_src + 120 + upper*4 - (a)*8))), \
+		_mm_load_si128((__m128i*)(_src + 120 + upper*4 - (b)*8)), \
+		1 \
+	)
+#define LOAD_X4(offs, dst1, dst2, upper) { \
+	__m256i in1 = LOAD_HALVES(offs+0, offs+8, upper); /* 88888888 00000000 */ \
+	__m256i in2 = LOAD_HALVES(offs+1, offs+9, upper); /* 99999999 11111111 */ \
+	dst1 = _mm256_unpacklo_epi8(in1, in2); /* 98989898 10101010 */ \
+	dst2 = _mm256_unpackhi_epi8(in1, in2); \
+}
+
+#define UNPACK_VECTS \
+	srcD0a = _mm256_unpacklo_epi16(srcW0, srcW2); /* ba98ba98 32103210 */ \
+	srcD0b = _mm256_unpackhi_epi16(srcW0, srcW2); \
+	srcD0c = _mm256_unpacklo_epi16(srcW1, srcW3); \
+	srcD0d = _mm256_unpackhi_epi16(srcW1, srcW3); \
+	srcD4a = _mm256_unpacklo_epi16(srcW4, srcW6); \
+	srcD4b = _mm256_unpackhi_epi16(srcW4, srcW6); \
+	srcD4c = _mm256_unpacklo_epi16(srcW5, srcW7); \
+	srcD4d = _mm256_unpackhi_epi16(srcW5, srcW7); \
+	 \
+	srcQa = _mm256_unpacklo_epi32(srcD0a, srcD4a); /* fedcba98 76543210 */ \
+	srcQb = _mm256_unpackhi_epi32(srcD0a, srcD4a); \
+	srcQc = _mm256_unpacklo_epi32(srcD0b, srcD4b); \
+	srcQd = _mm256_unpackhi_epi32(srcD0b, srcD4b); \
+	srcQe = _mm256_unpacklo_epi32(srcD0c, srcD4c); \
+	srcQf = _mm256_unpackhi_epi32(srcD0c, srcD4c); \
+	srcQg = _mm256_unpacklo_epi32(srcD0d, srcD4d); \
+	srcQh = _mm256_unpackhi_epi32(srcD0d, srcD4d); \
+	 \
+	srcQa = _mm256_permute4x64_epi64(srcQa, _MM_SHUFFLE(3,1,2,0)); /* fedcba9876543210 fedcba9876543210 */ \
+	srcQb = _mm256_permute4x64_epi64(srcQb, _MM_SHUFFLE(3,1,2,0)); \
+	srcQc = _mm256_permute4x64_epi64(srcQc, _MM_SHUFFLE(3,1,2,0)); \
+	srcQd = _mm256_permute4x64_epi64(srcQd, _MM_SHUFFLE(3,1,2,0)); \
+	srcQe = _mm256_permute4x64_epi64(srcQe, _MM_SHUFFLE(3,1,2,0)); \
+	srcQf = _mm256_permute4x64_epi64(srcQf, _MM_SHUFFLE(3,1,2,0)); \
+	srcQg = _mm256_permute4x64_epi64(srcQg, _MM_SHUFFLE(3,1,2,0)); \
+	srcQh = _mm256_permute4x64_epi64(srcQh, _MM_SHUFFLE(3,1,2,0))
 void gf16_xor_finish_block_avx2(void *HEDLEY_RESTRICT dst) {
 	uint32_t* _dst = (uint32_t*)dst;
-	
-	#define LOAD_HALVES(a, b, upper) \
-		_mm256_inserti128_si256( \
-			_mm256_castsi128_si256(_mm_load_si128((__m128i*)(_dst + 120 + upper*4 - (a)*8))), \
-			_mm_load_si128((__m128i*)(_dst + 120 + upper*4 - (b)*8)), \
-			1 \
-		)
-	#define LOAD_X4(offs, dst1, dst2, upper) { \
-		__m256i in1 = LOAD_HALVES(offs+0, offs+8, upper); /* 88888888 00000000 */ \
-		__m256i in2 = LOAD_HALVES(offs+1, offs+9, upper); /* 99999999 11111111 */ \
-		dst1 = _mm256_unpacklo_epi8(in1, in2); /* 98989898 10101010 */ \
-		dst2 = _mm256_unpackhi_epi8(in1, in2); \
-	}
-	
-	#define UNPACK_VECTS \
-		srcD0a = _mm256_unpacklo_epi16(srcW0, srcW2); /* ba98ba98 32103210 */ \
-		srcD0b = _mm256_unpackhi_epi16(srcW0, srcW2); \
-		srcD0c = _mm256_unpacklo_epi16(srcW1, srcW3); \
-		srcD0d = _mm256_unpackhi_epi16(srcW1, srcW3); \
-		srcD4a = _mm256_unpacklo_epi16(srcW4, srcW6); \
-		srcD4b = _mm256_unpackhi_epi16(srcW4, srcW6); \
-		srcD4c = _mm256_unpacklo_epi16(srcW5, srcW7); \
-		srcD4d = _mm256_unpackhi_epi16(srcW5, srcW7); \
-		 \
-		srcQa = _mm256_unpacklo_epi32(srcD0a, srcD4a); /* fedcba98 76543210 */ \
-		srcQb = _mm256_unpackhi_epi32(srcD0a, srcD4a); \
-		srcQc = _mm256_unpacklo_epi32(srcD0b, srcD4b); \
-		srcQd = _mm256_unpackhi_epi32(srcD0b, srcD4b); \
-		srcQe = _mm256_unpacklo_epi32(srcD0c, srcD4c); \
-		srcQf = _mm256_unpackhi_epi32(srcD0c, srcD4c); \
-		srcQg = _mm256_unpacklo_epi32(srcD0d, srcD4d); \
-		srcQh = _mm256_unpackhi_epi32(srcD0d, srcD4d); \
-		 \
-		srcQa = _mm256_permute4x64_epi64(srcQa, _MM_SHUFFLE(3,1,2,0)); /* fedcba9876543210 fedcba9876543210 */ \
-		srcQb = _mm256_permute4x64_epi64(srcQb, _MM_SHUFFLE(3,1,2,0)); \
-		srcQc = _mm256_permute4x64_epi64(srcQc, _MM_SHUFFLE(3,1,2,0)); \
-		srcQd = _mm256_permute4x64_epi64(srcQd, _MM_SHUFFLE(3,1,2,0)); \
-		srcQe = _mm256_permute4x64_epi64(srcQe, _MM_SHUFFLE(3,1,2,0)); \
-		srcQf = _mm256_permute4x64_epi64(srcQf, _MM_SHUFFLE(3,1,2,0)); \
-		srcQg = _mm256_permute4x64_epi64(srcQg, _MM_SHUFFLE(3,1,2,0)); \
-		srcQh = _mm256_permute4x64_epi64(srcQh, _MM_SHUFFLE(3,1,2,0))
+	const uint32_t* _src = _dst;
 	
 	__m256i srcW0, srcW1, srcW2, srcW3, srcW4, srcW5, srcW6, srcW7;
 	__m256i srcD0a, srcD0b, srcD0c, srcD0d, srcD4a, srcD4b, srcD4c, srcD4d;
@@ -551,13 +551,65 @@ void gf16_xor_finish_block_avx2(void *HEDLEY_RESTRICT dst) {
 	gf16_xor_finish_extract_bits_store(_dst + 64 + 40, srcQf);
 	gf16_xor_finish_extract_bits_store(_dst + 64 + 48, srcQg);
 	gf16_xor_finish_extract_bits_store(_dst + 64 + 56, srcQh);
-	
-	
-	#undef UNPACK_VECTS
-	#undef LOAD_HALVES
-	#undef LOAD_X4
 }
+void gf16_xor_finish_copy_block_avx2(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src) {
+	uint32_t* _dst = (uint32_t*)dst;
+	const uint32_t* _src = (uint32_t*)src;
+	
+	__m256i srcW0, srcW1, srcW2, srcW3, srcW4, srcW5, srcW6, srcW7;
+	__m256i srcD0a, srcD0b, srcD0c, srcD0d, srcD4a, srcD4b, srcD4c, srcD4d;
+	__m256i srcQa, srcQb, srcQc, srcQd, srcQe, srcQf, srcQg, srcQh;
+	
+	// load 16x 128-bit inputs
+	LOAD_X4(0, srcW0, srcW1, 0)
+	LOAD_X4(2, srcW2, srcW3, 0)
+	LOAD_X4(4, srcW4, srcW5, 0)
+	LOAD_X4(6, srcW6, srcW7, 0)
+	
+	// interleave bytes in all 8 vectors
+	UNPACK_VECTS;
+	
+	// save extracted bits
+	gf16_xor_finish_extract_bits_store(_dst +  0, srcQa);
+	gf16_xor_finish_extract_bits_store(_dst +  8, srcQb);
+	gf16_xor_finish_extract_bits_store(_dst + 16, srcQc);
+	gf16_xor_finish_extract_bits_store(_dst + 24, srcQd);
+	gf16_xor_finish_extract_bits_store(_dst + 32, srcQe);
+	gf16_xor_finish_extract_bits_store(_dst + 40, srcQf);
+	gf16_xor_finish_extract_bits_store(_dst + 48, srcQg);
+	gf16_xor_finish_extract_bits_store(_dst + 56, srcQh);
+	
+	
+	// load second half & store saved data once relevant stuff read
+	LOAD_X4(0, srcW0, srcW1, 1)
+	LOAD_X4(2, srcW2, srcW3, 1)
+	LOAD_X4(4, srcW4, srcW5, 1)
+	LOAD_X4(6, srcW6, srcW7, 1)
+	
+	UNPACK_VECTS;
+	
+	gf16_xor_finish_extract_bits_store(_dst + 64 +  0, srcQa);
+	gf16_xor_finish_extract_bits_store(_dst + 64 +  8, srcQb);
+	gf16_xor_finish_extract_bits_store(_dst + 64 + 16, srcQc);
+	gf16_xor_finish_extract_bits_store(_dst + 64 + 24, srcQd);
+	gf16_xor_finish_extract_bits_store(_dst + 64 + 32, srcQe);
+	gf16_xor_finish_extract_bits_store(_dst + 64 + 40, srcQf);
+	gf16_xor_finish_extract_bits_store(_dst + 64 + 48, srcQg);
+	gf16_xor_finish_extract_bits_store(_dst + 64 + 56, srcQh);
+}
+#undef UNPACK_VECTS
+#undef LOAD_HALVES
+#undef LOAD_X4
 #endif
+
+void gf16_xor_finish_packed_avx2(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t sliceLen, unsigned numOutputs, unsigned outputNum, size_t chunkLen) {
+#if defined(__AVX2__) && defined(PLATFORM_AMD64)
+	gf16_finish_packed(dst, src, sliceLen, sizeof(__m256i)*16, &gf16_xor_finish_copy_block_avx2, numOutputs, outputNum, chunkLen, 1);
+	_mm256_zeroupper();
+#else
+	UNUSED(dst); UNUSED(src); UNUSED(sliceLen); UNUSED(numOutputs); UNUSED(outputNum); UNUSED(chunkLen);
+#endif
+}
 
 
 #define MWORD_SIZE 32

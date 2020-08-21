@@ -42,6 +42,15 @@ void _FN(gf16_shuffle_finish)(void *HEDLEY_RESTRICT dst, size_t len) {
 #endif
 }
 
+void _FN(gf16_shuffle_finish_packed)(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t sliceLen, unsigned numOutputs, unsigned outputNum, size_t chunkLen) {
+#ifdef _AVAILABLE
+	gf16_finish_packed(dst, src, sliceLen, sizeof(_mword)*2, &_FN(gf16_shuffle_finish_copy_block), numOutputs, outputNum, chunkLen, 1);
+	_MM_END
+#else
+	UNUSED(dst); UNUSED(src); UNUSED(sliceLen); UNUSED(numOutputs); UNUSED(outputNum); UNUSED(chunkLen);
+#endif
+}
+
 #if MWORD_SIZE >= 32
 # ifdef _AVAILABLE
 static HEDLEY_ALWAYS_INLINE __m256i mul16_vec256(__m256i poly, __m256i src) {

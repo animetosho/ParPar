@@ -411,6 +411,11 @@ void gf16_affine2x_finish_block_avx512(void *HEDLEY_RESTRICT dst) {
 	data = _mm512_shuffle_epi8(data, _mm512_set4_epi32(0x0f070e06, 0x0d050c04, 0x0b030a02, 0x09010800));
 	_mm512_store_si512((__m512i*)dst, data);
 }
+void gf16_affine2x_finish_copy_block_avx512(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src) {
+	__m512i data = _mm512_load_si512((__m512i*)src);
+	data = _mm512_shuffle_epi8(data, _mm512_set4_epi32(0x0f070e06, 0x0d050c04, 0x0b030a02, 0x09010800));
+	_mm512_store_si512((__m512i*)dst, data);
+}
 #endif
 
 void gf16_affine2x_prepare_avx512(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen) {
@@ -445,6 +450,16 @@ void gf16_affine2x_finish_avx512(void *HEDLEY_RESTRICT dst, size_t len) {
 	UNUSED(dst); UNUSED(len);
 #endif
 }
+
+void gf16_affine2x_finish_packed_avx512(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t sliceLen, unsigned numOutputs, unsigned outputNum, size_t chunkLen) {
+#if defined(__GFNI__) && defined(__AVX512BW__) && defined(__AVX512VL__)
+	gf16_finish_packed(dst, src, sliceLen, sizeof(__m512i), &gf16_affine2x_finish_copy_block_avx512, numOutputs, outputNum, chunkLen, 1);
+	_mm256_zeroupper();
+#else
+	UNUSED(dst); UNUSED(src); UNUSED(sliceLen); UNUSED(numOutputs); UNUSED(outputNum); UNUSED(chunkLen);
+#endif
+}
+
 
 
 void gf16_affine2x_muladd_avx512(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch) {

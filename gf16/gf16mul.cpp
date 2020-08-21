@@ -247,6 +247,7 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 					prepare = &gf16_shuffle_prepare_ssse3;
 					prepare_packed = &gf16_shuffle_prepare_packed_ssse3;
 					finish = &gf16_shuffle_finish_ssse3;
+					finish_packed = &gf16_shuffle_finish_packed_ssse3;
 				break;
 				case GF16_SHUFFLE_AVX:
 					if(!gf16_shuffle_available_avx) {
@@ -258,6 +259,7 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 					prepare = &gf16_shuffle_prepare_avx;
 					prepare_packed = &gf16_shuffle_prepare_packed_avx;
 					finish = &gf16_shuffle_finish_avx;
+					finish_packed = &gf16_shuffle_finish_packed_avx;
 				break;
 				case GF16_SHUFFLE_AVX2:
 					if(!gf16_shuffle_available_avx2) {
@@ -269,6 +271,7 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 					prepare = &gf16_shuffle_prepare_avx2;
 					prepare_packed = &gf16_shuffle_prepare_packed_avx2;
 					finish = &gf16_shuffle_finish_avx2;
+					finish_packed = &gf16_shuffle_finish_packed_avx2;
 					_info.alignment = 32;
 				break;
 				case GF16_SHUFFLE_AVX512:
@@ -286,6 +289,7 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 					prepare = &gf16_shuffle_prepare_avx512;
 					prepare_packed = &gf16_shuffle_prepare_packed_avx512;
 					finish = &gf16_shuffle_finish_avx512;
+					finish_packed = &gf16_shuffle_finish_packed_avx512;
 					_info.alignment = 64;
 				break;
 				default: break; // for pedantic compilers
@@ -307,6 +311,7 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 			prepare = &gf16_shuffle_prepare_avx512;
 			prepare_packed = &gf16_shuffle_prepare_packed_vbmi;
 			finish = &gf16_shuffle_finish_avx512;
+			finish_packed = &gf16_shuffle_finish_packed_avx512;
 			_info.alignment = 64;
 			_info.stride = 128;
 		break;
@@ -324,6 +329,7 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 			prepare = &gf16_shuffle2x_prepare_avx512;
 			prepare_packed = &gf16_shuffle2x_prepare_packed_avx512;
 			finish = &gf16_shuffle2x_finish_avx512;
+			finish_packed = &gf16_shuffle2x_finish_packed_avx512;
 			_info.alignment = 64;
 			_info.stride = 64;
 		break;
@@ -341,6 +347,7 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 			prepare = &gf16_shuffle2x_prepare_avx2;
 			prepare_packed = &gf16_shuffle2x_prepare_packed_avx2;
 			finish = &gf16_shuffle2x_finish_avx2;
+			finish_packed = &gf16_shuffle2x_finish_packed_avx2;
 			_info.alignment = 32;
 			_info.stride = 32;
 		break;
@@ -382,6 +389,7 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 			prepare = &gf16_shuffle_prepare_avx512;
 			prepare_packed = &gf16_affine_prepare_packed_avx512;
 			finish = &gf16_shuffle_finish_avx512;
+			finish_packed = &gf16_shuffle_finish_packed_avx512;
 		break;
 		
 		case GF16_AFFINE_GFNI:
@@ -401,6 +409,7 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 			prepare = &gf16_shuffle_prepare_ssse3;
 			prepare_packed = &gf16_affine_prepare_packed_gfni;
 			finish = &gf16_shuffle_finish_ssse3;
+			finish_packed = &gf16_shuffle_finish_packed_ssse3;
 		break;
 		
 		case GF16_AFFINE2X_AVX512:
@@ -417,6 +426,7 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 			prepare = &gf16_affine2x_prepare_avx512;
 			prepare_packed = &gf16_affine2x_prepare_packed_avx512;
 			finish = &gf16_affine2x_finish_avx512;
+			finish_packed = &gf16_affine2x_finish_packed_avx512;
 		break;
 		
 		case GF16_AFFINE2X_GFNI:
@@ -433,6 +443,7 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 			prepare = &gf16_affine2x_prepare_gfni;
 			prepare_packed = &gf16_affine2x_prepare_packed_gfni;
 			finish = &gf16_affine2x_finish_gfni;
+			finish_packed = &gf16_affine2x_finish_packed_gfni;
 		break;
 		
 		case GF16_XOR_JIT_AVX512:
@@ -463,6 +474,7 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 					prepare = &gf16_xor_prepare_sse2;
 					prepare_packed = &gf16_xor_prepare_packed_sse2;
 					finish = &gf16_xor_finish_sse2;
+					finish_packed = &gf16_xor_finish_packed_sse2;
 				break;
 				/*
 				case GF16_XOR_JIT_AVX:
@@ -489,6 +501,7 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 					prepare = &gf16_xor_prepare_avx2;
 					prepare_packed = &gf16_xor_prepare_packed_avx2;
 					finish = &gf16_xor_finish_avx2;
+					finish_packed = &gf16_xor_finish_packed_avx2;
 					_info.alignment = 32;
 				break;
 				case GF16_XOR_JIT_AVX512:
@@ -504,6 +517,7 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 					prepare = &gf16_xor_prepare_avx512;
 					prepare_packed = &gf16_xor_prepare_packed_avx512;
 					finish = &gf16_xor_finish_avx512;
+					finish_packed = &gf16_xor_finish_packed_avx512;
 					_info.alignment = 64;
 				break;
 				default: break; // for pedantic compilers
@@ -568,6 +582,7 @@ Galois16Mul::Galois16Mul(Galois16Methods method) {
 	prepare = &Galois16Mul::_prepare_none;
 	prepare_packed = &Galois16Mul::_prepare_packed_none;
 	finish = &Galois16Mul::_finish_none;
+	finish_packed = &Galois16Mul::_finish_packed_none;
 	_info.alignment = 2;
 	_info.stride = 2;
 	
@@ -595,6 +610,7 @@ void Galois16Mul::move(Galois16Mul& other) {
 	prepare = other.prepare;
 	prepare_packed = other.prepare_packed;
 	finish = other.finish;
+	finish_packed = other.finish_packed;
 	_info = other._info;
 	_mul = other._mul;
 	_add = other._add;
@@ -783,3 +799,21 @@ void Galois16Mul::_prepare_packed_none(void *HEDLEY_RESTRICT dst, const void *HE
 		memset((uint8_t*)dst + chunkStride * sliceFullChunks + remaining*inputNum, 0, remaining);
 	}
 }
+
+void Galois16Mul::_finish_packed_none(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t sliceLen, unsigned numOutputs, unsigned outputNum, size_t chunkLen) {
+	assert(outputNum < numOutputs);
+	assert(chunkLen <= sliceLen);
+	
+	uint8_t* srcBase = (uint8_t*)src + outputNum * chunkLen;
+	unsigned fullChunks = sliceLen/chunkLen;
+	size_t chunkStride = chunkLen * numOutputs;
+	for(unsigned chunk=0; chunk<fullChunks; chunk++) {
+		memcpy((uint8_t*)dst + chunkLen*chunk, srcBase + chunkStride*chunk, chunkLen);
+	}
+	
+	size_t remaining = sliceLen % chunkLen;
+	if(remaining) {
+		memcpy((uint8_t*)dst + chunkLen*fullChunks, (uint8_t*)src + chunkStride * fullChunks + remaining*outputNum, remaining);
+	}
+}
+

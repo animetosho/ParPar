@@ -21,10 +21,12 @@
 typedef void (*gf16_prepare_block)(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src);
 typedef void (*gf16_prepare_blocku)(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t remaining);
 typedef void (*gf16_finish_block)(void *HEDLEY_RESTRICT dst);
+typedef void (*gf16_finish_copy_block)(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src);
 #else
 typedef void (*const gf16_prepare_block)(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src);
 typedef void (*const gf16_prepare_blocku)(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t remaining);
 typedef void (*const gf16_finish_block)(void *HEDLEY_RESTRICT dst);
+typedef void (*const gf16_finish_copy_block)(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src);
 #endif
 
 HEDLEY_ALWAYS_INLINE void gf16_prepare(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen, const unsigned blockLen, gf16_prepare_block prepareBlock, gf16_prepare_blocku prepareBlockU) {
@@ -129,5 +131,40 @@ HEDLEY_ALWAYS_INLINE void gf16_prepare_packed(
 	}
 }
 
+HEDLEY_ALWAYS_INLINE void gf16_finish_packed(
+	void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t sliceLen, const unsigned blockLen, gf16_finish_copy_block finishBlock,
+	unsigned numOutputs, unsigned outputNum, size_t chunkLen, const unsigned interleaveSize
+) {
+	assert(outputNum < numOutputs);
+	assert(chunkLen <= sliceLen);
+	assert(chunkLen % blockLen == 0);
+	assert(sliceLen % blockLen == 0);
+	
+	unsigned interleaveBy = (outputNum >= numOutputs - (numOutputs%interleaveSize)) ?
+		numOutputs%interleaveSize : interleaveSize;
+	
+	uint8_t* srcBase = (uint8_t*)src + (outputNum/interleaveSize) * chunkLen * interleaveSize + (outputNum%interleaveSize) * blockLen;
+	
+	unsigned fullChunks = sliceLen/chunkLen;
+	size_t chunkStride = chunkLen * numOutputs;
+	for(unsigned chunk=0; chunk<fullChunks; chunk++) {
+		uint8_t* _src = srcBase + chunkStride*chunk;
+		uint8_t* _dst = (uint8_t*)dst + chunkLen*chunk;
+		for(size_t pos=0; pos<chunkLen; pos+=blockLen) {
+			finishBlock(_dst + pos, _src + pos*interleaveBy);
+		}
+	}
+	
+	// do final chunk
+	size_t remaining = sliceLen % chunkLen;
+	if(remaining) {
+		uint8_t* _src = (uint8_t*)src + (outputNum/interleaveSize) * remaining * interleaveSize + (outputNum%interleaveSize) * blockLen + chunkStride*fullChunks;
+		uint8_t* _dst = (uint8_t*)dst + chunkLen*fullChunks;
+		
+		for(size_t pos=0; pos<remaining; pos+=blockLen) {
+			finishBlock(_dst + pos, _src + pos*interleaveBy);
+		}
+	}
+}
 
 #endif

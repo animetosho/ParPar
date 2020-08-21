@@ -286,6 +286,13 @@ void gf16_affine2x_finish_block_gfni(void *HEDLEY_RESTRICT dst) {
 	));
 	_mm_store_si128((__m128i*)dst, data);
 }
+void gf16_affine2x_finish_copy_block_gfni(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src) {
+	__m128i data = _mm_load_si128((__m128i*)src);
+	data = _mm_shuffle_epi8(data, _mm_set_epi32(
+		0x0f070e06, 0x0d050c04, 0x0b030a02, 0x09010800
+	));
+	_mm_store_si128((__m128i*)dst, data);
+}
 #endif
 
 
@@ -318,6 +325,15 @@ void gf16_affine2x_finish_gfni(void *HEDLEY_RESTRICT dst, size_t len) {
 	UNUSED(dst); UNUSED(len);
 #endif
 }
+
+void gf16_affine2x_finish_packed_gfni(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t sliceLen, unsigned numOutputs, unsigned outputNum, size_t chunkLen) {
+#if defined(__GFNI__) && defined(__SSSE3__)
+	gf16_finish_packed(dst, src, sliceLen, sizeof(__m128i), &gf16_affine2x_finish_copy_block_gfni, numOutputs, outputNum, chunkLen, 1);
+#else
+	UNUSED(dst); UNUSED(src); UNUSED(sliceLen); UNUSED(numOutputs); UNUSED(outputNum); UNUSED(chunkLen);
+#endif
+}
+
 
 void gf16_affine2x_muladd_gfni(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch) {
 	UNUSED(mutScratch);
