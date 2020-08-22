@@ -174,7 +174,7 @@ void gf16_lookup_mul(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT 
 	uint8_t* _dst = (uint8_t*)dst + len;
 	
 	if(sizeof(uintptr_t) == 4) { // assume 32-bit CPU
-		for(long ptr = -(long)len; ptr; ptr+=4) {
+		for(intptr_t ptr = -(intptr_t)len; ptr; ptr+=4) {
 			*(uint32_t*)(_dst + ptr) = PACK_2X16(
 				lhtable[_src[ptr]] ^ lhtable[256 + _src[ptr + 1]],
 				lhtable[_src[ptr + 2]] ^ lhtable[256 + _src[ptr + 3]]
@@ -182,7 +182,7 @@ void gf16_lookup_mul(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT 
 		}
 	}
 	else if(sizeof(uintptr_t) >= 8) { // process in 64-bit
-		for(long ptr = -(long)len; ptr; ptr+=8) {
+		for(intptr_t ptr = -(intptr_t)len; ptr; ptr+=8) {
 			*(uint64_t*)(_dst + ptr) = PACK_4X16(
 				lhtable[_src[ptr]] ^ lhtable[256 + _src[ptr + 1]],
 				lhtable[_src[ptr + 2]] ^ lhtable[256 + _src[ptr + 3]],
@@ -192,7 +192,7 @@ void gf16_lookup_mul(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT 
 		}
 	}
 	else { // use 2 byte wordsize
-		for(long ptr = -(long)len; ptr; ptr+=2) {
+		for(intptr_t ptr = -(intptr_t)len; ptr; ptr+=2) {
 			*(uint16_t*)(_dst + ptr) = lhtable[_src[ptr]] ^ lhtable[256 + _src[ptr + 1]];
 		}
 	}
@@ -207,7 +207,7 @@ void gf16_lookup_muladd(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRI
 	uint8_t* _dst = (uint8_t*)dst + len;
 	
 	if(sizeof(uintptr_t) == 4) { // assume 32-bit CPU
-		for(long ptr = -(long)len; ptr; ptr+=4) {
+		for(intptr_t ptr = -(intptr_t)len; ptr; ptr+=4) {
 			*(uint32_t*)(_dst + ptr) ^= PACK_2X16(
 				lhtable[_src[ptr]] ^ lhtable[256 + _src[ptr + 1]],
 				lhtable[_src[ptr + 2]] ^ lhtable[256 + _src[ptr + 3]]
@@ -215,7 +215,7 @@ void gf16_lookup_muladd(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRI
 		}
 	}
 	else if(sizeof(uintptr_t) >= 8) { // process in 64-bit
-		for(long ptr = -(long)len; ptr; ptr+=8) {
+		for(intptr_t ptr = -(intptr_t)len; ptr; ptr+=8) {
 			*(uint64_t*)(_dst + ptr) ^= PACK_4X16(
 				lhtable[_src[ptr]] ^ lhtable[256 + _src[ptr + 1]],
 				lhtable[_src[ptr + 2]] ^ lhtable[256 + _src[ptr + 3]],
@@ -225,7 +225,7 @@ void gf16_lookup_muladd(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRI
 		}
 	}
 	else { // use 2 byte wordsize
-		for(long ptr = -(long)len; ptr; ptr+=2) {
+		for(intptr_t ptr = -(intptr_t)len; ptr; ptr+=2) {
 			*(uint16_t*)(_dst + ptr) ^= lhtable[_src[ptr]] ^ lhtable[256 + _src[ptr + 1]];
 		}
 	}
@@ -240,7 +240,7 @@ void gf16_lookup_powadd(const void *HEDLEY_RESTRICT scratch, unsigned outputs, s
 	size_t lenPlusOffset = len + offset; // TODO: consider pre-computing this to all dst pointers
 	
 	if(sizeof(uintptr_t) == 4) { // assume 32-bit CPU
-		for(long ptr = -(long)len; ptr; ptr+=4) {
+		for(intptr_t ptr = -(intptr_t)len; ptr; ptr+=4) {
 			size_t dstPtr = ptr + lenPlusOffset;
 			uint16_t res1 = lhtable[_src[ptr]] ^ lhtable[256 + _src[ptr + 1]];
 			uint16_t res2 = lhtable[_src[ptr + 2]] ^ lhtable[256 + _src[ptr + 3]];
@@ -254,7 +254,7 @@ void gf16_lookup_powadd(const void *HEDLEY_RESTRICT scratch, unsigned outputs, s
 		}
 	}
 	else if(sizeof(uintptr_t) >= 8) { // process in 64-bit
-		for(long ptr = -(long)len; ptr; ptr+=8) {
+		for(intptr_t ptr = -(intptr_t)len; ptr; ptr+=8) {
 			size_t dstPtr = ptr + lenPlusOffset;
 			uint16_t res1 = lhtable[_src[ptr]] ^ lhtable[256 + _src[ptr + 1]];
 			uint16_t res2 = lhtable[_src[ptr + 2]] ^ lhtable[256 + _src[ptr + 3]];
@@ -271,7 +271,7 @@ void gf16_lookup_powadd(const void *HEDLEY_RESTRICT scratch, unsigned outputs, s
 		}
 	}
 	else { // use 2 byte wordsize
-		for(long ptr = -(long)len; ptr; ptr+=2) {
+		for(intptr_t ptr = -(intptr_t)len; ptr; ptr+=2) {
 			size_t dstPtr = ptr + lenPlusOffset;
 			uint16_t data = *(uint16_t*)(_src + ptr);
 			for(unsigned output = 0; output < outputs; output++) {
@@ -390,7 +390,7 @@ void gf16_lookup3_mul(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT
 	uint8_t* _dst = (uint8_t*)dst + len;
 	
 	if(sizeof(uintptr_t) >= 8) { // assume 64-bit CPU
-		for(long ptr = -(long)len; ptr; ptr+=8) {
+		for(intptr_t ptr = -(intptr_t)len; ptr; ptr+=8) {
 			uint64_t data = *(uint64_t*)(_src + ptr);
 			uint32_t data2 = data >> 32;
 			*(uint64_t*)(_dst + ptr) = (
@@ -405,7 +405,7 @@ void gf16_lookup3_mul(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT
 		}
 	}
 	else {
-		for(long ptr = -(long)len; ptr; ptr+=4) {
+		for(intptr_t ptr = -(intptr_t)len; ptr; ptr+=4) {
 			uint32_t data = *(uint32_t*)(_src + ptr);
 			*(uint32_t*)(_dst + ptr) = 
 				(uint32_t)lookup.table1[data & 0x7ff] ^
@@ -424,7 +424,7 @@ void gf16_lookup3_muladd(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTR
 	uint8_t* _dst = (uint8_t*)dst + len;
 	
 	if(sizeof(uintptr_t) >= 8) { // assume 64-bit CPU
-		for(long ptr = -(long)len; ptr; ptr+=8) {
+		for(intptr_t ptr = -(intptr_t)len; ptr; ptr+=8) {
 			uint64_t data = *(uint64_t*)(_src + ptr);
 			uint32_t data2 = data >> 32;
 			*(uint64_t*)(_dst + ptr) ^= (
@@ -439,7 +439,7 @@ void gf16_lookup3_muladd(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTR
 		}
 	}
 	else {
-		for(long ptr = -(long)len; ptr; ptr+=4) {
+		for(intptr_t ptr = -(intptr_t)len; ptr; ptr+=4) {
 			uint32_t data = *(uint32_t*)(_src + ptr);
 			*(uint32_t*)(_dst + ptr) ^= 
 				(uint32_t)lookup.table1[data & 0x7ff] ^

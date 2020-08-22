@@ -132,7 +132,7 @@ void _FN(gf16_shuffle_mul)(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RES
 	uint8_t* _src = (uint8_t*)src + len;
 	uint8_t* _dst = (uint8_t*)dst + len;
 
-	for(long ptr = -(long)len; ptr; ptr += sizeof(_mword)*2) {
+	for(intptr_t ptr = -(intptr_t)len; ptr; ptr += sizeof(_mword)*2) {
 		_mword ta = _MMI(load)((_mword*)(_src+ptr));
 		_mword tb = _MMI(load)((_mword*)(_src+ptr) + 1);
 
@@ -177,7 +177,7 @@ void _FN(gf16_shuffle_muladd)(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_
 	uint8_t* _src = (uint8_t*)src + len;
 	uint8_t* _dst = (uint8_t*)dst + len;
 
-	for(long ptr = -(long)len; ptr; ptr += sizeof(_mword)*2) {
+	for(intptr_t ptr = -(intptr_t)len; ptr; ptr += sizeof(_mword)*2) {
 		_mword ta = _MMI(load)((_mword*)(_src+ptr));
 		_mword tb = _MMI(load)((_mword*)(_src+ptr) + 1);
 

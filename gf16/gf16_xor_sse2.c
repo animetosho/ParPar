@@ -808,7 +808,7 @@ void gf16_xor_mul_sse2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRIC
 	
 	gf16_xor_write_deptable(deptable, counts, (uint8_t*)scratch, val, (uintptr_t)src - (uintptr_t)dst);
 	
-	for(long ptr = -(long)len; ptr; ptr += sizeof(__m128i)*16) {
+	for(intptr_t ptr = -(intptr_t)len; ptr; ptr += sizeof(__m128i)*16) {
 		uint8_t* p = _dst + ptr;
 		/* Note that we assume that all counts are at least 1; I don't think it's possible for that to be false */
 		#define STEP(bit, type, typev, typed) { \
@@ -867,7 +867,7 @@ void gf16_xor_muladd_sse2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_REST
 
 	gf16_xor_write_deptable(deptable, counts, (uint8_t*)scratch, val, (uintptr_t)src - (uintptr_t)dst);
 	
-	for(long ptr = -(long)len; ptr; ptr += sizeof(__m128i)*16) {
+	for(intptr_t ptr = -(intptr_t)len; ptr; ptr += sizeof(__m128i)*16) {
 		uint8_t* p = _dst + ptr;
 		#define STEP(bit, type, typev, typed) { \
 			uintptr_t* deps = deptable + bit*16; \

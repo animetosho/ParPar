@@ -29,12 +29,12 @@ typedef void (*const gf16_finish_block)(void *HEDLEY_RESTRICT dst);
 typedef void (*const gf16_finish_copy_block)(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src);
 #endif
 
-HEDLEY_ALWAYS_INLINE void gf16_prepare(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen, const unsigned blockLen, gf16_prepare_block prepareBlock, gf16_prepare_blocku prepareBlockU) {
+HEDLEY_ALWAYS_INLINE void gf16_prepare(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen, const size_t blockLen, gf16_prepare_block prepareBlock, gf16_prepare_blocku prepareBlockU) {
 	size_t len = srcLen & ~(blockLen-1);
 	uint8_t* _src = (uint8_t*)src + len;
 	uint8_t* _dst = (uint8_t*)dst + len;
 	
-	for(long ptr = -(long)len; ptr; ptr += blockLen)
+	for(intptr_t ptr = -(intptr_t)len; ptr; ptr += blockLen)
 		prepareBlock(_dst+ptr, _src+ptr);
 	
 	size_t remaining = srcLen & (blockLen - 1);
@@ -44,10 +44,10 @@ HEDLEY_ALWAYS_INLINE void gf16_prepare(void *HEDLEY_RESTRICT dst, const void *HE
 	}
 }
 
-HEDLEY_ALWAYS_INLINE void gf16_finish(void *HEDLEY_RESTRICT dst, size_t len, const unsigned blockLen, gf16_finish_block finishBlock) {
+HEDLEY_ALWAYS_INLINE void gf16_finish(void *HEDLEY_RESTRICT dst, size_t len, const size_t blockLen, gf16_finish_block finishBlock) {
 	uint8_t* _dst = (uint8_t*)dst + len;
 	
-	for(long ptr = -(long)len; ptr; ptr += blockLen)
+	for(intptr_t ptr = -(intptr_t)len; ptr; ptr += blockLen)
 		finishBlock(_dst+ptr);
 }
 
@@ -55,7 +55,7 @@ HEDLEY_ALWAYS_INLINE void gf16_finish(void *HEDLEY_RESTRICT dst, size_t len, con
 #include <assert.h>
 #include <string.h>
 HEDLEY_ALWAYS_INLINE void gf16_prepare_packed(
-	void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen, size_t sliceLen, const unsigned blockLen, gf16_prepare_block prepareBlock, gf16_prepare_blocku prepareBlockU,
+	void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen, size_t sliceLen, const size_t blockLen, gf16_prepare_block prepareBlock, gf16_prepare_blocku prepareBlockU,
 	unsigned inputPackSize, unsigned inputNum, size_t chunkLen, const unsigned interleaveSize
 ) {
 	assert(inputNum < inputPackSize);
@@ -70,7 +70,7 @@ HEDLEY_ALWAYS_INLINE void gf16_prepare_packed(
 	
 	uint8_t* dstBase = (uint8_t*)dst + (inputNum/interleaveSize) * chunkLen * interleaveSize + (inputNum%interleaveSize) * blockLen;
 	
-	unsigned fullChunks = srcLen/chunkLen;
+	unsigned fullChunks = (unsigned)(srcLen/chunkLen);
 	size_t chunkStride = chunkLen * inputPackSize;
 	unsigned chunk=0;
 	for(; chunk<fullChunks; chunk++) {
@@ -113,7 +113,7 @@ HEDLEY_ALWAYS_INLINE void gf16_prepare_packed(
 	
 	
 	// zero fill remaining chunks
-	fullChunks = sliceLen / chunkLen;
+	fullChunks = (unsigned)(sliceLen / chunkLen);
 	for(; chunk<fullChunks; chunk++) {
 		uint8_t* _dst = dstBase + chunkStride*chunk;
 		for(size_t pos=0; pos<chunkLen; pos+=blockLen) {
@@ -132,7 +132,7 @@ HEDLEY_ALWAYS_INLINE void gf16_prepare_packed(
 }
 
 HEDLEY_ALWAYS_INLINE void gf16_finish_packed(
-	void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t sliceLen, const unsigned blockLen, gf16_finish_copy_block finishBlock,
+	void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t sliceLen, const size_t blockLen, gf16_finish_copy_block finishBlock,
 	unsigned numOutputs, unsigned outputNum, size_t chunkLen, const unsigned interleaveSize
 ) {
 	assert(outputNum < numOutputs);
@@ -145,7 +145,7 @@ HEDLEY_ALWAYS_INLINE void gf16_finish_packed(
 	
 	uint8_t* srcBase = (uint8_t*)src + (outputNum/interleaveSize) * chunkLen * interleaveSize + (outputNum%interleaveSize) * blockLen;
 	
-	unsigned fullChunks = sliceLen/chunkLen;
+	unsigned fullChunks = (unsigned)(sliceLen/chunkLen);
 	size_t chunkStride = chunkLen * numOutputs;
 	for(unsigned chunk=0; chunk<fullChunks; chunk++) {
 		uint8_t* _src = srcBase + chunkStride*chunk;

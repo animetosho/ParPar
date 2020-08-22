@@ -329,7 +329,7 @@ void gf16_shuffle_mul_vbmi(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RES
 	uint8_t* _src = (uint8_t*)src + len;
 	uint8_t* _dst = (uint8_t*)dst + len;
 
-	for(long ptr = -(long)len; ptr; ptr += sizeof(__m512i)*2) {
+	for(intptr_t ptr = -(intptr_t)len; ptr; ptr += sizeof(__m512i)*2) {
 		__m512i tpl, tph;
 		gf16_shuffle_mul_vbmi_round(
 			_mm512_load_si512((__m512i*)(_src+ptr)), _mm512_load_si512((__m512i*)(_src+ptr) +1),
@@ -363,7 +363,7 @@ void gf16_shuffle_muladd_vbmi(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_
 	uint8_t* _src = (uint8_t*)src + len;
 	uint8_t* _dst = (uint8_t*)dst + len;
 
-	for(long ptr = -(long)len; ptr; ptr += sizeof(__m512i)*2) {
+	for(intptr_t ptr = -(intptr_t)len; ptr; ptr += sizeof(__m512i)*2) {
 		__m512i tpl, tph;
 		gf16_shuffle_mul_vbmi_round(
 			_mm512_load_si512((__m512i*)(_src+ptr)), _mm512_load_si512((__m512i*)(_src+ptr) +1),
@@ -411,7 +411,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle_muladd_x_vbmi(
 	if(srcCount > 3)
 		generate_remaining_lookup(mulLo, mulHi, loD0, hiD0, &loD1, &hiD1, &loD2, &hiD2);
 	
-	for(long ptr = -(long)len; ptr; ptr += sizeof(__m512i)*2) {
+	for(intptr_t ptr = -(intptr_t)len; ptr; ptr += sizeof(__m512i)*2) {
 		__m512i tpl, tph;
 		gf16_shuffle_mul_vbmi_round(
 			_mm512_load_si512((__m512i*)(_src1+ptr*srcScale)), _mm512_load_si512((__m512i*)(_src1+ptr*srcScale) +1),

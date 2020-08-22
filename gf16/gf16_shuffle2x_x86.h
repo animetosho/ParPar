@@ -151,7 +151,7 @@ void _FN(gf16_shuffle2x_muladd)(const void *HEDLEY_RESTRICT scratch, void *HEDLE
 	uint8_t* _src = (uint8_t*)src + len;
 	uint8_t* _dst = (uint8_t*)dst + len;
 
-	for(long ptr = -(long)len; ptr; ptr += sizeof(_mword)) {
+	for(intptr_t ptr = -(intptr_t)len; ptr; ptr += sizeof(_mword)) {
 		_mword data = _MMI(load)((_mword*)(_src+ptr));
 		
 		ti = _MMI(and) (mask, data);

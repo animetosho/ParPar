@@ -170,7 +170,7 @@ void gf16_shuffle_mul_neon(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RES
 	uint8_t* _src = (uint8_t*)src + len;
 	uint8_t* _dst = (uint8_t*)dst + len;
 	
-	for(long ptr = -(long)len; ptr; ptr += sizeof(uint8x16_t)*2) {
+	for(intptr_t ptr = -(intptr_t)len; ptr; ptr += sizeof(uint8x16_t)*2) {
 		uint8x16x2_t r;
 		gf16_shuffle_neon_round1(vld2q_u8(_src+ptr), &r.val[0], &r.val[1], tbl_l, tbl_h);
 		vst2q_u8(_dst+ptr, r);
@@ -189,7 +189,7 @@ void gf16_shuffle_muladd_neon(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_
 	uint8_t* _src = (uint8_t*)src + len;
 	uint8_t* _dst = (uint8_t*)dst + len;
 	
-	for(long ptr = -(long)len; ptr; ptr += sizeof(uint8x16_t)*2) {
+	for(intptr_t ptr = -(intptr_t)len; ptr; ptr += sizeof(uint8x16_t)*2) {
 		uint8x16_t rl, rh;
 		uint8x16x2_t vb = vld2q_u8(_dst+ptr);
 		gf16_shuffle_neon_round1(vld2q_u8(_src+ptr), &rl, &rh, tbl_l, tbl_h);
@@ -213,7 +213,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle_muladd_x2_neon(
 	gf16_shuffle_neon_calc_tables(poly, coefficients[0], tbl_Al, tbl_Ah);
 	gf16_shuffle_neon_calc_tables(poly, coefficients[1], tbl_Bl, tbl_Bh);
 
-	for(long ptr = -(long)len; ptr; ptr += sizeof(uint8x16_t)*2) {
+	for(intptr_t ptr = -(intptr_t)len; ptr; ptr += sizeof(uint8x16_t)*2) {
 		uint8x16_t rl, rh;
 		gf16_shuffle_neon_round1(vld2q_u8(_src1+ptr), &rl, &rh, tbl_Al, tbl_Ah);
 		gf16_shuffle_neon_round(vld2q_u8(_src2+ptr), &rl, &rh, tbl_Bl, tbl_Bh);
@@ -237,7 +237,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle_muladd_x3_neon(
 	gf16_shuffle_neon_calc_tables(poly, coefficients[1], tbl_Bl, tbl_Bh);
 	gf16_shuffle_neon_calc_tables(poly, coefficients[2], tbl_Cl, tbl_Ch);
 
-	for(long ptr = -(long)len; ptr; ptr += sizeof(uint8x16_t)*2) {
+	for(intptr_t ptr = -(intptr_t)len; ptr; ptr += sizeof(uint8x16_t)*2) {
 		uint8x16_t rl, rh;
 		gf16_shuffle_neon_round1(vld2q_u8(_src1+ptr), &rl, &rh, tbl_Al, tbl_Ah);
 		gf16_shuffle_neon_round(vld2q_u8(_src2+ptr), &rl, &rh, tbl_Bl, tbl_Bh);
@@ -260,7 +260,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle_muladd_packed_x2_neon(
 	gf16_shuffle_neon_calc_tables(poly, coefficients[0], tbl_Al, tbl_Ah);
 	gf16_shuffle_neon_calc_tables(poly, coefficients[1], tbl_Bl, tbl_Bh);
 
-	for(long ptr = -(long)len; ptr; ptr += sizeof(uint8x16_t)*2) {
+	for(intptr_t ptr = -(intptr_t)len; ptr; ptr += sizeof(uint8x16_t)*2) {
 		uint8x16_t rl, rh;
 		gf16_shuffle_neon_round1(vld2q_u8(_src+ptr*2), &rl, &rh, tbl_Al, tbl_Ah);
 		gf16_shuffle_neon_round(vld2q_u8(_src+ptr*2 + sizeof(uint8x16x2_t)), &rl, &rh, tbl_Bl, tbl_Bh);

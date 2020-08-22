@@ -167,7 +167,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle_muladd_x_avx512(
 	}
 	
 	
-	for(long ptr = -(long)len; ptr; ptr += sizeof(__m512i)*2) {
+	for(intptr_t ptr = -(intptr_t)len; ptr; ptr += sizeof(__m512i)*2) {
 		__m512i tph = _mm512_load_si512((__m512i*)(_dst+ptr));
 		__m512i tpl = _mm512_load_si512((__m512i*)(_dst+ptr) + 1);
 		gf16_shuffle_avx512_round((__m512i*)(_src1+ptr*srcScale), &tpl, &tph, lowA0, highA0, lowA1, highA1, lowA2, highA2, lowA3, highA3);
@@ -384,7 +384,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle2x_muladd_x_avx512(
 	}
 	#undef JOIN_VEC
 	
-	for(long ptr = -(long)len; ptr; ptr += sizeof(__m512i)) {
+	for(intptr_t ptr = -(intptr_t)len; ptr; ptr += sizeof(__m512i)) {
 		__m512i swapped, result = _mm512_load_si512((__m512i*)(_dst+ptr));
 		gf16_shuffle2x_avx512_round1((__m512i*)(_src1+ptr*srcScale), &result, &swapped, shufNormLoA, shufNormHiA, shufSwapLoA, shufSwapHiA);
 		gf16_shuffle2x_avx512_round((__m512i*)(_src2+ptr*srcScale), &result, &swapped, shufNormLoB, shufNormHiB, shufSwapLoB, shufSwapHiB);

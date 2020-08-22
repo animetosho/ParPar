@@ -218,7 +218,7 @@ void Galois16Mul::addGeneric(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTR
 	uint16_t* _src = (uint16_t*)src + len;
 	
 	// let compiler figure out optimal width for target platform
-	for(long ptr = -(long)len; ptr; ptr++) {
+	for(intptr_t ptr = -(intptr_t)len; ptr; ptr++) {
 		_dst[ptr] ^= _src[ptr];
 	}
 }
@@ -765,7 +765,7 @@ void Galois16Mul::_prepare_packed_none(void *HEDLEY_RESTRICT dst, const void *HE
 	assert(chunkLen <= sliceLen);
 	
 	uint8_t* dstBase = (uint8_t*)dst + inputNum * chunkLen;
-	unsigned fullChunks = srcLen/chunkLen;
+	unsigned fullChunks = (unsigned)(srcLen/chunkLen);
 	size_t chunkStride = chunkLen * inputPackSize;
 	for(unsigned chunk=0; chunk<fullChunks; chunk++) {
 		memcpy(dstBase + chunkStride*chunk, (uint8_t*)src + chunkLen*chunk, chunkLen);
@@ -788,7 +788,7 @@ void Galois16Mul::_prepare_packed_none(void *HEDLEY_RESTRICT dst, const void *HE
 	}
 	
 	// zero fill remaining full blocks
-	unsigned sliceFullChunks = sliceLen/chunkLen;
+	unsigned sliceFullChunks = (unsigned)(sliceLen/chunkLen);
 	for(unsigned chunk=fullChunks; chunk<sliceFullChunks; chunk++) {
 		memset(dstBase + chunkStride*chunk, 0, chunkLen);
 	}
@@ -805,7 +805,7 @@ void Galois16Mul::_finish_packed_none(void *HEDLEY_RESTRICT dst, const void *HED
 	assert(chunkLen <= sliceLen);
 	
 	uint8_t* srcBase = (uint8_t*)src + outputNum * chunkLen;
-	unsigned fullChunks = sliceLen/chunkLen;
+	unsigned fullChunks = (unsigned)(sliceLen/chunkLen);
 	size_t chunkStride = chunkLen * numOutputs;
 	for(unsigned chunk=0; chunk<fullChunks; chunk++) {
 		memcpy((uint8_t*)dst + chunkLen*chunk, srcBase + chunkStride*chunk, chunkLen);

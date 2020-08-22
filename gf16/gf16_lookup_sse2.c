@@ -74,7 +74,7 @@ void gf16_lookup_mul_sse2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_REST
 	uint8_t* _src = (uint8_t*)src + len;
 	uint8_t* _dst = (uint8_t*)dst + len;
 	
-	for(long ptr = -(long)len; ptr; ptr+=sizeof(__m128i)) {
+	for(intptr_t ptr = -(intptr_t)len; ptr; ptr+=sizeof(__m128i)) {
 		uintptr_t input = *(uintptr_t*)(_src+ptr);
 		__m128i lo1 = _mm_cvtsi32_si128(*(uint32_t*)(lhtable + (input & 0xff))); // 1/32 chance of crossing cacheline boundary
 		__m128i hi1 = _mm_cvtsi32_si128(*(uint32_t*)(lhtable + (256 + ((input >> 8) & 0xff))));
@@ -126,7 +126,7 @@ void gf16_lookup_muladd_sse2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_R
 	uint8_t* _src = (uint8_t*)src + len;
 	uint8_t* _dst = (uint8_t*)dst + len;
 	
-	for(long ptr = -(long)len; ptr; ptr+=sizeof(__m128i)) {
+	for(intptr_t ptr = -(intptr_t)len; ptr; ptr+=sizeof(__m128i)) {
 		uintptr_t input = *(uintptr_t*)(_src+ptr);
 		__m128i lo1 = _mm_cvtsi32_si128(*(uint32_t*)(lhtable + (input & 0xff)));
 		__m128i hi1 = _mm_cvtsi32_si128(*(uint32_t*)(lhtable + (256 + ((input >> 8) & 0xff))));

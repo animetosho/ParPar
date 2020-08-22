@@ -16,7 +16,7 @@
 
 
 #if defined(_AVAILABLE) && defined(PLATFORM_AMD64)
-static HEDLEY_ALWAYS_INLINE void gf16_shuffle2x_muladd_x2_avx2(__m256i polyl, __m256i polyh, void *HEDLEY_RESTRICT _dst, const uint8_t* _src1, const uint8_t* _src2, const unsigned srcScale, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients) {
+static HEDLEY_ALWAYS_INLINE void gf16_shuffle2x_muladd_x2_avx2(__m256i polyl, __m256i polyh, uint8_t *HEDLEY_RESTRICT _dst, const uint8_t* _src1, const uint8_t* _src2, const unsigned srcScale, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients) {
 	__m256i mask = _mm256_set1_epi8(0x0f);
 	__m256i prodLo0, prodHi0, prodLo1, prodHi1, prodLo2, prodHi2, prodLo3, prodHi3;
 	
@@ -65,7 +65,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle2x_muladd_x2_avx2(__m256i polyl, __
 	
 	__m256i ti;
 
-	for(long ptr = -(long)len; ptr; ptr += sizeof(__m256i)) {
+	for(intptr_t ptr = -(intptr_t)len; ptr; ptr += sizeof(__m256i)) {
 		__m256i data = _mm256_load_si256((__m256i*)(_src1+ptr*srcScale));
 		
 		ti = _mm256_and_si256(mask, data);
@@ -125,6 +125,8 @@ unsigned gf16_shuffle2x_muladd_multi_packed_avx2(const void *HEDLEY_RESTRICT scr
 	
 	unsigned region = 0;
 	for(; region < (regions & ~1); region += 2) {
+		// for some reason, the *2 scale seems to perform worse on Intel; haven't seen it on Zen
+		// also causes GCC9 to spill
 		gf16_shuffle2x_muladd_x2_avx2(polyl, polyh, _dst, _src + len*region, _src + len*region + sizeof(__m256i), 2, len, coefficients + region);
 	}
 	_mm256_zeroupper();

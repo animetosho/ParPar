@@ -99,7 +99,7 @@ void gf16_affine_mul_avx512(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RE
 	
 	uint8_t* _src = (uint8_t*)src + len;
 	uint8_t* _dst = (uint8_t*)dst + len;
-	for(long ptr = -(long)len; ptr; ptr += sizeof(__m512i)*2) {
+	for(intptr_t ptr = -(intptr_t)len; ptr; ptr += sizeof(__m512i)*2) {
 		__m512i ta = _mm512_load_si512((__m512i*)(_src + ptr));
 		__m512i tb = _mm512_load_si512((__m512i*)(_src + ptr) + 1);
 
@@ -197,7 +197,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_affine_muladd_x_avx512(
 	#undef PERM1
 	#undef PERM2
 	
-	for(long ptr = -(long)len; ptr; ptr += sizeof(__m512i)*2) {
+	for(intptr_t ptr = -(intptr_t)len; ptr; ptr += sizeof(__m512i)*2) {
 		__m512i tph = _mm512_load_si512((__m512i*)(_dst + ptr));
 		__m512i tpl = _mm512_load_si512((__m512i*)(_dst + ptr) + 1);
 		gf16_affine_muladd_round((__m512i*)(_src1 + ptr*srcScale), &tpl, &tph, mat_All, mat_Ahl, mat_Alh, mat_Ahh);
@@ -248,7 +248,7 @@ void gf16_affine_muladd_avx512(const void *HEDLEY_RESTRICT scratch, void *HEDLEY
 	uint8_t* _src = (uint8_t*)src + len;
 	uint8_t* _dst = (uint8_t*)dst + len;
 	
-	for(long ptr = -(long)len; ptr; ptr += sizeof(__m512i)*2) {
+	for(intptr_t ptr = -(intptr_t)len; ptr; ptr += sizeof(__m512i)*2) {
 		__m512i tpl = _mm512_load_si512((__m512i*)(_dst + ptr) + 1);
 		__m512i tph = _mm512_load_si512((__m512i*)(_dst + ptr));
 		gf16_affine_muladd_round((__m512i*)(_src + ptr), &tpl, &tph, mat_ll, mat_hl, mat_lh, mat_hh);
@@ -472,7 +472,7 @@ void gf16_affine2x_muladd_avx512(const void *HEDLEY_RESTRICT scratch, void *HEDL
 	uint8_t* _src = (uint8_t*)src + len;
 	uint8_t* _dst = (uint8_t*)dst + len;
 	
-	for(long ptr = -(long)len; ptr; ptr += sizeof(__m512i)) {
+	for(intptr_t ptr = -(intptr_t)len; ptr; ptr += sizeof(__m512i)) {
 		__m512i data = _mm512_load_si512((__m512i*)(_src + ptr));
 		data = _mm512_ternarylogic_epi32(
 			_mm512_gf2p8affine_epi64_epi8(data, depmask1, 0),
@@ -612,7 +612,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_affine2x_muladd_x_avx512(
 	}
 	
 	
-	for(long ptr = -(long)len; ptr; ptr += sizeof(__m512i)) {
+	for(intptr_t ptr = -(intptr_t)len; ptr; ptr += sizeof(__m512i)) {
 		__m512i data1 = _mm512_load_si512((__m512i*)(_src1 + ptr*srcScale));
 		__m512i data2 = _mm512_load_si512((__m512i*)(_src2 + ptr*srcScale));
 		__m512i result, swapped;
