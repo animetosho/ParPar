@@ -227,6 +227,7 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 	if(method == GF16_AUTO)
 		method = default_method();
 	
+	_info.idealInputMultiple = 1;
 	switch(method) {
 		case GF16_SHUFFLE_AVX512:
 		case GF16_SHUFFLE_AVX2:
@@ -285,6 +286,7 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 					// if 32 registers are available, can do multi-region
 					_mul_add_multi = &gf16_shuffle_muladd_multi_avx512;
 					_mul_add_multi_packed = &gf16_shuffle_muladd_multi_packed_avx512;
+					_info.idealInputMultiple = 3;
 					#endif
 					prepare = &gf16_shuffle_prepare_avx512;
 					prepare_packed = &gf16_shuffle_prepare_packed_avx512;
@@ -307,6 +309,7 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 			#ifdef PLATFORM_AMD64
 			_mul_add_multi = &gf16_shuffle_muladd_multi_vbmi;
 			_mul_add_multi_packed = &gf16_shuffle_muladd_multi_packed_vbmi;
+			_info.idealInputMultiple = 4;
 			#endif
 			prepare = &gf16_shuffle_prepare_avx512;
 			prepare_packed = &gf16_shuffle_prepare_packed_vbmi;
@@ -325,6 +328,7 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 			#ifdef PLATFORM_AMD64
 			_mul_add_multi = &gf16_shuffle2x_muladd_multi_avx512;
 			_mul_add_multi_packed = &gf16_shuffle2x_muladd_multi_packed_avx512;
+			_info.idealInputMultiple = 6;
 			#endif
 			prepare = &gf16_shuffle2x_prepare_avx512;
 			prepare_packed = &gf16_shuffle2x_prepare_packed_avx512;
@@ -343,6 +347,7 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 			#ifdef PLATFORM_AMD64
 			_mul_add_multi = &gf16_shuffle2x_muladd_multi_avx2;
 			_mul_add_multi_packed = &gf16_shuffle2x_muladd_multi_packed_avx2;
+			_info.idealInputMultiple = 2;
 			#endif
 			prepare = &gf16_shuffle2x_prepare_avx2;
 			prepare_packed = &gf16_shuffle2x_prepare_packed_avx2;
@@ -369,6 +374,7 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 			_mul_add_multi = &gf16_shuffle_muladd_multi_neon;
 			_mul_add_multi_packed = &gf16_shuffle_muladd_multi_packed_neon;
 			prepare_packed = &gf16_shuffle_prepare_packed_neon;
+			_info.idealInputMultiple = 2;
 			#endif
 		break;
 		
@@ -385,6 +391,7 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 			#ifdef PLATFORM_AMD64
 			_mul_add_multi = &gf16_affine_muladd_multi_avx512;
 			_mul_add_multi_packed = &gf16_affine_muladd_multi_packed_avx512;
+			_info.idealInputMultiple = 6;
 			#endif
 			prepare = &gf16_shuffle_prepare_avx512;
 			prepare_packed = &gf16_affine_prepare_packed_avx512;
@@ -405,6 +412,7 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 			#ifdef PLATFORM_AMD64
 			_mul_add_multi = &gf16_affine_muladd_multi_gfni;
 			_mul_add_multi_packed = &gf16_affine_muladd_multi_packed_gfni;
+			_info.idealInputMultiple = 3;
 			#endif
 			prepare = &gf16_shuffle_prepare_ssse3;
 			prepare_packed = &gf16_affine_prepare_packed_gfni;
@@ -423,6 +431,11 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 			_mul_add = &gf16_affine2x_muladd_avx512;
 			_mul_add_multi = &gf16_affine2x_muladd_multi_avx512;
 			_mul_add_multi_packed = &gf16_affine2x_muladd_multi_packed_avx512;
+			#ifdef PLATFORM_AMD64
+			_info.idealInputMultiple = 12;
+			#else
+			_info.idealInputMultiple = 2;
+			#endif
 			prepare = &gf16_affine2x_prepare_avx512;
 			prepare_packed = &gf16_affine2x_prepare_packed_avx512;
 			finish = &gf16_affine2x_finish_avx512;
@@ -440,6 +453,11 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 			_mul_add = &gf16_affine2x_muladd_gfni;
 			_mul_add_multi = &gf16_affine2x_muladd_multi_gfni;
 			_mul_add_multi_packed = &gf16_affine2x_muladd_multi_packed_gfni;
+			#ifdef PLATFORM_AMD64
+			_info.idealInputMultiple = 6;
+			#else
+			_info.idealInputMultiple = 2;
+			#endif
 			prepare = &gf16_affine2x_prepare_gfni;
 			prepare_packed = &gf16_affine2x_prepare_packed_gfni;
 			finish = &gf16_affine2x_finish_gfni;
@@ -514,6 +532,7 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 					_mul_add = &gf16_xor_jit_muladd_avx512;
 					_mul_add_multi = &gf16_xor_jit_muladd_multi_avx512;
 					_mul_add_multi_packed = &gf16_xor_jit_muladd_multi_packed_avx512;
+					_info.idealInputMultiple = 6;
 					prepare = &gf16_xor_prepare_avx512;
 					prepare_packed = &gf16_xor_prepare_packed_avx512;
 					finish = &gf16_xor_finish_avx512;
