@@ -97,11 +97,14 @@ static HEDLEY_ALWAYS_INLINE void gf16_affine_muladd_round(const __m128i* src, __
 	*tph = _mm_xor_si128(*tph, _mm_gf2p8affine_epi64_epi8(ta, mat_hh, 0));
 	*tph = _mm_xor_si128(*tph, _mm_gf2p8affine_epi64_epi8(tb, mat_hl, 0));
 }
-static HEDLEY_ALWAYS_INLINE void gf16_affine_muladd_x2_gfni(
+#include "gf16_muladd_multi.h"
+static HEDLEY_ALWAYS_INLINE void gf16_affine_muladd_x_gfni(
 	const void *HEDLEY_RESTRICT scratch,
-	uint8_t *HEDLEY_RESTRICT _dst, const unsigned srcScale, const uint8_t* _src1, const uint8_t* _src2, size_t len,
-	const uint16_t *HEDLEY_RESTRICT coefficients
+	uint8_t *HEDLEY_RESTRICT _dst, const unsigned srcScale,
+	GF16_MULADD_MULTI_SRCLIST, size_t len,
+	const uint16_t *HEDLEY_RESTRICT coefficients, const int doPrefetch, const uint8_t* _pf
 ) {
+	GF16_MULADD_MULTI_SRC_UNUSED(3);
 	__m128i depmask1, depmask2;
 	
 	gf16_affine_load_matrix(scratch, coefficients[0], &depmask1, &depmask2);
@@ -116,48 +119,27 @@ static HEDLEY_ALWAYS_INLINE void gf16_affine_muladd_x2_gfni(
 	__m128i mat_Bhl = _mm_shuffle_epi32(depmask2, _MM_SHUFFLE(1,0,1,0));
 	__m128i mat_Blh = _mm_unpackhi_epi64(depmask2, depmask2);
 	
-	for(intptr_t ptr = -(intptr_t)len; ptr; ptr += sizeof(__m128i)*2) {
-		__m128i tph = _mm_load_si128((__m128i*)(_dst + ptr));
-		__m128i tpl = _mm_load_si128((__m128i*)(_dst + ptr) + 1);
-		gf16_affine_muladd_round((__m128i*)(_src1 + ptr*srcScale), &tpl, &tph, mat_All, mat_Ahl, mat_Alh, mat_Ahh);
-		gf16_affine_muladd_round((__m128i*)(_src2 + ptr*srcScale), &tpl, &tph, mat_Bll, mat_Bhl, mat_Blh, mat_Bhh);
-		_mm_store_si128 ((__m128i*)(_dst + ptr), tph);
-		_mm_store_si128 ((__m128i*)(_dst + ptr)+1, tpl);
+	__m128i mat_Cll, mat_Chh, mat_Chl, mat_Clh;
+	if(srcCount > 2) {
+		gf16_affine_load_matrix(scratch, coefficients[2], &depmask1, &depmask2);
+		mat_Cll = _mm_shuffle_epi32(depmask1, _MM_SHUFFLE(1,0,1,0));
+		mat_Chh = _mm_unpackhi_epi64(depmask1, depmask1);
+		mat_Chl = _mm_shuffle_epi32(depmask2, _MM_SHUFFLE(1,0,1,0));
+		mat_Clh = _mm_unpackhi_epi64(depmask2, depmask2);
 	}
-}
-static HEDLEY_ALWAYS_INLINE void gf16_affine_muladd_x3_gfni(
-	const void *HEDLEY_RESTRICT scratch,
-	uint8_t *HEDLEY_RESTRICT _dst, const unsigned srcScale, const uint8_t* _src1, const uint8_t* _src2, const uint8_t* _src3, size_t len,
-	const uint16_t *HEDLEY_RESTRICT coefficients
-) {
-	__m128i depmask1, depmask2;
-	
-	gf16_affine_load_matrix(scratch, coefficients[0], &depmask1, &depmask2);
-	__m128i mat_All = _mm_shuffle_epi32(depmask1, _MM_SHUFFLE(1,0,1,0));
-	__m128i mat_Ahh = _mm_unpackhi_epi64(depmask1, depmask1);
-	__m128i mat_Ahl = _mm_shuffle_epi32(depmask2, _MM_SHUFFLE(1,0,1,0));
-	__m128i mat_Alh = _mm_unpackhi_epi64(depmask2, depmask2);
-	
-	gf16_affine_load_matrix(scratch, coefficients[1], &depmask1, &depmask2);
-	__m128i mat_Bll = _mm_shuffle_epi32(depmask1, _MM_SHUFFLE(1,0,1,0));
-	__m128i mat_Bhh = _mm_unpackhi_epi64(depmask1, depmask1);
-	__m128i mat_Bhl = _mm_shuffle_epi32(depmask2, _MM_SHUFFLE(1,0,1,0));
-	__m128i mat_Blh = _mm_unpackhi_epi64(depmask2, depmask2);
-	
-	gf16_affine_load_matrix(scratch, coefficients[2], &depmask1, &depmask2);
-	__m128i mat_Cll = _mm_shuffle_epi32(depmask1, _MM_SHUFFLE(1,0,1,0));
-	__m128i mat_Chh = _mm_unpackhi_epi64(depmask1, depmask1);
-	__m128i mat_Chl = _mm_shuffle_epi32(depmask2, _MM_SHUFFLE(1,0,1,0));
-	__m128i mat_Clh = _mm_unpackhi_epi64(depmask2, depmask2);
 	
 	for(intptr_t ptr = -(intptr_t)len; ptr; ptr += sizeof(__m128i)*2) {
 		__m128i tph = _mm_load_si128((__m128i*)(_dst + ptr));
 		__m128i tpl = _mm_load_si128((__m128i*)(_dst + ptr) + 1);
 		gf16_affine_muladd_round((__m128i*)(_src1 + ptr*srcScale), &tpl, &tph, mat_All, mat_Ahl, mat_Alh, mat_Ahh);
 		gf16_affine_muladd_round((__m128i*)(_src2 + ptr*srcScale), &tpl, &tph, mat_Bll, mat_Bhl, mat_Blh, mat_Bhh);
-		gf16_affine_muladd_round((__m128i*)(_src3 + ptr*srcScale), &tpl, &tph, mat_Cll, mat_Chl, mat_Clh, mat_Chh);
+		if(srcCount > 2)
+			gf16_affine_muladd_round((__m128i*)(_src3 + ptr*srcScale), &tpl, &tph, mat_Cll, mat_Chl, mat_Clh, mat_Chh);
 		_mm_store_si128 ((__m128i*)(_dst + ptr), tph);
 		_mm_store_si128 ((__m128i*)(_dst + ptr)+1, tpl);
+		
+		// TODO: prefetch?
+		UNUSED(doPrefetch); UNUSED(_pf);
 	}
 }
 #endif /*defined(__GFNI__) && defined(__SSSE3__)*/
@@ -193,26 +175,7 @@ void gf16_affine_muladd_gfni(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_R
 unsigned gf16_affine_muladd_multi_gfni(const void *HEDLEY_RESTRICT scratch, unsigned regions, size_t offset, void *HEDLEY_RESTRICT dst, const void* const*HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch) {
 	UNUSED(mutScratch);
 #if defined(__GFNI__) && defined(__SSSE3__) && defined(PLATFORM_AMD64)
-	uint8_t* _dst = (uint8_t*)dst + offset + len;
-	
-	unsigned region = 0;
-	if(regions > 2) do {
-		gf16_affine_muladd_x3_gfni(
-			scratch, _dst, 1,
-			(const uint8_t* HEDLEY_RESTRICT)src[region] + offset + len, (const uint8_t* HEDLEY_RESTRICT)src[region+1] + offset + len, (const uint8_t* HEDLEY_RESTRICT)src[region+2] + offset + len,
-			len, coefficients + region
-		);
-		region += 3;
-	} while(region+2 < regions);
-	if(region+1 < regions) {
-		gf16_affine_muladd_x2_gfni(
-			scratch, _dst, 1,
-			(const uint8_t* HEDLEY_RESTRICT)src[region] + offset + len, (const uint8_t* HEDLEY_RESTRICT)src[region+1] + offset + len,
-			len, coefficients + region
-		);
-		region += 2;
-	}
-	return region;
+	return gf16_muladd_multi(scratch, &gf16_affine_muladd_x_gfni, 3, regions, offset, dst, src, len, coefficients);
 #else
 	UNUSED(scratch); UNUSED(regions); UNUSED(offset); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficients);
 	return 0;
@@ -222,32 +185,19 @@ unsigned gf16_affine_muladd_multi_gfni(const void *HEDLEY_RESTRICT scratch, unsi
 unsigned gf16_affine_muladd_multi_packed_gfni(const void *HEDLEY_RESTRICT scratch, unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch) {
 	UNUSED(mutScratch);
 #if defined(__GFNI__) && defined(__SSSE3__) && defined(PLATFORM_AMD64)
-	uint8_t* _dst = (uint8_t*)dst + len;
-	uint8_t* _src = (uint8_t*)src;
-	
-	unsigned region = 0;
-	if(regions > 2) do {
-		gf16_affine_muladd_x3_gfni(
-			scratch, _dst, 3,
-			_src + region * len + len*3,
-			_src + region * len + len*3 + sizeof(__m128i)*2,
-			_src + region * len + len*3 + sizeof(__m128i)*4,
-			len, coefficients + region
-		);
-		region += 3;
-	} while(region+2 < regions);
-	if(region+1 < regions) {
-		gf16_affine_muladd_x2_gfni(
-			scratch, _dst, 2,
-			_src + region * len + len*2,
-			_src + region * len + len*2 + sizeof(__m128i)*2,
-			len, coefficients + region
-		);
-		region += 2;
-	}
-	return region;
+	return gf16_muladd_multi_packed(scratch, &gf16_affine_muladd_x_gfni, 3, regions, dst, src, len, sizeof(__m128i)*2, coefficients);
 #else
 	UNUSED(scratch); UNUSED(regions); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficients);
+	return 0;
+#endif
+}
+
+unsigned gf16_affine_muladd_multi_packpf_gfni(const void *HEDLEY_RESTRICT scratch, unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch, const void* HEDLEY_RESTRICT prefetchIn, const void* HEDLEY_RESTRICT prefetchOut) {
+	UNUSED(mutScratch);
+#if defined(__GFNI__) && defined(__SSSE3__) && defined(PLATFORM_AMD64)
+	return gf16_muladd_multi_packpf(scratch, &gf16_affine_muladd_x_gfni, 3, regions, dst, src, len, sizeof(__m128i)*2, coefficients, prefetchIn, prefetchOut);
+#else
+	UNUSED(scratch); UNUSED(regions); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficients); UNUSED(prefetchIn); UNUSED(prefetchOut);
 	return 0;
 #endif
 }
@@ -360,10 +310,12 @@ void gf16_affine2x_muladd_gfni(const void *HEDLEY_RESTRICT scratch, void *HEDLEY
 #if defined(__GFNI__) && defined(__SSSE3__)
 static HEDLEY_ALWAYS_INLINE void gf16_affine2x_muladd_x_gfni(
 	const void *HEDLEY_RESTRICT scratch,
-	uint8_t *HEDLEY_RESTRICT _dst, const unsigned srcScale, const int srcCount,
-	const uint8_t* _src1, const uint8_t* _src2, const uint8_t* _src3, const uint8_t* _src4, const uint8_t* _src5, const uint8_t* _src6,
-	size_t len, const uint16_t *HEDLEY_RESTRICT coefficients
+	uint8_t *HEDLEY_RESTRICT _dst, const unsigned srcScale,
+	GF16_MULADD_MULTI_SRCLIST,
+	size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, const int doPrefetch, const uint8_t* _pf
 ) {
+	GF16_MULADD_MULTI_SRC_UNUSED(6);
+	
 	__m128i matNormA, matSwapA;
 	__m128i matNormB, matSwapB;
 	__m128i matNormC, matSwapC;
@@ -414,93 +366,22 @@ static HEDLEY_ALWAYS_INLINE void gf16_affine2x_muladd_x_gfni(
 		result1 = _mm_xor_si128(result1, _mm_load_si128((__m128i*)(_dst + ptr)));
 		result1 = _mm_xor_si128(result1, _mm_shuffle_epi32(result2, _MM_SHUFFLE(1,0,3,2)));
 		_mm_store_si128((__m128i*)(_dst + ptr), result1);
+		
+		// TODO: prefetch?
+		UNUSED(doPrefetch); UNUSED(_pf);
 	}
-}
-static HEDLEY_ALWAYS_INLINE void gf16_affine2x_muladd_packed_x_gfni(
-	const void *HEDLEY_RESTRICT scratch, uint8_t *HEDLEY_RESTRICT _dst, const int srcCount,
-	const uint8_t *HEDLEY_RESTRICT _src, size_t len,
-	const uint16_t *HEDLEY_RESTRICT coefficients
-) {
-	gf16_affine2x_muladd_x_gfni(
-		scratch, _dst, srcCount, srcCount,
-		_src + len*srcCount,
-		_src + len*srcCount + sizeof(__m128i)*1,
-		_src + len*srcCount + sizeof(__m128i)*2,
-		_src + len*srcCount + sizeof(__m128i)*3,
-		_src + len*srcCount + sizeof(__m128i)*4,
-		_src + len*srcCount + sizeof(__m128i)*5,
-		len, coefficients
-	);
 }
 #endif /*defined(__GFNI__) && defined(__SSSE3__)*/
 
 unsigned gf16_affine2x_muladd_multi_gfni(const void *HEDLEY_RESTRICT scratch, unsigned regions, size_t offset, void *HEDLEY_RESTRICT dst, const void* const*HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch) {
 	UNUSED(mutScratch);
 #if defined(__GFNI__) && defined(__SSSE3__)
-	uint8_t* _dst = (uint8_t*)dst + offset + len;
-	
-	unsigned region = 0;
-#ifdef PLATFORM_AMD64
-	if(regions > 5) do {
-		gf16_affine2x_muladd_x_gfni(
-			scratch, _dst, 1, 6,
-			(const uint8_t* HEDLEY_RESTRICT)src[region] + offset + len, (const uint8_t* HEDLEY_RESTRICT)src[region+1] + offset + len, (const uint8_t* HEDLEY_RESTRICT)src[region+2] + offset + len,
-			(const uint8_t* HEDLEY_RESTRICT)src[region+3] + offset + len, (const uint8_t* HEDLEY_RESTRICT)src[region+4] + offset + len, (const uint8_t* HEDLEY_RESTRICT)src[region+5] + offset + len,
-			len, coefficients + region
-		);
-		region += 6;
-	} while(region+5 < regions);
-	switch(regions - region) {
-		case 5:
-			gf16_affine2x_muladd_x_gfni(
-				scratch, _dst, 1, 5,
-				(const uint8_t* HEDLEY_RESTRICT)src[region] + offset + len, (const uint8_t* HEDLEY_RESTRICT)src[region+1] + offset + len, (const uint8_t* HEDLEY_RESTRICT)src[region+2] + offset + len,
-				(const uint8_t* HEDLEY_RESTRICT)src[region+3] + offset + len, (const uint8_t* HEDLEY_RESTRICT)src[region+4] + offset + len, NULL,
-				len, coefficients + region
-			);
-			region += 5;
-		break;
-		case 4:
-			gf16_affine2x_muladd_x_gfni(
-				scratch, _dst, 1, 4,
-				(const uint8_t* HEDLEY_RESTRICT)src[region] + offset + len, (const uint8_t* HEDLEY_RESTRICT)src[region+1] + offset + len, (const uint8_t* HEDLEY_RESTRICT)src[region+2] + offset + len,
-				(const uint8_t* HEDLEY_RESTRICT)src[region+3] + offset + len, NULL, NULL,
-				len, coefficients + region
-			);
-			region += 4;
-		break;
-		case 3:
-			gf16_affine2x_muladd_x_gfni(
-				scratch, _dst, 1, 3,
-				(const uint8_t* HEDLEY_RESTRICT)src[region] + offset + len, (const uint8_t* HEDLEY_RESTRICT)src[region+1] + offset + len, (const uint8_t* HEDLEY_RESTRICT)src[region+2] + offset + len,
-				NULL, NULL, NULL,
-				len, coefficients + region
-			);
-			region += 3;
-		break;
-		case 2:
-			gf16_affine2x_muladd_x_gfni(
-				scratch, _dst, 1, 2,
-				(const uint8_t* HEDLEY_RESTRICT)src[region] + offset + len, (const uint8_t* HEDLEY_RESTRICT)src[region+1] + offset + len,
-				NULL, NULL, NULL, NULL,
-				len, coefficients + region
-			);
-			region += 2;
-		break;
-		default: break;
-	}
-#else
+# ifdef PLATFORM_AMD64
+	return gf16_muladd_multi(scratch, &gf16_affine2x_muladd_x_gfni, 6, regions, offset, dst, src, len, coefficients);
+# else
 	// if only 8 registers available, only allow 2 parallel regions
-	for(; region < (regions & ~1); region+=2) {
-		gf16_affine2x_muladd_x_gfni(
-			scratch, _dst, 1, 2,
-			(const uint8_t* HEDLEY_RESTRICT)src[region] + offset + len, (const uint8_t* HEDLEY_RESTRICT)src[region+1] + offset + len,
-			NULL, NULL, NULL, NULL,
-			len, coefficients + region
-		);
-	}
-#endif
-	return region;
+	return gf16_muladd_multi(scratch, &gf16_affine2x_muladd_x_gfni, 2, regions, offset, dst, src, len, coefficients);
+# endif
 #else
 	UNUSED(scratch); UNUSED(regions); UNUSED(offset); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficients);
 	return 0;
@@ -510,69 +391,29 @@ unsigned gf16_affine2x_muladd_multi_gfni(const void *HEDLEY_RESTRICT scratch, un
 unsigned gf16_affine2x_muladd_multi_packed_gfni(const void *HEDLEY_RESTRICT scratch, unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch) {
 	UNUSED(mutScratch);
 #if defined(__GFNI__) && defined(__SSSE3__)
-	uint8_t* _dst = (uint8_t*)dst + len;
-	uint8_t* _src = (uint8_t*)src;
-	
-	unsigned region = 0;
-	
-#ifdef PLATFORM_AMD64
-	if(regions > 5) do {
-		gf16_affine2x_muladd_packed_x_gfni(
-			scratch, _dst, 6,
-			_src + region * len,
-			len, coefficients + region
-		);
-		region += 6;
-	} while(region+5 < regions);
-	switch(regions - region) {
-		case 5:
-			gf16_affine2x_muladd_packed_x_gfni(
-				scratch, _dst, 5,
-				_src + region * len,
-				len, coefficients + region
-			);
-			region += 5;
-		break;
-		case 4:
-			gf16_affine2x_muladd_packed_x_gfni(
-				scratch, _dst, 4,
-				_src + region * len,
-				len, coefficients + region
-			);
-			region += 4;
-		break;
-		case 3:
-			gf16_affine2x_muladd_packed_x_gfni(
-				scratch, _dst, 3,
-				_src + region * len,
-				len, coefficients + region
-			);
-			region += 3;
-		break;
-		case 2:
-			gf16_affine2x_muladd_packed_x_gfni(
-				scratch, _dst, 2,
-				_src + region * len,
-				len, coefficients + region
-			);
-			region += 2;
-		break;
-		default: break;
-	}
-#else
+# ifdef PLATFORM_AMD64
+	return gf16_muladd_multi_packed(scratch, &gf16_affine2x_muladd_x_gfni, 6, regions, dst, src, len, sizeof(__m128i), coefficients);
+# else
 	// if only 8 registers available, only allow 2 parallel regions
-	for(; region < (regions & ~1); region+=2) {
-		gf16_affine2x_muladd_packed_x_gfni(
-			scratch, _dst, 2,
-			_src + region * len,
-			len, coefficients + region
-		);
-	}
-#endif
-	
-	return region;
+	return gf16_muladd_multi_packed(scratch, &gf16_affine2x_muladd_x_gfni, 2, regions, dst, src, len, sizeof(__m128i), coefficients);
+# endif
 #else
 	UNUSED(scratch); UNUSED(regions); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficients);
 	return 0;
 #endif
 }
+
+unsigned gf16_affine2x_muladd_multi_packpf_gfni(const void *HEDLEY_RESTRICT scratch, unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch, const void* HEDLEY_RESTRICT prefetchIn, const void* HEDLEY_RESTRICT prefetchOut) {
+	UNUSED(mutScratch);
+#if defined(__GFNI__) && defined(__SSSE3__)
+# ifdef PLATFORM_AMD64
+	return gf16_muladd_multi_packpf(scratch, &gf16_affine2x_muladd_x_gfni, 6, regions, dst, src, len, sizeof(__m128i), coefficients, prefetchIn, prefetchOut);
+# else
+	return gf16_muladd_multi_packpf(scratch, &gf16_affine2x_muladd_x_gfni, 2, regions, dst, src, len, sizeof(__m128i), coefficients, prefetchIn, prefetchOut);
+# endif
+#else
+	UNUSED(scratch); UNUSED(regions); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficients); UNUSED(prefetchIn); UNUSED(prefetchOut);
+	return 0;
+#endif
+}
+

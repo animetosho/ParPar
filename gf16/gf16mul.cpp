@@ -286,6 +286,7 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 					// if 32 registers are available, can do multi-region
 					_mul_add_multi = &gf16_shuffle_muladd_multi_avx512;
 					_mul_add_multi_packed = &gf16_shuffle_muladd_multi_packed_avx512;
+					_mul_add_multi_packpf = &gf16_shuffle_muladd_multi_packpf_avx512;
 					_info.idealInputMultiple = 3;
 					#endif
 					prepare = &gf16_shuffle_prepare_avx512;
@@ -309,6 +310,7 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 			#ifdef PLATFORM_AMD64
 			_mul_add_multi = &gf16_shuffle_muladd_multi_vbmi;
 			_mul_add_multi_packed = &gf16_shuffle_muladd_multi_packed_vbmi;
+			_mul_add_multi_packpf = &gf16_shuffle_muladd_multi_packpf_vbmi;
 			_info.idealInputMultiple = 4;
 			#endif
 			prepare = &gf16_shuffle_prepare_avx512;
@@ -328,6 +330,7 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 			#ifdef PLATFORM_AMD64
 			_mul_add_multi = &gf16_shuffle2x_muladd_multi_avx512;
 			_mul_add_multi_packed = &gf16_shuffle2x_muladd_multi_packed_avx512;
+			_mul_add_multi_packpf = &gf16_shuffle2x_muladd_multi_packpf_avx512;
 			_info.idealInputMultiple = 6;
 			#endif
 			prepare = &gf16_shuffle2x_prepare_avx512;
@@ -347,6 +350,7 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 			#ifdef PLATFORM_AMD64
 			_mul_add_multi = &gf16_shuffle2x_muladd_multi_avx2;
 			_mul_add_multi_packed = &gf16_shuffle2x_muladd_multi_packed_avx2;
+			_mul_add_multi_packpf = &gf16_shuffle2x_muladd_multi_packpf_avx2;
 			_info.idealInputMultiple = 2;
 			#endif
 			prepare = &gf16_shuffle2x_prepare_avx2;
@@ -373,6 +377,7 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 			// enable only if 32 registers available
 			_mul_add_multi = &gf16_shuffle_muladd_multi_neon;
 			_mul_add_multi_packed = &gf16_shuffle_muladd_multi_packed_neon;
+			_mul_add_multi_packpf = &gf16_shuffle_muladd_multi_packpf_neon;
 			prepare_packed = &gf16_shuffle_prepare_packed_neon;
 			_info.idealInputMultiple = 2;
 			#endif
@@ -391,6 +396,7 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 			#ifdef PLATFORM_AMD64
 			_mul_add_multi = &gf16_affine_muladd_multi_avx512;
 			_mul_add_multi_packed = &gf16_affine_muladd_multi_packed_avx512;
+			_mul_add_multi_packpf = &gf16_affine_muladd_multi_packpf_avx512;
 			_info.idealInputMultiple = 6;
 			#endif
 			prepare = &gf16_shuffle_prepare_avx512;
@@ -412,6 +418,7 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 			#ifdef PLATFORM_AMD64
 			_mul_add_multi = &gf16_affine_muladd_multi_gfni;
 			_mul_add_multi_packed = &gf16_affine_muladd_multi_packed_gfni;
+			_mul_add_multi_packpf = &gf16_affine_muladd_multi_packpf_gfni;
 			_info.idealInputMultiple = 3;
 			#endif
 			prepare = &gf16_shuffle_prepare_ssse3;
@@ -431,6 +438,7 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 			_mul_add = &gf16_affine2x_muladd_avx512;
 			_mul_add_multi = &gf16_affine2x_muladd_multi_avx512;
 			_mul_add_multi_packed = &gf16_affine2x_muladd_multi_packed_avx512;
+			_mul_add_multi_packpf = &gf16_affine2x_muladd_multi_packpf_avx512;
 			#ifdef PLATFORM_AMD64
 			_info.idealInputMultiple = 12;
 			#else
@@ -453,6 +461,7 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 			_mul_add = &gf16_affine2x_muladd_gfni;
 			_mul_add_multi = &gf16_affine2x_muladd_multi_gfni;
 			_mul_add_multi_packed = &gf16_affine2x_muladd_multi_packed_gfni;
+			_mul_add_multi_packpf = &gf16_affine2x_muladd_multi_packpf_gfni;
 			#ifdef PLATFORM_AMD64
 			_info.idealInputMultiple = 6;
 			#else
@@ -609,6 +618,7 @@ Galois16Mul::Galois16Mul(Galois16Methods method) {
 	_add = &Galois16Mul::addGeneric;
 	_mul_add_multi = &Galois16Mul::_mul_add_multi_none;
 	_mul_add_multi_packed = NULL;
+	_mul_add_multi_packpf = NULL;
 	
 	_pow = NULL;
 	_pow_add = NULL;
@@ -636,6 +646,7 @@ void Galois16Mul::move(Galois16Mul& other) {
 	_mul_add = other._mul_add;
 	_mul_add_multi = other._mul_add_multi;
 	_mul_add_multi_packed = other._mul_add_multi_packed;
+	_mul_add_multi_packpf = other._mul_add_multi_packpf;
 	_pow = other._pow;
 	_pow_add = other._pow_add;
 }

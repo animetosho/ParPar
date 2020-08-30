@@ -203,71 +203,36 @@ void gf16_shuffle_muladd_neon(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_
 }
 
 #if defined(__ARM_NEON) && defined(__aarch64__)
-static HEDLEY_ALWAYS_INLINE void gf16_shuffle_muladd_x2_neon(
-	uint8x16x2_t poly,
-	uint8_t *HEDLEY_RESTRICT _dst, const uint8_t *HEDLEY_RESTRICT _src1, const uint8_t *HEDLEY_RESTRICT _src2, size_t len,
-	const uint16_t *HEDLEY_RESTRICT coefficients
+#include "gf16_muladd_multi.h"
+static HEDLEY_ALWAYS_INLINE void gf16_shuffle_muladd_x_neon(
+	const void *HEDLEY_RESTRICT scratch,
+	uint8_t *HEDLEY_RESTRICT _dst, const unsigned srcScale, GF16_MULADD_MULTI_SRCLIST, size_t len,
+	const uint16_t *HEDLEY_RESTRICT coefficients, const int doPrefetch, const uint8_t* _pf
 ) {
-	qtbl_t tbl_Ah[4], tbl_Al[4];
-	qtbl_t tbl_Bh[4], tbl_Bl[4];
-	gf16_shuffle_neon_calc_tables(poly, coefficients[0], tbl_Al, tbl_Ah);
-	gf16_shuffle_neon_calc_tables(poly, coefficients[1], tbl_Bl, tbl_Bh);
-
-	for(intptr_t ptr = -(intptr_t)len; ptr; ptr += sizeof(uint8x16_t)*2) {
-		uint8x16_t rl, rh;
-		gf16_shuffle_neon_round1(vld2q_u8(_src1+ptr), &rl, &rh, tbl_Al, tbl_Ah);
-		gf16_shuffle_neon_round(vld2q_u8(_src2+ptr), &rl, &rh, tbl_Bl, tbl_Bh);
-		uint8x16x2_t vb = vld2q_u8(_dst+ptr);
-		vb.val[0] = veorq_u8(rl, vb.val[0]);
-		vb.val[1] = veorq_u8(rh, vb.val[1]);
-		vst2q_u8(_dst+ptr, vb);
-	}
-}
-// GCC/Clang seem to spill some registers with 3 regions, so disable this for now
-/*
-static HEDLEY_ALWAYS_INLINE void gf16_shuffle_muladd_x3_neon(
-	uint8x16x2_t poly,
-	uint8_t *HEDLEY_RESTRICT _dst, const uint8_t *HEDLEY_RESTRICT _src1, const uint8_t *HEDLEY_RESTRICT _src2, const uint8_t *HEDLEY_RESTRICT _src3, size_t len,
-	const uint16_t *HEDLEY_RESTRICT coefficients
-) {
+	GF16_MULADD_MULTI_SRC_UNUSED(3);
+	uint8x16x2_t poly = vld1q_u8_x2_align(scratch);
+	
 	qtbl_t tbl_Ah[4], tbl_Al[4];
 	qtbl_t tbl_Bh[4], tbl_Bl[4];
 	qtbl_t tbl_Ch[4], tbl_Cl[4];
 	gf16_shuffle_neon_calc_tables(poly, coefficients[0], tbl_Al, tbl_Ah);
 	gf16_shuffle_neon_calc_tables(poly, coefficients[1], tbl_Bl, tbl_Bh);
-	gf16_shuffle_neon_calc_tables(poly, coefficients[2], tbl_Cl, tbl_Ch);
+	if(srcCount > 2)
+		gf16_shuffle_neon_calc_tables(poly, coefficients[2], tbl_Cl, tbl_Ch);
 
 	for(intptr_t ptr = -(intptr_t)len; ptr; ptr += sizeof(uint8x16_t)*2) {
 		uint8x16_t rl, rh;
-		gf16_shuffle_neon_round1(vld2q_u8(_src1+ptr), &rl, &rh, tbl_Al, tbl_Ah);
-		gf16_shuffle_neon_round(vld2q_u8(_src2+ptr), &rl, &rh, tbl_Bl, tbl_Bh);
-		gf16_shuffle_neon_round(vld2q_u8(_src3+ptr), &rl, &rh, tbl_Cl, tbl_Ch);
+		gf16_shuffle_neon_round1(vld2q_u8(_src1+ptr*srcScale), &rl, &rh, tbl_Al, tbl_Ah);
+		gf16_shuffle_neon_round(vld2q_u8(_src2+ptr*srcScale), &rl, &rh, tbl_Bl, tbl_Bh);
+		if(srcCount > 2)
+			gf16_shuffle_neon_round(vld2q_u8(_src3+ptr*srcScale), &rl, &rh, tbl_Cl, tbl_Ch);
 		uint8x16x2_t vb = vld2q_u8(_dst+ptr);
 		vb.val[0] = veorq_u8(rl, vb.val[0]);
 		vb.val[1] = veorq_u8(rh, vb.val[1]);
 		vst2q_u8(_dst+ptr, vb);
-	}
-}
-*/
-
-static HEDLEY_ALWAYS_INLINE void gf16_shuffle_muladd_packed_x2_neon(
-	uint8x16x2_t poly,
-	uint8_t *HEDLEY_RESTRICT _dst, const uint8_t *HEDLEY_RESTRICT _src, size_t len,
-	const uint16_t *HEDLEY_RESTRICT coefficients
-) {
-	qtbl_t tbl_Ah[4], tbl_Al[4];
-	qtbl_t tbl_Bh[4], tbl_Bl[4];
-	gf16_shuffle_neon_calc_tables(poly, coefficients[0], tbl_Al, tbl_Ah);
-	gf16_shuffle_neon_calc_tables(poly, coefficients[1], tbl_Bl, tbl_Bh);
-
-	for(intptr_t ptr = -(intptr_t)len; ptr; ptr += sizeof(uint8x16_t)*2) {
-		uint8x16_t rl, rh;
-		gf16_shuffle_neon_round1(vld2q_u8(_src+ptr*2), &rl, &rh, tbl_Al, tbl_Ah);
-		gf16_shuffle_neon_round(vld2q_u8(_src+ptr*2 + sizeof(uint8x16x2_t)), &rl, &rh, tbl_Bl, tbl_Bh);
-		uint8x16x2_t vb = vld2q_u8(_dst+ptr);
-		vb.val[0] = veorq_u8(rl, vb.val[0]);
-		vb.val[1] = veorq_u8(rh, vb.val[1]);
-		vst2q_u8(_dst+ptr, vb);
+		
+		// TODO: prefetch
+		UNUSED(doPrefetch); UNUSED(_pf);
 	}
 }
 #endif
@@ -275,37 +240,8 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle_muladd_packed_x2_neon(
 unsigned gf16_shuffle_muladd_multi_neon(const void *HEDLEY_RESTRICT scratch, unsigned regions, size_t offset, void *HEDLEY_RESTRICT dst, const void* const*HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch) {
 	UNUSED(mutScratch);
 #if defined(__ARM_NEON) && defined(__aarch64__)
-	uint8_t* _dst = (uint8_t*)dst + offset + len;
-	uint8x16x2_t poly = vld1q_u8_x2_align(scratch);
-	
-	unsigned region = 0;
-	/*
-	if(regions > 2) do {
-		gf16_shuffle_muladd_x3_neon(
-			poly, _dst,
-			(const uint8_t* HEDLEY_RESTRICT)src[region] + offset + len, (const uint8_t* HEDLEY_RESTRICT)src[region+1] + offset + len, (const uint8_t* HEDLEY_RESTRICT)src[region+2] + offset + len,
-			len, coefficients + region
-		);
-		region += 3;
-	} while(region+2 < regions);
-	if(region+1 < regions) {
-		gf16_shuffle_muladd_x2_neon(
-			poly, _dst,
-			(const uint8_t* HEDLEY_RESTRICT)src[region] + offset + len, (const uint8_t* HEDLEY_RESTRICT)src[region+1] + offset + len,
-			len, coefficients + region
-		);
-		region += 2;
-	}
-	*/
-	for(; region < (regions & ~1); region += 2) {
-		gf16_shuffle_muladd_x2_neon(
-			poly, _dst,
-			(const uint8_t* HEDLEY_RESTRICT)src[region] + offset + len, (const uint8_t* HEDLEY_RESTRICT)src[region+1] + offset + len,
-			len, coefficients + region
-		);
-	}
-	
-	return region;
+	// GCC/Clang seem to spill some registers with 3 regions, so max out at 2 for now
+	return gf16_muladd_multi(scratch, &gf16_shuffle_muladd_x_neon, 2, regions, offset, dst, src, len, coefficients);
 #else
 	UNUSED(scratch); UNUSED(regions); UNUSED(offset); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficients);
 	return 0;
@@ -315,21 +251,19 @@ unsigned gf16_shuffle_muladd_multi_neon(const void *HEDLEY_RESTRICT scratch, uns
 unsigned gf16_shuffle_muladd_multi_packed_neon(const void *HEDLEY_RESTRICT scratch, unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch) {
 	UNUSED(mutScratch);
 #if defined(__ARM_NEON) && defined(__aarch64__)
-	uint8_t* _dst = (uint8_t*)dst + len;
-	uint8_t* _src = (uint8_t*)src;
-	uint8x16x2_t poly = vld1q_u8_x2_align(scratch);
-	
-	unsigned region = 0;
-	for(; region < (regions & ~1); region += 2) {
-		gf16_shuffle_muladd_packed_x2_neon(
-			poly, _dst,
-			_src + region * len + len*2,
-			len, coefficients + region
-		);
-	}
-	return region;
+	return gf16_muladd_multi_packed(scratch, &gf16_shuffle_muladd_x_neon, 2, regions, dst, src, len, sizeof(uint8x16_t)*2, coefficients);
 #else
 	UNUSED(scratch); UNUSED(regions); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficients);
+	return 0;
+#endif
+}
+
+unsigned gf16_shuffle_muladd_multi_packpf_neon(const void *HEDLEY_RESTRICT scratch, unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch, const void* HEDLEY_RESTRICT prefetchIn, const void* HEDLEY_RESTRICT prefetchOut) {
+	UNUSED(mutScratch);
+#if defined(__ARM_NEON) && defined(__aarch64__)
+	return gf16_muladd_multi_packpf(scratch, &gf16_shuffle_muladd_x_neon, 2, regions, dst, src, len, sizeof(uint8x16_t)*2, coefficients, prefetchIn, prefetchOut);
+#else
+	UNUSED(scratch); UNUSED(regions); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficients); UNUSED(prefetchIn); UNUSED(prefetchOut);
 	return 0;
 #endif
 }

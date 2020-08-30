@@ -1,0 +1,263 @@
+
+#define GF16_MULADD_MULTI_SRCLIST const int srcCount, \
+	const uint8_t* _src1, const uint8_t* _src2, const uint8_t* _src3, const uint8_t* _src4, const uint8_t* _src5, const uint8_t* _src6, \
+	const uint8_t* _src7, const uint8_t* _src8, const uint8_t* _src9, const uint8_t* _src10, const uint8_t* _src11, const uint8_t* _src12, const uint8_t* _src13
+#define GF16_MULADD_MULTI_SRC_UNUSED(max) \
+	HEDLEY_ASSUME(srcCount <= max); \
+	if(max < 2) UNUSED(_src2); \
+	if(max < 3) UNUSED(_src3); \
+	if(max < 4) UNUSED(_src4); \
+	if(max < 5) UNUSED(_src5); \
+	if(max < 6) UNUSED(_src6); \
+	if(max < 7) UNUSED(_src7); \
+	if(max < 8) UNUSED(_src8); \
+	if(max < 9) UNUSED(_src9); \
+	if(max < 10) UNUSED(_src10); \
+	if(max < 11) UNUSED(_src11); \
+	if(max < 12) UNUSED(_src12); \
+	if(max < 13) UNUSED(_src13)
+
+#if defined(__GNUC__) && !defined(__clang__) && !defined(__OPTIMIZE__)
+// GCC, for some reason, doesn't like const pointers when forced to inline without optimizations
+typedef void (*fMuladdPF)
+#else
+typedef void (*const fMuladdPF)
+#endif
+(const void *HEDLEY_RESTRICT scratch, uint8_t *HEDLEY_RESTRICT _dst, const unsigned srcScale,
+	GF16_MULADD_MULTI_SRCLIST,
+	size_t len, const uint16_t *HEDLEY_RESTRICT coefficients,
+	const int doPrefetch, const uint8_t* _pf
+);
+
+
+static HEDLEY_ALWAYS_INLINE unsigned gf16_muladd_multi(const void *HEDLEY_RESTRICT scratch, fMuladdPF muladd_pf, const unsigned interleave, unsigned regions, size_t offset, void *HEDLEY_RESTRICT dst, const void* const*HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients) {
+	uint8_t* _dst = (uint8_t*)dst + offset + len;
+	
+	unsigned region = 0;
+	if(regions >= interleave) do {
+		muladd_pf(
+			scratch, _dst, 1, interleave,
+			(const uint8_t* HEDLEY_RESTRICT)src[region] + offset + len,
+			(const uint8_t* HEDLEY_RESTRICT)src[region+1] + offset + len,
+			(const uint8_t* HEDLEY_RESTRICT)src[region+2] + offset + len,
+			(const uint8_t* HEDLEY_RESTRICT)src[region+3] + offset + len,
+			(const uint8_t* HEDLEY_RESTRICT)src[region+4] + offset + len,
+			(const uint8_t* HEDLEY_RESTRICT)src[region+5] + offset + len,
+			(const uint8_t* HEDLEY_RESTRICT)src[region+6] + offset + len,
+			(const uint8_t* HEDLEY_RESTRICT)src[region+7] + offset + len,
+			(const uint8_t* HEDLEY_RESTRICT)src[region+8] + offset + len,
+			(const uint8_t* HEDLEY_RESTRICT)src[region+9] + offset + len,
+			(const uint8_t* HEDLEY_RESTRICT)src[region+10] + offset + len,
+			(const uint8_t* HEDLEY_RESTRICT)src[region+11] + offset + len,
+			(const uint8_t* HEDLEY_RESTRICT)src[region+12] + offset + len,
+			len, coefficients + region, 0, NULL
+		);
+		region += interleave;
+	} while(interleave <= regions - region);
+	unsigned remaining = regions - region;
+	HEDLEY_ASSUME(remaining < interleave); // doesn't seem to always work, so we have additional checks in the switch cases
+	switch(remaining) {
+		#define CASE(x) \
+			case x: \
+				if(x >= interleave) HEDLEY_UNREACHABLE(); \
+				muladd_pf( \
+					scratch, _dst, 1, x, \
+					(const uint8_t* HEDLEY_RESTRICT)src[region] + offset + len, \
+					(const uint8_t* HEDLEY_RESTRICT)src[region+1] + offset + len, \
+					(const uint8_t* HEDLEY_RESTRICT)src[region+2] + offset + len, \
+					(const uint8_t* HEDLEY_RESTRICT)src[region+3] + offset + len, \
+					(const uint8_t* HEDLEY_RESTRICT)src[region+4] + offset + len, \
+					(const uint8_t* HEDLEY_RESTRICT)src[region+5] + offset + len, \
+					(const uint8_t* HEDLEY_RESTRICT)src[region+6] + offset + len, \
+					(const uint8_t* HEDLEY_RESTRICT)src[region+7] + offset + len, \
+					(const uint8_t* HEDLEY_RESTRICT)src[region+8] + offset + len, \
+					(const uint8_t* HEDLEY_RESTRICT)src[region+9] + offset + len, \
+					(const uint8_t* HEDLEY_RESTRICT)src[region+10] + offset + len, \
+					(const uint8_t* HEDLEY_RESTRICT)src[region+11] + offset + len, \
+					(const uint8_t* HEDLEY_RESTRICT)src[region+12] + offset + len, \
+					len, coefficients + region, 0, NULL \
+				); \
+				region += x; \
+			break
+			CASE(12);
+			CASE(11);
+			CASE(10);
+			CASE( 9);
+			CASE( 8);
+			CASE( 7);
+			CASE( 6);
+			CASE( 5);
+			CASE( 4);
+			CASE( 3);
+			CASE( 2);
+		#undef CASE
+		default: break;
+	}
+	return region;
+}
+
+
+static HEDLEY_ALWAYS_INLINE unsigned gf16_muladd_multi_packed(const void *HEDLEY_RESTRICT scratch, fMuladdPF muladd_pf, const unsigned interleave, unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, size_t blockLen, const uint16_t *HEDLEY_RESTRICT coefficients) {
+	uint8_t* _dst = (uint8_t*)dst + len;
+	uint8_t* _src = (uint8_t*)src;
+	
+	unsigned region = 0;
+	if(regions >= interleave) do {
+		muladd_pf(
+			scratch, _dst, interleave, interleave,
+			_src + region * len + len*interleave,
+			_src + region * len + len*interleave + blockLen*1,
+			_src + region * len + len*interleave + blockLen*2,
+			_src + region * len + len*interleave + blockLen*3,
+			_src + region * len + len*interleave + blockLen*4,
+			_src + region * len + len*interleave + blockLen*5,
+			_src + region * len + len*interleave + blockLen*6,
+			_src + region * len + len*interleave + blockLen*7,
+			_src + region * len + len*interleave + blockLen*8,
+			_src + region * len + len*interleave + blockLen*9,
+			_src + region * len + len*interleave + blockLen*10,
+			_src + region * len + len*interleave + blockLen*11,
+			_src + region * len + len*interleave + blockLen*12,
+			len, coefficients + region, 0, NULL
+		);
+		region += interleave;
+	} while(interleave <= regions - region);
+	unsigned remaining = regions - region;
+	HEDLEY_ASSUME(remaining < interleave); // doesn't seem to always work, so we have additional checks in the switch cases
+	switch(remaining) {
+		#define CASE(x) \
+			case x: \
+				if(x >= interleave) HEDLEY_UNREACHABLE(); \
+				muladd_pf( \
+					scratch, _dst, x, x, \
+					_src + region * len + len*x, \
+					_src + region * len + len*x + blockLen*1, \
+					_src + region * len + len*x + blockLen*2, \
+					_src + region * len + len*x + blockLen*3, \
+					_src + region * len + len*x + blockLen*4, \
+					_src + region * len + len*x + blockLen*5, \
+					_src + region * len + len*x + blockLen*6, \
+					_src + region * len + len*x + blockLen*7, \
+					_src + region * len + len*x + blockLen*8, \
+					_src + region * len + len*x + blockLen*9, \
+					_src + region * len + len*x + blockLen*10, \
+					_src + region * len + len*x + blockLen*11, \
+					_src + region * len + len*x + blockLen*12, \
+					len, coefficients + region, 0, NULL \
+				); \
+				region += x; \
+			break
+			CASE(12);
+			CASE(11);
+			CASE(10);
+			CASE( 9);
+			CASE( 8);
+			CASE( 7);
+			CASE( 6);
+			CASE( 5);
+			CASE( 4);
+			CASE( 3);
+			CASE( 2);
+		#undef CASE
+		default: break;
+	}
+	return region;
+}
+
+
+static HEDLEY_ALWAYS_INLINE unsigned gf16_muladd_multi_packpf(const void *HEDLEY_RESTRICT scratch, fMuladdPF muladd_pf, const unsigned interleave, unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, size_t blockLen, const uint16_t *HEDLEY_RESTRICT coefficients, const void* HEDLEY_RESTRICT prefetchIn, const void* HEDLEY_RESTRICT prefetchOut) {
+	uint8_t* _dst = (uint8_t*)dst + len;
+	uint8_t* _src = (uint8_t*)src;
+	
+	unsigned region = 0;
+	if(regions > interleave) {
+		if(prefetchIn) {
+			uint8_t* _pfi = (uint8_t*)prefetchIn + len;
+			do {
+				muladd_pf(
+					scratch, _dst, interleave, interleave,
+					_src + region * len + len*interleave,
+					_src + region * len + len*interleave + blockLen*1,
+					_src + region * len + len*interleave + blockLen*2,
+					_src + region * len + len*interleave + blockLen*3,
+					_src + region * len + len*interleave + blockLen*4,
+					_src + region * len + len*interleave + blockLen*5,
+					_src + region * len + len*interleave + blockLen*6,
+					_src + region * len + len*interleave + blockLen*7,
+					_src + region * len + len*interleave + blockLen*8,
+					_src + region * len + len*interleave + blockLen*9,
+					_src + region * len + len*interleave + blockLen*10,
+					_src + region * len + len*interleave + blockLen*11,
+					_src + region * len + len*interleave + blockLen*12,
+					len, coefficients + region, 2, _pfi
+				);
+				region += interleave;
+				_pfi += len;
+			} while(interleave < regions - region);
+		}
+		else do {
+			muladd_pf(
+				scratch, _dst, interleave, interleave,
+				_src + region * len + len*interleave,
+				_src + region * len + len*interleave + blockLen*1,
+				_src + region * len + len*interleave + blockLen*2,
+				_src + region * len + len*interleave + blockLen*3,
+				_src + region * len + len*interleave + blockLen*4,
+				_src + region * len + len*interleave + blockLen*5,
+				_src + region * len + len*interleave + blockLen*6,
+				_src + region * len + len*interleave + blockLen*7,
+				_src + region * len + len*interleave + blockLen*8,
+				_src + region * len + len*interleave + blockLen*9,
+				_src + region * len + len*interleave + blockLen*10,
+				_src + region * len + len*interleave + blockLen*11,
+				_src + region * len + len*interleave + blockLen*12,
+				len, coefficients + region, 0, NULL
+			);
+			region += interleave;
+		} while(interleave < regions - region);
+	}
+	unsigned remaining = regions - region;
+	HEDLEY_ASSUME(remaining <= interleave);
+	uint8_t* _pfo = (uint8_t*)prefetchOut + len;
+	switch(remaining) {
+		// TODO: it seems that prefetching has less benefit if few left; may need to prefetch earlier for max benefit?
+		
+		#define CASE(x) \
+			case x: \
+				if(x > interleave) HEDLEY_UNREACHABLE(); \
+				muladd_pf( \
+					scratch, _dst, x, x, \
+					_src + region * len + len*x, \
+					_src + region * len + len*x + blockLen*1, \
+					_src + region * len + len*x + blockLen*2, \
+					_src + region * len + len*x + blockLen*3, \
+					_src + region * len + len*x + blockLen*4, \
+					_src + region * len + len*x + blockLen*5, \
+					_src + region * len + len*x + blockLen*6, \
+					_src + region * len + len*x + blockLen*7, \
+					_src + region * len + len*x + blockLen*8, \
+					_src + region * len + len*x + blockLen*9, \
+					_src + region * len + len*x + blockLen*10, \
+					_src + region * len + len*x + blockLen*11, \
+					_src + region * len + len*x + blockLen*12, \
+					len, coefficients + region, 1, _pfo \
+				); \
+				region += x; \
+			break
+			CASE(13);
+			CASE(12);
+			CASE(11);
+			CASE(10);
+			CASE( 9);
+			CASE( 8);
+			CASE( 7);
+			CASE( 6);
+			CASE( 5);
+			CASE( 4);
+			CASE( 3);
+			CASE( 2);
+		#undef CASE
+		default: break;
+	}
+	return region;
+}

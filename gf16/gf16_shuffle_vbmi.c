@@ -385,11 +385,16 @@ void gf16_shuffle_muladd_vbmi(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_
 
 
 #if defined(__AVX512VBMI__) && defined(__AVX512VL__) && defined(PLATFORM_AMD64)
+#include "gf16_muladd_multi.h"
 static HEDLEY_ALWAYS_INLINE void gf16_shuffle_muladd_x_vbmi(
-	__m512i mulLo, __m512i mulHi, uint8_t *HEDLEY_RESTRICT _dst, const unsigned srcScale, const int srcCount,
-	const uint8_t* _src1, const uint8_t* _src2, const uint8_t* _src3, const uint8_t* _src4,
-	size_t len, const uint16_t *HEDLEY_RESTRICT coefficients
+	const void *HEDLEY_RESTRICT scratch, uint8_t *HEDLEY_RESTRICT _dst, const unsigned srcScale,
+	GF16_MULADD_MULTI_SRCLIST,
+	size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, const int doPrefetch, const uint8_t* _pf
 ) {
+	GF16_MULADD_MULTI_SRC_UNUSED(4);
+	__m512i mulLo = _mm512_load_si512((__m512i*)scratch + 1);
+	__m512i mulHi = _mm512_load_si512((__m512i*)scratch);
+	
 	__m512i loA0, loA1, loA2, hiA0, hiA1, hiA2;
 	__m512i loB0, loB1, loB2, hiB0, hiB1, hiB2;
 	__m512i loC0, loC1, loC2, hiC0, hiC1, hiC2;
@@ -479,57 +484,23 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle_muladd_x_vbmi(
 		}
 		_mm512_store_si512((__m512i*)(_dst+ptr), tph);
 		_mm512_store_si512((__m512i*)(_dst+ptr) + 1, tpl);
+		
+		if(doPrefetch == 1) {
+			_mm_prefetch(_pf+ptr, _MM_HINT_ET1);
+			_mm_prefetch(_pf+ptr + sizeof(__m512i), _MM_HINT_ET1);
+		}
+		if(doPrefetch == 2) {
+			_mm_prefetch(_pf+ptr, _MM_HINT_T1);
+			_mm_prefetch(_pf+ptr + sizeof(__m512i), _MM_HINT_T1);
+		}
 	}
-}
-static HEDLEY_ALWAYS_INLINE void gf16_shuffle_muladd_packed_x_vbmi(
-	__m512i polyl, __m512i polyh, uint8_t *HEDLEY_RESTRICT _dst, const int srcCount,
-	const uint8_t *HEDLEY_RESTRICT _src, size_t len,
-	const uint16_t *HEDLEY_RESTRICT coefficients
-) {
-	gf16_shuffle_muladd_x_vbmi(
-		polyl, polyh, _dst, srcCount, srcCount,
-		_src + len*srcCount,
-		_src + len*srcCount + sizeof(__m512i)*2,
-		_src + len*srcCount + sizeof(__m512i)*4,
-		_src + len*srcCount + sizeof(__m512i)*6,
-		len, coefficients
-	);
 }
 #endif
 
 unsigned gf16_shuffle_muladd_multi_vbmi(const void *HEDLEY_RESTRICT scratch, unsigned regions, size_t offset, void *HEDLEY_RESTRICT dst, const void* const*HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch) {
 	UNUSED(mutScratch);
 #if defined(__AVX512VBMI__) && defined(__AVX512VL__) && defined(PLATFORM_AMD64)
-	uint8_t* _dst = (uint8_t*)dst + offset + len;
-	__m512i mulLo = _mm512_load_si512((__m512i*)scratch + 1);
-	__m512i mulHi = _mm512_load_si512((__m512i*)scratch);
-	
-	unsigned region = 0;
-	if(regions > 3) do {
-		gf16_shuffle_muladd_x_vbmi(
-			mulLo, mulHi, _dst, 1, 4,
-			(const uint8_t* HEDLEY_RESTRICT)src[region] + offset + len, (const uint8_t* HEDLEY_RESTRICT)src[region+1] + offset + len, (const uint8_t* HEDLEY_RESTRICT)src[region+2] + offset + len, (const uint8_t* HEDLEY_RESTRICT)src[region+3] + offset + len,
-			len, coefficients + region
-		);
-		region += 4;
-	} while(region+3 < regions);
-	if(region+2 < regions) {
-		gf16_shuffle_muladd_x_vbmi(
-			mulLo, mulHi, _dst, 1, 3,
-			(const uint8_t* HEDLEY_RESTRICT)src[region] + offset + len, (const uint8_t* HEDLEY_RESTRICT)src[region+1] + offset + len, (const uint8_t* HEDLEY_RESTRICT)src[region+2] + offset + len, NULL,
-			len, coefficients + region
-		);
-		region += 3;
-	}
-	else if(region+1 < regions) {
-		gf16_shuffle_muladd_x_vbmi(
-			mulLo, mulHi, _dst, 1, 2,
-			(const uint8_t* HEDLEY_RESTRICT)src[region] + offset + len, (const uint8_t* HEDLEY_RESTRICT)src[region+1] + offset + len, NULL, NULL,
-			len, coefficients + region
-		);
-		region += 2;
-	}
-	
+	unsigned region = gf16_muladd_multi(scratch, &gf16_shuffle_muladd_x_vbmi, 4, regions, offset, dst, src, len, coefficients);
 	_mm256_zeroupper();
 	return region;
 #else
@@ -541,37 +512,7 @@ unsigned gf16_shuffle_muladd_multi_vbmi(const void *HEDLEY_RESTRICT scratch, uns
 unsigned gf16_shuffle_muladd_multi_packed_vbmi(const void *HEDLEY_RESTRICT scratch, unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch) {
 	UNUSED(mutScratch);
 #if defined(__AVX512VBMI__) && defined(__AVX512VL__) && defined(PLATFORM_AMD64)
-	uint8_t* _dst = (uint8_t*)dst + len;
-	uint8_t* _src = (uint8_t*)src;
-	__m512i mulLo = _mm512_load_si512((__m512i*)scratch + 1);
-	__m512i mulHi = _mm512_load_si512((__m512i*)scratch);
-	
-	unsigned region = 0;
-	if(regions > 3) do {
-		gf16_shuffle_muladd_packed_x_vbmi(
-			mulLo, mulHi, _dst, 4,
-			_src + region * len,
-			len, coefficients + region
-		);
-		region += 4;
-	} while(region+3 < regions);
-	if(region+2 < regions) {
-		gf16_shuffle_muladd_packed_x_vbmi(
-			mulLo, mulHi, _dst, 3,
-			_src + region * len,
-			len, coefficients + region
-		);
-		region += 3;
-	}
-	else if(region+1 < regions) {
-		gf16_shuffle_muladd_packed_x_vbmi(
-			mulLo, mulHi, _dst, 2,
-			_src + region * len,
-			len, coefficients + region
-		);
-		region += 2;
-	}
-	
+	unsigned region = gf16_muladd_multi_packed(scratch, &gf16_shuffle_muladd_x_vbmi, 4, regions, dst, src, len, sizeof(__m512i)*2, coefficients);
 	_mm256_zeroupper();
 	return region;
 #else
@@ -580,6 +521,17 @@ unsigned gf16_shuffle_muladd_multi_packed_vbmi(const void *HEDLEY_RESTRICT scrat
 #endif
 }
 
+unsigned gf16_shuffle_muladd_multi_packpf_vbmi(const void *HEDLEY_RESTRICT scratch, unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch, const void* HEDLEY_RESTRICT prefetchIn, const void* HEDLEY_RESTRICT prefetchOut) {
+	UNUSED(mutScratch);
+#if defined(__AVX512VBMI__) && defined(__AVX512VL__) && defined(PLATFORM_AMD64)
+	unsigned region = gf16_muladd_multi_packpf(scratch, &gf16_shuffle_muladd_x_vbmi, 4, regions, dst, src, len, sizeof(__m512i)*2, coefficients, prefetchIn, prefetchOut);
+	_mm256_zeroupper();
+	return region;
+#else
+	UNUSED(scratch); UNUSED(regions); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficients); UNUSED(prefetchIn); UNUSED(prefetchOut);
+	return 0;
+#endif
+}
 
 
 

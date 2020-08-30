@@ -16,7 +16,12 @@
 
 
 #if defined(_AVAILABLE) && defined(PLATFORM_AMD64)
-static HEDLEY_ALWAYS_INLINE void gf16_shuffle2x_muladd_x2_avx2(__m256i polyl, __m256i polyh, uint8_t *HEDLEY_RESTRICT _dst, const uint8_t* _src1, const uint8_t* _src2, const unsigned srcScale, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients) {
+#include "gf16_muladd_multi.h"
+static HEDLEY_ALWAYS_INLINE void gf16_shuffle2x_muladd_x2_avx2(const void *HEDLEY_RESTRICT scratch, uint8_t *HEDLEY_RESTRICT _dst, const unsigned srcScale, GF16_MULADD_MULTI_SRCLIST, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, const int doPrefetch, const uint8_t* _pf) {
+	GF16_MULADD_MULTI_SRC_UNUSED(2);
+	__m256i polyl = _mm256_broadcastsi128_si256(_mm_load_si128((__m128i*)scratch + 1));
+	__m256i polyh = _mm256_broadcastsi128_si256(_mm_load_si128((__m128i*)scratch));
+	
 	__m256i mask = _mm256_set1_epi8(0x0f);
 	__m256i prodLo0, prodHi0, prodLo1, prodHi1, prodLo2, prodHi2, prodLo3, prodHi3;
 	
@@ -91,6 +96,9 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle2x_muladd_x2_avx2(__m256i polyl, __
 		result = _mm256_xor_si256(result, swapped);
 		
 		_mm256_store_si256((__m256i*)(_dst+ptr), result);
+		
+		// TODO: consider prefetch
+		UNUSED(doPrefetch); UNUSED(_pf);
 	}
 	
 }
@@ -99,14 +107,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle2x_muladd_x2_avx2(__m256i polyl, __
 unsigned gf16_shuffle2x_muladd_multi_avx2(const void *HEDLEY_RESTRICT scratch, unsigned regions, size_t offset, void *HEDLEY_RESTRICT dst, const void* const*HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch) {
 	UNUSED(mutScratch);
 #if defined(_AVAILABLE) && defined(PLATFORM_AMD64)
-	uint8_t* _dst = (uint8_t*)dst + offset + len;
-	__m256i polyl = _mm256_broadcastsi128_si256(_mm_load_si128((__m128i*)scratch + 1));
-	__m256i polyh = _mm256_broadcastsi128_si256(_mm_load_si128((__m128i*)scratch));
-	
-	unsigned region = 0;
-	for(; region < (regions & ~1); region += 2) {
-		gf16_shuffle2x_muladd_x2_avx2(polyl, polyh, _dst, (uint8_t*)src[region] + offset + len, (uint8_t*)src[region+1] + offset + len, 1, len, coefficients + region);
-	}
+	unsigned region = gf16_muladd_multi(scratch, &gf16_shuffle2x_muladd_x2_avx2, 2, regions, offset, dst, src, len, coefficients);
 	_mm256_zeroupper();
 	return region;
 #else
@@ -118,17 +119,7 @@ unsigned gf16_shuffle2x_muladd_multi_avx2(const void *HEDLEY_RESTRICT scratch, u
 unsigned gf16_shuffle2x_muladd_multi_packed_avx2(const void *HEDLEY_RESTRICT scratch, unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch) {
 	UNUSED(mutScratch);
 #if defined(_AVAILABLE) && defined(PLATFORM_AMD64)
-	uint8_t* _dst = (uint8_t*)dst + len;
-	uint8_t* _src = (uint8_t*)src + len*2;
-	__m256i polyl = _mm256_broadcastsi128_si256(_mm_load_si128((__m128i*)scratch + 1));
-	__m256i polyh = _mm256_broadcastsi128_si256(_mm_load_si128((__m128i*)scratch));
-	
-	unsigned region = 0;
-	for(; region < (regions & ~1); region += 2) {
-		// for some reason, the *2 scale seems to perform worse on Intel; haven't seen it on Zen
-		// also causes GCC9 to spill
-		gf16_shuffle2x_muladd_x2_avx2(polyl, polyh, _dst, _src + len*region, _src + len*region + sizeof(__m256i), 2, len, coefficients + region);
-	}
+	unsigned region = gf16_muladd_multi_packed(scratch, &gf16_shuffle2x_muladd_x2_avx2, 2, regions, dst, src, len, sizeof(__m256i), coefficients);
 	_mm256_zeroupper();
 	return region;
 #else
@@ -136,6 +127,19 @@ unsigned gf16_shuffle2x_muladd_multi_packed_avx2(const void *HEDLEY_RESTRICT scr
 	return 0;
 #endif
 }
+
+unsigned gf16_shuffle2x_muladd_multi_packpf_avx2(const void *HEDLEY_RESTRICT scratch, unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch, const void* HEDLEY_RESTRICT prefetchIn, const void* HEDLEY_RESTRICT prefetchOut) {
+	UNUSED(mutScratch);
+#if defined(_AVAILABLE) && defined(PLATFORM_AMD64)
+	unsigned region = gf16_muladd_multi_packpf(scratch, &gf16_shuffle2x_muladd_x2_avx2, 2, regions, dst, src, len, sizeof(__m256i), coefficients, prefetchIn, prefetchOut);
+	_mm256_zeroupper();
+	return region;
+#else
+	UNUSED(scratch); UNUSED(regions); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficients); UNUSED(prefetchIn); UNUSED(prefetchOut);
+	return 0;
+#endif
+}
+
 
 
 
