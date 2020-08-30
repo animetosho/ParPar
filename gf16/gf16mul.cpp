@@ -615,6 +615,7 @@ Galois16Mul::Galois16Mul(Galois16Methods method) {
 	_info.stride = 2;
 	
 	_mul = NULL;
+	_mul_add_pf = NULL;
 	_add = &Galois16Mul::addGeneric;
 	_mul_add_multi = &Galois16Mul::_mul_add_multi_none;
 	_mul_add_multi_packed = NULL;
@@ -644,6 +645,7 @@ void Galois16Mul::move(Galois16Mul& other) {
 	_mul = other._mul;
 	_add = other._add;
 	_mul_add = other._mul_add;
+	_mul_add_pf = other._mul_add_pf;
 	_mul_add_multi = other._mul_add_multi;
 	_mul_add_multi_packed = other._mul_add_multi_packed;
 	_mul_add_multi_packpf = other._mul_add_multi_packpf;
