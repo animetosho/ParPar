@@ -128,18 +128,63 @@ static HEDLEY_ALWAYS_INLINE void gf16_affine_muladd_x_gfni(
 		mat_Clh = _mm_unpackhi_epi64(depmask2, depmask2);
 	}
 	
-	for(intptr_t ptr = -(intptr_t)len; ptr; ptr += sizeof(__m128i)*2) {
-		__m128i tph = _mm_load_si128((__m128i*)(_dst + ptr));
-		__m128i tpl = _mm_load_si128((__m128i*)(_dst + ptr) + 1);
-		gf16_affine_muladd_round((__m128i*)(_src1 + ptr*srcScale), &tpl, &tph, mat_All, mat_Ahl, mat_Alh, mat_Ahh);
-		gf16_affine_muladd_round((__m128i*)(_src2 + ptr*srcScale), &tpl, &tph, mat_Bll, mat_Bhl, mat_Blh, mat_Bhh);
-		if(srcCount > 2)
-			gf16_affine_muladd_round((__m128i*)(_src3 + ptr*srcScale), &tpl, &tph, mat_Cll, mat_Chl, mat_Clh, mat_Chh);
-		_mm_store_si128 ((__m128i*)(_dst + ptr), tph);
-		_mm_store_si128 ((__m128i*)(_dst + ptr)+1, tpl);
-		
-		// TODO: prefetch?
-		UNUSED(doPrefetch); UNUSED(_pf);
+	__m128i tph, tpl;
+	if(doPrefetch) {
+		intptr_t ptr = -(intptr_t)len;
+		if(len & (sizeof(__m128i)*4-1)) { // number of loop iterations isn't even, so do one iteration to make it even
+			tph = _mm_load_si128((__m128i*)(_dst + ptr));
+			tpl = _mm_load_si128((__m128i*)(_dst + ptr) + 1);
+			gf16_affine_muladd_round((__m128i*)(_src1 + ptr*srcScale), &tpl, &tph, mat_All, mat_Ahl, mat_Alh, mat_Ahh);
+			gf16_affine_muladd_round((__m128i*)(_src2 + ptr*srcScale), &tpl, &tph, mat_Bll, mat_Bhl, mat_Blh, mat_Bhh);
+			if(srcCount > 2)
+				gf16_affine_muladd_round((__m128i*)(_src3 + ptr*srcScale), &tpl, &tph, mat_Cll, mat_Chl, mat_Clh, mat_Chh);
+			_mm_store_si128 ((__m128i*)(_dst + ptr), tph);
+			_mm_store_si128 ((__m128i*)(_dst + ptr)+1, tpl);
+			
+			if(doPrefetch == 1)
+				_mm_prefetch(_pf+ptr, _MM_HINT_ET1);
+			if(doPrefetch == 2)
+				_mm_prefetch(_pf+ptr, _MM_HINT_T1);
+			ptr += sizeof(__m128i)*2;
+		}
+		while(ptr) {
+			tph = _mm_load_si128((__m128i*)(_dst + ptr));
+			tpl = _mm_load_si128((__m128i*)(_dst + ptr) + 1);
+			gf16_affine_muladd_round((__m128i*)(_src1 + ptr*srcScale), &tpl, &tph, mat_All, mat_Ahl, mat_Alh, mat_Ahh);
+			gf16_affine_muladd_round((__m128i*)(_src2 + ptr*srcScale), &tpl, &tph, mat_Bll, mat_Bhl, mat_Blh, mat_Bhh);
+			if(srcCount > 2)
+				gf16_affine_muladd_round((__m128i*)(_src3 + ptr*srcScale), &tpl, &tph, mat_Cll, mat_Chl, mat_Clh, mat_Chh);
+			_mm_store_si128 ((__m128i*)(_dst + ptr), tph);
+			_mm_store_si128 ((__m128i*)(_dst + ptr)+1, tpl);
+			
+			ptr += sizeof(__m128i)*2;
+			
+			tph = _mm_load_si128((__m128i*)(_dst + ptr));
+			tpl = _mm_load_si128((__m128i*)(_dst + ptr) + 1);
+			gf16_affine_muladd_round((__m128i*)(_src1 + ptr*srcScale), &tpl, &tph, mat_All, mat_Ahl, mat_Alh, mat_Ahh);
+			gf16_affine_muladd_round((__m128i*)(_src2 + ptr*srcScale), &tpl, &tph, mat_Bll, mat_Bhl, mat_Blh, mat_Bhh);
+			if(srcCount > 2)
+				gf16_affine_muladd_round((__m128i*)(_src3 + ptr*srcScale), &tpl, &tph, mat_Cll, mat_Chl, mat_Clh, mat_Chh);
+			_mm_store_si128 ((__m128i*)(_dst + ptr), tph);
+			_mm_store_si128 ((__m128i*)(_dst + ptr)+1, tpl);
+			
+			if(doPrefetch == 1)
+				_mm_prefetch(_pf+ptr, _MM_HINT_ET1);
+			if(doPrefetch == 2)
+				_mm_prefetch(_pf+ptr, _MM_HINT_T1);
+			ptr += sizeof(__m128i)*2;
+		}
+	} else {
+		for(intptr_t ptr = -(intptr_t)len; ptr; ptr += sizeof(__m128i)*2) {
+			tph = _mm_load_si128((__m128i*)(_dst + ptr));
+			tpl = _mm_load_si128((__m128i*)(_dst + ptr) + 1);
+			gf16_affine_muladd_round((__m128i*)(_src1 + ptr*srcScale), &tpl, &tph, mat_All, mat_Ahl, mat_Alh, mat_Ahh);
+			gf16_affine_muladd_round((__m128i*)(_src2 + ptr*srcScale), &tpl, &tph, mat_Bll, mat_Bhl, mat_Blh, mat_Bhh);
+			if(srcCount > 2)
+				gf16_affine_muladd_round((__m128i*)(_src3 + ptr*srcScale), &tpl, &tph, mat_Cll, mat_Chl, mat_Clh, mat_Chh);
+			_mm_store_si128 ((__m128i*)(_dst + ptr), tph);
+			_mm_store_si128 ((__m128i*)(_dst + ptr)+1, tpl);
+		}
 	}
 }
 #endif /*defined(__GFNI__) && defined(__SSSE3__)*/
@@ -333,42 +378,92 @@ static HEDLEY_ALWAYS_INLINE void gf16_affine2x_muladd_x_gfni(
 	if(srcCount >= 6)
 		gf16_affine_load_matrix(scratch, coefficients[5], &matNormF, &matSwapF);
 	
-	for(intptr_t ptr = -(intptr_t)len; ptr; ptr += sizeof(__m128i)) {
-		__m128i data = _mm_load_si128((__m128i*)(_src1 + ptr*srcScale));
-		__m128i result1 = _mm_gf2p8affine_epi64_epi8(data, matNormA, 0);
-		__m128i result2 = _mm_gf2p8affine_epi64_epi8(data, matSwapA, 0);
-		
-		data = _mm_load_si128((__m128i*)(_src2 + ptr*srcScale));
-		result1 = _mm_xor_si128(result1, _mm_gf2p8affine_epi64_epi8(data, matNormB, 0));
-		result2 = _mm_xor_si128(result2, _mm_gf2p8affine_epi64_epi8(data, matSwapB, 0));
-		
-		if(srcCount >= 3) {
-			data = _mm_load_si128((__m128i*)(_src3 + ptr*srcScale));
-			result1 = _mm_xor_si128(result1, _mm_gf2p8affine_epi64_epi8(data, matNormC, 0));
-			result2 = _mm_xor_si128(result2, _mm_gf2p8affine_epi64_epi8(data, matSwapC, 0));
+	
+	intptr_t ptr = -(intptr_t)len;
+	if(doPrefetch) {
+		if(doPrefetch == 1)
+			_mm_prefetch(_pf+ptr, _MM_HINT_ET1);
+		if(doPrefetch == 2)
+			_mm_prefetch(_pf+ptr, _MM_HINT_T1);
+		while(ptr & (sizeof(__m128i)*4-1)) { // loop until we reach a cacheline boundary
+			__m128i data = _mm_load_si128((__m128i*)(_src1 + ptr*srcScale));
+			__m128i result1 = _mm_gf2p8affine_epi64_epi8(data, matNormA, 0);
+			__m128i result2 = _mm_gf2p8affine_epi64_epi8(data, matSwapA, 0);
+			
+			data = _mm_load_si128((__m128i*)(_src2 + ptr*srcScale));
+			result1 = _mm_xor_si128(result1, _mm_gf2p8affine_epi64_epi8(data, matNormB, 0));
+			result2 = _mm_xor_si128(result2, _mm_gf2p8affine_epi64_epi8(data, matSwapB, 0));
+			
+			if(srcCount >= 3) {
+				data = _mm_load_si128((__m128i*)(_src3 + ptr*srcScale));
+				result1 = _mm_xor_si128(result1, _mm_gf2p8affine_epi64_epi8(data, matNormC, 0));
+				result2 = _mm_xor_si128(result2, _mm_gf2p8affine_epi64_epi8(data, matSwapC, 0));
+			}
+			if(srcCount >= 4) {
+				data = _mm_load_si128((__m128i*)(_src4 + ptr*srcScale));
+				result1 = _mm_xor_si128(result1, _mm_gf2p8affine_epi64_epi8(data, matNormD, 0));
+				result2 = _mm_xor_si128(result2, _mm_gf2p8affine_epi64_epi8(data, matSwapD, 0));
+			}
+			if(srcCount >= 5) {
+				data = _mm_load_si128((__m128i*)(_src5 + ptr*srcScale));
+				result1 = _mm_xor_si128(result1, _mm_gf2p8affine_epi64_epi8(data, matNormE, 0));
+				result2 = _mm_xor_si128(result2, _mm_gf2p8affine_epi64_epi8(data, matSwapE, 0));
+			}
+			if(srcCount >= 6) {
+				data = _mm_load_si128((__m128i*)(_src6 + ptr*srcScale));
+				result1 = _mm_xor_si128(result1, _mm_gf2p8affine_epi64_epi8(data, matNormF, 0));
+				result2 = _mm_xor_si128(result2, _mm_gf2p8affine_epi64_epi8(data, matSwapF, 0));
+			}
+			
+			result1 = _mm_xor_si128(result1, _mm_load_si128((__m128i*)(_dst + ptr)));
+			result1 = _mm_xor_si128(result1, _mm_shuffle_epi32(result2, _MM_SHUFFLE(1,0,3,2)));
+			_mm_store_si128((__m128i*)(_dst + ptr), result1);
+			
+			ptr += sizeof(__m128i);
 		}
-		if(srcCount >= 4) {
-			data = _mm_load_si128((__m128i*)(_src4 + ptr*srcScale));
-			result1 = _mm_xor_si128(result1, _mm_gf2p8affine_epi64_epi8(data, matNormD, 0));
-			result2 = _mm_xor_si128(result2, _mm_gf2p8affine_epi64_epi8(data, matSwapD, 0));
-		}
-		if(srcCount >= 5) {
-			data = _mm_load_si128((__m128i*)(_src5 + ptr*srcScale));
-			result1 = _mm_xor_si128(result1, _mm_gf2p8affine_epi64_epi8(data, matNormE, 0));
-			result2 = _mm_xor_si128(result2, _mm_gf2p8affine_epi64_epi8(data, matSwapE, 0));
-		}
-		if(srcCount >= 6) {
-			data = _mm_load_si128((__m128i*)(_src6 + ptr*srcScale));
-			result1 = _mm_xor_si128(result1, _mm_gf2p8affine_epi64_epi8(data, matNormF, 0));
-			result2 = _mm_xor_si128(result2, _mm_gf2p8affine_epi64_epi8(data, matSwapF, 0));
-		}
+	}
+	while(ptr) {
+		if(doPrefetch == 1)
+			_mm_prefetch(_pf+ptr, _MM_HINT_ET1);
+		if(doPrefetch == 2)
+			_mm_prefetch(_pf+ptr, _MM_HINT_T1);
 		
-		result1 = _mm_xor_si128(result1, _mm_load_si128((__m128i*)(_dst + ptr)));
-		result1 = _mm_xor_si128(result1, _mm_shuffle_epi32(result2, _MM_SHUFFLE(1,0,3,2)));
-		_mm_store_si128((__m128i*)(_dst + ptr), result1);
-		
-		// TODO: prefetch?
-		UNUSED(doPrefetch); UNUSED(_pf);
+		for(int iter=0; iter<(doPrefetch?4:1); iter++) { // if prefetching, iterate on cachelines
+			__m128i data = _mm_load_si128((__m128i*)(_src1 + ptr*srcScale));
+			__m128i result1 = _mm_gf2p8affine_epi64_epi8(data, matNormA, 0);
+			__m128i result2 = _mm_gf2p8affine_epi64_epi8(data, matSwapA, 0);
+			
+			data = _mm_load_si128((__m128i*)(_src2 + ptr*srcScale));
+			result1 = _mm_xor_si128(result1, _mm_gf2p8affine_epi64_epi8(data, matNormB, 0));
+			result2 = _mm_xor_si128(result2, _mm_gf2p8affine_epi64_epi8(data, matSwapB, 0));
+			
+			if(srcCount >= 3) {
+				data = _mm_load_si128((__m128i*)(_src3 + ptr*srcScale));
+				result1 = _mm_xor_si128(result1, _mm_gf2p8affine_epi64_epi8(data, matNormC, 0));
+				result2 = _mm_xor_si128(result2, _mm_gf2p8affine_epi64_epi8(data, matSwapC, 0));
+			}
+			if(srcCount >= 4) {
+				data = _mm_load_si128((__m128i*)(_src4 + ptr*srcScale));
+				result1 = _mm_xor_si128(result1, _mm_gf2p8affine_epi64_epi8(data, matNormD, 0));
+				result2 = _mm_xor_si128(result2, _mm_gf2p8affine_epi64_epi8(data, matSwapD, 0));
+			}
+			if(srcCount >= 5) {
+				data = _mm_load_si128((__m128i*)(_src5 + ptr*srcScale));
+				result1 = _mm_xor_si128(result1, _mm_gf2p8affine_epi64_epi8(data, matNormE, 0));
+				result2 = _mm_xor_si128(result2, _mm_gf2p8affine_epi64_epi8(data, matSwapE, 0));
+			}
+			if(srcCount >= 6) {
+				data = _mm_load_si128((__m128i*)(_src6 + ptr*srcScale));
+				result1 = _mm_xor_si128(result1, _mm_gf2p8affine_epi64_epi8(data, matNormF, 0));
+				result2 = _mm_xor_si128(result2, _mm_gf2p8affine_epi64_epi8(data, matSwapF, 0));
+			}
+			
+			result1 = _mm_xor_si128(result1, _mm_load_si128((__m128i*)(_dst + ptr)));
+			result1 = _mm_xor_si128(result1, _mm_shuffle_epi32(result2, _MM_SHUFFLE(1,0,3,2)));
+			_mm_store_si128((__m128i*)(_dst + ptr), result1);
+			
+			ptr += sizeof(__m128i);
+		}
 	}
 }
 #endif /*defined(__GFNI__) && defined(__SSSE3__)*/

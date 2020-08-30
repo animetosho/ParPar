@@ -16,13 +16,41 @@
 
 
 #if defined(_AVAILABLE) && defined(PLATFORM_AMD64)
+static HEDLEY_ALWAYS_INLINE void gf16_shuffle2x_muladd_round_avx2(__m256i* _dst, __m256i* _src1, __m256i* _src2, __m256i shufNormLoA, __m256i shufNormLoB, __m256i shufNormHiA, __m256i shufNormHiB, __m256i shufSwapLoA, __m256i shufSwapLoB, __m256i shufSwapHiA, __m256i shufSwapHiB) {
+	__m256i data = _mm256_load_si256(_src1);
+	__m256i mask = _mm256_set1_epi8(0x0f);
+	
+	__m256i ti = _mm256_and_si256(mask, data);
+	__m256i swapped = _mm256_shuffle_epi8(shufSwapLoA, ti);
+	__m256i result = _mm256_shuffle_epi8(shufNormLoA, ti);
+	
+	ti = _mm256_and_si256(mask, _mm256_srli_epi16(data, 4));
+	swapped = _mm256_xor_si256(_mm256_shuffle_epi8(shufSwapHiA, ti), swapped);
+	result = _mm256_xor_si256(_mm256_shuffle_epi8(shufNormHiA, ti), result);
+	
+	result = _mm256_xor_si256(result, _mm256_load_si256(_dst));
+	data = _mm256_load_si256(_src2);
+	
+	ti = _mm256_and_si256(mask, data);
+	result = _mm256_xor_si256(_mm256_shuffle_epi8(shufNormLoB, ti), result);
+	swapped = _mm256_xor_si256(_mm256_shuffle_epi8(shufSwapLoB, ti), swapped);
+	
+	ti = _mm256_and_si256(mask, _mm256_srli_epi16(data, 4));
+	result = _mm256_xor_si256(_mm256_shuffle_epi8(shufNormHiB, ti), result);
+	swapped = _mm256_xor_si256(_mm256_shuffle_epi8(shufSwapHiB, ti), swapped);
+	
+	swapped = _mm256_permute2x128_si256(swapped, swapped, 0x01);
+	result = _mm256_xor_si256(result, swapped);
+	
+	_mm256_store_si256(_dst, result);
+}
+
 #include "gf16_muladd_multi.h"
 static HEDLEY_ALWAYS_INLINE void gf16_shuffle2x_muladd_x2_avx2(const void *HEDLEY_RESTRICT scratch, uint8_t *HEDLEY_RESTRICT _dst, const unsigned srcScale, GF16_MULADD_MULTI_SRCLIST, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, const int doPrefetch, const uint8_t* _pf) {
 	GF16_MULADD_MULTI_SRC_UNUSED(2);
 	__m256i polyl = _mm256_broadcastsi128_si256(_mm_load_si128((__m128i*)scratch + 1));
 	__m256i polyh = _mm256_broadcastsi128_si256(_mm_load_si128((__m128i*)scratch));
 	
-	__m256i mask = _mm256_set1_epi8(0x0f);
 	__m256i prodLo0, prodHi0, prodLo1, prodHi1, prodLo2, prodHi2, prodLo3, prodHi3;
 	
 	__m128i prod0A, mul4A;
@@ -68,39 +96,44 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle2x_muladd_x2_avx2(const void *HEDLE
 	__m256i shufSwapHiB = JOIN_VEC(prodHi1, prodLo3, 1);
 #undef JOIN_VEC
 	
-	__m256i ti;
-
-	for(intptr_t ptr = -(intptr_t)len; ptr; ptr += sizeof(__m256i)) {
-		__m256i data = _mm256_load_si256((__m256i*)(_src1+ptr*srcScale));
-		
-		ti = _mm256_and_si256(mask, data);
-		__m256i swapped = _mm256_shuffle_epi8(shufSwapLoA, ti);
-		__m256i result = _mm256_shuffle_epi8(shufNormLoA, ti);
-		
-		ti = _mm256_and_si256(mask, _mm256_srli_epi16(data, 4));
-		swapped = _mm256_xor_si256(_mm256_shuffle_epi8(shufSwapHiA, ti), swapped);
-		result = _mm256_xor_si256(_mm256_shuffle_epi8(shufNormHiA, ti), result);
-		
-		result = _mm256_xor_si256(result, _mm256_load_si256((__m256i*)(_dst+ptr)));
-		data = _mm256_load_si256((__m256i*)(_src2+ptr*srcScale));
-		
-		ti = _mm256_and_si256(mask, data);
-		result = _mm256_xor_si256(_mm256_shuffle_epi8(shufNormLoB, ti), result);
-		swapped = _mm256_xor_si256(_mm256_shuffle_epi8(shufSwapLoB, ti), swapped);
-		
-		ti = _mm256_and_si256(mask, _mm256_srli_epi16(data, 4));
-		result = _mm256_xor_si256(_mm256_shuffle_epi8(shufNormHiB, ti), result);
-		swapped = _mm256_xor_si256(_mm256_shuffle_epi8(shufSwapHiB, ti), swapped);
-		
-		swapped = _mm256_permute2x128_si256(swapped, swapped, 0x01);
-		result = _mm256_xor_si256(result, swapped);
-		
-		_mm256_store_si256((__m256i*)(_dst+ptr), result);
-		
-		// TODO: consider prefetch
-		UNUSED(doPrefetch); UNUSED(_pf);
+	if(doPrefetch) {
+		intptr_t ptr = -(intptr_t)len;
+		if(len & (sizeof(__m256i)*2-1)) { // number of loop iterations isn't even, so do one iteration to make it even
+			gf16_shuffle2x_muladd_round_avx2(
+				(__m256i*)(_dst+ptr), (__m256i*)(_src1+ptr*srcScale), (__m256i*)(_src2+ptr*srcScale),
+				shufNormLoA, shufNormLoB, shufNormHiA, shufNormHiB, shufSwapLoA, shufSwapLoB, shufSwapHiA, shufSwapHiB
+			);
+			if(doPrefetch == 1)
+				_mm_prefetch(_pf+ptr, _MM_HINT_ET1);
+			if(doPrefetch == 2)
+				_mm_prefetch(_pf+ptr, _MM_HINT_T1);
+			ptr += sizeof(__m256i);
+		}
+		while(ptr) {
+			gf16_shuffle2x_muladd_round_avx2(
+				(__m256i*)(_dst+ptr), (__m256i*)(_src1+ptr*srcScale), (__m256i*)(_src2+ptr*srcScale),
+				shufNormLoA, shufNormLoB, shufNormHiA, shufNormHiB, shufSwapLoA, shufSwapLoB, shufSwapHiA, shufSwapHiB
+			);
+			ptr += sizeof(__m256i);
+			gf16_shuffle2x_muladd_round_avx2(
+				(__m256i*)(_dst+ptr), (__m256i*)(_src1+ptr*srcScale), (__m256i*)(_src2+ptr*srcScale),
+				shufNormLoA, shufNormLoB, shufNormHiA, shufNormHiB, shufSwapLoA, shufSwapLoB, shufSwapHiA, shufSwapHiB
+			);
+			
+			if(doPrefetch == 1)
+				_mm_prefetch(_pf+ptr, _MM_HINT_ET1);
+			if(doPrefetch == 2)
+				_mm_prefetch(_pf+ptr, _MM_HINT_T1);
+			ptr += sizeof(__m256i);
+		}
+	} else {
+		for(intptr_t ptr = -(intptr_t)len; ptr; ptr += sizeof(__m256i)) {
+			gf16_shuffle2x_muladd_round_avx2(
+				(__m256i*)(_dst+ptr), (__m256i*)(_src1+ptr*srcScale), (__m256i*)(_src2+ptr*srcScale),
+				shufNormLoA, shufNormLoB, shufNormHiA, shufNormHiB, shufSwapLoA, shufSwapLoB, shufSwapHiA, shufSwapHiB
+			);
+		}
 	}
-	
 }
 #endif
 
