@@ -45,6 +45,14 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle2x_muladd_round_avx2(__m256i* _dst,
 	_mm256_store_si256(_dst, result);
 }
 
+static HEDLEY_ALWAYS_INLINE __m256i gf16_vec256_mul2(__m256i v) {
+	return _mm256_xor_si256(
+		_mm256_add_epi16(v, v),
+		_mm256_and_si256(_mm256_set1_epi16(GF16_POLYNOMIAL & 0xffff), _mm256_cmpgt_epi16(
+			_mm256_setzero_si256(), v
+		))
+	);
+}
 #include "gf16_muladd_multi.h"
 static HEDLEY_ALWAYS_INLINE void gf16_shuffle2x_muladd_x2_avx2(const void *HEDLEY_RESTRICT scratch, uint8_t *HEDLEY_RESTRICT _dst, const unsigned srcScale, GF16_MULADD_MULTI_SRCLIST, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, const int doPrefetch, const uint8_t* _pf) {
 	GF16_MULADD_MULTI_SRC_UNUSED(2);
@@ -53,24 +61,21 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle2x_muladd_x2_avx2(const void *HEDLE
 	
 	__m256i prodLo0, prodHi0, prodLo1, prodHi1, prodLo2, prodHi2, prodLo3, prodHi3;
 	
-	__m128i prod0A, mul4A;
-	__m128i prod0B, mul4B;
-	initial_mul_vector(coefficients[0], &prod0A, &mul4A);
-	initial_mul_vector(coefficients[1], &prod0B, &mul4B);
-	
-	__m256i prod0 = _mm256_inserti128_si256(_mm256_castsi128_si256(prod0A), prod0B, 1);
-	__m256i mul4 = _mm256_inserti128_si256(_mm256_castsi128_si256(mul4A), mul4B, 1);
-	prod0 = _mm256_unpacklo_epi64(prod0, _mm256_xor_si256(prod0, mul4));
-	
-	// multiply by 2
-	__m256i mul8 = _mm256_xor_si256(
-		_mm256_add_epi16(mul4, mul4),
-		_mm256_and_si256(_mm256_set1_epi16(GF16_POLYNOMIAL & 0xffff), _mm256_cmpgt_epi16(
-			_mm256_setzero_si256(), mul4
-		))
+	__m256i prod0 = _mm256_shuffle_epi8(
+		_mm256_broadcastd_epi32(_mm_cvtsi32_si128(*(uint32_t*)coefficients)),
+		_mm256_set_epi32(
+			0x03020302, 0x03020302, 0x03020302, 0x03020302,
+			0x01000100, 0x01000100, 0x01000100, 0x01000100
+		)
 	);
+	__m256i mul2 = gf16_vec256_mul2(prod0);
+	__m256i mul4 = gf16_vec256_mul2(mul2);
 	
-	__m256i prod8 = _mm256_xor_si256(prod0, mul8);
+	prod0 = _mm256_slli_epi32(prod0, 16);
+	prod0 = _mm256_xor_si256(prod0, _mm256_slli_epi64(mul2, 32));
+	prod0 = _mm256_xor_si256(prod0, _mm256_slli_si256(mul4, 8));
+	
+	__m256i prod8 = _mm256_xor_si256(prod0, gf16_vec256_mul2(mul4));
 	__m256i shuf = _mm256_set_epi32(
 		0x0f0d0b09, 0x07050301, 0x0e0c0a08, 0x06040200,
 		0x0f0d0b09, 0x07050301, 0x0e0c0a08, 0x06040200

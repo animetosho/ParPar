@@ -193,24 +193,83 @@ static HEDLEY_ALWAYS_INLINE void mul16_vec4x(__m512i mulLo, __m512i mulHi, __m51
 	);
 	*dstHi = _mm512_xor_si512(th, _mm512_shuffle_epi8(mulHi, ti));
 }
-static HEDLEY_ALWAYS_INLINE __m512i gf16_mm512_set_si128(__m128i a, __m128i b, __m128i c, __m128i d) {
-	return _mm512_inserti64x4(
-		_mm512_castsi256_si512(
-			_mm256_inserti128_si256(_mm256_castsi128_si256(d), c, 1)
-		),
-		_mm256_inserti128_si256(_mm256_castsi128_si256(b), a, 1),
-		1
-	);
-}
-static HEDLEY_ALWAYS_INLINE __m512i gf16_mm512_set_3si128(__m128i a, __m128i b, __m128i c) {
-	return _mm512_inserti32x4(
-		zext256_512(
-			_mm256_inserti128_si256(_mm256_castsi128_si256(c), b, 1)
-		), a, 2
-	);
-}
 static HEDLEY_ALWAYS_INLINE __m512i separate_low_high512(__m512i v) {
 	return _mm512_shuffle_epi8(v, _mm512_set4_epi32(0x0f0d0b09, 0x07050301, 0x0e0c0a08, 0x06040200));
+}
+static HEDLEY_ALWAYS_INLINE __m256i gf16_vec256_mul2(__m256i v) {
+	return _mm256_ternarylogic_epi32(
+		_mm256_add_epi16(v, v),
+		_mm256_cmpgt_epi16(_mm256_setzero_si256(), v),
+		_mm256_set1_epi16(GF16_POLYNOMIAL & 0xffff),
+		0x78 // (a^(b&c))
+	);
+}
+static HEDLEY_ALWAYS_INLINE __m512i gf16_vec512_mul2(__m512i v) {
+	return _mm512_ternarylogic_epi32(
+		_mm512_add_epi16(v, v),
+		_mm512_srai_epi16(v, 15),
+		_mm512_set1_epi16(GF16_POLYNOMIAL & 0xffff),
+		0x78 // (a^(b&c))
+	);
+}
+static HEDLEY_ALWAYS_INLINE void gf16_initial_mul_vector_x2(const uint16_t* coefficients, __m256i* prod0, __m256i* mul8) {
+	*prod0 = _mm256_shuffle_epi8(
+		_mm256_broadcastd_epi32(_mm_cvtsi32_si128(*(uint32_t*)coefficients)),
+		_mm256_set_epi32(
+			0x03020302, 0x03020302, 0x03020302, 0x03020302,
+			0x01000100, 0x01000100, 0x01000100, 0x01000100
+		)
+	);
+	
+	#if GF16_POLYNOMIAL & 0xe000 // we assume top three bits aren't set
+	# error Polynomial unsupported
+	#endif
+	__mmask8 mul4poly = _mm256_test_epi32_mask(*prod0, _mm256_set1_epi32(0x4000));
+	__mmask8 mul8poly = _mm256_test_epi32_mask(*prod0, _mm256_set1_epi32(0x2000));
+	__m256i poly = _mm256_set1_epi16(GF16_POLYNOMIAL & 0xffff);
+	
+	__m256i mul2 = gf16_vec256_mul2(*prod0);
+	__m256i mul4 = _mm256_add_epi16(mul2, mul2);
+	mul4 = _mm256_mask_xor_epi32(mul4, mul4poly, mul4, poly);
+	
+	*prod0 = _mm256_slli_epi32(*prod0, 16); // 10101010
+	*prod0 = _mm256_mask_xor_epi32(*prod0, 0xaa, mul2, *prod0); // 32103210
+	*prod0 = _mm256_mask_xor_epi64(*prod0, 0xaa, mul4, *prod0); // 76543210
+	
+	*mul8 = _mm256_add_epi16(mul4, mul4);
+	*mul8 = _mm256_mask_xor_epi32(*mul8, mul8poly, *mul8, poly);
+}
+static HEDLEY_ALWAYS_INLINE void gf16_initial_mul_vector_x4(const uint16_t* coefficients, __m512i* prod0, __m512i* mul8, const int do4) {
+	__m128i coeff;
+	if(do4)
+		coeff = _mm_loadl_epi64((__m128i*)coefficients);
+	else
+		coeff = _mm_insert_epi16(_mm_cvtsi32_si128(*(uint32_t*)coefficients), coefficients[2], 2);
+	
+	*prod0 = _mm512_shuffle_epi8(_mm512_broadcastq_epi64(coeff), _mm512_set_epi32(
+		0x07060706, 0x07060706, 0x07060706, 0x07060706,
+		0x05040504, 0x05040504, 0x05040504, 0x05040504,
+		0x03020302, 0x03020302, 0x03020302, 0x03020302,
+		0x01000100, 0x01000100, 0x01000100, 0x01000100
+	));
+	
+	#if GF16_POLYNOMIAL & 0xe000 // we assume top three bits aren't set
+	# error Polynomial unsupported
+	#endif
+	__mmask16 mul4poly = _mm512_test_epi32_mask(*prod0, _mm512_set1_epi32(0x4000));
+	__mmask16 mul8poly = _mm512_test_epi32_mask(*prod0, _mm512_set1_epi32(0x2000));
+	__m512i poly = _mm512_set1_epi16(GF16_POLYNOMIAL & 0xffff);
+	
+	__m512i mul2 = gf16_vec512_mul2(*prod0);
+	__m512i mul4 = _mm512_add_epi16(mul2, mul2);
+	mul4 = _mm512_mask_xor_epi32(mul4, mul4poly, mul4, poly);
+	
+	*prod0 = _mm512_slli_epi32(*prod0, 16); // 10101010
+	*prod0 = _mm512_mask_xor_epi32(*prod0, 0xaaaa, mul2, *prod0); // 32103210
+	*prod0 = _mm512_mask_xor_epi64(*prod0, 0xaa, mul4, *prod0); // 76543210
+	
+	*mul8 = _mm512_add_epi16(mul4, mul4);
+	*mul8 = _mm512_mask_xor_epi32(*mul8, mul8poly, *mul8, poly);
 }
 #endif
 

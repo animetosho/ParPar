@@ -32,22 +32,6 @@ static HEDLEY_ALWAYS_INLINE __m128i gf16_vec128_mul2(__m128i v) {
 		0x78 // (a^(b&c))
 	);
 }
-static HEDLEY_ALWAYS_INLINE __m256i gf16_vec256_mul2(__m256i v) {
-	return _mm256_ternarylogic_epi32(
-		_mm256_add_epi16(v, v),
-		_mm256_cmpgt_epi16(_mm256_setzero_si256(), v),
-		_mm256_set1_epi16(GF16_POLYNOMIAL & 0xffff),
-		0x78 // (a^(b&c))
-	);
-}
-static HEDLEY_ALWAYS_INLINE __m512i gf16_vec512_mul2(__m512i v) {
-	return _mm512_ternarylogic_epi32(
-		_mm512_add_epi16(v, v),
-		_mm512_srai_epi16(v, 15),
-		_mm512_set1_epi16(GF16_POLYNOMIAL & 0xffff),
-		0x78 // (a^(b&c))
-	);
-}
 static HEDLEY_ALWAYS_INLINE void mul64_vec(__m512i mulLo, __m512i mulHi, __m512i srcLo, __m512i srcHi, __m512i* dstLo, __m512i *dstHi) {
 	__m512i ti = _mm512_srli_epi16(srcHi, 2);
 	__m512i th = _mm512_ternarylogic_epi32(
@@ -110,27 +94,9 @@ static HEDLEY_ALWAYS_INLINE void generate_first_lookup(uint16_t val, __m512i* lo
 	deinterleave_bytes(tmp4, tmp4b, lo0, hi0);
 }
 static HEDLEY_ALWAYS_INLINE void generate_first_lookup_x2(const uint16_t* coefficients, __m512i* lo0A, __m512i* hi0A, __m512i* lo0B, __m512i* hi0B) {
-	__m128i prod0A, mul4A;
-	__m128i prod0B, mul4B;
-	initial_mul_vector(coefficients[0], &prod0A, &mul4A);
-	initial_mul_vector(coefficients[1], &prod0B, &mul4B);
-	
-	__m256i prod0 = _mm256_inserti128_si256(
-		_mm256_castsi128_si256(prod0A),
-		prod0B,
-		1
-	);
-	__m256i mul4 = _mm256_inserti128_si256(
-		_mm256_castsi128_si256(mul4A),
-		mul4B,
-		1
-	);
-	
-	prod0 = _mm256_unpacklo_epi64(prod0, _mm256_xor_si256(prod0, mul4)); // products 0-7
-	
-	// 4*2 = 8
-	__m256i mul8 = gf16_vec256_mul2(mul4);
-	__m256i prod8 = _mm256_xor_si256(mul8, prod0); // products 8-15
+	__m256i prod0, mul8;
+	gf16_initial_mul_vector_x2(coefficients, &prod0, &mul8);
+	__m256i prod8 = _mm256_xor_si256(prod0, mul8);
 	
 	__m512i prod08 = _mm512_inserti64x4( // products 0-7,0-7,8-15,8-15
 		_mm512_castsi256_si512(prod0), prod8, 1
@@ -165,29 +131,9 @@ static HEDLEY_ALWAYS_INLINE void generate_first_lookup_x2(const uint16_t* coeffi
 	*hi0B = _mm512_permutex2var_epi64(prod0Hi, idx1, prod32Hi);
 }
 static HEDLEY_ALWAYS_INLINE void generate_first_lookup_x4(const uint16_t* coefficients, const int do4, __m512i* lo0A, __m512i* hi0A, __m512i* lo0B, __m512i* hi0B, __m512i* lo0C, __m512i* hi0C, __m512i* lo0D, __m512i* hi0D) {
-	__m128i prod0A, mul4A;
-	__m128i prod0B, mul4B;
-	__m128i prod0C, mul4C;
-	__m128i prod0D, mul4D;
-	initial_mul_vector(coefficients[0], &prod0A, &mul4A);
-	initial_mul_vector(coefficients[1], &prod0B, &mul4B);
-	initial_mul_vector(coefficients[2], &prod0C, &mul4C);
-	if(do4)
-		initial_mul_vector(coefficients[3], &prod0D, &mul4D);
-	
-	__m512i prod0, mul4;
-	if(do4) {
-		prod0 = gf16_mm512_set_si128(prod0D, prod0C, prod0B, prod0A);
-		mul4 = gf16_mm512_set_si128(mul4D, mul4C, mul4B, mul4A);
-	} else {
-		prod0 = gf16_mm512_set_3si128(prod0C, prod0B, prod0A);
-		mul4 = gf16_mm512_set_3si128(mul4C, mul4B, mul4A);
-	}
-	prod0 = _mm512_unpacklo_epi64(prod0, _mm512_xor_si512(prod0, mul4)); // products 0-7
-	
-	// 4*2 = 8
-	__m512i mul8 = gf16_vec512_mul2(mul4);
-	__m512i prod8 = _mm512_xor_si512(mul8, prod0); // products 8-15
+	__m512i prod0, mul8;
+	gf16_initial_mul_vector_x4(coefficients, &prod0, &mul8, do4);
+	__m512i prod8 = _mm512_xor_si512(prod0, mul8);
 	
 	// 8*2 = 16
 	__m512i mul16 = gf16_vec512_mul2(mul8);

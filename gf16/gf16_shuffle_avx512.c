@@ -19,24 +19,10 @@
 
 #ifdef _AVAILABLE
 static HEDLEY_ALWAYS_INLINE void gf16_shuffle_calc2x_table(const uint16_t* coefficients, __m256i polyl, __m256i polyh, __m256i* prodLo0, __m256i* prodHi0, __m256i* prodLo1, __m256i* prodHi1, __m256i* prodLo2, __m256i* prodHi2, __m256i* prodLo3, __m256i* prodHi3) {
-	__m128i prod0A, mul4A;
-	__m128i prod0B, mul4B;
-	initial_mul_vector(coefficients[0], &prod0A, &mul4A);
-	initial_mul_vector(coefficients[1], &prod0B, &mul4B);
+	__m256i prod0, mul8;
+	gf16_initial_mul_vector_x2(coefficients, &prod0, &mul8);
+	__m256i prod8 = _mm256_xor_si256(prod0, mul8);
 	
-	__m256i prod0 = _mm256_inserti128_si256(_mm256_castsi128_si256(prod0A), prod0B, 1);
-	__m256i mul4 = _mm256_inserti128_si256(_mm256_castsi128_si256(mul4A), mul4B, 1);
-	prod0 = _mm256_unpacklo_epi64(prod0, _mm256_xor_si256(prod0, mul4));
-	
-	// multiply by 2
-	__m256i prod8 = _mm256_ternarylogic_epi32(
-		_mm256_add_epi16(mul4, mul4),
-		prod0,
-		_mm256_and_si256(_mm256_set1_epi16(GF16_POLYNOMIAL & 0xffff), _mm256_cmpgt_epi16(
-			_mm256_setzero_si256(), mul4
-		)),
-		0x96
-	);
 	__m256i shuf = _mm256_set_epi32(
 		0x0f0d0b09, 0x07050301, 0x0e0c0a08, 0x06040200,
 		0x0f0d0b09, 0x07050301, 0x0e0c0a08, 0x06040200
@@ -52,36 +38,10 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle_calc2x_table(const uint16_t* coeff
 }
 
 static HEDLEY_ALWAYS_INLINE void gf16_shuffle_calc4x_table(const uint16_t* coefficients, const int do4, __m512i polyl, __m512i polyh, __m512i* prodLo0, __m512i* prodHi0, __m512i* prodLo1, __m512i* prodHi1, __m512i* prodLo2, __m512i* prodHi2, __m512i* prodLo3, __m512i* prodHi3) {
-	__m128i prod0A, mul4A;
-	__m128i prod0B, mul4B;
-	__m128i prod0C, mul4C;
-	__m128i prod0D, mul4D;
-	initial_mul_vector(coefficients[0], &prod0A, &mul4A);
-	initial_mul_vector(coefficients[1], &prod0B, &mul4B);
-	initial_mul_vector(coefficients[2], &prod0C, &mul4C);
-	if(do4)
-		initial_mul_vector(coefficients[3], &prod0D, &mul4D);
+	__m512i prod0, mul8;
+	gf16_initial_mul_vector_x4(coefficients, &prod0, &mul8, do4);
+	__m512i prod8 = _mm512_xor_si512(prod0, mul8);
 	
-	__m512i prod0, mul4;
-	if(do4) {
-		prod0 = gf16_mm512_set_si128(prod0D, prod0C, prod0B, prod0A);
-		mul4 = gf16_mm512_set_si128(mul4D, mul4C, mul4B, mul4A);
-	} else {
-		prod0 = gf16_mm512_set_3si128(prod0C, prod0B, prod0A);
-		mul4 = gf16_mm512_set_3si128(mul4C, mul4B, mul4A);
-	}
-	prod0 = _mm512_unpacklo_epi64(prod0, _mm512_xor_si512(prod0, mul4));
-	
-	// multiply by 2
-	__m512i prod8 = _mm512_ternarylogic_epi32(
-		_mm512_add_epi16(mul4, mul4),
-		prod0,
-		_mm512_and_si512(
-			_mm512_set1_epi16(GF16_POLYNOMIAL & 0xffff),
-			_mm512_srai_epi16(mul4, 15)
-		),
-		0x96
-	);
 	prod0 = separate_low_high512(prod0);
 	prod8 = separate_low_high512(prod8);
 	*prodLo0 = _mm512_unpacklo_epi64(prod0, prod8);
