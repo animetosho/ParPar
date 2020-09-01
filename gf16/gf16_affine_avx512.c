@@ -145,7 +145,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_affine_muladd_x_avx512(
 	const void *HEDLEY_RESTRICT scratch,
 	uint8_t *HEDLEY_RESTRICT _dst, const unsigned srcScale,
 	GF16_MULADD_MULTI_SRCLIST,
-	size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, const int doPrefetch, const uint8_t* _pf
+	size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, const int doPrefetch, const char* _pf
 ) {
 	GF16_MULADD_MULTI_SRC_UNUSED(6);
 	
@@ -441,7 +441,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_affine2x_muladd_2round(const int srcCountO
 static HEDLEY_ALWAYS_INLINE void gf16_affine2x_muladd_x_avx512(
 	const void *HEDLEY_RESTRICT scratch, uint8_t *HEDLEY_RESTRICT _dst, const unsigned srcScale,
 	GF16_MULADD_MULTI_SRCLIST,
-	size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, const int doPrefetch, const uint8_t* _pf
+	size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, const int doPrefetch, const char* _pf
 ) {
 	GF16_MULADD_MULTI_SRC_UNUSED(13);
 	

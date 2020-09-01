@@ -176,7 +176,7 @@ static HEDLEY_ALWAYS_INLINE void mul16_vec128(__m128i mulLo, __m128i mulHi, __m1
 
 #endif // defined(_AVAILABLE)
 
-#ifdef __AVX512BW__
+#if defined(__AVX512BW__) && defined(__AVX512VL__)
 static HEDLEY_ALWAYS_INLINE void mul16_vec4x(__m512i mulLo, __m512i mulHi, __m512i srcLo, __m512i srcHi, __m512i* dstLo, __m512i *dstHi) {
 	__m512i ti = _mm512_and_si512(_mm512_srli_epi16(srcHi, 4), _mm512_set1_epi8(0xf));
 	__m512i th = _mm512_ternarylogic_epi32(

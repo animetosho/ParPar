@@ -41,7 +41,7 @@
 	/*#define __ARM_NEON 1*/
 # endif
 
-#ifdef _MSC_VER
+#if defined(_MSC_VER) && !defined(__clang__)
 
 # if (defined(_M_IX86_FP) && _M_IX86_FP == 2) || defined(_M_X64)
 	#define __SSE2__ 1
@@ -72,16 +72,19 @@
 
 #endif /* _MSC_VER */
 
-
 #ifdef __SSE2__
 # include <emmintrin.h>
 #endif
 #ifdef __SSSE3__
 # include <tmmintrin.h>
 #endif
+#ifdef __SSE4_1__
+# include <smmintrin.h>
+#endif
 #if defined(__AVX__) || defined(__GFNI__)
 # include <immintrin.h>
 #endif
+
 
 
 

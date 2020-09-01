@@ -26,7 +26,7 @@ typedef void (*const fMuladdPF)
 (const void *HEDLEY_RESTRICT scratch, uint8_t *HEDLEY_RESTRICT _dst, const unsigned srcScale,
 	GF16_MULADD_MULTI_SRCLIST,
 	size_t len, const uint16_t *HEDLEY_RESTRICT coefficients,
-	const int doPrefetch, const uint8_t* _pf
+	const int doPrefetch, const char* _pf
 );
 
 
@@ -172,7 +172,7 @@ static HEDLEY_ALWAYS_INLINE unsigned gf16_muladd_multi_packpf(const void *HEDLEY
 	unsigned region = 0;
 	if(regions > interleave) {
 		if(prefetchIn) {
-			uint8_t* _pfi = (uint8_t*)prefetchIn + len;
+			const char* _pfi = (const char*)prefetchIn + len;
 			do {
 				muladd_pf(
 					scratch, _dst, interleave, interleave,
@@ -218,7 +218,7 @@ static HEDLEY_ALWAYS_INLINE unsigned gf16_muladd_multi_packpf(const void *HEDLEY
 	}
 	unsigned remaining = regions - region;
 	HEDLEY_ASSUME(remaining <= interleave);
-	uint8_t* _pfo = (uint8_t*)prefetchOut + len;
+	const char* _pfo = (const char*)prefetchOut + len;
 	switch(remaining) {
 		// TODO: it seems that prefetching has less benefit if few left; may need to prefetch earlier for max benefit?
 		

@@ -76,7 +76,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle_muladd_x_avx512(
 	const void *HEDLEY_RESTRICT scratch, uint8_t *HEDLEY_RESTRICT _dst, const unsigned srcScale,
 	GF16_MULADD_MULTI_SRCLIST, size_t len,
 	const uint16_t *HEDLEY_RESTRICT coefficients,
-	const int doPrefetch, const uint8_t* _pf
+	const int doPrefetch, const char* _pf
 ) {
 	GF16_MULADD_MULTI_SRC_UNUSED(3);
 	__m512i polyl = _mm512_broadcast_i32x4(_mm_load_si128((__m128i*)scratch + 1));
@@ -240,7 +240,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle2x_muladd_x_avx512(
 	const void *HEDLEY_RESTRICT scratch, uint8_t *HEDLEY_RESTRICT _dst, const unsigned srcScale,
 	GF16_MULADD_MULTI_SRCLIST, size_t len,
 	const uint16_t *HEDLEY_RESTRICT coefficients,
-	const int doPrefetch, const uint8_t* _pf
+	const int doPrefetch, const char* _pf
 ) {
 	GF16_MULADD_MULTI_SRC_UNUSED(6);
 	__m512i polyl = _mm512_broadcast_i32x4(_mm_load_si128((__m128i*)scratch + 1));

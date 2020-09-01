@@ -2,8 +2,12 @@
 #include "gf16_global.h"
 
 #ifdef _MSC_VER
-# define __BYTE_ORDER__ 1234
-# define __ORDER_BIG_ENDIAN__ 4321
+# ifndef __BYTE_ORDER__
+#  define __BYTE_ORDER__ 1234
+# endif
+# ifndef __ORDER_BIG_ENDIAN__
+#  define __ORDER_BIG_ENDIAN__ 4321
+# endif
 #endif
 
 
