@@ -140,6 +140,24 @@ static HEDLEY_ALWAYS_INLINE void mul16_vec2x(__m256i mulLo, __m256i mulHi, __m25
 #endif
 	*dstHi = _mm256_xor_si256(th, _mm256_shuffle_epi8(mulHi, ti));
 }
+
+static HEDLEY_ALWAYS_INLINE __m256i gf16_vec256_mul2(__m256i v) {
+# if MWORD_SIZE == 64
+	return _mm256_ternarylogic_epi32(
+		_mm256_add_epi16(v, v),
+		_mm256_cmpgt_epi16(_mm256_setzero_si256(), v),
+		_mm256_set1_epi16(GF16_POLYNOMIAL & 0xffff),
+		0x78 // (a^(b&c))
+	);
+# else
+	return _mm256_xor_si256(
+		_mm256_add_epi16(v, v),
+		_mm256_and_si256(_mm256_set1_epi16(GF16_POLYNOMIAL & 0xffff), _mm256_cmpgt_epi16(
+			_mm256_setzero_si256(), v
+		))
+	);
+# endif
+}
 #endif
 
 #if defined(_AVAILABLE_XOP)
@@ -174,9 +192,7 @@ static HEDLEY_ALWAYS_INLINE void mul16_vec128(__m128i mulLo, __m128i mulHi, __m1
 }
 
 
-#endif // defined(_AVAILABLE)
-
-#if defined(__AVX512BW__) && defined(__AVX512VL__)
+#if MWORD_SIZE == 64
 static HEDLEY_ALWAYS_INLINE void mul16_vec4x(__m512i mulLo, __m512i mulHi, __m512i srcLo, __m512i srcHi, __m512i* dstLo, __m512i *dstHi) {
 	__m512i ti = _mm512_and_si512(_mm512_srli_epi16(srcHi, 4), _mm512_set1_epi8(0xf));
 	__m512i th = _mm512_ternarylogic_epi32(
@@ -195,14 +211,6 @@ static HEDLEY_ALWAYS_INLINE void mul16_vec4x(__m512i mulLo, __m512i mulHi, __m51
 }
 static HEDLEY_ALWAYS_INLINE __m512i separate_low_high512(__m512i v) {
 	return _mm512_shuffle_epi8(v, _mm512_set4_epi32(0x0f0d0b09, 0x07050301, 0x0e0c0a08, 0x06040200));
-}
-static HEDLEY_ALWAYS_INLINE __m256i gf16_vec256_mul2(__m256i v) {
-	return _mm256_ternarylogic_epi32(
-		_mm256_add_epi16(v, v),
-		_mm256_cmpgt_epi16(_mm256_setzero_si256(), v),
-		_mm256_set1_epi16(GF16_POLYNOMIAL & 0xffff),
-		0x78 // (a^(b&c))
-	);
 }
 static HEDLEY_ALWAYS_INLINE __m512i gf16_vec512_mul2(__m512i v) {
 	return _mm512_ternarylogic_epi32(
@@ -272,5 +280,8 @@ static HEDLEY_ALWAYS_INLINE void gf16_initial_mul_vector_x4(const uint16_t* coef
 	*mul8 = _mm512_mask_xor_epi32(*mul8, mul8poly, *mul8, poly);
 }
 #endif
+
+
+#endif // defined(_AVAILABLE)
 
 #endif // defined(_GF16_SHUFFLE_X86_COMMON_)

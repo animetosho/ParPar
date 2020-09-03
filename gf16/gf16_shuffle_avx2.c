@@ -45,14 +45,6 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle2x_muladd_round_avx2(__m256i* _dst,
 	_mm256_store_si256(_dst, result);
 }
 
-static HEDLEY_ALWAYS_INLINE __m256i gf16_vec256_mul2(__m256i v) {
-	return _mm256_xor_si256(
-		_mm256_add_epi16(v, v),
-		_mm256_and_si256(_mm256_set1_epi16(GF16_POLYNOMIAL & 0xffff), _mm256_cmpgt_epi16(
-			_mm256_setzero_si256(), v
-		))
-	);
-}
 #include "gf16_muladd_multi.h"
 static HEDLEY_ALWAYS_INLINE void gf16_shuffle2x_muladd_x2_avx2(const void *HEDLEY_RESTRICT scratch, uint8_t *HEDLEY_RESTRICT _dst, const unsigned srcScale, GF16_MULADD_MULTI_SRCLIST, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, const int doPrefetch, const char* _pf) {
 	GF16_MULADD_MULTI_SRC_UNUSED(2);
