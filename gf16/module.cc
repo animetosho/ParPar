@@ -9,8 +9,8 @@
 #define CACHELINE_SIZE 64
 
 // these lookup tables consume a hefty 192KB... oh well
-static uint16_t input_lookup[32768]; // logarithms of input constants
-static uint16_t gf_exp[65536]; // pre-calculated exponents in GF(2^16)
+static uint16_t input_lookup[32768]; // input constants
+static uint16_t gf_exp[65535]; // pre-calculated exponents in GF(2^16)
 void ppgf_init_constants() {
 	int exp = 0, n = 1;
 	for (int i = 0; i < 32768; i++) {
@@ -23,10 +23,9 @@ void ppgf_init_constants() {
 		input_lookup[i] = exp;
 	}
 	gf_exp[exp] = n;
-	gf_exp[65535] = gf_exp[0];
 }
 
-static inline uint16_t calc_factor(uint_fast16_t inputBlock, uint_fast16_t recoveryBlock) {
+HEDLEY_CONST static inline uint16_t calc_factor(uint_fast16_t inputBlock, uint_fast16_t recoveryBlock) {
 	// calculate POW(inputBlockConstant, recoveryBlock) in GF
 	uint_fast32_t result = input_lookup[inputBlock] * recoveryBlock;
 	// clever bit hack for 'result %= 65535' from MultiPar sources
@@ -88,33 +87,14 @@ void ppgf_maybe_setup_gf() {
    - number of outputs and scales is same and == numOutputs
 */
 void ppgf_multiply_mat(const void* const* inputs, uint_fast16_t* iNums, unsigned int numInputs, size_t len, void** outputs, uint_fast16_t* oNums, unsigned int numOutputs, int add) {
-	
-	/*
-	if(gf->needPrepare()) {
-		int out;
-		#pragma omp parallel for
-		for(out = 0; out < (int)numOutputs; out++) {
-			unsigned int in = 0;
-			for(; in < numInputs-3; in+=4) {
-				gf_val_32_t inNum4[4] = {
-					calc_factor(iNums[in], oNums[out]),
-					calc_factor(iNums[in+1], oNums[out]),
-					calc_factor(iNums[in+2], oNums[out]),
-					calc_factor(iNums[in+3], oNums[out])
-				};
-				gf.multiply_regionX.w16(&gf, inputs + in, outputs[out], inNum4, (int)len, add || in>0);
-			}
-			for(; in < numInputs; in++)
-				gf.multiply_region.w32(&gf, inputs[in], outputs[out], calc_factor(iNums[in], oNums[out]), (int)len, true);
+	// pre-calc all coefficients
+	// calculation does lookups, so faster to do it first and avoid memory penalties later on
+	uint16_t* factors = new uint16_t[numInputs * numOutputs];
+	for(unsigned out=0; out<numOutputs; out++)
+		for(unsigned inp=0; inp<numInputs; inp++) {
+			factors[inp + out*numInputs] = calc_factor(iNums[inp], oNums[out]);
 		}
-		return;
-	}
-	*/
 	
-	unsigned int factStride = sizeof(uint16_t) * numInputs;
-	factStride = (factStride + CACHELINE_SIZE-1) & ~(CACHELINE_SIZE-1);
-	uint16_t* factors;
-	ALIGN_ALLOC(factors, factStride * maxNumThreads, CACHELINE_SIZE);
 	
 	// break the slice into smaller chunks so that we maximise CPU cache usage
 	int numChunks = ROUND_DIV(len, gf->info().idealChunkSize);
@@ -135,16 +115,12 @@ void ppgf_multiply_mat(const void* const* inputs, uint_fast16_t* iNums, unsigned
 #else
 		const int threadNum = 0;
 #endif
-		uint16_t* vals = (uint16_t*)((uint8_t*)factors + factStride * threadNum);
-		unsigned int i;
-		for(i=0; i<numInputs; i++)
-			vals[i] = calc_factor(iNums[i], oNums[out]);
 
 		if(!add) memset(((uint8_t*)outputs[out])+offset, 0, procSize);
-		gf->mul_add_multi(numInputs, offset, outputs[out], inputs, procSize, vals, gfScratch[threadNum]);
+		gf->mul_add_multi(numInputs, offset, outputs[out], inputs, procSize, factors + out*numInputs, gfScratch[threadNum]);
 	}
 	
-	ALIGN_FREE(factors);
+	delete[] factors;
 }
 
 
