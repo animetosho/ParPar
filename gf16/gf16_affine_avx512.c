@@ -216,14 +216,10 @@ static HEDLEY_ALWAYS_INLINE void gf16_affine_muladd_x_avx512(
 		_mm512_store_si512((__m512i*)(_dst + ptr), tph);
 		_mm512_store_si512((__m512i*)(_dst + ptr)+1, tpl);
 		
-		if(doPrefetch == 1) {
-			_mm_prefetch(_pf+ptr, _MM_HINT_ET1);
-			_mm_prefetch(_pf+ptr + sizeof(__m512i), _MM_HINT_ET1);
-		}
-		if(doPrefetch == 2) {
-			_mm_prefetch(_pf+ptr, _MM_HINT_T1);
-			_mm_prefetch(_pf+ptr + sizeof(__m512i), _MM_HINT_T1);
-		}
+		if(doPrefetch == 1)
+			_mm_prefetch(_pf+(ptr>>1), _MM_HINT_ET1);
+		if(doPrefetch == 2)
+			_mm_prefetch(_pf+(ptr>>1), _MM_HINT_T1);
 	}
 }
 #endif /*defined(__GFNI__) && defined(__AVX512BW__) && defined(__AVX512VL__)*/
@@ -285,7 +281,7 @@ unsigned gf16_affine_muladd_multi_packed_avx512(const void *HEDLEY_RESTRICT scra
 unsigned gf16_affine_muladd_multi_packpf_avx512(const void *HEDLEY_RESTRICT scratch, unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch, const void* HEDLEY_RESTRICT prefetchIn, const void* HEDLEY_RESTRICT prefetchOut) {
 	UNUSED(mutScratch);
 #if defined(__GFNI__) && defined(__AVX512BW__) && defined(__AVX512VL__) && defined(PLATFORM_AMD64)
-	unsigned region = gf16_muladd_multi_packpf(scratch, &gf16_affine_muladd_x_avx512, 6, regions, dst, src, len, sizeof(__m512i)*2, coefficients, prefetchIn, prefetchOut);
+	unsigned region = gf16_muladd_multi_packpf(scratch, &gf16_affine_muladd_x_avx512, 6, regions, dst, src, len, sizeof(__m512i)*2, coefficients, 1, prefetchIn, prefetchOut);
 	_mm256_zeroupper();
 	return region;
 #else
@@ -619,9 +615,9 @@ unsigned gf16_affine2x_muladd_multi_packpf_avx512(const void *HEDLEY_RESTRICT sc
 	UNUSED(mutScratch);
 #if defined(__GFNI__) && defined(__AVX512BW__) && defined(__AVX512VL__)
 # ifdef PLATFORM_AMD64
-	unsigned region = gf16_muladd_multi_packpf(scratch, &gf16_affine2x_muladd_x_avx512, 12, regions, dst, src, len, sizeof(__m512i), coefficients, prefetchIn, prefetchOut);
+	unsigned region = gf16_muladd_multi_packpf(scratch, &gf16_affine2x_muladd_x_avx512, 12, regions, dst, src, len, sizeof(__m512i), coefficients, 0, prefetchIn, prefetchOut);
 # else
-	unsigned region = gf16_muladd_multi_packpf(scratch, &gf16_affine2x_muladd_x_avx512, 2, regions, dst, src, len, sizeof(__m512i), coefficients, prefetchIn, prefetchOut);
+	unsigned region = gf16_muladd_multi_packpf(scratch, &gf16_affine2x_muladd_x_avx512, 2, regions, dst, src, len, sizeof(__m512i), coefficients, 0, prefetchIn, prefetchOut);
 # endif
 	_mm256_zeroupper();
 	return region;

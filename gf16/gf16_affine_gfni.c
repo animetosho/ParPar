@@ -144,7 +144,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_affine_muladd_x_gfni(
 			if(doPrefetch == 1)
 				_mm_prefetch(_pf+ptr, _MM_HINT_ET1);
 			if(doPrefetch == 2)
-				_mm_prefetch(_pf+ptr, _MM_HINT_T1);
+				_mm_prefetch(_pf+ptr, _MM_HINT_T2);
 			ptr += sizeof(__m128i)*2;
 		}
 		while(ptr) {
@@ -171,7 +171,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_affine_muladd_x_gfni(
 			if(doPrefetch == 1)
 				_mm_prefetch(_pf+ptr, _MM_HINT_ET1);
 			if(doPrefetch == 2)
-				_mm_prefetch(_pf+ptr, _MM_HINT_T1);
+				_mm_prefetch(_pf+ptr, _MM_HINT_T2);
 			ptr += sizeof(__m128i)*2;
 		}
 	} else {
@@ -240,7 +240,7 @@ unsigned gf16_affine_muladd_multi_packed_gfni(const void *HEDLEY_RESTRICT scratc
 unsigned gf16_affine_muladd_multi_packpf_gfni(const void *HEDLEY_RESTRICT scratch, unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch, const void* HEDLEY_RESTRICT prefetchIn, const void* HEDLEY_RESTRICT prefetchOut) {
 	UNUSED(mutScratch);
 #if defined(__GFNI__) && defined(__SSSE3__) && defined(PLATFORM_AMD64)
-	return gf16_muladd_multi_packpf(scratch, &gf16_affine_muladd_x_gfni, 3, regions, dst, src, len, sizeof(__m128i)*2, coefficients, prefetchIn, prefetchOut);
+	return gf16_muladd_multi_packpf(scratch, &gf16_affine_muladd_x_gfni, 3, regions, dst, src, len, sizeof(__m128i)*2, coefficients, 0, prefetchIn, prefetchOut);
 #else
 	UNUSED(scratch); UNUSED(regions); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficients); UNUSED(prefetchIn); UNUSED(prefetchOut);
 	return 0;
@@ -384,7 +384,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_affine2x_muladd_x_gfni(
 		if(doPrefetch == 1)
 			_mm_prefetch(_pf+ptr, _MM_HINT_ET1);
 		if(doPrefetch == 2)
-			_mm_prefetch(_pf+ptr, _MM_HINT_T1);
+			_mm_prefetch(_pf+ptr, _MM_HINT_T2);
 		while(ptr & (sizeof(__m128i)*4-1)) { // loop until we reach a cacheline boundary
 			__m128i data = _mm_load_si128((__m128i*)(_src1 + ptr*srcScale));
 			__m128i result1 = _mm_gf2p8affine_epi64_epi8(data, matNormA, 0);
@@ -426,7 +426,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_affine2x_muladd_x_gfni(
 		if(doPrefetch == 1)
 			_mm_prefetch(_pf+ptr, _MM_HINT_ET1);
 		if(doPrefetch == 2)
-			_mm_prefetch(_pf+ptr, _MM_HINT_T1);
+			_mm_prefetch(_pf+ptr, _MM_HINT_T2);
 		
 		for(int iter=0; iter<(doPrefetch?4:1); iter++) { // if prefetching, iterate on cachelines
 			__m128i data = _mm_load_si128((__m128i*)(_src1 + ptr*srcScale));
@@ -502,9 +502,9 @@ unsigned gf16_affine2x_muladd_multi_packpf_gfni(const void *HEDLEY_RESTRICT scra
 	UNUSED(mutScratch);
 #if defined(__GFNI__) && defined(__SSSE3__)
 # ifdef PLATFORM_AMD64
-	return gf16_muladd_multi_packpf(scratch, &gf16_affine2x_muladd_x_gfni, 6, regions, dst, src, len, sizeof(__m128i), coefficients, prefetchIn, prefetchOut);
+	return gf16_muladd_multi_packpf(scratch, &gf16_affine2x_muladd_x_gfni, 6, regions, dst, src, len, sizeof(__m128i), coefficients, 0, prefetchIn, prefetchOut);
 # else
-	return gf16_muladd_multi_packpf(scratch, &gf16_affine2x_muladd_x_gfni, 2, regions, dst, src, len, sizeof(__m128i), coefficients, prefetchIn, prefetchOut);
+	return gf16_muladd_multi_packpf(scratch, &gf16_affine2x_muladd_x_gfni, 2, regions, dst, src, len, sizeof(__m128i), coefficients, 0, prefetchIn, prefetchOut);
 # endif
 #else
 	UNUSED(scratch); UNUSED(regions); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficients); UNUSED(prefetchIn); UNUSED(prefetchOut);

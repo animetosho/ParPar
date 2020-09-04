@@ -308,7 +308,7 @@ unsigned gf16_shuffle_muladd_multi_packpf_neon(const void *HEDLEY_RESTRICT scrat
 	// TODO: on Cortex A53, prefetching seems to be slower, so disabled for now
 	UNUSED(prefetchIn); UNUSED(prefetchOut);
 	return gf16_muladd_multi_packed(scratch, &gf16_shuffle_muladd_x_neon, 2, regions, dst, src, len, sizeof(uint8x16_t)*2, coefficients);
-	//return gf16_muladd_multi_packpf(scratch, &gf16_shuffle_muladd_x_neon, 2, regions, dst, src, len, sizeof(uint8x16_t)*2, coefficients, prefetchIn, prefetchOut);
+	//return gf16_muladd_multi_packpf(scratch, &gf16_shuffle_muladd_x_neon, 2, regions, dst, src, len, sizeof(uint8x16_t)*2, coefficients, 0, prefetchIn, prefetchOut);
 #else
 	UNUSED(scratch); UNUSED(regions); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficients); UNUSED(prefetchIn); UNUSED(prefetchOut);
 	return 0;

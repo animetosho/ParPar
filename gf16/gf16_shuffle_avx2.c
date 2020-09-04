@@ -103,7 +103,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle2x_muladd_x2_avx2(const void *HEDLE
 			if(doPrefetch == 1)
 				_mm_prefetch(_pf+ptr, _MM_HINT_ET1);
 			if(doPrefetch == 2)
-				_mm_prefetch(_pf+ptr, _MM_HINT_T1);
+				_mm_prefetch(_pf+ptr, _MM_HINT_T2);
 			ptr += sizeof(__m256i);
 		}
 		while(ptr) {
@@ -120,7 +120,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle2x_muladd_x2_avx2(const void *HEDLE
 			if(doPrefetch == 1)
 				_mm_prefetch(_pf+ptr, _MM_HINT_ET1);
 			if(doPrefetch == 2)
-				_mm_prefetch(_pf+ptr, _MM_HINT_T1);
+				_mm_prefetch(_pf+ptr, _MM_HINT_T2);
 			ptr += sizeof(__m256i);
 		}
 	} else {
@@ -161,7 +161,7 @@ unsigned gf16_shuffle2x_muladd_multi_packed_avx2(const void *HEDLEY_RESTRICT scr
 unsigned gf16_shuffle2x_muladd_multi_packpf_avx2(const void *HEDLEY_RESTRICT scratch, unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch, const void* HEDLEY_RESTRICT prefetchIn, const void* HEDLEY_RESTRICT prefetchOut) {
 	UNUSED(mutScratch);
 #if defined(_AVAILABLE) && defined(PLATFORM_AMD64)
-	unsigned region = gf16_muladd_multi_packpf(scratch, &gf16_shuffle2x_muladd_x2_avx2, 2, regions, dst, src, len, sizeof(__m256i), coefficients, prefetchIn, prefetchOut);
+	unsigned region = gf16_muladd_multi_packpf(scratch, &gf16_shuffle2x_muladd_x2_avx2, 2, regions, dst, src, len, sizeof(__m256i), coefficients, 0, prefetchIn, prefetchOut);
 	_mm256_zeroupper();
 	return region;
 #else

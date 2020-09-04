@@ -71,6 +71,7 @@ typedef struct {
 	size_t stride;
 	size_t idealChunkSize;
 	unsigned idealInputMultiple;
+	unsigned prefetchDownscale;
 } Galois16MethodInfo;
 
 class Galois16Mul {

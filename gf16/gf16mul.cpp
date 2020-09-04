@@ -228,6 +228,7 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 		method = default_method();
 	
 	_info.idealInputMultiple = 1;
+	_info.prefetchDownscale = 0;
 	switch(method) {
 		case GF16_SHUFFLE_AVX512:
 		case GF16_SHUFFLE_AVX2:
@@ -288,6 +289,7 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 					_mul_add_multi_packed = &gf16_shuffle_muladd_multi_packed_avx512;
 					_mul_add_multi_packpf = &gf16_shuffle_muladd_multi_packpf_avx512;
 					_info.idealInputMultiple = 3;
+					_info.prefetchDownscale = 1;
 					#endif
 					prepare = &gf16_shuffle_prepare_avx512;
 					prepare_packed = &gf16_shuffle_prepare_packed_avx512;
@@ -312,6 +314,7 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 			_mul_add_multi_packed = &gf16_shuffle_muladd_multi_packed_vbmi;
 			_mul_add_multi_packpf = &gf16_shuffle_muladd_multi_packpf_vbmi;
 			_info.idealInputMultiple = 4;
+			_info.prefetchDownscale = 1;
 			#endif
 			prepare = &gf16_shuffle_prepare_avx512;
 			prepare_packed = &gf16_shuffle_prepare_packed_vbmi;
@@ -398,6 +401,7 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 			_mul_add_multi_packed = &gf16_affine_muladd_multi_packed_avx512;
 			_mul_add_multi_packpf = &gf16_affine_muladd_multi_packpf_avx512;
 			_info.idealInputMultiple = 6;
+			_info.prefetchDownscale = 1;
 			#endif
 			prepare = &gf16_shuffle_prepare_avx512;
 			prepare_packed = &gf16_affine_prepare_packed_avx512;
