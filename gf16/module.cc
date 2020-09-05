@@ -8,31 +8,50 @@
 
 #define CACHELINE_SIZE 64
 
-// these lookup tables consume a hefty 192KB... oh well
-static uint16_t input_lookup[32768]; // input constants
-static uint16_t gf_exp[65535]; // pre-calculated exponents in GF(2^16)
+static int8_t input_diff[32768]; // difference between predicted input coefficient and actual (number range is -4...5, so could be compressed to 4 bits, but I don't feel it's worth the savings)
+static uint16_t gf_exp[8192+128]; // pre-calculated exponents in GF(2^16), missing bottom 3 bits, followed by 128-entry polynomial shift table
 void ppgf_init_constants() {
 	int exp = 0, n = 1;
 	for (int i = 0; i < 32768; i++) {
 		do {
-			gf_exp[exp] = n;
+			if((exp & 7) == 0) gf_exp[exp>>3] = n;
 			exp++; // exp will reach 65534 by the end of the loop
 			n <<= 1;
 			if(n > 65535) n ^= 0x1100B;
 		} while( !(exp%3) || !(exp%5) || !(exp%17) || !(exp%257) );
-		input_lookup[i] = exp;
+		
+		input_diff[i] = exp - i*2;
 	}
-	gf_exp[exp] = n;
+	
+	for (int i = 0; i < 128; i++) {
+		exp = i << 9;
+		for (int j = 0; j < 7; j++) {
+			exp <<= 1;
+			if (exp & 0x10000)
+				exp ^= 0x1100B;
+		}
+		gf_exp[8192+i] = exp;
+	}
 }
 
 HEDLEY_CONST static inline uint16_t calc_factor(uint_fast16_t inputBlock, uint_fast16_t recoveryBlock) {
+	assert(recoveryBlock < 65535); // if ==65535, gets an invalid exponent
+	
 	// calculate POW(inputBlockConstant, recoveryBlock) in GF
-	uint_fast32_t result = input_lookup[inputBlock] * recoveryBlock;
+	uint_fast32_t result = (inputBlock*2 + input_diff[inputBlock]) * recoveryBlock;
 	// clever bit hack for 'result %= 65535' from MultiPar sources
 	result = (result >> 16) + (result & 65535);
 	result = (result >> 16) + (result & 65535);
 	
-	return gf_exp[result];
+	result = gf_exp[result>>3] << (result&7);
+	return (uint16_t)result ^ gf_exp[8192 + (result>>16)];
+	
+	/* alternative idea which only omits bottom bit of gf_exp lookup, but avoids a second lookup
+	// GCC doesn't handle the unpredictable check that well
+	uint_fast32_t result0 = gf_exp[result>>1];
+	uint_fast32_t result1 = (result0 << 1) ^ (-(result0 >> 15) & 0x1100B); // multiply by 2?
+	return HEDLEY_UNPREDICTABLE(result & 1) ? result1 : result0;
+	*/
 }
 
 static Galois16Mul* gf = NULL;
