@@ -142,7 +142,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_affine_muladd_x_gfni(
 			_mm_store_si128 ((__m128i*)(_dst + ptr)+1, tpl);
 			
 			if(doPrefetch == 1)
-				_mm_prefetch(_pf+ptr, _MM_HINT_ET1);
+				_mm_prefetch(_pf+ptr, MM_HINT_WT1);
 			if(doPrefetch == 2)
 				_mm_prefetch(_pf+ptr, _MM_HINT_T2);
 			ptr += sizeof(__m128i)*2;
@@ -169,7 +169,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_affine_muladd_x_gfni(
 			_mm_store_si128 ((__m128i*)(_dst + ptr)+1, tpl);
 			
 			if(doPrefetch == 1)
-				_mm_prefetch(_pf+ptr, _MM_HINT_ET1);
+				_mm_prefetch(_pf+ptr, MM_HINT_WT1);
 			if(doPrefetch == 2)
 				_mm_prefetch(_pf+ptr, _MM_HINT_T2);
 			ptr += sizeof(__m128i)*2;
@@ -382,7 +382,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_affine2x_muladd_x_gfni(
 	intptr_t ptr = -(intptr_t)len;
 	if(doPrefetch) {
 		if(doPrefetch == 1)
-			_mm_prefetch(_pf+ptr, _MM_HINT_ET1);
+			_mm_prefetch(_pf+ptr, MM_HINT_WT1);
 		if(doPrefetch == 2)
 			_mm_prefetch(_pf+ptr, _MM_HINT_T2);
 		while(ptr & (sizeof(__m128i)*4-1)) { // loop until we reach a cacheline boundary
@@ -424,7 +424,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_affine2x_muladd_x_gfni(
 	}
 	while(ptr) {
 		if(doPrefetch == 1)
-			_mm_prefetch(_pf+ptr, _MM_HINT_ET1);
+			_mm_prefetch(_pf+ptr, MM_HINT_WT1);
 		if(doPrefetch == 2)
 			_mm_prefetch(_pf+ptr, _MM_HINT_T2);
 		

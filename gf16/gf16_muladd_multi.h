@@ -37,19 +37,19 @@ static HEDLEY_ALWAYS_INLINE unsigned gf16_muladd_multi(const void *HEDLEY_RESTRI
 	if(regions >= interleave) do {
 		muladd_pf(
 			scratch, _dst, 1, interleave,
-			(const uint8_t* HEDLEY_RESTRICT)src[region] + offset + len,
-			(const uint8_t* HEDLEY_RESTRICT)src[region+1] + offset + len,
-			(const uint8_t* HEDLEY_RESTRICT)src[region+2] + offset + len,
-			(const uint8_t* HEDLEY_RESTRICT)src[region+3] + offset + len,
-			(const uint8_t* HEDLEY_RESTRICT)src[region+4] + offset + len,
-			(const uint8_t* HEDLEY_RESTRICT)src[region+5] + offset + len,
-			(const uint8_t* HEDLEY_RESTRICT)src[region+6] + offset + len,
-			(const uint8_t* HEDLEY_RESTRICT)src[region+7] + offset + len,
-			(const uint8_t* HEDLEY_RESTRICT)src[region+8] + offset + len,
-			(const uint8_t* HEDLEY_RESTRICT)src[region+9] + offset + len,
-			(const uint8_t* HEDLEY_RESTRICT)src[region+10] + offset + len,
-			(const uint8_t* HEDLEY_RESTRICT)src[region+11] + offset + len,
-			(const uint8_t* HEDLEY_RESTRICT)src[region+12] + offset + len,
+			(const uint8_t*)src[region] + offset + len,
+			(const uint8_t*)src[region+1] + offset + len,
+			(const uint8_t*)src[region+2] + offset + len,
+			(const uint8_t*)src[region+3] + offset + len,
+			(const uint8_t*)src[region+4] + offset + len,
+			(const uint8_t*)src[region+5] + offset + len,
+			(const uint8_t*)src[region+6] + offset + len,
+			(const uint8_t*)src[region+7] + offset + len,
+			(const uint8_t*)src[region+8] + offset + len,
+			(const uint8_t*)src[region+9] + offset + len,
+			(const uint8_t*)src[region+10] + offset + len,
+			(const uint8_t*)src[region+11] + offset + len,
+			(const uint8_t*)src[region+12] + offset + len,
 			len, coefficients + region, 0, NULL
 		);
 		region += interleave;
@@ -62,19 +62,19 @@ static HEDLEY_ALWAYS_INLINE unsigned gf16_muladd_multi(const void *HEDLEY_RESTRI
 				if(x >= interleave) HEDLEY_UNREACHABLE(); \
 				muladd_pf( \
 					scratch, _dst, 1, x, \
-					(const uint8_t* HEDLEY_RESTRICT)src[region] + offset + len, \
-					(const uint8_t* HEDLEY_RESTRICT)src[region+1] + offset + len, \
-					(const uint8_t* HEDLEY_RESTRICT)src[region+2] + offset + len, \
-					(const uint8_t* HEDLEY_RESTRICT)src[region+3] + offset + len, \
-					(const uint8_t* HEDLEY_RESTRICT)src[region+4] + offset + len, \
-					(const uint8_t* HEDLEY_RESTRICT)src[region+5] + offset + len, \
-					(const uint8_t* HEDLEY_RESTRICT)src[region+6] + offset + len, \
-					(const uint8_t* HEDLEY_RESTRICT)src[region+7] + offset + len, \
-					(const uint8_t* HEDLEY_RESTRICT)src[region+8] + offset + len, \
-					(const uint8_t* HEDLEY_RESTRICT)src[region+9] + offset + len, \
-					(const uint8_t* HEDLEY_RESTRICT)src[region+10] + offset + len, \
-					(const uint8_t* HEDLEY_RESTRICT)src[region+11] + offset + len, \
-					(const uint8_t* HEDLEY_RESTRICT)src[region+12] + offset + len, \
+					(const uint8_t*)src[region] + offset + len, \
+					(const uint8_t*)src[region+1] + offset + len, \
+					(const uint8_t*)src[region+2] + offset + len, \
+					(const uint8_t*)src[region+3] + offset + len, \
+					(const uint8_t*)src[region+4] + offset + len, \
+					(const uint8_t*)src[region+5] + offset + len, \
+					(const uint8_t*)src[region+6] + offset + len, \
+					(const uint8_t*)src[region+7] + offset + len, \
+					(const uint8_t*)src[region+8] + offset + len, \
+					(const uint8_t*)src[region+9] + offset + len, \
+					(const uint8_t*)src[region+10] + offset + len, \
+					(const uint8_t*)src[region+11] + offset + len, \
+					(const uint8_t*)src[region+12] + offset + len, \
 					len, coefficients + region, 0, NULL \
 				); \
 				region += x; \
@@ -164,6 +164,11 @@ static HEDLEY_ALWAYS_INLINE unsigned gf16_muladd_multi_packed(const void *HEDLEY
 	return region;
 }
 
+#ifdef __ICC
+# define MM_HINT_WT1 _MM_HINT_T1
+#else
+# define MM_HINT_WT1 _MM_HINT_ET1
+#endif
 
 static HEDLEY_ALWAYS_INLINE unsigned gf16_muladd_multi_packpf(const void *HEDLEY_RESTRICT scratch, fMuladdPF muladd_pf, const unsigned interleave, unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, size_t blockLen, const uint16_t *HEDLEY_RESTRICT coefficients, const unsigned pfFactor, const void* HEDLEY_RESTRICT prefetchIn, const void* HEDLEY_RESTRICT prefetchOut) {
 	uint8_t* _dst = (uint8_t*)dst + len;

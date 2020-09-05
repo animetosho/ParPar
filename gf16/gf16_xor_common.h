@@ -118,7 +118,7 @@ struct gf16_xor_scratch {
 #ifdef __SSE2__
 typedef void*(*gf16_xorjit_write_func)(const struct gf16_xor_scratch *HEDLEY_RESTRICT scratch, uint8_t *HEDLEY_RESTRICT jitptr, uint16_t val, int xor);
 static HEDLEY_ALWAYS_INLINE void gf16_xorjit_write_jit(const void *HEDLEY_RESTRICT scratch, uint16_t coefficient, jit_wx_pair* jit, const int add, gf16_xorjit_write_func writeFunc) {
-	const struct gf16_xor_scratch *HEDLEY_RESTRICT info = (const struct gf16_xor_scratch *HEDLEY_RESTRICT)scratch;
+	const struct gf16_xor_scratch *HEDLEY_RESTRICT info = (const struct gf16_xor_scratch*)scratch;
 	uint8_t* jitptr = (uint8_t*)jit->w + info->codeStart;
 	
 	if(info->jitOptStrat == GF16_XOR_JIT_STRAT_COPYNT || info->jitOptStrat == GF16_XOR_JIT_STRAT_COPY) {

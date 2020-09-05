@@ -101,7 +101,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle2x_muladd_x2_avx2(const void *HEDLE
 				shufNormLoA, shufNormLoB, shufNormHiA, shufNormHiB, shufSwapLoA, shufSwapLoB, shufSwapHiA, shufSwapHiB
 			);
 			if(doPrefetch == 1)
-				_mm_prefetch(_pf+ptr, _MM_HINT_ET1);
+				_mm_prefetch(_pf+ptr, MM_HINT_WT1);
 			if(doPrefetch == 2)
 				_mm_prefetch(_pf+ptr, _MM_HINT_T2);
 			ptr += sizeof(__m256i);
@@ -118,7 +118,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle2x_muladd_x2_avx2(const void *HEDLE
 			);
 			
 			if(doPrefetch == 1)
-				_mm_prefetch(_pf+ptr, _MM_HINT_ET1);
+				_mm_prefetch(_pf+ptr, MM_HINT_WT1);
 			if(doPrefetch == 2)
 				_mm_prefetch(_pf+ptr, _MM_HINT_T2);
 			ptr += sizeof(__m256i);

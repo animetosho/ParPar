@@ -217,7 +217,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_affine_muladd_x_avx512(
 		_mm512_store_si512((__m512i*)(_dst + ptr)+1, tpl);
 		
 		if(doPrefetch == 1)
-			_mm_prefetch(_pf+(ptr>>1), _MM_HINT_ET1);
+			_mm_prefetch(_pf+(ptr>>1), MM_HINT_WT1);
 		if(doPrefetch == 2)
 			_mm_prefetch(_pf+(ptr>>1), _MM_HINT_T1);
 	}
@@ -569,7 +569,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_affine2x_muladd_x_avx512(
 		_mm512_store_si512 ((__m512i*)(_dst + ptr), result);
 		
 		if(doPrefetch == 1)
-			_mm_prefetch(_pf+ptr, _MM_HINT_ET1);
+			_mm_prefetch(_pf+ptr, MM_HINT_WT1);
 		if(doPrefetch == 2)
 			_mm_prefetch(_pf+ptr, _MM_HINT_T1);
 	}

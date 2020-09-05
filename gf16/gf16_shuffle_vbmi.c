@@ -432,7 +432,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle_muladd_x_vbmi(
 		_mm512_store_si512((__m512i*)(_dst+ptr) + 1, tpl);
 		
 		if(doPrefetch == 1) {
-			_mm_prefetch(_pf+(ptr>>1), _MM_HINT_ET1);
+			_mm_prefetch(_pf+(ptr>>1), MM_HINT_WT1);
 		}
 		if(doPrefetch == 2) {
 			_mm_prefetch(_pf+(ptr>>1), _MM_HINT_T1);
