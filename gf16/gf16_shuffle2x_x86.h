@@ -115,10 +115,8 @@ void _FN(gf16_shuffle2x_finish_packed)(void *HEDLEY_RESTRICT dst, const void *HE
 }
 
 
-
-void _FN(gf16_shuffle2x_muladd)(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t val, void *HEDLEY_RESTRICT mutScratch) {
-	UNUSED(mutScratch);
 #ifdef _AVAILABLE
+void _FN(gf16_shuffle2x_setup_vec)(const void *HEDLEY_RESTRICT scratch, uint16_t val, _mword* shufNormLo, _mword* shufSwapLo, _mword* shufNormHi, _mword* shufSwapHi) {
 	__m128i prodLo0, prodHi0, prodLo1, prodHi1, prodLo2, prodHi2, prodLo3, prodHi3;
 	__m128i pd0, pd1;
 	shuf0_vector(val, &pd0, &pd1);
@@ -140,11 +138,19 @@ void _FN(gf16_shuffle2x_muladd)(const void *HEDLEY_RESTRICT scratch, void *HEDLE
 #else
 # define JOIN_VEC(a, b) _mm256_permute2x128_si256(_mm256_castsi128_si256(a), _mm256_castsi128_si256(b), 0x20)
 #endif
-	_mword shufNormLo = JOIN_VEC(prodLo0, prodHi2);
-	_mword shufSwapLo = JOIN_VEC(prodHi0, prodLo2);
-	_mword shufNormHi = JOIN_VEC(prodLo1, prodHi3);
-	_mword shufSwapHi = JOIN_VEC(prodHi1, prodLo3);
+	*shufNormLo = JOIN_VEC(prodLo0, prodHi2);
+	*shufSwapLo = JOIN_VEC(prodHi0, prodLo2);
+	*shufNormHi = JOIN_VEC(prodLo1, prodHi3);
+	*shufSwapHi = JOIN_VEC(prodHi1, prodLo3);
 #undef JOIN_VEC
+}
+#endif
+
+void _FN(gf16_shuffle2x_mul)(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t val, void *HEDLEY_RESTRICT mutScratch) {
+	UNUSED(mutScratch);
+#ifdef _AVAILABLE
+	_mword shufNormLo, shufSwapLo, shufNormHi, shufSwapHi;
+	_FN(gf16_shuffle2x_setup_vec)(scratch, val, &shufNormLo, &shufSwapLo, &shufNormHi, &shufSwapHi);
 	
 	_mword ti;
 	_mword mask = _MM(set1_epi8) (0x0f);
@@ -161,21 +167,18 @@ void _FN(gf16_shuffle2x_muladd)(const void *HEDLEY_RESTRICT scratch, void *HEDLE
 		ti = _MM_SRLI4_EPI8(data);
 		swapped = _MMI(xor)(_MM(shuffle_epi8) (shufSwapHi, ti), swapped);
 #if MWORD_SIZE >= 64
+		swapped = _mm512_shuffle_i32x4(swapped, swapped, _MM_SHUFFLE(1,0,3,2));
 		result = _mm512_ternarylogic_epi32(
 			result,
 			_mm512_shuffle_epi8(shufNormHi, ti),
-			_mm512_load_si512((_mword*)(_dst+ptr)),
+			swapped,
 			0x96
 		);
-		swapped = _mm512_shuffle_i32x4(swapped, swapped, _MM_SHUFFLE(1,0,3,2));
 #else
 		result = _MMI(xor)(_MM(shuffle_epi8) (shufNormHi, ti), result);
-		
-		result = _MMI(xor)(result, _MMI(load)((_mword*)(_dst+ptr)));
 		swapped = _mm256_permute2x128_si256(swapped, swapped, 0x01);
-#endif
-		
 		result = _MMI(xor)(result, swapped);
+#endif
 		
 		_MMI(store) ((_mword*)(_dst+ptr), result);
 	}
@@ -184,5 +187,3 @@ void _FN(gf16_shuffle2x_muladd)(const void *HEDLEY_RESTRICT scratch, void *HEDLE
 	UNUSED(scratch); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(val);
 #endif
 }
-
-

@@ -329,6 +329,7 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 				setupMethod(GF16_AUTO);
 				return;
 			}
+			_mul = &gf16_shuffle2x_mul_avx512;
 			_mul_add = &gf16_shuffle2x_muladd_avx512;
 			#ifdef PLATFORM_AMD64
 			_mul_add_multi = &gf16_shuffle2x_muladd_multi_avx512;
@@ -349,6 +350,7 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 				setupMethod(GF16_AUTO);
 				return;
 			}
+			_mul = &gf16_shuffle2x_mul_avx2;
 			_mul_add = &gf16_shuffle2x_muladd_avx2;
 			#ifdef PLATFORM_AMD64
 			_mul_add_multi = &gf16_shuffle2x_muladd_multi_avx2;

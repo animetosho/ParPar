@@ -162,40 +162,46 @@ static HEDLEY_ALWAYS_INLINE void gf16_affine_muladd_x_avx512(
 		dstVec##ll = _mm512_broadcastq_epi64(srcLL); \
 		dstVec##hl = _mm512_broadcastq_epi64(_mm512_castsi512_si128(depmask2))
 	#define PERM2(dstVec) \
-		depmask2 = _mm512_shuffle_i64x2(depmask, depmask, _MM_SHUFFLE(2,3,2,3)); \
+		depmask2 = _mm512_shuffle_i64x2(depmask1, depmask1, _MM_SHUFFLE(2,3,2,3)); \
 		dstVec##hh = _mm512_permutex_epi64(depmask2, _MM_SHUFFLE(3,3,3,3)); \
 		dstVec##lh = _mm512_permutex_epi64(depmask2, _MM_SHUFFLE(1,1,1,1)); \
 		dstVec##ll = _mm512_permutex_epi64(depmask2, _MM_SHUFFLE(2,2,2,2)); \
 		dstVec##hl = _mm512_broadcastq_epi64(_mm512_castsi512_si128(depmask2))
 	
-	__m512i depmask = gf16_affine_load2_matrix(scratch, coefficients[0], coefficients[1]);
-	__m512i depmask2 = _mm512_shuffle_i64x2(depmask, depmask, _MM_SHUFFLE(0,1,0,1));
-	PERM1(mat_A, _mm512_castsi512_si128(depmask));
-	PERM2(mat_B);
-	
-	__m256i depmask3;
-	if(srcCount == 3) {
-		depmask3 = gf16_affine_load_matrix(scratch, coefficients[2]);
-		depmask2 = _mm512_castsi256_si512(depmask3);
+	__m256i depmask256;
+	__m512i depmask1, depmask2;
+	if(srcCount == 1) {
+		depmask256 = gf16_affine_load_matrix(scratch, coefficients[0]);
+		depmask2 = _mm512_castsi256_si512(depmask256);
 		depmask2 = _mm512_shuffle_i64x2(depmask2, depmask2, _MM_SHUFFLE(0,1,0,1));
-		PERM1(mat_C, _mm256_castsi256_si128(depmask3));
+		PERM1(mat_A, _mm256_castsi256_si128(depmask256));
+	} else if(srcCount > 1) {
+		depmask1 = gf16_affine_load2_matrix(scratch, coefficients[0], coefficients[1]);
+		depmask2 = _mm512_shuffle_i64x2(depmask1, depmask1, _MM_SHUFFLE(0,1,0,1));
+		PERM1(mat_A, _mm512_castsi512_si128(depmask1));
+		PERM2(mat_B);
+	}
+	if(srcCount == 3) {
+		depmask256 = gf16_affine_load_matrix(scratch, coefficients[2]);
+		depmask2 = _mm512_castsi256_si512(depmask256);
+		depmask2 = _mm512_shuffle_i64x2(depmask2, depmask2, _MM_SHUFFLE(0,1,0,1));
+		PERM1(mat_C, _mm256_castsi256_si128(depmask256));
 	} else if(srcCount > 3) {
-		depmask = gf16_affine_load2_matrix(scratch, coefficients[2], coefficients[3]);
-		depmask2 = _mm512_shuffle_i64x2(depmask, depmask, _MM_SHUFFLE(0,1,0,1));
-		PERM1(mat_C, _mm512_castsi512_si128(depmask));
+		depmask1 = gf16_affine_load2_matrix(scratch, coefficients[2], coefficients[3]);
+		depmask2 = _mm512_shuffle_i64x2(depmask1, depmask1, _MM_SHUFFLE(0,1,0,1));
+		PERM1(mat_C, _mm512_castsi512_si128(depmask1));
 		PERM2(mat_D);
-		
-		if(srcCount == 5) {
-			depmask3 = gf16_affine_load_matrix(scratch, coefficients[4]);
-			depmask2 = _mm512_castsi256_si512(depmask3);
-			depmask2 = _mm512_shuffle_i64x2(depmask2, depmask2, _MM_SHUFFLE(0,1,0,1));
-			PERM1(mat_E, _mm256_castsi256_si128(depmask3));
-		} else if(srcCount > 5) {
-			depmask = gf16_affine_load2_matrix(scratch, coefficients[4], coefficients[5]);
-			depmask2 = _mm512_shuffle_i64x2(depmask, depmask, _MM_SHUFFLE(0,1,0,1));
-			PERM1(mat_E, _mm512_castsi512_si128(depmask));
-			PERM2(mat_F);
-		}
+	}
+	if(srcCount == 5) {
+		depmask256 = gf16_affine_load_matrix(scratch, coefficients[4]);
+		depmask2 = _mm512_castsi256_si512(depmask256);
+		depmask2 = _mm512_shuffle_i64x2(depmask2, depmask2, _MM_SHUFFLE(0,1,0,1));
+		PERM1(mat_E, _mm256_castsi256_si128(depmask256));
+	} else if(srcCount > 5) {
+		depmask1 = gf16_affine_load2_matrix(scratch, coefficients[4], coefficients[5]);
+		depmask2 = _mm512_shuffle_i64x2(depmask1, depmask1, _MM_SHUFFLE(0,1,0,1));
+		PERM1(mat_E, _mm512_castsi512_si128(depmask1));
+		PERM2(mat_F);
 	}
 	#undef PERM1
 	#undef PERM2
@@ -204,7 +210,8 @@ static HEDLEY_ALWAYS_INLINE void gf16_affine_muladd_x_avx512(
 		__m512i tph = _mm512_load_si512((__m512i*)(_dst + ptr));
 		__m512i tpl = _mm512_load_si512((__m512i*)(_dst + ptr) + 1);
 		gf16_affine_muladd_round((__m512i*)(_src1 + ptr*srcScale), &tpl, &tph, mat_All, mat_Ahl, mat_Alh, mat_Ahh);
-		gf16_affine_muladd_round((__m512i*)(_src2 + ptr*srcScale), &tpl, &tph, mat_Bll, mat_Bhl, mat_Blh, mat_Bhh);
+		if(srcCount >= 2)
+			gf16_affine_muladd_round((__m512i*)(_src2 + ptr*srcScale), &tpl, &tph, mat_Bll, mat_Bhl, mat_Blh, mat_Bhh);
 		if(srcCount >= 3)
 			gf16_affine_muladd_round((__m512i*)(_src3 + ptr*srcScale), &tpl, &tph, mat_Cll, mat_Chl, mat_Clh, mat_Chh);
 		if(srcCount >= 4)
@@ -227,27 +234,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_affine_muladd_x_avx512(
 void gf16_affine_muladd_avx512(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch) {
 	UNUSED(mutScratch);
 #if defined(__GFNI__) && defined(__AVX512BW__) && defined(__AVX512VL__)
-	__m256i depmask = gf16_affine_load_matrix(scratch, coefficient);
-	
-	__m512i mat_ll, mat_lh, mat_hl, mat_hh;
-	__m512i depmask2 = _mm512_castsi256_si512(depmask);
-	depmask2 = _mm512_shuffle_i64x2(depmask2, depmask2, _MM_SHUFFLE(0,1,0,1)); // reverse order to allow more abuse of VBROADCASTQ
-	mat_hh = _mm512_permutex_epi64(depmask2, _MM_SHUFFLE(3,3,3,3));
-	mat_lh = _mm512_permutex_epi64(depmask2, _MM_SHUFFLE(1,1,1,1));
-	mat_ll = _mm512_broadcastq_epi64(_mm256_castsi256_si128(depmask));
-	mat_hl = _mm512_broadcastq_epi64(_mm512_castsi512_si128(depmask2));
-	
-	uint8_t* _src = (uint8_t*)src + len;
-	uint8_t* _dst = (uint8_t*)dst + len;
-	
-	for(intptr_t ptr = -(intptr_t)len; ptr; ptr += sizeof(__m512i)*2) {
-		__m512i tpl = _mm512_load_si512((__m512i*)(_dst + ptr) + 1);
-		__m512i tph = _mm512_load_si512((__m512i*)(_dst + ptr));
-		gf16_affine_muladd_round((__m512i*)(_src + ptr), &tpl, &tph, mat_ll, mat_hl, mat_lh, mat_hh);
-		
-		_mm512_store_si512 ((__m512i*)(_dst + ptr), tph);
-		_mm512_store_si512 ((__m512i*)(_dst + ptr)+1, tpl);
-	}
+	gf16_muladd_single(scratch, &gf16_affine_muladd_x_avx512, dst, src, len, coefficient);
 	_mm256_zeroupper();
 #else
 	UNUSED(scratch); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficient);
@@ -372,37 +359,6 @@ void gf16_affine2x_finish_packed_avx512(void *HEDLEY_RESTRICT dst, const void *H
 }
 
 
-
-void gf16_affine2x_muladd_avx512(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch) {
-	UNUSED(mutScratch);
-#if defined(__GFNI__) && defined(__AVX512BW__) && defined(__AVX512VL__)
-	__m512i depmask = _mm512_castsi256_si512(gf16_affine_load_matrix(scratch, coefficient));
-	__m512i depmask1 = _mm512_shuffle_i64x2(depmask, depmask, _MM_SHUFFLE(0,0,0,0));
-	__m512i depmask2 = _mm512_shuffle_i64x2(depmask, depmask, _MM_SHUFFLE(1,1,1,1));
-	
-	uint8_t* _src = (uint8_t*)src + len;
-	uint8_t* _dst = (uint8_t*)dst + len;
-	
-	for(intptr_t ptr = -(intptr_t)len; ptr; ptr += sizeof(__m512i)) {
-		__m512i data = _mm512_load_si512((__m512i*)(_src + ptr));
-		data = _mm512_ternarylogic_epi32(
-			_mm512_gf2p8affine_epi64_epi8(data, depmask1, 0),
-			_mm512_shuffle_epi32(
-				_mm512_gf2p8affine_epi64_epi8(data, depmask2, 0),
-				_MM_SHUFFLE(1,0,3,2)
-			),
-			_mm512_load_si512((__m512i*)(_dst + ptr)),
-			0x96
-		);
-		_mm512_store_si512 ((__m512i*)(_dst + ptr), data);
-	}
-	_mm256_zeroupper();
-#else
-	UNUSED(scratch); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficient);
-#endif
-}
-
-
 #if defined(__GFNI__) && defined(__AVX512BW__) && defined(__AVX512VL__)
 static HEDLEY_ALWAYS_INLINE void gf16_affine2x_muladd_2round(const int srcCountOffs, const void* _src1, const void* _src2, __m512i* result, __m512i* swapped, __m512i matNorm1, __m512i matSwap1, __m512i matNorm2, __m512i matSwap2) {
 	if(srcCountOffs < 0) return;
@@ -441,12 +397,9 @@ static HEDLEY_ALWAYS_INLINE void gf16_affine2x_muladd_x_avx512(
 ) {
 	GF16_MULADD_MULTI_SRC_UNUSED(13);
 	
-	__m512i depmask = gf16_affine_load2_matrix(scratch, coefficients[0], coefficients[1]);
-	__m512i matNormA = _mm512_shuffle_i64x2(depmask, depmask, _MM_SHUFFLE(0,0,0,0));
-	__m512i matSwapA = _mm512_shuffle_i64x2(depmask, depmask, _MM_SHUFFLE(1,1,1,1));
-	__m512i matNormB = _mm512_shuffle_i64x2(depmask, depmask, _MM_SHUFFLE(2,2,2,2));
-	__m512i matSwapB = _mm512_shuffle_i64x2(depmask, depmask, _MM_SHUFFLE(3,3,3,3));
-	
+	__m512i depmask;
+	__m512i matNormA, matSwapA;
+	__m512i matNormB, matSwapB;
 	__m512i matNormC, matSwapC;
 	__m512i matNormD, matSwapD;
 	__m512i matNormE, matSwapE;
@@ -458,6 +411,18 @@ static HEDLEY_ALWAYS_INLINE void gf16_affine2x_muladd_x_avx512(
 	__m512i matNormK, matSwapK;
 	__m512i matNormL, matSwapL;
 	__m512i matNormM, matSwapM;
+	if(srcCount == 1) {
+		depmask = _mm512_castsi256_si512(gf16_affine_load_matrix(scratch, coefficients[0]));
+		matNormA = _mm512_shuffle_i64x2(depmask, depmask, _MM_SHUFFLE(0,0,0,0));
+		matSwapA = _mm512_shuffle_i64x2(depmask, depmask, _MM_SHUFFLE(1,1,1,1));
+	}
+	if(srcCount > 1) {
+		depmask = gf16_affine_load2_matrix(scratch, coefficients[0], coefficients[1]);
+		matNormA = _mm512_shuffle_i64x2(depmask, depmask, _MM_SHUFFLE(0,0,0,0));
+		matSwapA = _mm512_shuffle_i64x2(depmask, depmask, _MM_SHUFFLE(1,1,1,1));
+		matNormB = _mm512_shuffle_i64x2(depmask, depmask, _MM_SHUFFLE(2,2,2,2));
+		matSwapB = _mm512_shuffle_i64x2(depmask, depmask, _MM_SHUFFLE(3,3,3,3));
+	}
 	if(srcCount == 3) {
 		depmask = _mm512_castsi256_si512(gf16_affine_load_matrix(scratch, coefficients[2]));
 		matNormC = _mm512_shuffle_i64x2(depmask, depmask, _MM_SHUFFLE(0,0,0,0));
@@ -526,31 +491,33 @@ static HEDLEY_ALWAYS_INLINE void gf16_affine2x_muladd_x_avx512(
 	
 	
 	for(intptr_t ptr = -(intptr_t)len; ptr; ptr += sizeof(__m512i)) {
-		__m512i data1 = _mm512_load_si512((__m512i*)(_src1 + ptr*srcScale));
-		__m512i data2 = _mm512_load_si512((__m512i*)(_src2 + ptr*srcScale));
-		__m512i result, swapped;
+		__m512i data = _mm512_load_si512((__m512i*)(_src1 + ptr*srcScale));
+		__m512i result = _mm512_gf2p8affine_epi64_epi8(data, matNormA, 0);
+		__m512i swapped = _mm512_gf2p8affine_epi64_epi8(data, matSwapA, 0);
+		if(srcCount > 1)
+			data = _mm512_load_si512((__m512i*)(_src2 + ptr*srcScale));
 		if(srcCount >= 3) {
-			__m512i data3 = _mm512_load_si512((__m512i*)(_src3 + ptr*srcScale));
+			__m512i data2 = _mm512_load_si512((__m512i*)(_src3 + ptr*srcScale));
 			result = _mm512_ternarylogic_epi32(
-				_mm512_gf2p8affine_epi64_epi8(data1, matNormA, 0),
-				_mm512_gf2p8affine_epi64_epi8(data2, matNormB, 0),
-				_mm512_gf2p8affine_epi64_epi8(data3, matNormC, 0),
+				result,
+				_mm512_gf2p8affine_epi64_epi8(data, matNormB, 0),
+				_mm512_gf2p8affine_epi64_epi8(data2, matNormC, 0),
 				0x96
 			);
 			swapped = _mm512_ternarylogic_epi32(
-				_mm512_gf2p8affine_epi64_epi8(data1, matSwapA, 0),
-				_mm512_gf2p8affine_epi64_epi8(data2, matSwapB, 0),
-				_mm512_gf2p8affine_epi64_epi8(data3, matSwapC, 0),
+				swapped,
+				_mm512_gf2p8affine_epi64_epi8(data, matSwapB, 0),
+				_mm512_gf2p8affine_epi64_epi8(data2, matSwapC, 0),
 				0x96
 			);
-		} else {
+		} else if(srcCount == 2) {
 			result = _mm512_xor_si512(
-				_mm512_gf2p8affine_epi64_epi8(data1, matNormA, 0),
-				_mm512_gf2p8affine_epi64_epi8(data2, matNormB, 0)
+				result,
+				_mm512_gf2p8affine_epi64_epi8(data, matNormB, 0)
 			);
 			swapped = _mm512_xor_si512(
-				_mm512_gf2p8affine_epi64_epi8(data1, matSwapA, 0),
-				_mm512_gf2p8affine_epi64_epi8(data2, matSwapB, 0)
+				swapped,
+				_mm512_gf2p8affine_epi64_epi8(data, matSwapB, 0)
 			);
 		}
 		
@@ -575,6 +542,18 @@ static HEDLEY_ALWAYS_INLINE void gf16_affine2x_muladd_x_avx512(
 	}
 }
 #endif /*defined(__GFNI__) && defined(__AVX512BW__) && defined(__AVX512VL__)*/
+
+
+void gf16_affine2x_muladd_avx512(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch) {
+	UNUSED(mutScratch);
+#if defined(__GFNI__) && defined(__AVX512BW__) && defined(__AVX512VL__)
+	gf16_muladd_single(scratch, &gf16_affine2x_muladd_x_avx512, dst, src, len, coefficient);
+	_mm256_zeroupper();
+#else
+	UNUSED(scratch); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficient);
+#endif
+}
+
 
 unsigned gf16_affine2x_muladd_multi_avx512(const void *HEDLEY_RESTRICT scratch, unsigned regions, size_t offset, void *HEDLEY_RESTRICT dst, const void* const*HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch) {
 	UNUSED(mutScratch);

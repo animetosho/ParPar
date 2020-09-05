@@ -79,8 +79,11 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle_muladd_x_avx512(
 	const int doPrefetch, const char* _pf
 ) {
 	GF16_MULADD_MULTI_SRC_UNUSED(3);
-	__m512i polyl = _mm512_broadcast_i32x4(_mm_load_si128((__m128i*)scratch + 1));
-	__m512i polyh = _mm512_broadcast_i32x4(_mm_load_si128((__m128i*)scratch));
+	__m512i polyl, polyh;
+	if(srcCount > 1) {
+		polyl = _mm512_broadcast_i32x4(_mm_load_si128((__m128i*)scratch + 1));
+		polyh = _mm512_broadcast_i32x4(_mm_load_si128((__m128i*)scratch));
+	}
 	
 	__m512i lowA0, lowA1, lowA2, lowA3, highA0, highA1, highA2, highA3;
 	__m512i lowB0, lowB1, lowB2, lowB3, highB0, highB1, highB2, highB3;
@@ -131,13 +134,17 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle_muladd_x_avx512(
 		GEN_TABLE(3);
 		#undef GEN_TABLE
 	}
+	if(srcCount == 1) {
+		gf16_shuffle_setup_vec(scratch, coefficients[0], &lowA0, &highA0, &lowA1, &highA1, &lowA2, &highA2, &lowA3, &highA3);
+	}
 	
 	
 	for(intptr_t ptr = -(intptr_t)len; ptr; ptr += sizeof(__m512i)*2) {
 		__m512i tph = _mm512_load_si512((__m512i*)(_dst+ptr));
 		__m512i tpl = _mm512_load_si512((__m512i*)(_dst+ptr) + 1);
 		gf16_shuffle_avx512_round((__m512i*)(_src1+ptr*srcScale), &tpl, &tph, lowA0, highA0, lowA1, highA1, lowA2, highA2, lowA3, highA3);
-		gf16_shuffle_avx512_round((__m512i*)(_src2+ptr*srcScale), &tpl, &tph, lowB0, highB0, lowB1, highB1, lowB2, highB2, lowB3, highB3);
+		if(srcCount >= 2)
+			gf16_shuffle_avx512_round((__m512i*)(_src2+ptr*srcScale), &tpl, &tph, lowB0, highB0, lowB1, highB1, lowB2, highB2, lowB3, highB3);
 		if(srcCount >= 3)
 			gf16_shuffle_avx512_round((__m512i*)(_src3+ptr*srcScale), &tpl, &tph, lowC0, highC0, lowC1, highC1, lowC2, highC2, lowC3, highC3);
 		if(srcCount >= 4)
@@ -239,8 +246,11 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle2x_muladd_x_avx512(
 	const int doPrefetch, const char* _pf
 ) {
 	GF16_MULADD_MULTI_SRC_UNUSED(6);
-	__m512i polyl = _mm512_broadcast_i32x4(_mm_load_si128((__m128i*)scratch + 1));
-	__m512i polyh = _mm512_broadcast_i32x4(_mm_load_si128((__m128i*)scratch));
+	__m512i polyl, polyh;
+	if(srcCount > 1) {
+		polyl = _mm512_broadcast_i32x4(_mm_load_si128((__m128i*)scratch + 1));
+		polyh = _mm512_broadcast_i32x4(_mm_load_si128((__m128i*)scratch));
+	}
 	
 	__m512i shufNormLoA, shufNormHiA, shufSwapLoA, shufSwapHiA;
 	__m512i shufNormLoB, shufNormHiB, shufSwapLoB, shufSwapHiB;
@@ -312,11 +322,15 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle2x_muladd_x_avx512(
 		shufSwapHiB = JOIN_VEC(prodHi1, prodLo3, 1);
 	}
 	#undef JOIN_VEC
+	if(srcCount == 1) {
+		gf16_shuffle2x_setup_vec_avx512(scratch, coefficients[0], &shufNormLoA, &shufSwapLoA, &shufNormHiA, &shufSwapHiA);
+	}
 	
 	for(intptr_t ptr = -(intptr_t)len; ptr; ptr += sizeof(__m512i)) {
 		__m512i swapped, result = _mm512_load_si512((__m512i*)(_dst+ptr));
 		gf16_shuffle2x_avx512_round1((__m512i*)(_src1+ptr*srcScale), &result, &swapped, shufNormLoA, shufNormHiA, shufSwapLoA, shufSwapHiA);
-		gf16_shuffle2x_avx512_round((__m512i*)(_src2+ptr*srcScale), &result, &swapped, shufNormLoB, shufNormHiB, shufSwapLoB, shufSwapHiB);
+		if(srcCount >= 2)
+			gf16_shuffle2x_avx512_round((__m512i*)(_src2+ptr*srcScale), &result, &swapped, shufNormLoB, shufNormHiB, shufSwapLoB, shufSwapHiB);
 		if(srcCount >= 3)
 			gf16_shuffle2x_avx512_round((__m512i*)(_src3+ptr*srcScale), &result, &swapped, shufNormLoC, shufNormHiC, shufSwapLoC, shufSwapHiC);
 		if(srcCount >= 4)
@@ -373,6 +387,16 @@ unsigned gf16_shuffle2x_muladd_multi_packpf_avx512(const void *HEDLEY_RESTRICT s
 #else
 	UNUSED(scratch); UNUSED(regions); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficients); UNUSED(prefetchIn); UNUSED(prefetchOut);
 	return 0;
+#endif
+}
+
+void gf16_shuffle2x_muladd_avx512(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t val, void *HEDLEY_RESTRICT mutScratch) {
+	UNUSED(mutScratch);
+#ifdef _AVAILABLE
+	gf16_muladd_single(scratch, &gf16_shuffle2x_muladd_x_avx512, dst, src, len, val);
+	_mm256_zeroupper();
+#else
+	UNUSED(scratch); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(val);
 #endif
 }
 

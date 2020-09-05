@@ -159,7 +159,91 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle_neon_round(uint8x16x2_t va, uint8x
 	*rl = veorq_u8(*rl, vqtbl1q_u8(tbl_l[3], va.val[1]));
 	*rh = veorq_u8(*rh, vqtbl1q_u8(tbl_h[3], va.val[1]));
 }
+
+# define CACHELINE_SIZE 64
+# ifdef _MSC_VER
+#  define PREFETCH_MEM(addr, rw) __prefetch(addr)
+// TODO: ARM64 intrin is a little different
+# else
+#  define PREFETCH_MEM(addr, rw) __builtin_prefetch(addr, rw, 2)
+# endif
+#include "gf16_muladd_multi.h"
+static HEDLEY_ALWAYS_INLINE void gf16_shuffle_muladd_x_neon(
+	const void *HEDLEY_RESTRICT scratch,
+	uint8_t *HEDLEY_RESTRICT _dst, const unsigned srcScale, GF16_MULADD_MULTI_SRCLIST, size_t len,
+	const uint16_t *HEDLEY_RESTRICT coefficients, const int doPrefetch, const char* _pf
+) {
+	GF16_MULADD_MULTI_SRC_UNUSED(3);
+	uint8x16x2_t poly = vld1q_u8_x2_align(scratch);
+	
+	qtbl_t tbl_Ah[4], tbl_Al[4];
+	qtbl_t tbl_Bh[4], tbl_Bl[4];
+	qtbl_t tbl_Ch[4], tbl_Cl[4];
+	gf16_shuffle_neon_calc_tables(poly, coefficients[0], tbl_Al, tbl_Ah);
+	if(srcCount > 1)
+		gf16_shuffle_neon_calc_tables(poly, coefficients[1], tbl_Bl, tbl_Bh);
+	if(srcCount > 2)
+		gf16_shuffle_neon_calc_tables(poly, coefficients[2], tbl_Cl, tbl_Ch);
+
+	uint8x16_t rl, rh;
+	if(doPrefetch) {
+		intptr_t ptr = -(intptr_t)len;
+		if(doPrefetch == 1)
+			PREFETCH_MEM(_pf+ptr, 1);
+		if(doPrefetch == 2)
+			PREFETCH_MEM(_pf+ptr, 0);
+		while(ptr & (CACHELINE_SIZE-1)) {
+			gf16_shuffle_neon_round1(vld2q_u8(_src1+ptr*srcScale), &rl, &rh, tbl_Al, tbl_Ah);
+			if(srcCount > 1)
+				gf16_shuffle_neon_round(vld2q_u8(_src2+ptr*srcScale), &rl, &rh, tbl_Bl, tbl_Bh);
+			if(srcCount > 2)
+				gf16_shuffle_neon_round(vld2q_u8(_src3+ptr*srcScale), &rl, &rh, tbl_Cl, tbl_Ch);
+			uint8x16x2_t vb = vld2q_u8(_dst+ptr);
+			vb.val[0] = veorq_u8(rl, vb.val[0]);
+			vb.val[1] = veorq_u8(rh, vb.val[1]);
+			vst2q_u8(_dst+ptr, vb);
+			
+			ptr += sizeof(uint8x16_t)*2;
+		}
+		while(ptr) {
+			if(doPrefetch == 1)
+				PREFETCH_MEM(_pf+ptr, 1);
+			if(doPrefetch == 2)
+				PREFETCH_MEM(_pf+ptr, 0);
+			
+			for(int iter=0; iter<(CACHELINE_SIZE/(sizeof(uint8x16_t)*2)); iter++) {
+				gf16_shuffle_neon_round1(vld2q_u8(_src1+ptr*srcScale), &rl, &rh, tbl_Al, tbl_Ah);
+				if(srcCount > 1)
+					gf16_shuffle_neon_round(vld2q_u8(_src2+ptr*srcScale), &rl, &rh, tbl_Bl, tbl_Bh);
+				if(srcCount > 2)
+					gf16_shuffle_neon_round(vld2q_u8(_src3+ptr*srcScale), &rl, &rh, tbl_Cl, tbl_Ch);
+				uint8x16x2_t vb = vld2q_u8(_dst+ptr);
+				vb.val[0] = veorq_u8(rl, vb.val[0]);
+				vb.val[1] = veorq_u8(rh, vb.val[1]);
+				vst2q_u8(_dst+ptr, vb);
+				ptr += sizeof(uint8x16_t)*2;
+			}
+		}
+	} else {
+		for(intptr_t ptr = -(intptr_t)len; ptr; ptr += sizeof(uint8x16_t)*2) {
+			gf16_shuffle_neon_round1(vld2q_u8(_src1+ptr*srcScale), &rl, &rh, tbl_Al, tbl_Ah);
+			if(srcCount > 1)
+				gf16_shuffle_neon_round(vld2q_u8(_src2+ptr*srcScale), &rl, &rh, tbl_Bl, tbl_Bh);
+			if(srcCount > 2)
+				gf16_shuffle_neon_round(vld2q_u8(_src3+ptr*srcScale), &rl, &rh, tbl_Cl, tbl_Ch);
+			uint8x16x2_t vb = vld2q_u8(_dst+ptr);
+			vb.val[0] = veorq_u8(rl, vb.val[0]);
+			vb.val[1] = veorq_u8(rh, vb.val[1]);
+			vst2q_u8(_dst+ptr, vb);
+		}
+	}
+}
+# undef PREFETCH_MEM
+
 #endif /*defined(__ARM_NEON)*/
+
+
+
 
 void gf16_shuffle_mul_neon(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t val, void *HEDLEY_RESTRICT mutScratch) {
 	UNUSED(mutScratch);
@@ -183,103 +267,12 @@ void gf16_shuffle_mul_neon(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RES
 void gf16_shuffle_muladd_neon(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t val, void *HEDLEY_RESTRICT mutScratch) {
 	UNUSED(mutScratch);
 #if defined(__ARM_NEON)
-	qtbl_t tbl_h[4], tbl_l[4];
-	gf16_shuffle_neon_calc_tables(vld1q_u8_x2_align(scratch), val, tbl_l, tbl_h);
-
-	uint8_t* _src = (uint8_t*)src + len;
-	uint8_t* _dst = (uint8_t*)dst + len;
-	
-	for(intptr_t ptr = -(intptr_t)len; ptr; ptr += sizeof(uint8x16_t)*2) {
-		uint8x16_t rl, rh;
-		uint8x16x2_t vb = vld2q_u8(_dst+ptr);
-		gf16_shuffle_neon_round1(vld2q_u8(_src+ptr), &rl, &rh, tbl_l, tbl_h);
-		vb.val[0] = veorq_u8(rl, vb.val[0]);
-		vb.val[1] = veorq_u8(rh, vb.val[1]);
-		vst2q_u8(_dst+ptr, vb);
-	}
+	gf16_muladd_single(scratch, &gf16_shuffle_muladd_x_neon, dst, src, len, val);
 #else
 	UNUSED(scratch); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(val);
 #endif
 }
 
-
-#if defined(__ARM_NEON) && defined(__aarch64__)
-# define CACHELINE_SIZE 64
-# ifdef _MSC_VER
-#  define PREFETCH_MEM(addr, rw) __prefetch(addr)
-// TODO: ARM64 intrin is a little different
-# else
-#  define PREFETCH_MEM(addr, rw) __builtin_prefetch(addr, rw, 2)
-# endif
-#include "gf16_muladd_multi.h"
-static HEDLEY_ALWAYS_INLINE void gf16_shuffle_muladd_x_neon(
-	const void *HEDLEY_RESTRICT scratch,
-	uint8_t *HEDLEY_RESTRICT _dst, const unsigned srcScale, GF16_MULADD_MULTI_SRCLIST, size_t len,
-	const uint16_t *HEDLEY_RESTRICT coefficients, const int doPrefetch, const char* _pf
-) {
-	GF16_MULADD_MULTI_SRC_UNUSED(3);
-	uint8x16x2_t poly = vld1q_u8_x2_align(scratch);
-	
-	qtbl_t tbl_Ah[4], tbl_Al[4];
-	qtbl_t tbl_Bh[4], tbl_Bl[4];
-	qtbl_t tbl_Ch[4], tbl_Cl[4];
-	gf16_shuffle_neon_calc_tables(poly, coefficients[0], tbl_Al, tbl_Ah);
-	gf16_shuffle_neon_calc_tables(poly, coefficients[1], tbl_Bl, tbl_Bh);
-	if(srcCount > 2)
-		gf16_shuffle_neon_calc_tables(poly, coefficients[2], tbl_Cl, tbl_Ch);
-
-	uint8x16_t rl, rh;
-	if(doPrefetch) {
-		intptr_t ptr = -(intptr_t)len;
-		if(doPrefetch == 1)
-			PREFETCH_MEM(_pf+ptr, 1);
-		if(doPrefetch == 2)
-			PREFETCH_MEM(_pf+ptr, 0);
-		while(ptr & (CACHELINE_SIZE-1)) {
-			gf16_shuffle_neon_round1(vld2q_u8(_src1+ptr*srcScale), &rl, &rh, tbl_Al, tbl_Ah);
-			gf16_shuffle_neon_round(vld2q_u8(_src2+ptr*srcScale), &rl, &rh, tbl_Bl, tbl_Bh);
-			if(srcCount > 2)
-				gf16_shuffle_neon_round(vld2q_u8(_src3+ptr*srcScale), &rl, &rh, tbl_Cl, tbl_Ch);
-			uint8x16x2_t vb = vld2q_u8(_dst+ptr);
-			vb.val[0] = veorq_u8(rl, vb.val[0]);
-			vb.val[1] = veorq_u8(rh, vb.val[1]);
-			vst2q_u8(_dst+ptr, vb);
-			
-			ptr += sizeof(uint8x16_t)*2;
-		}
-		while(ptr) {
-			if(doPrefetch == 1)
-				PREFETCH_MEM(_pf+ptr, 1);
-			if(doPrefetch == 2)
-				PREFETCH_MEM(_pf+ptr, 0);
-			
-			for(int iter=0; iter<(CACHELINE_SIZE/(sizeof(uint8x16_t)*2)); iter++) {
-				gf16_shuffle_neon_round1(vld2q_u8(_src1+ptr*srcScale), &rl, &rh, tbl_Al, tbl_Ah);
-				gf16_shuffle_neon_round(vld2q_u8(_src2+ptr*srcScale), &rl, &rh, tbl_Bl, tbl_Bh);
-				if(srcCount > 2)
-					gf16_shuffle_neon_round(vld2q_u8(_src3+ptr*srcScale), &rl, &rh, tbl_Cl, tbl_Ch);
-				uint8x16x2_t vb = vld2q_u8(_dst+ptr);
-				vb.val[0] = veorq_u8(rl, vb.val[0]);
-				vb.val[1] = veorq_u8(rh, vb.val[1]);
-				vst2q_u8(_dst+ptr, vb);
-				ptr += sizeof(uint8x16_t)*2;
-			}
-		}
-	} else {
-		for(intptr_t ptr = -(intptr_t)len; ptr; ptr += sizeof(uint8x16_t)*2) {
-			gf16_shuffle_neon_round1(vld2q_u8(_src1+ptr*srcScale), &rl, &rh, tbl_Al, tbl_Ah);
-			gf16_shuffle_neon_round(vld2q_u8(_src2+ptr*srcScale), &rl, &rh, tbl_Bl, tbl_Bh);
-			if(srcCount > 2)
-				gf16_shuffle_neon_round(vld2q_u8(_src3+ptr*srcScale), &rl, &rh, tbl_Cl, tbl_Ch);
-			uint8x16x2_t vb = vld2q_u8(_dst+ptr);
-			vb.val[0] = veorq_u8(rl, vb.val[0]);
-			vb.val[1] = veorq_u8(rh, vb.val[1]);
-			vst2q_u8(_dst+ptr, vb);
-		}
-	}
-}
-# undef PREFETCH_MEM
-#endif
 
 unsigned gf16_shuffle_muladd_multi_neon(const void *HEDLEY_RESTRICT scratch, unsigned regions, size_t offset, void *HEDLEY_RESTRICT dst, const void* const*HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch) {
 	UNUSED(mutScratch);

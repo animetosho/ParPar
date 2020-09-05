@@ -30,6 +30,18 @@ typedef void (*const fMuladdPF)
 );
 
 
+static HEDLEY_ALWAYS_INLINE void gf16_muladd_single(const void *HEDLEY_RESTRICT scratch, fMuladdPF muladd_pf, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, uint16_t val) {
+	muladd_pf(
+		scratch, (uint8_t*)dst + len, 1, 1,
+		(const uint8_t*)src + len,
+		NULL, NULL, NULL, NULL,
+		NULL, NULL, NULL, NULL,
+		NULL, NULL, NULL, NULL,
+		len, &val, 0, NULL
+	);
+}
+
+
 static HEDLEY_ALWAYS_INLINE unsigned gf16_muladd_multi(const void *HEDLEY_RESTRICT scratch, fMuladdPF muladd_pf, const unsigned interleave, unsigned regions, size_t offset, void *HEDLEY_RESTRICT dst, const void* const*HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients) {
 	uint8_t* _dst = (uint8_t*)dst + offset + len;
 	
