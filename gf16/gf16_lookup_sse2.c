@@ -9,7 +9,7 @@ static HEDLEY_ALWAYS_INLINE void calc_table(uint16_t val, uint16_t* lhtable) {
 	
 	int val2 = GF16_MULTBY_TWO(val);
 	int val4 = GF16_MULTBY_TWO(val2);
-	__m128i tmp0 = _mm_cvtsi32_si128(val << 16);
+	__m128i tmp0 = _mm_cvtsi32_si128((uint32_t)val << 16);
 	tmp0 = _mm_insert_epi16(tmp0, val2, 2);
 	tmp0 = _mm_insert_epi16(tmp0, val2 ^ val, 3);
 	

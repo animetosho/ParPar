@@ -7,7 +7,7 @@
 #define GF16_MULTBY_TWO_X2(p) ((((p) << 1) & 0xffffffff) ^ ((GF16_POLYNOMIAL ^ ((GF16_POLYNOMIAL&0xffff) << 16)) & -((p) >> 31)))
 #ifdef __SSSE3__
 static HEDLEY_ALWAYS_INLINE void initial_mul_vector(uint16_t val, __m128i* prod, __m128i* prod4) {
-	uint32_t val1 = val << 16;
+	uint32_t val1 = (uint32_t)val << 16;
 	uint32_t val2 = val1 | val;
 	val2 = GF16_MULTBY_TWO_X2(val2);
 	__m128i tmp = _mm_cvtsi32_si128(val1);
