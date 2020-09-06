@@ -45,23 +45,15 @@ static HEDLEY_ALWAYS_INLINE void gf16_muladd_single(const void *HEDLEY_RESTRICT 
 static HEDLEY_ALWAYS_INLINE unsigned gf16_muladd_multi(const void *HEDLEY_RESTRICT scratch, fMuladdPF muladd_pf, const unsigned interleave, unsigned regions, size_t offset, void *HEDLEY_RESTRICT dst, const void* const*HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients) {
 	uint8_t* _dst = (uint8_t*)dst + offset + len;
 	
+	#define _SRC(limit, n) limit > n ? (const uint8_t*)src[region+n] + offset + len : NULL
 	unsigned region = 0;
 	if(regions >= interleave) do {
 		muladd_pf(
 			scratch, _dst, 1, interleave,
 			(const uint8_t*)src[region] + offset + len,
-			(const uint8_t*)src[region+1] + offset + len,
-			(const uint8_t*)src[region+2] + offset + len,
-			(const uint8_t*)src[region+3] + offset + len,
-			(const uint8_t*)src[region+4] + offset + len,
-			(const uint8_t*)src[region+5] + offset + len,
-			(const uint8_t*)src[region+6] + offset + len,
-			(const uint8_t*)src[region+7] + offset + len,
-			(const uint8_t*)src[region+8] + offset + len,
-			(const uint8_t*)src[region+9] + offset + len,
-			(const uint8_t*)src[region+10] + offset + len,
-			(const uint8_t*)src[region+11] + offset + len,
-			(const uint8_t*)src[region+12] + offset + len,
+			_SRC(interleave, 1), _SRC(interleave,  2), _SRC(interleave,  3), _SRC(interleave,  4),
+			_SRC(interleave, 5), _SRC(interleave,  6), _SRC(interleave,  7), _SRC(interleave,  8),
+			_SRC(interleave, 9), _SRC(interleave, 10), _SRC(interleave, 11), _SRC(interleave, 12),
 			len, coefficients + region, 0, NULL
 		);
 		region += interleave;
@@ -75,18 +67,9 @@ static HEDLEY_ALWAYS_INLINE unsigned gf16_muladd_multi(const void *HEDLEY_RESTRI
 				muladd_pf( \
 					scratch, _dst, 1, x, \
 					(const uint8_t*)src[region] + offset + len, \
-					(const uint8_t*)src[region+1] + offset + len, \
-					(const uint8_t*)src[region+2] + offset + len, \
-					(const uint8_t*)src[region+3] + offset + len, \
-					(const uint8_t*)src[region+4] + offset + len, \
-					(const uint8_t*)src[region+5] + offset + len, \
-					(const uint8_t*)src[region+6] + offset + len, \
-					(const uint8_t*)src[region+7] + offset + len, \
-					(const uint8_t*)src[region+8] + offset + len, \
-					(const uint8_t*)src[region+9] + offset + len, \
-					(const uint8_t*)src[region+10] + offset + len, \
-					(const uint8_t*)src[region+11] + offset + len, \
-					(const uint8_t*)src[region+12] + offset + len, \
+					_SRC(x, 1), _SRC(x,  2), _SRC(x,  3), _SRC(x,  4), \
+					_SRC(x, 5), _SRC(x,  6), _SRC(x,  7), _SRC(x,  8), \
+					_SRC(x, 9), _SRC(x, 10), _SRC(x, 11), _SRC(x, 12), \
 					len, coefficients + region, 0, NULL \
 				); \
 				region += x; \
@@ -105,6 +88,7 @@ static HEDLEY_ALWAYS_INLINE unsigned gf16_muladd_multi(const void *HEDLEY_RESTRI
 		#undef CASE
 		default: break;
 	}
+	#undef _SRC
 	return region;
 }
 
