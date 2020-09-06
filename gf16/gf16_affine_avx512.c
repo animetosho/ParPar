@@ -241,6 +241,16 @@ void gf16_affine_muladd_avx512(const void *HEDLEY_RESTRICT scratch, void *HEDLEY
 #endif
 }
 
+void gf16_affine_muladd_prefetch_avx512(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch, const void *HEDLEY_RESTRICT prefetch) {
+	UNUSED(mutScratch);
+#if defined(__GFNI__) && defined(__AVX512BW__) && defined(__AVX512VL__)
+	gf16_muladd_prefetch_single(scratch, &gf16_affine_muladd_x_avx512, dst, src, len, coefficient, prefetch);
+	_mm256_zeroupper();
+#else
+	UNUSED(scratch); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficient);
+#endif
+}
+
 unsigned gf16_affine_muladd_multi_avx512(const void *HEDLEY_RESTRICT scratch, unsigned regions, size_t offset, void *HEDLEY_RESTRICT dst, const void* const*HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch) {
 	UNUSED(mutScratch);
 #if defined(__GFNI__) && defined(__AVX512BW__) && defined(__AVX512VL__) && defined(PLATFORM_AMD64)

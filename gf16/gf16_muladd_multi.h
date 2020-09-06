@@ -41,6 +41,17 @@ static HEDLEY_ALWAYS_INLINE void gf16_muladd_single(const void *HEDLEY_RESTRICT 
 	);
 }
 
+static HEDLEY_ALWAYS_INLINE void gf16_muladd_prefetch_single(const void *HEDLEY_RESTRICT scratch, fMuladdPF muladd_pf, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, uint16_t val, const void *HEDLEY_RESTRICT prefetch) {
+	muladd_pf(
+		scratch, (uint8_t*)dst + len, 1, 1,
+		(const uint8_t*)src + len,
+		NULL, NULL, NULL, NULL,
+		NULL, NULL, NULL, NULL,
+		NULL, NULL, NULL, NULL,
+		len, &val, 2, prefetch
+	);
+}
+
 
 static HEDLEY_ALWAYS_INLINE unsigned gf16_muladd_multi(const void *HEDLEY_RESTRICT scratch, fMuladdPF muladd_pf, const unsigned interleave, unsigned regions, size_t offset, void *HEDLEY_RESTRICT dst, const void* const*HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients) {
 	uint8_t* _dst = (uint8_t*)dst + offset + len;
@@ -160,7 +171,7 @@ static HEDLEY_ALWAYS_INLINE unsigned gf16_muladd_multi_packed(const void *HEDLEY
 	return region;
 }
 
-#ifdef __ICC
+#if defined(__ICC) || (defined(_MSC_VER) && !defined(__clang__))
 # define MM_HINT_WT1 _MM_HINT_T1
 #else
 # define MM_HINT_WT1 _MM_HINT_ET1

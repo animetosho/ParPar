@@ -313,6 +313,7 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 			scratch = gf16_shuffle_init_vbmi(GF16_POLYNOMIAL);
 			_mul = &gf16_shuffle_mul_vbmi;
 			_mul_add = &gf16_shuffle_muladd_vbmi;
+			_mul_add_pf = &gf16_shuffle_muladd_prefetch_vbmi;
 			#ifdef PLATFORM_AMD64
 			_mul_add_multi = &gf16_shuffle_muladd_multi_vbmi;
 			_mul_add_multi_packed = &gf16_shuffle_muladd_multi_packed_vbmi;
@@ -403,6 +404,7 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 			}
 			_mul = &gf16_affine_mul_avx512;
 			_mul_add = &gf16_affine_muladd_avx512;
+			_mul_add_pf = &gf16_affine_muladd_prefetch_avx512;
 			#ifdef PLATFORM_AMD64
 			_mul_add_multi = &gf16_affine_muladd_multi_avx512;
 			_mul_add_multi_packed = &gf16_affine_muladd_multi_packed_avx512;
@@ -426,6 +428,7 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 			}
 			_mul = &gf16_affine_mul_gfni;
 			_mul_add = &gf16_affine_muladd_gfni;
+			_mul_add_pf = &gf16_affine_muladd_prefetch_gfni;
 			#ifdef PLATFORM_AMD64
 			_mul_add_multi = &gf16_affine_muladd_multi_gfni;
 			_mul_add_multi_packed = &gf16_affine_muladd_multi_packed_gfni;
@@ -525,6 +528,7 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 					scratch = gf16_xor_jit_init_sse2(GF16_POLYNOMIAL, jitOptStrat);
 					_mul = &gf16_xor_jit_mul_avx;
 					_mul_add = &gf16_xor_jit_muladd_avx;
+					_mul_add_pf = &gf16_xor_jit_muladd_prefetch_avx;
 					prepare = &gf16_xor_prepare_avx;
 					prepare_packed = &gf16_xor_prepare_packed_avx;
 					finish = &gf16_xor_finish_avx;
