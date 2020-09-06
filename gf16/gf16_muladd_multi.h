@@ -182,7 +182,7 @@ static HEDLEY_ALWAYS_INLINE unsigned gf16_muladd_multi_packed(const void *HEDLEY
 # define MM_HINT_WT1 _MM_HINT_ET1
 #endif
 
-static HEDLEY_ALWAYS_INLINE unsigned gf16_muladd_multi_packpf(const void *HEDLEY_RESTRICT scratch, fMuladdPF muladd_pf, const unsigned interleave, unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, size_t blockLen, const uint16_t *HEDLEY_RESTRICT coefficients, const unsigned pfFactor, const void* HEDLEY_RESTRICT prefetchIn, const void* HEDLEY_RESTRICT prefetchOut) {
+static HEDLEY_ALWAYS_INLINE void gf16_muladd_multi_packpf(const void *HEDLEY_RESTRICT scratch, fMuladdPF muladd_pf, const unsigned interleave, unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, size_t blockLen, const uint16_t *HEDLEY_RESTRICT coefficients, const unsigned pfFactor, const void* HEDLEY_RESTRICT prefetchIn, const void* HEDLEY_RESTRICT prefetchOut) {
 	uint8_t* _dst = (uint8_t*)dst + len;
 	uint8_t* _src = (uint8_t*)src;
 	
@@ -253,10 +253,11 @@ static HEDLEY_ALWAYS_INLINE unsigned gf16_muladd_multi_packpf(const void *HEDLEY
 				CASE( 4);
 				CASE( 3);
 				CASE( 2);
+				CASE( 1);
 			#undef CASE
 			default: break;
 		}
-		return region;
+		return;
 	}
 	
 	if(prefetchIn) {
@@ -340,8 +341,8 @@ static HEDLEY_ALWAYS_INLINE unsigned gf16_muladd_multi_packpf(const void *HEDLEY
 			CASE( 4);
 			CASE( 3);
 			CASE( 2);
+			CASE( 1);
 		#undef CASE
 		default: break;
 	}
-	return region;
 }
