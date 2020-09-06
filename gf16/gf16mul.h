@@ -252,7 +252,7 @@ public:
 		
 		// process remaining regions
 		for(; region<regions; region++) {
-			mul_add((uint8_t*)dst+offset, ((uint8_t*)src[region])+offset, len, coefficients[region], mutScratch);
+			_mul_add(scratch, (uint8_t*)dst+offset, ((uint8_t*)src[region])+offset, len, coefficients[region], mutScratch);
 		}
 	}
 	
@@ -270,8 +270,7 @@ public:
 		
 		// process remaining regions
 		for(; region<regions; region++) {
-			if(coefficients[region])
-				_mul_add(scratch, dst, (uint8_t*)src + region*len, len, coefficients[region], mutScratch);
+			_mul_add(scratch, dst, (uint8_t*)src + region*len, len, coefficients[region], mutScratch);
 		}
 	}
 	
@@ -294,13 +293,24 @@ public:
 		
 		// do using single multiplies
 		unsigned region = 0;
-		// TODO: undesirable!!
-		for(; region<regions-1; region++) {
-			if(coefficients[region])
-				_mul_add(scratch, dst, (uint8_t*)src + region*len, len, coefficients[region], mutScratch);
+		size_t pfLen = len>>_info.prefetchDownscale;
+		// firstly, prefetch output
+		const char* _pf = (const char*)prefetchOut;
+		for(unsigned outputPfRounds = 1<<_info.prefetchDownscale; region<regions && outputPfRounds; region++, outputPfRounds--) {
+			_mul_add_pf(scratch, dst, (uint8_t*)src + region*len, len, coefficients[region], mutScratch, _pf);
+			_pf += pfLen;
 		}
-		if(region < regions && coefficients[region]) {
-			_mul_add_pf(scratch, dst, (uint8_t*)src + region*len, len, coefficients[region], mutScratch, prefetchOut);
+		// next, prefetch inputs
+		if(prefetchIn) {
+			_pf = (const char*)prefetchIn;
+			for(; region<regions; region++) {
+				_mul_add_pf(scratch, dst, (uint8_t*)src + region*len, len, coefficients[region], mutScratch, _pf);
+				_pf += pfLen;
+			}
+		} else {
+			for(; region<regions; region++) {
+				_mul_add(scratch, dst, (uint8_t*)src + region*len, len, coefficients[region], mutScratch);
+			}
 		}
 	}
 	

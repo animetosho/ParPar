@@ -681,6 +681,10 @@ static HEDLEY_ALWAYS_INLINE void gf16_xor_jit_mul_sse2_base(const void *HEDLEY_R
 
 void gf16_xor_jit_mul_sse2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch) {
 #ifdef __SSE2__
+	if(coefficient == 0) {
+		memset(dst, 0, len);
+		return;
+	}
 	gf16_xor_jit_mul_sse2_base(scratch, dst, src, len, coefficient, mutScratch, 0);
 #else
 	UNUSED(scratch); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficient); UNUSED(mutScratch);
@@ -689,6 +693,7 @@ void gf16_xor_jit_mul_sse2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RES
 
 void gf16_xor_jit_muladd_sse2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch) {
 #ifdef __SSE2__
+	if(coefficient == 0) return;
 	gf16_xor_jit_mul_sse2_base(scratch, dst, src, len, coefficient, mutScratch, 1);
 #else
 	UNUSED(scratch); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficient); UNUSED(mutScratch);
@@ -802,6 +807,10 @@ static HEDLEY_ALWAYS_INLINE void gf16_xor_write_deptable(uintptr_t *HEDLEY_RESTR
 void gf16_xor_mul_sse2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t val, void *HEDLEY_RESTRICT mutScratch) {
 	UNUSED(mutScratch);
 #ifdef __SSE2__
+	if(val == 0) {
+		memset(dst, 0, len);
+		return;
+	}
 	uint_fast32_t counts[16];
 	ALIGN_TO(16, uintptr_t deptable[256]);
 	uint8_t* _dst = (uint8_t*)dst + len;
@@ -861,6 +870,7 @@ void gf16_xor_mul_sse2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRIC
 void gf16_xor_muladd_sse2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t val, void *HEDLEY_RESTRICT mutScratch) {
 	UNUSED(mutScratch);
 #ifdef __SSE2__
+	if(val == 0) return;
 	uint_fast32_t counts[16];
 	ALIGN_TO(16, uintptr_t deptable[256]);
 	uint8_t* _dst = (uint8_t*)dst + len;

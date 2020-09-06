@@ -120,6 +120,44 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle_setup_vec(const void *HEDLEY_RESTR
 	mul16_vec128(polyl, polyh, *low2, *high2, low3, high3);
 #endif
 }
+static HEDLEY_ALWAYS_INLINE void gf16_shuffle_muladd_round(_mword* _dst, _mword* _src, _mword low0, _mword high0, _mword low1, _mword high1, _mword low2, _mword high2, _mword low3, _mword high3) {
+	_mword mask = _MM(set1_epi8) (0x0f);
+	_mword ta = _MMI(load)(_src);
+	_mword tb = _MMI(load)(_src+1);
+
+	_mword ti = _MMI(and) (mask, tb);
+	_mword tph = _MM(shuffle_epi8) (high0, ti);
+	_mword tpl = _MM(shuffle_epi8) (low0, ti);
+
+	ti = _MM_SRLI4_EPI8(tb);
+#if MWORD_SIZE == 64
+	tpl = _mm512_ternarylogic_epi32(tpl, _MM(shuffle_epi8) (low1, ti), _MMI(load)(_dst+1), 0x96);
+	tph = _mm512_ternarylogic_epi32(tph, _MM(shuffle_epi8) (high1, ti), _MMI(load)(_dst), 0x96);
+
+	ti = _MMI(and) (mask, ta);
+	_mword ti2 = _MMI(and) (mask, _MM(srli_epi16)(ta, 4));
+	
+	tpl = _mm512_ternarylogic_epi32(tpl, _MM(shuffle_epi8) (low2, ti), _MM(shuffle_epi8) (low3, ti2), 0x96);
+	tph = _mm512_ternarylogic_epi32(tph, _MM(shuffle_epi8) (high2, ti), _MM(shuffle_epi8) (high3, ti2), 0x96);
+#else
+	tpl = _MMI(xor)(_MM(shuffle_epi8) (low1, ti), tpl);
+	tph = _MMI(xor)(_MM(shuffle_epi8) (high1, ti), tph);
+
+	tph = _MMI(xor)(tph, _MMI(load)(_dst));
+	tpl = _MMI(xor)(tpl, _MMI(load)(_dst+1));
+
+	ti = _MMI(and) (mask, ta);
+	tpl = _MMI(xor)(_MM(shuffle_epi8) (low2, ti), tpl);
+	tph = _MMI(xor)(_MM(shuffle_epi8) (high2, ti), tph);
+
+	ti = _MM_SRLI4_EPI8(ta);
+	tpl = _MMI(xor)(_MM(shuffle_epi8) (low3, ti), tpl);
+	tph = _MMI(xor)(_MM(shuffle_epi8) (high3, ti), tph);
+#endif
+	
+	_MMI(store) (_dst, tph);
+	_MMI(store) (_dst+1, tpl);
+}
 #endif
 
 void _FN(gf16_shuffle_mul)(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t val, void *HEDLEY_RESTRICT mutScratch) {
@@ -173,50 +211,48 @@ void _FN(gf16_shuffle_muladd)(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_
 	_mword low0, low1, low2, low3, high0, high1, high2, high3;
 	gf16_shuffle_setup_vec(scratch, val, &low0, &high0, &low1, &high1, &low2, &high2, &low3, &high3);
 	
-	_mword mask = _MM(set1_epi8) (0x0f);
 	uint8_t* _src = (uint8_t*)src + len;
 	uint8_t* _dst = (uint8_t*)dst + len;
 
 	for(intptr_t ptr = -(intptr_t)len; ptr; ptr += sizeof(_mword)*2) {
-		_mword ta = _MMI(load)((_mword*)(_src+ptr));
-		_mword tb = _MMI(load)((_mword*)(_src+ptr) + 1);
-
-		_mword ti = _MMI(and) (mask, tb);
-		_mword tph = _MM(shuffle_epi8) (high0, ti);
-		_mword tpl = _MM(shuffle_epi8) (low0, ti);
-
-		ti = _MM_SRLI4_EPI8(tb);
-#if MWORD_SIZE == 64
-		tpl = _mm512_ternarylogic_epi32(tpl, _MM(shuffle_epi8) (low1, ti), _MMI(load)((_mword*)(_dst+ptr) + 1), 0x96);
-		tph = _mm512_ternarylogic_epi32(tph, _MM(shuffle_epi8) (high1, ti), _MMI(load)((_mword*)(_dst+ptr)), 0x96);
-
-		ti = _MMI(and) (mask, ta);
-		_mword ti2 = _MMI(and) (mask, _MM(srli_epi16)(ta, 4));
-		
-		tpl = _mm512_ternarylogic_epi32(tpl, _MM(shuffle_epi8) (low2, ti), _MM(shuffle_epi8) (low3, ti2), 0x96);
-		tph = _mm512_ternarylogic_epi32(tph, _MM(shuffle_epi8) (high2, ti), _MM(shuffle_epi8) (high3, ti2), 0x96);
-#else
-		tpl = _MMI(xor)(_MM(shuffle_epi8) (low1, ti), tpl);
-		tph = _MMI(xor)(_MM(shuffle_epi8) (high1, ti), tph);
-
-		tph = _MMI(xor)(tph, _MMI(load)((_mword*)(_dst+ptr)));
-		tpl = _MMI(xor)(tpl, _MMI(load)((_mword*)(_dst+ptr) + 1));
-
-		ti = _MMI(and) (mask, ta);
-		tpl = _MMI(xor)(_MM(shuffle_epi8) (low2, ti), tpl);
-		tph = _MMI(xor)(_MM(shuffle_epi8) (high2, ti), tph);
-
-		ti = _MM_SRLI4_EPI8(ta);
-		tpl = _MMI(xor)(_MM(shuffle_epi8) (low3, ti), tpl);
-		tph = _MMI(xor)(_MM(shuffle_epi8) (high3, ti), tph);
-#endif
-		
-		_MMI(store) ((_mword*)(_dst+ptr), tph);
-		_MMI(store) ((_mword*)(_dst+ptr) + 1, tpl);
+		gf16_shuffle_muladd_round((_mword*)(_dst+ptr), (_mword*)(_src+ptr), low0, high0, low1, high1, low2, high2, low3, high3);
 	}
 	_MM_END
 #else
 	UNUSED(scratch); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(val);
+#endif
+}
+
+void _FN(gf16_shuffle_muladd_prefetch)(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t val, void *HEDLEY_RESTRICT mutScratch, const void *HEDLEY_RESTRICT prefetch) {
+	UNUSED(mutScratch);
+#ifdef _AVAILABLE
+	_mword low0, low1, low2, low3, high0, high1, high2, high3;
+	gf16_shuffle_setup_vec(scratch, val, &low0, &high0, &low1, &high1, &low2, &high2, &low3, &high3);
+	
+	uint8_t* _src = (uint8_t*)src + len;
+	uint8_t* _dst = (uint8_t*)dst + len;
+	char* _pf = (char*)prefetch + len/2;
+	intptr_t ptr = -(intptr_t)len;
+
+	// we'll prefetch at half-rate (one cacheline per 128 bytes), as it seems to work best
+	// initial alignment
+	_mm_prefetch(_pf+(ptr>>1), _MM_HINT_T1);
+	while(ptr & 127) {
+		gf16_shuffle_muladd_round((_mword*)(_dst+ptr), (_mword*)(_src+ptr), low0, high0, low1, high1, low2, high2, low3, high3);
+		ptr += sizeof(_mword)*2;
+	}
+	
+	while(ptr) {
+		_mm_prefetch(_pf+(ptr>>1), _MM_HINT_T1);
+		
+		for(unsigned round=0; round<64/sizeof(_mword); round++) {
+			gf16_shuffle_muladd_round((_mword*)(_dst+ptr), (_mword*)(_src+ptr), low0, high0, low1, high1, low2, high2, low3, high3);
+			ptr += sizeof(_mword)*2;
+		}
+	}
+	_MM_END
+#else
+	UNUSED(scratch); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(prefetch); UNUSED(val);
 #endif
 }
 

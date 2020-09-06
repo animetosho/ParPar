@@ -237,6 +237,7 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 			_info.alignment = 16;
 			scratch = gf16_shuffle_init_x86(GF16_POLYNOMIAL);
 			// TODO: set _add
+			_info.prefetchDownscale = 1;
 			
 			switch(method) {
 				case GF16_SHUFFLE_SSSE3:
@@ -246,6 +247,7 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 					}
 					_mul = &gf16_shuffle_mul_ssse3;
 					_mul_add = &gf16_shuffle_muladd_ssse3;
+					_mul_add_pf = &gf16_shuffle_muladd_prefetch_ssse3;
 					prepare = &gf16_shuffle_prepare_ssse3;
 					prepare_packed = &gf16_shuffle_prepare_packed_ssse3;
 					finish = &gf16_shuffle_finish_ssse3;
@@ -258,6 +260,7 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 					}
 					_mul = &gf16_shuffle_mul_avx;
 					_mul_add = &gf16_shuffle_muladd_avx;
+					_mul_add_pf = &gf16_shuffle_muladd_prefetch_avx;
 					prepare = &gf16_shuffle_prepare_avx;
 					prepare_packed = &gf16_shuffle_prepare_packed_avx;
 					finish = &gf16_shuffle_finish_avx;
@@ -270,6 +273,7 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 					}
 					_mul = &gf16_shuffle_mul_avx2;
 					_mul_add = &gf16_shuffle_muladd_avx2;
+					_mul_add_pf = &gf16_shuffle_muladd_prefetch_avx2;
 					prepare = &gf16_shuffle_prepare_avx2;
 					prepare_packed = &gf16_shuffle_prepare_packed_avx2;
 					finish = &gf16_shuffle_finish_avx2;
@@ -283,13 +287,13 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 					}
 					_mul = &gf16_shuffle_mul_avx512;
 					_mul_add = &gf16_shuffle_muladd_avx512;
+					_mul_add_pf = &gf16_shuffle_muladd_prefetch_avx512;
 					#ifdef PLATFORM_AMD64
 					// if 32 registers are available, can do multi-region
 					_mul_add_multi = &gf16_shuffle_muladd_multi_avx512;
 					_mul_add_multi_packed = &gf16_shuffle_muladd_multi_packed_avx512;
 					_mul_add_multi_packpf = &gf16_shuffle_muladd_multi_packpf_avx512;
 					_info.idealInputMultiple = 3;
-					_info.prefetchDownscale = 1;
 					#endif
 					prepare = &gf16_shuffle_prepare_avx512;
 					prepare_packed = &gf16_shuffle_prepare_packed_avx512;
