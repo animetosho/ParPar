@@ -13,11 +13,11 @@
 #ifdef PLATFORM_AMD64
 # ifdef _MSC_VER
 /* specified in external file, as we can't use inline ASM for 64-bit MSVC */
-extern void gf16_xor_jit_stub(intptr_t src, intptr_t dEnd, intptr_t dest, void* fn);
+extern void gf16_xor_jit_stub(intptr_t src, intptr_t dEnd, intptr_t dest, intptr_t pf, void* fn);
 #  ifdef __AVX2__
 #   define gf16_xor512_jit_stub gf16_xor256_jit_stub
 #   define gf16_xor512_jit_multi_stub gf16_xor256_jit_multi_stub
-extern void gf16_xor256_jit_stub(intptr_t src, intptr_t dEnd, intptr_t dest, void* fn);
+extern void gf16_xor256_jit_stub(intptr_t src, intptr_t dEnd, intptr_t dest, intptr_t pf, void* fn);
 extern void gf16_xor256_jit_multi_stub(intptr_t dst, intptr_t dstEnd, const void** src, void* fn);
 #  endif
 # else
@@ -32,20 +32,20 @@ extern void gf16_xor256_jit_multi_stub(intptr_t dst, intptr_t dstEnd, const void
 #  else
 #   define WRITE_JIT(l)
 #  endif
-static HEDLEY_ALWAYS_INLINE void gf16_xor_jit_stub(intptr_t src, intptr_t dEnd, intptr_t dest, void* fn) {
+static HEDLEY_ALWAYS_INLINE void gf16_xor_jit_stub(intptr_t src, intptr_t dEnd, intptr_t dest, intptr_t pf, void* fn) {
 	WRITE_JIT(2048)
 	asm volatile(
 		"callq *%[f]\n"
-		: "+a"(src), "+d"(dest) : "c"(dEnd), [f]"r"(fn)
+		: "+a"(src), "+d"(dest), "+S"(pf) : "c"(dEnd), [f]"r"(fn)
 		: "%xmm0", "%xmm1", "%xmm2", "%xmm3", "%xmm4", "%xmm5", "%xmm6", "%xmm7", "%xmm8", "%xmm9", "%xmm10", "%xmm11", "%xmm12", "%xmm13", "%xmm14", "%xmm15", "memory"
 	);
 }
 #  ifdef __AVX2__
-static HEDLEY_ALWAYS_INLINE void gf16_xor256_jit_stub(intptr_t src, intptr_t dEnd, intptr_t dest, void* fn) {
+static HEDLEY_ALWAYS_INLINE void gf16_xor256_jit_stub(intptr_t src, intptr_t dEnd, intptr_t dest, intptr_t pf, void* fn) {
 	WRITE_JIT(2048)
 	asm volatile(
 		"callq *%[f]\n"
-		: "+a"(src), "+d"(dest) : "c"(dEnd), [f]"r"(fn)
+		: "+a"(src), "+d"(dest), "+S"(pf) : "c"(dEnd), [f]"r"(fn)
 		: "memory" // GCC pre 4.9 doesn't accept YMM registers
 #   if !defined(__GNUC__) || defined(__clang__) || __GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ > 8)
 		, "%ymm0", "%ymm1", "%ymm2", "%ymm3", "%ymm4", "%ymm5", "%ymm6", "%ymm7", "%ymm8", "%ymm9", "%ymm10", "%ymm11", "%ymm12", "%ymm13", "%ymm14", "%ymm15"
@@ -54,11 +54,11 @@ static HEDLEY_ALWAYS_INLINE void gf16_xor256_jit_stub(intptr_t src, intptr_t dEn
 }
 #  endif
 #  ifdef __AVX512F__
-static HEDLEY_ALWAYS_INLINE void gf16_xor512_jit_stub(intptr_t src, intptr_t dEnd, intptr_t dest, void* fn) {
+static HEDLEY_ALWAYS_INLINE void gf16_xor512_jit_stub(intptr_t src, intptr_t dEnd, intptr_t dest, intptr_t pf, void* fn) {
 	WRITE_JIT(2048)
 	asm volatile(
 		"callq *%[f]\n"
-		: "+a"(src), "+d"(dest) : "c"(dEnd), [f]"r"(fn)
+		: "+a"(src), "+d"(dest), "+S"(pf) : "c"(dEnd), [f]"r"(fn)
 		: "%zmm1", "%zmm2", "%zmm3", "%zmm16", "%zmm17", "%zmm18", "%zmm19", "%zmm20", "%zmm21", "%zmm22", "%zmm23", "%zmm24", "%zmm25", "%zmm26", "%zmm27", "%zmm28", "%zmm29", "%zmm30", "%zmm31", "memory"
 	);
 }
@@ -88,19 +88,20 @@ static HEDLEY_ALWAYS_INLINE void gf16_xor512_jit_multi_stub(
 # endif
 #else
 # ifdef _MSC_VER
-static HEDLEY_ALWAYS_INLINE void gf16_xor_jit_stub(intptr_t src, intptr_t dEnd, intptr_t dest, void* fn) {
+static HEDLEY_ALWAYS_INLINE void gf16_xor_jit_stub(intptr_t src, intptr_t dEnd, intptr_t dest, intptr_t pf, void* fn) {
 	__asm {
 		mov eax, src
 		mov ecx, dEnd
 		mov edx, dest
+		mov esi, pf
 		call fn
 	}
 }
 # else
-static HEDLEY_ALWAYS_INLINE void gf16_xor_jit_stub(intptr_t src, intptr_t dEnd, intptr_t dest, void* fn) {
+static HEDLEY_ALWAYS_INLINE void gf16_xor_jit_stub(intptr_t src, intptr_t dEnd, intptr_t dest, intptr_t pf, void* fn) {
 	asm volatile(
 		"calll *%[f]\n"
-		: "+a"(src), "+d"(dest) : "c"(dEnd), [f]"r"(fn)
+		: "+a"(src), "+d"(dest), "+S"(pf) : "c"(dEnd), [f]"r"(fn)
 		: "%xmm0", "%xmm1", "%xmm2", "%xmm3", "%xmm4", "%xmm5", "%xmm6", "%xmm7", "memory"
 	);
 }
@@ -116,8 +117,8 @@ struct gf16_xor_scratch {
 
 
 #ifdef __SSE2__
-typedef void*(*gf16_xorjit_write_func)(const struct gf16_xor_scratch *HEDLEY_RESTRICT scratch, uint8_t *HEDLEY_RESTRICT jitptr, uint16_t val, int xor);
-static HEDLEY_ALWAYS_INLINE void gf16_xorjit_write_jit(const void *HEDLEY_RESTRICT scratch, uint16_t coefficient, jit_wx_pair* jit, const int add, gf16_xorjit_write_func writeFunc) {
+typedef void*(*gf16_xorjit_write_func)(const struct gf16_xor_scratch *HEDLEY_RESTRICT scratch, uint8_t *HEDLEY_RESTRICT jitptr, uint16_t val, const int xor, const int prefetch);
+static HEDLEY_ALWAYS_INLINE void gf16_xorjit_write_jit(const void *HEDLEY_RESTRICT scratch, uint16_t coefficient, jit_wx_pair* jit, const int add, const int prefetch, gf16_xorjit_write_func writeFunc) {
 	const struct gf16_xor_scratch *HEDLEY_RESTRICT info = (const struct gf16_xor_scratch*)scratch;
 	uint8_t* jitptr = (uint8_t*)jit->w + info->codeStart;
 	
@@ -137,7 +138,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_xorjit_write_jit(const void *HEDLEY_RESTRI
 		else
 			jitptr = jitTemp;
 		
-		jitptr = writeFunc(info, jitptr, coefficient, add);
+		jitptr = writeFunc(info, jitptr, coefficient, add, prefetch);
 		*(int32_t*)jitptr = (int32_t)(jitTemp - copyOffset - jitptr -4);
 		jitptr[4] = 0xC3; /* ret */
 		jitptr += 5;
@@ -184,7 +185,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_xorjit_write_jit(const void *HEDLEY_RESTRI
 			for(int i=0; i<XORDEP_JIT_CODE_SIZE; i+=64)
 				jitptr[i] = 0;
 		}
-		jitptr = writeFunc(info, jitptr, coefficient, add);
+		jitptr = writeFunc(info, jitptr, coefficient, add, prefetch);
 		*(int32_t*)jitptr = (int32_t)((uint8_t*)jit->w - jitptr -4);
 		jitptr[4] = 0xC3; /* ret */
 	}

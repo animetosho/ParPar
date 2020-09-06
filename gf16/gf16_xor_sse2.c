@@ -315,7 +315,7 @@ static HEDLEY_ALWAYS_INLINE uint_fast16_t xor_jit_bitpair3_nc_noxor(uint8_t* des
 
 
 
-static inline void* xor_write_jit_sse(const struct gf16_xor_scratch *HEDLEY_RESTRICT scratch, uint8_t *HEDLEY_RESTRICT jitptr, uint16_t val, int xor) {
+static inline void* xor_write_jit_sse(const struct gf16_xor_scratch *HEDLEY_RESTRICT scratch, uint8_t *HEDLEY_RESTRICT jitptr, uint16_t val, const int xor, const int prefetch) {
 	uint_fast32_t bit;
 	ALIGN_TO(16, uint32_t lumask[8]);
 	
@@ -354,6 +354,12 @@ static inline void* xor_write_jit_sse(const struct gf16_xor_scratch *HEDLEY_REST
 	#define no_common_mask 0
 #endif
 	
+	
+	if(prefetch) {
+		jitptr += _jit_add_i(jitptr, SI, 128);
+		jitptr += _jit_prefetch_m(jitptr, prefetch, SI, 0);
+		jitptr += _jit_prefetch_m(jitptr, prefetch, SI, 64);
+	}
 	
 	//_jit_movaps_load(jit, reg, xreg, offs)
 	// (we just save a conditional by hardcoding this)
@@ -663,9 +669,9 @@ static inline void* xor_write_jit_sse(const struct gf16_xor_scratch *HEDLEY_REST
 	return jitptr;
 }
 
-static HEDLEY_ALWAYS_INLINE void gf16_xor_jit_mul_sse2_base(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch, int add) {
+static HEDLEY_ALWAYS_INLINE void gf16_xor_jit_mul_sse2_base(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch, const int add, const int doPrefetch, const void *HEDLEY_RESTRICT prefetch) {
 	jit_wx_pair* jit = (jit_wx_pair*)mutScratch;
-	gf16_xorjit_write_jit(scratch, coefficient, jit, add, &xor_write_jit_sse);
+	gf16_xorjit_write_jit(scratch, coefficient, jit, add, doPrefetch, &xor_write_jit_sse);
 	
 	// exec
 	/* adding 128 to the destination pointer allows the register offset to be coded in 1 byte
@@ -674,6 +680,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_xor_jit_mul_sse2_base(const void *HEDLEY_R
 		(intptr_t)src - 128,
 		(intptr_t)dst + len - 128,
 		(intptr_t)dst - 128,
+		(intptr_t)prefetch - 128,
 		jit->x
 	);
 }
@@ -685,7 +692,7 @@ void gf16_xor_jit_mul_sse2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RES
 		memset(dst, 0, len);
 		return;
 	}
-	gf16_xor_jit_mul_sse2_base(scratch, dst, src, len, coefficient, mutScratch, 0);
+	gf16_xor_jit_mul_sse2_base(scratch, dst, src, len, coefficient, mutScratch, 0, 0, NULL);
 #else
 	UNUSED(scratch); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficient); UNUSED(mutScratch);
 #endif
@@ -694,7 +701,16 @@ void gf16_xor_jit_mul_sse2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RES
 void gf16_xor_jit_muladd_sse2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch) {
 #ifdef __SSE2__
 	if(coefficient == 0) return;
-	gf16_xor_jit_mul_sse2_base(scratch, dst, src, len, coefficient, mutScratch, 1);
+	gf16_xor_jit_mul_sse2_base(scratch, dst, src, len, coefficient, mutScratch, 1, 0, NULL);
+#else
+	UNUSED(scratch); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficient); UNUSED(mutScratch);
+#endif
+}
+
+void gf16_xor_jit_muladd_prefetch_sse2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch, const void *HEDLEY_RESTRICT prefetch) {
+#ifdef __SSE2__
+	if(coefficient == 0) return;
+	gf16_xor_jit_mul_sse2_base(scratch, dst, src, len, coefficient, mutScratch, 1, _MM_HINT_T1, prefetch);
 #else
 	UNUSED(scratch); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficient); UNUSED(mutScratch);
 #endif

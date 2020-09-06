@@ -364,7 +364,7 @@ static HEDLEY_ALWAYS_INLINE int xor_avx512_merge_part(uint8_t *HEDLEY_RESTRICT j
 }
 
 
-static inline void* xor_write_jit_avx512(const struct gf16_xor_scratch *HEDLEY_RESTRICT scratch, uint8_t *HEDLEY_RESTRICT jitptr, uint16_t val, int xor) {
+static inline void* xor_write_jit_avx512(const struct gf16_xor_scratch *HEDLEY_RESTRICT scratch, uint8_t *HEDLEY_RESTRICT jitptr, uint16_t val, const int xor, const int prefetch) {
 	uint_fast32_t bit;
 	
 	__m256i depmask = _mm256_load_si256((__m256i*)scratch->deps + (val & 0xf)*4);
@@ -408,6 +408,17 @@ static inline void* xor_write_jit_avx512(const struct gf16_xor_scratch *HEDLEY_R
 	);
 	
 	
+	if(prefetch) {
+		jitptr += _jit_add_i(jitptr, SI, 512);
+		jitptr += _jit_prefetch_m(jitptr, prefetch, SI, -128);
+		jitptr += _jit_prefetch_m(jitptr, prefetch, SI, -64);
+		jitptr += _jit_prefetch_m(jitptr, prefetch, SI, 0);
+		jitptr += _jit_prefetch_m(jitptr, prefetch, SI, 64);
+		jitptr += _jit_prefetch_m(jitptr, prefetch, SI, 128);
+		jitptr += _jit_prefetch_m(jitptr, prefetch, SI, 192);
+		jitptr += _jit_prefetch_m(jitptr, prefetch, SI, 256);
+		jitptr += _jit_prefetch_m(jitptr, prefetch, SI, 320);
+	}
 	
 	jitptr += _jit_vmovdqa32_load(jitptr, 16, DX, 0);
 	
@@ -738,14 +749,15 @@ static void* xor_write_jit_avx512_multi(const struct gf16_xor_scratch *HEDLEY_RE
 	return jitptr;
 }
 
-static HEDLEY_ALWAYS_INLINE void gf16_xor_jit_mul_avx512_base(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch, int add) {
+static HEDLEY_ALWAYS_INLINE void gf16_xor_jit_mul_avx512_base(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch, const int add, const int doPrefetch, const void *HEDLEY_RESTRICT prefetch) {
 	jit_wx_pair* jit = (jit_wx_pair*)mutScratch;
-	gf16_xorjit_write_jit(scratch, coefficient, jit, add, &xor_write_jit_avx512);
+	gf16_xorjit_write_jit(scratch, coefficient, jit, add, doPrefetch, &xor_write_jit_avx512);
 	
 	gf16_xor512_jit_stub(
 		(intptr_t)dst - 1024,
 		(intptr_t)dst + len - 1024,
 		(intptr_t)src - 1024,
+		(intptr_t)prefetch - 384,
 		jit->x
 	);
 	
@@ -760,7 +772,7 @@ void gf16_xor_jit_mul_avx512(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_R
 		memset(dst, 0, len);
 		return;
 	}
-	gf16_xor_jit_mul_avx512_base(scratch, dst, src, len, coefficient, mutScratch, 0);
+	gf16_xor_jit_mul_avx512_base(scratch, dst, src, len, coefficient, mutScratch, 0, 0, NULL);
 #else
 	UNUSED(scratch); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficient); UNUSED(mutScratch);
 #endif
@@ -769,12 +781,20 @@ void gf16_xor_jit_mul_avx512(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_R
 void gf16_xor_jit_muladd_avx512(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch) {
 #if defined(__AVX512BW__) && defined(__AVX512VL__) && defined(PLATFORM_AMD64)
 	if(coefficient == 0) return;
-	gf16_xor_jit_mul_avx512_base(scratch, dst, src, len, coefficient, mutScratch, 1);
+	gf16_xor_jit_mul_avx512_base(scratch, dst, src, len, coefficient, mutScratch, 1, 0, NULL);
 #else
 	UNUSED(scratch); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficient); UNUSED(mutScratch);
 #endif
 }
 
+void gf16_xor_jit_muladd_prefetch_avx512(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch, const void *HEDLEY_RESTRICT prefetch) {
+#if defined(__AVX512BW__) && defined(__AVX512VL__) && defined(PLATFORM_AMD64)
+	if(coefficient == 0) return;
+	gf16_xor_jit_mul_avx512_base(scratch, dst, src, len, coefficient, mutScratch, 1, _MM_HINT_T1, prefetch);
+#else
+	UNUSED(scratch); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficient); UNUSED(mutScratch);
+#endif
+}
 
 
 #define XOR512_MULTI_REGIONS 6 // we support up to 10, but 6 seems more optimal (cache associativity reasons?)
@@ -975,6 +995,7 @@ unsigned gf16_xor_jit_muladd_multi_packed_avx512(const void *HEDLEY_RESTRICT scr
 			(intptr_t)dst - 1024,
 			(intptr_t)dst + len - 1024,
 			(intptr_t)src + len*region - 1024,
+			0,
 			jit->x
 		);
 	}
@@ -986,6 +1007,8 @@ unsigned gf16_xor_jit_muladd_multi_packed_avx512(const void *HEDLEY_RESTRICT scr
 	return 0;
 #endif
 }
+
+// TODO: gf16_xor_jit_muladd_multi_packpf_avx512  if bored enough
 
 
 #if defined(__AVX512BW__) && defined(__AVX512VL__) && defined(PLATFORM_AMD64)

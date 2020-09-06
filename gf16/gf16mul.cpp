@@ -492,6 +492,7 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 #ifdef PLATFORM_X86
 			_info.alignment = 16;
 			int jitOptStrat = CpuCap(true).jitOptStrat;
+			_info.prefetchDownscale = 1;
 			
 			switch(method) {
 				case GF16_XOR_JIT_SSE2:
@@ -508,6 +509,7 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 						scratch = gf16_xor_jit_init_sse2(GF16_POLYNOMIAL, jitOptStrat);
 						_mul = &gf16_xor_jit_mul_sse2;
 						_mul_add = &gf16_xor_jit_muladd_sse2;
+						_mul_add_pf = &gf16_xor_jit_muladd_prefetch_sse2;
 					}
 					prepare = &gf16_xor_prepare_sse2;
 					prepare_packed = &gf16_xor_prepare_packed_sse2;
@@ -536,6 +538,7 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 					scratch = gf16_xor_jit_init_avx2(GF16_POLYNOMIAL, jitOptStrat);
 					_mul = &gf16_xor_jit_mul_avx2;
 					_mul_add = &gf16_xor_jit_muladd_avx2;
+					_mul_add_pf = &gf16_xor_jit_muladd_prefetch_avx2;
 					prepare = &gf16_xor_prepare_avx2;
 					prepare_packed = &gf16_xor_prepare_packed_avx2;
 					finish = &gf16_xor_finish_avx2;
@@ -550,6 +553,7 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 					scratch = gf16_xor_jit_init_avx512(GF16_POLYNOMIAL, jitOptStrat);
 					_mul = &gf16_xor_jit_mul_avx512;
 					_mul_add = &gf16_xor_jit_muladd_avx512;
+					_mul_add_pf = &gf16_xor_jit_muladd_prefetch_avx512;
 					_mul_add_multi = &gf16_xor_jit_muladd_multi_avx512;
 					_mul_add_multi_packed = &gf16_xor_jit_muladd_multi_packed_avx512;
 					_info.idealInputMultiple = 6;

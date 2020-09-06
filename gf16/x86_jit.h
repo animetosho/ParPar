@@ -655,6 +655,28 @@ static inline size_t _jit_mov_store(uint8_t* jit, uint8_t mreg, int32_t offs, ui
 		return p+2;
 	}
 }
+
+static inline size_t _jit_prefetch_m(uint8_t* jit, uint8_t level, uint8_t mreg, int32_t offs) {
+	assert(level-1 < 3); // use _MM_HINT_T* constants
+	size_t p = _jit_rex_pref(&jit, 0, mreg);
+	p += mreg == 12;
+	mreg &= 7;
+	if((offs+128) & ~0xFF) {
+		*(int32_t*)jit = 0x2480180F | (level << 19) | (mreg << 16);
+		jit += mreg == 12;
+		*(int32_t*)(jit +3) = offs;
+		return p+7;
+	} else if(offs || mreg == 13) {
+		*(int32_t*)jit = 0x2440180F | (level << 19) | (mreg << 16);
+		jit += mreg == 12;
+		jit[3] = (uint8_t)offs;
+		return p+4;
+	} else {
+		*(int32_t*)jit = 0x2400180F | (level << 19) | (mreg << 16);
+		return p+3;
+	}
+}
+
 static inline size_t _jit_nop(uint8_t* jit) {
 	jit[0] = 0x90;
 	return 1;
