@@ -386,7 +386,8 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 			// enable only if 32 registers available
 			_mul_add_multi = &gf16_shuffle_muladd_multi_neon;
 			_mul_add_multi_packed = &gf16_shuffle_muladd_multi_packed_neon;
-			_mul_add_multi_packpf = &gf16_shuffle_muladd_multi_packpf_neon;
+			// TODO: on Cortex A53, prefetching seems to be slower, so disabled for now
+			//_mul_add_multi_packpf = &gf16_shuffle_muladd_multi_packpf_neon;
 			prepare_packed = &gf16_shuffle_prepare_packed_neon;
 			_info.idealInputMultiple = 2;
 			#endif

@@ -298,12 +298,7 @@ unsigned gf16_shuffle_muladd_multi_packed_neon(const void *HEDLEY_RESTRICT scrat
 void gf16_shuffle_muladd_multi_packpf_neon(const void *HEDLEY_RESTRICT scratch, unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch, const void* HEDLEY_RESTRICT prefetchIn, const void* HEDLEY_RESTRICT prefetchOut) {
 	UNUSED(mutScratch);
 #if defined(__ARM_NEON) && defined(__aarch64__)
-	// TODO: on Cortex A53, prefetching seems to be slower, so disabled for now
-	UNUSED(prefetchIn); UNUSED(prefetchOut);
-	unsigned region = gf16_muladd_multi_packed(scratch, &gf16_shuffle_muladd_x_neon, 2, regions, dst, src, len, sizeof(uint8x16_t)*2, coefficients);
-	if(region < regions && coefficients[region])
-		gf16_shuffle_muladd_neon(scratch, dst, (uint8_t*)src + region*len, len, coefficients[region], NULL);
-	//gf16_muladd_multi_packpf(scratch, &gf16_shuffle_muladd_x_neon, 2, regions, dst, src, len, sizeof(uint8x16_t)*2, coefficients, 0, prefetchIn, prefetchOut);
+	gf16_muladd_multi_packpf(scratch, &gf16_shuffle_muladd_x_neon, 2, regions, dst, src, len, sizeof(uint8x16_t)*2, coefficients, 0, prefetchIn, prefetchOut);
 #else
 	UNUSED(scratch); UNUSED(regions); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficients); UNUSED(prefetchIn); UNUSED(prefetchOut);
 #endif
