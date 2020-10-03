@@ -454,6 +454,109 @@ void gf16_lookup3_muladd(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTR
 }
 
 
+
+struct gf16_lookup2_tables {
+	uint16_t table1[2048]; // bits  0-10 & 16-26
+	uint32_t table2[1024]; // bits 11-15 + 27-31
+};
+static HEDLEY_ALWAYS_INLINE void calc_2table(uint16_t coefficient, struct gf16_lookup2_tables* lookup) {
+	if(sizeof(uintptr_t) >= 8) {
+		uint64_t* tbl = (uint64_t*)lookup->table1;
+		uint32_t coefficient2 = ((uint32_t)coefficient << 16);
+		uint32_t tmp = coefficient2 | coefficient;
+		tmp = GF16_MULTBY_TWO_X2(tmp);
+		tbl[0] = coefficient2 | ((uint64_t)(tmp^coefficient2) << 32);
+		uint64_t coefficient4 = tmp | ((uint64_t)tmp << 32);
+		coefficient4 = GF16_MULTBY_TWO_X4(coefficient4);
+		int j, k;
+		for (j = 1; j < 512; j <<= 1) {
+			for (k = 0; k < j; k++)
+				tbl[k+j] = coefficient4 ^ tbl[k];
+			coefficient4 = GF16_MULTBY_TWO_X4(coefficient4);
+		}
+		
+		tbl = (uint64_t*)lookup->table2;
+		tbl[0] = coefficient4 & 0xffff00000000ULL;
+		coefficient4 = GF16_MULTBY_TWO_X4(coefficient4);
+		coefficient4 &= 0xffff0000ffffULL;
+		for (j = 1; j < 16; j <<= 1) {
+			for (k = 0; k < j; k++)
+				tbl[k+j] = coefficient4 ^ tbl[k];
+			coefficient4 = GF16_MULTBY_TWO_LOWER_X2(coefficient4);
+		}
+		for (j = 1; j < 32; j++) {
+			uint64_t highVal = (uint64_t)lookup->table2[j] * 0x0001000000010000ULL;
+			for (k = 0; k < 16; k++)
+				tbl[j*16 + k] = tbl[k] | highVal;
+		}
+	} else {
+		uint32_t* tbl = (uint32_t*)lookup->table1;
+		uint32_t coefficient2 = ((uint32_t)coefficient << 16);
+		tbl[0] = coefficient2;
+		coefficient2 |= coefficient;
+		coefficient2 = GF16_MULTBY_TWO_X2(coefficient2);
+		int j, k;
+		for (j = 1; j < 1024; j <<= 1) {
+			for (k = 0; k < j; k++)
+				tbl[k+j] = coefficient2 ^ tbl[k];
+			coefficient2 = GF16_MULTBY_TWO_X2(coefficient2);
+		}
+		
+		lookup->table2[0] = 0;
+		uint16_t val = coefficient2 & 0xffff;
+		for (j = 1; j < 32; j <<= 1) {
+			for (k = 0; k < j; k++)
+				lookup->table2[k+j] = val ^ lookup->table2[k];
+			val = GF16_MULTBY_TWO(val);
+		}
+		for (j = 1; j < 32; j++) {
+			uint32_t highVal = lookup->table2[j] << 16;
+			for (k = 0; k < 32; k++)
+				lookup->table2[j*32 + k] = lookup->table2[k] | highVal;
+		}
+	}
+}
+
+
+unsigned gf16_lookup3_muladd_multi_packed(const void *HEDLEY_RESTRICT scratch, unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch) {
+	UNUSED(scratch); UNUSED(mutScratch);
+	
+	uint8_t* _dst = (uint8_t*)dst + len;
+	uint8_t* _src = (uint8_t*)src;
+	for(unsigned region=0; region<regions; region++) {
+		struct gf16_lookup2_tables lookup;
+		calc_2table(coefficients[region], &lookup);
+		_src += len;
+		
+		if(sizeof(uintptr_t) >= 8) { // assume 64-bit CPU
+			for(intptr_t ptr = -(intptr_t)len; ptr; ptr+=8) {
+				uint64_t data = *(uint64_t*)(_src + ptr);
+				uint32_t data2 = data >> 32;
+				*(uint64_t*)(_dst + ptr) ^= (
+					(uint32_t)lookup.table1[data & 0x7ff] ^
+					lookup.table2[(data & 0xffc00000) >> 22] ^
+					((uint32_t)lookup.table1[(data & 0x3ff800) >> 11] << 16)
+				) ^ ((uint64_t)(
+					(uint64_t)lookup.table1[data2 & 0x7ff] ^
+					lookup.table2[data2 >> 22]
+				) << 32) ^
+				((uint64_t)lookup.table1[(data2 & 0x3ff800) >> 11] << 48);
+			}
+		}
+		else {
+			for(intptr_t ptr = -(intptr_t)len; ptr; ptr+=4) {
+				uint32_t data = *(uint32_t*)(_src + ptr);
+				*(uint32_t*)(_dst + ptr) ^= 
+					(uint32_t)lookup.table1[data & 0x7ff] ^
+					lookup.table2[data >> 22] ^
+					((uint32_t)lookup.table1[(data & 0x3ff800) >> 11] << 16);
+			}
+		}
+	}
+	return regions;
+}
+
+
 size_t gf16_lookup3_stride() {
 #if __BYTE_ORDER__ != __ORDER_BIG_ENDIAN__
 	// we only support this technique on little endian for now
@@ -530,9 +633,37 @@ static HEDLEY_ALWAYS_INLINE void gf16_lookup_prepare_blocku(void *HEDLEY_RESTRIC
 	memset(dst + remaining, 0, gf16_lookup_stride()-remaining);
 }
 
+static HEDLEY_ALWAYS_INLINE void gf16_lookup3_prepare_block(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src) {
+	// pack bits so that we have: 0...10,16...26,11...15,27...31
+	if(sizeof(uintptr_t) >= 8) {
+		uint64_t data = *(uint64_t*)src;
+		*(uint64_t*)dst = (data & 0x07ff000007ffULL) | ((data & 0x07ff000007ff0000ULL) >> 5) | ((data & 0xf8000000f800ULL) << 11) | (data & 0xf8000000f8000000ULL);
+	} else {
+		uint32_t data = *(uint32_t*)src;
+		*(uint32_t*)dst = (data & 0x07ff) | ((data & 0x07ff0000) >> 5) | ((data & 0xf800) << 11) | (data & 0xf8000000);
+	}
+}
+static HEDLEY_ALWAYS_INLINE void gf16_lookup3_prepare_blocku(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t remaining) {
+	uintptr_t data = 0;
+	memcpy(&data, src, remaining);
+	gf16_lookup3_prepare_block(dst, &data);
+}
+static HEDLEY_ALWAYS_INLINE void gf16_lookup3_checksum_prepare(void *HEDLEY_RESTRICT dst, void *HEDLEY_RESTRICT checksum, const size_t blockLen, gf16_prepare_block prepareBlock) {
+	UNUSED(blockLen); UNUSED(prepareBlock);
+	gf16_lookup3_prepare_block(dst, checksum);
+}
+
+
 void gf16_lookup_prepare_packed_cksum(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen, size_t sliceLen, unsigned inputPackSize, unsigned inputNum, size_t chunkLen) {
 	uintptr_t checksum = 0;
 	gf16_prepare_packed(dst, src, srcLen, sliceLen, gf16_lookup_stride(), &gf16_lookup_copy_block, &gf16_lookup_prepare_blocku, inputPackSize, inputNum, chunkLen, 1, &checksum, &gf16_lookup_checksum_block, &gf16_lookup_checksum_blocku, &gf16_lookup_checksum_zeroes, &gf16_lookup_checksum_prepare);
+}
+void gf16_lookup3_prepare_packed(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen, size_t sliceLen, unsigned inputPackSize, unsigned inputNum, size_t chunkLen) {
+	gf16_prepare_packed(dst, src, srcLen, sliceLen, gf16_lookup3_stride(), &gf16_lookup3_prepare_block, &gf16_lookup3_prepare_blocku, inputPackSize, inputNum, chunkLen, 1, NULL, NULL, NULL, NULL, NULL);
+}
+void gf16_lookup3_prepare_packed_cksum(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen, size_t sliceLen, unsigned inputPackSize, unsigned inputNum, size_t chunkLen) {
+	uintptr_t checksum = 0;
+	gf16_prepare_packed(dst, src, srcLen, sliceLen, gf16_lookup3_stride(), &gf16_lookup3_prepare_block, &gf16_lookup3_prepare_blocku, inputPackSize, inputNum, chunkLen, 1, &checksum, &gf16_lookup_checksum_block, &gf16_lookup_checksum_blocku, &gf16_lookup_checksum_zeroes, &gf16_lookup3_checksum_prepare);
 }
 int gf16_lookup_finish_packed_cksum(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t sliceLen, unsigned numOutputs, unsigned outputNum, size_t chunkLen) {
 	uintptr_t checksum = 0;

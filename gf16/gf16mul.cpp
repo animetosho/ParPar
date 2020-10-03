@@ -622,7 +622,9 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 		case GF16_LOOKUP3:
 			_mul = &gf16_lookup3_mul;
 			_mul_add = &gf16_lookup3_muladd;
-			prepare_packed_cksum = &gf16_lookup_prepare_packed_cksum;
+			_mul_add_multi_packed = &gf16_lookup3_muladd_multi_packed;
+			prepare_packed = &gf16_lookup3_prepare_packed;
+			prepare_packed_cksum = &gf16_lookup3_prepare_packed_cksum;
 			finish_packed_cksum = &gf16_lookup_finish_packed_cksum;
 			_info.stride = gf16_lookup3_stride();
 			_info.alignment = _info.stride; // assume platform doesn't like misalignment
