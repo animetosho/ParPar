@@ -286,7 +286,7 @@ void gf16_lookup_powadd(const void *HEDLEY_RESTRICT scratch, unsigned outputs, s
 	}
 }
 
-size_t gf16_lookup_stride() {
+HEDLEY_CONST size_t gf16_lookup_stride() {
 	if(sizeof(uintptr_t) >= 8)
 		return 8;
 	else if(sizeof(uintptr_t) >= 4)
@@ -557,7 +557,7 @@ unsigned gf16_lookup3_muladd_multi_packed(const void *HEDLEY_RESTRICT scratch, u
 }
 
 
-size_t gf16_lookup3_stride() {
+HEDLEY_CONST size_t gf16_lookup3_stride() {
 #if __BYTE_ORDER__ != __ORDER_BIG_ENDIAN__
 	// we only support this technique on little endian for now
 	if(sizeof(uintptr_t) >= 8)
@@ -587,26 +587,56 @@ static HEDLEY_ALWAYS_INLINE uintptr_t gf16_lookup_multi_mul2(uintptr_t v) {
 }
 
 static HEDLEY_ALWAYS_INLINE void gf16_lookup_checksum_blocku(const void *HEDLEY_RESTRICT src, size_t amount, void *HEDLEY_RESTRICT checksum) {
+	uint8_t* _src = (uint8_t*)src;
 	if(sizeof(uintptr_t) >= 8) {
-		uint64_t _src = 0;
-		memcpy(&_src, src, amount);
+		uint64_t data = 0;
+		size_t remaining = amount & (sizeof(uint64_t)-1);
+		if(remaining) {
+			memcpy(&data, _src, remaining);
+			_src += remaining;
+			amount ^= remaining;
+		}
+		while(amount) {
+			data ^= *(uint64_t*)_src;
+			_src += sizeof(uint64_t);
+			amount -= sizeof(uint64_t);
+		}
 		uint64_t* _checksum = (uint64_t*)checksum;
-		*_checksum = gf16_lookup_multi_mul2(*_checksum) ^ _src;
+		*_checksum = gf16_lookup_multi_mul2(*_checksum) ^ data;
 	} else if(sizeof(uintptr_t) >= 4) {
-		uint32_t _src = 0;
-		memcpy(&_src, src, amount);
+		uint32_t data = 0;
+		size_t remaining = amount & (sizeof(uint32_t)-1);
+		if(remaining) {
+			memcpy(&data, _src, remaining);
+			_src += remaining;
+			amount ^= remaining;
+		}
+		while(amount) {
+			data ^= *(uint32_t*)_src;
+			_src += sizeof(uint32_t);
+			amount -= sizeof(uint32_t);
+		}
 		uint32_t* _checksum = (uint32_t*)checksum;
-		*_checksum = gf16_lookup_multi_mul2(*_checksum) ^ _src;
+		*_checksum = gf16_lookup_multi_mul2(*_checksum) ^ data;
 	} else {
-		uint16_t _src = 0;
-		memcpy(&_src, src, amount);
+		uint16_t data = 0;
+		if(amount & 1) {
+			data = *_src;
+			_src++;
+			amount ^= 1;
+		}
+		while(amount) {
+			data ^= *(uint16_t*)_src;
+			_src += sizeof(uint16_t);
+			amount -= sizeof(uint16_t);
+		}
 		uint16_t* _checksum = (uint16_t*)checksum;
-		*_checksum = gf16_lookup_multi_mul2(*_checksum) ^ _src;
+		*_checksum = gf16_lookup_multi_mul2(*_checksum) ^ data;
 	}
 }
 static HEDLEY_ALWAYS_INLINE void gf16_lookup_checksum_block(const void *HEDLEY_RESTRICT src, void *HEDLEY_RESTRICT checksum, const size_t blockLen, const int aligned) {
-	UNUSED(blockLen); UNUSED(aligned);
-	gf16_lookup_checksum_blocku(src, gf16_lookup_stride(), checksum);
+	UNUSED(aligned);
+	gf16_lookup_checksum_blocku(src, blockLen, checksum);
 }
 
 #include "gfmat_coeff.h"
@@ -645,8 +675,10 @@ static HEDLEY_ALWAYS_INLINE void gf16_lookup_checksum_zeroes(void *HEDLEY_RESTRI
 }
 
 static HEDLEY_ALWAYS_INLINE void gf16_lookup_checksum_prepare(void *HEDLEY_RESTRICT dst, void *HEDLEY_RESTRICT checksum, const size_t blockLen, gf16_prepare_block prepareBlock) {
-	UNUSED(blockLen); UNUSED(prepareBlock);
-	memcpy(dst, checksum, gf16_lookup_stride());
+	UNUSED(prepareBlock);
+	size_t cksumLen = gf16_lookup_stride();
+	memcpy(dst, checksum, cksumLen);
+	memset((char*)dst+cksumLen, 0, blockLen-cksumLen);
 }
 static HEDLEY_ALWAYS_INLINE int gf16_lookup_checksum_finish(const void *HEDLEY_RESTRICT src, void *HEDLEY_RESTRICT checksum, const size_t blockLen, gf16_finish_copy_block finishBlock) {
 	UNUSED(blockLen); UNUSED(finishBlock);
@@ -677,8 +709,9 @@ static HEDLEY_ALWAYS_INLINE void gf16_lookup3_prepare_blocku(void *HEDLEY_RESTRI
 	gf16_lookup3_prepare_block(dst, &data);
 }
 static HEDLEY_ALWAYS_INLINE void gf16_lookup3_checksum_prepare(void *HEDLEY_RESTRICT dst, void *HEDLEY_RESTRICT checksum, const size_t blockLen, gf16_prepare_block prepareBlock) {
-	UNUSED(blockLen); UNUSED(prepareBlock);
+	UNUSED(prepareBlock);
 	gf16_lookup3_prepare_block(dst, checksum);
+	memset((char*)dst+gf16_lookup3_stride(), 0, blockLen-gf16_lookup3_stride());
 }
 
 
