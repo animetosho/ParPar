@@ -259,7 +259,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle_mul_vbmi_round_merge(__m512i ta, _
 int gf16_shuffle_available_vbmi = 0;
 #endif
 
-#if defined(__AVX512VBMI__) && defined(__AVX512VL__) && defined(PLATFORM_AMD64)
+#if defined(__AVX512VBMI__) && defined(__AVX512VL__)
 #include "gf16_muladd_multi.h"
 static HEDLEY_ALWAYS_INLINE void gf16_shuffle_muladd_x_vbmi(
 	const void *HEDLEY_RESTRICT scratch, uint8_t *HEDLEY_RESTRICT _dst, const unsigned srcScale,

@@ -15,7 +15,7 @@
 #include "gf16_shuffle2x_x86.h"
 
 
-#if defined(_AVAILABLE) && defined(PLATFORM_AMD64)
+#if defined(_AVAILABLE)
 static HEDLEY_ALWAYS_INLINE void gf16_shuffle2x_muladd_round_avx2(__m256i* _dst, const int srcCount, __m256i* _src1, __m256i* _src2, __m256i shufNormLoA, __m256i shufNormLoB, __m256i shufNormHiA, __m256i shufNormHiB, __m256i shufSwapLoA, __m256i shufSwapLoB, __m256i shufSwapHiA, __m256i shufSwapHiB) {
 	__m256i data = _mm256_load_si256(_src1);
 	__m256i mask = _mm256_set1_epi8(0x0f);
