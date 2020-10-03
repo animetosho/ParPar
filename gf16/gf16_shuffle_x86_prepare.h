@@ -1,5 +1,6 @@
 
 #include "gf16_shuffle_x86_common.h"
+#include "gf16_checksum_x86.h"
 
 static HEDLEY_ALWAYS_INLINE void _FN(gf16_shuffle_prepare_block)(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src) {
 	_mword ta = _MMI(loadu)((_mword*)src);

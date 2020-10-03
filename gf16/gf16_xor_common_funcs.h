@@ -17,6 +17,7 @@
 #endif
 
 #ifdef _AVAILABLE
+# include "gf16_checksum_x86.h"
 static HEDLEY_ALWAYS_INLINE void gf16_xor_prep_write(_mword ta, _mword tb, umask_t* _dst) {
 	/* split to high/low parts */
 #if MWORD_SIZE == 64
@@ -107,7 +108,22 @@ void _FN(gf16_xor_prepare_packed)(void *HEDLEY_RESTRICT dst, const void *HEDLEY_
 # else
 		1
 # endif
-	);
+	, NULL, NULL, NULL, NULL, NULL);
+	_MM_END
+#else
+	UNUSED(dst); UNUSED(src); UNUSED(srcLen); UNUSED(sliceLen); UNUSED(inputPackSize); UNUSED(inputNum); UNUSED(chunkLen);
+#endif
+}
+void _FN(gf16_xor_prepare_packed_cksum)(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen, size_t sliceLen, unsigned inputPackSize, unsigned inputNum, size_t chunkLen) {
+#ifdef _AVAILABLE
+	_mword checksum = _MMI(setzero)();
+	gf16_prepare_packed(dst, src, srcLen, sliceLen, sizeof(_mword)*16, &_FN(gf16_xor_prepare_block), &_FN(gf16_xor_prepare_blocku), inputPackSize, inputNum, chunkLen,
+# if MWORD_SIZE == 64
+		XOR512_MULTI_REGIONS
+# else
+		1
+# endif
+	, &checksum, &_FN(gf16_checksum_block), &_FN(gf16_checksum_blocku), &_FN(gf16_checksum_zeroes), &_FN(gf16_checksum_prepare));
 	_MM_END
 #else
 	UNUSED(dst); UNUSED(src); UNUSED(srcLen); UNUSED(sliceLen); UNUSED(inputPackSize); UNUSED(inputNum); UNUSED(chunkLen);

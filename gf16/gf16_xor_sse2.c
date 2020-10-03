@@ -712,7 +712,7 @@ void gf16_xor_jit_muladd_prefetch_sse2(const void *HEDLEY_RESTRICT scratch, void
 	if(coefficient == 0) return;
 	gf16_xor_jit_mul_sse2_base(scratch, dst, src, len, coefficient, mutScratch, 1, _MM_HINT_T1, prefetch);
 #else
-	UNUSED(scratch); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficient); UNUSED(mutScratch);
+	UNUSED(scratch); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficient); UNUSED(mutScratch); UNUSED(prefetch);
 #endif
 }
 
@@ -1119,13 +1119,6 @@ void gf16_xor_finish_copy_block_sse2(void *HEDLEY_RESTRICT dst, const void *HEDL
 #undef LOAD_X4
 #endif
 
-void gf16_xor_finish_packed_sse2(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t sliceLen, unsigned numOutputs, unsigned outputNum, size_t chunkLen) {
-#ifdef __SSE2__
-	gf16_finish_packed(dst, src, sliceLen, sizeof(__m128i)*16, &gf16_xor_finish_copy_block_sse2, numOutputs, outputNum, chunkLen, 1);
-#else
-	UNUSED(dst); UNUSED(src); UNUSED(sliceLen); UNUSED(numOutputs); UNUSED(outputNum); UNUSED(chunkLen);
-#endif
-}
 
 
 #define MWORD_SIZE 16
@@ -1137,6 +1130,7 @@ void gf16_xor_finish_packed_sse2(void *HEDLEY_RESTRICT dst, const void *HEDLEY_R
 
 #if defined(__SSE2__)
 # define _AVAILABLE
+# include "gf16_checksum_x86.h"
 #endif
 #include "gf16_xor_common_funcs.h"
 #undef _AVAILABLE
@@ -1147,6 +1141,25 @@ void gf16_xor_finish_packed_sse2(void *HEDLEY_RESTRICT dst, const void *HEDLEY_R
 #undef _MMI
 #undef _FN
 #undef _MM_END
+
+
+void gf16_xor_finish_packed_sse2(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t sliceLen, unsigned numOutputs, unsigned outputNum, size_t chunkLen) {
+#ifdef __SSE2__
+	gf16_finish_packed(dst, src, sliceLen, sizeof(__m128i)*16, &gf16_xor_finish_copy_block_sse2, numOutputs, outputNum, chunkLen, 1, NULL, NULL, NULL);
+#else
+	UNUSED(dst); UNUSED(src); UNUSED(sliceLen); UNUSED(numOutputs); UNUSED(outputNum); UNUSED(chunkLen);
+#endif
+}
+
+int gf16_xor_finish_packed_cksum_sse2(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t sliceLen, unsigned numOutputs, unsigned outputNum, size_t chunkLen) {
+#ifdef __SSE2__
+	__m128i checksum = _mm_setzero_si128();
+	return gf16_finish_packed(dst, src, sliceLen, sizeof(__m128i)*16, &gf16_xor_finish_copy_block_sse2, numOutputs, outputNum, chunkLen, 1, &checksum, &gf16_checksum_block_sse2, &gf16_checksum_finish_sse2);
+#else
+	UNUSED(dst); UNUSED(src); UNUSED(sliceLen); UNUSED(numOutputs); UNUSED(outputNum); UNUSED(chunkLen);
+	return 0;
+#endif
+}
 
 
 #include "gf16_bitdep_init_sse2.h"

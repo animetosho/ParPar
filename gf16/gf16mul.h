@@ -8,6 +8,7 @@ typedef void(*Galois16MulTransform) (void *HEDLEY_RESTRICT dst, const void *HEDL
 typedef void(*Galois16MulTransformPacked) (void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen, size_t sliceLen, unsigned inputPackSize, unsigned inputNum, size_t chunkLen);
 typedef void(*Galois16MulUntransform) (void *HEDLEY_RESTRICT dst, size_t len);
 typedef void(*Galois16MulUntransformPacked) (void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t sliceLen, unsigned numOutputs, unsigned outputNum, size_t chunkLen);
+typedef int(*Galois16MulUntransformPackedCksum) (void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t sliceLen, unsigned numOutputs, unsigned outputNum, size_t chunkLen);
 typedef void(*Galois16MulFunc) (const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch);
 typedef void(*Galois16MulPfFunc) (const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch, const void *HEDLEY_RESTRICT prefetch);
 typedef void(*Galois16PowFunc) (const void *HEDLEY_RESTRICT scratch, unsigned outputs, size_t offset, void **HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch);
@@ -145,8 +146,10 @@ public:
 	
 	Galois16MulTransform prepare;
 	Galois16MulTransformPacked prepare_packed;
+	Galois16MulTransformPacked prepare_packed_cksum;
 	Galois16MulUntransform finish;
 	Galois16MulUntransformPacked finish_packed;
+	Galois16MulUntransformPackedCksum finish_packed_cksum;
 	
 	void* mutScratch_alloc() const;
 	void mutScratch_free(void* mutScratch) const;

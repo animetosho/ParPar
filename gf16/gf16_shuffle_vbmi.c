@@ -13,6 +13,7 @@
 # define _AVAILABLE 1
 # include "gf16_shuffle_x86_common.h"
 # include "gf16_shuffle_x86_prepare.h"
+# include "gf16_checksum_x86.h"
 # undef _AVAILABLE
 # undef _AVAILABLE_AVX
 # undef _FN
@@ -428,7 +429,7 @@ void gf16_shuffle_muladd_prefetch_vbmi(const void *HEDLEY_RESTRICT scratch, void
 	gf16_muladd_prefetch_single(scratch, &gf16_shuffle_muladd_x_vbmi, dst, src, len, val, prefetch);
 	_mm256_zeroupper();
 #else
-	UNUSED(scratch); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(val);
+	UNUSED(scratch); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(val); UNUSED(prefetch);
 #endif
 }
 
@@ -476,7 +477,23 @@ void gf16_shuffle_prepare_packed_vbmi(void *HEDLEY_RESTRICT dst, const void *HED
 #else
 		1
 #endif
-	);
+	, NULL, NULL, NULL, NULL, NULL);
+	_mm256_zeroupper();
+#else
+	UNUSED(dst); UNUSED(src); UNUSED(srcLen); UNUSED(sliceLen); UNUSED(inputPackSize); UNUSED(inputNum); UNUSED(chunkLen);
+#endif
+}
+
+void gf16_shuffle_prepare_packed_cksum_vbmi(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen, size_t sliceLen, unsigned inputPackSize, unsigned inputNum, size_t chunkLen) {
+#if defined(__AVX512VBMI__) && defined(__AVX512VL__)
+	__m512i checksum = _mm512_setzero_si512();
+	gf16_prepare_packed(dst, src, srcLen, sliceLen, sizeof(__m512i)*2, &gf16_shuffle_prepare_block_vbmi, &gf16_shuffle_prepare_blocku_vbmi, inputPackSize, inputNum, chunkLen,
+#ifdef PLATFORM_AMD64
+		4
+#else
+		1
+#endif
+	, &checksum, &gf16_checksum_block_vbmi, &gf16_checksum_blocku_vbmi, &gf16_checksum_zeroes_vbmi, &gf16_checksum_prepare_vbmi);
 	_mm256_zeroupper();
 #else
 	UNUSED(dst); UNUSED(src); UNUSED(srcLen); UNUSED(sliceLen); UNUSED(inputPackSize); UNUSED(inputNum); UNUSED(chunkLen);

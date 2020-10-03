@@ -5,6 +5,7 @@
 
 #if defined(__ARM_NEON)
 # include <arm_neon.h>
+# include "gf16_checksum_arm.h"
 # ifdef _M_ARM64 /* MSVC header */
 #  include <arm64_neon.h>
 # endif
@@ -211,7 +212,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle_muladd_x_neon(
 			if(doPrefetch == 2)
 				PREFETCH_MEM(_pf+ptr, 0);
 			
-			for(int iter=0; iter<(CACHELINE_SIZE/(sizeof(uint8x16_t)*2)); iter++) {
+			for(size_t iter=0; iter<(CACHELINE_SIZE/(sizeof(uint8x16_t)*2)); iter++) {
 				gf16_shuffle_neon_round1(vld2q_u8(_src1+ptr*srcScale), &rl, &rh, tbl_Al, tbl_Ah);
 				if(srcCount > 1)
 					gf16_shuffle_neon_round(vld2q_u8(_src2+ptr*srcScale), &rl, &rh, tbl_Bl, tbl_Bh);
@@ -318,12 +319,30 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle_prepare_blocku_neon(void *HEDLEY_R
 
 void gf16_shuffle_prepare_packed_neon(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen, size_t sliceLen, unsigned inputPackSize, unsigned inputNum, size_t chunkLen) {
 #if defined(__ARM_NEON) && defined(__aarch64__)
-	gf16_prepare_packed(dst, src, srcLen, sliceLen, sizeof(uint8x16x2_t), &gf16_shuffle_prepare_block_neon, &gf16_shuffle_prepare_blocku_neon, inputPackSize, inputNum, chunkLen, 2);
+	gf16_prepare_packed(dst, src, srcLen, sliceLen, sizeof(uint8x16x2_t), &gf16_shuffle_prepare_block_neon, &gf16_shuffle_prepare_blocku_neon, inputPackSize, inputNum, chunkLen, 2, NULL, NULL, NULL, NULL, NULL);
 #else
 	UNUSED(dst); UNUSED(src); UNUSED(srcLen); UNUSED(sliceLen); UNUSED(inputPackSize); UNUSED(inputNum); UNUSED(chunkLen);
 #endif
 }
 
+void gf16_shuffle_prepare_packed_cksum_neon(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen, size_t sliceLen, unsigned inputPackSize, unsigned inputNum, size_t chunkLen) {
+#if defined(__ARM_NEON) && defined(__aarch64__)
+	int16x8_t checksum = vdupq_n_s16(0);
+	gf16_prepare_packed(dst, src, srcLen, sliceLen, sizeof(uint8x16x2_t), &gf16_shuffle_prepare_block_neon, &gf16_shuffle_prepare_blocku_neon, inputPackSize, inputNum, chunkLen, 2, &checksum, &gf16_checksum_block_neon, &gf16_checksum_blocku_neon, &gf16_checksum_zeroes_neon, &gf16_checksum_prepare_neon);
+#else
+	UNUSED(dst); UNUSED(src); UNUSED(srcLen); UNUSED(sliceLen); UNUSED(inputPackSize); UNUSED(inputNum); UNUSED(chunkLen);
+#endif
+}
+
+int gf16_shuffle_finish_packed_cksum_neon(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t sliceLen, unsigned numOutputs, unsigned outputNum, size_t chunkLen) {
+#if defined(__ARM_NEON) && defined(__aarch64__)
+	int16x8_t checksum = vdupq_n_s16(0);
+	return gf16_finish_packed(dst, src, sliceLen, sizeof(uint8x16x2_t), &gf16_shuffle_prepare_block_neon, numOutputs, outputNum, chunkLen, 1, &checksum, &gf16_checksum_block_neon, &gf16_checksum_finish_neon);
+#else
+	UNUSED(dst); UNUSED(src); UNUSED(sliceLen); UNUSED(numOutputs); UNUSED(outputNum); UNUSED(chunkLen);
+	return 0;
+#endif
+}
 
 
 void* gf16_shuffle_init_arm(int polynomial) {

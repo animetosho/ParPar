@@ -3,6 +3,7 @@
 #include "gf16_global.h"
 
 #ifdef _AVAILABLE
+# include "gf16_checksum_x86.h"
 int _FN(gf16_shuffle_available) = 1;
 #include "gf16_shuffle_x86_prepare.h"
 #else
@@ -26,7 +27,23 @@ void _FN(gf16_shuffle_prepare_packed)(void *HEDLEY_RESTRICT dst, const void *HED
 #else
 		1
 #endif
-	);
+	, NULL, NULL, NULL, NULL, NULL);
+	_MM_END
+#else
+	UNUSED(dst); UNUSED(src); UNUSED(srcLen); UNUSED(sliceLen); UNUSED(inputPackSize); UNUSED(inputNum); UNUSED(chunkLen);
+#endif
+}
+
+void _FN(gf16_shuffle_prepare_packed_cksum)(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen, size_t sliceLen, unsigned inputPackSize, unsigned inputNum, size_t chunkLen) {
+#ifdef _AVAILABLE
+	_mword checksum = _MMI(setzero)();
+	gf16_prepare_packed(dst, src, srcLen, sliceLen, sizeof(_mword)*2, &_FN(gf16_shuffle_prepare_block), &_FN(gf16_shuffle_prepare_blocku), inputPackSize, inputNum, chunkLen,
+#if MWORD_SIZE==64 && defined(PLATFORM_AMD64)
+		3
+#else
+		1
+#endif
+	, &checksum, &_FN(gf16_checksum_block), &_FN(gf16_checksum_blocku), &_FN(gf16_checksum_zeroes), &_FN(gf16_checksum_prepare));
 	_MM_END
 #else
 	UNUSED(dst); UNUSED(src); UNUSED(srcLen); UNUSED(sliceLen); UNUSED(inputPackSize); UNUSED(inputNum); UNUSED(chunkLen);
@@ -44,10 +61,22 @@ void _FN(gf16_shuffle_finish)(void *HEDLEY_RESTRICT dst, size_t len) {
 
 void _FN(gf16_shuffle_finish_packed)(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t sliceLen, unsigned numOutputs, unsigned outputNum, size_t chunkLen) {
 #ifdef _AVAILABLE
-	gf16_finish_packed(dst, src, sliceLen, sizeof(_mword)*2, &_FN(gf16_shuffle_finish_copy_block), numOutputs, outputNum, chunkLen, 1);
+	gf16_finish_packed(dst, src, sliceLen, sizeof(_mword)*2, &_FN(gf16_shuffle_finish_copy_block), numOutputs, outputNum, chunkLen, 1, NULL, NULL, NULL);
 	_MM_END
 #else
 	UNUSED(dst); UNUSED(src); UNUSED(sliceLen); UNUSED(numOutputs); UNUSED(outputNum); UNUSED(chunkLen);
+#endif
+}
+
+int _FN(gf16_shuffle_finish_packed_cksum)(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t sliceLen, unsigned numOutputs, unsigned outputNum, size_t chunkLen) {
+#ifdef _AVAILABLE
+	_mword checksum = _MMI(setzero)();
+	int ret = gf16_finish_packed(dst, src, sliceLen, sizeof(_mword)*2, &_FN(gf16_shuffle_finish_copy_block), numOutputs, outputNum, chunkLen, 1, &checksum, &_FN(gf16_checksum_block), &_FN(gf16_checksum_finish));
+	_MM_END
+	return ret;
+#else
+	UNUSED(dst); UNUSED(src); UNUSED(sliceLen); UNUSED(numOutputs); UNUSED(outputNum); UNUSED(chunkLen);
+	return 0;
 #endif
 }
 

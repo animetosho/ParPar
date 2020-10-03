@@ -23,38 +23,6 @@ static HEDLEY_ALWAYS_INLINE void initial_mul_vector(uint16_t val, __m128i* prod,
 #ifdef _AVAILABLE
 
 
-#if MWORD_SIZE != 64
-ALIGN_TO(64, static char load_mask[64]) = {
-	-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
-	-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
-	 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-	 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
-};
-#endif
-
-// load part of a vector, zeroing out remaining bytes
-static inline _mword partial_load(const void* ptr, size_t bytes) {
-#if MWORD_SIZE == 64
-	// AVX512 is easy - masked load does the trick
-	return _mm512_maskz_loadu_epi8((1ULL<<bytes)-1, ptr);
-#else
-	uintptr_t alignedPtr = ((uintptr_t)ptr & ~(sizeof(_mword)-1));
-	_mword result;
-	// does the load straddle across alignment boundary? (could check page boundary, but we'll be safer and only use vector alignment boundary)
-	if((((uintptr_t)ptr+bytes) & ~(sizeof(_mword)-1)) != alignedPtr)
-		result = _MMI(loadu)(ptr); // if so, unaligned load is safe
-	else {
-		// a shift could work, but painful on AVX2, so just give up and go through memory
-		ALIGN_TO(MWORD_SIZE, _mword tmp[2]);
-		_MMI(store)(tmp, _MMI(load)((_mword*)alignedPtr));
-		result = _MMI(loadu)((_mword*)((uint8_t*)tmp + ((uintptr_t)ptr & (sizeof(_mword)-1))));
-	}
-	// mask out junk
-	result = _MMI(and)(result, _MMI(loadu)((_mword*)( load_mask + 32 - bytes )));
-	return result;
-#endif
-}
-
 static HEDLEY_ALWAYS_INLINE void shuf0_vector(uint16_t val, __m128i* prod0, __m128i* prod8) {
 	__m128i tmp, vval4;
 	initial_mul_vector(val, &tmp, &vval4);

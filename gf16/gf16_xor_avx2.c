@@ -427,9 +427,10 @@ void gf16_xor_jit_muladd_prefetch_avx2(const void *HEDLEY_RESTRICT scratch, void
 	if(coefficient == 0) return;
 	gf16_xor_jit_mul_avx2_base(scratch, dst, src, len, coefficient, mutScratch, 1, _MM_HINT_T1, prefetch);
 #else
-	UNUSED(scratch); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficient); UNUSED(mutScratch);
+	UNUSED(scratch); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficient); UNUSED(mutScratch); UNUSED(prefetch);
 #endif
 }
+
 
 
 #if defined(__AVX2__) && defined(PLATFORM_AMD64)
@@ -626,15 +627,6 @@ void gf16_xor_finish_copy_block_avx2(void *HEDLEY_RESTRICT dst, const void *HEDL
 #undef LOAD_X4
 #endif
 
-void gf16_xor_finish_packed_avx2(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t sliceLen, unsigned numOutputs, unsigned outputNum, size_t chunkLen) {
-#if defined(__AVX2__) && defined(PLATFORM_AMD64)
-	gf16_finish_packed(dst, src, sliceLen, sizeof(__m256i)*16, &gf16_xor_finish_copy_block_avx2, numOutputs, outputNum, chunkLen, 1);
-	_mm256_zeroupper();
-#else
-	UNUSED(dst); UNUSED(src); UNUSED(sliceLen); UNUSED(numOutputs); UNUSED(outputNum); UNUSED(chunkLen);
-#endif
-}
-
 
 #define MWORD_SIZE 32
 #define _mword __m256i
@@ -645,6 +637,7 @@ void gf16_xor_finish_packed_avx2(void *HEDLEY_RESTRICT dst, const void *HEDLEY_R
 
 #if defined(__AVX2__) && defined(PLATFORM_AMD64)
 # define _AVAILABLE
+# include "gf16_checksum_x86.h"
 #endif
 #include "gf16_xor_common_funcs.h"
 #undef _AVAILABLE
@@ -655,6 +648,29 @@ void gf16_xor_finish_packed_avx2(void *HEDLEY_RESTRICT dst, const void *HEDLEY_R
 #undef _MMI
 #undef _FN
 #undef _MM_END
+
+
+void gf16_xor_finish_packed_avx2(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t sliceLen, unsigned numOutputs, unsigned outputNum, size_t chunkLen) {
+#if defined(__AVX2__) && defined(PLATFORM_AMD64)
+	gf16_finish_packed(dst, src, sliceLen, sizeof(__m256i)*16, &gf16_xor_finish_copy_block_avx2, numOutputs, outputNum, chunkLen, 1, NULL, NULL, NULL);
+	_mm256_zeroupper();
+#else
+	UNUSED(dst); UNUSED(src); UNUSED(sliceLen); UNUSED(numOutputs); UNUSED(outputNum); UNUSED(chunkLen);
+#endif
+}
+
+int gf16_xor_finish_packed_cksum_avx2(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t sliceLen, unsigned numOutputs, unsigned outputNum, size_t chunkLen) {
+#if defined(__AVX2__) && defined(PLATFORM_AMD64)
+	__m256i checksum = _mm256_setzero_si256();
+	int ret = gf16_finish_packed(dst, src, sliceLen, sizeof(__m256i)*16, &gf16_xor_finish_copy_block_avx2, numOutputs, outputNum, chunkLen, 1, &checksum, &gf16_checksum_block_avx2, &gf16_checksum_finish_avx2);
+	_mm256_zeroupper();
+	return ret;
+#else
+	UNUSED(dst); UNUSED(src); UNUSED(sliceLen); UNUSED(numOutputs); UNUSED(outputNum); UNUSED(chunkLen);
+	return 0;
+#endif
+}
+
 
 
 #if defined(__AVX2__) && defined(PLATFORM_AMD64)

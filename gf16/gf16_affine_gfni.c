@@ -13,6 +13,7 @@ int gf16_affine_available_gfni = 1;
 # define _MM_END
 # define _AVAILABLE 1
 # include "gf16_shuffle_x86_prepare.h"
+# include "gf16_checksum_x86.h"
 # undef _AVAILABLE
 # undef _MM_END
 # undef _FN
@@ -32,7 +33,22 @@ void gf16_affine_prepare_packed_gfni(void *HEDLEY_RESTRICT dst, const void *HEDL
 #else
 		1
 #endif
-	);
+	, NULL, NULL, NULL, NULL, NULL);
+#else
+	UNUSED(dst); UNUSED(src); UNUSED(srcLen); UNUSED(sliceLen); UNUSED(inputPackSize); UNUSED(inputNum); UNUSED(chunkLen);
+#endif
+}
+
+void gf16_affine_prepare_packed_cksum_gfni(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen, size_t sliceLen, unsigned inputPackSize, unsigned inputNum, size_t chunkLen) {
+#if defined(__GFNI__) && defined(__SSSE3__)
+	__m128i checksum = _mm_setzero_si128();
+	gf16_prepare_packed(dst, src, srcLen, sliceLen, sizeof(__m128i)*2, &gf16_shuffle_prepare_block_gfni, &gf16_shuffle_prepare_blocku_gfni, inputPackSize, inputNum, chunkLen,
+#ifdef PLATFORM_AMD64
+		3
+#else
+		1
+#endif
+	, &checksum, &gf16_checksum_block_gfni, &gf16_checksum_blocku_gfni, &gf16_checksum_zeroes_gfni, &gf16_checksum_prepare_gfni);
 #else
 	UNUSED(dst); UNUSED(src); UNUSED(srcLen); UNUSED(sliceLen); UNUSED(inputPackSize); UNUSED(inputNum); UNUSED(chunkLen);
 #endif
@@ -211,7 +227,7 @@ void gf16_affine_muladd_prefetch_gfni(const void *HEDLEY_RESTRICT scratch, void 
 #if defined(__GFNI__) && defined(__SSSE3__)
 	gf16_muladd_prefetch_single(scratch, &gf16_affine_muladd_x_gfni, dst, src, len, coefficient, prefetch);
 #else
-	UNUSED(scratch); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficient);
+	UNUSED(scratch); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficient); UNUSED(prefetch);
 #endif
 }
 
@@ -304,7 +320,22 @@ void gf16_affine2x_prepare_packed_gfni(void *HEDLEY_RESTRICT dst, const void *HE
 #else
 		2
 #endif
-	);
+	, NULL, NULL, NULL, NULL, NULL);
+#else
+	UNUSED(dst); UNUSED(src); UNUSED(srcLen); UNUSED(sliceLen); UNUSED(inputPackSize); UNUSED(inputNum); UNUSED(chunkLen);
+#endif
+}
+
+void gf16_affine2x_prepare_packed_cksum_gfni(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen, size_t sliceLen, unsigned inputPackSize, unsigned inputNum, size_t chunkLen) {
+#if defined(__GFNI__) && defined(__SSSE3__)
+	__m128i checksum = _mm_setzero_si128();
+	gf16_prepare_packed(dst, src, srcLen, sliceLen, sizeof(__m128i), &gf16_affine2x_prepare_block_gfni, &gf16_affine2x_prepare_blocku_gfni, inputPackSize, inputNum, chunkLen,
+#ifdef PLATFORM_AMD64
+		6
+#else
+		2
+#endif
+	, &checksum, &gf16_checksum_block_gfni, &gf16_checksum_blocku_gfni, &gf16_checksum_zeroes_gfni, &gf16_checksum_prepare_gfni);
 #else
 	UNUSED(dst); UNUSED(src); UNUSED(srcLen); UNUSED(sliceLen); UNUSED(inputPackSize); UNUSED(inputNum); UNUSED(chunkLen);
 #endif
@@ -320,9 +351,19 @@ void gf16_affine2x_finish_gfni(void *HEDLEY_RESTRICT dst, size_t len) {
 
 void gf16_affine2x_finish_packed_gfni(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t sliceLen, unsigned numOutputs, unsigned outputNum, size_t chunkLen) {
 #if defined(__GFNI__) && defined(__SSSE3__)
-	gf16_finish_packed(dst, src, sliceLen, sizeof(__m128i), &gf16_affine2x_finish_copy_block_gfni, numOutputs, outputNum, chunkLen, 1);
+	gf16_finish_packed(dst, src, sliceLen, sizeof(__m128i), &gf16_affine2x_finish_copy_block_gfni, numOutputs, outputNum, chunkLen, 1, NULL, NULL, NULL);
 #else
 	UNUSED(dst); UNUSED(src); UNUSED(sliceLen); UNUSED(numOutputs); UNUSED(outputNum); UNUSED(chunkLen);
+#endif
+}
+
+int gf16_affine2x_finish_packed_cksum_gfni(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t sliceLen, unsigned numOutputs, unsigned outputNum, size_t chunkLen) {
+#if defined(__GFNI__) && defined(__SSSE3__)
+	__m128i checksum = _mm_setzero_si128();
+	return gf16_finish_packed(dst, src, sliceLen, sizeof(__m128i), &gf16_affine2x_finish_copy_block_gfni, numOutputs, outputNum, chunkLen, 1, &checksum, &gf16_checksum_block_gfni, &gf16_checksum_finish_gfni);
+#else
+	UNUSED(dst); UNUSED(src); UNUSED(sliceLen); UNUSED(numOutputs); UNUSED(outputNum); UNUSED(chunkLen);
+	return 0;
 #endif
 }
 
