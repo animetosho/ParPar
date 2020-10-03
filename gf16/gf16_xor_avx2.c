@@ -120,11 +120,11 @@ static HEDLEY_ALWAYS_INLINE __m128i sse4_lzcnt_to_mask_epi16(__m128i v) {
 	return _mm_or_si128(bits, _mm_slli_epi16(zeroes, 15));
 }
 
-static inline uint8_t xor_write_avx_load_part(uint8_t** jitptr, uint8_t reg, int16_t lowest, int16_t highest) {
+static inline uint8_t xor_write_avx_load_part(uint8_t* HEDLEY_RESTRICT* jitptr, uint8_t reg, int16_t lowest, int16_t highest) {
 	if(lowest < 16) {
 		if(lowest < 3) {
 			if(highest > 2) {
-				*jitptr += _jit_vpxor_m(*jitptr, reg, highest, AX, lowest*32-128);
+				*jitptr += _jit_vpxor_m(*jitptr, reg, (uint_fast8_t)highest, AX, lowest*32-128);
 			} else if(highest >= 0) {
 				*jitptr += _jit_vmovdqa_load(*jitptr, reg, AX, highest*32-128);
 				*jitptr += _jit_vpxor_m(*jitptr, reg, reg, AX, lowest*32-128);
@@ -133,7 +133,7 @@ static inline uint8_t xor_write_avx_load_part(uint8_t** jitptr, uint8_t reg, int
 		} else {
 			if(highest >= 0) {
 				/* highest dep cannot be sourced from memory */
-				*jitptr += _jit_vpxor_r(*jitptr, reg, highest, lowest);
+				*jitptr += _jit_vpxor_r(*jitptr, reg, (uint_fast8_t)highest, (uint_fast8_t)lowest);
 			} else
 #ifdef XORDEP_AVX_XOR_OPTIMAL
 			{
@@ -142,7 +142,7 @@ static inline uint8_t xor_write_avx_load_part(uint8_t** jitptr, uint8_t reg, int
 			}
 #else
 			/* just a move */
-			*jitptr += _jit_vmovdqa(*jitptr, reg, lowest);
+			*jitptr += _jit_vmovdqa(*jitptr, reg, (uint_fast8_t)lowest);
 #endif
 		}
 	}
@@ -182,7 +182,7 @@ static inline int xor_write_avx_main_part(void* jitptr, uint8_t dep1, uint8_t de
 	return xor256_jit_len[dep];
 }
 
-static inline void* xor_write_jit_avx(const struct gf16_xor_scratch *HEDLEY_RESTRICT scratch, uint8_t* jitptr, uint16_t val, const int xor, const int prefetch) {
+static inline void* xor_write_jit_avx(const struct gf16_xor_scratch *HEDLEY_RESTRICT scratch, uint8_t *HEDLEY_RESTRICT jitptr, uint16_t val, const int xor, const int prefetch) {
 	uint_fast32_t bit;
 	
 	__m256i depmask = _mm256_load_si256((__m256i*)scratch->deps + (val & 0xf)*4);
@@ -300,14 +300,14 @@ static inline void* xor_write_jit_avx(const struct gf16_xor_scratch *HEDLEY_REST
 			
 			/* if there's a higest bit set, do a VPXOR-load, otherwise, regular load + VPXOR-load */
 			if(dep1_highest[bit] > 2) {
-				jitptr += _jit_vpxor_m(jitptr, 0, dep1_highest[bit], DX, destOffs);
+				jitptr += _jit_vpxor_m(jitptr, 0, (uint_fast8_t)dep1_highest[bit], DX, destOffs);
 			} else {
 				_LD_DQA(0, DX, destOffs);
 				if(dep1_highest[bit] >= 0)
 					jitptr += _jit_vpxor_m(jitptr, 0, 0, AX, dep1_highest[bit]*32-128);
 			}
 			if(dep2_highest[bit] > 2) {
-				jitptr += _jit_vpxor_m(jitptr, 1, dep2_highest[bit], DX, destOffs2);
+				jitptr += _jit_vpxor_m(jitptr, 1, (uint_fast8_t)dep2_highest[bit], DX, destOffs2);
 			} else {
 				_LD_DQA(1, DX, destOffs2);
 				if(dep2_highest[bit] >= 0)

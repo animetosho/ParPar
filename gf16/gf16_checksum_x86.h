@@ -20,7 +20,7 @@ static HEDLEY_ALWAYS_INLINE _mword _FN(gf16_vec_mul2)(_mword v) {
 }
 
 static HEDLEY_ALWAYS_INLINE void _FN(gf16_checksum_block)(const void *HEDLEY_RESTRICT src, void *HEDLEY_RESTRICT checksum, const size_t blockLen, const int aligned) {
-	const unsigned words = blockLen/sizeof(_mword);
+	const unsigned words = (unsigned)blockLen / sizeof(_mword);
 	_mword v = *(_mword*)checksum;
 	v = _FN(gf16_vec_mul2)(v);
 	_mword* _src = (_mword*)src;
@@ -149,17 +149,54 @@ static HEDLEY_ALWAYS_INLINE int _FN(gf16_checksum_vec_isequal)(_mword a, _mword 
 }
 
 static HEDLEY_ALWAYS_INLINE void _FN(gf16_checksum_prepare)(void *HEDLEY_RESTRICT dst, void *HEDLEY_RESTRICT checksum, const size_t blockLen, gf16_prepare_block prepareBlock) {
-	ALIGN_TO(MWORD_SIZE, uint8_t tmp[blockLen]);
-	memset(tmp, 0, blockLen);
-	_MMI(store)((_mword*)tmp, *(_mword*)checksum);
-	
-	prepareBlock(dst, tmp);
+	// because some compilers don't like `tmp[blockLen]` despite blockLen being constant, just implement every possibility
+#define _X(bl) \
+	ALIGN_TO(MWORD_SIZE, uint8_t tmp[bl]) = {0}; \
+	_MMI(store)((_mword*)tmp, *(_mword*)checksum); \
+	prepareBlock(dst, tmp)
+	if(blockLen == 16) {
+		_X(16);
+	} else if(blockLen == 32) {
+		_X(32);
+	} else if(blockLen == 64) {
+		_X(64);
+	} else if(blockLen == 128) {
+		_X(128);
+	} else if(blockLen == 256) {
+		_X(256);
+	} else if(blockLen == 512) {
+		_X(512);
+	} else if(blockLen == 1024) {
+		_X(1024);
+	} else {
+		assert(blockLen == 0);
+	}
+#undef _X
 }
 static HEDLEY_ALWAYS_INLINE int _FN(gf16_checksum_finish)(const void *HEDLEY_RESTRICT src, void *HEDLEY_RESTRICT checksum, const size_t blockLen, gf16_finish_copy_block finishBlock) {
-	ALIGN_TO(MWORD_SIZE, uint8_t tmp[blockLen]);
-	finishBlock(tmp, src);
-	
-	return _FN(gf16_checksum_vec_isequal)(_MMI(load)((_mword*)tmp), *(_mword*)checksum);
+#define _X(bl) \
+	ALIGN_TO(MWORD_SIZE, uint8_t tmp[bl]); \
+	finishBlock(tmp, src); \
+	return _FN(gf16_checksum_vec_isequal)(_MMI(load)((_mword*)tmp), *(_mword*)checksum)
+	if(blockLen == 16) {
+		_X(16);
+	} else if(blockLen == 32) {
+		_X(32);
+	} else if(blockLen == 64) {
+		_X(64);
+	} else if(blockLen == 128) {
+		_X(128);
+	} else if(blockLen == 256) {
+		_X(256);
+	} else if(blockLen == 512) {
+		_X(512);
+	} else if(blockLen == 1024) {
+		_X(1024);
+	} else {
+		assert(blockLen == 0);
+		return 0;
+	}
+#undef _X
 }
 
 #endif

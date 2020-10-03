@@ -1,11 +1,11 @@
 #include "gfmat_coeff.h"
+#include <stdlib.h>
 
 static int8_t* input_diff; // difference between predicted input coefficient and actual (number range is -4...5, so could be compressed to 4 bits, but I don't feel it's worth the savings)
 static uint16_t* gf_exp; // pre-calculated exponents in GF(2^16), missing bottom 3 bits, followed by 128-entry polynomial shift table
 void gfmat_init() {
-	
-	input_diff = new int8_t[32768];
-	gf_exp = new uint16_t[8192+128];
+	input_diff = (int8_t*)malloc(32768);
+	gf_exp = (uint16_t*)malloc((8192+128)*2);
 	
 	int exp = 0, n = 1;
 	for (int i = 0; i < 32768; i++) {

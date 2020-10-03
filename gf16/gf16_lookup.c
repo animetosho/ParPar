@@ -602,7 +602,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_lookup_checksum_blocku(const void *HEDLEY_
 			amount -= sizeof(uint64_t);
 		}
 		uint64_t* _checksum = (uint64_t*)checksum;
-		*_checksum = gf16_lookup_multi_mul2(*_checksum) ^ data;
+		*_checksum = (uint64_t)gf16_lookup_multi_mul2(*_checksum) ^ data;
 	} else if(sizeof(uintptr_t) >= 4) {
 		uint32_t data = 0;
 		size_t remaining = amount & (sizeof(uint32_t)-1);
@@ -617,7 +617,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_lookup_checksum_blocku(const void *HEDLEY_
 			amount -= sizeof(uint32_t);
 		}
 		uint32_t* _checksum = (uint32_t*)checksum;
-		*_checksum = gf16_lookup_multi_mul2(*_checksum) ^ data;
+		*_checksum = (uint32_t)gf16_lookup_multi_mul2(*_checksum) ^ data;
 	} else {
 		uint16_t data = 0;
 		if(amount & 1) {
@@ -631,7 +631,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_lookup_checksum_blocku(const void *HEDLEY_
 			amount -= sizeof(uint16_t);
 		}
 		uint16_t* _checksum = (uint16_t*)checksum;
-		*_checksum = gf16_lookup_multi_mul2(*_checksum) ^ data;
+		*_checksum = (uint16_t)gf16_lookup_multi_mul2(*_checksum) ^ data;
 	}
 }
 static HEDLEY_ALWAYS_INLINE void gf16_lookup_checksum_block(const void *HEDLEY_RESTRICT src, void *HEDLEY_RESTRICT checksum, const size_t blockLen, const int aligned) {
@@ -648,7 +648,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_lookup_checksum_zeroes(void *HEDLEY_RESTRI
 		uint64_t _checksum = *(uint64_t*)checksum;
 		uint64_t res = -(uint64_t)(coeff>>15) & _checksum;
 		for(int i=0; i<15; i++) {
-			res = gf16_lookup_multi_mul2(res);
+			res = (uint64_t)gf16_lookup_multi_mul2(res);
 			coeff <<= 1;
 			res ^= -(uint64_t)(coeff>>15) & _checksum;
 		}
@@ -657,7 +657,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_lookup_checksum_zeroes(void *HEDLEY_RESTRI
 		uint32_t _checksum = *(uint32_t*)checksum;
 		uint32_t res = -(uint32_t)(coeff>>15) & _checksum;
 		for(int i=0; i<15; i++) {
-			res = gf16_lookup_multi_mul2(res);
+			res = (uint32_t)gf16_lookup_multi_mul2(res);
 			coeff <<= 1;
 			res ^= -(uint32_t)(coeff>>15) & _checksum;
 		}
@@ -666,7 +666,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_lookup_checksum_zeroes(void *HEDLEY_RESTRI
 		uint16_t _checksum = *(uint16_t*)checksum;
 		uint16_t res = -(coeff>>15) & _checksum;
 		for(int i=0; i<15; i++) {
-			res = gf16_lookup_multi_mul2(res);
+			res = (uint16_t)gf16_lookup_multi_mul2(res);
 			coeff <<= 1;
 			res ^= -(coeff>>15) & _checksum;
 		}
@@ -690,7 +690,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_lookup_copy_block(void *HEDLEY_RESTRICT ds
 }
 static HEDLEY_ALWAYS_INLINE void gf16_lookup_prepare_blocku(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t remaining) {
 	memcpy(dst, src, remaining);
-	memset(dst + remaining, 0, gf16_lookup_stride()-remaining);
+	memset((char*)dst + remaining, 0, gf16_lookup_stride()-remaining);
 }
 
 static HEDLEY_ALWAYS_INLINE void gf16_lookup3_prepare_block(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src) {

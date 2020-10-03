@@ -182,7 +182,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_lookup_finish_block_sse2(void *HEDLEY_REST
 }
 static HEDLEY_ALWAYS_INLINE void gf16_lookup_prepare_blocku(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t remaining) {
 	memcpy(dst, src, remaining);
-	memset(dst + remaining, 0, sizeof(__m128i)-remaining);
+	memset((char*)dst + remaining, 0, sizeof(__m128i)-remaining);
 }
 
 
