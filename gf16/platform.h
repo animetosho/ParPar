@@ -2,6 +2,8 @@
 #ifndef GF16_PLATFORM_H
 #define GF16_PLATFORM_H
 
+#include "../src/hedley.h"
+
 #if defined(__x86_64__) || \
     defined(__amd64__ ) || \
     defined(__LP64    ) || \
@@ -105,11 +107,18 @@
 
 
 // AVX on mingw-gcc is just broken - don't do it...
-#if defined(__GNUC__) && !defined(__clang__) && !defined(__INTEL_COMPILER) && (defined(__MINGW32__) || defined(__MINGW64__)) && defined(__AVX2__)
-# include "../src/hedley.h"
+#if defined(HEDLEY_GCC_VERSION) && (defined(__MINGW32__) || defined(__MINGW64__)) && defined(__AVX2__)
 HEDLEY_WARNING("Compiling AVX code on MinGW GCC may cause crashing due to stack alignment bugs [https://gcc.gnu.org/bugzilla/show_bug.cgi?id=54412]");
 // as of writing, GCC 10.1 still has this problem, and it doesn't look like it'll be fixed any time soon
 // ...so if you're reading this, try Clang instead
+#endif
+
+// GCC < 10 has buggy handling of GF2P8AFFINEQB instruction
+// for SSE encodings, the bug seems to cause the operands to sometimes be placed in the wrong order
+// haven't checked EVEX encoding, but it seems to fail tests there as well
+// we hack around it by pretending GCC < 10 doesn't support GFNI
+#if !HEDLEY_GCC_VERSION_CHECK(10,0,0)
+# undef __GFNI__
 #endif
 
 // alignment
