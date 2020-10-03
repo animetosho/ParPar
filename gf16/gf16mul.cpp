@@ -404,10 +404,10 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 			// TODO: on Cortex A53, prefetching seems to be slower, so disabled for now
 			//_mul_add_multi_packpf = &gf16_shuffle_muladd_multi_packpf_neon;
 			prepare_packed = &gf16_shuffle_prepare_packed_neon;
-			prepare_packed_cksum = &gf16_shuffle_prepare_packed_cksum_neon;
-			finish_packed_cksum = &gf16_shuffle_finish_packed_cksum_neon;
 			_info.idealInputMultiple = 2;
 			#endif
+			prepare_packed_cksum = &gf16_shuffle_prepare_packed_cksum_neon;
+			finish_packed_cksum = &gf16_shuffle_finish_packed_cksum_neon;
 		break;
 		
 		case GF16_AFFINE_AVX512:

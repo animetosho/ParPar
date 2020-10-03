@@ -306,7 +306,7 @@ void gf16_shuffle_muladd_multi_packpf_neon(const void *HEDLEY_RESTRICT scratch, 
 }
 
 
-#if defined(__ARM_NEON) && defined(__aarch64__)
+#if defined(__ARM_NEON)
 static HEDLEY_ALWAYS_INLINE void gf16_shuffle_prepare_block_neon(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src) {
 	vst1q_u8_x2_align(dst, vld1q_u8_x2_align(src));
 }
@@ -326,16 +326,22 @@ void gf16_shuffle_prepare_packed_neon(void *HEDLEY_RESTRICT dst, const void *HED
 }
 
 void gf16_shuffle_prepare_packed_cksum_neon(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen, size_t sliceLen, unsigned inputPackSize, unsigned inputNum, size_t chunkLen) {
-#if defined(__ARM_NEON) && defined(__aarch64__)
+#if defined(__ARM_NEON)
 	int16x8_t checksum = vdupq_n_s16(0);
-	gf16_prepare_packed(dst, src, srcLen, sliceLen, sizeof(uint8x16x2_t), &gf16_shuffle_prepare_block_neon, &gf16_shuffle_prepare_blocku_neon, inputPackSize, inputNum, chunkLen, 2, &checksum, &gf16_checksum_block_neon, &gf16_checksum_blocku_neon, &gf16_checksum_zeroes_neon, &gf16_checksum_prepare_neon);
+	gf16_prepare_packed(dst, src, srcLen, sliceLen, sizeof(uint8x16x2_t), &gf16_shuffle_prepare_block_neon, &gf16_shuffle_prepare_blocku_neon, inputPackSize, inputNum, chunkLen,
+#ifdef __aarch64__
+	2
+#else
+	1
+#endif
+	, &checksum, &gf16_checksum_block_neon, &gf16_checksum_blocku_neon, &gf16_checksum_zeroes_neon, &gf16_checksum_prepare_neon);
 #else
 	UNUSED(dst); UNUSED(src); UNUSED(srcLen); UNUSED(sliceLen); UNUSED(inputPackSize); UNUSED(inputNum); UNUSED(chunkLen);
 #endif
 }
 
 int gf16_shuffle_finish_packed_cksum_neon(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t sliceLen, unsigned numOutputs, unsigned outputNum, size_t chunkLen) {
-#if defined(__ARM_NEON) && defined(__aarch64__)
+#if defined(__ARM_NEON)
 	int16x8_t checksum = vdupq_n_s16(0);
 	return gf16_finish_packed(dst, src, sliceLen, sizeof(uint8x16x2_t), &gf16_shuffle_prepare_block_neon, numOutputs, outputNum, chunkLen, 1, &checksum, &gf16_checksum_block_neon, &gf16_checksum_finish_neon);
 #else
