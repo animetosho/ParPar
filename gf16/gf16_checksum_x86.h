@@ -111,11 +111,33 @@ static HEDLEY_ALWAYS_INLINE void _FN(gf16_checksum_blocku)(const void *HEDLEY_RE
 }
 
 
+#include "gfmat_coeff.h"
 static HEDLEY_ALWAYS_INLINE void _FN(gf16_checksum_zeroes)(void *HEDLEY_RESTRICT checksum, size_t blocks) {
-	// TODO: optimize this
-	_mword* _checksum = (_mword*)checksum;
-	while(blocks--)
-		*_checksum = _FN(gf16_vec_mul2)(*_checksum);
+	_mword coeff = _MM(set1_epi16)(gf16_exp(blocks % 65535));
+	
+	_mword _checksum = *(_mword*)checksum;
+	_mword res = _MMI(and)(
+		_MM(srai_epi16)(coeff, 15),
+		_checksum
+	);
+	for(int i=0; i<15; i++) {
+		res = _FN(gf16_vec_mul2)(res);
+		coeff = _MM(add_epi16)(coeff, coeff);
+#if MWORD_SIZE==64
+		res = _mm512_ternarylogic_epi32(
+			res,
+			_mm512_srai_epi16(coeff, 15),
+			_checksum,
+			0x78 // (a^(b&c))
+		);
+#else
+		res = _MMI(xor)(res, _MMI(and)(
+			_MM(srai_epi16)(coeff, 15),
+			_checksum
+		));
+#endif
+	}
+	*(_mword*)checksum = res;
 }
 
 static HEDLEY_ALWAYS_INLINE int _FN(gf16_checksum_vec_isequal)(_mword a, _mword b) {

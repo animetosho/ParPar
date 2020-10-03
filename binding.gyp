@@ -35,7 +35,7 @@
     {
       "target_name": "parpar_gf",
       "dependencies": ["gf16", "gf16_sse2", "gf16_ssse3", "gf16_avx", "gf16_avx2", "gf16_avx512", "gf16_vbmi", "gf16_gfni", "gf16_gfni_avx512", "gf16_neon", "multi_md5"],
-      "sources": ["src/gf.cc", "gf16/module.cc", "gf16/gfmat_coeff.cpp", "src/gyp_warnings.cc"],
+      "sources": ["src/gf.cc", "gf16/module.cc", "gf16/gfmat_coeff.c", "src/gyp_warnings.cc"],
       "include_dirs": ["gf16"],
       "conditions": [
         ['OS=="win"', {

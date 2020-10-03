@@ -41,11 +41,20 @@ static HEDLEY_ALWAYS_INLINE void gf16_checksum_blocku_neon(const void *HEDLEY_RE
 	*(int16x8_t*)checksum = v;
 }
 
+#include "gfmat_coeff.h"
 static HEDLEY_ALWAYS_INLINE void gf16_checksum_zeroes_neon(void *HEDLEY_RESTRICT checksum, size_t blocks) {
-	// TODO: optimize this
-	int16x8_t* _checksum = (int16x8_t*)checksum;
-	while(blocks--)
-		*_checksum = gf16_vec_mul2_neon(*_checksum);
+	int16x8_t coeff = vdupq_n_s16(gf16_exp(blocks % 65535));
+	int16x8_t _checksum = *(int16x8_t*)checksum;
+	int16x8_t res = vandq_s16(vshrq_n_s16(coeff, 15), _checksum);
+	for(int i=0; i<15; i++) {
+		res = gf16_vec_mul2_neon(res);
+		coeff = vaddq_s16(coeff, coeff);
+		res = veorq_s16(res, vandq_s16(
+			vshrq_n_s16(coeff, 15),
+			_checksum
+		));
+	}
+	*(int16x8_t*)checksum = res;
 }
 
 static HEDLEY_ALWAYS_INLINE void gf16_checksum_prepare_neon(void *HEDLEY_RESTRICT dst, void *HEDLEY_RESTRICT checksum, const size_t blockLen, gf16_prepare_block prepareBlock) {

@@ -19,15 +19,28 @@ void gfmat_init() {
 		input_diff[i] = exp - i*2;
 	}
 	
+	// correction values for handling the missing bottom 3 bits of exp
+	// essentially this is a table to speed up multiplication by 0...127 by applying the effects of polynomial masking
 	for (int i = 0; i < 128; i++) {
-		exp = i << 9;
+		n = i << 9;
 		for (int j = 0; j < 7; j++) {
-			exp <<= 1;
-			if (exp & 0x10000)
-				exp ^= 0x1100B;
+			n <<= 1;
+			if(n > 65535) n ^= 0x1100B;
 		}
-		gf_exp[8192+i] = exp;
+		gf_exp[8192+i] = n;
 	}
+}
+
+HEDLEY_CONST uint16_t gf16_exp(uint_fast16_t v) {
+	v = gf_exp[v>>3] << (v&7);
+	return (uint16_t)v ^ gf_exp[8192 + (v>>16)];
+	
+	/* alternative idea which only omits bottom bit of gf_exp lookup, but avoids a second lookup
+	// GCC doesn't handle the unpredictable check that well
+	uint_fast32_t result0 = gf_exp[result>>1];
+	uint_fast32_t result1 = (result0 << 1) ^ (-(result0 >> 15) & 0x1100B); // multiply by 2?
+	return HEDLEY_UNPREDICTABLE(result & 1) ? result1 : result0;
+	*/
 }
 
 HEDLEY_CONST uint16_t gfmat_coeff(uint_fast16_t inputBlock, uint_fast16_t recoveryBlock) {
@@ -39,13 +52,5 @@ HEDLEY_CONST uint16_t gfmat_coeff(uint_fast16_t inputBlock, uint_fast16_t recove
 	result = (result >> 16) + (result & 65535);
 	result = (result >> 16) + (result & 65535);
 	
-	result = gf_exp[result>>3] << (result&7);
-	return (uint16_t)result ^ gf_exp[8192 + (result>>16)];
-	
-	/* alternative idea which only omits bottom bit of gf_exp lookup, but avoids a second lookup
-	// GCC doesn't handle the unpredictable check that well
-	uint_fast32_t result0 = gf_exp[result>>1];
-	uint_fast32_t result1 = (result0 << 1) ^ (-(result0 >> 15) & 0x1100B); // multiply by 2?
-	return HEDLEY_UNPREDICTABLE(result & 1) ? result1 : result0;
-	*/
+	return gf16_exp(result);
 }

@@ -609,11 +609,39 @@ static HEDLEY_ALWAYS_INLINE void gf16_lookup_checksum_block(const void *HEDLEY_R
 	gf16_lookup_checksum_blocku(src, gf16_lookup_stride(), checksum);
 }
 
+#include "gfmat_coeff.h"
 static HEDLEY_ALWAYS_INLINE void gf16_lookup_checksum_zeroes(void *HEDLEY_RESTRICT checksum, size_t blocks) {
-	// TODO: optimize this
-	uintptr_t* _checksum = (uintptr_t*)checksum;
-	while(blocks--)
-		*_checksum = gf16_lookup_multi_mul2(*_checksum);
+	uint16_t coeff = gf16_exp(blocks % 65535);
+	
+	// multiply checksum by coeff
+	if(sizeof(uintptr_t) >= 8) {
+		uint64_t _checksum = *(uint64_t*)checksum;
+		uint64_t res = -(uint64_t)(coeff>>15) & _checksum;
+		for(int i=0; i<15; i++) {
+			res = gf16_lookup_multi_mul2(res);
+			coeff <<= 1;
+			res ^= -(uint64_t)(coeff>>15) & _checksum;
+		}
+		*(uint64_t*)checksum = res;
+	} else if(sizeof(uintptr_t) >= 4) {
+		uint32_t _checksum = *(uint32_t*)checksum;
+		uint32_t res = -(uint32_t)(coeff>>15) & _checksum;
+		for(int i=0; i<15; i++) {
+			res = gf16_lookup_multi_mul2(res);
+			coeff <<= 1;
+			res ^= -(uint32_t)(coeff>>15) & _checksum;
+		}
+		*(uint32_t*)checksum = res;
+	} else {
+		uint16_t _checksum = *(uint16_t*)checksum;
+		uint16_t res = -(coeff>>15) & _checksum;
+		for(int i=0; i<15; i++) {
+			res = gf16_lookup_multi_mul2(res);
+			coeff <<= 1;
+			res ^= -(coeff>>15) & _checksum;
+		}
+		*(uint16_t*)checksum = res;
+	}
 }
 
 static HEDLEY_ALWAYS_INLINE void gf16_lookup_checksum_prepare(void *HEDLEY_RESTRICT dst, void *HEDLEY_RESTRICT checksum, const size_t blockLen, gf16_prepare_block prepareBlock) {
