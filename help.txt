@@ -237,13 +237,13 @@ Input Files:
                              directories given on the command line without
                              recursion.
                              This option takes no values.
-  -i,  --input-file          Supply a list of files to be included as input,
-                             separated by newlines. Can be `-` to read from
-                             stdin, or a command prefixed with proc:// to read
-                             from the stdout of specified process (example:
-                             `proc://cat somefile.txt`). Can also be an fd
-                             prefixed with fd:// (requires NodeJS >= 0.12),
-                             i.e. `fd://0` is an alias for stdin.
+  -i,  --input-file          Supply a text file which lists files, separated by
+                             newlines, to be included as input. Can be `-` to
+                             read from stdin, or a command prefixed with
+                             proc:// to read from the stdout of specified
+                             process (example: `proc://cat somefile.txt`). Can
+                             also be an fd prefixed with fd:// (requires NodeJS
+                             >= 0.12), i.e. `fd://0` is an alias for stdin.
                              Can be specified multiple times.
   -0,  --input-file0         Same as the `--input-file` option, except files
                              are separated by null characters instead of
