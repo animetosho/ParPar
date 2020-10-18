@@ -117,7 +117,7 @@ HEDLEY_WARNING("Compiling AVX code on MinGW GCC may cause crashing due to stack 
 // for SSE encodings, the bug seems to cause the operands to sometimes be placed in the wrong order (example: https://godbolt.org/z/5Yf135)
 // haven't checked EVEX encoding, but it seems to fail tests there as well
 // we hack around it by pretending GCC < 10 doesn't support GFNI
-#if !HEDLEY_GCC_VERSION_CHECK(10,0,0) && defined(__OPTIMIZE__)
+#if !HEDLEY_GCC_VERSION_CHECK(10,0,0) && defined(HEDLEY_GCC_VERSION) && defined(__OPTIMIZE__)
 # undef __GFNI__
 #endif
 
