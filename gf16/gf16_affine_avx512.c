@@ -2,31 +2,36 @@
 #include "gf16_global.h"
 #include "platform.h"
 
+#define MWORD_SIZE 64
+#define _mword __m512i
+#define _MM(f) _mm512_ ## f
+#define _MMI(f) _mm512_ ## f ## _si512
+#define _FN(f) f ## _avx512
+#define _MM_END _mm256_zeroupper();
+
 #if defined(__GFNI__) && defined(__AVX512BW__) && defined(__AVX512VL__)
 int gf16_affine_available_avx512 = 1;
-# define MWORD_SIZE 64
-# define _mword __m512i
-# define _MM(f) _mm512_ ## f
-# define _MMI(f) _mm512_ ## f ## _si512
-# define _FN(f) f ## _gfni512
-# define _MM_END _mm256_zeroupper();
 # define _AVAILABLE 1
 # include "gf16_shuffle_x86_prepare.h"
 # include "gf16_checksum_x86.h"
-# undef _AVAILABLE
-# undef _MM_END
-# undef _FN
-# undef _MMI
-# undef _MM
-# undef _mword
-# undef MWORD_SIZE
 #else
 int gf16_affine_available_avx512 = 0;
 #endif
 
+#include "gf16_affine2x_x86.h"
+#ifdef _AVAILABLE
+# undef _AVAILABLE
+#endif
+#undef _MM_END
+#undef _FN
+#undef _MMI
+#undef _MM
+#undef _mword
+#undef MWORD_SIZE
+
 void gf16_affine_prepare_packed_avx512(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen, size_t sliceLen, unsigned inputPackSize, unsigned inputNum, size_t chunkLen) {
 #if defined(__GFNI__) && defined(__AVX512BW__) && defined(__AVX512VL__)
-	gf16_prepare_packed(dst, src, srcLen, sliceLen, sizeof(__m512i)*2, &gf16_shuffle_prepare_block_gfni512, &gf16_shuffle_prepare_blocku_gfni512, inputPackSize, inputNum, chunkLen,
+	gf16_prepare_packed(dst, src, srcLen, sliceLen, sizeof(__m512i)*2, &gf16_shuffle_prepare_block_avx512, &gf16_shuffle_prepare_blocku_avx512, inputPackSize, inputNum, chunkLen,
 #ifdef PLATFORM_AMD64
 		6
 #else
@@ -42,13 +47,13 @@ void gf16_affine_prepare_packed_avx512(void *HEDLEY_RESTRICT dst, const void *HE
 void gf16_affine_prepare_packed_cksum_avx512(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen, size_t sliceLen, unsigned inputPackSize, unsigned inputNum, size_t chunkLen) {
 #if defined(__GFNI__) && defined(__AVX512BW__) && defined(__AVX512VL__)
 	__m512i checksum = _mm512_setzero_si512();
-	gf16_prepare_packed(dst, src, srcLen, sliceLen, sizeof(__m512i)*2, &gf16_shuffle_prepare_block_gfni512, &gf16_shuffle_prepare_blocku_gfni512, inputPackSize, inputNum, chunkLen,
+	gf16_prepare_packed(dst, src, srcLen, sliceLen, sizeof(__m512i)*2, &gf16_shuffle_prepare_block_avx512, &gf16_shuffle_prepare_blocku_avx512, inputPackSize, inputNum, chunkLen,
 #ifdef PLATFORM_AMD64
 		6
 #else
 		1
 #endif
-	, &checksum, &gf16_checksum_block_gfni512, &gf16_checksum_blocku_gfni512, &gf16_checksum_zeroes_gfni512, &gf16_checksum_prepare_gfni512);
+	, &checksum, &gf16_checksum_block_avx512, &gf16_checksum_blocku_avx512, &gf16_checksum_zeroes_avx512, &gf16_checksum_prepare_avx512);
 	_mm256_zeroupper();
 #else
 	UNUSED(dst); UNUSED(src); UNUSED(srcLen); UNUSED(sliceLen); UNUSED(inputPackSize); UNUSED(inputNum); UNUSED(chunkLen);
@@ -315,99 +320,6 @@ void* gf16_affine_init_avx512(int polynomial) {
 #else
 	UNUSED(polynomial);
 	return NULL;
-#endif
-}
-
-#if defined(__GFNI__) && defined(__AVX512BW__) && defined(__AVX512VL__)
-void gf16_affine2x_prepare_block_avx512(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src) {
-	__m512i data = _mm512_loadu_si512((__m512i*)src);
-	data = _mm512_shuffle_epi8(data, _mm512_set4_epi32(0x0f0d0b09, 0x07050301, 0x0e0c0a08, 0x06040200));
-	_mm512_store_si512((__m512i*)dst, data);
-}
-void gf16_affine2x_prepare_blocku_avx512(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t remaining) {
-	__m512i data = _mm512_maskz_loadu_epi8((1ULL<<remaining)-1, src);
-	data = _mm512_shuffle_epi8(data, _mm512_set4_epi32(0x0f0d0b09, 0x07050301, 0x0e0c0a08, 0x06040200));
-	_mm512_store_si512((__m512i*)dst, data);
-}
-void gf16_affine2x_finish_block_avx512(void *HEDLEY_RESTRICT dst) {
-	__m512i data = _mm512_load_si512((__m512i*)dst);
-	data = _mm512_shuffle_epi8(data, _mm512_set4_epi32(0x0f070e06, 0x0d050c04, 0x0b030a02, 0x09010800));
-	_mm512_store_si512((__m512i*)dst, data);
-}
-void gf16_affine2x_finish_copy_block_avx512(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src) {
-	__m512i data = _mm512_load_si512((__m512i*)src);
-	data = _mm512_shuffle_epi8(data, _mm512_set4_epi32(0x0f070e06, 0x0d050c04, 0x0b030a02, 0x09010800));
-	_mm512_store_si512((__m512i*)dst, data);
-}
-#endif
-
-void gf16_affine2x_prepare_avx512(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen) {
-#if defined(__GFNI__) && defined(__AVX512BW__) && defined(__AVX512VL__)
-	gf16_prepare(dst, src, srcLen, sizeof(__m512i), &gf16_affine2x_prepare_block_avx512, &gf16_affine2x_prepare_blocku_avx512);
-	_mm256_zeroupper();
-#else
-	UNUSED(dst); UNUSED(src); UNUSED(srcLen);
-#endif
-}
-
-void gf16_affine2x_prepare_packed_avx512(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen, size_t sliceLen, unsigned inputPackSize, unsigned inputNum, size_t chunkLen) {
-#if defined(__GFNI__) && defined(__AVX512BW__) && defined(__AVX512VL__)
-	gf16_prepare_packed(dst, src, srcLen, sliceLen, sizeof(__m512i), &gf16_affine2x_prepare_block_avx512, &gf16_affine2x_prepare_blocku_avx512, inputPackSize, inputNum, chunkLen,
-#ifdef PLATFORM_AMD64
-		12
-#else
-		2
-#endif
-	, NULL, NULL, NULL, NULL, NULL);
-	_mm256_zeroupper();
-#else
-	UNUSED(dst); UNUSED(src); UNUSED(srcLen); UNUSED(sliceLen); UNUSED(inputPackSize); UNUSED(inputNum); UNUSED(chunkLen);
-#endif
-}
-
-void gf16_affine2x_prepare_packed_cksum_avx512(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen, size_t sliceLen, unsigned inputPackSize, unsigned inputNum, size_t chunkLen) {
-#if defined(__GFNI__) && defined(__AVX512BW__) && defined(__AVX512VL__)
-	__m512i checksum = _mm512_setzero_si512();
-	gf16_prepare_packed(dst, src, srcLen, sliceLen, sizeof(__m512i), &gf16_affine2x_prepare_block_avx512, &gf16_affine2x_prepare_blocku_avx512, inputPackSize, inputNum, chunkLen,
-#ifdef PLATFORM_AMD64
-		12
-#else
-		2
-#endif
-	, &checksum, &gf16_checksum_block_gfni512, &gf16_checksum_blocku_gfni512, &gf16_checksum_zeroes_gfni512, &gf16_checksum_prepare_gfni512);
-	_mm256_zeroupper();
-#else
-	UNUSED(dst); UNUSED(src); UNUSED(srcLen); UNUSED(sliceLen); UNUSED(inputPackSize); UNUSED(inputNum); UNUSED(chunkLen);
-#endif
-}
-
-void gf16_affine2x_finish_avx512(void *HEDLEY_RESTRICT dst, size_t len) {
-#if defined(__GFNI__) && defined(__AVX512BW__) && defined(__AVX512VL__)
-	gf16_finish(dst, len, sizeof(__m512i), &gf16_affine2x_finish_block_avx512);
-	_mm256_zeroupper();
-#else
-	UNUSED(dst); UNUSED(len);
-#endif
-}
-
-void gf16_affine2x_finish_packed_avx512(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t sliceLen, unsigned numOutputs, unsigned outputNum, size_t chunkLen) {
-#if defined(__GFNI__) && defined(__AVX512BW__) && defined(__AVX512VL__)
-	gf16_finish_packed(dst, src, sliceLen, sizeof(__m512i), &gf16_affine2x_finish_copy_block_avx512, numOutputs, outputNum, chunkLen, 1, NULL, NULL, NULL);
-	_mm256_zeroupper();
-#else
-	UNUSED(dst); UNUSED(src); UNUSED(sliceLen); UNUSED(numOutputs); UNUSED(outputNum); UNUSED(chunkLen);
-#endif
-}
-
-int gf16_affine2x_finish_packed_cksum_avx512(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t sliceLen, unsigned numOutputs, unsigned outputNum, size_t chunkLen) {
-#if defined(__GFNI__) && defined(__AVX512BW__) && defined(__AVX512VL__)
-	__m512i checksum = _mm512_setzero_si512();
-	int ret = gf16_finish_packed(dst, src, sliceLen, sizeof(__m512i), &gf16_affine2x_finish_copy_block_avx512, numOutputs, outputNum, chunkLen, 1, &checksum, &gf16_checksum_block_gfni512, &gf16_checksum_finish_gfni512);
-	_mm256_zeroupper();
-	return ret;
-#else
-	UNUSED(dst); UNUSED(src); UNUSED(sliceLen); UNUSED(numOutputs); UNUSED(outputNum); UNUSED(chunkLen);
-	return 0;
 #endif
 }
 

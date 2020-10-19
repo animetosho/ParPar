@@ -191,7 +191,7 @@ Performance Options:
                              Choices are:
                                  lh_lookup: split 2x 8-bit scalar table lookup
                                  lh_lookup-sse: SSE2 variant of above
-                                 3p_lookup: split 3x 11/10-bit scalar table lookup
+                                 3p_lookup: split biword 3x 11/10-bit scalar table lookup
                                  xor-sse: vector XOR bit dependencies (SSE2)
                                  xorjit-sse: JIT variant of above
                                  xorjit-avx2: AVX2 x64 variant of above
@@ -200,13 +200,15 @@ Performance Options:
                                  shuffle-avx: AVX variant of above
                                  shuffle-avx2: AVX2 variant of above
                                  shuffle-avx512: AVX512BW variant of above
-                                 shuffle-vbmi: AVX512VBMI variant of above
-                                 shuffle-neon: NEON variant of above
+                                 shuffle-vbmi: split 3x 6-bit vector table lookup (AVX512VBMI)
+                                 shuffle-neon: NEON variant of shuffle-sse
                                  shuffle2x-avx2: half width variant of shuffle-avx2
                                  shuffle2x-avx512: half width variant of shuffle-avx512
                                  affine-sse: split 2x 8-bit vector XOR dependencies (GFNI)
+                                 affine-avx2: AVX2 + GFNI variant of above
                                  affine-avx512: AVX512BW + GFNI variant of above
                                  affine2x-sse: half width variant of affine-sse
+                                 affine2x-avx2: half width variant of affine-avx2
                                  affine2x-avx512: half width variant of affine-avx512
                              Default is auto-detected.
 

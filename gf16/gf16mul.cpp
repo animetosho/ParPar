@@ -436,6 +436,31 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 			finish_packed_cksum = &gf16_shuffle_finish_packed_cksum_avx512;
 		break;
 		
+		case GF16_AFFINE_AVX2:
+			scratch = gf16_affine_init_avx2(GF16_POLYNOMIAL);
+			_info.alignment = 32;
+			_info.stride = 64;
+			if(!gf16_affine_available_avx2 || !gf16_shuffle_available_avx2) {
+				setupMethod(GF16_AUTO);
+				return;
+			}
+			_mul = &gf16_affine_mul_avx2;
+			_mul_add = &gf16_affine_muladd_avx2;
+			_mul_add_pf = &gf16_affine_muladd_prefetch_avx2;
+			#ifdef PLATFORM_AMD64
+			_mul_add_multi = &gf16_affine_muladd_multi_avx2;
+			_mul_add_multi_packed = &gf16_affine_muladd_multi_packed_avx2;
+			_mul_add_multi_packpf = &gf16_affine_muladd_multi_packpf_avx2;
+			_info.idealInputMultiple = 3;
+			#endif
+			prepare = &gf16_shuffle_prepare_avx2;
+			prepare_packed = &gf16_affine_prepare_packed_avx2;
+			prepare_packed_cksum = &gf16_affine_prepare_packed_cksum_avx2;
+			finish = &gf16_shuffle_finish_avx2;
+			finish_packed = &gf16_shuffle_finish_packed_avx2;
+			finish_packed_cksum = &gf16_shuffle_finish_packed_cksum_avx2;
+		break;
+		
 		case GF16_AFFINE_GFNI:
 			scratch = gf16_affine_init_gfni(GF16_POLYNOMIAL);
 			_info.alignment = 16;
@@ -484,6 +509,31 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 			finish = &gf16_affine2x_finish_avx512;
 			finish_packed = &gf16_affine2x_finish_packed_avx512;
 			finish_packed_cksum = &gf16_affine2x_finish_packed_cksum_avx512;
+		break;
+		
+		case GF16_AFFINE2X_AVX2:
+			scratch = gf16_affine_init_avx2(GF16_POLYNOMIAL);
+			_info.alignment = 32;
+			_info.stride = 32;
+			if(!gf16_affine_available_avx2 || !gf16_shuffle_available_avx2) {
+				setupMethod(GF16_AUTO);
+				return;
+			}
+			_mul_add = &gf16_affine2x_muladd_avx2;
+			_mul_add_multi = &gf16_affine2x_muladd_multi_avx2;
+			_mul_add_multi_packed = &gf16_affine2x_muladd_multi_packed_avx2;
+			_mul_add_multi_packpf = &gf16_affine2x_muladd_multi_packpf_avx2;
+			#ifdef PLATFORM_AMD64
+			_info.idealInputMultiple = 6;
+			#else
+			_info.idealInputMultiple = 2;
+			#endif
+			prepare = &gf16_affine2x_prepare_avx2;
+			prepare_packed = &gf16_affine2x_prepare_packed_avx2;
+			prepare_packed_cksum = &gf16_affine2x_prepare_packed_cksum_avx2;
+			finish = &gf16_affine2x_finish_avx2;
+			finish_packed = &gf16_affine2x_finish_packed_avx2;
+			finish_packed_cksum = &gf16_affine2x_finish_packed_cksum_avx2;
 		break;
 		
 		case GF16_AFFINE2X_GFNI:
@@ -745,9 +795,13 @@ Galois16Methods Galois16Mul::default_method(size_t regionSizeHint, unsigned /*ou
 	const CpuCap caps(true);
 	
 #ifdef PLATFORM_X86
+	if(caps.hasGFNI) {
+		if(gf16_affine_available_avx512 && caps.hasAVX512VLBW)
+			return GF16_AFFINE2X_AVX512; // better peak at 24x1KB, whereas 1x is better at 18x1KB
+		if(gf16_affine_available_avx2 && caps.hasAVX2)
+			return GF16_AFFINE2X_AVX2;
+	}
 	if(caps.hasAVX512VLBW) {
-		if(gf16_affine_available_avx512 && caps.hasGFNI)
-			return GF16_AFFINE_AVX512;
 		if(gf16_shuffle_available_vbmi && caps.hasAVX512VBMI)
 			return GF16_SHUFFLE_VBMI;
 		if(gf16_shuffle_available_avx512)
@@ -819,6 +873,10 @@ std::vector<Galois16Methods> Galois16Mul::availableMethods(bool checkCpuid) {
 		if(gf16_affine_available_gfni && gf16_shuffle_available_ssse3 && caps.hasSSSE3) {
 			ret.push_back(GF16_AFFINE_GFNI);
 			ret.push_back(GF16_AFFINE2X_GFNI);
+		}
+		if(gf16_affine_available_avx2 && gf16_shuffle_available_avx2 && caps.hasAVX2) {
+			ret.push_back(GF16_AFFINE_AVX2);
+			ret.push_back(GF16_AFFINE2X_AVX2);
 		}
 		if(gf16_affine_available_avx512 && gf16_shuffle_available_avx512 && caps.hasAVX512VLBW) {
 			ret.push_back(GF16_AFFINE_AVX512);

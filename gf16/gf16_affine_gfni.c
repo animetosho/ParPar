@@ -3,27 +3,32 @@
 #include "platform.h"
 #include <string.h>
 
+#define MWORD_SIZE 16
+#define _mword __m128i
+#define _MM(f) _mm_ ## f
+#define _MMI(f) _mm_ ## f ## _si128
+#define _FN(f) f ## _gfni
+#define _MM_END
+
 #if defined(__GFNI__) && defined(__SSSE3__)
 int gf16_affine_available_gfni = 1;
-# define MWORD_SIZE 16
-# define _mword __m128i
-# define _MM(f) _mm_ ## f
-# define _MMI(f) _mm_ ## f ## _si128
-# define _FN(f) f ## _gfni
-# define _MM_END
 # define _AVAILABLE 1
 # include "gf16_shuffle_x86_prepare.h"
 # include "gf16_checksum_x86.h"
-# undef _AVAILABLE
-# undef _MM_END
-# undef _FN
-# undef _MMI
-# undef _MM
-# undef _mword
-# undef MWORD_SIZE
 #else
 int gf16_affine_available_gfni = 0;
 #endif
+
+#include "gf16_affine2x_x86.h"
+#ifdef _AVAILABLE
+# undef _AVAILABLE
+#endif
+#undef _MM_END
+#undef _FN
+#undef _MMI
+#undef _MM
+#undef _mword
+#undef MWORD_SIZE
 
 void gf16_affine_prepare_packed_gfni(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen, size_t sliceLen, unsigned inputPackSize, unsigned inputNum, size_t chunkLen) {
 #if defined(__GFNI__) && defined(__SSSE3__)
@@ -275,97 +280,6 @@ void* gf16_affine_init_gfni(int polynomial) {
 }
 
 
-#if defined(__GFNI__) && defined(__SSSE3__)
-void gf16_affine2x_prepare_block_gfni(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src) {
-	__m128i data = _mm_loadu_si128((__m128i*)src);
-	data = _mm_shuffle_epi8(data, _mm_set_epi32(0x0f0d0b09, 0x07050301, 0x0e0c0a08, 0x06040200));
-	_mm_store_si128((__m128i*)dst, data);
-}
-void gf16_affine2x_prepare_blocku_gfni(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t remaining) {
-	__m128i data = _mm_setzero_si128();
-	memcpy(&data, src, remaining);
-	data = _mm_shuffle_epi8(data, _mm_set_epi32(0x0f0d0b09, 0x07050301, 0x0e0c0a08, 0x06040200));
-	_mm_store_si128((__m128i*)dst, data);
-}
-void gf16_affine2x_finish_block_gfni(void *HEDLEY_RESTRICT dst) {
-	__m128i data = _mm_load_si128((__m128i*)dst);
-	data = _mm_shuffle_epi8(data, _mm_set_epi32(
-		0x0f070e06, 0x0d050c04, 0x0b030a02, 0x09010800
-	));
-	_mm_store_si128((__m128i*)dst, data);
-}
-void gf16_affine2x_finish_copy_block_gfni(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src) {
-	__m128i data = _mm_load_si128((__m128i*)src);
-	data = _mm_shuffle_epi8(data, _mm_set_epi32(
-		0x0f070e06, 0x0d050c04, 0x0b030a02, 0x09010800
-	));
-	_mm_store_si128((__m128i*)dst, data);
-}
-#endif
-
-
-void gf16_affine2x_prepare_gfni(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen) {
-#if defined(__GFNI__) && defined(__SSSE3__)
-	gf16_prepare(dst, src, srcLen, sizeof(__m128i), &gf16_affine2x_prepare_block_gfni, &gf16_affine2x_prepare_blocku_gfni);
-#else
-	UNUSED(dst); UNUSED(src); UNUSED(srcLen);
-#endif
-}
-
-void gf16_affine2x_prepare_packed_gfni(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen, size_t sliceLen, unsigned inputPackSize, unsigned inputNum, size_t chunkLen) {
-#if defined(__GFNI__) && defined(__SSSE3__)
-	gf16_prepare_packed(dst, src, srcLen, sliceLen, sizeof(__m128i), &gf16_affine2x_prepare_block_gfni, &gf16_affine2x_prepare_blocku_gfni, inputPackSize, inputNum, chunkLen,
-#ifdef PLATFORM_AMD64
-		6
-#else
-		2
-#endif
-	, NULL, NULL, NULL, NULL, NULL);
-#else
-	UNUSED(dst); UNUSED(src); UNUSED(srcLen); UNUSED(sliceLen); UNUSED(inputPackSize); UNUSED(inputNum); UNUSED(chunkLen);
-#endif
-}
-
-void gf16_affine2x_prepare_packed_cksum_gfni(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen, size_t sliceLen, unsigned inputPackSize, unsigned inputNum, size_t chunkLen) {
-#if defined(__GFNI__) && defined(__SSSE3__)
-	__m128i checksum = _mm_setzero_si128();
-	gf16_prepare_packed(dst, src, srcLen, sliceLen, sizeof(__m128i), &gf16_affine2x_prepare_block_gfni, &gf16_affine2x_prepare_blocku_gfni, inputPackSize, inputNum, chunkLen,
-#ifdef PLATFORM_AMD64
-		6
-#else
-		2
-#endif
-	, &checksum, &gf16_checksum_block_gfni, &gf16_checksum_blocku_gfni, &gf16_checksum_zeroes_gfni, &gf16_checksum_prepare_gfni);
-#else
-	UNUSED(dst); UNUSED(src); UNUSED(srcLen); UNUSED(sliceLen); UNUSED(inputPackSize); UNUSED(inputNum); UNUSED(chunkLen);
-#endif
-}
-
-void gf16_affine2x_finish_gfni(void *HEDLEY_RESTRICT dst, size_t len) {
-#if defined(__GFNI__) && defined(__SSSE3__)
-	gf16_finish(dst, len, sizeof(__m128i), &gf16_affine2x_finish_block_gfni);
-#else
-	UNUSED(dst); UNUSED(len);
-#endif
-}
-
-void gf16_affine2x_finish_packed_gfni(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t sliceLen, unsigned numOutputs, unsigned outputNum, size_t chunkLen) {
-#if defined(__GFNI__) && defined(__SSSE3__)
-	gf16_finish_packed(dst, src, sliceLen, sizeof(__m128i), &gf16_affine2x_finish_copy_block_gfni, numOutputs, outputNum, chunkLen, 1, NULL, NULL, NULL);
-#else
-	UNUSED(dst); UNUSED(src); UNUSED(sliceLen); UNUSED(numOutputs); UNUSED(outputNum); UNUSED(chunkLen);
-#endif
-}
-
-int gf16_affine2x_finish_packed_cksum_gfni(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t sliceLen, unsigned numOutputs, unsigned outputNum, size_t chunkLen) {
-#if defined(__GFNI__) && defined(__SSSE3__)
-	__m128i checksum = _mm_setzero_si128();
-	return gf16_finish_packed(dst, src, sliceLen, sizeof(__m128i), &gf16_affine2x_finish_copy_block_gfni, numOutputs, outputNum, chunkLen, 1, &checksum, &gf16_checksum_block_gfni, &gf16_checksum_finish_gfni);
-#else
-	UNUSED(dst); UNUSED(src); UNUSED(sliceLen); UNUSED(numOutputs); UNUSED(outputNum); UNUSED(chunkLen);
-	return 0;
-#endif
-}
 
 #if defined(__GFNI__) && defined(__SSSE3__)
 static HEDLEY_ALWAYS_INLINE void gf16_affine2x_muladd_x_gfni(

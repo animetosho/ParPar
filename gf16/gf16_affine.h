@@ -14,6 +14,7 @@
 	extern int gf16_affine_available_##v
 
 FUNCS(gfni);
+FUNCS(avx2);
 FUNCS(avx512);
 
 #undef FUNCS
@@ -31,6 +32,7 @@ FUNCS(avx512);
 	int gf16_affine2x_finish_packed_cksum_##v(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t sliceLen, unsigned numOutputs, unsigned outputNum, size_t chunkLen)
 
 FUNCS(gfni);
+FUNCS(avx2);
 FUNCS(avx512);
 
 #undef FUNCS

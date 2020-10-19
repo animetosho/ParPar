@@ -323,6 +323,39 @@
       ]
     },
     {
+      "target_name": "gf16_gfni_avx2",
+      "type": "static_library",
+      "defines": ["NDEBUG"],
+      "sources": [
+        "gf16/gf16_affine_avx2.c"
+      ],
+      "cflags": ["-Wno-unused-function"],
+      "xcode_settings": {
+        "OTHER_CFLAGS": ["-Wno-unused-function"],
+        "OTHER_CFLAGS!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"]
+      },
+      "cflags!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"],
+      "msvs_settings": {"VCCLCompilerTool": {"BufferSecurityCheck": "false"}},
+      "conditions": [
+        ['target_arch in "ia32 x64" and OS!="win"', {
+          "variables": {"supports_gfni_avx2%": "<!(<!(echo ${CC_target:-${CC:-cc}}) -MM -E gf16/gf16_affine_avx2.c -mgfni -mavx2 2>/dev/null || true)"},
+          "conditions": [
+            ['supports_gfni_avx2!=""', {
+              "cflags": ["-mgfni", "-mavx2"],
+              "cxxflags": ["-mgfni", "-mavx2"],
+              "xcode_settings": {
+                "OTHER_CFLAGS": ["-mgfni", "-mavx2"],
+                "OTHER_CXXFLAGS": ["-mgfni", "-mavx2"],
+              }
+            }]
+          ]
+        }],
+        ['target_arch in "ia32 x64" and OS=="win"', {
+          "msvs_settings": {"VCCLCompilerTool": {"EnableEnhancedInstructionSet": "3"}}
+        }]
+      ]
+    },
+    {
       "target_name": "gf16_gfni_avx512",
       "type": "static_library",
       "defines": ["NDEBUG"],
