@@ -12,7 +12,7 @@ var exeNode = 'node';
 var exeParpar = '../bin/parpar';
 var exePar2 = 'par2';
 
-var skipFileCreate = false; // skip creating test files if they already exist (speeds up repeated failing tests, but existing files aren't checked)
+var skipFileCreate = true; // skip creating test files if they already exist (speeds up repeated failing tests, but existing files aren't checked)
 
 
 var fs = require('fs');
@@ -304,6 +304,7 @@ function writeRndFile(name, size) {
 }
 writeRndFile('test64m.bin', 64*1048576);
 writeRndFile('test2200m.bin', 2200*1048576);
+writeRndFile('test4100m.bin', 4100*1048576); // >4GB to test 32-bit overflows
 
 // we don't test 0 byte files - different implementations seem to treat it differently:
 // - par2cmdline: skips all 0 byte files
@@ -323,7 +324,12 @@ var sourceFiles = {};
 try {
 	cachedResults = require(tmpDir + 'cached-cmpref.json');
 } catch(x) {
-	cachedResults = {};
+	try {
+		// try current folder as well, since I tend to stick it there
+		cachedResults = require('./cached-cmpref.json');
+	} catch(x) {
+		cachedResults = {};
+	}
 }
 
 var allTests = [
@@ -433,24 +439,26 @@ var allTests = [
 		cacheKey: '12'
 	},
 	
-	// TODO: no recovery test (par2cmdline doesn't support it?)
+	// no recovery test
 	{
 		in: [tmpDir + 'test64m.bin'],
 		blockSize: 1048576,
 		blocks: 0,
-		singleFile: true
+		singleFile: true,
+		cacheKey: '20'
 	},
 	{
 		in: [tmpDir + 'test65k.bin'],
 		blockSize: 1048576,
 		blocks: 0,
-		singleFile: true
+		singleFile: true,
+		cacheKey: '21'
 	},
 	
 	// 2x large block size test
 	{
 		in: [tmpDir + 'test64m.bin'],
-		blockSize: 2147483452,
+		blockSize: 2048*1048576 - 1024-68,
 		blocks: 1,
 		memory: process.arch == 'x64' ? '2.5g' : '1.5g',
 		singleFile: true,
@@ -467,7 +475,7 @@ var allTests = [
 	
 	// 2x large input file test
 	{
-		in: [tmpDir + 'test2200m.bin'],
+		in: [tmpDir + 'test4100m.bin'],
 		blockSize: 1048576,
 		blocks: 64,
 		singleFile: true,
@@ -489,6 +497,21 @@ var allTests = [
 		cacheKey: '17'
 	},
 	
+	{ // skewed slice size to test chunk miscalculation bug
+		in: [tmpDir + 'test2200m.bin'],
+		blockSize: 256*1048576 + 4,
+		blocks: 2,
+		singleFile: true,
+		cacheKey: '18'
+	},
+	
+	{ // slice > 4GB (generally unsupported, but can be made via par2cmdline with some trickery)
+		in: [tmpDir + 'test4100m.bin'],
+		inBlocks: 1, // 4100MB slice
+		blocks: 2,
+		singleFile: true,
+		cacheKey: '19'
+	},
 ];
 
 
@@ -580,11 +603,15 @@ async.timesSeries(allTests.length, function(testNum, cb) {
 	
 }, function(err) {
 	delOutput();
-	fs.unlinkSync(tmpDir + 'test64m.bin');
-	fs.unlinkSync(tmpDir + 'test1b.bin');
-	fs.unlinkSync(tmpDir + 'test8b.bin');
-	fs.unlinkSync(tmpDir + 'test65k.bin');
-	fs.unlinkSync(tmpDir + 'test13m.bin');
+	if(!skipFileCreate) {
+		fs.unlinkSync(tmpDir + 'test64m.bin');
+		fs.unlinkSync(tmpDir + 'test1b.bin');
+		fs.unlinkSync(tmpDir + 'test8b.bin');
+		fs.unlinkSync(tmpDir + 'test65k.bin');
+		fs.unlinkSync(tmpDir + 'test13m.bin');
+		fs.unlinkSync(tmpDir + 'test2200m.bin');
+		fs.unlinkSync(tmpDir + 'test4100m.bin');
+	}
 	
 	if(!err) {
 		try {

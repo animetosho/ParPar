@@ -77,8 +77,11 @@ void ppgf_multiply_mat(const void* const* inputs, uint_fast16_t* iNums, unsigned
 	// break the slice into smaller chunks so that we maximise CPU cache usage
 	int numChunks = ROUND_DIV(len, gf->info().idealChunkSize);
 	if(numChunks < 1) numChunks = 1;
-	unsigned int alignMask = gf->info().stride-1;
-	unsigned int chunkSize = (CEIL_DIV(len, numChunks) + alignMask) & ~alignMask; // we'll assume that input chunks are memory aligned here
+	size_t alignMask = gf->info().stride-1;
+	size_t chunkSize = (CEIL_DIV(len, numChunks) + alignMask) & ~alignMask; // we'll assume that input chunks are memory aligned here
+	
+	// fix up numChunks with actual number (since it may have changed from above)
+	numChunks = CEIL_DIV(len, chunkSize);
 	
 	// avoid nested loop issues by combining chunk & output loop into one
 	// the loop goes through outputs before chunks
