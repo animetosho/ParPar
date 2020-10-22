@@ -43,9 +43,20 @@
         }, {
           "variables": {
             "supports_omp%": "<!(<!(echo ${CXX_target:-${CXX:-c++}}) -MM -E src/gyp_warnings.cc -fopenmp 2>/dev/null || true)",
+            "supports_omp_icc%": "<!(<!(echo ${CXX_target:-${CXX:-c++}}) -MM -E src/gyp_warnings.cc -qopenmp 2>/dev/null || true)",
             "supports_omp_clang%": "<!(<!(echo ${CXX_target:-${CXX:-c++}}) -MM -E src/gyp_warnings.cc -fopenmp=libomp 2>/dev/null || true)"
           },
           "conditions": [
+            ['supports_omp_icc!=""', {
+              "cflags": ["-qopenmp"],
+              "cxxflags": ["-qopenmp"],
+              "ldflags": ["-qopenmp"],
+              "xcode_settings": {
+                "OTHER_CFLAGS": ["-qopenmp"],
+                "OTHER_CXXFLAGS": ["-qopenmp"],
+                "OTHER_LDFLAGS": ["-qopenmp"]
+              }
+            }],
             ['supports_omp!="" and supports_omp_clang==""', {
               "cflags": ["-fopenmp"],
               "cxxflags": ["-fopenmp"],
