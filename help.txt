@@ -70,7 +70,7 @@ PAR2 Options:
                              `--recovery-slices`.
                              Default is `--recovery-slices` (no auto-scaling)
        --max-recovery-slices Upper limit counterpart to `--min-recovery-slices`
-                             Default is 65537. This default value has the
+                             Default is 65536. This default value has the
                              effect of making specified percentages or sizes
                              given to `--recovery-slices` a minimum amount. In
                              other words, `-r5%` effectively means 'at least
@@ -79,7 +79,7 @@ PAR2 Options:
                              'exactly 5%' and `-r5% --max-recovery-slices=5%
                              --min-recovery-slices=0` would mean 'at most 5%'.
                              This default also causes an error to be thrown if
-                             the number exceeds the maximum of 65536.
+                             the number exceeds the maximum of 65535.
   -e,  --recovery-offset     Recovery slice start offset. Default 0.
   -c,  --comment             Add PAR2 comment. Can be specified multiple times.
        --packet-redundancy   How critical packets are repeated, can be either:
@@ -137,7 +137,7 @@ Output Options:
                              '<' (round down) or '>' (round up) [also take care
                              that the shell may interpret these characters, so
                              escape them if appropriate]
-                             Default 65536
+                             Default 65535
        --slices-first-file   Number of slices in the first recovery file. If
                              `--slice-dist` is `pow2`, the subsequent file will
                              contain double this number of slices. Format of
