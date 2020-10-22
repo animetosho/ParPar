@@ -435,6 +435,15 @@ var inputFiles = argv._;
 				return (Math.round(s *100)/100) + ' ' + units[i];
 			};
 			process.stderr.write('Generating '+friendlySize(g.opts.recoverySlices*g.opts.sliceSize)+' recovery data ('+g.opts.recoverySlices+' slices) from '+friendlySize(g.totalSize)+' of data\n');
+			
+			if(g.opts.sliceSize > 1024*1048576) {
+				// par2j has 1GB slice size limit hard-coded; 32-bit version supports 1GB slices
+				// some 32-bit applications seem to have issues with 1GB slices as well (phpar2 v1.4 win32 seems to have trouble with 854M slices, 848M works in the test I did)
+				process.stderr.write('Warning: selected slice size (' + friendlySize(g.opts.sliceSize) + ') is larger than 1GB, which is beyond what a number of PAR2 clients support. Consider increasing the number of slices or reducing the slice size so that it is under 1GB\n');
+			}
+			else if(g.opts.sliceSize > 100*1000000 && g.totalSize <= 32768*100*1000000) { // we also check whether 100MB slices are viable by checking the input size - essentially there's a max of 32768 slices, so at 100MB, max size would be 3051.76GB
+				process.stderr.write('Warning: selected slice size (' + friendlySize(g.opts.sliceSize) + ') may be too large to be compatible with QuickPar\n');
+			}
 		}
 		if(argv.progress != 'none') {
 			var totalSlices = g.chunks * g.passes * g.inputSlices;
