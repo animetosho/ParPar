@@ -14,11 +14,19 @@
 #define ROTATE(a, r) _mm_srli_epi64(_mm_shuffle_epi32(a, _MM_SHUFFLE(2,2,0,0)), 32-r)
 #define _FN(f) f##_sse
 
-#define F(b,c,d) _mm_xor_si128(_mm_and_si128(_mm_xor_si128(c, d), b), d)
-// in theory, following OR could be replaced with ADD, which means it could be added to `a` before `b` is available
-#define G(b,c,d) _mm_or_si128(_mm_and_si128(d, b), _mm_andnot_si128(d, c))
-#define H(b,c,d) _mm_xor_si128(_mm_xor_si128(d, c), b)
-#define I(b,c,d) _mm_xor_si128(_mm_or_si128(_mm_xor_si128(d, _mm_set1_epi8(-1)), b), c)
+#define F 1
+#define G 2
+#define H 3
+#define I 4
+// this is defined to allow a special sequence for the 'G' function - essentially, the usual bitwise OR can be replaced with an ADD, and re-ordering can be done to slightly defer the dependency on the 'b' input
+#define ADDF(f,a,b,c,d) ( \
+	f==G ? ADD(ADD(_mm_andnot_si128(d, c), a), _mm_and_si128(d, b)) : ADD(a, \
+		f==F ? _mm_xor_si128(_mm_and_si128(_mm_xor_si128(c, d), b), d) : ( \
+			f==H ? _mm_xor_si128(_mm_xor_si128(d, c), b) : \
+			_mm_xor_si128(_mm_or_si128(_mm_xor_si128(d, _mm_set1_epi8(-1)), b), c) \
+		) \
+	) \
+)
 
 #include "md5x2-base.h"
 
@@ -71,6 +79,9 @@ static HEDLEY_ALWAYS_INLINE void md5_extract_x2_sse(void* dst, void* state, cons
 #ifdef ROTATE
 # undef ROTATE
 #endif
+#ifdef ADDF
+# undef ADDF
+#endif
 
 #ifdef __XOP__
 #include <x86intrin.h>
@@ -79,8 +90,12 @@ static HEDLEY_ALWAYS_INLINE void md5_extract_x2_sse(void* dst, void* state, cons
 
 #undef F
 #undef G
+#undef H
+#undef I
 #define F(b,c,d) _mm_cmov_si128(c, d, b)
 #define G _mm_cmov_si128
+#define H(b,c,d) _mm_xor_si128(_mm_xor_si128(d, c), b)
+#define I(b,c,d) _mm_xor_si128(_mm_or_si128(_mm_xor_si128(d, _mm_set1_epi8(-1)), b), c)
 
 #include "md5x2-base.h"
 
@@ -128,4 +143,3 @@ static HEDLEY_ALWAYS_INLINE void md5_extract_x2_sse(void* dst, void* state, cons
 # undef H
 # undef I
 #endif
-

@@ -32,10 +32,18 @@
 #define _FN(f) f##_sse
 #define md5mb_regions_sse 8
 
-#define F(b,c,d) _mm_xor_si128(_mm_and_si128(_mm_xor_si128(c, d), b), d)
-#define G(b,c,d) _mm_or_si128(_mm_and_si128(d, b), _mm_andnot_si128(d, c))
-#define H(b,c,d) _mm_xor_si128(_mm_xor_si128(d, c), b)
-#define I(b,c,d) _mm_xor_si128(_mm_or_si128(_mm_xor_si128(d, _mm_set1_epi8(-1)), b), c)
+#define F 1
+#define G 2
+#define H 3
+#define I 4
+#define ADDF(f,a,b,c,d) ( \
+	f==G ? ADD(ADD(_mm_andnot_si128(d, c), a), _mm_and_si128(d, b)) : ADD(a, \
+		f==F ? _mm_xor_si128(_mm_and_si128(_mm_xor_si128(c, d), b), d) : ( \
+			f==H ? _mm_xor_si128(_mm_xor_si128(d, c), b) : \
+			_mm_xor_si128(_mm_or_si128(_mm_xor_si128(d, _mm_set1_epi8(-1)), b), c) \
+		) \
+	) \
+)
 
 #include "md5mb-base.h"
 
@@ -80,8 +88,13 @@ static HEDLEY_ALWAYS_INLINE void md5_extract_mb_sse(void* dst, void* state, int 
 
 #undef F
 #undef G
+#undef H
+#undef I
+#undef ADDF
 #define F(b,c,d) _mm_cmov_si128(c, d, b)
 #define G _mm_cmov_si128
+#define H(b,c,d) _mm_xor_si128(_mm_xor_si128(d, c), b)
+#define I(b,c,d) _mm_xor_si128(_mm_or_si128(_mm_xor_si128(d, _mm_set1_epi8(-1)), b), c)
 
 #include "md5mb-base.h"
 
@@ -106,6 +119,9 @@ static HEDLEY_ALWAYS_INLINE void md5_extract_mb_sse(void* dst, void* state, int 
 #undef G
 #undef H
 #undef I
+#ifdef ADDF
+# undef ADDF
+#endif
 
 #define ADD _mm256_add_epi32
 #define VAL _mm256_set1_epi32
@@ -153,10 +169,19 @@ static HEDLEY_ALWAYS_INLINE void md5_extract_mb_sse(void* dst, void* state, int 
 #define _FN(f) f##_avx2
 #define md5mb_regions_avx2 16
 
-#define F(b,c,d) _mm256_xor_si256(_mm256_and_si256(_mm256_xor_si256(c, d), b), d)
-#define G(b,c,d) _mm256_or_si256(_mm256_and_si256(d, b), _mm256_andnot_si256(d, c))
-#define H(b,c,d) _mm256_xor_si256(_mm256_xor_si256(d, c), b)
-#define I(b,c,d) _mm256_xor_si256(_mm256_or_si256(_mm256_xor_si256(d, _mm256_set1_epi8(-1)), b), c)
+
+#define F 1
+#define G 2
+#define H 3
+#define I 4
+#define ADDF(f,a,b,c,d) ( \
+	f==G ? ADD(ADD(_mm256_andnot_si256(d, c), a), _mm256_and_si256(d, b)) : ADD(a, \
+		f==F ? _mm256_xor_si256(_mm256_and_si256(_mm256_xor_si256(c, d), b), d) : ( \
+			f==H ? _mm256_xor_si256(_mm256_xor_si256(d, c), b) : \
+			_mm256_xor_si256(_mm256_or_si256(_mm256_xor_si256(d, _mm256_set1_epi8(-1)), b), c) \
+		) \
+	) \
+)
 
 #include "md5mb-base.h"
 
@@ -195,7 +220,9 @@ static HEDLEY_ALWAYS_INLINE void md5_extract_mb_avx2(void* dst, void* state, int
 #endif
 
 
-
+#ifdef ADDF
+# undef ADDF
+#endif
 
 #ifdef __AVX512F__
 #include <immintrin.h>

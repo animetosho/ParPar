@@ -22,6 +22,7 @@
 #undef G
 #undef H
 #undef I
+#undef ADDF
 
 static HEDLEY_ALWAYS_INLINE void md5_extract_mb_scalar(void* dst, void* state, int idx) {
 #if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__

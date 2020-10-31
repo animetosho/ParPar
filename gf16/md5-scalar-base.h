@@ -75,8 +75,18 @@
 # endif
 
 
-#define F(b,c,d) (((c ^ d) & b) ^ d)
-#define G(b,c,d) ((d & b) | (~d & c))
-#define H(b,c,d) (d ^ c ^ b)
-#define I(b,c,d) ((~d | b) ^ c)
+
+#define F 1
+#define G 2
+#define H 3
+#define I 4
+// this is defined to allow a special sequence for the 'G' function - essentially, the usual bitwise OR can be replaced with an ADD, and re-ordering can be done to slightly defer the dependency on the 'b' input
+#define ADDF(f,a,b,c,d) ( \
+	f==G ? (((~d & c) + a) + (d & b)) : a + ( \
+		f==F ? (((c ^ d) & b) ^ d) : ( \
+			f==H ? ((d ^ c) ^ b) : \
+			((~d | b) ^ c) \
+		) \
+	) \
+)
 

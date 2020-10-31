@@ -5,11 +5,17 @@
 # define UNUSED(...) (void)(__VA_ARGS__)
 #endif
 
+#ifdef ADDF
+# define _ADDF ADDF
+#else
+# define _ADDF(f,a,b,c,d) ADD(a, f(b,c,d))
+#endif
+
 /* code was originally based off OpenSSL's implementation */
 
 #define _RX(f,a,b,c,d,ik,r) \
 	a = ADD(a, ik); \
-	a = ADD(a, f(b, c, d)); \
+	a = _ADDF(f, a, b, c, d); \
 	a = ROTATE(a, r); \
 	a = ADD(a, b)
 
@@ -304,6 +310,7 @@ static HEDLEY_ALWAYS_INLINE void FNB(md5_zero_block)(void* state) {
 }
 #undef _RX
 #undef RX
+#undef _ADDF
 
 
 
