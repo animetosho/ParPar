@@ -3,11 +3,15 @@
 #define VAL _mm_set1_epi32
 #define word_t __m128i
 #define INPUT(k, set, ptr, offs, idx, var) ADD(var, VAL(k))
-#define LOAD(k, set, ptr, offs, idx, var) ADD(var = _mm_unpacklo_epi64( \
-	_mm_cvtsi32_si128(((uint32_t*)(ptr[0]))[idx]), \
-	_mm_cvtsi32_si128(((uint32_t*)(ptr[1]))[idx]) \
-), VAL(k))
-
+#define LOAD INPUT
+#define LOAD4(set, ptr, offs, idx, var0, var1, var2, var3) { \
+	__m128i in0 = _mm_loadu_si128((__m128i*)(ptr[0] + idx*4)); \
+	__m128i in1 = _mm_loadu_si128((__m128i*)(ptr[1] + idx*4)); \
+	var0 = _mm_unpacklo_epi64(in0, in1); \
+	var1 = _mm_shuffle_epi32(var0, _MM_SHUFFLE(2,3,0,1)); \
+	var2 = _mm_unpackhi_epi64(in0, in1); \
+	var3 = _mm_shuffle_epi32(var2, _MM_SHUFFLE(2,3,0,1)); \
+}
 #ifdef __SSE2__
 #include <emmintrin.h>
 // simulate a 32b rotate by duplicating lanes and doing a single 64b shift
@@ -59,11 +63,6 @@ static HEDLEY_ALWAYS_INLINE void md5_extract_x2_sse(void* dst, void* state, cons
 
 
 #ifdef __AVX__
-# undef LOAD
-# define LOAD(k, set, ptr, offs, idx, var) ADD(var = _mm_insert_epi32( \
-	_mm_cvtsi32_si128(((uint32_t*)(ptr[0]))[idx]), \
-	((uint32_t*)(ptr[1]))[idx], 2 \
-), VAL(k))
 # define _FN(f) f##_avx
 # include "md5x2-base.h"
 # undef _FN
@@ -136,6 +135,7 @@ static HEDLEY_ALWAYS_INLINE void md5_extract_x2_sse(void* dst, void* state, cons
 #undef word_t
 #undef INPUT
 #undef LOAD
+#undef LOAD4
 
 #ifdef F
 # undef F

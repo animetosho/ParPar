@@ -1,5 +1,6 @@
 
 #include "platform.h"
+#include "../src/hedley.h"
 
 #ifndef UNUSED
 # define UNUSED(...) (void)(__VA_ARGS__)

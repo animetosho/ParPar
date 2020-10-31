@@ -6,6 +6,15 @@
 #define word_t uint32x2_t
 #define INPUT(k, set, ptr, offs, idx, var) ADD(var, VAL(k))
 #define LOAD(k, set, ptr, offs, idx, var) ADD(var = (uint32x2_t){((uint32_t*)(ptr[0]))[idx], ((uint32_t*)(ptr[1]))[idx]}, VAL(k))
+#define LOAD4(set, ptr, offs, idx, var0, var1, var2, var3) { \
+	uint32x4_t in0 = vld1q_u32((uint32_t*)ptr[0] + idx); \
+	uint32x4_t in1 = vld1q_u32((uint32_t*)ptr[1] + idx); \
+	uint32x4x2_t tmp = vzipq_u32(in0, in1); \
+	var0 = vget_low_u32(tmp.val[0]); \
+	var1 = vget_high_u32(tmp.val[0]); \
+	var2 = vget_low_u32(tmp.val[1]); \
+	var3 = vget_high_u32(tmp.val[1]); \
+}
 
 #define ROTATE(a, r) r==16 ? vreinterpret_u32_u16(vrev32_u16(vreinterpret_u16_u32(a))) : vsli_n_u32(vshr_n_u32(a, 32-r), a, r)
 #define _FN(f) f##_neon
@@ -24,6 +33,7 @@
 #undef word_t
 #undef INPUT
 #undef LOAD
+#undef LOAD4
 
 #undef F
 #undef G
