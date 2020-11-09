@@ -6,6 +6,22 @@
 # define UNUSED(...) (void)(__VA_ARGS__)
 #endif
 
+
+static HEDLEY_ALWAYS_INLINE void FNB(md5_init)(void* state) {
+	word_t* state_ = (word_t*)state;
+	state_[0] = VAL(0x67452301L);
+	state_[1] = VAL(0xefcdab89L);
+	state_[2] = VAL(0x98badcfeL);
+	state_[3] = VAL(0x10325476L);
+#ifdef MD5X2
+	state_[4] = VAL(0x67452301L);
+	state_[5] = VAL(0xefcdab89L);
+	state_[6] = VAL(0x98badcfeL);
+	state_[7] = VAL(0x10325476L);
+#endif
+}
+
+
 #ifdef ADDF
 # define _ADDF ADDF
 #else
@@ -26,6 +42,7 @@
 # define RX(f,a,b,c,d,x,i,r,k) _RX(f,a,b,c,d,x(i,k),r)
 #endif
 
+#ifndef MD5_USE_ASM
 static HEDLEY_ALWAYS_INLINE void FNB(md5_process_block)(word_t* state, const char* const* HEDLEY_RESTRICT data, size_t offset) {
 	UNUSED(offset);
 	word_t A, B, C, D;
@@ -194,23 +211,11 @@ static HEDLEY_ALWAYS_INLINE void FNB(md5_process_block)(word_t* state, const cha
 #undef L4X
 #undef L8X
 }
+#endif
 #undef RX
 
-static HEDLEY_ALWAYS_INLINE void FNB(md5_init)(void* state) {
-	word_t* state_ = (word_t*)state;
-	state_[0] = VAL(0x67452301L);
-	state_[1] = VAL(0xefcdab89L);
-	state_[2] = VAL(0x98badcfeL);
-	state_[3] = VAL(0x10325476L);
-#ifdef MD5X2
-	state_[4] = VAL(0x67452301L);
-	state_[5] = VAL(0xefcdab89L);
-	state_[6] = VAL(0x98badcfeL);
-	state_[7] = VAL(0x10325476L);
-#endif
-}
 
-
+// TODO: check if zero block is worth it if ASM optimized routines aren't slowed down much by input
 #ifdef MD5X2
 # define RX(f,a,b,c,d,r,k) _RX(f,a,b,c,d,VAL(k),r); _RX(f,a##2,b##2,c##2,d##2,VAL(k),r)
 #else

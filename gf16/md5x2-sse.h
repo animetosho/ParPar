@@ -1,4 +1,10 @@
 
+#ifdef __GNUC__
+# define MD5_USE_ASM
+# include "md5x2-sse-asm.h"
+#endif
+
+
 #define ADD _mm_add_epi32
 #define VAL _mm_set1_epi32
 #define word_t __m128i
@@ -82,6 +88,7 @@ static HEDLEY_ALWAYS_INLINE void md5_extract_x2_sse(void* dst, void* state, cons
 # undef ADDF
 #endif
 
+
 #ifdef __XOP__
 #include <x86intrin.h>
 #define ROTATE _mm_roti_epi32
@@ -142,4 +149,8 @@ static HEDLEY_ALWAYS_INLINE void md5_extract_x2_sse(void* dst, void* state, cons
 # undef G
 # undef H
 # undef I
+#endif
+
+#ifdef MD5_USE_ASM
+# undef MD5_USE_ASM
 #endif

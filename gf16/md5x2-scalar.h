@@ -1,4 +1,10 @@
 #include <string.h> // memcpy+memset
+#include "platform.h"
+
+#if defined(__GNUC__) && defined(PLATFORM_AMD64)
+# define MD5_USE_ASM
+# include "md5x2-x86-asm.h"
+#endif
 
 #include "md5-scalar-base.h"
 
@@ -24,6 +30,10 @@
 #undef H
 #undef I
 #undef ADDF
+
+#ifdef MD5_USE_ASM
+# undef MD5_USE_ASM
+#endif
 
 static HEDLEY_ALWAYS_INLINE void md5_extract_x2_scalar(void* dst, void* state, const int idx) {
 #if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
