@@ -8,7 +8,7 @@ static HEDLEY_ALWAYS_INLINE void _FN(md5_update_block_mb)(void* state, const voi
 }
 
 static HEDLEY_ALWAYS_INLINE void _FN(md5_final_block_mb)(void* state, const void *HEDLEY_RESTRICT const*HEDLEY_RESTRICT data, size_t offset, size_t totalLength) {
-	ALIGN_TO(8, char block[_FN(md5mb_regions)][64]); // TODO: need to align properly?
+	ALIGN_TO(_FN(md5mb_alignment), char block[_FN(md5mb_regions)][64]);
 	const char* blockPtr[_FN(md5mb_regions)];
 	size_t remaining = totalLength & 63;
 	for(unsigned i=0; i<_FN(md5mb_regions); i++) {

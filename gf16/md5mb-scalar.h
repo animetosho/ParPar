@@ -2,6 +2,7 @@
 
 #define _FN(f) f##_scalar
 #define md5mb_regions_scalar 2
+#define md5mb_alignment_scalar 4
 #define MD5X2
 
 #include "md5mb-base.h"

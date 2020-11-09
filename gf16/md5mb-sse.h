@@ -1,5 +1,9 @@
 
+#include "platform.h"
+#ifdef PLATFORM_AMD64
 #define MD5X2
+#endif
+
 #define INPUT(k, set, ptr, offs, idx, var) ADD(var, VAL(k))
 #define LOAD INPUT
 
@@ -10,10 +14,10 @@
 #define VAL _mm_set1_epi32
 #define word_t __m128i
 #define LOAD4(set, ptr, offs, idx, var0, var1, var2, var3) { \
-	__m128i in0 = _mm_loadu_si128((__m128i*)(ptr[0+set*4] + offs + idx*4)); \
-	__m128i in1 = _mm_loadu_si128((__m128i*)(ptr[1+set*4] + offs + idx*4)); \
-	__m128i in2 = _mm_loadu_si128((__m128i*)(ptr[2+set*4] + offs + idx*4)); \
-	__m128i in3 = _mm_loadu_si128((__m128i*)(ptr[3+set*4] + offs + idx*4)); \
+	__m128i in0 = _mm_load_si128((__m128i*)(ptr[0+set*4] + offs + idx*4)); \
+	__m128i in1 = _mm_load_si128((__m128i*)(ptr[1+set*4] + offs + idx*4)); \
+	__m128i in2 = _mm_load_si128((__m128i*)(ptr[2+set*4] + offs + idx*4)); \
+	__m128i in3 = _mm_load_si128((__m128i*)(ptr[3+set*4] + offs + idx*4)); \
 	__m128i in01a = _mm_unpacklo_epi32(in0, in1); \
 	__m128i in01b = _mm_unpackhi_epi32(in0, in1); \
 	__m128i in23a = _mm_unpacklo_epi32(in2, in3); \
@@ -30,7 +34,12 @@
 	: _mm_or_si128(_mm_slli_epi32(a, r), _mm_srli_epi32(a, 32-r)) \
 )
 #define _FN(f) f##_sse
+#ifdef MD5X2
 #define md5mb_regions_sse 8
+#else
+#define md5mb_regions_sse 4
+#endif
+#define md5mb_alignment_sse 16
 
 #define F 1
 #define G 2
@@ -50,6 +59,7 @@
 #undef _FN
 
 static HEDLEY_ALWAYS_INLINE void md5_extract_mb_sse(void* dst, void* state, int idx) {
+	HEDLEY_ASSUME(idx < md5mb_regions_sse);
 	__m128i* state_ = (__m128i*)state + (idx & 4);
 	__m128i tmp1 = _mm_unpacklo_epi32(state_[0], state_[1]);
 	__m128i tmp2 = _mm_unpackhi_epi32(state_[0], state_[1]);
@@ -72,6 +82,7 @@ static HEDLEY_ALWAYS_INLINE void md5_extract_mb_sse(void* dst, void* state, int 
 #ifdef __AVX__
 # define _FN(f) f##_avx
 # define md5mb_regions_avx md5mb_regions_sse
+#define md5mb_alignment_avx md5mb_alignment_sse
 # include "md5mb-base.h"
 # undef _FN
 # define md5_extract_mb_avx md5_extract_mb_sse
@@ -85,6 +96,7 @@ static HEDLEY_ALWAYS_INLINE void md5_extract_mb_sse(void* dst, void* state, int 
 #define ROTATE _mm_roti_epi32
 #define _FN(f) f##_xop
 #define md5mb_regions_xop md5mb_regions_sse
+#define md5mb_alignment_xop md5mb_alignment_sse
 
 #undef F
 #undef G
@@ -127,14 +139,14 @@ static HEDLEY_ALWAYS_INLINE void md5_extract_mb_sse(void* dst, void* state, int 
 #define VAL _mm256_set1_epi32
 #define word_t __m256i
 #define LOAD8(set, ptr, offs, idx, var0, var1, var2, var3, var4, var5, var6, var7) { \
-	__m256i in0 = _mm256_loadu_si256((__m256i*)(ptr[0+set*8] + offs + idx*4)); \
-	__m256i in1 = _mm256_loadu_si256((__m256i*)(ptr[1+set*8] + offs + idx*4)); \
-	__m256i in2 = _mm256_loadu_si256((__m256i*)(ptr[2+set*8] + offs + idx*4)); \
-	__m256i in3 = _mm256_loadu_si256((__m256i*)(ptr[3+set*8] + offs + idx*4)); \
-	__m256i in4 = _mm256_loadu_si256((__m256i*)(ptr[4+set*8] + offs + idx*4)); \
-	__m256i in5 = _mm256_loadu_si256((__m256i*)(ptr[5+set*8] + offs + idx*4)); \
-	__m256i in6 = _mm256_loadu_si256((__m256i*)(ptr[6+set*8] + offs + idx*4)); \
-	__m256i in7 = _mm256_loadu_si256((__m256i*)(ptr[7+set*8] + offs + idx*4)); \
+	__m256i in0 = _mm256_load_si256((__m256i*)(ptr[0+set*8] + offs + idx*4)); \
+	__m256i in1 = _mm256_load_si256((__m256i*)(ptr[1+set*8] + offs + idx*4)); \
+	__m256i in2 = _mm256_load_si256((__m256i*)(ptr[2+set*8] + offs + idx*4)); \
+	__m256i in3 = _mm256_load_si256((__m256i*)(ptr[3+set*8] + offs + idx*4)); \
+	__m256i in4 = _mm256_load_si256((__m256i*)(ptr[4+set*8] + offs + idx*4)); \
+	__m256i in5 = _mm256_load_si256((__m256i*)(ptr[5+set*8] + offs + idx*4)); \
+	__m256i in6 = _mm256_load_si256((__m256i*)(ptr[6+set*8] + offs + idx*4)); \
+	__m256i in7 = _mm256_load_si256((__m256i*)(ptr[7+set*8] + offs + idx*4)); \
 	__m256i in01a = _mm256_unpacklo_epi32(in0, in1); \
 	__m256i in01b = _mm256_unpackhi_epi32(in0, in1); \
 	__m256i in23a = _mm256_unpacklo_epi32(in2, in3); \
@@ -167,7 +179,12 @@ static HEDLEY_ALWAYS_INLINE void md5_extract_mb_sse(void* dst, void* state, int 
 	: _mm256_or_si256(_mm256_slli_epi32(a, r), _mm256_srli_epi32(a, 32-r)) \
 )
 #define _FN(f) f##_avx2
+#ifdef MD5X2
 #define md5mb_regions_avx2 16
+#else
+#define md5mb_regions_avx2 8
+#endif
+#define md5mb_alignment_avx2 32
 
 
 #define F 1
@@ -188,6 +205,7 @@ static HEDLEY_ALWAYS_INLINE void md5_extract_mb_sse(void* dst, void* state, int 
 #undef _FN
 
 static HEDLEY_ALWAYS_INLINE void md5_extract_mb_avx2(void* dst, void* state, int idx) {
+	HEDLEY_ASSUME(idx < md5mb_regions_avx2);
 	__m256i* state_ = (__m256i*)state + ((idx & 8) >> 1);
 	__m256i tmpAB0 = _mm256_unpacklo_epi32(state_[0], state_[1]);
 	__m256i tmpAB2 = _mm256_unpackhi_epi32(state_[0], state_[1]);
@@ -237,22 +255,22 @@ static HEDLEY_ALWAYS_INLINE void md5_extract_mb_avx2(void* dst, void* state, int
 #define VAL _mm512_set1_epi32
 #define word_t __m512i
 #define LOAD16(set, ptr, offs, var0, var1, var2, var3, var4, var5, var6, var7, var8, var9, var10, var11, var12, var13, var14, var15) { \
-	__m512i in0  = _mm512_loadu_si512(ptr[0+set*16] + offs); \
-	__m512i in1  = _mm512_loadu_si512(ptr[1+set*16] + offs); \
-	__m512i in2  = _mm512_loadu_si512(ptr[2+set*16] + offs); \
-	__m512i in3  = _mm512_loadu_si512(ptr[3+set*16] + offs); \
-	__m512i in4  = _mm512_loadu_si512(ptr[4+set*16] + offs); \
-	__m512i in5  = _mm512_loadu_si512(ptr[5+set*16] + offs); \
-	__m512i in6  = _mm512_loadu_si512(ptr[6+set*16] + offs); \
-	__m512i in7  = _mm512_loadu_si512(ptr[7+set*16] + offs); \
-	__m512i in8  = _mm512_loadu_si512(ptr[8+set*16] + offs); \
-	__m512i in9  = _mm512_loadu_si512(ptr[9+set*16] + offs); \
-	__m512i in10 = _mm512_loadu_si512(ptr[10+set*16] + offs); \
-	__m512i in11 = _mm512_loadu_si512(ptr[11+set*16] + offs); \
-	__m512i in12 = _mm512_loadu_si512(ptr[12+set*16] + offs); \
-	__m512i in13 = _mm512_loadu_si512(ptr[13+set*16] + offs); \
-	__m512i in14 = _mm512_loadu_si512(ptr[14+set*16] + offs); \
-	__m512i in15 = _mm512_loadu_si512(ptr[15+set*16] + offs); \
+	__m512i in0  = _mm512_load_si512(ptr[0+set*16] + offs); \
+	__m512i in1  = _mm512_load_si512(ptr[1+set*16] + offs); \
+	__m512i in2  = _mm512_load_si512(ptr[2+set*16] + offs); \
+	__m512i in3  = _mm512_load_si512(ptr[3+set*16] + offs); \
+	__m512i in4  = _mm512_load_si512(ptr[4+set*16] + offs); \
+	__m512i in5  = _mm512_load_si512(ptr[5+set*16] + offs); \
+	__m512i in6  = _mm512_load_si512(ptr[6+set*16] + offs); \
+	__m512i in7  = _mm512_load_si512(ptr[7+set*16] + offs); \
+	__m512i in8  = _mm512_load_si512(ptr[8+set*16] + offs); \
+	__m512i in9  = _mm512_load_si512(ptr[9+set*16] + offs); \
+	__m512i in10 = _mm512_load_si512(ptr[10+set*16] + offs); \
+	__m512i in11 = _mm512_load_si512(ptr[11+set*16] + offs); \
+	__m512i in12 = _mm512_load_si512(ptr[12+set*16] + offs); \
+	__m512i in13 = _mm512_load_si512(ptr[13+set*16] + offs); \
+	__m512i in14 = _mm512_load_si512(ptr[14+set*16] + offs); \
+	__m512i in15 = _mm512_load_si512(ptr[15+set*16] + offs); \
 	__m512i in01a = _mm512_unpacklo_epi32(in0, in1); \
 	__m512i in01b = _mm512_unpackhi_epi32(in0, in1); \
 	__m512i in23a = _mm512_unpacklo_epi32(in2, in3); \
@@ -322,7 +340,12 @@ static HEDLEY_ALWAYS_INLINE void md5_extract_mb_avx2(void* dst, void* state, int
 
 #define ROTATE _mm512_rol_epi32
 #define _FN(f) f##_avx512
+#ifdef MD5X2
 #define md5mb_regions_avx512 32
+#else
+#define md5mb_regions_avx512 16
+#endif
+#define md5mb_alignment_avx512 64
 
 
 
@@ -342,6 +365,7 @@ static HEDLEY_ALWAYS_INLINE void md5_extract_mb_avx2(void* dst, void* state, int
 #undef LOAD16
 
 static HEDLEY_ALWAYS_INLINE void md5_extract_mb_avx512(void* dst, void* state, int idx) {
+	HEDLEY_ASSUME(idx < md5mb_regions_avx512);
 	__m512i* state_ = (__m512i*)state + ((idx & 16) >> 2);
 	__m512i tmpAB0 = _mm512_unpacklo_epi32(state_[0], state_[1]);
 	__m512i tmpAB2 = _mm512_unpackhi_epi32(state_[0], state_[1]);
@@ -407,4 +431,6 @@ static HEDLEY_ALWAYS_INLINE void md5_extract_mb_avx512(void* dst, void* state, i
 
 #undef INPUT
 #undef LOAD
+#ifdef MD5X2
 #undef MD5X2
+#endif

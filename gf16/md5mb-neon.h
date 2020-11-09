@@ -18,6 +18,7 @@
 #define ROTATE(a, r) r==16 ? vreinterpretq_u32_u16(vrev32q_u16(vreinterpretq_u16_u32(a))) : vsliq_n_u32(vshrq_n_u32(a, 32-r), a, r)
 #define _FN(f) f##_neon
 #define md5mb_regions_neon 8
+#define md5mb_alignment_neon 16
 
 #define F vbslq_u32
 #define G(b,c,d) vbslq_u32(d, b, c)
