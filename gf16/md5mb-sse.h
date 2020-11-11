@@ -106,7 +106,8 @@ static HEDLEY_ALWAYS_INLINE void md5_extract_mb_sse(void* dst, void* state, int 
 #define F(b,c,d) _mm_cmov_si128(c, d, b)
 #define G _mm_cmov_si128
 #define H(b,c,d) _mm_xor_si128(_mm_xor_si128(d, c), b)
-#define I(b,c,d) _mm_xor_si128(_mm_or_si128(_mm_xor_si128(d, _mm_set1_epi8(-1)), b), c)
+//#define I(b,c,d) _mm_xor_si128(_mm_or_si128(_mm_xor_si128(d, _mm_set1_epi8(-1)), b), c)
+#define I(b,c,d) _mm_cmov_si128(_mm_xor_si128(c, _mm_set1_epi8(-1)), _mm_xor_si128(d, _mm_xor_si128(c, _mm_set1_epi8(-1))), b)
 
 #include "md5mb-base.h"
 

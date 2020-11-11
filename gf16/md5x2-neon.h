@@ -23,6 +23,7 @@
 #define G(b,c,d) vbsl_u32(d, b, c)
 #define H(b,c,d) veor_u32(veor_u32(d, c), b)
 #define I(b,c,d) veor_u32(vorn_u32(b, d), c)
+//#define I(b,c,d) vbsl_u32(b, vmvn_u32(c), veor_u32(vmvn_u32(c), d))
 
 #include "md5x2-base.h"
 

@@ -24,6 +24,7 @@
 #define G(b,c,d) vbslq_u32(d, b, c)
 #define H(b,c,d) veorq_u32(veorq_u32(d, c), b)
 #define I(b,c,d) veorq_u32(vornq_u32(b, d), c)
+//#define I(b,c,d) vbslq_u32(b, vmvnq_u32(c), veorq_u32(vmvnq_u32(c), d))
 
 #define MD5X2
 #include "md5mb-base.h"
