@@ -89,30 +89,6 @@ static HEDLEY_ALWAYS_INLINE void md5_extract_x2_sse(void* dst, void* state, cons
 #endif
 
 
-#ifdef __XOP__
-#include <x86intrin.h>
-#define ROTATE _mm_roti_epi32
-#define _FN(f) f##_xop
-
-#undef F
-#undef G
-#undef H
-#undef I
-#define F(b,c,d) _mm_cmov_si128(c, d, b)
-#define G _mm_cmov_si128
-#define H(b,c,d) _mm_xor_si128(_mm_xor_si128(d, c), b)
-#define I(b,c,d) _mm_xor_si128(_mm_or_si128(_mm_xor_si128(d, _mm_set1_epi8(-1)), b), c)
-
-#include "md5x2-base.h"
-
-#undef _FN
-#undef ROTATE
-
-#define md5_extract_x2_xop md5_extract_x2_sse
-#define md5_init_lane_x2_xop md5_init_lane_x2_avx
-#endif
-
-
 #ifdef __AVX512VL__
 #include <immintrin.h>
 #define ROTATE _mm_rol_epi32
