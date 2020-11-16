@@ -1,7 +1,9 @@
 #include "platform.h"
 
-#define STR_HELPER(x) #x
-#define STR(x) STR_HELPER(x)
+#ifndef STR
+# define STR_HELPER(x) #x
+# define STR(x) STR_HELPER(x)
+#endif
 
 #ifndef UNUSED
 # define UNUSED(...) (void)(__VA_ARGS__)
@@ -21,8 +23,8 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_x2_scalar(uint32_t* state, co
 	
 #define ROUND_F(A1, B1, C1, D1, A2, B2, C2, D2, NEXT_IN1, NEXT_IN2, K, TMP1, TMP2, R) \
 	"leal " STR(K) "(%k[" STR(A1) "], %%" TMP1 "), %k[" STR(A1) "]\n" \
-	"movl %k[" STR(D1) "], %%" TMP1 "\n" \
 	"leal " STR(K) "(%k[" STR(A2) "], %%" TMP2 "), %k[" STR(A2) "]\n" \
+	"movl %k[" STR(D1) "], %%" TMP1 "\n" \
 	"movl %k[" STR(D2) "], %%" TMP2 "\n" \
 	"xorl %k[" STR(C1) "], %%" TMP1 "\n" \
 	"xorl %k[" STR(C2) "], %%" TMP2 "\n" \
@@ -40,8 +42,8 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_x2_scalar(uint32_t* state, co
 	"addl %k[" STR(B2) "], %k[" STR(A2) "]\n"
 #define ROUND_H(A1, B1, C1, D1, A2, B2, C2, D2, NEXT_IN1, NEXT_IN2, K, TMP1, TMP2, R) \
 	"leal " STR(K) "(%k[" STR(A1) "], %%" TMP1 "), %k[" STR(A1) "]\n" \
-	"movl %k[" STR(D1) "], %%" TMP1 "\n" \
 	"leal " STR(K) "(%k[" STR(A2) "], %%" TMP2 "), %k[" STR(A2) "]\n" \
+	"movl %k[" STR(D1) "], %%" TMP1 "\n" \
 	"movl %k[" STR(D2) "], %%" TMP2 "\n" \
 	"xorl %k[" STR(C1) "], %%" TMP1 "\n" \
 	"xorl %k[" STR(C2) "], %%" TMP2 "\n" \
@@ -57,8 +59,8 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_x2_scalar(uint32_t* state, co
 	"addl %k[" STR(B2) "], %k[" STR(A2) "]\n"
 #define ROUND_I(A1, B1, C1, D1, A2, B2, C2, D2, NEXT_IN1, NEXT_IN2, K, TMP1, TMP2, R) \
 	"leal " STR(K) "(%k[" STR(A1) "], %%" TMP1 "), %k[" STR(A1) "]\n" \
-	"movl %k[" STR(D1) "], %%" TMP1 "\n" \
 	"leal " STR(K) "(%k[" STR(A2) "], %%" TMP2 "), %k[" STR(A2) "]\n" \
+	"movl %k[" STR(D1) "], %%" TMP1 "\n" \
 	"movl %k[" STR(D2) "], %%" TMP2 "\n" \
 	"notl %%" TMP1 "\n" \
 	"notl %%" TMP2 "\n" \
@@ -76,8 +78,8 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_x2_scalar(uint32_t* state, co
 	"addl %k[" STR(B2) "], %k[" STR(A2) "]\n"
 #define ROUND_I_LAST(A1, B1, C1, D1, A2, B2, C2, D2, K, TMP1, TMP2, R) \
 	"leal " STR(K) "(%k[" STR(A1) "], %%" TMP1 "), %k[" STR(A1) "]\n" \
-	"movl %k[" STR(D1) "], %%" TMP1 "\n" \
 	"leal " STR(K) "(%k[" STR(A2) "], %%" TMP2 "), %k[" STR(A2) "]\n" \
+	"movl %k[" STR(D1) "], %%" TMP1 "\n" \
 	"movl %k[" STR(D2) "], %%" TMP2 "\n" \
 	"notl %%" TMP1 "\n" \
 	"notl %%" TMP2 "\n" \
@@ -94,8 +96,8 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_x2_scalar(uint32_t* state, co
 
 #define ROUND_G(A1, B1, C1, D1, A2, B2, C2, D2, NEXT_IN1, NEXT_IN2, K, TMP1, TMP2, R) \
 	"leal " STR(K) "(%k[" STR(A1) "], %%" TMP1 "), %k[" STR(A1) "]\n" \
-	"movl %k[" STR(D1) "], %%" TMP1 "\n" \
 	"leal " STR(K) "(%k[" STR(A2) "], %%" TMP2 "), %k[" STR(A2) "]\n" \
+	"movl %k[" STR(D1) "], %%" TMP1 "\n" \
 	"movl %k[" STR(D2) "], %%" TMP2 "\n" \
 	"notl %%" TMP1 "\n" \
 	"notl %%" TMP2 "\n" \
@@ -140,9 +142,6 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_x2_scalar(uint32_t* state, co
 	ROUND_I(C1, D1, A1, B1, C2, D2, A2, B2, STR(i2) "(%[i0])", STR(i2) "(%[i1])", k2, "r14d", "r15d", 15) \
 	ROUND_I(B1, C1, D1, A1, B2, C2, D2, A2, STR(i3) "(%[i0])", STR(i3) "(%[i1])", k3, "r14d", "r15d", 21)
 	
-#ifndef PLATFORM_AMD64
-	ALIGN_TO(16, uint32_t scratch[32]);
-#endif
 	asm(
 		"movl (%[i0]), %%r14d\n"
 		"movl (%[i1]), %%r15d\n"

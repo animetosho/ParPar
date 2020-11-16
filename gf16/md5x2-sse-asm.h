@@ -1,7 +1,9 @@
 #include "platform.h"
 
-#define STR_HELPER(x) #x
-#define STR(x) STR_HELPER(x)
+#ifndef STR
+# define STR_HELPER(x) #x
+# define STR(x) STR_HELPER(x)
+#endif
 
 ALIGN_TO(16, static const uint32_t md5_constants[64]) = {
 	// F
