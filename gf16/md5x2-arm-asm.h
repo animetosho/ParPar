@@ -25,8 +25,8 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_x2_scalar(uint32_t* state, co
 #ifdef __aarch64__
 # define TMP1 "w14"
 # define TMP2 "w15"
-# define SETI_L(x) "mov " TMP2 ", #" STR(x) "\n"
-# define SETI_H(x) "movk " TMP2 ", #" STR(x) ", lsl #16\n"
+# define SETI_L(x) "mov " TMP1 ", #" STR(x) "\n"
+# define SETI_H(x) "movk " TMP1 ", #" STR(x) ", lsl #16\n"
 # define REG(x) "%w[" STR(x) "]"
 # define ROR_ADD(A1, B1, A2, B2, R) \
 	"ror %w[" STR(A1) "], %w[" STR(A1) "], #" STR(R) "\n" \
@@ -35,12 +35,12 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_x2_scalar(uint32_t* state, co
 	"add %w[" STR(A2) "], %w[" STR(A2) "], %w[" STR(B2) "]\n"
 # define ORN(dst, src1, src2) "orn " dst ", " src1 ", " src2 "\n"
 #else
-# define TMP1 "r14"
+# define TMP1 "r11"
 # define TMP2 "r12"
 
 # if defined(__armv7__) || defined(_M_ARM) || defined(__ARM_ARCH_7__) || defined(__ARM_ARCH_7A__) || defined(__ARM_ARCH_8A__) || (defined(__ARM_ARCH) && __ARM_ARCH >= 7)
-#  define SETI_L(x) "movw " TMP2 ", #" STR(x) "\n"
-#  define SETI_H(x) "movt " TMP2 ", #" STR(x) "\n"
+#  define SETI_L(x) "movw " TMP1 ", #" STR(x) "\n"
+#  define SETI_H(x) "movt " TMP1 ", #" STR(x) "\n"
 # else
 #  define SETI_L(x) "mov " TMP2 ", #" STR(x) " & 0xff\n orr " TMP2 ", #" STR(x) " & 0xff00\n"
 #  define SETI_H(x) "orr " TMP2 ", #(" STR(x) " & 0xff)<<16\n orr " TMP2 ", #(" STR(x) " & 0xff00)<<16\n"
@@ -54,84 +54,84 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_x2_scalar(uint32_t* state, co
 #endif
 #define ROUND_F(A1, B1, C1, D1, A2, B2, C2, D2, NEXT_IN1, NEXT_IN2, KL, KH, R) \
 	"add " REG(A1) ", " REG(A1) ", " TMP1 "\n" \
-	"add " REG(A2) ", " REG(A2) ", " TMP2 "\n" \
 	SETI_L(KL) \
+	"add " REG(A2) ", " REG(A2) ", " TMP2 "\n" \
 	SETI_H(KH) \
-	"add " REG(A1) ", " REG(A1) ", " TMP2 "\n" \
-	"add " REG(A2) ", " REG(A2) ", " TMP2 "\n" \
-	"eor " TMP1 ", " REG(C1) ", " REG(D1) "\n" \
 	"eor " TMP2 ", " REG(C2) ", " REG(D2) "\n" \
-	"and " TMP1 ", " TMP1 ", " REG(B1) "\n" \
-	"and " TMP2 ", " TMP2 ", " REG(B2) "\n" \
-	"eor " TMP1 ", " TMP1 ", " REG(D1) "\n" \
-	"eor " TMP2 ", " TMP2 ", " REG(D2) "\n" \
 	"add " REG(A1) ", " REG(A1) ", " TMP1 "\n" \
+	"add " REG(A2) ", " REG(A2) ", " TMP1 "\n" \
+	"eor " TMP1 ", " REG(C1) ", " REG(D1) "\n" \
+	"and " TMP2 ", " TMP2 ", " REG(B2) "\n" \
+	"and " TMP1 ", " TMP1 ", " REG(B1) "\n" \
+	"eor " TMP2 ", " TMP2 ", " REG(D2) "\n" \
+	"eor " TMP1 ", " TMP1 ", " REG(D1) "\n" \
 	"add " REG(A2) ", " REG(A2) ", " TMP2 "\n" \
+	"add " REG(A1) ", " REG(A1) ", " TMP1 "\n" \
 	"ldr " TMP1 ", " NEXT_IN1 "\n" \
 	"ldr " TMP2 ", " NEXT_IN2 "\n" \
 	ROR_ADD(A1, B1, A2, B2, R)
 #define ROUND_H(A1, B1, C1, D1, A2, B2, C2, D2, NEXT_IN1, NEXT_IN2, KL, KH, R) \
 	"add " REG(A1) ", " REG(A1) ", " TMP1 "\n" \
-	"add " REG(A2) ", " REG(A2) ", " TMP2 "\n" \
 	SETI_L(KL) \
+	"add " REG(A2) ", " REG(A2) ", " TMP2 "\n" \
 	SETI_H(KH) \
-	"add " REG(A1) ", " REG(A1) ", " TMP2 "\n" \
-	"add " REG(A2) ", " REG(A2) ", " TMP2 "\n" \
-	"eor " TMP1 ", " REG(C1) ", " REG(D1) "\n" \
 	"eor " TMP2 ", " REG(C2) ", " REG(D2) "\n" \
-	"eor " TMP1 ", " TMP1 ", " REG(B1) "\n" \
-	"eor " TMP2 ", " TMP2 ", " REG(B2) "\n" \
 	"add " REG(A1) ", " REG(A1) ", " TMP1 "\n" \
+	"add " REG(A2) ", " REG(A2) ", " TMP1 "\n" \
+	"eor " TMP1 ", " REG(C1) ", " REG(D1) "\n" \
+	"eor " TMP2 ", " TMP2 ", " REG(B2) "\n" \
+	"eor " TMP1 ", " TMP1 ", " REG(B1) "\n" \
 	"add " REG(A2) ", " REG(A2) ", " TMP2 "\n" \
+	"add " REG(A1) ", " REG(A1) ", " TMP1 "\n" \
 	"ldr " TMP1 ", " NEXT_IN1 "\n" \
 	"ldr " TMP2 ", " NEXT_IN2 "\n" \
 	ROR_ADD(A1, B1, A2, B2, R)
 #define ROUND_I(A1, B1, C1, D1, A2, B2, C2, D2, NEXT_IN1, NEXT_IN2, KL, KH, R) \
 	"add " REG(A1) ", " REG(A1) ", " TMP1 "\n" \
-	"add " REG(A2) ", " REG(A2) ", " TMP2 "\n" \
 	SETI_L(KL) \
+	"add " REG(A2) ", " REG(A2) ", " TMP2 "\n" \
 	SETI_H(KH) \
-	"add " REG(A1) ", " REG(A1) ", " TMP2 "\n" \
-	"add " REG(A2) ", " REG(A2) ", " TMP2 "\n" \
-	ORN(TMP1, REG(B1), REG(D1)) \
 	ORN(TMP2, REG(B2), REG(D2)) \
-	"eor " TMP1 ", " TMP1 ", " REG(C1) "\n" \
-	"eor " TMP2 ", " TMP2 ", " REG(C2) "\n" \
 	"add " REG(A1) ", " REG(A1) ", " TMP1 "\n" \
+	"add " REG(A2) ", " REG(A2) ", " TMP1 "\n" \
+	ORN(TMP1, REG(B1), REG(D1)) \
+	"eor " TMP2 ", " TMP2 ", " REG(C2) "\n" \
+	"eor " TMP1 ", " TMP1 ", " REG(C1) "\n" \
 	"add " REG(A2) ", " REG(A2) ", " TMP2 "\n" \
+	"add " REG(A1) ", " REG(A1) ", " TMP1 "\n" \
 	"ldr " TMP1 ", " NEXT_IN1 "\n" \
 	"ldr " TMP2 ", " NEXT_IN2 "\n" \
 	ROR_ADD(A1, B1, A2, B2, R)
 #define ROUND_I_LAST(A1, B1, C1, D1, A2, B2, C2, D2, KL, KH, R) \
 	"add " REG(A1) ", " REG(A1) ", " TMP1 "\n" \
-	"add " REG(A2) ", " REG(A2) ", " TMP2 "\n" \
 	SETI_L(KL) \
+	"add " REG(A2) ", " REG(A2) ", " TMP2 "\n" \
 	SETI_H(KH) \
-	"add " REG(A1) ", " REG(A1) ", " TMP2 "\n" \
-	"add " REG(A2) ", " REG(A2) ", " TMP2 "\n" \
-	ORN(TMP1, REG(B1), REG(D1)) \
 	ORN(TMP2, REG(B2), REG(D2)) \
-	"eor " TMP1 ", " TMP1 ", " REG(C1) "\n" \
-	"eor " TMP2 ", " TMP2 ", " REG(C2) "\n" \
 	"add " REG(A1) ", " REG(A1) ", " TMP1 "\n" \
+	"add " REG(A2) ", " REG(A2) ", " TMP1 "\n" \
+	ORN(TMP1, REG(B1), REG(D1)) \
+	"eor " TMP2 ", " TMP2 ", " REG(C2) "\n" \
+	"eor " TMP1 ", " TMP1 ", " REG(C1) "\n" \
 	"add " REG(A2) ", " REG(A2) ", " TMP2 "\n" \
+	"add " REG(A1) ", " REG(A1) ", " TMP1 "\n" \
 	ROR_ADD(A1, B1, A2, B2, R)
 
 #define ROUND_G(A1, B1, C1, D1, A2, B2, C2, D2, NEXT_IN1, NEXT_IN2, KL, KH, R) \
 	"add " REG(A1) ", " REG(A1) ", " TMP1 "\n" \
-	"add " REG(A2) ", " REG(A2) ", " TMP2 "\n" \
 	SETI_L(KL) \
-	SETI_H(KH) \
-	"add " REG(A1) ", " REG(A1) ", " TMP2 "\n" \
 	"add " REG(A2) ", " REG(A2) ", " TMP2 "\n" \
-	"bic " TMP1 ", " REG(C1) ", " REG(D1) "\n" \
+	SETI_H(KH) \
 	"bic " TMP2 ", " REG(C2) ", " REG(D2) "\n" \
 	"add " REG(A1) ", " REG(A1) ", " TMP1 "\n" \
+	"add " REG(A2) ", " REG(A2) ", " TMP1 "\n" \
+	"bic " TMP1 ", " REG(C1) ", " REG(D1) "\n" \
 	"add " REG(A2) ", " REG(A2) ", " TMP2 "\n" \
-	"and " TMP1 ", " REG(B1) ", " REG(D1) "\n" \
-	"and " TMP2 ", " REG(B2) ", " REG(D2) "\n" \
 	"add " REG(A1) ", " REG(A1) ", " TMP1 "\n" \
+	"and " TMP2 ", " REG(B2) ", " REG(D2) "\n" \
+	"and " TMP1 ", " REG(B1) ", " REG(D1) "\n" \
 	"add " REG(A2) ", " REG(A2) ", " TMP2 "\n" \
+	"add " REG(A1) ", " REG(A1) ", " TMP1 "\n" \
 	"ldr " TMP1 ", " NEXT_IN1 "\n" \
 	"ldr " TMP2 ", " NEXT_IN2 "\n" \
 	ROR_ADD(A1, B1, A2, B2, R)
