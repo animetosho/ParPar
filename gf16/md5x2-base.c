@@ -7,19 +7,31 @@
 #include "md5-base.h"
 #undef FNB
 
-void md5_final_block(void* state, const void *HEDLEY_RESTRICT data, uint64_t totalLength) {
+void md5_final_block(void* state, const void *HEDLEY_RESTRICT data, uint64_t totalLength, uint64_t zeroPad) {
 	ALIGN_TO(8, char block[64]);
 	const char* blockPtr[] = {block};
 	size_t remaining = totalLength & 63;
 	memcpy(block, data, remaining);
-	block[remaining++] = 0x80;
+	memset(block + remaining, 0, 64-remaining);
 	
-	// write this in a loop to avoid duplicating the force-inlined process_block function twice
-	for(int iter = (remaining <= 64-8); iter < 2; iter++) {
-		if(iter == 0) {
-			memset(block + remaining, 0, 64-remaining);
-			remaining = 0;
-		} else {
+	totalLength += zeroPad;
+	int loopState = (remaining + zeroPad < 64)*2;
+	// write this in a funky loop to avoid duplicating the force-inlined process_block function twice
+	while(1) {
+		if(loopState == 1 && zeroPad < 64) loopState = 2;
+		if(loopState == 2) {
+			remaining = totalLength & 63;
+			block[remaining++] = 0x80;
+			
+			if(remaining <= 64-8)
+				loopState = 4;
+			else {
+				loopState = 3;
+				remaining = 0;
+			}
+		}
+		
+		if(loopState == 4) {
 			memset(block + remaining, 0, 64-8 - remaining);
 			
 			totalLength <<= 3; // bytes -> bits
@@ -32,6 +44,15 @@ void md5_final_block(void* state, const void *HEDLEY_RESTRICT data, uint64_t tot
 		}
 		
 		md5_process_block((uint32_t*)state, blockPtr, 0);
+		
+		if(loopState == 4) break;
+		else if(loopState == 3) loopState = 4;
+		else if(loopState == 1) zeroPad -= 64;
+		else if(loopState == 0) {
+			memset(block, 0, 64);
+			zeroPad -= 64-remaining;
+			loopState = 1;
+		}
 	}
 }
 

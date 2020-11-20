@@ -14,6 +14,6 @@ static HEDLEY_ALWAYS_INLINE void _FN(md5_update_block_x2)(void* state, const voi
 #ifdef __cplusplus
 extern "C"
 #endif
-void md5_final_block(void* state, const void *HEDLEY_RESTRICT data, uint64_t totalLength);
+void md5_final_block(void* state, const void *HEDLEY_RESTRICT data, uint64_t totalLength, uint64_t zeroPad);
 #endif
 
