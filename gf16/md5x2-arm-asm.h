@@ -214,4 +214,5 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_x2_scalar(uint32_t* state, co
 #undef SETI_H
 #undef ROR_ADD
 #undef ORN
+#undef REG
 }
