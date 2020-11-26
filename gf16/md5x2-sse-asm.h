@@ -32,13 +32,13 @@ ALIGN_TO(16, static const uint32_t md5_constants[64]) = {
 
 #ifdef PLATFORM_AMD64
 #define ASM_PARAMS_F(n, c0, c1) \
-	[A]"+x"(A), [B]"+x"(B), [C]"+x"(C), [D]"+x"(D), [TMPI1]"+x"(tmpI1), [TMPI2]"+x"(tmpI2), [TMPF1]"+x"(tmpF1), [TMPF2]"+x"(tmpF2), \
+	[A]"+x"(A), [B]"+x"(B), [C]"+x"(C), [D]"+x"(D), [TMPI1]"=x"(tmpI1), [TMPI2]"=x"(tmpI2), [TMPF1]"=x"(tmpF1), [TMPF2]"=x"(tmpF2), \
 	[cache0]"=x"(cache##c0), [cache1]"=x"(cache##c1) \
 	: \
 	[k]"m"(md5_constants[n]), [i0]"m"(_in[0][n/4]), [i1]"m"(_in[1][n/4]) :
 
 #define ASM_PARAMS(n) \
-	[A]"+x"(A), [B]"+x"(B), [C]"+x"(C), [D]"+x"(D), [TMPI1]"+x"(tmpI1), [TMPI2]"+x"(tmpI2), [TMPF1]"+x"(tmpF1), [TMPF2]"+x"(tmpF2) \
+	[A]"+x"(A), [B]"+x"(B), [C]"+x"(C), [D]"+x"(D), [TMPI1]"=x"(tmpI1), [TMPI2]"=x"(tmpI2), [TMPF1]"=x"(tmpF1), [TMPF2]"=x"(tmpF2) \
 	: [input0]"x"(cache0), [input1]"x"(cache1), [input2]"x"(cache2), [input3]"x"(cache3), [input4]"x"(cache4), [input5]"x"(cache5), [input6]"x"(cache6), [input7]"x"(cache7), \
 	[k0]"m"(md5_constants[n+0]), [k4]"m"(md5_constants[n+4]), [k8]"m"(md5_constants[n+8]), [k12]"m"(md5_constants[n+12]) :
 
@@ -55,12 +55,12 @@ ALIGN_TO(16, static const uint32_t md5_constants[64]) = {
 
 #else
 #define ASM_PARAMS_F(n, c0, c1) \
-	[A]"+x"(A), [B]"+x"(B), [C]"+x"(C), [D]"+x"(D), [TMPI1]"+x"(tmpI1), [TMPI2]"+x"(tmpI2), [TMPF1]"+x"(tmpF1), [TMPF2]"+x"(tmpF2) \
+	[A]"+x"(A), [B]"+x"(B), [C]"+x"(C), [D]"+x"(D), [TMPI1]"=x"(tmpI1), [TMPI2]"=x"(tmpI2), [TMPF1]"=x"(tmpF1), [TMPF2]"=x"(tmpF2) \
 	: \
 	[k]"m"(md5_constants[n]), [i0]"m"(_in[0][n/4]), [i1]"m"(_in[1][n/4]), [scratch0]"m"(scratch[c0*4]), [scratch1]"m"(scratch[c1*4]) :
 	
 #define ASM_PARAMS(n) \
-	[A]"+x"(A), [B]"+x"(B), [C]"+x"(C), [D]"+x"(D), [TMPI1]"+x"(tmpI1), [TMPI2]"+x"(tmpI2), [TMPF1]"+x"(tmpF1), [TMPF2]"+x"(tmpF2) \
+	[A]"+x"(A), [B]"+x"(B), [C]"+x"(C), [D]"+x"(D), [TMPI1]"=x"(tmpI1), [TMPI2]"=x"(tmpI2), [TMPF1]"=x"(tmpF1), [TMPF2]"=x"(tmpF2) \
 	: \
 	[k0]"m"(md5_constants[n+0]), [k4]"m"(md5_constants[n+4]), [k8]"m"(md5_constants[n+8]), [k12]"m"(md5_constants[n+12]), \
 	[input0]"m"(scratch[0]), [input1]"m"(scratch[4]), [input2]"m"(scratch[8]), [input3]"m"(scratch[12]), [input4]"m"(scratch[16]), [input5]"m"(scratch[20]), [input6]"m"(scratch[24]), [input7]"m"(scratch[28]) :
@@ -236,6 +236,8 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_x2_sse(__m128i* state, const 
 		RI4(12, 2, 5, 1, 4)
 	: ASM_PARAMS(48));
 	
+	asm("" :: "x"(tmpI1), "x"(tmpI2), "x"(tmpF1), "x"(tmpF2) :); // for some reason, the above can fail without this
+	
 	state[0] = _mm_add_epi32(A, state[0]);
 	state[1] = _mm_add_epi32(B, state[1]);
 	state[2] = _mm_add_epi32(C, state[2]);
@@ -405,6 +407,8 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_x2_avx(__m128i* state, const 
 		RI4(12, 2, 5, 1, 4)
 	: ASM_PARAMS(48));
 	
+	asm("" :: "x"(tmpI1), "x"(tmpI2), "x"(tmpF1), "x"(tmpF2) :); // for some reason, the above can fail without this
+	
 	state[0] = _mm_add_epi32(A, state[0]);
 	state[1] = _mm_add_epi32(B, state[1]);
 	state[2] = _mm_add_epi32(C, state[2]);
@@ -480,6 +484,8 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_x2_avx512(__m128i* state, con
 		RI4(8, 4, 7, 3, 6)
 		RI4(12, 2, 5, 1, 4)
 	: ASM_PARAMS(48));
+	
+	asm("" :: "x"(tmpI1), "x"(tmpI2), "x"(tmpF1), "x"(tmpF2) :); // for some reason, the above can fail without this
 	
 	state[0] = _mm_add_epi32(A, state[0]);
 	state[1] = _mm_add_epi32(B, state[1]);
