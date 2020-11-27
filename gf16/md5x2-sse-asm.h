@@ -95,24 +95,24 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_x2_sse(__m128i* state, const 
 #ifdef PLATFORM_AMD64
 #define READ4 \
 	"movdqu %[i0], %[cache0]\n" \
-	"movdqu %[i1], %[TMPI1]\n" \
-	"movdqa %[cache0], %[cache1]\n" \
-	"punpcklqdq %[TMPI1], %[cache0]\n" \
-	"punpckhqdq %[TMPI1], %[cache1]\n" \
+	"movdqu %[i1], %[TMPI2]\n" \
 	"movdqa %[k0], %[TMPI1]\n" \
+	"movdqa %[cache0], %[cache1]\n" \
+	"punpcklqdq %[TMPI2], %[cache0]\n" \
+	"punpckhqdq %[TMPI2], %[cache1]\n" \
 	"movdqa %[k1], %[TMPI2]\n" \
 	"paddd %[cache0], %[TMPI1]\n" \
 	"paddd %[cache1], %[TMPI2]\n"
 #else
 #define READ4 \
-	"movdqu %[i0], %[TMPF1]\n" \
-	"movdqu %[i1], %[TMPI2]\n" \
-	"movdqa %[TMPF1], %[TMPF2]\n" \
-	"punpcklqdq %[TMPI2], %[TMPF1]\n" \
-	"punpckhqdq %[TMPI2], %[TMPF2]\n" \
-	"movaps %[TMPF1], %[scratch0]\n" \
-	"movaps %[TMPF2], %[scratch1]\n" \
+	"movdqu %[i0], %[TMPI1]\n" \
+	"movdqu %[i1], %[TMPF2]\n" \
+	"movdqa %[TMPI1], %[TMPI2]\n" \
+	"punpcklqdq %[TMPF2], %[TMPI1]\n" \
+	"punpckhqdq %[TMPF2], %[TMPI2]\n" \
+	"movaps %[TMPI1], %[scratch0]\n" \
 	"paddd %[k0], %[TMPI1]\n" \
+	"movaps %[TMPI2], %[scratch1]\n" \
 	"paddd %[k1], %[TMPI2]\n"
 #endif
 
@@ -160,10 +160,10 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_x2_sse(__m128i* state, const 
 	"movaps %[input" STR(r1) "], %[TMPI2]\n" \
 	"movdqa %[k0_" STR(offs) "], %[TMPI1]\n" \
 	"shufps $0b11011000, %[input" STR(r2) "], %[TMPI2]\n" \
-	"shufps $0b11011000, %[TMPI2], %[TMPI2]\n" \
 	"paddd %[input" STR(rs) "], %[TMPI1]\n" \
-	"paddd %[k1_" STR(offs) "], %[TMPI2]\n" \
+	"shufps $0b11011000, %[TMPI2], %[TMPI2]\n" \
 	"pshufd $0b10110001, %[TMPI1], %[TMPF2]\n" \
+	"paddd %[k1_" STR(offs) "], %[TMPI2]\n" \
 	\
 	ROUND_G(A, B, C, D, "%[TMPF2]", 27) \
 	ROUND_G(D, A, B, C, "%[TMPI2]", 23) \
@@ -190,12 +190,12 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_x2_sse(__m128i* state, const 
 	
 #define RI4(offs, r1, r2, r3, r4) \
 	"movaps %[input" STR(r1) "], %[TMPI1]\n" \
-	"shufps $0b11011000, %[input" STR(r2) "], %[TMPI1]\n" \
-	"shufps $0b11011000, %[TMPI1], %[TMPI1]\n" \
-	"paddd %[k0_" STR(offs) "], %[TMPI1]\n" \
 	"movaps %[input" STR(r3) "], %[TMPI2]\n" \
+	"shufps $0b11011000, %[input" STR(r2) "], %[TMPI1]\n" \
 	"shufps $0b11011000, %[input" STR(r4) "], %[TMPI2]\n" \
+	"shufps $0b11011000, %[TMPI1], %[TMPI1]\n" \
 	"shufps $0b11011000, %[TMPI2], %[TMPI2]\n" \
+	"paddd %[k0_" STR(offs) "], %[TMPI1]\n" \
 	"paddd %[k1_" STR(offs) "], %[TMPI2]\n" \
 	\
 	ROUND_I(A, B, C, D, "%[TMPI1]", 26) \
@@ -273,14 +273,14 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_x2_avx(__m128i* state, const 
 	"vpaddd %[k1], %[cache1], %[TMPI2]\n"
 #else
 #define READ4 \
-	"vmovdqu %[i0], %[TMPF1]\n" \
-	"vmovdqu %[i1], %[TMPI2]\n" \
-	"vpunpckhqdq %[TMPI2], %[TMPF1], %[TMPF2]\n" \
-	"vpunpcklqdq %[TMPI2], %[TMPF1], %[TMPF1]\n" \
-	"vmovdqa %[TMPF1], %[scratch0]\n" \
-	"vmovdqa %[TMPF2], %[scratch1]\n" \
-	"vpaddd %[k0], %[TMPF1], %[TMPI1]\n" \
-	"vpaddd %[k1], %[TMPF2], %[TMPI2]\n"
+	"vmovdqu %[i0], %[TMPI1]\n" \
+	"vmovdqu %[i1], %[TMPF2]\n" \
+	"vpunpckhqdq %[TMPF2], %[TMPI1], %[TMPI2]\n" \
+	"vpunpcklqdq %[TMPF2], %[TMPI1], %[TMPI1]\n" \
+	"vmovdqa %[TMPI1], %[scratch0]\n" \
+	"vmovdqa %[TMPI2], %[scratch1]\n" \
+	"vpaddd %[k0], %[TMPI1], %[TMPI1]\n" \
+	"vpaddd %[k1], %[TMPI2], %[TMPI2]\n"
 #endif
 
 #define ROUND_F(A, B, C, D, I, R) \
@@ -322,15 +322,19 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_x2_avx(__m128i* state, const 
 #ifdef PLATFORM_AMD64
 #define BLENDD(r1, r2, target) \
 	"vblendps $0b1010, %[input" STR(r2) "], %[input" STR(r1) "], " target "\n"
+#define G_ADDS(offs, r) "vpaddd %[k0_" STR(offs) "], %[input" STR(r) "], %[TMPI1]\n"
 #else
 #define BLENDD(r1, r2, target) \
 	"vmovdqa %[input" STR(r1) "], " target "\n" \
 	"vblendps $0b1010, %[input" STR(r2) "], " target ", " target "\n"
+#define G_ADDS(offs, r) \
+	"vmovdqa %[input" STR(r) "], %[TMPI1]\n" \
+	"vpaddd %[k0_" STR(offs) "], %[TMPI1], %[TMPI1]\n"
 #endif
 #define RG4(offs, rs, r1, r2) \
-	BLENDD(r1, r2, "%[TMPF2]") \
-	"vpaddd %[k0_" STR(offs) "], %[input" STR(rs) "], %[TMPI1]\n" \
-	"vpaddd %[k1_" STR(offs) "], %[TMPF2], %[TMPI2]\n" \
+	BLENDD(r1, r2, "%[TMPI2]") \
+	G_ADDS(offs, rs) \
+	"vpaddd %[k1_" STR(offs) "], %[TMPI2], %[TMPI2]\n" \
 	"vpsrlq $32, %[TMPI1], %[TMPF2]\n" \
 	\
 	ROUND_G(A, B, C, D, "%[TMPF2]", 27) \
@@ -340,10 +344,10 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_x2_avx(__m128i* state, const 
 	ROUND_G(B, C, D, A, "%[TMPI1]", 12)
 	
 #define RH4(offs, r1, r2, r3, r4) \
-	BLENDD(r2, r1, "%[TMPF1]") \
-	BLENDD(r4, r3, "%[TMPF2]") \
-	"vpaddd %[k0_" STR(offs) "], %[TMPF1], %[TMPI1]\n" \
-	"vpaddd %[k1_" STR(offs) "], %[TMPF2], %[TMPI2]\n" \
+	BLENDD(r2, r1, "%[TMPI1]") \
+	BLENDD(r4, r3, "%[TMPI2]") \
+	"vpaddd %[k0_" STR(offs) "], %[TMPI1], %[TMPI1]\n" \
+	"vpaddd %[k1_" STR(offs) "], %[TMPI2], %[TMPI2]\n" \
 	\
 	"vpsrlq $32, %[TMPI1], %[TMPF2]\n" \
 	ROUND_H(A, B, C, D, "%[TMPF2]", 28) \
@@ -353,10 +357,10 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_x2_avx(__m128i* state, const 
 	ROUND_H(B, C, D, A, "%[TMPI2]",  9)
 	
 #define RI4(offs, r1, r2, r3, r4) \
-	BLENDD(r1, r2, "%[TMPF1]") \
-	"vpaddd %[k0_" STR(offs) "], %[TMPF1], %[TMPI1]\n" \
-	BLENDD(r3, r4, "%[TMPF1]") \
-	"vpaddd %[k1_" STR(offs) "], %[TMPF1], %[TMPI2]\n" \
+	BLENDD(r1, r2, "%[TMPI1]") \
+	BLENDD(r3, r4, "%[TMPI2]") \
+	"vpaddd %[k0_" STR(offs) "], %[TMPI1], %[TMPI1]\n" \
+	"vpaddd %[k1_" STR(offs) "], %[TMPI2], %[TMPI2]\n" \
 	\
 	ROUND_I(A, B, C, D, "%[TMPI1]", 26) \
 	"vpsrlq $32, %[TMPI1], %[TMPI1]\n" \
@@ -491,6 +495,7 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_x2_avx512(__m128i* state, con
 #undef RH4
 #undef RI4
 #undef READ4
+#undef G_ADDS
 #endif
 
 #undef ASM_PARAMS_F
