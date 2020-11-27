@@ -122,9 +122,13 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_x2_sse(__m128i* state, const 
 	"pand %[" STR(B) "], %[TMPF1]\n" \
 	"pxor %[" STR(D) "], %[TMPF1]\n" \
 	ROUND_X(A, B, I, R)
-#define ROUND_H(A, B, C, D, I, R) \
+#define ROUND_H_FIRST(A, B, C, D, I, R) \
 	"movdqa %[" STR(D) "], %[TMPF1]\n" \
 	"pxor %[" STR(C) "], %[TMPF1]\n" \
+	"pxor %[" STR(B) "], %[TMPF1]\n" \
+	ROUND_X(A, B, I, R)
+#define ROUND_H(A, B, C, D, I, R) \
+	"pxor %[" STR(A) "], %[TMPF1]\n" \
 	"pxor %[" STR(B) "], %[TMPF1]\n" \
 	ROUND_X(A, B, I, R)
 #define ROUND_I(A, B, C, D, I, R) \
@@ -171,7 +175,7 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_x2_sse(__m128i* state, const 
 	ROUND_G(C, D, A, B, "%[TMPI2]", 18) \
 	ROUND_G(B, C, D, A, "%[TMPI1]", 12)
 	
-#define RH4(offs, r1, r2, r3, r4) \
+#define RH4(offs, ff, r1, r2, r3, r4) \
 	"movaps %[input" STR(r1) "], %[TMPI1]\n" \
 	"shufps $0b10001101, %[input" STR(r2) "], %[TMPI1]\n" \
 	"movaps %[input" STR(r3) "], %[TMPI2]\n" \
@@ -182,7 +186,7 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_x2_sse(__m128i* state, const 
 	"paddd %[k1_" STR(offs) "], %[TMPI2]\n" \
 	\
 	"pshufd $0b11110101, %[TMPI1], %[TMPF2]\n" \
-	ROUND_H(A, B, C, D, "%[TMPF2]", 28) \
+	ff(A, B, C, D, "%[TMPF2]", 28) \
 	ROUND_H(D, A, B, C, "%[TMPI1]", 21) \
 	"pshufd $0b11110101, %[TMPI2], %[TMPF2]\n" \
 	ROUND_H(C, D, A, B, "%[TMPF2]", 16) \
@@ -218,10 +222,10 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_x2_sse(__m128i* state, const 
 	: ASM_PARAMS(32));
 	
 	asm(
-		RH4(0, 2, 4, 5, 7)
-		RH4(1, 0, 2, 3, 5)
-		RH4(2, 6, 0, 1, 3)
-		RH4(3, 4, 6, 7, 1)
+		RH4(0, ROUND_H_FIRST, 2, 4, 5, 7)
+		RH4(1, ROUND_H, 0, 2, 3, 5)
+		RH4(2, ROUND_H, 6, 0, 1, 3)
+		RH4(3, ROUND_H, 4, 6, 7, 1)
 	: ASM_PARAMS(64));
 	
 	asm(
@@ -243,6 +247,7 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_x2_sse(__m128i* state, const 
 #undef ROUND_F
 #undef ROUND_G
 #undef ROUND_H
+#undef ROUND_H_FIRST
 #undef ROUND_I
 #undef RF4
 #undef RG4
@@ -343,14 +348,14 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_x2_avx(__m128i* state, const 
 	ROUND_G(C, D, A, B, "%[TMPI2]", 18) \
 	ROUND_G(B, C, D, A, "%[TMPI1]", 12)
 	
-#define RH4(offs, r1, r2, r3, r4) \
+#define RH4(offs, ff, r1, r2, r3, r4) \
 	BLENDD(r2, r1, "%[TMPI1]") \
 	BLENDD(r4, r3, "%[TMPI2]") \
 	"vpaddd %[k0_" STR(offs) "], %[TMPI1], %[TMPI1]\n" \
 	"vpaddd %[k1_" STR(offs) "], %[TMPI2], %[TMPI2]\n" \
 	\
 	"vpsrlq $32, %[TMPI1], %[TMPF2]\n" \
-	ROUND_H(A, B, C, D, "%[TMPF2]", 28) \
+	ff(A, B, C, D, "%[TMPF2]", 28) \
 	ROUND_H(D, A, B, C, "%[TMPI1]", 21) \
 	"vpsrlq $32, %[TMPI2], %[TMPF2]\n" \
 	ROUND_H(C, D, A, B, "%[TMPF2]", 16) \
@@ -382,10 +387,10 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_x2_avx(__m128i* state, const 
 	: ASM_PARAMS(32));
 	
 	asm(
-		RH4(0, 2, 4, 5, 7)
-		RH4(1, 0, 2, 3, 5)
-		RH4(2, 6, 0, 1, 3)
-		RH4(3, 4, 6, 7, 1)
+		RH4(0, ROUND_H, 2, 4, 5, 7)
+		RH4(1, ROUND_H, 0, 2, 3, 5)
+		RH4(2, ROUND_H, 6, 0, 1, 3)
+		RH4(3, ROUND_H, 4, 6, 7, 1)
 	: ASM_PARAMS(64));
 	
 	asm(
@@ -430,9 +435,12 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_x2_avx512(__m128i* state, con
 	"vmovdqa %[" STR(D) "], %[TMPF1]\n" \
 	"vpternlogd $0xAC, %[" STR(B) "], %[" STR(C) "], %[TMPF1]\n" \
 	ROUND_X(A, B, I, R)
-#define ROUND_H(A, B, C, D, I, R) \
+#define ROUND_H_FIRST(A, B, C, D, I, R) \
 	"vmovdqa %[" STR(D) "], %[TMPF1]\n" \
 	"vpternlogd $0x96, %[" STR(B) "], %[" STR(C) "], %[TMPF1]\n" \
+	ROUND_X(A, B, I, R)
+#define ROUND_H(A, B, C, D, I, R) \
+	"vpternlogd $0x96, %[" STR(B) "], %[" STR(A) "], %[TMPF1]\n" \
 	ROUND_X(A, B, I, R)
 #define ROUND_I(A, B, C, D, I, R) \
 	"vmovdqa %[" STR(D) "], %[TMPF1]\n" \
@@ -461,10 +469,10 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_x2_avx512(__m128i* state, con
 	: ASM_PARAMS(32));
 	
 	asm(
-		RH4(0, 2, 4, 5, 7)
-		RH4(1, 0, 2, 3, 5)
-		RH4(2, 6, 0, 1, 3)
-		RH4(3, 4, 6, 7, 1)
+		RH4(0, ROUND_H_FIRST, 2, 4, 5, 7)
+		RH4(1, ROUND_H, 0, 2, 3, 5)
+		RH4(2, ROUND_H, 6, 0, 1, 3)
+		RH4(3, ROUND_H, 4, 6, 7, 1)
 	: ASM_PARAMS(64));
 	
 	asm(
@@ -484,6 +492,7 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_x2_avx512(__m128i* state, con
 #undef ROUND_F
 #undef ROUND_G
 #undef ROUND_H
+#undef ROUND_H_FIRST
 #undef ROUND_I
 #undef BLENDD
 }
