@@ -261,8 +261,8 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_x2_sse(__m128i* state, const 
 static HEDLEY_ALWAYS_INLINE void md5_process_block_x2_avx(__m128i* state, const char* const* HEDLEY_RESTRICT data, size_t offset) {
 	FN_VARS;
 	
-#define ROUND_X(A, B, I, R) \
-	"vpaddd " I ", %[" STR(A) "], %[" STR(A) "]\n" \
+#define ROUND_X(IA, A, B, I, R) \
+	"vpaddd " I ", %[" STR(IA) "], %[" STR(A) "]\n" \
 	"vpaddd %[TMPF1], %[" STR(A) "], %[" STR(A) "]\n" \
 	"vpshufd $0b10100000, %[" STR(A) "], %[" STR(A) "]\n" \
 	"vpsrlq $" STR(R) ", %[" STR(A) "], %[" STR(A) "]\n" \
@@ -292,16 +292,16 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_x2_avx(__m128i* state, const 
 	"vpxor %[" STR(D) "], %[" STR(C) "], %[TMPF1]\n" \
 	"vpand %[" STR(B) "], %[TMPF1], %[TMPF1]\n" \
 	"vpxor %[" STR(D) "], %[TMPF1], %[TMPF1]\n" \
-	ROUND_X(A, B, I, R)
+	ROUND_X(A, A, B, I, R)
 #define ROUND_H(A, B, C, D, I, R) \
 	"vpxor %[" STR(D) "], %[" STR(C) "], %[TMPF1]\n" \
 	"vpxor %[" STR(B) "], %[TMPF1], %[TMPF1]\n" \
-	ROUND_X(A, B, I, R)
+	ROUND_X(A, A, B, I, R)
 #define ROUND_I(A, B, C, D, I, R) \
 	"vpxor %[" STR(D) "], %[TMPF2], %[TMPF1]\n" \
 	"vpor %[" STR(B) "], %[TMPF1], %[TMPF1]\n" \
 	"vpxor %[" STR(C) "], %[TMPF1], %[TMPF1]\n" \
-	ROUND_X(A, B, I, R)
+	ROUND_X(A, A, B, I, R)
 
 #define ROUND_G(A, B, C, D, I, R) \
 	"vpaddd " I ", %[" STR(A) "], %[" STR(A) "]\n" \
@@ -421,8 +421,8 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_x2_avx(__m128i* state, const 
 static HEDLEY_ALWAYS_INLINE void md5_process_block_x2_avx512(__m128i* state, const char* const* HEDLEY_RESTRICT data, size_t offset) {
 	FN_VARS;
 	
-#define ROUND_X(A, B, I, R) \
-	"vpaddd " I ", %[" STR(A) "], %[" STR(A) "]\n" \
+#define ROUND_X(IA, A, B, I, R) \
+	"vpaddd " I ", %[" STR(IA) "], %[" STR(A) "]\n" \
 	"vpaddd %[TMPF1], %[" STR(A) "], %[" STR(A) "]\n" \
 	"vprord $" STR(R) ", %[" STR(A) "], %[" STR(A) "]\n" \
 	"vpaddd %[" STR(B) "], %[" STR(A) "], %[" STR(A) "]\n"
@@ -430,22 +430,22 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_x2_avx512(__m128i* state, con
 #define ROUND_F(A, B, C, D, I, R) \
 	"vmovdqa %[" STR(D) "], %[TMPF1]\n" \
 	"vpternlogd $0xD8, %[" STR(B) "], %[" STR(C) "], %[TMPF1]\n" \
-	ROUND_X(A, B, I, R)
+	ROUND_X(A, A, B, I, R)
 #define ROUND_G(A, B, C, D, I, R) \
 	"vmovdqa %[" STR(D) "], %[TMPF1]\n" \
 	"vpternlogd $0xAC, %[" STR(B) "], %[" STR(C) "], %[TMPF1]\n" \
-	ROUND_X(A, B, I, R)
+	ROUND_X(A, A, B, I, R)
 #define ROUND_H_FIRST(A, B, C, D, I, R) \
 	"vmovdqa %[" STR(D) "], %[TMPF1]\n" \
 	"vpternlogd $0x96, %[" STR(B) "], %[" STR(C) "], %[TMPF1]\n" \
-	ROUND_X(A, B, I, R)
+	ROUND_X(A, A, B, I, R)
 #define ROUND_H(A, B, C, D, I, R) \
 	"vpternlogd $0x96, %[" STR(B) "], %[" STR(A) "], %[TMPF1]\n" \
-	ROUND_X(A, B, I, R)
+	ROUND_X(A, A, B, I, R)
 #define ROUND_I(A, B, C, D, I, R) \
 	"vmovdqa %[" STR(D) "], %[TMPF1]\n" \
 	"vpternlogd $0x63, %[" STR(B) "], %[" STR(C) "], %[TMPF1]\n" \
-	ROUND_X(A, B, I, R)
+	ROUND_X(A, A, B, I, R)
 
 #ifdef PLATFORM_AMD64
 #define BLENDD(r1, r2, target) \
