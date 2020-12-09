@@ -25,6 +25,10 @@ var opts = {
 		type: 'size',
 		map: 'sliceSizeMultiple'
 	},
+	'auto-slice-size': {
+		alias: 'S',
+		type: 'bool',
+	},
 	'recovery-slices': {
 		alias: 'r',
 		type: 'string'
@@ -211,6 +215,11 @@ if(argv.version) {
 if(!argv.out || !argv['input-slices']) {
 	error('Values for `out` and `input-slices` are required');
 }
+
+
+// alias for 'auto-slice-size'
+if(argv['auto-slice-size'] && !('max-input-slices' in argv))
+	argv['max-input-slices'] = 32768;
 
 if(!argv.progress)
 	argv.progress = argv.quiet ? 'none' : 'stderr';

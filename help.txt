@@ -31,6 +31,10 @@ PAR2 Options:
                              Default is `--input-slices` if size specified and
                              `--min-input-slices` equals that size, otherwise
                              is 4B
+  -S,  --auto-slice-size     Automatically scale up input slice size if the
+                             number of input slices would exceed the maximum
+                             allowed. This option takes no parameters.
+                             Alias for `--max-input-slices=32768`
   -r,  --recovery-slices     Number of recovery slices to generate. You can
                              append a suffix to auto-calculate this, as in the
                              following examples:
