@@ -24,65 +24,65 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_x2_scalar(uint32_t* state, co
 	const uint32_t* const* HEDLEY_RESTRICT _data = (const uint32_t* const* HEDLEY_RESTRICT)data;
 	
 #define ROUND_F(A1, B1, C1, D1, A2, B2, C2, D2, NEXT_IN1, NEXT_IN2, K, R) \
-	"leal " STR(K) "(%k[" STR(A1) "], %k[TMP1]), %k[" STR(A1) "]\n" \
-	"leal " STR(K) "(%k[" STR(A2) "], %k[TMP2]), %k[" STR(A2) "]\n" \
 	"movl %k[" STR(D1) "], %k[TMP1]\n" \
 	"movl %k[" STR(D2) "], %k[TMP2]\n" \
+	"addl $" STR(K) ", %k[" STR(A1) "]\n" \
+	"addl $" STR(K) ", %k[" STR(A2) "]\n" \
 	"xorl %k[" STR(C1) "], %k[TMP1]\n" \
 	"xorl %k[" STR(C2) "], %k[TMP2]\n" \
 	"andl %k[" STR(B1) "], %k[TMP1]\n" \
 	"andl %k[" STR(B2) "], %k[TMP2]\n" \
 	"xorl %k[" STR(D1) "], %k[TMP1]\n" \
 	"xorl %k[" STR(D2) "], %k[TMP2]\n" \
+	"addl " NEXT_IN1 ", %k[" STR(D1) "]\n" \
+	"addl " NEXT_IN2 ", %k[" STR(D2) "]\n" \
 	"addl %k[TMP1], %k[" STR(A1) "]\n" \
 	"addl %k[TMP2], %k[" STR(A2) "]\n" \
-	"movl " NEXT_IN1 ", %k[TMP1]\n" \
-	"movl " NEXT_IN2 ", %k[TMP2]\n" \
 	"roll $" STR(R) ", %k[" STR(A1) "]\n" \
 	"roll $" STR(R) ", %k[" STR(A2) "]\n" \
 	"addl %k[" STR(B1) "], %k[" STR(A1) "]\n" \
 	"addl %k[" STR(B2) "], %k[" STR(A2) "]\n"
 #define ROUND_H(A1, B1, C1, D1, A2, B2, C2, D2, NEXT_IN1, NEXT_IN2, K, R) \
-	"leal " STR(K) "(%k[" STR(A1) "], %k[TMP1]), %k[" STR(A1) "]\n" \
-	"leal " STR(K) "(%k[" STR(A2) "], %k[TMP2]), %k[" STR(A2) "]\n" \
 	"movl %k[" STR(D1) "], %k[TMP1]\n" \
 	"movl %k[" STR(D2) "], %k[TMP2]\n" \
+	"addl $" STR(K) ", %k[" STR(A1) "]\n" \
+	"addl $" STR(K) ", %k[" STR(A2) "]\n" \
 	"xorl %k[" STR(C1) "], %k[TMP1]\n" \
 	"xorl %k[" STR(C2) "], %k[TMP2]\n" \
+	"addl " NEXT_IN1 ", %k[" STR(D1) "]\n" \
+	"addl " NEXT_IN2 ", %k[" STR(D2) "]\n" \
 	"xorl %k[" STR(B1) "], %k[TMP1]\n" \
 	"xorl %k[" STR(B2) "], %k[TMP2]\n" \
 	"addl %k[TMP1], %k[" STR(A1) "]\n" \
 	"addl %k[TMP2], %k[" STR(A2) "]\n" \
-	"movl " NEXT_IN1 ", %k[TMP1]\n" \
-	"movl " NEXT_IN2 ", %k[TMP2]\n" \
 	"roll $" STR(R) ", %k[" STR(A1) "]\n" \
 	"roll $" STR(R) ", %k[" STR(A2) "]\n" \
 	"addl %k[" STR(B1) "], %k[" STR(A1) "]\n" \
 	"addl %k[" STR(B2) "], %k[" STR(A2) "]\n"
 #define ROUND_I(A1, B1, C1, D1, A2, B2, C2, D2, NEXT_IN1, NEXT_IN2, K, R) \
-	"leal " STR(K) "(%k[" STR(A1) "], %k[TMP1]), %k[" STR(A1) "]\n" \
-	"leal " STR(K) "(%k[" STR(A2) "], %k[TMP2]), %k[" STR(A2) "]\n" \
 	"movl %k[" STR(D1) "], %k[TMP1]\n" \
 	"movl %k[" STR(D2) "], %k[TMP2]\n" \
+	"addl $" STR(K) ", %k[" STR(A1) "]\n" \
+	"addl $" STR(K) ", %k[" STR(A2) "]\n" \
 	"notl %k[TMP1]\n" \
 	"notl %k[TMP2]\n" \
 	"orl %k[" STR(B1) "], %k[TMP1]\n" \
 	"orl %k[" STR(B2) "], %k[TMP2]\n" \
 	"xorl %k[" STR(C1) "], %k[TMP1]\n" \
 	"xorl %k[" STR(C2) "], %k[TMP2]\n" \
+	"addl " NEXT_IN1 ", %k[" STR(D1) "]\n" \
+	"addl " NEXT_IN2 ", %k[" STR(D2) "]\n" \
 	"addl %k[TMP1], %k[" STR(A1) "]\n" \
 	"addl %k[TMP2], %k[" STR(A2) "]\n" \
-	"movl " NEXT_IN1 ", %k[TMP1]\n" \
-	"movl " NEXT_IN2 ", %k[TMP2]\n" \
 	"roll $" STR(R) ", %k[" STR(A1) "]\n" \
 	"roll $" STR(R) ", %k[" STR(A2) "]\n" \
 	"addl %k[" STR(B1) "], %k[" STR(A1) "]\n" \
 	"addl %k[" STR(B2) "], %k[" STR(A2) "]\n"
 #define ROUND_I_LAST(A1, B1, C1, D1, A2, B2, C2, D2, K, R) \
-	"leal " STR(K) "(%k[" STR(A1) "], %k[TMP1]), %k[" STR(A1) "]\n" \
-	"leal " STR(K) "(%k[" STR(A2) "], %k[TMP2]), %k[" STR(A2) "]\n" \
 	"movl %k[" STR(D1) "], %k[TMP1]\n" \
 	"movl %k[" STR(D2) "], %k[TMP2]\n" \
+	"addl $" STR(K) ", %k[" STR(A1) "]\n" \
+	"addl $" STR(K) ", %k[" STR(A2) "]\n" \
 	"notl %k[TMP1]\n" \
 	"notl %k[TMP2]\n" \
 	"orl %k[" STR(B1) "], %k[TMP1]\n" \
@@ -97,10 +97,10 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_x2_scalar(uint32_t* state, co
 	"addl %k[" STR(B2) "], %k[" STR(A2) "]\n"
 
 #define ROUND_G(A1, B1, C1, D1, A2, B2, C2, D2, NEXT_IN1, NEXT_IN2, K, R) \
-	"leal " STR(K) "(%k[" STR(A1) "], %k[TMP1]), %k[" STR(A1) "]\n" \
-	"leal " STR(K) "(%k[" STR(A2) "], %k[TMP2]), %k[" STR(A2) "]\n" \
 	"movl %k[" STR(D1) "], %k[TMP1]\n" \
 	"movl %k[" STR(D2) "], %k[TMP2]\n" \
+	"addl $" STR(K) ", %k[" STR(A1) "]\n" \
+	"addl $" STR(K) ", %k[" STR(A2) "]\n" \
 	"notl %k[TMP1]\n" \
 	"notl %k[TMP2]\n" \
 	"andl %k[" STR(C1) "], %k[TMP1]\n" \
@@ -109,12 +109,12 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_x2_scalar(uint32_t* state, co
 	"addl %k[TMP2], %k[" STR(A2) "]\n" \
 	"movl %k[" STR(D1) "], %k[TMP1]\n" \
 	"movl %k[" STR(D2) "], %k[TMP2]\n" \
+	"addl " NEXT_IN1 ", %k[" STR(D1) "]\n" \
+	"addl " NEXT_IN2 ", %k[" STR(D2) "]\n" \
 	"andl %k[" STR(B1) "], %k[TMP1]\n" \
 	"andl %k[" STR(B2) "], %k[TMP2]\n" \
 	"addl %k[TMP1], %k[" STR(A1) "]\n" \
 	"addl %k[TMP2], %k[" STR(A2) "]\n" \
-	"movl " NEXT_IN1 ", %k[TMP1]\n" \
-	"movl " NEXT_IN2 ", %k[TMP2]\n" \
 	"roll $" STR(R) ", %k[" STR(A1) "]\n" \
 	"roll $" STR(R) ", %k[" STR(A2) "]\n" \
 	"addl %k[" STR(B1) "], %k[" STR(A1) "]\n" \
@@ -156,8 +156,8 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_x2_scalar(uint32_t* state, co
 	ROUND_I(B1, C1, D1, A1, B2, C2, D2, A2, "%[i0_3]", "%[i1_3]", k3, 21) \
 : ASM_PARAMS(i0, i1, i2, i3));
 	
-	tmp1 = _data[0][0];
-	tmp2 = _data[1][0];
+	A1 += _data[0][0];
+	A2 += _data[1][0];
 	
 	RF4( 1,  2,  3,  4,  -0x28955b88, -0x173848aa, 0x242070db, -0x3e423112)
 	RF4( 5,  6,  7,  8,  -0x0a83f051, 0x4787c62a, -0x57cfb9ed, -0x02b96aff)
