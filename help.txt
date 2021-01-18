@@ -95,10 +95,12 @@ PAR2 Options:
                                  basename: discard paths
                                  keep: retain full paths as specified
                                  common: discard common parts of paths
+                                 outrel: path computed relative to output
                                  path: path computed relative to that specified
                                        in `--filepath-base`
-                             Default is `common`.
-       --filepath-base       The base path to use when computing paths when
+                             Default is `common`, or `path` if `--filepath-base`
+                             is specified.
+  -B,  --filepath-base       The base path to use when computing paths when
                              `--filepath-format=path` is used.
                              Default is `.` (i.e. current working directory)
        --unicode             Whether to force PAR2 unicode packets to be

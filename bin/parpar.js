@@ -57,7 +57,7 @@ var opts = {
 	'filepath-format': {
 		alias: 'f',
 		type: 'enum',
-		enum: ['basename','keep','common','path'],
+		enum: ['basename','keep','common','outrel','path'],
 		default: 'common',
 		map: 'displayNameFormat'
 	},

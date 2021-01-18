@@ -259,7 +259,7 @@ var par2creator = require('@animetosho/parpar').run(
         outputFileMaxSlicesRounding: 'round', // round, floor or ceil
         criticalRedundancyScheme: 'pow2', // none or pow2
         outputAltNamingScheme: true,
-        displayNameFormat: 'common', // basename, keep, common or path
+        displayNameFormat: 'common', // basename, keep, common, outrel or path
         displayNameBase: '.', // base path, only used if displayNameFormat is 'path'
         seqReadSize: 4*1048576
     },
