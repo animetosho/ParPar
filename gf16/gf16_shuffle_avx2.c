@@ -100,6 +100,11 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle2x_muladd_x_avx2(const void *HEDLEY
 		#undef JOIN_VEC
 	} else {
 		gf16_shuffle2x_setup_vec_avx2(scratch, coefficients[0], &shufNormLoA, &shufSwapLoA, &shufNormHiA, &shufSwapHiA);
+		// MSVC, in Debug mode, complains about unintialized variables, so set it to something...
+		shufNormLoB = _mm256_undefined_si256();
+		shufSwapLoB = _mm256_undefined_si256();
+		shufNormHiB = _mm256_undefined_si256();
+		shufSwapHiB = _mm256_undefined_si256();
 	}
 	
 	if(doPrefetch) {
