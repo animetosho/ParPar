@@ -136,7 +136,7 @@ var opts = {
 		type: 'int'
 	},
 	'min-chunk-size': {
-		type: 'size',
+		type: 'size0',
 		map: 'minChunkSize'
 	},
 	'seq-read-size': {
