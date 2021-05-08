@@ -65,7 +65,13 @@ static HEDLEY_ALWAYS_INLINE void vst1q_u8_x2_align(uint8_t* p, uint8x16x2_t data
 
 // copying prepare block for both shuffle/clmul
 static HEDLEY_ALWAYS_INLINE void gf16_prepare_block_neon(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src) {
+#if defined(__clang__) && !defined(__aarch64__)
+	// ARMv7 Clang seems to crash here with vst2q_u8_x2 for some reason, so use a different approach
+	// vst2q_u8_x2 seems to work fine in Clang 8
+	vst2q_u8((uint8_t*)__builtin_assume_aligned(dst, 32), vld2q_u8((uint8_t*)__builtin_assume_aligned(src, 32)));
+#else
 	vst1q_u8_x2_align(dst, vld1q_u8_x2_align(src));
+#endif
 }
 // final block
 static HEDLEY_ALWAYS_INLINE void gf16_prepare_blocku_neon(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t remaining) {
