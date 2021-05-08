@@ -84,14 +84,14 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle_neon_calc_tables(
 	tbl_h[0].val[1] = vget_high_u8(tbl.val[1]);
 	
 # ifdef GF16_POLYNOMIAL_SIMPLE
-	uint8x8x2_t poly_l = {{vget_low_u8(polyIn), vget_high_u8(polyIn)}};
+	poly8x16_t poly_l = vreinterpretq_p8_u8(polyIn);
 	#define MUL16(p, c) \
 		ri = vshrq_n_u8(tbl.val[1], 4); \
 		rl = vshlq_n_u8(tbl.val[0], 4); \
 		rh = veorq_u8(tbl.val[1], ri); \
 		rh = vshlq_n_u8(rh, 4); \
 		tbl.val[1] = vsriq_n_u8(rh, tbl.val[0], 4); \
-		tbl.val[0] = veorq_u8(rl, vqtbl1q_u8(poly_l, ri)); \
+		tbl.val[0] = veorq_u8(rl, vreinterpretq_u8_p8(vmulq_p8(poly_l, vreinterpretq_p8_u8(ri)))); \
 		tbl_l[c].val[0] = vget_low_u8(tbl.val[0]); \
 		tbl_l[c].val[1] = vget_high_u8(tbl.val[0]); \
 		tbl_h[c].val[0] = vget_low_u8(tbl.val[1]); \
@@ -339,11 +339,16 @@ int gf16_shuffle_finish_packed_cksum_neon(void *HEDLEY_RESTRICT dst, const void 
 
 void* gf16_shuffle_init_arm(int polynomial) {
 #if defined(__ARM_NEON)
-#ifdef GF16_POLYNOMIAL_SIMPLE
-	if((polynomial | 0x1f) != 0x1101f) return NULL;
-#endif
-	uint8x16x2_t poly;
 	uint8_t* ret;
+# ifdef GF16_POLYNOMIAL_SIMPLE
+	if((polynomial | 0x1f) != 0x1101f) return NULL;
+#  ifndef __aarch64__
+	ALIGN_ALLOC(ret, sizeof(uint8x16_t), 16);
+	vst1q_u8_align(ret, vdupq_n_u8(polynomial & 0x1f), 16);
+	return ret;
+#  endif
+# endif
+	uint8x16x2_t poly;
 	for(int i=0; i<16; i++) {
 		int p = 0;
 		if(i & 8) p ^= polynomial << 3;
@@ -354,13 +359,13 @@ void* gf16_shuffle_init_arm(int polynomial) {
 		poly.val[0][i] = p & 0xff;
 		poly.val[1][i] = (p>>8) & 0xff;
 	}
-#ifdef GF16_POLYNOMIAL_SIMPLE
+# ifdef GF16_POLYNOMIAL_SIMPLE
 	ALIGN_ALLOC(ret, sizeof(uint8x16_t), 16);
 	vst1q_u8_align(ret, poly.val[0], 16);
-#else
+# else
 	ALIGN_ALLOC(ret, sizeof(uint8x16x2_t), 32);
 	vst1q_u8_x2_align(ret, poly);
-#endif
+# endif
 	return ret;
 	
 	/*
