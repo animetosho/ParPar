@@ -41,7 +41,8 @@ enum Galois16Methods {
 	GF16_AFFINE_AVX512,
 	GF16_AFFINE2X_GFNI,
 	GF16_AFFINE2X_AVX2,
-	GF16_AFFINE2X_AVX512
+	GF16_AFFINE2X_AVX512,
+	GF16_CLMUL_NEON
 	// TODO: consider non-transforming shuffle/affine
 };
 static const char* Galois16MethodsText[] = {
@@ -66,7 +67,8 @@ static const char* Galois16MethodsText[] = {
 	"Affine (GFNI+AVX512)",
 	"Affine2x (GFNI)",
 	"Affine2x (GFNI+AVX2)",
-	"Affine2x (GFNI+AVX512)"
+	"Affine2x (GFNI+AVX512)",
+	"CLMul (NEON)"
 };
 
 typedef struct {

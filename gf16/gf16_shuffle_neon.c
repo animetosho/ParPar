@@ -1,59 +1,17 @@
 
-#include "gf16_global.h"
-#include "platform.h"
+#include "gf16_neon_common.h"
+#if defined(__ARM_NEON)
+int gf16_available_neon = 1;
+#else
+int gf16_available_neon = 0;
+#endif
+
+// EOR3 could be useful, but few CPUs support it (Apple M1, ARM V1); supported in SVE2 instead, so perhaps defer this to an SVE implementation
+// BCAX might also be useful for a 5+5+5+1 bit approach (or maybe rely on predicated EOR)
+
 
 
 #if defined(__ARM_NEON)
-# include <arm_neon.h>
-# include "gf16_checksum_arm.h"
-# ifdef _M_ARM64 /* MSVC header */
-#  include <arm64_neon.h>
-# endif
-int gf16_shuffle_available_neon = 1;
-#else
-int gf16_shuffle_available_neon = 0;
-#endif
-
-
-#if defined(__ARM_NEON)
-
-#ifndef __aarch64__
-#define vqtbl1q_u8(tbl, v) vcombine_u8(vtbl2_u8(tbl, vget_low_u8(v)),   \
-                                       vtbl2_u8(tbl, vget_high_u8(v)))
-typedef uint8x8x2_t qtbl_t;
-#else
-typedef uint8x16_t qtbl_t;
-#endif
-
-
-#ifdef _MSC_VER
-# define vld1_u8_align vld1_u8_ex
-# define vld1q_u8_align vld1q_u8_ex
-#elif defined(__GNUC__)
-# define vld1_u8_align(p, n) vld1_u8((uint8_t*)__builtin_assume_aligned(p, n))
-# define vld1q_u8_align(p, n) vld1q_u8((uint8_t*)__builtin_assume_aligned(p, n))
-#else
-# define vld1_u8_align(p, n) vld1_u8(p)
-# define vld1q_u8_align(p, n) vld1q_u8(p)
-#endif
-
-// for compilers that lack these functions
-#if defined(__clang__) || (defined(__GNUC__) && (defined(__aarch64__) && __GNUC__ >= 9))
-# define vld1q_u8_x2_align(p) vld1q_u8_x2((uint8_t*)__builtin_assume_aligned(p, 32))
-# define vst1q_u8_x2_align(p, data) vst1q_u8_x2((uint8_t*)__builtin_assume_aligned(p, 32), data)
-#else
-HEDLEY_ALWAYS_INLINE uint8x16x2_t vld1q_u8_x2_align(const uint8_t* p) {
-	uint8x16x2_t r;
-	r.val[0] = vld1q_u8_align(p, 32);
-	r.val[1] = vld1q_u8_align(p+16, 16);
-	return r;
-}
-HEDLEY_ALWAYS_INLINE void vst1q_u8_x2_align(uint8_t* p, uint8x16x2_t data) {
-	vst1q_u8(__builtin_assume_aligned(p, 32), data.val[0]);
-	vst1q_u8(__builtin_assume_aligned(p+16, 16), data.val[1]);
-}
-#endif
-
 
 static HEDLEY_ALWAYS_INLINE void gf16_shuffle_neon_calc_tables(uint8x16x2_t polyIn, uint16_t val, qtbl_t* tbl_l, qtbl_t* tbl_h) {
 	uint8x16_t ri;
@@ -161,13 +119,6 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle_neon_round(uint8x16x2_t va, uint8x
 	*rh = veorq_u8(*rh, vqtbl1q_u8(tbl_h[3], va.val[1]));
 }
 
-# define CACHELINE_SIZE 64
-# ifdef _MSC_VER
-#  define PREFETCH_MEM(addr, rw) __prefetch(addr)
-// TODO: ARM64 intrin is a little different
-# else
-#  define PREFETCH_MEM(addr, rw) __builtin_prefetch(addr, rw, 2)
-# endif
 #include "gf16_muladd_multi.h"
 static HEDLEY_ALWAYS_INLINE void gf16_shuffle_muladd_x_neon(
 	const void *HEDLEY_RESTRICT scratch,
@@ -239,7 +190,6 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle_muladd_x_neon(
 		}
 	}
 }
-# undef PREFETCH_MEM
 
 #endif /*defined(__ARM_NEON)*/
 
@@ -306,20 +256,10 @@ void gf16_shuffle_muladd_multi_packpf_neon(const void *HEDLEY_RESTRICT scratch, 
 }
 
 
-#if defined(__ARM_NEON)
-static HEDLEY_ALWAYS_INLINE void gf16_shuffle_prepare_block_neon(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src) {
-	vst1q_u8_x2_align(dst, vld1q_u8_x2_align(src));
-}
-// final block
-static HEDLEY_ALWAYS_INLINE void gf16_shuffle_prepare_blocku_neon(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t remaining) {
-	memcpy(dst, src, remaining);
-	memset(dst + remaining, 0, sizeof(uint8x16x2_t) - remaining);
-}
-#endif
 
 void gf16_shuffle_prepare_packed_neon(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen, size_t sliceLen, unsigned inputPackSize, unsigned inputNum, size_t chunkLen) {
 #if defined(__ARM_NEON) && defined(__aarch64__)
-	gf16_prepare_packed(dst, src, srcLen, sliceLen, sizeof(uint8x16x2_t), &gf16_shuffle_prepare_block_neon, &gf16_shuffle_prepare_blocku_neon, inputPackSize, inputNum, chunkLen, 2, NULL, NULL, NULL, NULL, NULL);
+	gf16_prepare_packed(dst, src, srcLen, sliceLen, sizeof(uint8x16x2_t), &gf16_prepare_block_neon, &gf16_prepare_blocku_neon, inputPackSize, inputNum, chunkLen, 2, NULL, NULL, NULL, NULL, NULL);
 #else
 	UNUSED(dst); UNUSED(src); UNUSED(srcLen); UNUSED(sliceLen); UNUSED(inputPackSize); UNUSED(inputNum); UNUSED(chunkLen);
 #endif
@@ -328,7 +268,7 @@ void gf16_shuffle_prepare_packed_neon(void *HEDLEY_RESTRICT dst, const void *HED
 void gf16_shuffle_prepare_packed_cksum_neon(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen, size_t sliceLen, unsigned inputPackSize, unsigned inputNum, size_t chunkLen) {
 #if defined(__ARM_NEON)
 	int16x8_t checksum = vdupq_n_s16(0);
-	gf16_prepare_packed(dst, src, srcLen, sliceLen, sizeof(uint8x16x2_t), &gf16_shuffle_prepare_block_neon, &gf16_shuffle_prepare_blocku_neon, inputPackSize, inputNum, chunkLen,
+	gf16_prepare_packed(dst, src, srcLen, sliceLen, sizeof(uint8x16x2_t), &gf16_prepare_block_neon, &gf16_prepare_blocku_neon, inputPackSize, inputNum, chunkLen,
 #ifdef __aarch64__
 	2
 #else
@@ -343,7 +283,7 @@ void gf16_shuffle_prepare_packed_cksum_neon(void *HEDLEY_RESTRICT dst, const voi
 int gf16_shuffle_finish_packed_cksum_neon(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t sliceLen, unsigned numOutputs, unsigned outputNum, size_t chunkLen) {
 #if defined(__ARM_NEON)
 	int16x8_t checksum = vdupq_n_s16(0);
-	return gf16_finish_packed(dst, src, sliceLen, sizeof(uint8x16x2_t), &gf16_shuffle_prepare_block_neon, numOutputs, outputNum, chunkLen, 1, &checksum, &gf16_checksum_block_neon, &gf16_checksum_finish_neon);
+	return gf16_finish_packed(dst, src, sliceLen, sizeof(uint8x16x2_t), &gf16_prepare_block_neon, numOutputs, outputNum, chunkLen, 1, &checksum, &gf16_checksum_block_neon, &gf16_checksum_finish_neon);
 #else
 	UNUSED(dst); UNUSED(src); UNUSED(sliceLen); UNUSED(numOutputs); UNUSED(outputNum); UNUSED(chunkLen);
 	return 0;

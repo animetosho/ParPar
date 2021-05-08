@@ -5,6 +5,7 @@
 extern "C" {
 	#include "gf16_lookup.h"
 	#include "gf16_shuffle.h"
+	#include "gf16_clmul.h"
 	#include "gf16_affine.h"
 	#include "gf16_xor.h"
 }
@@ -391,7 +392,7 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 			scratch = gf16_shuffle_init_arm(GF16_POLYNOMIAL);
 			// TODO: set _add
 			
-			if(!gf16_shuffle_available_neon) {
+			if(!gf16_available_neon) {
 				setupMethod(GF16_AUTO);
 				return;
 			}
@@ -408,6 +409,31 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 			#endif
 			prepare_packed_cksum = &gf16_shuffle_prepare_packed_cksum_neon;
 			finish_packed_cksum = &gf16_shuffle_finish_packed_cksum_neon;
+		break;
+		
+		case GF16_CLMUL_NEON:
+			_info.alignment = 32; // presumably double-loads work best when aligned to 32 instead of 16?
+			_info.stride = 32;
+			scratch = gf16_clmul_init_arm(GF16_POLYNOMIAL);
+			// TODO: set _add
+			
+			if(!gf16_available_neon || !scratch) {
+				setupMethod(GF16_AUTO);
+				return;
+			}
+			_mul_add = &gf16_clmul_muladd_neon;
+			_mul_add_multi = &gf16_clmul_muladd_multi_neon;
+			_mul_add_multi_packed = &gf16_clmul_muladd_multi_packed_neon;
+			// TODO: on Cortex A53, prefetching seems to be slower, so disabled for now
+			//_mul_add_multi_packpf = &gf16_clmul_muladd_multi_packpf_neon;
+			prepare_packed = &gf16_clmul_prepare_packed_neon;
+			#ifdef __aarch64__
+			_info.idealInputMultiple = 6;
+			#else
+			_info.idealInputMultiple = 3;
+			#endif
+			prepare_packed_cksum = &gf16_clmul_prepare_packed_cksum_neon;
+			finish_packed_cksum = &gf16_shuffle_finish_packed_cksum_neon; // re-use shuffle routine
 		break;
 		
 		case GF16_AFFINE_AVX512:
@@ -838,8 +864,12 @@ Galois16Methods Galois16Mul::default_method(size_t regionSizeHint, unsigned /*ou
 		return GF16_XOR_SSE2;
 #endif
 #ifdef PLATFORM_ARM
-	if(gf16_shuffle_available_neon && caps.hasNEON)
+	if(gf16_available_neon && caps.hasNEON)
+# ifdef __aarch64__
 		return GF16_SHUFFLE_NEON;
+# else
+		return GF16_CLMUL_NEON;
+# endif
 #endif
 	
 	return GF16_LOOKUP;
@@ -900,8 +930,10 @@ std::vector<Galois16Methods> Galois16Mul::availableMethods(bool checkCpuid) {
 	}
 #endif
 #ifdef PLATFORM_ARM
-	if(gf16_shuffle_available_neon && caps.hasNEON)
+	if(gf16_available_neon && caps.hasNEON) {
 		ret.push_back(GF16_SHUFFLE_NEON);
+		ret.push_back(GF16_CLMUL_NEON);
+	}
 #endif
 	
 	return ret;

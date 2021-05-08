@@ -406,7 +406,8 @@
       "type": "static_library",
       "defines": ["NDEBUG"],
       "sources": [
-        "gf16/gf16_shuffle_neon.c"
+        "gf16/gf16_shuffle_neon.c",
+        "gf16/gf16_clmul_neon.c"
       ],
       "cflags": ["-Wno-unused-function"],
       "xcode_settings": {

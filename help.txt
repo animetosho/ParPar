@@ -194,10 +194,11 @@ Performance Options:
                              `--proc-batch-size`
        --method              Algorithm for performing GF multiplies. Process
                              can crash if CPU does not support selected method.
-                             Choices are:
+                             Choices are (all platforms):
                                  lh_lookup: split 2x 8-bit scalar table lookup
-                                 lh_lookup-sse: SSE2 variant of above
                                  3p_lookup: split biword 3x 11/10-bit scalar table lookup
+                             x86/x64 only choices:
+                                 lh_lookup-sse: SSE2 variant of lh_lookup
                                  xor-sse: vector XOR bit dependencies (SSE2)
                                  xorjit-sse: JIT variant of above
                                  xorjit-avx2: AVX2 x64 variant of above
@@ -207,7 +208,6 @@ Performance Options:
                                  shuffle-avx2: AVX2 variant of above
                                  shuffle-avx512: AVX512BW variant of above
                                  shuffle-vbmi: split 3x 6-bit vector table lookup (AVX512VBMI)
-                                 shuffle-neon: NEON variant of shuffle-sse
                                  shuffle2x-avx2: half width variant of shuffle-avx2
                                  shuffle2x-avx512: half width variant of shuffle-avx512
                                  affine-sse: split 2x 8-bit vector XOR dependencies (GFNI)
@@ -216,6 +216,9 @@ Performance Options:
                                  affine2x-sse: half width variant of affine-sse
                                  affine2x-avx2: half width variant of affine-avx2
                                  affine2x-avx512: half width variant of affine-avx512
+                             ARMv7/AArch64 only choices:
+                                 shuffle-neon: NEON variant of shuffle-sse
+                                 clmul-neon: split 8-bit polynomial multiplication (NEON)
                              Default is auto-detected.
 
 UI Options:
