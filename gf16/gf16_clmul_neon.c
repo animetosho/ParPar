@@ -57,9 +57,10 @@ static HEDLEY_ALWAYS_INLINE void gf16_clmul_neon_round1(const void* src, poly16x
 	*high1 = pmull_low(data.val[1], coeff[1]);
 	*high2 = pmull_high(data.val[1], coeff[1]);
 	
+	// TODO: try idea of forcing an EOR via asm volatile
+	
 /*  Alternative approach for AArch64, which only needs one register per region at the expense of 2 additional instructions; unfortunately compilers won't heed our aim
 	// the `midCoeff` approach can also work with AArch32
-	coeff_t midCoeff = veorq_p8(coeff[0], swapCoeff);
 	coeff_t swapCoeff = vextq_p8(coeff[0], coeff[0], 8);
 	coeff_t midCoeff = veorq_p8(coeff[0], swapCoeff);
 	
@@ -84,7 +85,16 @@ static HEDLEY_ALWAYS_INLINE void gf16_clmul_neon_round(const void* src, poly16x8
 	*high2 = veorq_p16(*high2, _high2);
 }
 
-static HEDLEY_ALWAYS_INLINE void gf16_clmul_neon_reduction(poly16x8_t* low1, const poly16x8_t* low2, const poly16x8_t* mid1, const poly16x8_t* mid2, poly16x8_t* high1, const poly16x8_t* high2, qtbl_t poly) {
+// on AArch64, do multiplies using TBL; on some uArchs, PMUL is very slow whilst TBL seems to always be decent
+#ifdef __aarch64__
+# define clmul_red_lo vqtbl1q_u8
+#else
+static HEDLEY_ALWAYS_INLINE uint8x16_t clmul_red_lo(uint8x16_t a, uint8x16_t b) {
+	return vreinterpretq_u8_p8(vmulq_p8(vreinterpretq_p8_u8(a), vreinterpretq_p8_u8(b)));
+}
+#endif
+
+static HEDLEY_ALWAYS_INLINE void gf16_clmul_neon_reduction(poly16x8_t* low1, const poly16x8_t* low2, const poly16x8_t* mid1, const poly16x8_t* mid2, poly16x8_t* high1, const poly16x8_t* high2, uint8x16_t poly) {
 	// put data in proper form
 	uint8x16x2_t hibytes = vuzpq_u8(vreinterpretq_u8_p16(*high1), vreinterpretq_u8_p16(*high2));
 	uint8x16x2_t lobytes = vuzpq_u8(vreinterpretq_u8_p16(*low1), vreinterpretq_u8_p16(*low2));
@@ -100,7 +110,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_clmul_neon_reduction(poly16x8_t* low1, con
 	// for 0x1100b polynomial, we can abuse the 2nd '1' by EORing the top nibble with the next - this saves a 2nd TBL lookup
 	// ^ this fits in nicely with 4-bit lookups; the trick doesn't work with 5-bit lookups
 	uint8x16_t red = vshrq_n_u8(hibytes.val[1], 4);
-	uint8x16_t rem = vqtbl1q_u8(poly, red);
+	uint8x16_t rem = clmul_red_lo(poly, red);
 	lobytes.val[1] = veorq_u8(lobytes.val[1], vshlq_n_u8(rem, 4));
 	hibytes.val[0] = veorq_u8(hibytes.val[0], vshrq_n_u8(rem, 4));
 	
@@ -111,13 +121,13 @@ static HEDLEY_ALWAYS_INLINE void gf16_clmul_neon_reduction(poly16x8_t* low1, con
 	// we do this on ARMv7 due to there being fewer 128-bit registers available
 	red = veorq_u8(vsliq_n_u8(red, red, 4), hibytes.val[1]);
 #endif
-	rem = vqtbl1q_u8(poly, red);
+	rem = clmul_red_lo(poly, red);
 	lobytes.val[1] = veorq_u8(lobytes.val[1], rem);
 	
 	// repeat reduction for next byte
 	uint8x16_t hibyte0_top = vshrq_n_u8(hibytes.val[0], 4);
 	red = veorq_u8(red, hibyte0_top);
-	rem = vqtbl1q_u8(poly, red);
+	rem = clmul_red_lo(poly, red);
 	uint8x16_t lobyte1_merge = vshrq_n_u8(rem, 4);
 	lobytes.val[0] = veorq_u8(lobytes.val[0], vshlq_n_u8(rem, 4));
 	
@@ -126,7 +136,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_clmul_neon_reduction(poly16x8_t* low1, con
 #else
 	red = veorq_u8(vsliq_n_u8(red, hibyte0_top, 4), hibytes.val[0]);
 #endif
-	rem = vqtbl1q_u8(poly, red);
+	rem = clmul_red_lo(poly, red);
 	lobytes.val[0] = veorq_u8(lobytes.val[0], rem);
 	lobytes.val[1] = veorq_u8(lobytes.val[1], vsliq_n_u8(lobyte1_merge, red, 4));
 	
@@ -150,14 +160,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_clmul_muladd_x_neon(
 	const uint16_t *HEDLEY_RESTRICT coefficients, const int doPrefetch, const char* _pf
 ) {
 	GF16_MULADD_MULTI_SRC_UNUSED(CLMUL_NUM_REGIONS);
-#ifdef __aarch64__
-	qtbl_t poly = vld1q_u8_align(scratch, 16);
-#else
-	qtbl_t poly;
-	uint8x16_t _poly = vld1q_u8_align(scratch, 16);
-	poly.val[0] = vget_low_u8(_poly);
-	poly.val[1] = vget_high_u8(_poly);
-#endif
+	uint8x16_t poly = vld1q_u8_align(scratch, 16);
 	
 	coeff_t coeff[CLMUL_COEFF_PER_REGION*CLMUL_NUM_REGIONS];
 	for(int src=0; src<srcCount; src++) {
@@ -336,6 +339,7 @@ void* gf16_clmul_init_arm(int polynomial) {
 	uint8x16_t poly;
 	uint8_t* ret;
 	ALIGN_ALLOC(ret, sizeof(uint8x16_t), 16);
+#ifdef __aarch64__
 	for(int i=0; i<16; i++) {
 		int p = 0;
 		if(i & 8) p ^= polynomial << 3;
@@ -345,6 +349,9 @@ void* gf16_clmul_init_arm(int polynomial) {
 		
 		poly[i] = p & 0xff;
 	}
+#else
+	poly = vdupq_n_u8(polynomial & 0x1f);
+#endif
 	vst1q_u8(ret, poly);
 	return ret;
 #else
