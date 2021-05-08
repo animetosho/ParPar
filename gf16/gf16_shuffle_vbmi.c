@@ -203,7 +203,11 @@ static HEDLEY_ALWAYS_INLINE void generate_remaining_lookup(__m512i mulLo, __m512
 	*hi1 = _mm512_shuffle_i32x4(*hi1, *hi1, 0);
 	
 	// then mul above by 16 to get 0,1024,2048..64512
+#ifndef GF16_POLYNOMIAL_SIMPLE
 	mul16_vec4x(_mm512_shuffle_i32x4(mulLo, mulLo, 0), _mm512_shuffle_i32x4(mulHi, mulHi, 0), tmpLo, tmpHi, lo2, hi2);
+#else
+	mul16_vec4x(_mm512_shuffle_i32x4(mulLo, mulLo, 0), _mm512_setzero_si512(), tmpLo, tmpHi, lo2, hi2);
+#endif
 }
 static HEDLEY_ALWAYS_INLINE void gf16_shuffle_mul_vbmi_round(__m512i ta, __m512i tb, __m512i lo0, __m512i hi0, __m512i lo1, __m512i hi1, __m512i lo2, __m512i hi2, __m512i* tpl, __m512i* tph) {
 	// get straddled component (bottom 2 bits of ta, followed by top 2 bits from tb)

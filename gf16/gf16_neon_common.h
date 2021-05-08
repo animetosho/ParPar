@@ -27,12 +27,15 @@ typedef uint8x16_t qtbl_t;
 # ifdef _MSC_VER
 #  define vld1_u8_align vld1_u8_ex
 #  define vld1q_u8_align vld1q_u8_ex
+#  define vst1q_u8_align vst1q_u8_ex
 # elif defined(__GNUC__)
 #  define vld1_u8_align(p, n) vld1_u8((uint8_t*)__builtin_assume_aligned(p, n))
 #  define vld1q_u8_align(p, n) vld1q_u8((uint8_t*)__builtin_assume_aligned(p, n))
+#  define vst1q_u8_align(p, d, n) vst1q_u8((uint8_t*)__builtin_assume_aligned(p, n), d)
 # else
 #  define vld1_u8_align(p, n) vld1_u8(p)
 #  define vld1q_u8_align(p, n) vld1q_u8(p)
+#  define vst1q_u8_align(p, d, n) vst1q_u8(p)
 # endif
 
 // for compilers that lack these functions
@@ -47,8 +50,8 @@ static HEDLEY_ALWAYS_INLINE uint8x16x2_t vld1q_u8_x2_align(const uint8_t* p) {
 	return r;
 }
 static HEDLEY_ALWAYS_INLINE void vst1q_u8_x2_align(uint8_t* p, uint8x16x2_t data) {
-	vst1q_u8(__builtin_assume_aligned(p, 32), data.val[0]);
-	vst1q_u8(__builtin_assume_aligned(p+16, 16), data.val[1]);
+	vst1q_u8_align(p, data.val[0], 32);
+	vst1q_u8_align(p+16, data.val[1], 16);
 }
 # endif
 

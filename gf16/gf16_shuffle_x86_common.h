@@ -4,6 +4,11 @@
 #include "gf16_global.h"
 #include "platform.h"
 
+#if (GF16_POLYNOMIAL | 0x1f) == 0x1101f
+// enable special routine if targeting our default 0x1100b polynomial
+# define GF16_POLYNOMIAL_SIMPLE
+#endif
+
 #define GF16_MULTBY_TWO_X2(p) ((((p) << 1) & 0xffffffff) ^ ((GF16_POLYNOMIAL ^ ((GF16_POLYNOMIAL&0xffff) << 16)) & -((p) >> 31)))
 #ifdef __SSSE3__
 static HEDLEY_ALWAYS_INLINE void initial_mul_vector(uint16_t val, __m128i* prod, __m128i* prod4) {
@@ -87,6 +92,9 @@ static HEDLEY_ALWAYS_INLINE _mword separate_low_high(_mword data) {
 #if MWORD_SIZE >= 32
 static HEDLEY_ALWAYS_INLINE void mul16_vec2x(__m256i mulLo, __m256i mulHi, __m256i srcLo, __m256i srcHi, __m256i* dstLo, __m256i *dstHi) {
 	__m256i ti = _mm256_and_si256(_mm256_srli_epi16(srcHi, 4), _mm256_set1_epi8(0xf));
+#ifdef GF16_POLYNOMIAL_SIMPLE
+	srcHi = _mm256_xor_si256(srcHi, ti);
+#endif
 #if MWORD_SIZE == 64
 	__m256i th = _mm256_ternarylogic_epi32(
 		_mm256_srli_epi16(srcLo, 4),
@@ -106,7 +114,12 @@ static HEDLEY_ALWAYS_INLINE void mul16_vec2x(__m256i mulLo, __m256i mulHi, __m25
 	th = _mm256_or_si256(th, _mm256_and_si256(_mm256_srli_epi16(srcLo, 4), _mm256_set1_epi8(0xf)));
 	*dstLo = _mm256_xor_si256(tl, _mm256_shuffle_epi8(mulLo, ti));
 #endif
+#ifdef GF16_POLYNOMIAL_SIMPLE
+	*dstHi = th;
+	UNUSED(mulHi);
+#else
 	*dstHi = _mm256_xor_si256(th, _mm256_shuffle_epi8(mulHi, ti));
+#endif
 }
 
 static HEDLEY_ALWAYS_INLINE __m256i gf16_vec256_mul2(__m256i v) {
@@ -137,6 +150,9 @@ static HEDLEY_ALWAYS_INLINE __m256i gf16_vec256_mul2(__m256i v) {
 #endif
 static HEDLEY_ALWAYS_INLINE void mul16_vec128(__m128i mulLo, __m128i mulHi, __m128i srcLo, __m128i srcHi, __m128i* dstLo, __m128i *dstHi) {
 	__m128i ti = _MM128_SRLI4_EPI8(srcHi);
+#ifdef GF16_POLYNOMIAL_SIMPLE
+	srcHi = _mm_xor_si128(srcHi, ti);
+#endif
 #if MWORD_SIZE == 64
 	__m128i th = _mm_ternarylogic_epi32(
 		_mm_srli_epi16(srcLo, 4),
@@ -156,13 +172,21 @@ static HEDLEY_ALWAYS_INLINE void mul16_vec128(__m128i mulLo, __m128i mulHi, __m1
 	th = _mm_or_si128(th, _MM128_SRLI4_EPI8(srcLo));
 	*dstLo = _mm_xor_si128(tl, _mm_shuffle_epi8(mulLo, ti));
 #endif
+#ifdef GF16_POLYNOMIAL_SIMPLE
+	*dstHi = th;
+	UNUSED(mulHi);
+#else
 	*dstHi = _mm_xor_si128(th, _mm_shuffle_epi8(mulHi, ti));
+#endif
 }
 
 
 #if MWORD_SIZE == 64
 static HEDLEY_ALWAYS_INLINE void mul16_vec4x(__m512i mulLo, __m512i mulHi, __m512i srcLo, __m512i srcHi, __m512i* dstLo, __m512i *dstHi) {
 	__m512i ti = _mm512_and_si512(_mm512_srli_epi16(srcHi, 4), _mm512_set1_epi8(0xf));
+#ifdef GF16_POLYNOMIAL_SIMPLE
+	srcHi = _mm512_xor_si512(srcHi, ti);
+#endif
 	__m512i th = _mm512_ternarylogic_epi32(
 		_mm512_srli_epi16(srcLo, 4),
 		_mm512_set1_epi8(0xf),
@@ -175,7 +199,12 @@ static HEDLEY_ALWAYS_INLINE void mul16_vec4x(__m512i mulLo, __m512i mulHi, __m51
 		_mm512_slli_epi16(srcLo, 4),
 		0xD2
 	);
+#ifdef GF16_POLYNOMIAL_SIMPLE
+	*dstHi = th;
+	UNUSED(mulHi);
+#else
 	*dstHi = _mm512_xor_si512(th, _mm512_shuffle_epi8(mulHi, ti));
+#endif
 }
 static HEDLEY_ALWAYS_INLINE __m512i separate_low_high512(__m512i v) {
 	return _mm512_shuffle_epi8(v, _mm512_set4_epi32(0x0f0d0b09, 0x07050301, 0x0e0c0a08, 0x06040200));

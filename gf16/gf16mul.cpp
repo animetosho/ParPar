@@ -227,6 +227,10 @@ void Galois16Mul::addGeneric(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTR
 void Galois16Mul::setupMethod(Galois16Methods method) {
 	if(method == GF16_AUTO)
 		method = default_method();
+	if(scratch) {
+		ALIGN_FREE(scratch);
+		scratch = NULL;
+	}
 	
 	_info.idealInputMultiple = 1;
 	_info.prefetchDownscale = 0;
@@ -242,7 +246,7 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 			
 			switch(method) {
 				case GF16_SHUFFLE_SSSE3:
-					if(!gf16_shuffle_available_ssse3) {
+					if(!gf16_shuffle_available_ssse3 || !scratch) {
 						setupMethod(GF16_AUTO);
 						return;
 					}
@@ -257,7 +261,7 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 					finish_packed_cksum = &gf16_shuffle_finish_packed_cksum_ssse3;
 				break;
 				case GF16_SHUFFLE_AVX:
-					if(!gf16_shuffle_available_avx) {
+					if(!gf16_shuffle_available_avx || !scratch) {
 						setupMethod(GF16_AUTO);
 						return;
 					}
@@ -272,7 +276,7 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 					finish_packed_cksum = &gf16_shuffle_finish_packed_cksum_avx;
 				break;
 				case GF16_SHUFFLE_AVX2:
-					if(!gf16_shuffle_available_avx2) {
+					if(!gf16_shuffle_available_avx2 || !scratch) {
 						setupMethod(GF16_AUTO);
 						return;
 					}
@@ -288,7 +292,7 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 					_info.alignment = 32;
 				break;
 				case GF16_SHUFFLE_AVX512:
-					if(!gf16_shuffle_available_avx512) {
+					if(!gf16_shuffle_available_avx512 || !scratch) {
 						setupMethod(GF16_AUTO);
 						return;
 					}
@@ -315,11 +319,11 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 			_info.stride = _info.alignment*2;
 		break;
 		case GF16_SHUFFLE_VBMI:
-			if(!gf16_shuffle_available_vbmi) {
+			scratch = gf16_shuffle_init_vbmi(GF16_POLYNOMIAL);
+			if(!gf16_shuffle_available_vbmi || !scratch) {
 				setupMethod(GF16_AUTO);
 				return;
 			}
-			scratch = gf16_shuffle_init_vbmi(GF16_POLYNOMIAL);
 			_mul = &gf16_shuffle_mul_vbmi;
 			_mul_add = &gf16_shuffle_muladd_vbmi;
 			_mul_add_pf = &gf16_shuffle_muladd_prefetch_vbmi;
@@ -341,7 +345,7 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 		break;
 		case GF16_SHUFFLE2X_AVX512:
 			scratch = gf16_shuffle_init_x86(GF16_POLYNOMIAL);
-			if(!gf16_shuffle_available_avx512) {
+			if(!gf16_shuffle_available_avx512 || !scratch) {
 				setupMethod(GF16_AUTO);
 				return;
 			}
@@ -364,7 +368,7 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 		break;
 		case GF16_SHUFFLE2X_AVX2:
 			scratch = gf16_shuffle_init_x86(GF16_POLYNOMIAL);
-			if(!gf16_shuffle_available_avx2) {
+			if(!gf16_shuffle_available_avx2 || !scratch) {
 				setupMethod(GF16_AUTO);
 				return;
 			}
@@ -392,7 +396,7 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 			scratch = gf16_shuffle_init_arm(GF16_POLYNOMIAL);
 			// TODO: set _add
 			
-			if(!gf16_available_neon) {
+			if(!gf16_available_neon || !scratch) {
 				setupMethod(GF16_AUTO);
 				return;
 			}

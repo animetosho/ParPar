@@ -81,8 +81,12 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle_muladd_x_avx512(
 	GF16_MULADD_MULTI_SRC_UNUSED(3);
 	__m512i polyl, polyh;
 	if(srcCount > 1) {
-		polyl = _mm512_broadcast_i32x4(_mm_load_si128((__m128i*)scratch + 1));
-		polyh = _mm512_broadcast_i32x4(_mm_load_si128((__m128i*)scratch));
+		polyl = _mm512_broadcast_i32x4(_mm_load_si128((__m128i*)scratch));
+#ifndef GF16_POLYNOMIAL_SIMPLE
+		polyh = _mm512_broadcast_i32x4(_mm_load_si128((__m128i*)scratch + 1));
+#else
+		polyh = _mm512_setzero_si512();
+#endif
 	}
 	
 	__m512i lowA0, lowA1, lowA2, lowA3, highA0, highA1, highA2, highA3;
@@ -246,8 +250,12 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle2x_muladd_x_avx512(
 	GF16_MULADD_MULTI_SRC_UNUSED(6);
 	__m512i polyl, polyh;
 	if(srcCount > 1) {
-		polyl = _mm512_broadcast_i32x4(_mm_load_si128((__m128i*)scratch + 1));
-		polyh = _mm512_broadcast_i32x4(_mm_load_si128((__m128i*)scratch));
+		polyl = _mm512_broadcast_i32x4(_mm_load_si128((__m128i*)scratch));
+#ifndef GF16_POLYNOMIAL_SIMPLE
+		polyh = _mm512_broadcast_i32x4(_mm_load_si128((__m128i*)scratch + 1));
+#else
+		polyh = _mm512_setzero_si512();
+#endif
 	}
 	
 	__m512i shufNormLoA, shufNormHiA, shufSwapLoA, shufSwapHiA;

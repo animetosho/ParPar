@@ -82,23 +82,43 @@ int _FN(gf16_shuffle_finish_packed_cksum)(void *HEDLEY_RESTRICT dst, const void 
 
 #if MWORD_SIZE >= 32
 # ifdef _AVAILABLE
+#  ifdef GF16_POLYNOMIAL_SIMPLE
+static HEDLEY_ALWAYS_INLINE __m256i mul16_vec256(__m128i poly, __m256i src) {
+	__m256i prodHi = _mm256_andnot_si256(_mm256_set1_epi8(0xf), src);
+	__m256i idx = _mm256_srli_epi16(prodHi, 4);
+	__m256i merge = _mm256_inserti128_si256(prodHi, _mm_shuffle_epi8(poly, _mm256_castsi256_si128(idx)), 1);
+#   if MWORD_SIZE == 64
+	src = _mm256_ternarylogic_epi32(
+		zext128_256(_mm256_extracti128_si256(idx, 1)),
+		_mm256_set1_epi8(0xf),
+		_mm256_slli_epi16(src, 4),
+		0xF2
+	);
+#   else
+	__m256i prodLo = _mm256_slli_epi16(_mm256_and_si256(_mm256_set1_epi8(0xf), src), 4);
+	src = _mm256_or_si256(prodLo, zext128_256(_mm256_extracti128_si256(idx, 1)));
+#   endif
+	return _mm256_xor_si256(src, merge);
+}
+#  else // GF16_POLYNOMIAL_SIMPLE
 static HEDLEY_ALWAYS_INLINE __m256i mul16_vec256(__m256i poly, __m256i src) {
 	__m256i prodHi = _mm256_and_si256(_mm256_set1_epi8(0xf), _mm256_srli_epi16(src, 4));
 	__m256i idx = _mm256_inserti128_si256(prodHi, _mm256_castsi256_si128(prodHi), 1);
-#  if MWORD_SIZE == 64
+#   if MWORD_SIZE == 64
 	src = _mm256_ternarylogic_epi32(
 		zext128_256(_mm256_extracti128_si256(prodHi, 1)),
 		_mm256_set1_epi8(0xf),
 		_mm256_slli_epi16(src, 4),
 		0xF2
 	);
-#  else
+#   else
 	__m256i prodLo = _mm256_slli_epi16(_mm256_and_si256(_mm256_set1_epi8(0xf), src), 4);
 	src = _mm256_or_si256(prodLo, zext128_256(_mm256_extracti128_si256(prodHi, 1)));
-#  endif
+#   endif
 	return _mm256_xor_si256(src, _mm256_shuffle_epi8(poly, idx));
 	// another idea with AVX512 is to keep each 4-bit part of the 16-bit results in a 128-bit lane, and shuffle lanes to handle the shift
 }
+#  endif
 # endif
 # if MWORD_SIZE == 64
 #  define BCAST_HI(v) _mm512_shuffle_i32x4(_mm512_castsi256_si512(v), _mm512_castsi256_si512(v), _MM_SHUFFLE(1,1,1,1))
@@ -115,7 +135,11 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle_setup_vec(const void *HEDLEY_RESTR
 	shuf0_vector(val, &pd0, &pd1);
 	
 #if MWORD_SIZE >= 32
+# ifdef GF16_POLYNOMIAL_SIMPLE
+	__m128i poly = _mm_load_si128((__m128i*)scratch);
+# else
 	__m256i poly = _mm256_load_si256((__m256i*)scratch);
+# endif
 	__m256i prod = _mm256_inserti128_si256(_mm256_castsi128_si256(pd0), pd1, 1);
 	prod = _mm256_shuffle_epi8(prod, _mm256_set_epi32(
 		0x0f0d0b09, 0x07050301, 0x0e0c0a08, 0x06040200,
@@ -142,8 +166,11 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle_setup_vec(const void *HEDLEY_RESTR
 	*low0  = _mm_unpacklo_epi64(pd0, pd1);
 	*high0 = _mm_unpackhi_epi64(pd0, pd1);
 	
-	__m128i polyl = _mm_load_si128((__m128i*)scratch + 1);
-	__m128i polyh = _mm_load_si128((__m128i*)scratch);
+	__m128i polyl = _mm_load_si128((__m128i*)scratch);
+	__m128i polyh = _mm_setzero_si128();
+#ifndef GF16_POLYNOMIAL_SIMPLE
+	polyh = _mm_load_si128((__m128i*)scratch + 1);
+#endif
 	mul16_vec128(polyl, polyh, *low0, *high0, low1, high1);
 	mul16_vec128(polyl, polyh, *low1, *high1, low2, high2);
 	mul16_vec128(polyl, polyh, *low2, *high2, low3, high3);

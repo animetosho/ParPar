@@ -56,9 +56,12 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle2x_muladd_x_avx2(const void *HEDLEY
 	__m256i shufNormLoB, shufSwapLoB, shufNormHiB, shufSwapHiB;
 	if(srcCount == 2) {
 		__m256i prodLo0, prodHi0, prodLo1, prodHi1, prodLo2, prodHi2, prodLo3, prodHi3;
-		__m256i polyl = _mm256_broadcastsi128_si256(_mm_load_si128((__m128i*)scratch + 1));
-		__m256i polyh = _mm256_broadcastsi128_si256(_mm_load_si128((__m128i*)scratch));
-		
+		__m256i polyl = _mm256_broadcastsi128_si256(_mm_load_si128((__m128i*)scratch));
+		__m256i polyh = _mm256_setzero_si256();
+#ifndef GF16_POLYNOMIAL_SIMPLE
+		polyh = _mm256_broadcastsi128_si256(_mm_load_si128((__m128i*)scratch + 1));
+#endif
+
 		__m256i prod0 = _mm256_shuffle_epi8(
 			_mm256_broadcastd_epi32(_mm_cvtsi32_si128(*(uint32_t*)coefficients)),
 			_mm256_set_epi32(

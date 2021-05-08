@@ -352,7 +352,7 @@ void* gf16_clmul_init_arm(int polynomial) {
 #else
 	poly = vdupq_n_u8(polynomial & 0x1f);
 #endif
-	vst1q_u8(ret, poly);
+	vst1q_u8_align(ret, poly, 16);
 	return ret;
 #else
 	UNUSED(polynomial);

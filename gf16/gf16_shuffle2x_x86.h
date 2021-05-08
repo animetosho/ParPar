@@ -156,8 +156,11 @@ void _FN(gf16_shuffle2x_setup_vec)(const void *HEDLEY_RESTRICT scratch, uint16_t
 	prodLo0 = _mm_unpacklo_epi64(pd0, pd1);
 	prodHi0 = _mm_unpackhi_epi64(pd0, pd1);
 	
-	__m128i polyl = _mm_load_si128((__m128i*)scratch + 1);
-	__m128i polyh = _mm_load_si128((__m128i*)scratch);
+	__m128i polyl = _mm_load_si128((__m128i*)scratch);
+	__m128i polyh = _mm_setzero_si128();
+#ifndef GF16_POLYNOMIAL_SIMPLE
+	polyh = _mm_load_si128((__m128i*)scratch + 1);
+#endif
 	
 	mul16_vec128(polyl, polyh, prodLo0, prodHi0, &prodLo1, &prodHi1);
 	mul16_vec128(polyl, polyh, prodLo1, prodHi1, &prodLo2, &prodHi2);
