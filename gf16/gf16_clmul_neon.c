@@ -97,6 +97,8 @@ static HEDLEY_ALWAYS_INLINE void gf16_clmul_neon_reduction(poly16x8_t* low1, con
 	
 	
 	// reduction based on hibytes
+	// for 0x1100b polynomial, we can abuse the 2nd '1' by EORing the top nibble with the next - this saves a 2nd TBL lookup
+	// ^ this fits in nicely with 4-bit lookups; the trick doesn't work with 5-bit lookups
 	uint8x16_t red = vshrq_n_u8(hibytes.val[1], 4);
 	uint8x16_t rem = vqtbl1q_u8(poly, red);
 	lobytes.val[1] = veorq_u8(lobytes.val[1], vshlq_n_u8(rem, 4));
@@ -128,8 +130,6 @@ static HEDLEY_ALWAYS_INLINE void gf16_clmul_neon_reduction(poly16x8_t* low1, con
 	lobytes.val[0] = veorq_u8(lobytes.val[0], rem);
 	lobytes.val[1] = veorq_u8(lobytes.val[1], vsliq_n_u8(lobyte1_merge, red, 4));
 	
-	
-	// TODO: for AArch64, strat which uses TBL2 (only need 3x 5-bit ops) ?  TBL2 slower than TBL1 on older procs, but same on newer, so may make sense to reserve it to SHA3/SVE instead
 	
 	// return data
 	*low1 = vreinterpretq_p16_u8(lobytes.val[0]);
@@ -284,7 +284,6 @@ void gf16_clmul_muladd_neon(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RE
 unsigned gf16_clmul_muladd_multi_neon(const void *HEDLEY_RESTRICT scratch, unsigned regions, size_t offset, void *HEDLEY_RESTRICT dst, const void* const*HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch) {
 	UNUSED(mutScratch);
 #if defined(__ARM_NEON)
-	// TODO: check register spilling
 	return gf16_muladd_multi(scratch, &gf16_clmul_muladd_x_neon, CLMUL_NUM_REGIONS, regions, offset, dst, src, len, coefficients);
 #else
 	UNUSED(scratch); UNUSED(regions); UNUSED(offset); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficients);
@@ -332,7 +331,7 @@ void gf16_clmul_prepare_packed_cksum_neon(void *HEDLEY_RESTRICT dst, const void 
 
 void* gf16_clmul_init_arm(int polynomial) {
 #if defined(__ARM_NEON)
-	if(polynomial & ~0x1101f) return NULL; // unsupported polynomial, we mostly support 0x1100b
+	if((polynomial & ~0x1101f) || !(polynomial & 0x1000)) return NULL; // unsupported polynomial, we mostly support 0x1100b
 	
 	uint8x16_t poly;
 	uint8_t* ret;
