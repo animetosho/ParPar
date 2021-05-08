@@ -428,7 +428,7 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 			//_mul_add_multi_packpf = &gf16_clmul_muladd_multi_packpf_neon;
 			prepare_packed = &gf16_clmul_prepare_packed_neon;
 			#ifdef __aarch64__
-			_info.idealInputMultiple = 6;
+			_info.idealInputMultiple = 8;
 			#else
 			_info.idealInputMultiple = 3;
 			#endif

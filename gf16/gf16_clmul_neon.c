@@ -2,6 +2,7 @@
 #include "gf16_neon_common.h"
 
 // TODO: for any multiplicand byte that's 0 (e.g. for coeff < 256), can shortcut a bunch of stuff, but may not be worth the effort
+// can also look at BCAX/EOR3 from SHA3 if bored; SVE2 implementation can also use XAR
 
 #if defined(__ARM_NEON)
 
@@ -86,24 +87,34 @@ static HEDLEY_ALWAYS_INLINE void gf16_clmul_neon_reduction(poly16x8_t* low1, con
 	lobytes.val[1] = veorq_u8(lobytes.val[1], vshlq_n_u8(rem, 4));
 	hibytes.val[0] = veorq_u8(hibytes.val[0], vshrq_n_u8(rem, 4));
 	
-	// alternatively, to use fewer registers:
-	// red = veorq_u8(vsliq_n_u8(red, red, 4), hibytes.val[1]);
-	// this saves the need to vandq with 0xf, but SLI is generally a little slower than AND
+#ifdef __aarch64__
 	red = veorq_u8(red, vandq_u8(hibytes.val[1], vdupq_n_u8(0xf)));
+#else
+	// this saves a register constant by eliminating the need to vandq with 0xf, but SLI is generally a little slower than AND
+	// we do this on ARMv7 due to there being fewer 128-bit registers available
+	red = veorq_u8(vsliq_n_u8(red, red, 4), hibytes.val[1]);
+#endif
 	rem = vqtbl1q_u8(poly, red);
 	lobytes.val[1] = veorq_u8(lobytes.val[1], rem);
 	
 	// repeat reduction for next byte
-	red = veorq_u8(red, vshrq_n_u8(hibytes.val[0], 4));
+	uint8x16_t hibyte0_top = vshrq_n_u8(hibytes.val[0], 4);
+	red = veorq_u8(red, hibyte0_top);
 	rem = vqtbl1q_u8(poly, red);
 	uint8x16_t lobyte1_merge = vshrq_n_u8(rem, 4);
 	lobytes.val[0] = veorq_u8(lobytes.val[0], vshlq_n_u8(rem, 4));
 	
+#ifdef __aarch64__
 	red = veorq_u8(red, vandq_u8(hibytes.val[0], vdupq_n_u8(0xf)));
+#else
+	red = veorq_u8(vsliq_n_u8(red, hibyte0_top, 4), hibytes.val[0]);
+#endif
 	rem = vqtbl1q_u8(poly, red);
 	lobytes.val[0] = veorq_u8(lobytes.val[0], rem);
 	lobytes.val[1] = veorq_u8(lobytes.val[1], vsliq_n_u8(lobyte1_merge, red, 4));
 	
+	
+	// TODO: for AArch64, strat which uses TBL2 (only need 3x 5-bit ops) ?  TBL2 slower than TBL1 on older procs, but same on newer, so may make sense to reserve it to SHA3/SVE instead
 	
 	// return data
 	*low1 = vreinterpretq_p16_u8(lobytes.val[0]);
@@ -113,7 +124,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_clmul_neon_reduction(poly16x8_t* low1, con
 #ifdef __aarch64__
 # define CLMUL_NUM_REGIONS 8
 #else
-# define CLMUL_NUM_REGIONS 4
+# define CLMUL_NUM_REGIONS 3
 #endif
 
 #include "gf16_muladd_multi.h"
