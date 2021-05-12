@@ -218,6 +218,8 @@ Performance Options:
                                  affine2x-avx512: half width variant of affine-avx512
                              ARMv7/AArch64 only choices:
                                  shuffle-neon: NEON variant of shuffle-sse
+                                 shuffle128-sve: SVE variant of shuffle-neon
+                                 shuffle128-sve2: SVE2 variant of shuffle-neon
                                  clmul-neon: split 8-bit polynomial multiplication (NEON)
                              Default is auto-detected.
 

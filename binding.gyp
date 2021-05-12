@@ -34,7 +34,7 @@
   "targets": [
     {
       "target_name": "parpar_gf",
-      "dependencies": ["gf16", "gf16_sse2", "gf16_ssse3", "gf16_avx", "gf16_avx2", "gf16_avx512", "gf16_vbmi", "gf16_gfni", "gf16_gfni_avx2", "gf16_gfni_avx512", "gf16_neon", "multi_md5"],
+      "dependencies": ["gf16", "gf16_sse2", "gf16_ssse3", "gf16_avx", "gf16_avx2", "gf16_avx512", "gf16_vbmi", "gf16_gfni", "gf16_gfni_avx2", "gf16_gfni_avx512", "gf16_neon", "gf16_sve", "gf16_sve2", "multi_md5"],
       "sources": ["src/gf.cc", "gf16/module.cc", "gf16/gfmat_coeff.c", "src/gyp_warnings.cc"],
       "include_dirs": ["gf16"],
       "conditions": [
@@ -424,7 +424,66 @@
           }
         }]
       ]
+    },
+    {
+      "target_name": "gf16_sve",
+      "type": "static_library",
+      "defines": ["NDEBUG"],
+      "sources": [
+        "gf16/gf16_shuffle128_sve.c"
+      ],
+      "cflags": ["-Wno-unused-function"],
+      "xcode_settings": {
+        "OTHER_CFLAGS": ["-Wno-unused-function"],
+        "OTHER_CFLAGS!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"]
+      },
+      "cflags!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"],
+      "msvs_settings": {"VCCLCompilerTool": {"BufferSecurityCheck": "false"}},
+      "conditions": [
+        ['target_arch=="arm64" and OS!="win"', {
+          "variables": {"supports_sve%": "<!(<!(echo ${CC_target:-${CC:-cc}}) -MM -E gf16/gf16_shuffle128_sve.c -march=armv8-a+sve 2>/dev/null || true)"},
+          "conditions": [
+            ['supports_sve!=""', {
+              "cflags": ["-march=armv8-a+sve"],
+              "cxxflags": ["-march=armv8-a+sve"],
+              "xcode_settings": {
+                "OTHER_CFLAGS": ["-march=armv8-a+sve"],
+                "OTHER_CXXFLAGS": ["-march=armv8-a+sve"],
+              }
+            }]
+          ]
+        }]
+      ]
+    },
+    {
+      "target_name": "gf16_sve2",
+      "type": "static_library",
+      "defines": ["NDEBUG"],
+      "sources": [
+        "gf16/gf16_shuffle128_sve2.c"
+      ],
+      "cflags": ["-Wno-unused-function"],
+      "xcode_settings": {
+        "OTHER_CFLAGS": ["-Wno-unused-function"],
+        "OTHER_CFLAGS!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"]
+      },
+      "cflags!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"],
+      "msvs_settings": {"VCCLCompilerTool": {"BufferSecurityCheck": "false"}},
+      "conditions": [
+        ['target_arch=="arm64" and OS!="win"', {
+          "variables": {"supports_sve2%": "<!(<!(echo ${CC_target:-${CC:-cc}}) -MM -E gf16/gf16_shuffle128_sve2.c -march=armv8-a+sve2 2>/dev/null || true)"},
+          "conditions": [
+            ['supports_sve2!=""', {
+              "cflags": ["-march=armv8-a+sve2"],
+              "cxxflags": ["-march=armv8-a+sve2"],
+              "xcode_settings": {
+                "OTHER_CFLAGS": ["-march=armv8-a+sve2"],
+                "OTHER_CXXFLAGS": ["-march=armv8-a+sve2"],
+              }
+            }]
+          ]
+        }]
+      ]
     }
-
   ]
 }

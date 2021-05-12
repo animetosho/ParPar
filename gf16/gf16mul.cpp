@@ -184,13 +184,23 @@ struct CpuCap {
 # endif
 struct CpuCap {
 	bool hasNEON;
-	CpuCap(bool detect) : hasNEON(true) {
+	bool hasSVE;
+	bool hasSVE2;
+	CpuCap(bool detect) : hasNEON(true), hasSVE(true), hasSVE2(true) {
 		if(!detect) return;
 		hasNEON = false;
+		hasSVE = false;
+		hasSVE2 = false;
 		
 # if defined(AT_HWCAP)
 #  ifdef __aarch64__
 		hasNEON = getauxval(AT_HWCAP) & HWCAP_ASIMD;
+#   if defined(HWCAP_SVE)
+		hasSVE = getauxval(AT_HWCAP) & HWCAP_SVE;
+#   endif
+#   if defined(AT_HWCAP2) && defined(HWCAP2_SVE2)
+		hasSVE2 = getauxval(AT_HWCAP2) & HWCAP2_SVE2;
+#   endif
 #  else
 		hasNEON = getauxval(AT_HWCAP) & HWCAP_NEON;
 #  endif
@@ -438,6 +448,47 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 			#endif
 			prepare_packed_cksum = &gf16_clmul_prepare_packed_cksum_neon;
 			finish_packed_cksum = &gf16_shuffle_finish_packed_cksum_neon; // re-use shuffle routine
+		break;
+		
+		case GF16_SHUFFLE_128_SVE:
+			if(!gf16_available_sve) {
+				setupMethod(GF16_AUTO);
+				return;
+			}
+			
+			_info.alignment = 16; // TODO: ???
+			_info.stride = gf16_sve_get_size()*2; // TODO: consider using masking?
+			scratch = gf16_shuffle_init_128_sve(GF16_POLYNOMIAL);
+			
+			_mul = &gf16_shuffle_mul_128_sve;
+			_mul_add = &gf16_shuffle_muladd_128_sve;
+			_mul_add_multi = &gf16_shuffle_muladd_multi_128_sve;
+			_mul_add_multi_packed = &gf16_shuffle_muladd_multi_packed_128_sve;
+			//_mul_add_multi_packpf = &gf16_shuffle_muladd_multi_packpf_sve;
+			prepare_packed = &gf16_shuffle_prepare_packed_sve;
+			_info.idealInputMultiple = 2;
+			prepare_packed_cksum = &gf16_shuffle_prepare_packed_cksum_sve;
+			finish_packed_cksum = &gf16_shuffle_finish_packed_cksum_sve;
+		break;
+		
+		case GF16_SHUFFLE_128_SVE2:
+			if(!gf16_available_sve2) {
+				setupMethod(GF16_AUTO);
+				return;
+			}
+			
+			_info.alignment = 16; // TODO: ???
+			_info.stride = gf16_sve_get_size()*2; // TODO: consider using masking?
+			
+			_mul = &gf16_shuffle_mul_128_sve2;
+			_mul_add = &gf16_shuffle_muladd_128_sve2;
+			_mul_add_multi = &gf16_shuffle_muladd_multi_128_sve2;
+			_mul_add_multi_packed = &gf16_shuffle_muladd_multi_packed_128_sve2;
+			//_mul_add_multi_packpf = &gf16_shuffle_muladd_multi_packpf_sve2;
+			prepare_packed = &gf16_shuffle_prepare_packed_sve;
+			_info.idealInputMultiple = 2;
+			prepare_packed_cksum = &gf16_shuffle_prepare_packed_cksum_sve;
+			finish_packed_cksum = &gf16_shuffle_finish_packed_cksum_sve;
 		break;
 		
 		case GF16_AFFINE_AVX512:
@@ -868,6 +919,10 @@ Galois16Methods Galois16Mul::default_method(size_t regionSizeHint, unsigned /*ou
 		return GF16_XOR_SSE2;
 #endif
 #ifdef PLATFORM_ARM
+	if(caps.hasSVE2)
+		return GF16_SHUFFLE_128_SVE2;
+	if(caps.hasSVE && gf16_sve_get_size() > 16)
+		return GF16_SHUFFLE_128_SVE;
 	if(gf16_available_neon && caps.hasNEON)
 # ifdef __aarch64__
 		return GF16_SHUFFLE_NEON;
@@ -937,6 +992,11 @@ std::vector<Galois16Methods> Galois16Mul::availableMethods(bool checkCpuid) {
 	if(gf16_available_neon && caps.hasNEON) {
 		ret.push_back(GF16_SHUFFLE_NEON);
 		ret.push_back(GF16_CLMUL_NEON);
+	}
+	if(gf16_available_sve && caps.hasSVE)
+		ret.push_back(GF16_SHUFFLE_128_SVE);
+	if(gf16_available_sve2 && caps.hasSVE2) {
+		ret.push_back(GF16_SHUFFLE_128_SVE2);
 	}
 #endif
 	
