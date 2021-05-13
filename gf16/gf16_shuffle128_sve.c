@@ -62,13 +62,12 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle128_sve_round1(svuint8x2_t va, svui
 	*rl = NOMASK(sveor_u8, *rl, svtbl_u8(tbl_l2, tmp));
 	*rh = NOMASK(sveor_u8, *rh, svtbl_u8(tbl_h2, tmp));
 	
-	va = svset2(va, 0, NOMASK(svlsr_n_u8, svget2(va, 0), 4));
-	va = svset2(va, 1, NOMASK(svlsr_n_u8, svget2(va, 1), 4));
-	
-	*rl = NOMASK(sveor_u8, *rl, svtbl_u8(tbl_l1, svget2(va, 0)));
-	*rh = NOMASK(sveor_u8, *rh, svtbl_u8(tbl_h1, svget2(va, 0)));
-	*rl = NOMASK(sveor_u8, *rl, svtbl_u8(tbl_l3, svget2(va, 1)));
-	*rh = NOMASK(sveor_u8, *rh, svtbl_u8(tbl_h3, svget2(va, 1)));
+	tmp = NOMASK(svlsr_n_u8, svget2(va, 0), 4);
+	*rl = NOMASK(sveor_u8, *rl, svtbl_u8(tbl_l1, tmp));
+	*rh = NOMASK(sveor_u8, *rh, svtbl_u8(tbl_h1, tmp));
+	tmp = NOMASK(svlsr_n_u8, svget2(va, 1), 4);
+	*rl = NOMASK(sveor_u8, *rl, svtbl_u8(tbl_l3, tmp));
+	*rh = NOMASK(sveor_u8, *rh, svtbl_u8(tbl_h3, tmp));
 }
 static HEDLEY_ALWAYS_INLINE void gf16_shuffle128_sve_round(svuint8x2_t va, svuint8_t* rl, svuint8_t* rh,
 	svuint8_t tbl_l0, svuint8_t tbl_l1, svuint8_t tbl_l2, svuint8_t tbl_l3, 
@@ -81,13 +80,12 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle128_sve_round(svuint8x2_t va, svuin
 	*rl = NOMASK(sveor_u8, *rl, svtbl_u8(tbl_l2, tmp));
 	*rh = NOMASK(sveor_u8, *rh, svtbl_u8(tbl_h2, tmp));
 	
-	va = svset2(va, 0, NOMASK(svlsr_n_u8, svget2(va, 0), 4));
-	va = svset2(va, 1, NOMASK(svlsr_n_u8, svget2(va, 1), 4));
-	
-	*rl = NOMASK(sveor_u8, *rl, svtbl_u8(tbl_l1, svget2(va, 0)));
-	*rh = NOMASK(sveor_u8, *rh, svtbl_u8(tbl_h1, svget2(va, 0)));
-	*rl = NOMASK(sveor_u8, *rl, svtbl_u8(tbl_l3, svget2(va, 1)));
-	*rh = NOMASK(sveor_u8, *rh, svtbl_u8(tbl_h3, svget2(va, 1)));
+	tmp = NOMASK(svlsr_n_u8, svget2(va, 0), 4);
+	*rl = NOMASK(sveor_u8, *rl, svtbl_u8(tbl_l1, tmp));
+	*rh = NOMASK(sveor_u8, *rh, svtbl_u8(tbl_h1, tmp));
+	tmp = NOMASK(svlsr_n_u8, svget2(va, 1), 4);
+	*rl = NOMASK(sveor_u8, *rl, svtbl_u8(tbl_l3, tmp));
+	*rh = NOMASK(sveor_u8, *rh, svtbl_u8(tbl_h3, tmp));
 }
 
 #define _AVAILABLE

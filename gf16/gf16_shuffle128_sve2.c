@@ -53,33 +53,29 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle128_sve2_round1(svuint8x2_t va, svu
 	svuint8_t tbl_l0, svuint8_t tbl_l1, svuint8_t tbl_l2, svuint8_t tbl_l3, 
 	svuint8_t tbl_h0, svuint8_t tbl_h1, svuint8_t tbl_h2, svuint8_t tbl_h3
 ) {
-	svuint8_t tmp = NOMASK(svand_n_u8, svget2(va, 0), 0xf);
-	*rl = svtbl_u8(tbl_l0, tmp);
-	*rh = svtbl_u8(tbl_h0, tmp);
-	tmp = NOMASK(svand_n_u8, svget2(va, 1), 0xf);
-	*rl = NOMASK(sveor_u8, *rl, svtbl_u8(tbl_l2, tmp));
-	*rh = NOMASK(sveor_u8, *rh, svtbl_u8(tbl_h2, tmp));
+	svuint8_t tmp1 = NOMASK(svand_n_u8, svget2(va, 0), 0xf);
+	svuint8_t tmp2 = NOMASK(svlsr_n_u8, svget2(va, 0), 4);
+	*rl = NOMASK(sveor_u8, svtbl_u8(tbl_l0, tmp1), svtbl_u8(tbl_l1, tmp2));
+	*rh = NOMASK(sveor_u8, svtbl_u8(tbl_h0, tmp1), svtbl_u8(tbl_h1, tmp2));
 	
-	va = svset2(va, 0, NOMASK(svlsr_n_u8, svget2(va, 0), 4));
-	va = svset2(va, 1, NOMASK(svlsr_n_u8, svget2(va, 1), 4));
-	
-	*rl = sveor3(*rl, svtbl_u8(tbl_l1, svget2(va, 0)), svtbl_u8(tbl_l3, svget2(va, 1)));
-	*rh = sveor3(*rh, svtbl_u8(tbl_h1, svget2(va, 0)), svtbl_u8(tbl_h3, svget2(va, 1)));
+	tmp1 = NOMASK(svand_n_u8, svget2(va, 1), 0xf);
+	tmp2 = NOMASK(svlsr_n_u8, svget2(va, 1), 4);
+	*rl = sveor3(*rl, svtbl_u8(tbl_l2, tmp1), svtbl_u8(tbl_l3, tmp2));
+	*rh = sveor3(*rh, svtbl_u8(tbl_h2, tmp1), svtbl_u8(tbl_h3, tmp2));
 }
 static HEDLEY_ALWAYS_INLINE void gf16_shuffle128_sve2_round(svuint8x2_t va, svuint8_t* rl, svuint8_t* rh,
 	svuint8_t tbl_l0, svuint8_t tbl_l1, svuint8_t tbl_l2, svuint8_t tbl_l3, 
 	svuint8_t tbl_h0, svuint8_t tbl_h1, svuint8_t tbl_h2, svuint8_t tbl_h3
 ) {
 	svuint8_t tmp1 = NOMASK(svand_n_u8, svget2(va, 0), 0xf);
-	svuint8_t tmp2 = NOMASK(svand_n_u8, svget2(va, 1), 0xf);
-	*rl = sveor3(*rl, svtbl_u8(tbl_l0, tmp1), svtbl_u8(tbl_l2, tmp2));
-	*rh = sveor3(*rh, svtbl_u8(tbl_h0, tmp1), svtbl_u8(tbl_h2, tmp2));
+	svuint8_t tmp2 = NOMASK(svlsr_n_u8, svget2(va, 0), 4);
+	*rl = sveor3(*rl, svtbl_u8(tbl_l0, tmp1), svtbl_u8(tbl_l1, tmp2));
+	*rh = sveor3(*rh, svtbl_u8(tbl_h0, tmp1), svtbl_u8(tbl_h1, tmp2));
 	
-	va = svset2(va, 0, NOMASK(svlsr_n_u8, svget2(va, 0), 4));
-	va = svset2(va, 1, NOMASK(svlsr_n_u8, svget2(va, 1), 4));
-	
-	*rl = sveor3(*rl, svtbl_u8(tbl_l1, svget2(va, 0)), svtbl_u8(tbl_l3, svget2(va, 1)));
-	*rh = sveor3(*rh, svtbl_u8(tbl_h1, svget2(va, 0)), svtbl_u8(tbl_h3, svget2(va, 1)));
+	tmp1 = NOMASK(svand_n_u8, svget2(va, 1), 0xf);
+	tmp2 = NOMASK(svlsr_n_u8, svget2(va, 1), 4);
+	*rl = sveor3(*rl, svtbl_u8(tbl_l2, tmp1), svtbl_u8(tbl_l3, tmp2));
+	*rh = sveor3(*rh, svtbl_u8(tbl_h2, tmp1), svtbl_u8(tbl_h3, tmp2));
 }
 
 
