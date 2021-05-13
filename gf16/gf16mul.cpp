@@ -457,7 +457,7 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 			}
 			
 			_info.alignment = 16; // TODO: ???
-			_info.stride = gf16_sve_get_size()*2; // TODO: consider using masking?
+			_info.stride = gf16_sve_get_size()*2;
 			scratch = gf16_shuffle_init_128_sve(GF16_POLYNOMIAL);
 			
 			_mul = &gf16_shuffle_mul_128_sve;
@@ -478,7 +478,7 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 			}
 			
 			_info.alignment = 16; // TODO: ???
-			_info.stride = gf16_sve_get_size()*2; // TODO: consider using masking?
+			_info.stride = gf16_sve_get_size()*2;
 			
 			_mul = &gf16_shuffle_mul_128_sve2;
 			_mul_add = &gf16_shuffle_muladd_128_sve2;

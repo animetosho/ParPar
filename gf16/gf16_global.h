@@ -34,14 +34,14 @@ typedef int (CONST_PTR gf16_finish_checksum)(const void *HEDLEY_RESTRICT src, vo
 #undef CONST_PTR
 
 HEDLEY_ALWAYS_INLINE void gf16_prepare(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen, const size_t blockLen, gf16_prepare_block prepareBlock, gf16_prepare_blocku prepareBlockU) {
-	size_t len = srcLen & ~(blockLen-1);
+	size_t remaining = srcLen % blockLen;
+	size_t len = srcLen - remaining;
 	uint8_t* _src = (uint8_t*)src + len;
 	uint8_t* _dst = (uint8_t*)dst + len;
 	
 	for(intptr_t ptr = -(intptr_t)len; ptr; ptr += blockLen)
 		prepareBlock(_dst+ptr, _src+ptr);
 	
-	size_t remaining = srcLen & (blockLen - 1);
 	if(remaining) {
 		// handle misaligned part
 		prepareBlockU(_dst, _src, remaining);
@@ -97,7 +97,7 @@ HEDLEY_ALWAYS_INLINE void gf16_prepare_packed(
 	// do final (partial) chunk
 	size_t remaining = srcLen % dataChunkLen;
 	if(remaining) {
-		size_t len = remaining & ~(blockLen-1);
+		size_t len = remaining - (remaining % blockLen);
 		size_t lastChunkLen = dataChunkLen;
 		size_t effectiveLastChunkLen = chunkLen;
 		if(srcLen > (sliceLen/dataChunkLen) * dataChunkLen) { // if this is the last chunk, the length may be shorter

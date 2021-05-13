@@ -158,6 +158,24 @@ public:
 		return _info;
 	}
 	
+	inline HEDLEY_CONST bool isMultipleOfStride(size_t len) const {
+#if defined(_M_ARM64) || defined(__aarch64__)
+		// SVE can have non-power-of-2 strides
+		if((_info.stride & (_info.stride-1)) != 0) // ...but most of the time, expect stride to be a power of 2
+			return (len % _info.stride) == 0;
+#endif
+		return (len & (_info.stride-1)) == 0;
+	}
+	inline HEDLEY_CONST size_t alignToStride(size_t len) const {
+		size_t alignMask = _info.stride-1;
+#if defined(_M_ARM64) || defined(__aarch64__)
+		if((_info.stride & (_info.stride-1)) != 0) {
+			return ((len + alignMask) / _info.stride) * _info.stride;
+		}
+#endif
+		return (len + alignMask) & ~alignMask;
+	}
+	
 	Galois16MulTransform prepare;
 	Galois16MulTransformPacked prepare_packed;
 	Galois16MulTransformPacked prepare_packed_cksum;
@@ -171,7 +189,7 @@ public:
 	inline void mul(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch) const {
 		assert(((uintptr_t)dst & (_info.alignment-1)) == 0);
 		assert(((uintptr_t)src & (_info.alignment-1)) == 0);
-		assert((len & (_info.stride-1)) == 0);
+		assert(isMultipleOfStride(len));
 		assert(len > 0);
 		
 		if(!(coefficient & 0xfffe)) {
@@ -190,7 +208,7 @@ public:
 	inline void mul_add(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch) const {
 		assert(((uintptr_t)dst & (_info.alignment-1)) == 0);
 		assert(((uintptr_t)src & (_info.alignment-1)) == 0);
-		assert((len & (_info.stride-1)) == 0);
+		assert(isMultipleOfStride(len));
 		assert(len > 0);
 		
 		if(!(coefficient & 0xfffe)) {
@@ -204,7 +222,7 @@ public:
 	}
 	
 	inline void pow(unsigned outputs, size_t offset, void **HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch) const {
-		assert((len & (_info.stride-1)) == 0);
+		assert(isMultipleOfStride(len));
 		assert(len > 0);
 		assert(outputs > 0);
 		
@@ -243,7 +261,7 @@ public:
 		}
 	}
 	inline void pow_add(unsigned outputs, size_t offset, void **HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch) const {
-		assert((len & (_info.stride-1)) == 0);
+		assert(isMultipleOfStride(len));
 		assert(len > 0);
 		assert(outputs > 0);
 		
@@ -259,7 +277,7 @@ public:
 	}
 	
 	inline void mul_add_multi(unsigned regions, size_t offset, void *HEDLEY_RESTRICT dst, const void* const*HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch) const {
-		assert((len & (_info.stride-1)) == 0);
+		assert(isMultipleOfStride(len));
 		assert(len > 0);
 		assert(regions > 0);
 		
@@ -274,7 +292,7 @@ public:
 	}
 	
 	inline void mul_add_multi_packed(unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch) const {
-		assert((len & (_info.stride-1)) == 0);
+		assert(isMultipleOfStride(len));
 		assert(len > 0);
 		assert(regions > 0);
 		
@@ -292,7 +310,7 @@ public:
 	}
 	
 	inline void mul_add_multi_packpf(unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch, const void* HEDLEY_RESTRICT prefetchIn, const void* HEDLEY_RESTRICT prefetchOut) const {
-		assert((len & (_info.stride-1)) == 0);
+		assert(isMultipleOfStride(len));
 		assert(len > 0);
 		assert(regions > 0);
 		
