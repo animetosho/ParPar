@@ -173,7 +173,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_checksum_zeroes_sve(void *HEDLEY_RESTRICT 
 void gf16_shuffle_prepare_packed_cksum_sve(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen, size_t sliceLen, unsigned inputPackSize, unsigned inputNum, size_t chunkLen) {
 #ifdef __ARM_FEATURE_SVE
 	svint16_t checksum = svdup_n_s16(0);
-	gf16_prepare_packed(dst, src, srcLen, sliceLen, svcntb()*2, &gf16_prepare_block_sve, &gf16_prepare_blocku_sve, inputPackSize, inputNum, chunkLen, 2, &checksum, &gf16_checksum_block_sve, &gf16_checksum_blocku_sve, &gf16_checksum_zeroes_sve, &gf16_checksum_prepare_sve);
+	gf16_prepare_packed(dst, src, srcLen, sliceLen, svcntb()*2, &gf16_prepare_block_sve, &gf16_prepare_blocku_sve, inputPackSize, inputNum, chunkLen, 3, &checksum, &gf16_checksum_block_sve, &gf16_checksum_blocku_sve, &gf16_checksum_zeroes_sve, &gf16_checksum_prepare_sve);
 #else
 	UNUSED(dst); UNUSED(src); UNUSED(srcLen); UNUSED(sliceLen); UNUSED(inputPackSize); UNUSED(inputNum); UNUSED(chunkLen);
 #endif
@@ -191,7 +191,7 @@ int gf16_shuffle_finish_packed_cksum_sve(void *HEDLEY_RESTRICT dst, const void *
 
 void gf16_shuffle_prepare_packed_sve(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen, size_t sliceLen, unsigned inputPackSize, unsigned inputNum, size_t chunkLen) {
 #ifdef __ARM_FEATURE_SVE
-	gf16_prepare_packed(dst, src, srcLen, sliceLen, svcntb()*2, &gf16_prepare_block_sve, &gf16_prepare_blocku_sve, inputPackSize, inputNum, chunkLen, 2, NULL, NULL, NULL, NULL, NULL);
+	gf16_prepare_packed(dst, src, srcLen, sliceLen, svcntb()*2, &gf16_prepare_block_sve, &gf16_prepare_blocku_sve, inputPackSize, inputNum, chunkLen, 3, NULL, NULL, NULL, NULL, NULL);
 #else
 	UNUSED(dst); UNUSED(src); UNUSED(srcLen); UNUSED(sliceLen); UNUSED(inputPackSize); UNUSED(inputNum); UNUSED(chunkLen);
 #endif

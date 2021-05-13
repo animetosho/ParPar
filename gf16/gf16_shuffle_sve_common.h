@@ -23,7 +23,6 @@ static HEDLEY_ALWAYS_INLINE void _FN(gf16_shuffle_muladd_x)(
 	if(srcCount > 2)
 		SVE_CALC_TABLE(coefficients[2], &tbl_Cl0, &tbl_Cl1, &tbl_Cl2, &tbl_Cl3, &tbl_Ch0, &tbl_Ch1, &tbl_Ch2, &tbl_Ch3);
 	
-	// TODO: use masking to enable smaller stride
 	#define DO_PROCESS \
 		SVE_ROUND1(svld2_u8(svptrue_b8(), _src1+ptr*srcScale), &rl, &rh, tbl_Al0, tbl_Al1, tbl_Al2, tbl_Al3, tbl_Ah0, tbl_Ah1, tbl_Ah2, tbl_Ah3); \
 		if(srcCount > 1) \
@@ -106,8 +105,7 @@ void _FN(gf16_shuffle_muladd)(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_
 unsigned _FN(gf16_shuffle_muladd_multi)(const void *HEDLEY_RESTRICT scratch, unsigned regions, size_t offset, void *HEDLEY_RESTRICT dst, const void* const*HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch) {
 	UNUSED(mutScratch);
 #ifdef _AVAILABLE
-	// TODO: review max regions
-	return gf16_muladd_multi(scratch, &_FN(gf16_shuffle_muladd_x), 2, regions, offset, dst, src, len, coefficients);
+	return gf16_muladd_multi(scratch, &_FN(gf16_shuffle_muladd_x), 3, regions, offset, dst, src, len, coefficients);
 #else
 	UNUSED(scratch); UNUSED(regions); UNUSED(offset); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficients);
 	return 0;
@@ -117,7 +115,7 @@ unsigned _FN(gf16_shuffle_muladd_multi)(const void *HEDLEY_RESTRICT scratch, uns
 unsigned _FN(gf16_shuffle_muladd_multi_packed)(const void *HEDLEY_RESTRICT scratch, unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch) {
 	UNUSED(mutScratch);
 #ifdef _AVAILABLE
-	return gf16_muladd_multi_packed(scratch, &_FN(gf16_shuffle_muladd_x), 2, regions, dst, src, len, svcntb()*2, coefficients);
+	return gf16_muladd_multi_packed(scratch, &_FN(gf16_shuffle_muladd_x), 3, regions, dst, src, len, svcntb()*2, coefficients);
 #else
 	UNUSED(scratch); UNUSED(regions); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficients);
 	return 0;
@@ -127,7 +125,7 @@ unsigned _FN(gf16_shuffle_muladd_multi_packed)(const void *HEDLEY_RESTRICT scrat
 void _FN(gf16_shuffle_muladd_multi_packpf)(const void *HEDLEY_RESTRICT scratch, unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch, const void* HEDLEY_RESTRICT prefetchIn, const void* HEDLEY_RESTRICT prefetchOut) {
 	UNUSED(mutScratch);
 #ifdef _AVAILABLE
-	gf16_muladd_multi_packpf(scratch, &_FN(gf16_shuffle_muladd_x), 2, regions, dst, src, len, svcntb()*2, coefficients, 0, prefetchIn, prefetchOut);
+	gf16_muladd_multi_packpf(scratch, &_FN(gf16_shuffle_muladd_x), 3, regions, dst, src, len, svcntb()*2, coefficients, 0, prefetchIn, prefetchOut);
 #else
 	UNUSED(scratch); UNUSED(regions); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficients); UNUSED(prefetchIn); UNUSED(prefetchOut);
 #endif

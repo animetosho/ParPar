@@ -466,7 +466,7 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 			_mul_add_multi_packed = &gf16_shuffle_muladd_multi_packed_128_sve;
 			//_mul_add_multi_packpf = &gf16_shuffle_muladd_multi_packpf_sve;
 			prepare_packed = &gf16_shuffle_prepare_packed_sve;
-			_info.idealInputMultiple = 2;
+			_info.idealInputMultiple = 3;
 			prepare_packed_cksum = &gf16_shuffle_prepare_packed_cksum_sve;
 			finish_packed_cksum = &gf16_shuffle_finish_packed_cksum_sve;
 		break;
@@ -486,7 +486,7 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 			_mul_add_multi_packed = &gf16_shuffle_muladd_multi_packed_128_sve2;
 			//_mul_add_multi_packpf = &gf16_shuffle_muladd_multi_packpf_sve2;
 			prepare_packed = &gf16_shuffle_prepare_packed_sve;
-			_info.idealInputMultiple = 2;
+			_info.idealInputMultiple = 3;
 			prepare_packed_cksum = &gf16_shuffle_prepare_packed_cksum_sve;
 			finish_packed_cksum = &gf16_shuffle_finish_packed_cksum_sve;
 		break;
