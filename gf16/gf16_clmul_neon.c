@@ -94,13 +94,13 @@ static HEDLEY_ALWAYS_INLINE uint8x16_t clmul_red_lo(uint8x16_t a, uint8x16_t b) 
 }
 #endif
 
-static HEDLEY_ALWAYS_INLINE void gf16_clmul_neon_reduction(poly16x8_t* low1, const poly16x8_t* low2, const poly16x8_t* mid1, const poly16x8_t* mid2, poly16x8_t* high1, const poly16x8_t* high2, uint8x16_t poly) {
+static HEDLEY_ALWAYS_INLINE void gf16_clmul_neon_reduction(poly16x8_t* low1, poly16x8_t low2, poly16x8_t mid1, poly16x8_t mid2, poly16x8_t* high1, poly16x8_t high2, uint8x16_t poly) {
 	// put data in proper form
-	uint8x16x2_t hibytes = vuzpq_u8(vreinterpretq_u8_p16(*high1), vreinterpretq_u8_p16(*high2));
-	uint8x16x2_t lobytes = vuzpq_u8(vreinterpretq_u8_p16(*low1), vreinterpretq_u8_p16(*low2));
+	uint8x16x2_t hibytes = vuzpq_u8(vreinterpretq_u8_p16(*high1), vreinterpretq_u8_p16(high2));
+	uint8x16x2_t lobytes = vuzpq_u8(vreinterpretq_u8_p16(*low1), vreinterpretq_u8_p16(low2));
 	
 	// merge mid into high/low
-	uint8x16x2_t midbytes = vuzpq_u8(vreinterpretq_u8_p16(*mid1), vreinterpretq_u8_p16(*mid2));
+	uint8x16x2_t midbytes = vuzpq_u8(vreinterpretq_u8_p16(mid1), vreinterpretq_u8_p16(mid2));
 	uint8x16_t libytes = veorq_u8(hibytes.val[0], lobytes.val[1]);
 	lobytes.val[1] = veorq_u8(midbytes.val[0], veorq_u8(lobytes.val[0], libytes));
 	hibytes.val[0] = veorq_u8(midbytes.val[1], veorq_u8(hibytes.val[1], libytes));
@@ -181,6 +181,30 @@ static HEDLEY_ALWAYS_INLINE void gf16_clmul_muladd_x_neon(
 	}
 
 	poly16x8_t low1, low2, mid1, mid2, high1, high2;
+	#define DO_PROCESS \
+		gf16_clmul_neon_round1(_src1+ptr*srcScale, &low1, &low2, &mid1, &mid2, &high1, &high2, coeff + 0); \
+		if(srcCount > 1) \
+			gf16_clmul_neon_round(_src2+ptr*srcScale, &low1, &low2, &mid1, &mid2, &high1, &high2, coeff + CLMUL_COEFF_PER_REGION*1); \
+		if(srcCount > 2) \
+			gf16_clmul_neon_round(_src3+ptr*srcScale, &low1, &low2, &mid1, &mid2, &high1, &high2, coeff + CLMUL_COEFF_PER_REGION*2); \
+		if(srcCount > 3) \
+			gf16_clmul_neon_round(_src4+ptr*srcScale, &low1, &low2, &mid1, &mid2, &high1, &high2, coeff + CLMUL_COEFF_PER_REGION*3); \
+		if(srcCount > 4) \
+			gf16_clmul_neon_round(_src5+ptr*srcScale, &low1, &low2, &mid1, &mid2, &high1, &high2, coeff + CLMUL_COEFF_PER_REGION*4); \
+		if(srcCount > 5) \
+			gf16_clmul_neon_round(_src6+ptr*srcScale, &low1, &low2, &mid1, &mid2, &high1, &high2, coeff + CLMUL_COEFF_PER_REGION*5); \
+		if(srcCount > 6) \
+			gf16_clmul_neon_round(_src7+ptr*srcScale, &low1, &low2, &mid1, &mid2, &high1, &high2, coeff + CLMUL_COEFF_PER_REGION*6); \
+		if(srcCount > 7) \
+			gf16_clmul_neon_round(_src8+ptr*srcScale, &low1, &low2, &mid1, &mid2, &high1, &high2, coeff + CLMUL_COEFF_PER_REGION*7); \
+		 \
+		gf16_clmul_neon_reduction(&low1, low2, mid1, mid2, &high1, high2, poly); \
+		 \
+		uint8x16x2_t vb = vld2q_u8(_dst+ptr); \
+		vb.val[0] = veorq_u8(vreinterpretq_u8_p16(low1), vb.val[0]); \
+		vb.val[1] = veorq_u8(vreinterpretq_u8_p16(high1), vb.val[1]); \
+		vst2q_u8(_dst+ptr, vb)
+	
 	if(doPrefetch) {
 		intptr_t ptr = -(intptr_t)len;
 		if(doPrefetch == 1)
@@ -188,30 +212,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_clmul_muladd_x_neon(
 		if(doPrefetch == 2)
 			PREFETCH_MEM(_pf+ptr, 0);
 		while(ptr & (CACHELINE_SIZE-1)) {
-			gf16_clmul_neon_round1(_src1+ptr*srcScale, &low1, &low2, &mid1, &mid2, &high1, &high2, coeff + 0);
-			if(srcCount > 1)
-				gf16_clmul_neon_round(_src2+ptr*srcScale, &low1, &low2, &mid1, &mid2, &high1, &high2, coeff + CLMUL_COEFF_PER_REGION*1);
-			if(srcCount > 2)
-				gf16_clmul_neon_round(_src3+ptr*srcScale, &low1, &low2, &mid1, &mid2, &high1, &high2, coeff + CLMUL_COEFF_PER_REGION*2);
-			if(srcCount > 3)
-				gf16_clmul_neon_round(_src4+ptr*srcScale, &low1, &low2, &mid1, &mid2, &high1, &high2, coeff + CLMUL_COEFF_PER_REGION*3);
-			if(srcCount > 4)
-				gf16_clmul_neon_round(_src5+ptr*srcScale, &low1, &low2, &mid1, &mid2, &high1, &high2, coeff + CLMUL_COEFF_PER_REGION*4);
-			if(srcCount > 5)
-				gf16_clmul_neon_round(_src6+ptr*srcScale, &low1, &low2, &mid1, &mid2, &high1, &high2, coeff + CLMUL_COEFF_PER_REGION*5);
-			if(srcCount > 6)
-				gf16_clmul_neon_round(_src7+ptr*srcScale, &low1, &low2, &mid1, &mid2, &high1, &high2, coeff + CLMUL_COEFF_PER_REGION*6);
-			if(srcCount > 7)
-				gf16_clmul_neon_round(_src8+ptr*srcScale, &low1, &low2, &mid1, &mid2, &high1, &high2, coeff + CLMUL_COEFF_PER_REGION*7);
-			
-			// reduces into low1, high1
-			gf16_clmul_neon_reduction(&low1, &low2, &mid1, &mid2, &high1, &high2, poly);
-			
-			uint8x16x2_t vb = vld2q_u8(_dst+ptr);
-			vb.val[0] = veorq_u8(vreinterpretq_u8_p16(low1), vb.val[0]);
-			vb.val[1] = veorq_u8(vreinterpretq_u8_p16(high1), vb.val[1]);
-			vst2q_u8(_dst+ptr, vb);
-			
+			DO_PROCESS;
 			ptr += sizeof(uint8x16_t)*2;
 		}
 		while(ptr) {
@@ -221,55 +222,16 @@ static HEDLEY_ALWAYS_INLINE void gf16_clmul_muladd_x_neon(
 				PREFETCH_MEM(_pf+ptr, 0);
 			
 			for(size_t iter=0; iter<(CACHELINE_SIZE/(sizeof(uint8x16_t)*2)); iter++) {
-				gf16_clmul_neon_round1(_src1+ptr*srcScale, &low1, &low2, &mid1, &mid2, &high1, &high2, coeff + 0);
-				if(srcCount > 1)
-					gf16_clmul_neon_round(_src2+ptr*srcScale, &low1, &low2, &mid1, &mid2, &high1, &high2, coeff + CLMUL_COEFF_PER_REGION*1);
-				if(srcCount > 2)
-					gf16_clmul_neon_round(_src3+ptr*srcScale, &low1, &low2, &mid1, &mid2, &high1, &high2, coeff + CLMUL_COEFF_PER_REGION*2);
-				if(srcCount > 3)
-					gf16_clmul_neon_round(_src4+ptr*srcScale, &low1, &low2, &mid1, &mid2, &high1, &high2, coeff + CLMUL_COEFF_PER_REGION*3);
-				if(srcCount > 4)
-					gf16_clmul_neon_round(_src5+ptr*srcScale, &low1, &low2, &mid1, &mid2, &high1, &high2, coeff + CLMUL_COEFF_PER_REGION*4);
-				if(srcCount > 5)
-					gf16_clmul_neon_round(_src6+ptr*srcScale, &low1, &low2, &mid1, &mid2, &high1, &high2, coeff + CLMUL_COEFF_PER_REGION*5);
-				if(srcCount > 6)
-					gf16_clmul_neon_round(_src7+ptr*srcScale, &low1, &low2, &mid1, &mid2, &high1, &high2, coeff + CLMUL_COEFF_PER_REGION*6);
-				if(srcCount > 7)
-					gf16_clmul_neon_round(_src8+ptr*srcScale, &low1, &low2, &mid1, &mid2, &high1, &high2, coeff + CLMUL_COEFF_PER_REGION*7);
-				gf16_clmul_neon_reduction(&low1, &low2, &mid1, &mid2, &high1, &high2, poly);
-				
-				uint8x16x2_t vb = vld2q_u8(_dst+ptr);
-				vb.val[0] = veorq_u8(vreinterpretq_u8_p16(low1), vb.val[0]);
-				vb.val[1] = veorq_u8(vreinterpretq_u8_p16(high1), vb.val[1]);
-				vst2q_u8(_dst+ptr, vb);
+				DO_PROCESS;
 				ptr += sizeof(uint8x16_t)*2;
 			}
 		}
 	} else {
 		for(intptr_t ptr = -(intptr_t)len; ptr; ptr += sizeof(uint8x16_t)*2) {
-			gf16_clmul_neon_round1(_src1+ptr*srcScale, &low1, &low2, &mid1, &mid2, &high1, &high2, coeff + 0);
-			if(srcCount > 1)
-				gf16_clmul_neon_round(_src2+ptr*srcScale, &low1, &low2, &mid1, &mid2, &high1, &high2, coeff + CLMUL_COEFF_PER_REGION*1);
-			if(srcCount > 2)
-				gf16_clmul_neon_round(_src3+ptr*srcScale, &low1, &low2, &mid1, &mid2, &high1, &high2, coeff + CLMUL_COEFF_PER_REGION*2);
-			if(srcCount > 3)
-				gf16_clmul_neon_round(_src4+ptr*srcScale, &low1, &low2, &mid1, &mid2, &high1, &high2, coeff + CLMUL_COEFF_PER_REGION*3);
-			if(srcCount > 4)
-				gf16_clmul_neon_round(_src5+ptr*srcScale, &low1, &low2, &mid1, &mid2, &high1, &high2, coeff + CLMUL_COEFF_PER_REGION*4);
-			if(srcCount > 5)
-				gf16_clmul_neon_round(_src6+ptr*srcScale, &low1, &low2, &mid1, &mid2, &high1, &high2, coeff + CLMUL_COEFF_PER_REGION*5);
-			if(srcCount > 6)
-				gf16_clmul_neon_round(_src7+ptr*srcScale, &low1, &low2, &mid1, &mid2, &high1, &high2, coeff + CLMUL_COEFF_PER_REGION*6);
-			if(srcCount > 7)
-				gf16_clmul_neon_round(_src8+ptr*srcScale, &low1, &low2, &mid1, &mid2, &high1, &high2, coeff + CLMUL_COEFF_PER_REGION*7);
-			gf16_clmul_neon_reduction(&low1, &low2, &mid1, &mid2, &high1, &high2, poly);
-			
-			uint8x16x2_t vb = vld2q_u8(_dst+ptr);
-			vb.val[0] = veorq_u8(vreinterpretq_u8_p16(low1), vb.val[0]);
-			vb.val[1] = veorq_u8(vreinterpretq_u8_p16(high1), vb.val[1]);
-			vst2q_u8(_dst+ptr, vb);
+			DO_PROCESS;
 		}
 	}
+	#undef DO_PROCESS
 }
 #endif /*defined(__ARM_NEON)*/
 

@@ -456,7 +456,7 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 				return;
 			}
 			
-			_info.alignment = 16; // TODO: ???
+			_info.alignment = 16; // I guess this is good enough...
 			_info.stride = gf16_sve_get_size()*2;
 			scratch = gf16_shuffle_init_128_sve(GF16_POLYNOMIAL);
 			
@@ -464,7 +464,7 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 			_mul_add = &gf16_shuffle_muladd_128_sve;
 			_mul_add_multi = &gf16_shuffle_muladd_multi_128_sve;
 			_mul_add_multi_packed = &gf16_shuffle_muladd_multi_packed_128_sve;
-			//_mul_add_multi_packpf = &gf16_shuffle_muladd_multi_packpf_sve;
+			//_mul_add_multi_packpf = &gf16_shuffle_muladd_multi_packpf_128_sve;
 			prepare_packed = &gf16_shuffle_prepare_packed_sve;
 			_info.idealInputMultiple = 3;
 			prepare_packed_cksum = &gf16_shuffle_prepare_packed_cksum_sve;
@@ -477,18 +477,37 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 				return;
 			}
 			
-			_info.alignment = 16; // TODO: ???
+			_info.alignment = 16;
 			_info.stride = gf16_sve_get_size()*2;
 			
 			_mul = &gf16_shuffle_mul_128_sve2;
 			_mul_add = &gf16_shuffle_muladd_128_sve2;
 			_mul_add_multi = &gf16_shuffle_muladd_multi_128_sve2;
 			_mul_add_multi_packed = &gf16_shuffle_muladd_multi_packed_128_sve2;
-			//_mul_add_multi_packpf = &gf16_shuffle_muladd_multi_packpf_sve2;
+			//_mul_add_multi_packpf = &gf16_shuffle_muladd_multi_packpf_128_sve2;
 			prepare_packed = &gf16_shuffle_prepare_packed_sve;
 			_info.idealInputMultiple = 3;
 			prepare_packed_cksum = &gf16_shuffle_prepare_packed_cksum_sve;
 			finish_packed_cksum = &gf16_shuffle_finish_packed_cksum_sve;
+		break;
+		
+		case GF16_CLMUL_SVE2:
+			if(!gf16_available_sve2) {
+				setupMethod(GF16_AUTO);
+				return;
+			}
+			
+			_info.alignment = 16;
+			_info.stride = gf16_sve_get_size()*2;
+			
+			_mul_add = &gf16_clmul_muladd_sve2;
+			_mul_add_multi = &gf16_clmul_muladd_multi_sve2;
+			_mul_add_multi_packed = &gf16_clmul_muladd_multi_packed_sve2;
+			//_mul_add_multi_packpf = &gf16_clmul_muladd_multi_packpf_sve2;
+			prepare_packed = &gf16_clmul_prepare_packed_sve2;
+			_info.idealInputMultiple = 8;
+			prepare_packed_cksum = &gf16_clmul_prepare_packed_cksum_sve2;
+			finish_packed_cksum = &gf16_shuffle_finish_packed_cksum_sve; // reuse shuffle
 		break;
 		
 		case GF16_AFFINE_AVX512:
@@ -997,6 +1016,7 @@ std::vector<Galois16Methods> Galois16Mul::availableMethods(bool checkCpuid) {
 		ret.push_back(GF16_SHUFFLE_128_SVE);
 	if(gf16_available_sve2 && caps.hasSVE2) {
 		ret.push_back(GF16_SHUFFLE_128_SVE2);
+		ret.push_back(GF16_CLMUL_SVE2);
 	}
 #endif
 	

@@ -221,6 +221,7 @@ Performance Options:
                                  shuffle128-sve: SVE variant of shuffle-neon
                                  shuffle128-sve2: SVE2 variant of shuffle-neon
                                  clmul-neon: split 8-bit polynomial multiplication (NEON)
+                                 clmul-sve2: SVE2 variant of clmul-neon
                              Default is auto-detected.
 
 UI Options:
