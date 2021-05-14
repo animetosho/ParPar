@@ -1,10 +1,13 @@
 {
   "target_defaults": {
+    "variables": {
+      "enable_native_tuning%": 1
+    },
     "conditions": [
       ['target_arch=="ia32"', {
         "msvs_settings": {"VCCLCompilerTool": {"EnableEnhancedInstructionSet": "2"}}
       }],
-      ['OS!="win"', {
+      ['OS!="win" and enable_native_tuning!=0', {
         "variables": {"supports_native%": "<!(<!(echo ${CXX_target:-${CXX:-c++}}) -MM -E src/gyp_warnings.cc -march=native 2>/dev/null || true)"},
         "conditions": [
           ['supports_native!=""', {
@@ -417,10 +420,16 @@
       "cflags!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"],
       "msvs_settings": {"VCCLCompilerTool": {"BufferSecurityCheck": "false"}},
       "conditions": [
-        ['target_arch=="arm"', {
+        ['OS!="win" and target_arch=="arm"', {
           "cflags": ["-mfpu=neon"],
           "xcode_settings": {
             "OTHER_CFLAGS": ["-mfpu=neon"]
+          }
+        }],
+        ['OS!="win" and target_arch=="arm" and enable_native_tuning==0', {
+          "cflags": ["-march=armv7-a"],
+          "xcode_settings": {
+            "OTHER_CFLAGS": ["-march=armv7-a"]
           }
         }]
       ]
@@ -440,7 +449,7 @@
       "cflags!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"],
       "msvs_settings": {"VCCLCompilerTool": {"BufferSecurityCheck": "false"}},
       "conditions": [
-        ['target_arch=="arm64" and OS!="win"', {
+        ['target_arch=="arm64" and OS!="win" and enable_native_tuning!=0', {
           "variables": {"supports_sve%": "<!(<!(echo ${CC_target:-${CC:-cc}}) -MM -E gf16/gf16_shuffle128_sve.c -march=armv8-a+sve 2>/dev/null || true)"},
           "conditions": [
             ['supports_sve!=""', {
@@ -470,7 +479,7 @@
       "cflags!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"],
       "msvs_settings": {"VCCLCompilerTool": {"BufferSecurityCheck": "false"}},
       "conditions": [
-        ['target_arch=="arm64" and OS!="win"', {
+        ['target_arch=="arm64" and OS!="win" and enable_native_tuning!=0', {
           "variables": {"supports_sve2%": "<!(<!(echo ${CC_target:-${CC:-cc}}) -MM -E gf16/gf16_shuffle128_sve2.c -march=armv8-a+sve2 2>/dev/null || true)"},
           "conditions": [
             ['supports_sve2!=""', {
