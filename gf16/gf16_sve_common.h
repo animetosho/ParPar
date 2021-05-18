@@ -32,6 +32,10 @@ static HEDLEY_ALWAYS_INLINE void gf16_prepare_blocku_sve(void *HEDLEY_RESTRICT d
 	memcpy(dst, src, remaining);
 	memset(dst + remaining, 0, svcntb()*2 - remaining);
 }
+static HEDLEY_ALWAYS_INLINE void gf16_prepare_half_blocku_sve(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t remaining) {
+	memcpy(dst, src, remaining);
+	memset(dst + remaining, 0, svcntb() - remaining);
+}
 
 static HEDLEY_ALWAYS_INLINE void gf16_checksum_prepare_sve(void *HEDLEY_RESTRICT dst, void *HEDLEY_RESTRICT checksum, const size_t blockLen, gf16_prepare_block prepareBlock) {
 	ALIGN_TO(16, int16_t tmp[blockLen/2]);

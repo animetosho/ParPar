@@ -77,28 +77,28 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle2x128_sve2_calc_tables(const unsign
 	gf16_shuffle128_sve2_mul16_tables(valEvenA, valOddA, &tbl_l0, &tbl_l1, &tbl_l2, &tbl_l3, &tbl_h0, &tbl_h1, &tbl_h2, &tbl_h3);
 	
 	
-	#define EXTRACT_LANE(dst, lane) \
-		*dst##ln = join_lane(tbl_l0, tbl_h2, lane); \
-		*dst##ls = join_lane(tbl_h0, tbl_l2, lane); \
-		*dst##hn = join_lane(tbl_l1, tbl_h3, lane); \
-		*dst##hs = join_lane(tbl_h1, tbl_l3, lane)
-	EXTRACT_LANE(tbl_A, 0);
+	#define EXTRACT_LANE(dst, src, lane) \
+		*dst##ln = join_lane(src##l0, src##h2, lane); \
+		*dst##ls = join_lane(src##h0, src##l2, lane); \
+		*dst##hn = join_lane(src##l1, src##h3, lane); \
+		*dst##hs = join_lane(src##h1, src##l3, lane)
+	EXTRACT_LANE(tbl_A, tbl_, 0);
 	if(srcCount > 1) {
-		EXTRACT_LANE(tbl_B, 1);
+		EXTRACT_LANE(tbl_B, tbl_, 1);
 	}
 	
 	if(svcntb() >= srcCount*16 || srcCount == 1) {
 		if(srcCount > 2) {
-			EXTRACT_LANE(tbl_C, 2);
+			EXTRACT_LANE(tbl_C, tbl_, 2);
 		}
 		if(srcCount > 3) {
-			EXTRACT_LANE(tbl_D, 3);
+			EXTRACT_LANE(tbl_D, tbl_, 3);
 		}
 		if(srcCount > 4) {
-			EXTRACT_LANE(tbl_E, 4);
+			EXTRACT_LANE(tbl_E, tbl_, 4);
 		}
 		if(srcCount > 5) {
-			EXTRACT_LANE(tbl_F, 5);
+			EXTRACT_LANE(tbl_F, tbl_, 5);
 		}
 	} else { // implies srcCount >= 3
 		svuint64_t valEvenB = svzip2_u64(
@@ -107,50 +107,50 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle2x128_sve2_calc_tables(const unsign
 		);
 		
 		if(svcntb() >= srcCount*8) {
-			if(svcntb() >= 48) { // implies srcCount > 3
-				EXTRACT_LANE(tbl_C, 2);
-			}
-			if(svcntb() >= 64) { // implies srcCount > 4
-				EXTRACT_LANE(tbl_D, 3);
-			}
-			if(svcntb() >= 80) { // implies srcCount == 6
-				EXTRACT_LANE(tbl_E, 4);
-			}
+			svuint8_t tbl2_l0, tbl2_l1, tbl2_l2, tbl2_l3, tbl2_h0, tbl2_h1, tbl2_h2, tbl2_h3;
 			
 			val1x = svtbl_s16(val1, NOMASK(svadd_n_u16, shufQidx, svcntb()/16));
 			svuint64_t valOddB = NOMASK(sveor_u64, valEvenB, svreinterpret_u64_s16(val1x));
-			gf16_shuffle128_sve2_mul16_tables(valEvenB, valOddB, &tbl_l0, &tbl_l1, &tbl_l2, &tbl_l3, &tbl_h0, &tbl_h1, &tbl_h2, &tbl_h3);
+			gf16_shuffle128_sve2_mul16_tables(valEvenB, valOddB, &tbl2_l0, &tbl2_l1, &tbl2_l2, &tbl2_l3, &tbl2_h0, &tbl2_h1, &tbl2_h2, &tbl2_h3);
 			
-			if(svcntb() == 32) {
-				EXTRACT_LANE(tbl_C, 0);
-				if(srcCount >= 4) {
-					EXTRACT_LANE(tbl_D, 1);
+			if(svcntb() < 48) {
+				EXTRACT_LANE(tbl_C, tbl2_, 0);
+			} else {
+				EXTRACT_LANE(tbl_C, tbl_, 2);
+			}
+			if(srcCount >= 4) {
+				if(svcntb() < 48) {
+					EXTRACT_LANE(tbl_D, tbl2_, 1);
+				} else if(svcntb() < 64) {
+					EXTRACT_LANE(tbl_D, tbl2_, 0);
+				} else {
+					EXTRACT_LANE(tbl_D, tbl_, 3);
 				}
 			}
-			if(svcntb() == 48) {
-				EXTRACT_LANE(tbl_D, 0);
-				if(srcCount >= 5) {
-					EXTRACT_LANE(tbl_E, 1);
-				}
-				if(srcCount >= 6) {
-					EXTRACT_LANE(tbl_F, 2);
-				}
-			}
-			if(svcntb() == 64) {
-				EXTRACT_LANE(tbl_E, 0);
-				if(srcCount >= 6) {
-					EXTRACT_LANE(tbl_F, 1);
+			if(srcCount >= 5) { // implies vect-width >= 384
+				if(svcntb() < 64) {
+					EXTRACT_LANE(tbl_E, tbl2_, 1);
+				} else if(svcntb() < 80) {
+					EXTRACT_LANE(tbl_E, tbl2_, 0);
+				} else {
+					EXTRACT_LANE(tbl_E, tbl_, 4);
 				}
 			}
-			if(svcntb() == 80) {
-				EXTRACT_LANE(tbl_F, 0);
+			if(srcCount >= 6) { // implies vect-width >= 384
+				if(svcntb() < 64) {
+					EXTRACT_LANE(tbl_F, tbl2_, 2);
+				} else if(svcntb() < 80) {
+					EXTRACT_LANE(tbl_F, tbl2_, 1);
+				} else {
+					EXTRACT_LANE(tbl_F, tbl2_, 0);
+				}
 			}
 		} else { // implies srcCount={5 or 6}, vect-width=256
 			val1x = svtbl_s16(val1, NOMASK(svorr_n_u16, shufQidx, 2)); // duplicate element 2&3 across 256-bits
 			svuint64_t valOddB = NOMASK(sveor_u64, valEvenB, svreinterpret_u64_s16(val1x));
 			gf16_shuffle128_sve2_mul16_tables(valEvenB, valOddB, &tbl_l0, &tbl_l1, &tbl_l2, &tbl_l3, &tbl_h0, &tbl_h1, &tbl_h2, &tbl_h3);
-			EXTRACT_LANE(tbl_C, 0);
-			EXTRACT_LANE(tbl_D, 1);
+			EXTRACT_LANE(tbl_C, tbl_, 0);
+			EXTRACT_LANE(tbl_D, tbl_, 1);
 			
 			svint16_t val0246b = svzip2_s16(val04, val26);
 			svint16_t val8ACEb = NOMASK(sveor_s16, val0246b, svtbl_s16(val8, svdupq_n_u16(4,4,4,4, 5,5,5,5)));
@@ -163,9 +163,9 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle2x128_sve2_calc_tables(const unsign
 			valOddA = NOMASK(sveor_u64, valEvenA, svreinterpret_u64_s16(val1x));
 			gf16_shuffle128_sve2_mul16_tables(valEvenA, valOddA, &tbl_l0, &tbl_l1, &tbl_l2, &tbl_l3, &tbl_h0, &tbl_h1, &tbl_h2, &tbl_h3);
 			
-			EXTRACT_LANE(tbl_E, 0);
+			EXTRACT_LANE(tbl_E, tbl_, 0);
 			if(srcCount >= 6) {
-				EXTRACT_LANE(tbl_F, 1);
+				EXTRACT_LANE(tbl_F, tbl_, 1);
 			}
 		}
 	}
@@ -305,7 +305,7 @@ void gf16_shuffle2x_muladd_multi_packpf_128_sve2(const void *HEDLEY_RESTRICT scr
 
 void gf16_shuffle2x_prepare_packed_sve(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen, size_t sliceLen, unsigned inputPackSize, unsigned inputNum, size_t chunkLen) {
 #if defined(__ARM_FEATURE_SVE2)
-	gf16_prepare_packed(dst, src, srcLen, sliceLen, svcntb(), &gf16_prepare_half_block_sve, &gf16_prepare_blocku_sve, inputPackSize, inputNum, chunkLen, 6, NULL, NULL, NULL, NULL, NULL);
+	gf16_prepare_packed(dst, src, srcLen, sliceLen, svcntb(), &gf16_prepare_half_block_sve, &gf16_prepare_half_blocku_sve, inputPackSize, inputNum, chunkLen, 6, NULL, NULL, NULL, NULL, NULL);
 #else
 	UNUSED(dst); UNUSED(src); UNUSED(srcLen); UNUSED(sliceLen); UNUSED(inputPackSize); UNUSED(inputNum); UNUSED(chunkLen);
 #endif
@@ -314,7 +314,7 @@ void gf16_shuffle2x_prepare_packed_sve(void *HEDLEY_RESTRICT dst, const void *HE
 void gf16_shuffle2x_prepare_packed_cksum_sve(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen, size_t sliceLen, unsigned inputPackSize, unsigned inputNum, size_t chunkLen) {
 #if defined(__ARM_FEATURE_SVE2)
 	svint16_t checksum = svdup_n_s16(0);
-	gf16_prepare_packed(dst, src, srcLen, sliceLen, svcntb(), &gf16_prepare_half_block_sve, &gf16_prepare_blocku_sve, inputPackSize, inputNum, chunkLen, 6, &checksum, &gf16_checksum_block_sve, &gf16_checksum_blocku_sve, &gf16_checksum_zeroes_sve, &gf16_checksum_prepare_sve);
+	gf16_prepare_packed(dst, src, srcLen, sliceLen, svcntb(), &gf16_prepare_half_block_sve, &gf16_prepare_half_blocku_sve, inputPackSize, inputNum, chunkLen, 6, &checksum, &gf16_checksum_block_sve, &gf16_checksum_blocku_sve, &gf16_checksum_zeroes_sve, &gf16_checksum_prepare_sve);
 #else
 	UNUSED(dst); UNUSED(src); UNUSED(srcLen); UNUSED(sliceLen); UNUSED(inputPackSize); UNUSED(inputNum); UNUSED(chunkLen);
 #endif
