@@ -20,22 +20,21 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle128_sve_calc_tables(const void *HED
 	svint16_t val8 = gf16_vec_mul2_sve(val4);
 	
 	// expand val1 and val8 so they can be EOR'd correctly
-	val8 = svtbl_s16(val8, NOMASK(svlsr_n_u16, svindex_u16(0, 1), 2)); // duplicate each lane 4 times
-	val1 = svtbl_s16(val1, NOMASK(svlsr_n_u16, svindex_u16(0, 1), 3)); // duplicate each lane 8 times
+	svint16_t val8x = svtbl_s16(val8, NOMASK(svlsr_n_u16, svindex_u16(0, 1), 2)); // duplicate each lane 4 times
+	svint16_t val1x = svtbl_s16(val1, NOMASK(svlsr_n_u16, svindex_u16(0, 1), 3)); // duplicate each lane 8 times
 	
 	svint16_t val04 = svzip1_s16(svdup_n_s16(0), val4);
 	svint16_t val26 = NOMASK(sveor_s16, val04, svzip1_s16(val2, val2));
 	
 	svint16_t val0246a = svzip1_s16(val04, val26);
-	svint16_t val8ACEa = NOMASK(sveor_s16, val0246a, val8);
+	svint16_t val8ACEa = NOMASK(sveor_s16, val0246a, val8x);
 	
 	svuint64_t valEvenA = svzip1_u64(
 		svreinterpret_u64_s16(val0246a),
 		svreinterpret_u64_s16(val8ACEa)
 	);
-	svuint64_t valOddA = NOMASK(sveor_u64, valEvenA, svreinterpret_u64_s16(val1));
+	svuint64_t valOddA = NOMASK(sveor_u64, valEvenA, svreinterpret_u64_s16(val1x));
 	SVE_CALC_TABLE_MUL16(valEvenA, valOddA, tbl_Al0, tbl_Al1, tbl_Al2, tbl_Al3, tbl_Ah0, tbl_Ah1, tbl_Ah2, tbl_Ah3);
-	
 	
 	#define EXTRACT_LANE(dst, src, lane) \
 		*dst##l0 = svdupq_lane_u8(*src##l0, lane); \
@@ -59,26 +58,28 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle128_sve_calc_tables(const void *HED
 			svreinterpret_u64_s16(val0246a),
 			svreinterpret_u64_s16(val8ACEa)
 		);
-		svuint64_t valOddB = NOMASK(sveor_u64, valEvenB, svreinterpret_u64_s16(val1));
 		
 		if(svcntb() >= srcCount*8) {
 			if(srcCount > 2) { // implies vect-width=256, srcCount=3
+				svuint64_t valOddB = NOMASK(sveor_u64, valEvenB, svreinterpret_u64_s16(svdup_lane_s16(val1, 2)));
 				SVE_CALC_TABLE_MUL16(valEvenB, valOddB, tbl_Cl0, tbl_Cl1, tbl_Cl2, tbl_Cl3, tbl_Ch0, tbl_Ch1, tbl_Ch2, tbl_Ch3);
 				EXTRACT_LANE(tbl_B, tbl_A, 1);
 			} else { // implies vect-width=128, srcCount=2
+				svuint64_t valOddB = NOMASK(sveor_u64, valEvenB, svreinterpret_u64_s16(svdup_lane_s16(val1, 1)));
 				SVE_CALC_TABLE_MUL16(valEvenB, valOddB, tbl_Bl0, tbl_Bl1, tbl_Bl2, tbl_Bl3, tbl_Bh0, tbl_Bh1, tbl_Bh2, tbl_Bh3);
 			}
 		} else { // implies vect-width=128, srcCount=3
+			svuint64_t valOddB = NOMASK(sveor_u64, valEvenB, svreinterpret_u64_s16(svdup_lane_s16(val1, 1)));
 			SVE_CALC_TABLE_MUL16(valEvenB, valOddB, tbl_Bl0, tbl_Bl1, tbl_Bl2, tbl_Bl3, tbl_Bh0, tbl_Bh1, tbl_Bh2, tbl_Bh3);
 			
-			svint16_t val0246b = svzip1_s16(val04, val26);
-			svint16_t val8ACEb = NOMASK(sveor_s16, val0246b, val8);
+			svint16_t val0246b = svzip2_s16(val04, val26);
+			svint16_t val8ACEb = NOMASK(sveor_s16, val0246b, svdup_lane_s16(val8, 2));
 			
 			valEvenA = svzip1_u64(
 				svreinterpret_u64_s16(val0246b),
 				svreinterpret_u64_s16(val8ACEb)
 			);
-			valOddA = NOMASK(sveor_u64, valEvenA, svreinterpret_u64_s16(val1));
+			valOddA = NOMASK(sveor_u64, valEvenA, svreinterpret_u64_s16(svdup_lane_s16(val1, 2)));
 			SVE_CALC_TABLE_MUL16(valEvenA, valOddA, tbl_Cl0, tbl_Cl1, tbl_Cl2, tbl_Cl3, tbl_Ch0, tbl_Ch1, tbl_Ch2, tbl_Ch3);
 		}
 	}
