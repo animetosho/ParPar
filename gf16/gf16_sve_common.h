@@ -10,15 +10,13 @@
 # include <arm_sve.h>
 
 
-
-// cacheline prefetching
-# define CACHELINE_SIZE 64
-# ifdef _MSC_VER
-#  define PREFETCH_MEM(addr, rw) __prefetch(addr)
-// TODO: ARM64 intrin is a little different
-# else
-#  define PREFETCH_MEM(addr, rw) __builtin_prefetch(addr, rw, 2)
-# endif
+static HEDLEY_ALWAYS_INLINE svint16_t gf16_vec_mul2_sve(svint16_t v) {
+	return sveor_n_s16_m(
+		svcmplt_n_s16(svptrue_b16(), v, 0),
+		NOMASK(svadd_s16, v, v),
+		GF16_POLYNOMIAL & 0xffff
+	);
+}
 
 
 // copying prepare block for both shuffle/clmul

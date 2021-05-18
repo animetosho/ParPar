@@ -10,38 +10,21 @@ int gf16_available_sve2 = 0;
 
 
 #if defined(__ARM_FEATURE_SVE2)
-static HEDLEY_ALWAYS_INLINE void gf16_shuffle128_sve2_calc_tables(uint16_t val,
+static HEDLEY_ALWAYS_INLINE void gf16_shuffle128_sve2_mul16_tables(svuint64_t rl, svuint64_t rh,
 	svuint8_t* tbl_l0, svuint8_t* tbl_l1, svuint8_t* tbl_l2, svuint8_t* tbl_l3, 
 	svuint8_t* tbl_h0, svuint8_t* tbl_h1, svuint8_t* tbl_h2, svuint8_t* tbl_h3
 ) {
-	// TODO: compute multiple tables in parallel?
+	*tbl_l0 = svtrn1_u8(svreinterpret_u8_u64(rl), svreinterpret_u8_u64(rh));
+	*tbl_h0 = svtrn2_u8(svreinterpret_u8_u64(rl), svreinterpret_u8_u64(rh));
 	
-	int val2 = GF16_MULTBY_TWO(val);
-	int val4 = GF16_MULTBY_TWO(val2);
-	int val8 = GF16_MULTBY_TWO(val4);
-	
-	svuint16_t tmp = svdupq_n_u16(0, val2, val4, val4^val2, 0, 0, 0, 0);
-	
-	svuint8_t rl = svreinterpret_u8_u64(svzip1_u64(
-		svreinterpret_u64_u16(tmp),
-		svreinterpret_u64_u16(NOMASK(sveor_u16, tmp, svdup_n_u16(val8)))
-	));
-	svuint8_t rh = svreinterpret_u8_u16(NOMASK(sveor_u16,
-		svreinterpret_u16_u8(rl),
-		svdup_n_u16(val)
-	));
-	
-	*tbl_l0 = svtrn1_u8(rl, rh);
-	*tbl_h0 = svtrn2_u8(rl, rh);
-	
-	svuint8_t ri;
+	svuint8_t ti, th, tl;
 	
 	#define MUL16(p, c) \
-		ri = NOMASK(svlsr_n_u8, *tbl_h##p, 4); \
-		rl = NOMASK(svlsl_n_u8, *tbl_l##p, 4); \
-		rh = svxar_n_u8(*tbl_h##p, ri, 4); \
-		*tbl_h##c = svsri_n_u8(rh, *tbl_l##p, 4); \
-		*tbl_l##c = NOMASK(sveor_u8, rl, svpmul_n_u8(ri, GF16_POLYNOMIAL & 0x1f))
+		ti = NOMASK(svlsr_n_u8, *tbl_h##p, 4); \
+		tl = NOMASK(svlsl_n_u8, *tbl_l##p, 4); \
+		th = svxar_n_u8(*tbl_h##p, ti, 4); \
+		*tbl_h##c = svsri_n_u8(th, *tbl_l##p, 4); \
+		*tbl_l##c = NOMASK(sveor_u8, tl, svpmul_n_u8(ti, GF16_POLYNOMIAL & 0x1f))
 	
 	MUL16(0, 1);
 	MUL16(1, 2);
@@ -84,7 +67,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle128_sve2_round(svuint8x2_t va, svui
 
 
 
-#define SVE_CALC_TABLE gf16_shuffle128_sve2_calc_tables
+#define SVE_CALC_TABLE_MUL16 gf16_shuffle128_sve2_mul16_tables
 #define SVE_ROUND1 gf16_shuffle128_sve2_round1
 #define SVE_ROUND gf16_shuffle128_sve2_round
 #define _FN(f) f##_128_sve2
@@ -92,7 +75,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle128_sve2_round(svuint8x2_t va, svui
 #undef _FN
 #undef SVE_ROUND
 #undef SVE_ROUND1
-#undef SVE_CALC_TABLE
+#undef SVE_CALC_TABLE_MUL16
 
 #ifdef _AVAILABLE
 #undef _AVAILABLE

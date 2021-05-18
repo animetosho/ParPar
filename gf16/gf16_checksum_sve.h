@@ -2,14 +2,6 @@
 #define __GF16_CHECKSUM_H
 
 #ifdef __ARM_FEATURE_SVE
-static HEDLEY_ALWAYS_INLINE svint16_t gf16_vec_mul2_sve(svint16_t v) {
-	return sveor_n_s16_m(
-		svcmplt_n_s16(svptrue_b16(), v, 0),
-		NOMASK(svadd_s16, v, v),
-		GF16_POLYNOMIAL & 0xffff
-	);
-}
-
 static HEDLEY_ALWAYS_INLINE void gf16_checksum_block_sve(const void *HEDLEY_RESTRICT src, void *HEDLEY_RESTRICT checksum, const size_t blockLen, const int aligned) {
 	UNUSED(aligned);
 	const unsigned words = blockLen/svcntb();

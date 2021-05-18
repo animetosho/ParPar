@@ -154,26 +154,18 @@ static HEDLEY_ALWAYS_INLINE void gf16_clmul_muladd_x_sve2(
 		high1a = NOMASK(sveor_u8, high1a, svget2(vb, 1)); \
 		svst2_u8(svptrue_b8(), _dst+ptr, svcreate2_u8(low1a, high1a))
 	
-	if(0) { // TODO: doPrefetch
-		intptr_t ptr = -(intptr_t)len;
-		if(doPrefetch == 1)
-			PREFETCH_MEM(_pf+ptr, 1);
-		if(doPrefetch == 2)
-			PREFETCH_MEM(_pf+ptr, 0);
-		while(ptr & (CACHELINE_SIZE-1)) {
-			DO_PROCESS;
-			ptr += svcntb()*2;
-		}
-		while(ptr) {
-			if(doPrefetch == 1)
-				PREFETCH_MEM(_pf+ptr, 1);
-			if(doPrefetch == 2)
-				PREFETCH_MEM(_pf+ptr, 0);
-			
-			for(size_t iter=0; iter<(CACHELINE_SIZE/(svcntb()*2)); iter++) {
-				DO_PROCESS;
-				ptr += svcntb()*2;
+	if(doPrefetch) {
+		for(intptr_t ptr = -(intptr_t)len; ptr; ptr += svcntb()*2) {
+			if(doPrefetch == 1) {
+				svprfb(svptrue_b8(), _pf+ptr, SV_PLDL1KEEP);
+				svprfb(svptrue_b8(), _pf+ptr + svcntb(), SV_PLDL1KEEP);
 			}
+			if(doPrefetch == 2) {
+				svprfb(svptrue_b8(), _pf+ptr, SV_PLDL2KEEP);
+				svprfb(svptrue_b8(), _pf+ptr + svcntb(), SV_PLDL2KEEP);
+			}
+			
+			DO_PROCESS;
 		}
 	} else {
 		for(intptr_t ptr = -(intptr_t)len; ptr; ptr += svcntb()*2) {
