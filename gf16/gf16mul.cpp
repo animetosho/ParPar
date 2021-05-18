@@ -491,6 +491,25 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 			finish_packed_cksum = &gf16_shuffle_finish_packed_cksum_sve;
 		break;
 		
+		case GF16_SHUFFLE2X_128_SVE2:
+			if(!gf16_available_sve2 || gf16_sve_get_size() < 32) {
+				setupMethod(GF16_AUTO);
+				return;
+			}
+			
+			_info.alignment = 32;
+			_info.stride = gf16_sve_get_size();
+			
+			_mul_add = &gf16_shuffle2x_muladd_128_sve2;
+			_mul_add_multi = &gf16_shuffle2x_muladd_multi_128_sve2;
+			_mul_add_multi_packed = &gf16_shuffle2x_muladd_multi_packed_128_sve2;
+			//_mul_add_multi_packpf = &gf16_shuffle2x_muladd_multi_packpf_128_sve2;
+			prepare_packed = &gf16_shuffle2x_prepare_packed_sve;
+			_info.idealInputMultiple = 6;
+			prepare_packed_cksum = &gf16_shuffle2x_prepare_packed_cksum_sve;
+			finish_packed_cksum = &gf16_shuffle2x_finish_packed_cksum_sve;
+		break;
+		
 		case GF16_CLMUL_SVE2:
 			if(!gf16_available_sve2) {
 				setupMethod(GF16_AUTO);
@@ -1016,6 +1035,7 @@ std::vector<Galois16Methods> Galois16Mul::availableMethods(bool checkCpuid) {
 		ret.push_back(GF16_SHUFFLE_128_SVE);
 	if(gf16_available_sve2 && caps.hasSVE2) {
 		ret.push_back(GF16_SHUFFLE_128_SVE2);
+		ret.push_back(GF16_SHUFFLE2X_128_SVE2);
 		ret.push_back(GF16_CLMUL_SVE2);
 	}
 #endif

@@ -470,6 +470,7 @@
       "defines": ["NDEBUG"],
       "sources": [
         "gf16/gf16_shuffle128_sve2.c",
+        "gf16/gf16_shuffle2x128_sve2.c",
         "gf16/gf16_clmul_sve2.c"
       ],
       "cflags": ["-Wno-unused-function"],

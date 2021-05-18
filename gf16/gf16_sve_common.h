@@ -24,6 +24,9 @@ static HEDLEY_ALWAYS_INLINE void gf16_prepare_block_sve(void *HEDLEY_RESTRICT ds
 	svst1_u8(svptrue_b8(), dst, svld1_u8(svptrue_b8(), src));
 	svst1_u8(svptrue_b8(), dst+svcntb(), svld1_u8(svptrue_b8(), src+svcntb()));
 }
+static HEDLEY_ALWAYS_INLINE void gf16_prepare_half_block_sve(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src) {
+	svst1_u8(svptrue_b8(), dst, svld1_u8(svptrue_b8(), src));
+}
 // final block
 static HEDLEY_ALWAYS_INLINE void gf16_prepare_blocku_sve(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t remaining) {
 	memcpy(dst, src, remaining);
