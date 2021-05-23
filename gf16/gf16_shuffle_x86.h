@@ -89,14 +89,14 @@ static HEDLEY_ALWAYS_INLINE __m256i mul16_vec256(__m128i poly, __m256i src) {
 	__m256i merge = _mm256_inserti128_si256(prodHi, _mm_shuffle_epi8(poly, _mm256_castsi256_si128(idx)), 1);
 #   if MWORD_SIZE == 64
 	src = _mm256_ternarylogic_epi32(
-		zext128_256(_mm256_extracti128_si256(idx, 1)),
+		extract_top128_256(idx),
 		_mm256_set1_epi8(0xf),
 		_mm256_slli_epi16(src, 4),
 		0xF2
 	);
 #   else
 	__m256i prodLo = _mm256_slli_epi16(_mm256_and_si256(_mm256_set1_epi8(0xf), src), 4);
-	src = _mm256_or_si256(prodLo, zext128_256(_mm256_extracti128_si256(idx, 1)));
+	src = _mm256_or_si256(prodLo, extract_top128_256(idx));
 #   endif
 	return _mm256_xor_si256(src, merge);
 }
@@ -106,14 +106,14 @@ static HEDLEY_ALWAYS_INLINE __m256i mul16_vec256(__m256i poly, __m256i src) {
 	__m256i idx = _mm256_inserti128_si256(prodHi, _mm256_castsi256_si128(prodHi), 1);
 #   if MWORD_SIZE == 64
 	src = _mm256_ternarylogic_epi32(
-		zext128_256(_mm256_extracti128_si256(prodHi, 1)),
+		extract_top128_256(prodHi),
 		_mm256_set1_epi8(0xf),
 		_mm256_slli_epi16(src, 4),
 		0xF2
 	);
 #   else
 	__m256i prodLo = _mm256_slli_epi16(_mm256_and_si256(_mm256_set1_epi8(0xf), src), 4);
-	src = _mm256_or_si256(prodLo, zext128_256(_mm256_extracti128_si256(prodHi, 1)));
+	src = _mm256_or_si256(prodLo, extract_top128_256(prodHi));
 #   endif
 	return _mm256_xor_si256(src, _mm256_shuffle_epi8(poly, idx));
 	// another idea with AVX512 is to keep each 4-bit part of the 16-bit results in a 128-bit lane, and shuffle lanes to handle the shift

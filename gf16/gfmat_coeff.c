@@ -32,8 +32,9 @@ void gfmat_init() {
 }
 
 HEDLEY_CONST uint16_t gf16_exp(uint_fast16_t v) {
-	v = gf_exp[v>>3] << (v&7);
-	return (uint16_t)v ^ gf_exp[8192 + (v>>16)];
+	uint_fast32_t result = gf_exp[v>>3];
+	result <<= (v&7);
+	return result ^ gf_exp[8192 + (result>>16)];
 	
 	/* alternative idea which only omits bottom bit of gf_exp lookup, but avoids a second lookup
 	// GCC doesn't handle the unpredictable check that well
@@ -47,7 +48,8 @@ HEDLEY_CONST uint16_t gfmat_coeff(uint_fast16_t inputBlock, uint_fast16_t recove
 	//assert(recoveryBlock < 65535); // if ==65535, gets an invalid exponent
 	
 	// calculate POW(inputBlockConstant, recoveryBlock) in GF
-	uint_fast32_t result = (inputBlock*2 + input_diff[inputBlock]) * recoveryBlock;
+	uint_fast32_t result = (inputBlock*2 + input_diff[inputBlock]);
+	result *= recoveryBlock;
 	// clever bit hack for 'result %= 65535' from MultiPar sources
 	result = (result >> 16) + (result & 65535);
 	result = (result >> 16) + (result & 65535);
