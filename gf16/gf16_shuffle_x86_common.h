@@ -16,7 +16,7 @@ static HEDLEY_ALWAYS_INLINE void initial_mul_vector(uint16_t val, __m128i* prod,
 	uint32_t val2 = val1 | val;
 	val2 = GF16_MULTBY_TWO_X2(val2);
 	__m128i tmp = _mm_cvtsi32_si128(val1);
-#if defined(_AVAILABLE_AVX) || MWORD_SIZE >= 32
+#if defined(_AVAILABLE_AVX) || (MWORD_SIZE >= 32 && defined(_AVAILABLE))
 	*prod = _mm_insert_epi32(tmp, val2 ^ val1, 1);
 #else
 	*prod = _mm_unpacklo_epi32(tmp, _mm_cvtsi32_si128(val2 ^ val1));

@@ -171,7 +171,7 @@ static HEDLEY_ALWAYS_INLINE unsigned gf16_muladd_multi_packed(const void *HEDLEY
 	return region;
 }
 
-#if defined(__ICC) || (defined(_MSC_VER) && !defined(__clang__))
+#if defined(__ICC) || (defined(_MSC_VER) && !defined(__clang__)) || !defined(_MM_HINT_ET1)
 # define MM_HINT_WT1 _MM_HINT_T1
 #else
 # define MM_HINT_WT1 _MM_HINT_ET1

@@ -991,8 +991,14 @@ void gf16_xor_finish_block_sse2(void *HEDLEY_RESTRICT dst) {
 	__m128i srcD0a, srcD0b, srcD4a, srcD4b, srcD8a, srcD8b, srcD12a, srcD12b;
 	__m128i srcQ0a, srcQ0b, srcQ0c, srcQ0d, srcQ8a, srcQ8b, srcQ8c, srcQ8d;
 	__m128i srcDQa, srcDQb, srcDQc, srcDQd, srcDQe, srcDQf, srcDQg, srcDQh;
+	__m128i dstA, dstB, dstC, dstD;
 	// setting to undefined to stop ICC warning about uninitialized values
-	__m128i dstA = _mm_undefined_si128(), dstB = _mm_undefined_si128(), dstC = _mm_undefined_si128(), dstD = _mm_undefined_si128();
+	#ifndef __APPLE__
+	dstA = _mm_undefined_si128();
+	dstB = _mm_undefined_si128();
+	dstC = _mm_undefined_si128();
+	dstD = _mm_undefined_si128();
+	#endif
 	
 	// load 16x 64-bit inputs
 	LOAD_X4( 0, srcD0a , srcD0b, 0)
