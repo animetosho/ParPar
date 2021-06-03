@@ -25,31 +25,22 @@ Features
 
 -   all main packets from the [PAR2
     specification](http://parchive.sourceforge.net/docs/specifications/parity-volume-spec/article-spec.html)
-
 -   unicode filename/comment support
-
 -   asychronous calculations and I/O
-
 -   multi-threading via OpenMP
-
 -   multiple fast calculation implementations leveraging x86 (SSE2, SSSE3, AVX2,
-    AVX512BW, GFNI) and ARM (NEON) SIMD capabilities, automatically selecting
+    AVX512BW, GFNI) and ARM (NEON, SVE, SVE2) SIMD capabilities, automatically selecting
     the best routine for the CPU (see [benchmark
     comparisons](benchmarks/info.md))
-
 -   multi-buffer (SIMD) MD5 implementation and accelerated CRC32 computation
-
 -   single read pass on source files if memory constraints allow (no separate
     hashing pass required)
-
 -   chunking support for memory constrained situations or for generating large
     amounts of recovery data
-
 -   minimum chunk size restrictions to avoid heavy I/O seeking when memory is
     limited
 
 -   cross-platform support
-
 -   completely different implementation to all the par2cmdline forks, using
     fresh new ideas and approaches :)
 
@@ -112,9 +103,9 @@ If NPM is installed (usually comes bundled with
 [node.js](https://nodejs.org/en/download/)), the following command can be used
 to install ParPar:
 
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+```bash
 npm install -g @animetosho/parpar
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+```
 
 You’ll then be able to run ParPar via the **parpar** command.
 
@@ -124,15 +115,15 @@ website](https://nodejs.org/en/download/).
 
 If you get a `gyp ERR! stack Error: EACCES: permission denied` error when installing, try the following command instead:
 
-```
+```bash
 npm install -g @animetosho/parpar --unsafe-perm
 ```
 
 You can then later uninstall ParPar via:
 
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+```bash
 npm uninstall -g @animetosho/parpar
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+```
 
 Note that installing from NPM essentially compiles from source, so see issues
 listed in the following section if the install is failing on the build step.
@@ -146,10 +137,10 @@ managers otherwise) and relevant build tools (i.e. MS Visual C++ for Windows,
 GCC/Clang family otherwise). After you have the dependencies, the following
 commands can be used to build:
 
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+```bash
 node-gyp rebuild
 npm install
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+```
 
 This sets up ParPar to be run from the *bin/parpar.js* file (i.e. via `node bin/parpar.js` command). If you want it to be globally accessible via the `parpar` command, the process is OS dependent. On Linux, you can usually create a symlink named *parpar* in a location specified in the `PATH` environment variable, to *bin/parpar.js* (e.g. `ln -s bin/parpar.js /usr/bin/parpar`). On Windows, either add the *bin* folder to your `PATH` environment, or copy *bin/parpar.cmd* to a `PATH` specified directory and edit the paths appropriately in this copy of *parpar.cmd*.
 
@@ -169,10 +160,10 @@ package manager has the necessary packages.
 Debian 8 is such a system (should also be fine on Ubuntu 14.04), and here's how
 APT can be used:
 
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+```bash
 apt-get install nodejs node-gyp node-async
 node-gyp rebuild
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+```
 
 Note that you'll also need node-yencode; [follow the instructions
 here](https://animetosho.org/app/node-yencode) on how to build it. After
@@ -181,14 +172,7 @@ in there.
 
 ### Native binary targeting
 
-Currently ParPar doesn't have proper runtime dispatch for calculation kernels on
-GCC/Clang compilers (runtime dispatch on Windows (MSVC) does work).  
-This means that compilation is always done with the `-march=native` switch. The
-build script will try to auto-detect whether this is supported by the compiler,
-and avoid the flag if it's unavailable, but this means that the build may not be
-correctly optimized if your version of GCC/Clang doesn't recognize the native
-CPU architecture.  
-This also means that portable builds from GCC/Clang are currently unsupported.
+By default, the `-march=native` flag is used during builds, which optimises the build for the CPU it’s being built on, at the expense of not being portable. If you want the build to be portable, change the value of the `enable_native_tuning%` variable in *binding.gyp* to `0`. Also check that you disable the same thing with the *yencode* module.
 
 ### Multi-Threading Support
 
@@ -216,7 +200,7 @@ Simple Example
 This is a basic example of the high level JS API (note, API not yet finalised so
 names etc. may change in future):
 
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+```javascript
 var par2creator = require('@animetosho/parpar').run(
     ['file1', 'file2'],   // array of input files
     1024*1024,   // 1MB slice size; if you want a slice count instead, give it as a negative number, e.g. -10 means select a slice size which results in 10 input slices
@@ -282,7 +266,7 @@ par2creator.on('pass_complete', function(par, passNum, passChunkNum) {
 par2creator.on('files_written', function(par, passNum, passChunkNum) {
     console.log('Written data for read pass ' + passNum);
 });
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+```
 
 Functions
 ---------
@@ -332,10 +316,25 @@ and will likely take a while to complete.
 Building Binary
 ---------------
 
-Compiling ParPar into a single binary can be done via
-[nexe](https://github.com/nexe/nexe) 1.x. The process is basically the same as
-[building Nyuu’s binary](https://github.com/animetosho/nyuu#building-binary), so
-see those instructions for details.
+Compiling ParPar into a single binary can be done via [nexe](https://github.com/nexe/nexe) 1.x. There is a little complication with bundling the *yencode* 1.0.x module, but a rather fragile script has been supplied in *nexe/build.js* to help with the process. The following general steps need to be taken:
+
+1.  Ensure that *nexe* is installed (doesn’t need to be globally installed) and [its requirements](https://github.com/nexe/nexe#building-requirements) met
+    
+2.  Download a Node.js source package. The script has mostly been tested with Node 4.x.x and 8.x.x, it may work with other versions
+    
+3.  The required ParPar libraries need to be installed into the *node_modules* folder
+    
+4.  Inside the *nexe* folder (the one containing *build.js*), create the following two folders: *node* and *yencode-src*
+    
+5.  Inside the *node* folder, create a folder with the version number of the package you downloaded in step 2, for example “4.9.1”. Inside *this* folder, create one named “\_” and place the downloaded sources in this folder. After doing this, the file *nexe/node/x.x.x/\_/node.gyp* should exist, where *x.x.x* is the node version number
+    
+6.  Inside the *yencode-src* folder, copy the source code for the *yencode* module
+    
+7.  Edit *nexe/build.js*; options that are likely to be edited are at the top of the file. You’ll likely need to change *nodeVer* to be the version of node you’re using
+    
+8.  In the *nexe* folder, run *build.js*. This script patches node to embed the yencode module, and customises a few compiler options, then calls nexe to build the final executable. If it worked, you should get a binary named *parpar* or *parpar.exe* in the nexe folder
+
+Note that this will be built with the `-flto` option on non-Windows platforms. If this causes build failures, your system’s `ar` utility may not support LTO objects, which can be worked around if you have `gcc-ar` installed by issuing a command like `export AR=gcc-ar`
 
 Alternatives
 ============
