@@ -1,8 +1,8 @@
 {
+  "variables": {
+    "enable_native_tuning%": 1
+  },
   "target_defaults": {
-    "variables": {
-      "enable_native_tuning%": 1
-    },
     "conditions": [
       ['target_arch=="ia32"', {
         "msvs_settings": {"VCCLCompilerTool": {"EnableEnhancedInstructionSet": "2"}}
