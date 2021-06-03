@@ -99,13 +99,19 @@
 # define zext128_512 _mm512_zextsi128_si512
 # define extract_top128_256(x) _mm256_zextsi128_si256(_mm256_extracti128_si256(x, 1))
 #else
-// technically a cast is incorrect, due to upper 128 bits being undefined, but should usually work fine
+// technically a cast is incorrect, due to upper 128 bits being undefined, but should usually work fine because it wouldn't make sense for a compiler to do otherwise
+# ifdef __OPTIMIZE__
+//#  define zext128_256 _mm256_castsi128_si256
+#  define zext256_512 _mm512_castsi256_si512
+#  define zext128_512 _mm512_castsi128_si512
+#  define extract_top128_256(x) _mm256_castsi128_si256(_mm256_extracti128_si256(x, 1))
+# else
 // alternative may be `_mm256_set_m128i(_mm_setzero_si128(), v)` but unsupported on GCC < 7, and most compilers generate a VINSERTF128 instruction for it
-//# define zext128_256 _mm256_castsi128_si256
-# define zext256_512 _mm512_castsi256_si512
-# define zext128_512 _mm512_castsi128_si512
-// Clang can do whack things, so use a permute instead
-# define extract_top128_256(x) _mm256_permute2x128_si256(x, x, 0x81)
+// seems like Clang only stores half the register to the stack, if optimization disabled and zero extension not used, causing the top 128-bits to be the old value
+#  define zext256_512(x) _mm512_inserti64x4(_mm512_setzero_si512(), x, 0)
+#  define zext128_512(x) _mm512_inserti32x4(_mm512_setzero_si512(), x, 0)
+#  define extract_top128_256(x) _mm256_permute2x128_si256(x, x, 0x81)
+# endif
 #endif
 
 
