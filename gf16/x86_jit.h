@@ -701,6 +701,7 @@ typedef struct {
 } jit_wx_pair;
 
 #if defined(_WINDOWS) || defined(__WINDOWS__) || defined(_WIN32) || defined(_WIN64)
+# define NOMINMAX
 # include <windows.h>
 static inline jit_wx_pair* jit_alloc(size_t len) {
 	void* mem = VirtualAlloc(NULL, len, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
