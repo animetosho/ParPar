@@ -94,7 +94,9 @@ PAR2 Options:
   -f,  --filepath-format     How to format input file paths, can be either:
                                  basename: discard paths
                                  keep: retain full paths as specified
-                                 common: discard common parts of paths
+                                 common: discard common parts of paths; falls
+                                         back to basename if there is no common
+                                         path
                                  outrel: path computed relative to output
                                  path: path computed relative to that specified
                                        in `--filepath-base`
