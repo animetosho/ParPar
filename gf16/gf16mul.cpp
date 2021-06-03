@@ -510,6 +510,11 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 			finish_packed_cksum = &gf16_shuffle2x_finish_packed_cksum_sve;
 		break;
 		
+		case GF16_SHUFFLE_512_SVE2:
+			// TODO: implement
+			setupMethod(GF16_AUTO);
+			return;
+
 		case GF16_CLMUL_SVE2:
 			if(!gf16_available_sve2) {
 				setupMethod(GF16_AUTO);
