@@ -102,8 +102,8 @@ static HEDLEY_ALWAYS_INLINE void gf16_clmul_neon_reduction(poly16x8_t* low1, pol
 	// merge mid into high/low
 	uint8x16x2_t midbytes = vuzpq_u8(vreinterpretq_u8_p16(mid1), vreinterpretq_u8_p16(mid2));
 	uint8x16_t libytes = veorq_u8(hibytes.val[0], lobytes.val[1]);
-	lobytes.val[1] = veorq_u8(midbytes.val[0], veorq_u8(lobytes.val[0], libytes));
-	hibytes.val[0] = veorq_u8(midbytes.val[1], veorq_u8(hibytes.val[1], libytes));
+	lobytes.val[1] = veorq_u8(libytes, veorq_u8(lobytes.val[0], midbytes.val[0]));
+	hibytes.val[0] = veorq_u8(libytes, veorq_u8(hibytes.val[1], midbytes.val[1]));
 	
 	
 	// reduction based on hibytes
