@@ -47,7 +47,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_xor256_jit_stub(intptr_t src, intptr_t dEn
 		"callq *%[f]\n"
 		: "+a"(src), "+d"(dest), "+S"(pf) : "c"(dEnd), [f]"r"(fn)
 		: "memory" // GCC pre 4.9 doesn't accept YMM registers
-#   if !defined(__GNUC__) || defined(__clang__) || __GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ > 8)
+#   if HEDLEY_GCC_VERSION_CHECK(4,9,0) || !defined(HEDLEY_GCC_VERSION)
 		, "%ymm0", "%ymm1", "%ymm2", "%ymm3", "%ymm4", "%ymm5", "%ymm6", "%ymm7", "%ymm8", "%ymm9", "%ymm10", "%ymm11", "%ymm12", "%ymm13", "%ymm14", "%ymm15"
 #   endif
 	);
