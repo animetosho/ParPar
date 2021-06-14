@@ -505,6 +505,91 @@ STRINGIFY(
 // defined during compile: MUL_ONLY, numInputs
 
 // strategy which caches several inputs, dot-products to multiple outputs, and doesn't require a LUT per coefficient
+#define KERNEL_NOLUT_MULGROUP \
+"(__global val_t* restrict dst, __global const val_t* restrict src, COEFF_TABLE_TYPE const ushort* restrict coeff, const nat_uint outBlk, const nat_uint numOutputs, const nat_uint _numInputs, __local val_t* cache  EX_TABLE_ARGS_DECL) { \n"\
+"	const memsize_t len = get_global_size(0)*COL_GROUP_ITERS;                                    \n"\
+"	const memsize_t globalCol = get_global_id(0)*COL_GROUP_ITERS;                                \n"\
+"	const uint col = get_local_id(0)*COL_GROUP_ITERS;                                            \n"\
+"	__global const val_t* srcBase = src + globalCol;                                             \n"\
+"	                                                                                             \n"\
+"	val_t result[OUTPUT_GROUPING][COL_GROUP_ITERS];                                              \n"\
+"	val_t val[COL_GROUP_ITERS];                                                                  \n"\
+"	#pragma unroll                                                                               \n"\
+"	for(nat_uint iter=0; iter<COL_GROUP_ITERS; iter++) {                                         \n"\
+"		#ifdef DO_CACHE                                                                          \n"\
+"			val[iter] = READ_SRC(srcBase, iter);                                                 \n"\
+"			if(DO_CACHE == 1) cache[col+iter] = val[iter];                                       \n"\
+"		#else                                                                                    \n"\
+"			val[iter] = cache[col+iter];                                                         \n"\
+"		#endif                                                                                   \n"\
+"	}                                                                                            \n"\
+"	                                                                                             \n"\
+"	nat_uint curCoeff;                                                                           \n"\
+"	#ifdef GFMAT_COEFF_SHORTCUT                                                                  \n"\
+"		curCoeff = gfmat_calc_coeff_log(outBlk, coeff[0]);                                       \n"\
+"		#pragma unroll                                                                           \n"\
+"		for (nat_uint o = 0; o < numOutputs; o++) {                                              \n"\
+"			#pragma unroll                                                                       \n"\
+"			for(nat_uint iter=0; iter<COL_GROUP_ITERS; iter++)                                   \n"\
+"				result[o][iter] = GF_MULTIPLY(val[iter], curCoeff);                              \n"\
+"			curCoeff += coeff[0];                                                                \n"\
+"			curCoeff += curCoeff >> 16;                                                          \n"\
+"			curCoeff &= 0xffff;                                                                  \n"\
+"		}                                                                                        \n"\
+"	#else                                                                                        \n"\
+"		#pragma unroll                                                                           \n"\
+"		for (nat_uint o = 0; o < numOutputs; o++) {                                              \n"\
+"			curCoeff = GET_COEFF(outBlk+o, 0u);                                                  \n"\
+"			#pragma unroll                                                                       \n"\
+"			for(nat_uint iter=0; iter<COL_GROUP_ITERS; iter++)                                   \n"\
+"				result[o][iter] = GF_MULTIPLY(val[iter], curCoeff);                              \n"\
+"		}                                                                                        \n"\
+"	#endif                                                                                       \n"\
+"	                                                                                             \n"\
+"	for (nat_uint i = 1; i < _numInputs; i++) {                                                  \n"\
+"		srcBase += len;                                                                          \n"\
+"		#pragma unroll                                                                           \n"\
+"		for(nat_uint iter=0; iter<COL_GROUP_ITERS; iter++) {                                     \n"\
+"			#ifdef DO_CACHE                                                                      \n"\
+"				val[iter] = READ_SRC(srcBase, iter);                                             \n"\
+"				if(DO_CACHE == 1) cache[i*COL_GROUP_SIZE*COL_GROUP_ITERS + col+iter] = val[iter];\n"\
+"			#else                                                                                \n"\
+"				val[iter] = cache[i*COL_GROUP_SIZE*COL_GROUP_ITERS + col+iter];                  \n"\
+"			#endif                                                                               \n"\
+"		}                                                                                        \n"\
+"		                                                                                         \n"\
+"		#ifdef GFMAT_COEFF_SHORTCUT                                                              \n"\
+"			curCoeff = gfmat_calc_coeff_log(outBlk, coeff[i]);                                   \n"\
+"			#pragma unroll                                                                       \n"\
+"			for (nat_uint o = 0; o < numOutputs; o++) {                                          \n"\
+"				#pragma unroll                                                                   \n"\
+"				for(nat_uint iter=0; iter<COL_GROUP_ITERS; iter++)                               \n"\
+"					result[o][iter] ^= GF_MULTIPLY(val[iter], curCoeff);                         \n"\
+"				curCoeff += coeff[i];                                                            \n"\
+"				curCoeff += curCoeff >> 16;                                                      \n"\
+"				curCoeff &= 0xffff;                                                              \n"\
+"			}                                                                                    \n"\
+"		#else                                                                                    \n"\
+"			#pragma unroll                                                                       \n"\
+"			for (nat_uint o = 0; o < numOutputs; o++) {                                          \n"\
+"				curCoeff = GET_COEFF(outBlk+o, i);                                               \n"\
+"				#pragma unroll                                                                   \n"\
+"				for(nat_uint iter=0; iter<COL_GROUP_ITERS; iter++)                               \n"\
+"					result[o][iter] ^= GF_MULTIPLY(val[iter], curCoeff);                         \n"\
+"			}                                                                                    \n"\
+"		#endif                                                                                   \n"\
+"	}                                                                                            \n"\
+"	__global val_t* dstBase = dst + WBUF_REF(outBlk, len, globalCol);                            \n"\
+"	#pragma unroll                                                                               \n"\
+"	for (nat_uint o = 0; o < numOutputs; o++) {                                                  \n"\
+"		#pragma unroll                                                                           \n"\
+"		for(nat_uint iter=0; iter<COL_GROUP_ITERS; iter++) {                                     \n"\
+"			WRITE_DST(dstBase, iter, result[o][iter]);                                           \n"\
+"		}                                                                                        \n"\
+"		dstBase += len;                                                                          \n"\
+"	}                                                                                            \n"\
+"}                                                                                               \n"
+
 const static char _ocl_kernel_nolut_funcs[] =
 "#ifdef WRITE_DST_OVERRIDE\n"
 " #ifdef MUL_ONLY\n"
@@ -522,90 +607,14 @@ const static char _ocl_kernel_nolut_funcs[] =
 "#else\n"
 " #define GET_COEFF(o, i) coeff[COBUF_REF(o, i)]\n"
 "#endif\n"
-STRINGIFY(
-	/* @doCache: 0=use cache, 1=read and cache, 2=read but don't cache */
-	inline void KERNFN(mulgroup)(__global val_t* restrict dst, __global const val_t* restrict src, COEFF_TABLE_TYPE const ushort* restrict coeff, nat_uint outBlk, nat_uint numOutputs, nat_uint _numInputs, __local val_t* cache, int doCache  EX_TABLE_ARGS_DECL) {
-		const memsize_t len = get_global_size(0)*COL_GROUP_ITERS;
-		const memsize_t globalCol = get_global_id(0)*COL_GROUP_ITERS;
-		const uint col = get_local_id(0)*COL_GROUP_ITERS;
-		__global const val_t* srcBase = src + globalCol;
-		
-		val_t result[OUTPUT_GROUPING][COL_GROUP_ITERS];
-		val_t val[COL_GROUP_ITERS];
-		) "\n#pragma unroll\n" STRINGIFY(
-		for(nat_uint iter=0; iter<COL_GROUP_ITERS; iter++) {
-			if(doCache) {
-				val[iter] = READ_SRC(srcBase, iter);
-				if(doCache == 1) cache[col+iter] = val[iter];
-			} else
-				val[iter] = cache[col+iter];
-		}
-		
-		nat_uint curCoeff;
-		) "\n#ifdef GFMAT_COEFF_SHORTCUT\n" STRINGIFY(
-			curCoeff = gfmat_calc_coeff_log(outBlk, coeff[0]);
-			) "\n#pragma unroll\n" STRINGIFY(
-			for (nat_uint o = 0; o < numOutputs; o++) {
-				) "\n#pragma unroll\n" STRINGIFY(
-				for(nat_uint iter=0; iter<COL_GROUP_ITERS; iter++)
-					result[o][iter] = GF_MULTIPLY(val[iter], curCoeff);
-				curCoeff += coeff[0];
-				curCoeff += curCoeff >> 16;
-				curCoeff &= 0xffff;
-			}
-		) "\n#else\n" STRINGIFY(
-			) "\n#pragma unroll\n" STRINGIFY(
-			for (nat_uint o = 0; o < numOutputs; o++) {
-				curCoeff = GET_COEFF(outBlk+o, 0u);
-				) "\n#pragma unroll\n" STRINGIFY(
-				for(nat_uint iter=0; iter<COL_GROUP_ITERS; iter++)
-					result[o][iter] = GF_MULTIPLY(val[iter], curCoeff);
-			}
-		) "\n#endif\n" STRINGIFY(
-		
-		for (nat_uint i = 1; i < _numInputs; i++) {
-			srcBase += len;
-			) "\n#pragma unroll\n" STRINGIFY(
-			for(nat_uint iter=0; iter<COL_GROUP_ITERS; iter++) {
-				if(doCache) {
-					val[iter] = READ_SRC(srcBase, iter);
-					if(doCache == 1) cache[i*COL_GROUP_SIZE*COL_GROUP_ITERS + col+iter] = val[iter];
-				} else
-					val[iter] = cache[i*COL_GROUP_SIZE*COL_GROUP_ITERS + col+iter];
-			}
-			
-			) "\n#ifdef GFMAT_COEFF_SHORTCUT\n" STRINGIFY(
-				curCoeff = gfmat_calc_coeff_log(outBlk, coeff[i]);
-				) "\n#pragma unroll\n" STRINGIFY(
-				for (nat_uint o = 0; o < numOutputs; o++) {
-					) "\n#pragma unroll\n" STRINGIFY(
-					for(nat_uint iter=0; iter<COL_GROUP_ITERS; iter++)
-						result[o][iter] ^= GF_MULTIPLY(val[iter], curCoeff);
-					curCoeff += coeff[i];
-					curCoeff += curCoeff >> 16;
-					curCoeff &= 0xffff;
-				}
-			) "\n#else\n" STRINGIFY(
-				) "\n#pragma unroll\n" STRINGIFY(
-				for (nat_uint o = 0; o < numOutputs; o++) {
-					curCoeff = GET_COEFF(outBlk+o, i);
-					) "\n#pragma unroll\n" STRINGIFY(
-					for(nat_uint iter=0; iter<COL_GROUP_ITERS; iter++)
-						result[o][iter] ^= GF_MULTIPLY(val[iter], curCoeff);
-				}
-			) "\n#endif\n" STRINGIFY(
-		}
-		__global val_t* dstBase = dst + WBUF_REF(outBlk, len, globalCol);
-		) "\n#pragma unroll\n" STRINGIFY(
-		for (nat_uint o = 0; o < numOutputs; o++) {
-			) "\n#pragma unroll\n" STRINGIFY(
-			for(nat_uint iter=0; iter<COL_GROUP_ITERS; iter++) {
-				WRITE_DST(dstBase, iter, result[o][iter]);
-			}
-			dstBase += len;
-		}
-	}
-) "\n#undef GET_COEFF\n";
+"#define DO_CACHE 1\n"
+"inline void KERNFN(mulgroup_cache)" KERNEL_NOLUT_MULGROUP "\n"
+"#undef DO_CACHE\n"
+"#define DO_CACHE 0\n"
+"inline void KERNFN(mulgroup_nocache)" KERNEL_NOLUT_MULGROUP "\n"
+"#undef DO_CACHE\n"
+"inline void KERNFN(mulgroup_read)" KERNEL_NOLUT_MULGROUP "\n"
+"#undef GET_COEFF\n";
 
 const static char _ocl_kernel_nolut[] = STRINGIFY({
 	) "\n#ifdef LMEM_CACHE_SIZE\n" STRINGIFY(
@@ -656,19 +665,19 @@ const static char _ocl_kernel_nolut[] = STRINGIFY({
 		
 		// first iteration -> copy loaded data to cache
 		//barrier(CLK_LOCAL_MEM_FENCE);  // probably not needed? thread only accesses the same value that it writes
-		KERNFN(mulgroup)(dst, src, lcoeff, outBlk, OUTPUT_GROUPING, numInputs, cache, 1  EX_TABLE_ARGS);
+		KERNFN(mulgroup_cache)(dst, src, lcoeff, outBlk, OUTPUT_GROUPING, numInputs, cache  EX_TABLE_ARGS);
 		outBlk += OUTPUT_GROUPING;
 		//barrier(CLK_LOCAL_MEM_FENCE);
 		
 		for (; outBlk < OUTPUTS_PER_THREAD - OUTPUT_GROUPING + 1; outBlk += OUTPUT_GROUPING) {
-			KERNFN(mulgroup)(dst, src, lcoeff, outBlk, OUTPUT_GROUPING, numInputs, cache, 0  EX_TABLE_ARGS);
+			KERNFN(mulgroup_read)(dst, src, lcoeff, outBlk, OUTPUT_GROUPING, numInputs, cache  EX_TABLE_ARGS);
 		}
 		) "\n#endif\n"
 		"#if OUTPUTS_PER_THREAD == OUTPUT_GROUPING || OUTPUTS_PER_THREAD % OUTPUT_GROUPING > 0\n" STRINGIFY(
 		) "\n#if OUTPUTS_PER_THREAD > OUTPUT_GROUPING\n" STRINGIFY(
-			KERNFN(mulgroup)(dst, src, lcoeff, outBlk, (OUTPUTS_PER_THREAD == OUTPUT_GROUPING ? OUTPUTS_PER_THREAD : OUTPUTS_PER_THREAD % OUTPUT_GROUPING), numInputs, cache, 0  EX_TABLE_ARGS);
+			KERNFN(mulgroup_read)(dst, src, lcoeff, outBlk, (OUTPUTS_PER_THREAD == OUTPUT_GROUPING ? OUTPUTS_PER_THREAD : OUTPUTS_PER_THREAD % OUTPUT_GROUPING), numInputs, cache  EX_TABLE_ARGS);
 		) "\n#else\n" STRINGIFY(
-			KERNFN(mulgroup)(dst, src, lcoeff, outBlk, (OUTPUTS_PER_THREAD == OUTPUT_GROUPING ? OUTPUTS_PER_THREAD : OUTPUTS_PER_THREAD % OUTPUT_GROUPING), numInputs, (__local val_t*)0, 2  EX_TABLE_ARGS);
+			KERNFN(mulgroup_nocache)(dst, src, lcoeff, outBlk, (OUTPUTS_PER_THREAD == OUTPUT_GROUPING ? OUTPUTS_PER_THREAD : OUTPUTS_PER_THREAD % OUTPUT_GROUPING), numInputs, (__local val_t*)0  EX_TABLE_ARGS);
 		) "\n#endif\n" STRINGIFY(
 		) "\n#endif\n" STRINGIFY(
 	} else {
@@ -678,18 +687,18 @@ const static char _ocl_kernel_nolut[] = STRINGIFY({
 		__local val_t cache[SUBMIT_INPUTS*COL_GROUP_SIZE*COL_GROUP_ITERS];
 		// first iteration -> copy loaded data to cache
 		//barrier(CLK_LOCAL_MEM_FENCE);
-		KERNFN(mulgroup)(dst, src, lcoeff, outBlk, OUTPUT_GROUPING, numInputs, cache, 1  EX_TABLE_ARGS);
+		KERNFN(mulgroup_cache)(dst, src, lcoeff, outBlk, OUTPUT_GROUPING, numInputs, cache  EX_TABLE_ARGS);
 		outBlk += OUTPUT_GROUPING;
 		//barrier(CLK_LOCAL_MEM_FENCE);
 		
 		for (; outBlk < OUTPUTS_THIS_THREAD - OUTPUT_GROUPING + 1; outBlk += OUTPUT_GROUPING) {
-			KERNFN(mulgroup)(dst, src, lcoeff, outBlk, OUTPUT_GROUPING, numInputs, cache, 0  EX_TABLE_ARGS);
+			KERNFN(mulgroup_read)(dst, src, lcoeff, outBlk, OUTPUT_GROUPING, numInputs, cache  EX_TABLE_ARGS);
 		}
 		) "\n#endif\n#if OUTPUTS_THIS_THREAD == OUTPUT_GROUPING || OUTPUTS_THIS_THREAD % OUTPUT_GROUPING > 0\n" STRINGIFY(
 		) "\n#if OUTPUTS_THIS_THREAD > OUTPUT_GROUPING\n" STRINGIFY(
-			KERNFN(mulgroup)(dst, src, lcoeff, outBlk, (OUTPUTS_THIS_THREAD == OUTPUT_GROUPING ? OUTPUTS_THIS_THREAD : OUTPUTS_THIS_THREAD % OUTPUT_GROUPING), numInputs, cache, 0  EX_TABLE_ARGS);
+			KERNFN(mulgroup_read)(dst, src, lcoeff, outBlk, (OUTPUTS_THIS_THREAD == OUTPUT_GROUPING ? OUTPUTS_THIS_THREAD : OUTPUTS_THIS_THREAD % OUTPUT_GROUPING), numInputs, cache  EX_TABLE_ARGS);
 		) "\n#else\n" STRINGIFY(
-			KERNFN(mulgroup)(dst, src, lcoeff, outBlk, (OUTPUTS_THIS_THREAD == OUTPUT_GROUPING ? OUTPUTS_THIS_THREAD : OUTPUTS_THIS_THREAD % OUTPUT_GROUPING), numInputs, (__local val_t*)0, 2  EX_TABLE_ARGS);
+			KERNFN(mulgroup_nocache)(dst, src, lcoeff, outBlk, (OUTPUTS_THIS_THREAD == OUTPUT_GROUPING ? OUTPUTS_THIS_THREAD : OUTPUTS_THIS_THREAD % OUTPUT_GROUPING), numInputs, (__local val_t*)0  EX_TABLE_ARGS);
 		) "\n#endif\n" STRINGIFY(
 		) "\n#endif\n" STRINGIFY(
 		
