@@ -957,8 +957,21 @@ bool GF16OCL::setup_kernels(Galois16OCLMethods method, unsigned targetInputBatch
 	switch(method) {
 	case GF16OCL_BY2:
 		inputBatchSize = 16;
-		if(inputBatchSize*sizePerWorkGroup > deviceLocalSize)
-			inputBatchSize = (unsigned)(deviceLocalSize / sizePerWorkGroup);
+		while(1) {
+			if(inputBatchSize*sizePerWorkGroup > deviceLocalSize)
+				inputBatchSize = (unsigned)(deviceLocalSize / sizePerWorkGroup);
+			
+			if(inputBatchSize < 1 && deviceLocalSize >= 2048) {
+				// try reducing workgroup if too large
+				if(wgSize > 256) {
+					wgSize = 256;
+					sizePerWorkGroup = infoShortVecSize*2 * wgSize;
+					inputBatchSize = 16;
+					continue;
+				}
+			}
+			break;
+		}
 		
 		if(targetInputBatch) inputBatchSize = targetInputBatch;
 		
@@ -968,7 +981,7 @@ bool GF16OCL::setup_kernels(Galois16OCLMethods method, unsigned targetInputBatch
 		usesOutGrouping = true;
 	break;
 	case GF16OCL_SHUFFLE:
-	case GF16OCL_SHUFFLE2:
+	//case GF16OCL_SHUFFLE2:
 		oclVerArg = "-cl-std=CL1.1";
 		inputBatchSize = 4;
 		sizePerWorkGroup *= 2; // process two words, so double workgroup size
@@ -997,8 +1010,21 @@ bool GF16OCL::setup_kernels(Galois16OCLMethods method, unsigned targetInputBatch
 			deviceLocalSize -= reqLocalMem;
 		}
 		
-		if(inputBatchSize*sizePerWorkGroup > deviceLocalSize)
-			inputBatchSize = (unsigned)(deviceLocalSize / sizePerWorkGroup);
+		while(1) {
+			if(inputBatchSize*sizePerWorkGroup > deviceLocalSize)
+				inputBatchSize = (unsigned)(deviceLocalSize / sizePerWorkGroup);
+			
+			if(inputBatchSize < 1 && deviceLocalSize >= 2048) {
+				// try reducing workgroup if too large
+				if(wgSize > 256) {
+					wgSize = 256;
+					sizePerWorkGroup = infoShortVecSize*2 * wgSize;
+					inputBatchSize = 8;
+					continue;
+				}
+			}
+			break;
+		}
 		
 		if(targetInputBatch) inputBatchSize = targetInputBatch;
 		
@@ -1040,11 +1066,26 @@ bool GF16OCL::setup_kernels(Galois16OCLMethods method, unsigned targetInputBatch
 			inputBatchSize = 4;
 			if(targetInputBatch) inputBatchSize = targetInputBatch;
 			// TODO: compute ideal iteration count
-			groupIterations = (unsigned)round_down_pow2(
-				(deviceLocalSize - inputBatchSize*(method == GF16OCL_LOOKUP_HALF ? 512 : 1024))
-				/ (sizePerWorkGroup * inputBatchSize)
-			);
-			//groupIterations = 2; // 3 may be better?
+			while(1) {
+				groupIterations = (unsigned)round_down_pow2(
+					(deviceLocalSize - inputBatchSize*(method == GF16OCL_LOOKUP_HALF ? 512 : 1024))
+					/ (sizePerWorkGroup * inputBatchSize)
+				);
+				if(groupIterations < 1 && deviceLocalSize >= 8192) {
+					// maybe the workgroup is too big
+					if(wgSize > 256) {
+						wgSize = 256;
+						sizePerWorkGroup = infoShortVecSize*2 * wgSize;
+						continue;
+					}
+					// try reducing input batch size
+					if(inputBatchSize > 2) {
+						inputBatchSize = 2;
+						continue;
+					}
+				}
+				break;
+			}
 			kernelCode = _ocl_kernel_cachelut;
 		}
 		

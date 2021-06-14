@@ -41,10 +41,15 @@ GF16OCL::GF16OCL(int platformId, int deviceId) {
 	std::vector<cl::Device> devices;
 	if(deviceId == -1) {
 		// first try GPU
-		platform.getDevices(CL_DEVICE_TYPE_GPU, &devices);
+		try {
+			platform.getDevices(CL_DEVICE_TYPE_GPU, &devices);
+		} catch(cl::Error const&) {}
 		// if no GPU device found, try anything else
-		if(devices.size() < 1)
-			platform.getDevices(CL_DEVICE_TYPE_ALL, &devices);
+		if(devices.size() < 1) {
+			try {
+				platform.getDevices(CL_DEVICE_TYPE_ALL, &devices);
+			} catch(cl::Error const&) {}
+		}
 		if(devices.size() < 1) return; // no devices!
 		// match first device that's available
 		bool found = false;
@@ -303,6 +308,7 @@ std::vector<GF16OCL_DeviceInfo> GF16OCL::getDevices(int platformId) {
 		GF16OCL_DeviceInfo info;
 		const cl::Device& device = devices[i];
 		info.name = device.getInfo<CL_DEVICE_NAME>();
+		info.vendorId = device.getInfo<CL_DEVICE_VENDOR_ID>();
 		info.type = device.getInfo<CL_DEVICE_TYPE>();
 		info.available = device.getInfo<CL_DEVICE_AVAILABLE>() && device.getInfo<CL_DEVICE_COMPILER_AVAILABLE>();
 		info.supported = info.available && device.getInfo<CL_DEVICE_ENDIAN_LITTLE>();

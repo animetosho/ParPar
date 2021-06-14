@@ -15,7 +15,7 @@ enum Galois16OCLMethods {
 	GF16OCL_LOOKUP_NOCACHE,
 	GF16OCL_LOOKUP_HALF_NOCACHE,
 	GF16OCL_SHUFFLE,
-	GF16OCL_SHUFFLE2, // not implemented
+	//GF16OCL_SHUFFLE2, // not implemented
 	GF16OCL_LOG,
 	GF16OCL_LOG_SMALL,
 	GF16OCL_LOG_TINY,
@@ -31,7 +31,7 @@ static const char* Galois16OCLMethodsText[] = {
 	"LH Lookup (NoCache)",
 	"LL Lookup (NoCache)",
 	"Shuffle",
-	"Shuffle2",
+	//"Shuffle2",
 	"Log",
 	"Log-Small",
 	"Log-Tiny",
@@ -43,6 +43,7 @@ static const char* Galois16OCLMethodsText[] = {
 
 struct GF16OCL_DeviceInfo {
 	std::string name;
+	unsigned vendorId;
 	cl_device_type type;
 	bool available;
 	bool supported;
