@@ -126,14 +126,14 @@ STRINGIFY(
 		nat_int prod = SHIFT_TOP_BIT(a) & b;
 		) "\n#pragma unroll\n" STRINGIFY(
 		for(int i=0; i<7; i++) {
-			nat_uint poly = SHIFT_TOP_BIT(prod) & ((GF16_POLYNOMIAL & 0xffff) << (NAT_BITS-16));
+			nat_uint poly = SHIFT_TOP_BIT(prod) & ((nat_uint)(GF16_POLYNOMIAL & 0xffff) << (NAT_BITS-16));
 			prod = (prod << 1) ^ poly;
 			a <<= 1;
 			prod ^= SHIFT_TOP_BIT(a) & b;
 		}
 		
 		// multiply b by 2 (aligned to top)
-		nat_uint b2 = (b << 1) ^ (SHIFT_TOP_BIT(b) & ((GF16_POLYNOMIAL & 0xffff) << (NAT_BITS-16)));
+		nat_uint b2 = (b << 1) ^ (SHIFT_TOP_BIT(b) & ((nat_uint)(GF16_POLYNOMIAL & 0xffff) << (NAT_BITS-16)));
 		// multiply prod by 256
 		ushort prod256 = gf16_multiply_256((nat_uint)prod >> (NAT_BITS - 16));
 		
@@ -230,7 +230,7 @@ STRINGIFY(
 		) "\n#pragma unroll\n" STRINGIFY(
 		for(nat_uint v=1; v<VECT_WIDTH; v++) {
 			val >>= 16;
-			result |= (table[val & 0xff] ^ table[((val>>8) & 0xff) + 256]) << (v*16);
+			result |= (nat_uint)(table[val & 0xff] ^ table[((val>>8) & 0xff) + 256]) << (v*16);
 		}
 		return result;
 		) "\n#endif\n" STRINGIFY(
@@ -255,14 +255,14 @@ STRINGIFY(
 		nat_int prod = SHIFT_TOP_BIT(a) & b;
 		) "\n#pragma unroll\n" STRINGIFY(
 		for(int i=0; i<7; i++) {
-			nat_uint poly = SHIFT_TOP_BIT(prod) & ((GF16_POLYNOMIAL & 0xffff) << (NAT_BITS-16));
+			nat_uint poly = SHIFT_TOP_BIT(prod) & ((nat_uint)(GF16_POLYNOMIAL & 0xffff) << (NAT_BITS-16));
 			prod = (prod << 1) ^ poly;
 			a <<= 1;
 			prod ^= SHIFT_TOP_BIT(a) & b;
 		}
 		
 		// multiply by 2 (aligned to top)
-		nat_uint b2 = (b << 1) ^ (SHIFT_TOP_BIT(b) & ((GF16_POLYNOMIAL & 0xffff) << (NAT_BITS-16)));
+		nat_uint b2 = (b << 1) ^ (SHIFT_TOP_BIT(b) & ((nat_uint)(GF16_POLYNOMIAL & 0xffff) << (NAT_BITS-16)));
 		
 		// write out to subsequent products
 		) "\n#if VECT_WIDTH == 1\n" STRINGIFY(
@@ -327,7 +327,7 @@ STRINGIFY(
 		) "\n#pragma unroll\n" STRINGIFY(
 		for(nat_uint v=1; v<VECT_WIDTH; v++) {
 			val >>= 16;
-			result |= (table[val & 0xff] ^ gf16_multiply_256(table[(val>>8) & 0xff])) << (v*16);
+			result |= (nat_uint)(table[val & 0xff] ^ gf16_multiply_256(table[(val>>8) & 0xff])) << (v*16);
 		}
 		return result;
 		) "\n#endif\n" STRINGIFY(
@@ -418,7 +418,7 @@ STRINGIFY(
 		) "\n#pragma unroll\n" STRINGIFY(
 		for(int v=1; v<VECT_WIDTH; v++) {
 			int shift = v*16;
-			res |= gf16_log[(val>>shift) & 0xffff] << shift;
+			res |= (val_t)gf16_log[(val>>shift) & 0xffff] << shift;
 		}
 		return res;
 		) "\n#endif\n" STRINGIFY(
