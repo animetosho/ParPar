@@ -24,6 +24,7 @@
 const static char _ocl_defines[] =
 "#define GF16_POLYNOMIAL " STR(GF16_POLYNOMIAL) "\n"
 "#define SHIFT_TOP_BIT(x) ((x) >> (sizeof(x)*8-1))\n" // shift down top bit to bottom
+//"#define WORKAROUND_ALIAS_BUG\n" // have seen POCL not handle pointer alias writes properly
 // can use 24-bit multiply if the slice size fits within 24 bits (rownum guaranteed to be within 16 bits)
 // TODO: may be possible to do this is if stride is less than 16M *elements*, but we don't have byte addressing, so may not be possible
 "#if MAX_SLICE_SIZE < 16777216\n"
@@ -185,6 +186,12 @@ STRINGIFY(
 	void compute_lhtable(__local ushort* table, __global const ushort* restrict coeffs, const ushort numCoeff) {
 		barrier(CLK_LOCAL_MEM_FENCE);
 		
+		) "\n#ifdef WORKAROUND_ALIAS_BUG\n" STRINGIFY(
+		if(((ulong)table & (VECT_WIDTH*2-1)) != 0) { // guaranteed to be false
+			table[0] = 0; // never executed but needed for some reason
+		} else
+		) "\n#endif\n" STRINGIFY(
+		
 		// assume workgroup size is a power of 2
 		) "\n#if COL_GROUP_SIZE*4 > 256\n" STRINGIFY(
 		// process multiple coefficients at a time
@@ -284,6 +291,12 @@ STRINGIFY(
 	void compute_lltable(__local ushort* table, __global const ushort* restrict coeffs, const ushort numCoeff) {
 		barrier(CLK_LOCAL_MEM_FENCE);
 		
+		) "\n#ifdef WORKAROUND_ALIAS_BUG\n" STRINGIFY(
+		if(((ulong)table & (VECT_WIDTH*2-1)) != 0) { // guaranteed to be false
+			table[0] = 0; // never executed but needed for some reason
+		} else
+		) "\n#endif\n" STRINGIFY(
+		
 		// assume workgroup size is a power of 2
 		) "\n#if COL_GROUP_SIZE*4 > 256\n" STRINGIFY(
 		// process multiple coefficients at a time
@@ -341,10 +354,13 @@ const static char _ocl_method_shuffle[] =
 "#undef val_t\n"
 "#if VECT_WIDTH==1\n"
 " #define val_t uchar4\n"
+" #define val2_t ushort2\n"
 "#elif VECT_WIDTH==2\n"
 " #define val_t uchar8\n"
+" #define val2_t ushort4\n"
 "#else\n"
 " #define val_t uchar16\n"
+" #define val2_t ushort8\n"
 "#endif\n"
 "#define LUT_REF(name, idx) ((__private uchar4*)(name) + (idx)*16)\n"
 "#define LUT_DECLARATION(name, size) __private uchar4 name[16 * (size)]\n"
@@ -387,10 +403,10 @@ STRINGIFY(
 		return (val_t)(data.even, data.odd);
 	}
 	void gf16_shuffle_write(__global val_t* dst, const memsize_t offs, const val_t val) {
-		*(__global ushort4*)(dst + offs) = upsample(val.hi, val.lo);
+		*(__global val2_t*)(dst + offs) = upsample(val.hi, val.lo);
 	}
 	void gf16_shuffle_add(__global val_t* dst, const memsize_t offs, const val_t val) {
-		*(__global ushort4*)(dst + offs) ^= upsample(val.hi, val.lo);
+		*(__global val2_t*)(dst + offs) ^= upsample(val.hi, val.lo);
 	}
 	
 	inline val_t shuffle_multiply(__private const uchar4* table, val_t val) {
@@ -506,7 +522,7 @@ STRINGIFY(
 
 // strategy which caches several inputs, dot-products to multiple outputs, and doesn't require a LUT per coefficient
 #define KERNEL_NOLUT_MULGROUP \
-"(__global val_t* restrict dst, __global const val_t* restrict src, COEFF_TABLE_TYPE const ushort* restrict coeff, const nat_uint outBlk, const nat_uint numOutputs, const nat_uint _numInputs, __local val_t* cache  EX_TABLE_ARGS_DECL) { \n"\
+"(__global val_t* restrict dst, __global const val_t* restrict src, COEFF_TABLE_TYPE const ushort* restrict coeff, const nat_uint outBlk, const nat_uint numOutputs, const ushort _numInputs, __local val_t* cache  EX_TABLE_ARGS_DECL) { \n"\
 "	const memsize_t len = get_global_size(0)*COL_GROUP_ITERS;                                    \n"\
 "	const memsize_t globalCol = get_global_id(0)*COL_GROUP_ITERS;                                \n"\
 "	const uint col = get_local_id(0)*COL_GROUP_ITERS;                                            \n"\
@@ -659,9 +675,9 @@ const static char _ocl_kernel_nolut[] = STRINGIFY({
 		) "\n#endif\n" STRINGIFY(
 	) "\n#endif\n" STRINGIFY(
 	
+	__local val_t cache[SUBMIT_INPUTS*COL_GROUP_SIZE*COL_GROUP_ITERS];
 	if(!isPartialOutputsThread) {
 		) "\n#if OUTPUTS_PER_THREAD > OUTPUT_GROUPING\n" STRINGIFY(
-		__local val_t cache[SUBMIT_INPUTS*COL_GROUP_SIZE*COL_GROUP_ITERS];
 		
 		// first iteration -> copy loaded data to cache
 		//barrier(CLK_LOCAL_MEM_FENCE);  // probably not needed? thread only accesses the same value that it writes
@@ -684,7 +700,6 @@ const static char _ocl_kernel_nolut[] = STRINGIFY({
 		) "\n#define OUTPUTS_THIS_THREAD (NUM_OUTPUTS % OUTPUTS_PER_THREAD)\n" STRINGIFY(
 		
 		) "\n#if OUTPUTS_THIS_THREAD > OUTPUT_GROUPING\n" STRINGIFY(
-		__local val_t cache[SUBMIT_INPUTS*COL_GROUP_SIZE*COL_GROUP_ITERS];
 		// first iteration -> copy loaded data to cache
 		//barrier(CLK_LOCAL_MEM_FENCE);
 		KERNFN(mulgroup_cache)(dst, src, lcoeff, outBlk, OUTPUT_GROUPING, numInputs, cache  EX_TABLE_ARGS);
@@ -801,11 +816,11 @@ const static char _ocl_kernel_lut_funcs[] =
 " #define WRITE_DST(dst, idx, val) dst[idx] ^= val\n"
 "#endif\n"
 STRINGIFY(
-	inline void KERNFN(mulgroup)(__global val_t* restrict dst, __global const val_t* restrict src, __global const ushort* restrict coeff, __local void* lut_table, const nat_uint outBlk, const nat_uint numOutputs, const nat_uint _numInputs) {
+	inline void KERNFN(mulgroup)(__global val_t* restrict dst, __global const val_t* restrict src, __global const ushort* restrict coeff, __local void* lut_table, const nat_uint outBlk, const nat_uint numOutputs, const ushort _numInputs) {
 		const memsize_t len = get_global_size(0) * COL_GROUP_ITERS;
 		const memsize_t globalCol = get_local_id(0) + get_group_id(0)*COL_GROUP_SIZE*COL_GROUP_ITERS;
 		
-		// TODO: defer looping to lut_generate
+		// TODO: defer looping to lut_generate (also avoids unnecessary barriers)
 		) "\n#pragma unroll\n" STRINGIFY(
 		for (ushort o = 0; o < numOutputs; o++) {
 			LUT_GENERATE(LUT_REF(lut_table, o*SUBMIT_INPUTS), coeff + COBUF_REF(outBlk+o, 0u), _numInputs);
@@ -946,7 +961,8 @@ bool GF16OCL::setup_kernels(Galois16OCLMethods method, unsigned targetInputBatch
 	
 	unsigned groupIterations = 1;
 	bool usesOutGrouping = false;
-	unsigned sizePerWorkGroup = infoShortVecSize*2 * wgSize;
+	unsigned threadWordSize = infoShortVecSize*2;
+	unsigned sizePerWorkGroup = threadWordSize * wgSize;
 	unsigned outputGrouping = 8; // for nolut kernel; have seen some cards prefer '4' (on older cards?)
 	const char* kernelCode;
 	const char* kernelFuncs = NULL;
@@ -965,7 +981,7 @@ bool GF16OCL::setup_kernels(Galois16OCLMethods method, unsigned targetInputBatch
 				// try reducing workgroup if too large
 				if(wgSize > 256) {
 					wgSize = 256;
-					sizePerWorkGroup = infoShortVecSize*2 * wgSize;
+					sizePerWorkGroup = threadWordSize * wgSize;
 					inputBatchSize = 16;
 					continue;
 				}
@@ -983,13 +999,38 @@ bool GF16OCL::setup_kernels(Galois16OCLMethods method, unsigned targetInputBatch
 	case GF16OCL_SHUFFLE:
 	//case GF16OCL_SHUFFLE2:
 		oclVerArg = "-cl-std=CL1.1";
+		infoShortVecSize = 2; // currently only implemented for 32-bit on GPUs
 		inputBatchSize = 4;
-		sizePerWorkGroup *= 2; // process two words, so double workgroup size
+		threadWordSize = infoShortVecSize*4; // process two words, so double per thread word size
+		sizePerWorkGroup = threadWordSize * wgSize;
 		if(targetInputBatch) inputBatchSize = targetInputBatch;
 		// TODO: compute ideal iteration count
-		groupIterations = (unsigned)round_down_pow2(
-			deviceLocalSize / (sizePerWorkGroup * inputBatchSize)
-		);
+		while(1) {
+			groupIterations = (unsigned)round_down_pow2(
+				deviceLocalSize / (sizePerWorkGroup * inputBatchSize)
+			);
+			
+			if(groupIterations < 1 && deviceLocalSize >= 2048) {
+				// try reducing workgroup if too large
+				if(wgSize > 256) {
+					wgSize = 256;
+					sizePerWorkGroup = threadWordSize * wgSize;
+					continue;
+				}
+				// try reducing input batch size
+				if(inputBatchSize > 2) {
+					inputBatchSize = 2;
+					continue;
+				}
+				// try reducing workgroup again
+				if(wgSize > 64) {
+					wgSize = 64;
+					sizePerWorkGroup = threadWordSize * wgSize;
+					continue;
+				}
+			}
+			break;
+		}
 		
 		kernelCode = _ocl_kernel_cachelut;
 		methodCode = _ocl_method_shuffle;
@@ -1018,7 +1059,7 @@ bool GF16OCL::setup_kernels(Galois16OCLMethods method, unsigned targetInputBatch
 				// try reducing workgroup if too large
 				if(wgSize > 256) {
 					wgSize = 256;
-					sizePerWorkGroup = infoShortVecSize*2 * wgSize;
+					sizePerWorkGroup = threadWordSize * wgSize;
 					inputBatchSize = 8;
 					continue;
 				}
@@ -1075,7 +1116,7 @@ bool GF16OCL::setup_kernels(Galois16OCLMethods method, unsigned targetInputBatch
 					// maybe the workgroup is too big
 					if(wgSize > 256) {
 						wgSize = 256;
-						sizePerWorkGroup = infoShortVecSize*2 * wgSize;
+						sizePerWorkGroup = threadWordSize * wgSize;
 						continue;
 					}
 					// try reducing input batch size
@@ -1119,9 +1160,9 @@ bool GF16OCL::setup_kernels(Galois16OCLMethods method, unsigned targetInputBatch
 		}
 		// if iterations cannot be scaled down, scale down workgroup size next
 		if(groupIterations == 1 && sizePerWorkGroup > sliceSize) {
-			wgSize = CEIL_DIV(sliceSize, infoShortVecSize*2);
+			wgSize = CEIL_DIV(sliceSize, threadWordSize);
 			if(wgSize < 1) wgSize = 1;
-			sizePerWorkGroup = infoShortVecSize*2 * wgSize;
+			sizePerWorkGroup = threadWordSize * wgSize;
 		}
 	}
 	
