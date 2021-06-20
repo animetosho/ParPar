@@ -48,21 +48,18 @@ const static char _ocl_defines[] =
 "#endif\n"
 "#if VECT_WIDTH == 1\n"
 " #define VECT_ONE 0x0001u\n"
-" #define nat_ucharX uchar2\n"
 " #define nat_ushort4 ushort4\n"
 " #define nat_uint ushort\n"
 " #define nat_int short\n"
 " #define NAT_BITS 16\n"
 "#elif VECT_WIDTH == 2\n"
 " #define VECT_ONE 0x00010001ul\n"
-" #define nat_ucharX uchar4\n"
 " #define nat_ushort4 uint2\n"
 " #define nat_uint uint\n"
 " #define nat_int int\n"
 " #define NAT_BITS 32\n"
 "#elif VECT_WIDTH == 4\n"
 " #define VECT_ONE 0x0001000100010001ull\n"
-" #define nat_ucharX uchar8\n"
 " #define nat_ushort4 ulong\n"
 " #define nat_uint ulong\n"
 " #define nat_int long\n"
@@ -161,7 +158,9 @@ STRINGIFY(
 		table[val/VECT_WIDTH] = (res ^ b ^ ((nat_uint)b >> 32)) | (res >> 16);
 		
 		table[val/VECT_WIDTH + 256/VECT_WIDTH] = (prod256 * VECT_ONE) ^ coeff256;
-		) "\n#endif\n" STRINGIFY(
+		) "\n#else\n"
+		" #error Vector width not implemented\n"
+		"#endif\n" STRINGIFY(
 	}
 	
 	nat_ushort4 lh_compute_coeff256(nat_uint coeff) {
@@ -179,7 +178,9 @@ STRINGIFY(
 		result.s1 = upsample((ushort)(coeff256 ^ coeff512), coeff512);
 		) "\n#elif VECT_WIDTH == 4\n" STRINGIFY(
 		result = upsample(upsample((ushort)(coeff256 ^ coeff512), coeff512), (uint)coeff256 << 16);
-		) "\n#endif\n" STRINGIFY(
+		) "\n#else\n"
+		" #error Vector width not implemented\n"
+		"#endif\n" STRINGIFY(
 		return result;
 	}
 	
@@ -284,7 +285,9 @@ STRINGIFY(
 		) "\n#elif VECT_WIDTH == 4\n" STRINGIFY(
 		nat_uint res = (prod ^ b2) | ((nat_uint)prod >> 32);
 		table[val/VECT_WIDTH] = (res ^ b ^ ((nat_uint)b >> 32)) | (res >> 16);
-		) "\n#endif\n" STRINGIFY(
+		) "\n#else\n"
+		" #error Vector width not implemented\n"
+		"#endif\n" STRINGIFY(
 	}
 	
 	
@@ -355,12 +358,17 @@ const static char _ocl_method_shuffle[] =
 "#if VECT_WIDTH==1\n"
 " #define val_t uchar4\n"
 " #define val2_t ushort2\n"
+" #define nat_ucharX uchar2\n"
 "#elif VECT_WIDTH==2\n"
 " #define val_t uchar8\n"
 " #define val2_t ushort4\n"
-"#else\n"
+" #define nat_ucharX uchar4\n"
+"#elif VECT_WIDTH==4\n"
 " #define val_t uchar16\n"
 " #define val2_t ushort8\n"
+" #define nat_ucharX uchar8\n"
+"#else\n"
+" #error Unsupported vector width\n"
 "#endif\n"
 "#define LUT_REF(name, idx) ((__private uchar4*)(name) + (idx)*16)\n"
 "#define LUT_DECLARATION(name, size) __private uchar4 name[16 * (size)]\n"
