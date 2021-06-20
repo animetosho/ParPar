@@ -58,7 +58,7 @@ const static char _ocl_defines[] =
 " #define nat_uint uint\n"
 " #define nat_int int\n"
 " #define NAT_BITS 32\n"
-"#elif VECT_WIDTH == 4\n"
+"#elif VECT_WIDTH == 4 || VECT_WIDTH == 8\n"
 " #define VECT_ONE 0x0001000100010001ull\n"
 " #define nat_ushort4 ulong\n"
 " #define nat_uint ulong\n"
@@ -67,6 +67,14 @@ const static char _ocl_defines[] =
 "#else\n"
 " #error Unsupported vector width\n"
 "#endif\n"
+
+"#if VECT_WIDTH == 8\n"
+" #define val_t ulong2\n"
+"#else\n"
+" #define val_t nat_uint\n"
+"#endif\n"
+
+"#define MAP_VECT_ELEMS(res, val, body) for(nat_uint v=0; v<VECT_WIDTH; v++) { nat_uint e = val>>(v*16); body res |= (val_t)e<<(v*16); }\n"
 
 "#ifndef EX_TABLE_ARGS\n"
 " #define EX_TABLE_ARGS\n"
@@ -83,7 +91,6 @@ const static char _ocl_defines[] =
 " #define COEFF_TABLE_TYPE __global\n"
 "#endif\n"
 
-"#define val_t nat_uint\n"
 // TODO: explore using uint4 for reads to maximise bandwidth
 "#define READ_SRC(src, idx) src[idx]\n";
 
@@ -91,12 +98,12 @@ const static char _ocl_method_by2[] =
 "#define GF_MULTIPLY gf16_multiply_by2\n" STRINGIFY(
 	
 	// `a` is a packed ushort, `b` is just a ushort
-	nat_uint gf16_multiply_by2(nat_uint a, nat_uint b) {
+	val_t gf16_multiply_by2(val_t a, nat_uint b) {
 		nat_int btmp = b << (NAT_BITS - 16);
-		nat_uint res = SHIFT_TOP_BIT(btmp) & a;
+		val_t res = SHIFT_TOP_BIT(btmp) & a;
 		) "\n#pragma unroll\n" STRINGIFY(
 		for(int i=0; i<15; i++) {
-			nat_uint poly = ((res >> 15) & VECT_ONE) * (GF16_POLYNOMIAL & 0xffff);
+			val_t poly = ((res >> 15) & VECT_ONE) * (GF16_POLYNOMIAL & 0xffff);
 			res = ((res + res) & ~VECT_ONE) ^ poly;
 			btmp <<= 1;
 			res ^= SHIFT_TOP_BIT(btmp) & a;
@@ -456,8 +463,8 @@ STRINGIFY(
 		return result & 65535;
 	}
 	
-	nat_uint gf16_multiply_log(nat_uint a, nat_uint b  EX_TABLE_ARGS_DECL) {
-		nat_uint result = 0;
+	val_t gf16_multiply_log(val_t a, nat_uint b  EX_TABLE_ARGS_DECL) {
+		val_t result = 0;
 		) "\n#pragma unroll\n" STRINGIFY(
 		for(int v=0; v<VECT_WIDTH; v++) {
 			nat_uint va = a & 65535;
@@ -499,8 +506,8 @@ STRINGIFY(
 const static char _ocl_method_splitmul[] =
 "#define GF_MULTIPLY gf16_multiply_splitmul\n"
 STRINGIFY(
-	nat_uint gf16_multiply_splitmul(nat_uint a, nat_uint b) {
-		nat_uint result = 0;
+	val_t gf16_multiply_splitmul(val_t a, nat_uint b) {
+		val_t result = 0;
 		ushort ba = (b>>12)*16;
 		ushort bb = ((b>>8) & 0xf)*16;
 		ushort bc = ((b>>4) & 0xf)*16;
@@ -950,8 +957,12 @@ bool GF16OCL::setup_kernels(Galois16OCLMethods method, unsigned targetInputBatch
 	
 	
 	unsigned infoShortVecSize = device.getInfo<CL_DEVICE_PREFERRED_VECTOR_WIDTH_SHORT>(); // seems to usually be the same as CL_DEVICE_NATIVE_VECTOR_WIDTH_SHORT
-	if(infoShortVecSize < 2) infoShortVecSize = 2; // assume all GPUs do 32-bit math efficiently (various nVidia platforms return 1, but 2 runs faster)
-	if(infoShortVecSize > 2) infoShortVecSize = 4; // we currently only support vect-width=1,2,4
+	if(infoShortVecSize < 4) infoShortVecSize = 2; // assume all GPUs do 32-bit math efficiently (various nVidia platforms return 1, but 2 runs faster)
+	if(infoShortVecSize >= 8 && method == GF16OCL_BY2)
+		infoShortVecSize = 8; // allow BY2 to use VECT_WIDTH=8
+	else if(infoShortVecSize >= 4)
+		infoShortVecSize = 4; // other than BY2, we currently only support vect-width=1,2,4
+	
 	wgSize = device.getInfo<CL_DEVICE_MAX_WORK_GROUP_SIZE>();
 #ifdef OCL_PREFER_WORKGROUP_MULTIPLE
 	size_t wgSizeMultiple = getWGSize(context, device) * OCL_PREFER_WORKGROUP_MULTIPLE;
