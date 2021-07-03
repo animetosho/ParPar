@@ -17,6 +17,16 @@
 }
 
 #define ROTATE(a, r) r==16 ? vreinterpret_u32_u16(vrev32_u16(vreinterpret_u16_u32(a))) : vsli_n_u32(vshr_n_u32(a, 32-r), a, r)
+
+#define md5_init_lane_x2_neon(state, idx) { \
+	uint32x2_t* state_ = (uint32x2_t*)state; \
+	state_[0] = vset_lane_u32(0x67452301L, state_[0], idx); \
+	state_[1] = vset_lane_u32(0xefcdab89L, state_[1], idx); \
+	state_[2] = vset_lane_u32(0x98badcfeL, state_[2], idx); \
+	state_[3] = vset_lane_u32(0x10325476L, state_[3], idx); \
+}
+
+
 #define _FN(f) f##_neon
 
 #define F vbsl_u32
@@ -50,11 +60,4 @@ static HEDLEY_ALWAYS_INLINE void md5_extract_x2_neon(void* dst, void* state, con
 	
 	vst1_u32((uint32_t*)dst, tmp1.val[idx]);
 	vst1_u32((uint32_t*)dst + 2, tmp2.val[idx]);
-}
-#define md5_init_lane_x2_neon(state, idx) { \
-	uint32x2_t* state_ = (uint32x2_t*)state; \
-	state_[0] = vset_lane_u32(0x67452301L, state_[0], idx); \
-	state_[1] = vset_lane_u32(0xefcdab89L, state_[1], idx); \
-	state_[2] = vset_lane_u32(0x98badcfeL, state_[2], idx); \
-	state_[3] = vset_lane_u32(0x10325476L, state_[3], idx); \
 }

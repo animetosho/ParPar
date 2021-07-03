@@ -23,6 +23,7 @@
 #else
 # define md5mb_regions_neon 4
 #endif
+#define md5mb_max_regions_neon md5mb_regions_neon
 #define md5mb_alignment_neon 16
 
 #define F vbslq_u32

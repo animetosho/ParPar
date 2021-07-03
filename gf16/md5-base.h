@@ -7,20 +7,16 @@
 #endif
 
 
-static HEDLEY_ALWAYS_INLINE void FNB(md5_init)(void* state) {
-	word_t* state_ = (word_t*)state;
-	state_[0] = VAL(0x67452301L);
-	state_[1] = VAL(0xefcdab89L);
-	state_[2] = VAL(0x98badcfeL);
-	state_[3] = VAL(0x10325476L);
-#ifdef MD5X2
-	state_[4] = VAL(0x67452301L);
-	state_[5] = VAL(0xefcdab89L);
-	state_[6] = VAL(0x98badcfeL);
-	state_[7] = VAL(0x10325476L);
+#ifdef LOAD_STATE
+# define _LOAD_STATE LOAD_STATE
+#else
+# define _LOAD_STATE(state, n) state[n]
 #endif
-}
-
+#ifdef SET_STATE
+# define _SET_STATE SET_STATE
+#else
+# define _SET_STATE(state, n, val) state[n] = val
+#endif
 
 #ifdef ADDF
 # define _ADDF ADDF
@@ -46,6 +42,7 @@ static HEDLEY_ALWAYS_INLINE void FNB(md5_init)(void* state) {
 static HEDLEY_ALWAYS_INLINE void FNB(md5_process_block)(word_t* state, const char* const* HEDLEY_RESTRICT data, size_t offset) {
 	UNUSED(offset);
 	word_t A, B, C, D;
+	word_t oA, oB, oC, oD;
 	/* some compilers don't optimise arrays well (i.e. register spills), so use local variables */
 	word_t XX0, XX1, XX2, XX3, XX4, XX5, XX6, XX7,
 	       XX8, XX9, XX10, XX11, XX12, XX13, XX14, XX15;
@@ -54,22 +51,32 @@ static HEDLEY_ALWAYS_INLINE void FNB(md5_process_block)(word_t* state, const cha
 	UNUSED(XX8); UNUSED(XX9); UNUSED(XX10); UNUSED(XX11); UNUSED(XX12); UNUSED(XX13); UNUSED(XX14); UNUSED(XX15);
 #define L(i,k)   LOAD(k, 0, data, offset, i, XX##i)
 #define X(i,k)   INPUT(k, 0, data, offset, i, XX##i)
-	A = state[0];
-	B = state[1];
-	C = state[2];
-	D = state[3];
+	A = _LOAD_STATE(state, 0);
+	B = _LOAD_STATE(state, 1);
+	C = _LOAD_STATE(state, 2);
+	D = _LOAD_STATE(state, 3);
+	oA = A;
+	oB = B;
+	oC = C;
+	oD = D;
 #ifdef MD5X2
 	word_t A2, B2, C2, D2;
+	word_t oA2, oB2, oC2, oD2;
 	word_t XX0b, XX1b, XX2b, XX3b, XX4b, XX5b, XX6b, XX7b,
 	       XX8b, XX9b, XX10b, XX11b, XX12b, XX13b, XX14b, XX15b;
 	UNUSED(XX0b); UNUSED(XX1b); UNUSED(XX2b); UNUSED(XX3b); UNUSED(XX4b); UNUSED(XX5b); UNUSED(XX6b); UNUSED(XX7b);
 	UNUSED(XX8b); UNUSED(XX9b); UNUSED(XX10b); UNUSED(XX11b); UNUSED(XX12b); UNUSED(XX13b); UNUSED(XX14b); UNUSED(XX15b);
 # define L2(i,k)   LOAD(k, 1, data, offset, i, XX##i##b)
 # define X2(i,k)   INPUT(k, 1, data, offset, i, XX##i##b)
-	A2 = state[4];
-	B2 = state[5];
-	C2 = state[6];
-	D2 = state[7];
+	A2 = _LOAD_STATE(state, 4);
+	B2 = _LOAD_STATE(state, 5);
+	C2 = _LOAD_STATE(state, 6);
+	D2 = _LOAD_STATE(state, 7);
+	
+	oA2 = A2;
+	oB2 = B2;
+	oC2 = C2;
+	oD2 = D2;
 
 # ifdef LOAD2
 #  define L2X(i, j) LOAD2(0, data, offset, i, XX##i, XX##j); LOAD2(1, data, offset, i, XX##i##b, XX##j##b)
@@ -105,9 +112,6 @@ static HEDLEY_ALWAYS_INLINE void FNB(md5_process_block)(word_t* state, const cha
 #endif
 
 	/* Round 0 */
-	L2X(0, 1);
-	L4X(0, 1, 2, 3);
-	L8X(0, 1, 2, 3, 4, 5, 6, 7);
 #ifdef LOAD16
 	LOAD16(0, data, offset, XX0, XX1, XX2, XX3, XX4, XX5, XX6, XX7,
 	       XX8, XX9, XX10, XX11, XX12, XX13, XX14, XX15);
@@ -116,28 +120,31 @@ static HEDLEY_ALWAYS_INLINE void FNB(md5_process_block)(word_t* state, const cha
 	       XX8b, XX9b, XX10b, XX11b, XX12b, XX13b, XX14b, XX15b);
 # endif
 #endif
+	L8X(0, 1, 2, 3, 4, 5, 6, 7);
+	L4X(0, 1, 2, 3);
+	L2X(0, 1);
 	RX(F, A, B, C, D, L,  0,  7, 0xd76aa478L);
 	RX(F, D, A, B, C, L,  1, 12, 0xe8c7b756L);
 	L2X(2, 3);
 	RX(F, C, D, A, B, L,  2, 17, 0x242070dbL);
 	RX(F, B, C, D, A, L,  3, 22, 0xc1bdceeeL);
-	L2X(4, 5);
 	L4X(4, 5, 6, 7);
+	L2X(4, 5);
 	RX(F, A, B, C, D, L,  4,  7, 0xf57c0fafL);
 	RX(F, D, A, B, C, L,  5, 12, 0x4787c62aL);
 	L2X(6, 7);
 	RX(F, C, D, A, B, L,  6, 17, 0xa8304613L);
 	RX(F, B, C, D, A, L,  7, 22, 0xfd469501L);
-	L2X(8, 9);
-	L4X(8, 9, 10, 11);
 	L8X(8, 9, 10, 11, 12, 13, 14, 15);
+	L4X(8, 9, 10, 11);
+	L2X(8, 9);
 	RX(F, A, B, C, D, L,  8,  7, 0x698098d8L);
 	RX(F, D, A, B, C, L,  9, 12, 0x8b44f7afL);
 	L2X(10, 11);
 	RX(F, C, D, A, B, L, 10, 17, 0xffff5bb1L);
 	RX(F, B, C, D, A, L, 11, 22, 0x895cd7beL);
-	L2X(12, 13);
 	L4X(12, 13, 14, 15);
+	L2X(12, 13);
 	RX(F, A, B, C, D, L, 12,  7, 0x6b901122L);
 	RX(F, D, A, B, C, L, 13, 12, 0xfd987193L);
 	L2X(14, 15);
@@ -195,15 +202,15 @@ static HEDLEY_ALWAYS_INLINE void FNB(md5_process_block)(word_t* state, const cha
 	RX(I, C, D, A, B, X,  2, 15, 0x2ad7d2bbL);
 	RX(I, B, C, D, A, X,  9, 21, 0xeb86d391L);
 
-	state[0] = ADD(state[0], A);
-	state[1] = ADD(state[1], B);
-	state[2] = ADD(state[2], C);
-	state[3] = ADD(state[3], D);
+	_SET_STATE(state, 0, ADD(oA, A));
+	_SET_STATE(state, 1, ADD(oB, B));
+	_SET_STATE(state, 2, ADD(oC, C));
+	_SET_STATE(state, 3, ADD(oD, D));
 #ifdef MD5X2
-	state[4] = ADD(state[4], A2);
-	state[5] = ADD(state[5], B2);
-	state[6] = ADD(state[6], C2);
-	state[7] = ADD(state[7], D2);
+	_SET_STATE(state, 4, ADD(oA2, A2));
+	_SET_STATE(state, 5, ADD(oB2, B2));
+	_SET_STATE(state, 6, ADD(oC2, C2));
+	_SET_STATE(state, 7, ADD(oD2, D2));
 #endif
 #undef L
 #undef X
@@ -216,6 +223,8 @@ static HEDLEY_ALWAYS_INLINE void FNB(md5_process_block)(word_t* state, const cha
 #undef _RX
 #undef _ADDF
 
+#undef _LOAD_STATE
+#undef _SET_STATE
 
 
 #ifndef md5_free
@@ -224,9 +233,15 @@ static HEDLEY_ALWAYS_INLINE void FNB(md5_process_block)(word_t* state, const cha
 HEDLEY_MALLOC static HEDLEY_ALWAYS_INLINE void* FNB(md5_alloc)() {
 	void* ret;
 #ifdef MD5X2
-	ALIGN_ALLOC(ret, sizeof(word_t)*8, sizeof(word_t) < sizeof(void*) ? sizeof(void*) : sizeof(word_t));
+	size_t words = 8;
 #else
-	ALIGN_ALLOC(ret, sizeof(word_t)*4, sizeof(word_t) < sizeof(void*) ? sizeof(void*) : sizeof(word_t));
+	size_t words = 4;
+#endif
+#ifdef STATE_WORD_SIZE
+	// assume SVE
+	ALIGN_ALLOC(ret, STATE_WORD_SIZE*words, sizeof(void*));
+#else
+	ALIGN_ALLOC(ret, sizeof(word_t)*words, sizeof(word_t) < sizeof(void*) ? sizeof(void*) : sizeof(word_t));
 #endif
 	return ret;
 }

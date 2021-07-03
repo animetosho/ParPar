@@ -6,6 +6,14 @@
 # include "md5x2-x86-asm.h"
 #endif
 
+static HEDLEY_ALWAYS_INLINE void md5_init_lane_x2_scalar(void* state, const int idx) {
+	uint32_t* state_ = (uint32_t*)state;
+	state_[0 + idx*4] = 0x67452301L;
+	state_[1 + idx*4] = 0xefcdab89L;
+	state_[2 + idx*4] = 0x98badcfeL;
+	state_[3 + idx*4] = 0x10325476L;
+}
+
 #include "md5-scalar-base.h"
 
 #define _FN(f) f##_scalar
@@ -44,11 +52,4 @@ static HEDLEY_ALWAYS_INLINE void md5_extract_x2_scalar(void* dst, void* state, c
 #else
 	memcpy(dst, (uint32_t*)state + idx*4, 16);
 #endif
-}
-static HEDLEY_ALWAYS_INLINE void md5_init_lane_x2_scalar(void* state, const int idx) {
-	uint32_t* state_ = (uint32_t*)state;
-	state_[0 + idx*4] = 0x67452301L;
-	state_[1 + idx*4] = 0xefcdab89L;
-	state_[2 + idx*4] = 0x98badcfeL;
-	state_[3 + idx*4] = 0x10325476L;
 }

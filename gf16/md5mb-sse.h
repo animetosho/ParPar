@@ -39,6 +39,7 @@
 #else
 #define md5mb_regions_sse 4
 #endif
+#define md5mb_max_regions_sse md5mb_regions_sse
 #define md5mb_alignment_sse 16
 
 #define F 1
@@ -82,6 +83,7 @@ static HEDLEY_ALWAYS_INLINE void md5_extract_mb_sse(void* dst, void* state, int 
 #ifdef __AVX__
 # define _FN(f) f##_avx
 # define md5mb_regions_avx md5mb_regions_sse
+# define md5mb_max_regions_avx md5mb_regions_avx
 #define md5mb_alignment_avx md5mb_alignment_sse
 # include "md5mb-base.h"
 # undef _FN
@@ -96,6 +98,7 @@ static HEDLEY_ALWAYS_INLINE void md5_extract_mb_sse(void* dst, void* state, int 
 #define ROTATE _mm_roti_epi32
 #define _FN(f) f##_xop
 #define md5mb_regions_xop md5mb_regions_sse
+#define md5mb_max_regions_xop md5mb_regions_xop
 #define md5mb_alignment_xop md5mb_alignment_sse
 
 #undef F
@@ -185,6 +188,7 @@ static HEDLEY_ALWAYS_INLINE void md5_extract_mb_sse(void* dst, void* state, int 
 #else
 #define md5mb_regions_avx2 8
 #endif
+#define md5mb_max_regions_avx2 md5mb_regions_avx2
 #define md5mb_alignment_avx2 32
 
 
@@ -346,6 +350,7 @@ static HEDLEY_ALWAYS_INLINE void md5_extract_mb_avx2(void* dst, void* state, int
 #else
 #define md5mb_regions_avx512 16
 #endif
+#define md5mb_max_regions_avx512 md5mb_regions_avx512
 #define md5mb_alignment_avx512 64
 
 
