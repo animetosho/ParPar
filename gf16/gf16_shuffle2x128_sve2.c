@@ -220,43 +220,33 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle2x_muladd_x_sve2(
 	);
 	
 	
-	#define DO_PROCESS \
-		rn = svld1_u8(svptrue_b8(), _dst+ptr); \
-		gf16_shuffle2x128_sve2_round1(svld1_u8(svptrue_b8(), _src1+ptr*srcScale), &rn, &rs1, &rs2, tbl_Aln, tbl_Als, tbl_Ahn, tbl_Ahs); \
-		if(srcCount > 1) \
-			gf16_shuffle2x128_sve2_round(svld1_u8(svptrue_b8(), _src2+ptr*srcScale), &rn, &rs1, &rs2, tbl_Bln, tbl_Bls, tbl_Bhn, tbl_Bhs); \
-		if(srcCount > 2) \
-			gf16_shuffle2x128_sve2_round(svld1_u8(svptrue_b8(), _src3+ptr*srcScale), &rn, &rs1, &rs2, tbl_Cln, tbl_Cls, tbl_Chn, tbl_Chs); \
-		if(srcCount > 3) \
-			gf16_shuffle2x128_sve2_round(svld1_u8(svptrue_b8(), _src4+ptr*srcScale), &rn, &rs1, &rs2, tbl_Dln, tbl_Dls, tbl_Dhn, tbl_Dhs); \
-		if(srcCount > 4) \
-			gf16_shuffle2x128_sve2_round(svld1_u8(svptrue_b8(), _src5+ptr*srcScale), &rn, &rs1, &rs2, tbl_Eln, tbl_Els, tbl_Ehn, tbl_Ehs); \
-		if(srcCount > 5) \
-			gf16_shuffle2x128_sve2_round(svld1_u8(svptrue_b8(), _src6+ptr*srcScale), &rn, &rs1, &rs2, tbl_Fln, tbl_Fls, tbl_Fhn, tbl_Fhs); \
-		rs1 = svreinterpret_u8_u16(svxar_n_u16( \
-			svreinterpret_u16_u8(rs1), \
-			svreinterpret_u16_u8(rs2), \
-			8 \
-		)); \
-		rn = NOMASK(sveor_u8, rn, rs1); \
-		svst1_u8(svptrue_b8(), _dst+ptr, rn)
-	
 	svuint8_t rn, rs1, rs2;
-	if(doPrefetch) {
-		for(intptr_t ptr = -(intptr_t)len; ptr; ptr += svcntb()) {
-			if(doPrefetch == 1)
-				svprfb(svptrue_b8(), _pf+ptr, SV_PLDL1KEEP);
-			if(doPrefetch == 2)
-				svprfb(svptrue_b8(), _pf+ptr, SV_PLDL2KEEP);
-			
-			DO_PROCESS;
-		}
-	} else {
-		for(intptr_t ptr = -(intptr_t)len; ptr; ptr += svcntb()) {
-			DO_PROCESS;
-		}
+	for(intptr_t ptr = -(intptr_t)len; ptr; ptr += svcntb()) {
+		if(doPrefetch == 1)
+			svprfb(svptrue_b8(), _pf+ptr, SV_PLDL1KEEP);
+		if(doPrefetch == 2)
+			svprfb(svptrue_b8(), _pf+ptr, SV_PLDL2KEEP);
+		
+		rn = svld1_u8(svptrue_b8(), _dst+ptr);
+		gf16_shuffle2x128_sve2_round1(svld1_u8(svptrue_b8(), _src1+ptr*srcScale), &rn, &rs1, &rs2, tbl_Aln, tbl_Als, tbl_Ahn, tbl_Ahs);
+		if(srcCount > 1)
+			gf16_shuffle2x128_sve2_round(svld1_u8(svptrue_b8(), _src2+ptr*srcScale), &rn, &rs1, &rs2, tbl_Bln, tbl_Bls, tbl_Bhn, tbl_Bhs);
+		if(srcCount > 2)
+			gf16_shuffle2x128_sve2_round(svld1_u8(svptrue_b8(), _src3+ptr*srcScale), &rn, &rs1, &rs2, tbl_Cln, tbl_Cls, tbl_Chn, tbl_Chs);
+		if(srcCount > 3)
+			gf16_shuffle2x128_sve2_round(svld1_u8(svptrue_b8(), _src4+ptr*srcScale), &rn, &rs1, &rs2, tbl_Dln, tbl_Dls, tbl_Dhn, tbl_Dhs);
+		if(srcCount > 4)
+			gf16_shuffle2x128_sve2_round(svld1_u8(svptrue_b8(), _src5+ptr*srcScale), &rn, &rs1, &rs2, tbl_Eln, tbl_Els, tbl_Ehn, tbl_Ehs);
+		if(srcCount > 5)
+			gf16_shuffle2x128_sve2_round(svld1_u8(svptrue_b8(), _src6+ptr*srcScale), &rn, &rs1, &rs2, tbl_Fln, tbl_Fls, tbl_Fhn, tbl_Fhs);
+		rs1 = svreinterpret_u8_u16(svxar_n_u16(
+			svreinterpret_u16_u8(rs1),
+			svreinterpret_u16_u8(rs2),
+			8
+		));
+		rn = NOMASK(sveor_u8, rn, rs1);
+		svst1_u8(svptrue_b8(), _dst+ptr, rn);
 	}
-	#undef DO_PROCESS
 }
 #endif /*defined(__ARM_FEATURE_SVE2)*/
 

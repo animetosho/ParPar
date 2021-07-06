@@ -134,35 +134,26 @@ static HEDLEY_ALWAYS_INLINE void _FN(gf16_shuffle_muladd_x)(
 		&tbl_Cl0, &tbl_Cl1, &tbl_Cl2, &tbl_Cl3, &tbl_Ch0, &tbl_Ch1, &tbl_Ch2, &tbl_Ch3
 	);
 	
-	#define DO_PROCESS \
-		svuint8x2_t vb = svld2_u8(svptrue_b8(), _dst+ptr); \
-		rl = svget2(vb, 0); \
-		rh = svget2(vb, 1); \
-		SVE_ROUND(svld2_u8(svptrue_b8(), _src1+ptr*srcScale), &rl, &rh, tbl_Al0, tbl_Al1, tbl_Al2, tbl_Al3, tbl_Ah0, tbl_Ah1, tbl_Ah2, tbl_Ah3); \
-		if(srcCount > 1) \
-			SVE_ROUND(svld2_u8(svptrue_b8(), _src2+ptr*srcScale), &rl, &rh, tbl_Bl0, tbl_Bl1, tbl_Bl2, tbl_Bl3, tbl_Bh0, tbl_Bh1, tbl_Bh2, tbl_Bh3); \
-		if(srcCount > 2) \
-			SVE_ROUND(svld2_u8(svptrue_b8(), _src3+ptr*srcScale), &rl, &rh, tbl_Cl0, tbl_Cl1, tbl_Cl2, tbl_Cl3, tbl_Ch0, tbl_Ch1, tbl_Ch2, tbl_Ch3); \
-		svst2_u8(svptrue_b8(), _dst+ptr, svcreate2_u8(rl, rh))
-	
 	svuint8_t rl, rh;
-	if(doPrefetch) {
-		for(intptr_t ptr = -(intptr_t)len; ptr; ptr += svcntb()*2) {
-			if(doPrefetch == 1) {
-				svprfb(svptrue_b8(), _pf+ptr, SV_PLDL1KEEP);
-				svprfb(svptrue_b8(), _pf+ptr + svcntb(), SV_PLDL1KEEP);
-			}
-			if(doPrefetch == 2) {
-				svprfb(svptrue_b8(), _pf+ptr, SV_PLDL2KEEP);
-				svprfb(svptrue_b8(), _pf+ptr + svcntb(), SV_PLDL2KEEP);
-			}
-			
-			DO_PROCESS;
+	for(intptr_t ptr = -(intptr_t)len; ptr; ptr += svcntb()*2) {
+		if(doPrefetch == 1) {
+			svprfb(svptrue_b8(), _pf+ptr, SV_PLDL1KEEP);
+			svprfb(svptrue_b8(), _pf+ptr + svcntb(), SV_PLDL1KEEP);
 		}
-	} else {
-		for(intptr_t ptr = -(intptr_t)len; ptr; ptr += svcntb()*2) {
-			DO_PROCESS;
+		if(doPrefetch == 2) {
+			svprfb(svptrue_b8(), _pf+ptr, SV_PLDL2KEEP);
+			svprfb(svptrue_b8(), _pf+ptr + svcntb(), SV_PLDL2KEEP);
 		}
+		
+		svuint8x2_t vb = svld2_u8(svptrue_b8(), _dst+ptr);
+		rl = svget2(vb, 0);
+		rh = svget2(vb, 1);
+		SVE_ROUND(svld2_u8(svptrue_b8(), _src1+ptr*srcScale), &rl, &rh, tbl_Al0, tbl_Al1, tbl_Al2, tbl_Al3, tbl_Ah0, tbl_Ah1, tbl_Ah2, tbl_Ah3);
+		if(srcCount > 1)
+			SVE_ROUND(svld2_u8(svptrue_b8(), _src2+ptr*srcScale), &rl, &rh, tbl_Bl0, tbl_Bl1, tbl_Bl2, tbl_Bl3, tbl_Bh0, tbl_Bh1, tbl_Bh2, tbl_Bh3);
+		if(srcCount > 2)
+			SVE_ROUND(svld2_u8(svptrue_b8(), _src3+ptr*srcScale), &rl, &rh, tbl_Cl0, tbl_Cl1, tbl_Cl2, tbl_Cl3, tbl_Ch0, tbl_Ch1, tbl_Ch2, tbl_Ch3);
+		svst2_u8(svptrue_b8(), _dst+ptr, svcreate2_u8(rl, rh));
 	}
 }
 

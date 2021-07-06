@@ -511,9 +511,24 @@ void Galois16Mul::setupMethod(Galois16Methods method) {
 		break;
 		
 		case GF16_SHUFFLE_512_SVE2:
-			// TODO: implement
-			setupMethod(GF16_AUTO);
-			return;
+			if(!gf16_available_sve2 || gf16_sve_get_size() < 64) {
+				setupMethod(GF16_AUTO);
+				return;
+			}
+			
+			_info.alignment = 64;
+			_info.stride = gf16_sve_get_size()*2;
+			scratch = gf16_shuffle_init_512_sve(GF16_POLYNOMIAL);
+			
+			_mul_add = &gf16_shuffle_muladd_512_sve2;
+			_mul_add_multi = &gf16_shuffle_muladd_multi_512_sve2;
+			_mul_add_multi_packed = &gf16_shuffle_muladd_multi_packed_512_sve2;
+			//_mul_add_multi_packpf = &gf16_shuffle_muladd_multi_packpf_512_sve2;
+			prepare_packed = &gf16_shuffle_prepare_packed_512_sve2;
+			_info.idealInputMultiple = 4;
+			prepare_packed_cksum = &gf16_shuffle_prepare_packed_cksum_512_sve2;
+			finish_packed_cksum = &gf16_shuffle_finish_packed_cksum_sve;
+		break;
 
 		case GF16_CLMUL_SVE2:
 			if(!gf16_available_sve2) {
@@ -963,7 +978,7 @@ Galois16Methods Galois16Mul::default_method(size_t regionSizeHint, unsigned /*ou
 #endif
 #ifdef PLATFORM_ARM
 	if(caps.hasSVE2)
-		return GF16_SHUFFLE_128_SVE2;
+		return gf16_sve_get_size() >= 64 ? GF16_SHUFFLE_512_SVE2 : GF16_SHUFFLE_128_SVE2;
 	if(caps.hasSVE && gf16_sve_get_size() > 16)
 		return GF16_SHUFFLE_128_SVE;
 	if(gf16_available_neon && caps.hasNEON)
@@ -1042,6 +1057,10 @@ std::vector<Galois16Methods> Galois16Mul::availableMethods(bool checkCpuid) {
 		ret.push_back(GF16_SHUFFLE_128_SVE2);
 		ret.push_back(GF16_SHUFFLE2X_128_SVE2);
 		ret.push_back(GF16_CLMUL_SVE2);
+		if(gf16_sve_get_size() >= 32)
+			ret.push_back(GF16_SHUFFLE2X_128_SVE2);
+		if(gf16_sve_get_size() >= 64)
+			ret.push_back(GF16_SHUFFLE_512_SVE2);
 	}
 #endif
 	
