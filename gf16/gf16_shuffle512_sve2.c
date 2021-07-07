@@ -201,7 +201,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle512_sve2_round1(svuint8x2_t va, svu
 	tmp = NOMASK(svlsr_n_u8, svget2(va, 1), 2);
 	
 	// straddeld element - top 2 from low, bottom 2 from high
-	// TODO: investigate a non-contiguous straddled component to save a vector register
+	// TODO: investigate a non-contiguous straddled component to save a vector register; SRI is generally slower than BSL though so may not be worth it
 	svuint8_t mid = svbsl_n_u8(
 		svget2(va, 1),
 		NOMASK(svlsr_n_u8, svget2(va, 0), 4),
@@ -233,11 +233,12 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle512_sve2_round4(svuint8x2_t va, svu
 	svuint8_t tbl_l0, svuint8_t tbl_l1, svuint8_t tbl_l2, 
 	svuint8_t tbl_h0, svuint8_t tbl_h1, svuint8_t tbl_h2
 ) {
+	*rl = NOMASK(sveor_u8, *rl, rl2); // free up a register to avoid a spill
 	svuint8_t tmp = NOMASK(svand_n_u8, svget2(va, 0), 0x3f);
-	svuint8_t tmp2 = NOMASK(svlsr_n_u8, svget2(va, 1), 2);
-	*rl = sveor3_u8(*rl, svtbl_u8(tbl_l0, tmp), rl2);
+	*rl = NOMASK(sveor_u8, *rl, svtbl_u8(tbl_l0, tmp));
 	*rh = sveor3_u8(*rh, svtbl_u8(tbl_h0, tmp), rh2);
 	
+	svuint8_t tmp2 = NOMASK(svlsr_n_u8, svget2(va, 1), 2);
 	svuint8_t mid = svbsl_n_u8(
 		svget2(va, 1),
 		NOMASK(svlsr_n_u8, svget2(va, 0), 4),
