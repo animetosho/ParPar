@@ -9,7 +9,7 @@
     defined(__LP64    ) || \
     defined(_M_X64    ) || \
     defined(_M_AMD64  ) || \
-    defined(_WIN64    )
+    (defined(_WIN64) && !defined(_M_ARM64))
 	#define PLATFORM_AMD64 1
 #endif
 #if defined(PLATFORM_AMD64) || \
@@ -19,7 +19,7 @@
     defined(__i686__  ) || \
     defined(_M_I86    ) || \
     defined(_M_IX86   ) || \
-    defined(_WIN32    )
+    (defined(_WIN32) && !defined(_M_ARM) && !defined(_M_ARM64))
 	#define PLATFORM_X86 1
 #endif
 #if defined(__aarch64__) || \
@@ -40,7 +40,7 @@
 	#define __aarch64__ 1
 # endif
 # if defined(_M_ARM)
-	/*#define __ARM_NEON 1*/
+	#define __ARM_NEON 1
 # endif
 
 #if defined(_MSC_VER) && !defined(__clang__)

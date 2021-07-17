@@ -298,7 +298,6 @@ void* gf16_clmul_init_arm(int polynomial) {
 #if defined(__ARM_NEON)
 	if((polynomial & ~0x1101f) || !(polynomial & 0x1000)) return NULL; // unsupported polynomial, we mostly support 0x1100b
 	
-	uint8x16_t poly;
 	uint8_t* ret;
 	ALIGN_ALLOC(ret, sizeof(uint8x16_t), 16);
 #ifdef __aarch64__
@@ -309,12 +308,11 @@ void* gf16_clmul_init_arm(int polynomial) {
 		if(i & 2) p ^= polynomial << 1;
 		if(i & 1) p ^= polynomial << 0;
 		
-		poly[i] = p & 0xff;
+		ret[i] = p & 0xff;
 	}
 #else
-	poly = vdupq_n_u8(polynomial & 0x1f);
+	memset(ret, polynomial & 0x1f, sizeof(uint8x16_t));
 #endif
-	vst1q_u8_align(ret, poly, 16);
 	return ret;
 #else
 	UNUSED(polynomial);

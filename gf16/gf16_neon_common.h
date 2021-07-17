@@ -25,9 +25,9 @@ typedef uint8x16_t qtbl_t;
 
 // aligned loads
 # ifdef _MSC_VER
-#  define vld1_u8_align vld1_u8_ex
-#  define vld1q_u8_align vld1q_u8_ex
-#  define vst1q_u8_align vst1q_u8_ex
+#  define vld1_u8_align(p, a) vld1_u8_ex(p, a*8)
+#  define vld1q_u8_align(p, a) vld1q_u8_ex(p, a*8)
+#  define vst1q_u8_align(p, v, a) vst1q_u8_ex(p, v, a*8)
 # elif defined(__GNUC__)
 #  define vld1_u8_align(p, n) vld1_u8((uint8_t*)__builtin_assume_aligned(p, n))
 #  define vld1q_u8_align(p, n) vld1q_u8((uint8_t*)__builtin_assume_aligned(p, n))
@@ -45,12 +45,12 @@ typedef uint8x16_t qtbl_t;
 # else
 static HEDLEY_ALWAYS_INLINE uint8x16x2_t vld1q_u8_x2_align(const uint8_t* p) {
 	uint8x16x2_t r;
-	r.val[0] = vld1q_u8_align(p, 32);
+	r.val[0] = vld1q_u8_align(p, 16);
 	r.val[1] = vld1q_u8_align(p+16, 16);
 	return r;
 }
 static HEDLEY_ALWAYS_INLINE void vst1q_u8_x2_align(uint8_t* p, uint8x16x2_t data) {
-	vst1q_u8_align(p, data.val[0], 32);
+	vst1q_u8_align(p, data.val[0], 16);
 	vst1q_u8_align(p+16, data.val[1], 16);
 }
 # endif
@@ -79,6 +79,6 @@ static HEDLEY_ALWAYS_INLINE void gf16_prepare_block_neon(void *HEDLEY_RESTRICT d
 // final block
 static HEDLEY_ALWAYS_INLINE void gf16_prepare_blocku_neon(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t remaining) {
 	memcpy(dst, src, remaining);
-	memset(dst + remaining, 0, sizeof(uint8x16x2_t) - remaining);
+	memset((uint8_t*)dst + remaining, 0, sizeof(uint8x16x2_t) - remaining);
 }
 #endif

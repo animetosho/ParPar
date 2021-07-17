@@ -25,11 +25,13 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle_neon_calc_tables(
 #else
 	uint8x16x2_t polyIn,
 #endif
-	uint16_t val, qtbl_t* tbl_l, qtbl_t* tbl_h) {
-	uint8x16_t ri;
+uint16_t val, qtbl_t* tbl_l, qtbl_t* tbl_h) {
+	
 	int val2 = GF16_MULTBY_TWO(val);
 	int val4 = GF16_MULTBY_TWO(val2);
-	uint16x4_t tmp = {0, val, val2, val2 ^ val};
+	uint16x4_t tmp = vreinterpret_u16_u32(vdup_n_u32(val << 16));
+	uint16x4_t tmp2 = veor_u16(tmp, vdup_n_u16(val2));
+	tmp = vext_u16(tmp, tmp2, 2);
 	
 	uint8x16_t rl = vreinterpretq_u8_u16(vcombine_u16(
 		tmp,
@@ -39,6 +41,9 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle_neon_calc_tables(
 		rl,
 		vreinterpretq_u8_u16(vdupq_n_u16(GF16_MULTBY_TWO(val4)))
 	);
+	
+	
+	uint8x16_t ri;
 	
 	/*
 	uint16_t* multbl = (uint16_t*)(ltd->poly + 1);
@@ -342,13 +347,14 @@ void* gf16_shuffle_init_arm(int polynomial) {
 	uint8_t* ret;
 # ifdef GF16_POLYNOMIAL_SIMPLE
 	if((polynomial | 0x1f) != 0x1101f) return NULL;
-#  ifndef __aarch64__
 	ALIGN_ALLOC(ret, sizeof(uint8x16_t), 16);
-	vst1q_u8_align(ret, vdupq_n_u8(polynomial & 0x1f), 16);
+#  ifndef __aarch64__
+	memset(ret, polynomial & 0x1f, sizeof(uint8x16_t));
 	return ret;
 #  endif
+# else
+	ALIGN_ALLOC(ret, sizeof(uint8x16x2_t), 32);
 # endif
-	uint8x16x2_t poly;
 	for(int i=0; i<16; i++) {
 		int p = 0;
 		if(i & 8) p ^= polynomial << 3;
@@ -356,16 +362,11 @@ void* gf16_shuffle_init_arm(int polynomial) {
 		if(i & 2) p ^= polynomial << 1;
 		if(i & 1) p ^= polynomial << 0;
 		
-		poly.val[0][i] = p & 0xff;
-		poly.val[1][i] = (p>>8) & 0xff;
-	}
-# ifdef GF16_POLYNOMIAL_SIMPLE
-	ALIGN_ALLOC(ret, sizeof(uint8x16_t), 16);
-	vst1q_u8_align(ret, poly.val[0], 16);
-# else
-	ALIGN_ALLOC(ret, sizeof(uint8x16x2_t), 32);
-	vst1q_u8_x2_align(ret, poly);
+		ret[i] = p & 0xff;
+# ifndef GF16_POLYNOMIAL_SIMPLE
+		ret[16+i] = (p>>8) & 0xff;
 # endif
+	}
 	return ret;
 	
 	/*
