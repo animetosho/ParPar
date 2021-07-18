@@ -142,7 +142,7 @@ extern "C" {
     #endif
 #endif
 
-#if (defined (_WIN32) && defined(_MSC_VER))
+#if (defined (_WIN32) && defined(_MSC_VER) && !defined(__clang__))
 
 /* scalar types  */
 typedef signed   __int8         cl_char;

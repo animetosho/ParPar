@@ -41,15 +41,16 @@ void ppgf_maybe_setup_gf() {
 #define CEIL_DIV(a, b) (((a) + (b)-1) / (b))
 #define ROUND_DIV(a, b) (((a) + ((b)>>1)) / (b))
 
-#if defined(__cplusplus) && __cplusplus >= 201100 && !(defined(_MSC_VER) && defined(__clang__)) && !defined(__APPLE__)
+#if defined(_MSC_VER) || defined(__MINGW32__) || defined(__MINGW64__)
+	#include <stdlib.h> // MSVC ARM64 seems to need this
+	#define ALIGN_ALLOC(buf, len, align) *(void**)&(buf) = _aligned_malloc((len), align)
+	#define ALIGN_FREE _aligned_free
+#elif defined(__cplusplus) && __cplusplus >= 201100 && !(defined(_MSC_VER) && (defined(__clang__) || defined(_M_ARM64) || defined(_M_ARM))) && !defined(__APPLE__)
 	// C++11 method
 	// len needs to be a multiple of alignment, although it sometimes works if it isn't...
 	#include <cstdlib>
 	#define ALIGN_ALLOC(buf, len, align) *(void**)&(buf) = aligned_alloc(align, ((len) + (align)-1) & ~((align)-1))
 	#define ALIGN_FREE free
-#elif defined(_MSC_VER) || defined(__MINGW32__) || defined(__MINGW64__)
-	#define ALIGN_ALLOC(buf, len, align) *(void**)&(buf) = _aligned_malloc((len), align)
-	#define ALIGN_FREE _aligned_free
 #else
 	#include <stdlib.h>
 	#define ALIGN_ALLOC(buf, len, align) if(posix_memalign((void**)&(buf), align, (len))) (buf) = NULL

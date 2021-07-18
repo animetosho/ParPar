@@ -139,6 +139,7 @@ HEDLEY_WARNING("Compiling AVX code on MinGW GCC may cause crashing due to stack 
 #endif
 
 #if defined(_MSC_VER) || defined(__MINGW32__) || defined(__MINGW64__)
+	#include <stdlib.h> // MSVC ARM64 seems to need this
 	#define ALIGN_ALLOC(buf, len, align) *(void**)&(buf) = _aligned_malloc((len), align)
 	#define ALIGN_FREE _aligned_free
 #else

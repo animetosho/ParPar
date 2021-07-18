@@ -8,7 +8,7 @@
 // headers
 # include <arm_neon.h>
 # include "gf16_checksum_arm.h"
-# ifdef _M_ARM64 /* MSVC header */
+# if defined(_M_ARM64) && !defined(__clang__) /* MSVC header */
 #  include <arm64_neon.h>
 # endif
 
@@ -24,7 +24,7 @@ typedef uint8x16_t qtbl_t;
 
 
 // aligned loads
-# ifdef _MSC_VER
+# if defined(_MSC_VER) && !defined(__clang__)
 #  define vld1_u8_align(p, a) vld1_u8_ex(p, a*8)
 #  define vld1q_u8_align(p, a) vld1q_u8_ex(p, a*8)
 #  define vst1q_u8_align(p, v, a) vst1q_u8_ex(p, v, a*8)
@@ -58,7 +58,7 @@ static HEDLEY_ALWAYS_INLINE void vst1q_u8_x2_align(uint8_t* p, uint8x16x2_t data
 
 // cacheline prefetching
 # define CACHELINE_SIZE 64
-# ifdef _MSC_VER
+# if defined(_MSC_VER) && !defined(__clang__)
 #  define PREFETCH_MEM(addr, rw) __prefetch(addr)
 // TODO: ARM64 intrin is a little different
 # else

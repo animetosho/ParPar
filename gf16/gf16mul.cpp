@@ -141,7 +141,7 @@ struct CpuCap {
 		}
 		hasGFNI = (cpuInfoX[2] & 0x100) == 0x100;
 #endif
-	
+		
 		/* try to detect hyper-threading */
 		propHT = false;
 		if(hasMulticore) {
@@ -178,10 +178,28 @@ struct CpuCap {
 #ifdef PLATFORM_ARM
 # ifdef __ANDROID__
 #  include <cpu-features.h>
-# elif defined(__linux__)
+# elif defined(__linux__) || (defined(__FreeBSD__) && __FreeBSD__ >= 12)
 #  include <sys/auxv.h>
 #  include <asm/hwcap.h>
+# elif (defined(__FreeBSD__) && __FreeBSD__ < 12)
+#  include <sys/sysctl.h>
+#  include <asm/hwcap.h>
+# elif defined(_WIN32)
+#  define WIN32_LEAN_AND_MEAN
+#  define NOMINMAX
+#  include <Windows.h>
+# elif defined(__APPLE__)
+#  include <sys/types.h>
+#  include <sys/sysctl.h>
 # endif
+# ifdef __FreeBSD__
+static unsigned long getauxval(unsigned long cap) {
+	unsigned long ret;
+	elf_aux_info(cap, &ret, sizeof(ret));
+	return ret;
+}
+# endif
+
 struct CpuCap {
 	bool hasNEON;
 	bool hasSVE;
@@ -210,6 +228,13 @@ struct CpuCap {
 #  else
 		hasNEON = android_getCpuFeatures() & ANDROID_CPU_ARM_FEATURE_NEON;
 #  endif
+# elif defined(_WIN32)
+		hasNEON = IsProcessorFeaturePresent(PF_ARM_NEON_INSTRUCTIONS_AVAILABLE);
+# elif defined(__APPLE__)
+		int supported = 0;
+		size_t len = sizeof(supported);
+		if(sysctlbyname("hw.optional.neon", &supported, &len, NULL, 0) == 0)
+			hasNEON = (bool)supported;
 # endif
 	}
 };
