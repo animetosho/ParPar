@@ -1,6 +1,15 @@
 
 #include <arm_sve.h>
 
+#ifdef __ARM_FEATURE_SVE2
+
+// have found Clang 11 to mis-compile this, but works on 12
+#if defined(__clang__) && __clang_major__ < 12 && defined(__OPTIMIZE__)
+HEDLEY_WARNING("Clang prior to version 12 may break SVE2 MD5 code");
+#endif
+
+
+
 #define ADD(a, b) svadd_u32_x(svptrue_b32(), a, b)
 #define VAL svdup_n_u32
 #define STATE_WORD_SIZE svcntb()
@@ -9,6 +18,140 @@
 #define LOAD INPUT
 #define LOAD_STATE(state, n) svld1_vnum_u32(svptrue_b32(), (const uint32_t*)state, n)
 #define SET_STATE(state, n, val) svst1_vnum_u32(svptrue_b32(), (uint32_t*)state, n, val)
+/*
+// if we want to try width specific implementations...
+#define LOAD4(set, ptr, offs, idx, var0, var1, var2, var3) { \
+	var0 = svld1_u32(svptrue_b32(), (uint32_t*)(ptr[0+set*4] + offs + idx*4)); \
+	var1 = svld1_u32(svptrue_b32(), (uint32_t*)(ptr[1+set*4] + offs + idx*4)); \
+	var2 = svld1_u32(svptrue_b32(), (uint32_t*)(ptr[2+set*4] + offs + idx*4)); \
+	var3 = svld1_u32(svptrue_b32(), (uint32_t*)(ptr[3+set*4] + offs + idx*4)); \
+	svuint32_t in0 = svzip1_u32(var0, var2); \
+	svuint32_t in1 = svzip2_u32(var0, var2); \
+	svuint32_t in2 = svzip1_u32(var1, var3); \
+	svuint32_t in3 = svzip2_u32(var1, var3); \
+	var0 = svzip1_u32(in0, in2); \
+	var1 = svzip2_u32(in0, in2); \
+	var2 = svzip1_u32(in1, in3); \
+	var3 = svzip2_u32(in1, in3); \
+}
+#define LOAD8(set, ptr, offs, idx, var0, var1, var2, var3, var4, var5, var6, var7) { \
+	var0 = svld1_u32(svptrue_b32(), (uint32_t*)(ptr[0+set*8] + offs + idx*4)); \
+	var1 = svld1_u32(svptrue_b32(), (uint32_t*)(ptr[1+set*8] + offs + idx*4)); \
+	var2 = svld1_u32(svptrue_b32(), (uint32_t*)(ptr[2+set*8] + offs + idx*4)); \
+	var3 = svld1_u32(svptrue_b32(), (uint32_t*)(ptr[3+set*8] + offs + idx*4)); \
+	var4 = svld1_u32(svptrue_b32(), (uint32_t*)(ptr[4+set*8] + offs + idx*4)); \
+	var5 = svld1_u32(svptrue_b32(), (uint32_t*)(ptr[5+set*8] + offs + idx*4)); \
+	var6 = svld1_u32(svptrue_b32(), (uint32_t*)(ptr[6+set*8] + offs + idx*4)); \
+	var7 = svld1_u32(svptrue_b32(), (uint32_t*)(ptr[7+set*8] + offs + idx*4)); \
+	svuint32_t in0 = svzip1_u32(var0, var4); \
+	svuint32_t in1 = svzip2_u32(var0, var4); \
+	svuint32_t in2 = svzip1_u32(var1, var5); \
+	svuint32_t in3 = svzip2_u32(var1, var5); \
+	svuint32_t in4 = svzip1_u32(var2, var6); \
+	svuint32_t in5 = svzip2_u32(var2, var6); \
+	svuint32_t in6 = svzip1_u32(var3, var7); \
+	svuint32_t in7 = svzip2_u32(var3, var7); \
+	svuint32_t in0b = svzip1_u32(in0, in4); \
+	svuint32_t in1b = svzip2_u32(in0, in4); \
+	svuint32_t in2b = svzip1_u32(in1, in5); \
+	svuint32_t in3b = svzip2_u32(in1, in5); \
+	svuint32_t in4b = svzip1_u32(in2, in6); \
+	svuint32_t in5b = svzip2_u32(in2, in6); \
+	svuint32_t in6b = svzip1_u32(in3, in7); \
+	svuint32_t in7b = svzip2_u32(in3, in7); \
+	var0 = svzip1_u32(in0b, in4b); \
+	var1 = svzip2_u32(in0b, in4b); \
+	var2 = svzip1_u32(in1b, in5b); \
+	var3 = svzip2_u32(in1b, in5b); \
+	var4 = svzip1_u32(in2b, in6b); \
+	var5 = svzip2_u32(in2b, in6b); \
+	var6 = svzip1_u32(in3b, in7b); \
+	var7 = svzip2_u32(in3b, in7b); \
+}
+#define LOAD16(set, ptr, offs, var0, var1, var2, var3, var4, var5, var6, var7, var8, var9, var10, var11, var12, var13, var14, var15) { \
+	var0 = svld1_u32(svptrue_b32(), (uint32_t*)(ptr[0+set*16] + offs)); \
+	var1 = svld1_u32(svptrue_b32(), (uint32_t*)(ptr[1+set*16] + offs)); \
+	var2 = svld1_u32(svptrue_b32(), (uint32_t*)(ptr[2+set*16] + offs)); \
+	var3 = svld1_u32(svptrue_b32(), (uint32_t*)(ptr[3+set*16] + offs)); \
+	var4 = svld1_u32(svptrue_b32(), (uint32_t*)(ptr[4+set*16] + offs)); \
+	var5 = svld1_u32(svptrue_b32(), (uint32_t*)(ptr[5+set*16] + offs)); \
+	var6 = svld1_u32(svptrue_b32(), (uint32_t*)(ptr[6+set*16] + offs)); \
+	var7 = svld1_u32(svptrue_b32(), (uint32_t*)(ptr[7+set*16] + offs)); \
+	var8 = svld1_u32(svptrue_b32(), (uint32_t*)(ptr[8+set*16] + offs)); \
+	var9 = svld1_u32(svptrue_b32(), (uint32_t*)(ptr[9+set*16] + offs)); \
+	var10 = svld1_u32(svptrue_b32(), (uint32_t*)(ptr[10+set*16] + offs)); \
+	var11 = svld1_u32(svptrue_b32(), (uint32_t*)(ptr[11+set*16] + offs)); \
+	var12 = svld1_u32(svptrue_b32(), (uint32_t*)(ptr[12+set*16] + offs)); \
+	var13 = svld1_u32(svptrue_b32(), (uint32_t*)(ptr[13+set*16] + offs)); \
+	var14 = svld1_u32(svptrue_b32(), (uint32_t*)(ptr[14+set*16] + offs)); \
+	var15 = svld1_u32(svptrue_b32(), (uint32_t*)(ptr[15+set*16] + offs)); \
+	svuint32_t in0 = svzip1_u32(var0, var8); \
+	svuint32_t in1 = svzip2_u32(var0, var8); \
+	svuint32_t in2 = svzip1_u32(var1, var9); \
+	svuint32_t in3 = svzip2_u32(var1, var9); \
+	svuint32_t in4 = svzip1_u32(var2, var10); \
+	svuint32_t in5 = svzip2_u32(var2, var10); \
+	svuint32_t in6 = svzip1_u32(var3, var11); \
+	svuint32_t in7 = svzip2_u32(var3, var11); \
+	svuint32_t in8 = svzip1_u32(var4, var12); \
+	svuint32_t in9 = svzip2_u32(var4, var12); \
+	svuint32_t in10 = svzip1_u32(var5, var13); \
+	svuint32_t in11 = svzip2_u32(var5, var13); \
+	svuint32_t in12 = svzip1_u32(var6, var14); \
+	svuint32_t in13 = svzip2_u32(var6, var14); \
+	svuint32_t in14 = svzip1_u32(var7, var15); \
+	svuint32_t in15 = svzip2_u32(var7, var15); \
+	var0 = svzip1_u32(in0, in8); \
+	var1 = svzip2_u32(in0, in8); \
+	var2 = svzip1_u32(in1, in9); \
+	var3 = svzip2_u32(in1, in9); \
+	var4 = svzip1_u32(in2, in10); \
+	var5 = svzip2_u32(in2, in10); \
+	var6 = svzip1_u32(in3, in11); \
+	var7 = svzip2_u32(in3, in11); \
+	var8 = svzip1_u32(in4, in12); \
+	var9 = svzip2_u32(in4, in12); \
+	var10 = svzip1_u32(in5, in13); \
+	var11 = svzip2_u32(in5, in13); \
+	var12 = svzip1_u32(in6, in14); \
+	var13 = svzip2_u32(in6, in14); \
+	var14 = svzip1_u32(in7, in15); \
+	var15 = svzip2_u32(in7, in15); \
+	in0 = svzip1_u32(var0, var8); \
+	in1 = svzip2_u32(var0, var8); \
+	in2 = svzip1_u32(var1, var9); \
+	in3 = svzip2_u32(var1, var9); \
+	in4 = svzip1_u32(var2, var10); \
+	in5 = svzip2_u32(var2, var10); \
+	in6 = svzip1_u32(var3, var11); \
+	in7 = svzip2_u32(var3, var11); \
+	in8 = svzip1_u32(var4, var12); \
+	in9 = svzip2_u32(var4, var12); \
+	in10 = svzip1_u32(var5, var13); \
+	in11 = svzip2_u32(var5, var13); \
+	in12 = svzip1_u32(var6, var14); \
+	in13 = svzip2_u32(var6, var14); \
+	in14 = svzip1_u32(var7, var15); \
+	in15 = svzip2_u32(var7, var15); \
+	var0 = svzip1_u32(in0, in8); \
+	var1 = svzip2_u32(in0, in8); \
+	var2 = svzip1_u32(in1, in9); \
+	var3 = svzip2_u32(in1, in9); \
+	var4 = svzip1_u32(in2, in10); \
+	var5 = svzip2_u32(in2, in10); \
+	var6 = svzip1_u32(in3, in11); \
+	var7 = svzip2_u32(in3, in11); \
+	var8 = svzip1_u32(in4, in12); \
+	var9 = svzip2_u32(in4, in12); \
+	var10 = svzip1_u32(in5, in13); \
+	var11 = svzip2_u32(in5, in13); \
+	var12 = svzip1_u32(in6, in14); \
+	var13 = svzip2_u32(in6, in14); \
+	var14 = svzip1_u32(in7, in15); \
+	var15 = svzip2_u32(in7, in15); \
+}
+*/
+// using gather
 #define LOAD2(set, ptr, offs, idx, var0, var1) { \
 	svuint64x2_t base = svld2_u64(svptrue_b64(), (const uint64_t*)(ptr + set*svcntw())); \
 	svuint32_t data0 = svreinterpret_u32_u64(svld1_gather_offset_u64(svptrue_b64(), svget2(base, 0), offs + idx*4)); \
@@ -96,3 +239,4 @@ static HEDLEY_ALWAYS_INLINE void md5_extract_mb_sve2(void* dst, void* state, int
 	);
 	svst1_u32(mask, (uint32_t*)dst - subIdx*4, vect);
 }
+#endif

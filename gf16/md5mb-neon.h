@@ -1,4 +1,5 @@
 
+#ifdef __ARM_NEON
 #include <arm_neon.h>
 
 #define ADD vaddq_u32
@@ -69,3 +70,4 @@ static HEDLEY_ALWAYS_INLINE void md5_extract_mb_neon(void* dst, void* state, int
 	if(idx == 3)
 		vst1q_u32((uint32_t*)dst, vcombine_u32(vget_high_u32(tmp1.val[1]), vget_high_u32(tmp2.val[1])));
 }
+#endif

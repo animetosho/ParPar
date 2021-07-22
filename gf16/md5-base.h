@@ -26,11 +26,13 @@
 
 /* code was originally based off OpenSSL's implementation */
 
+#ifndef _RX
 #define _RX(f,a,b,c,d,ik,r) \
 	a = ADD(a, ik); \
 	a = _ADDF(f, a, b, c, d); \
 	a = ROTATE(a, r); \
 	a = ADD(a, b)
+#endif
 
 #ifdef MD5X2
 # define RX(f,a,b,c,d,x,i,r,k) _RX(f,a,b,c,d,x(i,k),r); _RX(f,a##2,b##2,c##2,d##2,x##2(i,k),r)

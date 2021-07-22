@@ -1,6 +1,7 @@
 
 #include <arm_neon.h>
 
+#ifdef __ARM_NEON
 #define ADD vadd_u32
 #define VAL vdup_n_u32
 #define word_t uint32x2_t
@@ -18,6 +19,20 @@
 
 #define ROTATE(a, r) r==16 ? vreinterpret_u32_u16(vrev32_u16(vreinterpret_u16_u32(a))) : vsli_n_u32(vshr_n_u32(a, 32-r), a, r)
 
+// this runs slower on Cortex A53/55/76 for ARMv7, marginally faster on A53/55 for AArch64, marginally slower on A76 for AArch64
+/*
+#define _RX(f,a,b,c,d,ik,r) \
+	a = vadd_u32(a, ik); \
+	a = _ADDF(f, a, b, c, d); \
+	if(r == 16) \
+		a = vadd_u32(b, vreinterpret_u32_u16(vrev32_u16(vreinterpret_u16_u32(a)))); \
+	else \
+		a = vadd_u32( \
+			vsra_n_u32(b, a, 32-r), \
+			vshl_n_u32(a, r) \
+		)
+*/
+
 #define md5_init_lane_x2_neon(state, idx) { \
 	uint32x2_t* state_ = (uint32x2_t*)state; \
 	state_[0] = vset_lane_u32(0x67452301L, state_[0], idx); \
@@ -33,6 +48,7 @@
 #define G(b,c,d) vbsl_u32(d, b, c)
 #define H(b,c,d) veor_u32(veor_u32(d, c), b)
 #define I(b,c,d) veor_u32(vorn_u32(b, d), c)
+// this alternative approach seems to be slower on C-A53, A55 and A76 (both ARMv7 and AArch64)
 //#define I(b,c,d) vbsl_u32(b, vmvn_u32(c), veor_u32(vmvn_u32(c), d))
 
 #include "md5x2-base.h"
@@ -61,3 +77,4 @@ static HEDLEY_ALWAYS_INLINE void md5_extract_x2_neon(void* dst, void* state, con
 	vst1_u32((uint32_t*)dst, tmp1.val[idx]);
 	vst1_u32((uint32_t*)dst + 2, tmp2.val[idx]);
 }
+#endif
