@@ -43,6 +43,37 @@ uint16_t val, qtbl_t* tbl_l, qtbl_t* tbl_h) {
 	);
 	
 	
+	/*  Idea of using PMULL, if it later is useful; an alternative idea would be to use PMUL and break everything into 4 bit chunks
+	// mul by 2,4,6,8
+	uint16x4_t vval = vdup_n_u16(val);
+	uint16x8_t prod = vreinterpretq_u16_p8(vmull_p8((poly8x8_t){2,2,4,4,6,6,8,8}, vreinterpret_p8_u16(vval)));
+	uint16x4_t prodLo = vreinterpret_u16_u8(vmovn_u16(prod));
+	uint16x4_t prodHi = vreinterpret_u16_u8(vshrn_n_u16(prod, 8));
+	
+	// prodHi contains excess bits from multiplication which need to be merged in
+	// top byte needs reduction, bottom byte needs to be shifted right by 4
+	uint8x8_t reduction = vreinterpret_u8_p8(vmul_p8(
+		vreinterpret_p8_p16(vdup_n_p16(((GF16_POLYNOMIAL & 0x1f) << 8) | 1)),
+		vreinterpret_p8_u16(prodHi)
+	));
+	reduction = vrev16_u8(reduction);
+	prodLo = veor_u16(prodLo, vreinterpret_u16_u8(reduction));
+	prodLo = veor_u16(
+		prodLo,
+		vreinterpret_u16_p8(vmul_p8(vreinterpret_u8_p16(vdup_n_p16(0x1000)), prodHi))
+	);
+	
+	uint16x8_t prod8 = vdupq_lane_u16(vreinterpret_u16_u8(prodLo), 3);
+	prodLo = vext_u16(vdup_n_u8(0), prodLo, 3);
+	uint16x4x2_t prod0 = vzip_u16(prodLo, veor_u16(prodLo, vval));
+	uint8x16_t rl = vreinterpretq_u8_u16(vcombine_u16(prod0.val[0], prod0.val[1]));
+	
+	uint8x16_t rh = veorq_u8(
+		rl,
+		vreinterpretq_u8_u16(prod8)
+	);
+	*/
+	
 	uint8x16_t ri;
 	
 	/*

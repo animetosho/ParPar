@@ -697,10 +697,10 @@ static HEDLEY_ALWAYS_INLINE void gf16_lookup3_prepare_block(void *HEDLEY_RESTRIC
 	// pack bits so that we have: 0...10,16...26,11...15,27...31
 	if(sizeof(uintptr_t) >= 8) {
 		uint64_t data = *(uint64_t*)src;
-		*(uint64_t*)dst = (data & 0x07ff000007ffULL) | ((data & 0x07ff000007ff0000ULL) >> 5) | ((data & 0xf8000000f800ULL) << 11) | (data & 0xf8000000f8000000ULL);
+		*(uint64_t*)dst = (data & 0xf80007fff80007ffULL) | ((data & 0x07ff000007ff0000ULL) >> 5) | ((data & 0xf8000000f800ULL) << 11);
 	} else {
 		uint32_t data = *(uint32_t*)src;
-		*(uint32_t*)dst = (data & 0x07ff) | ((data & 0x07ff0000) >> 5) | ((data & 0xf800) << 11) | (data & 0xf8000000);
+		*(uint32_t*)dst = (data & 0xf80007ff) | ((data & 0x07ff0000) >> 5) | ((data & 0xf800) << 11);
 	}
 }
 static HEDLEY_ALWAYS_INLINE void gf16_lookup3_prepare_blocku(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t remaining) {
