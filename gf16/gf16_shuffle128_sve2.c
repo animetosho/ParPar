@@ -71,7 +71,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle128_sve2_round(svuint8x2_t va, svui
 #define SVE_ROUND1 gf16_shuffle128_sve2_round1
 #define SVE_ROUND gf16_shuffle128_sve2_round
 #define _FN(f) f##_128_sve2
-#include "gf16_shuffle_sve_common.h"
+#include "gf16_shuffle128_sve_common.h"
 #undef _FN
 #undef SVE_ROUND
 #undef SVE_ROUND1
