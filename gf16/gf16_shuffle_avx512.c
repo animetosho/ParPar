@@ -16,6 +16,7 @@
 #include "gf16_shuffle2x_x86.h"
 
 
+#include "gf16_muladd_multi.h"
 
 #ifdef _AVAILABLE
 static HEDLEY_ALWAYS_INLINE void gf16_shuffle_calc2x_table(const uint16_t* coefficients, __m256i polyl, __m256i polyh, __m256i* prodLo0, __m256i* prodHi0, __m256i* prodLo1, __m256i* prodHi1, __m256i* prodLo2, __m256i* prodHi2, __m256i* prodLo3, __m256i* prodHi3) {
@@ -71,7 +72,6 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle_avx512_round(
 	*tph = _mm512_ternarylogic_epi32(*tph, _mm512_shuffle_epi8(prodHi2, til), _mm512_shuffle_epi8(prodHi3, tih), 0x96);
 }
 
-#include "gf16_muladd_multi.h"
 static HEDLEY_ALWAYS_INLINE void gf16_shuffle_muladd_x_avx512(
 	const void *HEDLEY_RESTRICT scratch, uint8_t *HEDLEY_RESTRICT _dst, const unsigned srcScale,
 	GF16_MULADD_MULTI_SRCLIST, size_t len,
@@ -164,39 +164,12 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle_muladd_x_avx512(
 }
 #endif // defined(_AVAILABLE)
 
-unsigned gf16_shuffle_muladd_multi_avx512(const void *HEDLEY_RESTRICT scratch, unsigned regions, size_t offset, void *HEDLEY_RESTRICT dst, const void* const*HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch) {
-	UNUSED(mutScratch);
-#if defined(_AVAILABLE) && defined(PLATFORM_AMD64)
-	unsigned region = gf16_muladd_multi(scratch, &gf16_shuffle_muladd_x_avx512, 3, regions, offset, dst, src, len, coefficients);
-	_mm256_zeroupper();
-	return region;
-#else
-	UNUSED(scratch); UNUSED(regions); UNUSED(offset); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficients);
-	return 0;
-#endif
-}
 
-unsigned gf16_shuffle_muladd_multi_packed_avx512(const void *HEDLEY_RESTRICT scratch, unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch) {
-	UNUSED(mutScratch);
 #if defined(_AVAILABLE) && defined(PLATFORM_AMD64)
-	unsigned region = gf16_muladd_multi_packed(scratch, &gf16_shuffle_muladd_x_avx512, 3, regions, dst, src, len, sizeof(__m512i)*2, coefficients);
-	_mm256_zeroupper();
-	return region;
+GF16_MULADD_MULTI_FUNCS(gf16_shuffle, _avx512, gf16_shuffle_muladd_x_avx512, 3, sizeof(__m512i)*2, 1, _mm256_zeroupper())
 #else
-	UNUSED(scratch); UNUSED(regions); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficients);
-	return 0;
+GF16_MULADD_MULTI_FUNCS_STUB(gf16_shuffle, _avx512)
 #endif
-}
-
-void gf16_shuffle_muladd_multi_packpf_avx512(const void *HEDLEY_RESTRICT scratch, unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch, const void* HEDLEY_RESTRICT prefetchIn, const void* HEDLEY_RESTRICT prefetchOut) {
-	UNUSED(mutScratch);
-#if defined(_AVAILABLE) && defined(PLATFORM_AMD64)
-	gf16_muladd_multi_packpf(scratch, &gf16_shuffle_muladd_x_avx512, 3, regions, dst, src, len, sizeof(__m512i)*2, coefficients, 1, prefetchIn, prefetchOut);
-	_mm256_zeroupper();
-#else
-	UNUSED(scratch); UNUSED(regions); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficients); UNUSED(prefetchIn); UNUSED(prefetchOut);
-#endif
-}
 
 
 #if defined(_AVAILABLE)
@@ -360,39 +333,12 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle2x_muladd_x_avx512(
 #endif // defined(_AVAILABLE)
 
 
-unsigned gf16_shuffle2x_muladd_multi_avx512(const void *HEDLEY_RESTRICT scratch, unsigned regions, size_t offset, void *HEDLEY_RESTRICT dst, const void* const*HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch) {
-	UNUSED(mutScratch);
 #if defined(_AVAILABLE) && defined(PLATFORM_AMD64)
-	unsigned region = gf16_muladd_multi(scratch, &gf16_shuffle2x_muladd_x_avx512, 6, regions, offset, dst, src, len, coefficients);
-	_mm256_zeroupper();
-	return region;
+GF16_MULADD_MULTI_FUNCS(gf16_shuffle2x, _avx512, gf16_shuffle2x_muladd_x_avx512, 6, sizeof(__m512i), 0, _mm256_zeroupper())
 #else
-	UNUSED(scratch); UNUSED(regions); UNUSED(offset); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficients);
-	return 0;
+GF16_MULADD_MULTI_FUNCS_STUB(gf16_shuffle2x, _avx512)
 #endif
-}
 
-unsigned gf16_shuffle2x_muladd_multi_packed_avx512(const void *HEDLEY_RESTRICT scratch, unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch) {
-	UNUSED(mutScratch);
-#if defined(_AVAILABLE) && defined(PLATFORM_AMD64)
-	unsigned region = gf16_muladd_multi_packed(scratch, &gf16_shuffle2x_muladd_x_avx512, 6, regions, dst, src, len, sizeof(__m512i), coefficients);
-	_mm256_zeroupper();
-	return region;
-#else
-	UNUSED(scratch); UNUSED(regions); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficients);
-	return 0;
-#endif
-}
-
-void gf16_shuffle2x_muladd_multi_packpf_avx512(const void *HEDLEY_RESTRICT scratch, unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch, const void* HEDLEY_RESTRICT prefetchIn, const void* HEDLEY_RESTRICT prefetchOut) {
-	UNUSED(mutScratch);
-#if defined(_AVAILABLE) && defined(PLATFORM_AMD64)
-	gf16_muladd_multi_packpf(scratch, &gf16_shuffle2x_muladd_x_avx512, 6, regions, dst, src, len, sizeof(__m512i), coefficients, 0, prefetchIn, prefetchOut);
-	_mm256_zeroupper();
-#else
-	UNUSED(scratch); UNUSED(regions); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficients); UNUSED(prefetchIn); UNUSED(prefetchOut);
-#endif
-}
 
 void gf16_shuffle2x_muladd_avx512(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t val, void *HEDLEY_RESTRICT mutScratch) {
 	UNUSED(mutScratch);

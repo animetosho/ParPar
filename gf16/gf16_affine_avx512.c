@@ -29,6 +29,8 @@ int gf16_affine_available_avx512 = 0;
 #undef _mword
 #undef MWORD_SIZE
 
+#include "gf16_muladd_multi.h"
+
 void gf16_affine_prepare_packed_avx512(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen, size_t sliceLen, unsigned inputPackSize, unsigned inputNum, size_t chunkLen) {
 #if defined(__GFNI__) && defined(__AVX512BW__) && defined(__AVX512VL__)
 	gf16_prepare_packed(dst, src, srcLen, sliceLen, sizeof(__m512i)*2, &gf16_shuffle_prepare_block_avx512, &gf16_shuffle_prepare_blocku_avx512, inputPackSize, inputNum, chunkLen,
@@ -162,7 +164,6 @@ static HEDLEY_ALWAYS_INLINE void gf16_affine_muladd_round(const __m512i* src, __
 		0x96
 	);
 }
-#include "gf16_muladd_multi.h"
 static HEDLEY_ALWAYS_INLINE void gf16_affine_muladd_x_avx512(
 	const void *HEDLEY_RESTRICT scratch,
 	uint8_t *HEDLEY_RESTRICT _dst, const unsigned srcScale,
@@ -273,39 +274,11 @@ void gf16_affine_muladd_prefetch_avx512(const void *HEDLEY_RESTRICT scratch, voi
 #endif
 }
 
-unsigned gf16_affine_muladd_multi_avx512(const void *HEDLEY_RESTRICT scratch, unsigned regions, size_t offset, void *HEDLEY_RESTRICT dst, const void* const*HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch) {
-	UNUSED(mutScratch);
 #if defined(__GFNI__) && defined(__AVX512BW__) && defined(__AVX512VL__) && defined(PLATFORM_AMD64)
-	unsigned region = gf16_muladd_multi(scratch, &gf16_affine_muladd_x_avx512, 6, regions, offset, dst, src, len, coefficients);
-	_mm256_zeroupper();
-	return region;
+GF16_MULADD_MULTI_FUNCS(gf16_affine, _avx512, gf16_affine_muladd_x_avx512, 6, sizeof(__m512i)*2, 1, _mm256_zeroupper())
 #else
-	UNUSED(scratch); UNUSED(regions); UNUSED(offset); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficients);
-	return 0;
+GF16_MULADD_MULTI_FUNCS_STUB(gf16_affine, _avx512)
 #endif
-}
-
-unsigned gf16_affine_muladd_multi_packed_avx512(const void *HEDLEY_RESTRICT scratch, unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch) {
-	UNUSED(mutScratch);
-#if defined(__GFNI__) && defined(__AVX512BW__) && defined(__AVX512VL__) && defined(PLATFORM_AMD64)
-	unsigned region = gf16_muladd_multi_packed(scratch, &gf16_affine_muladd_x_avx512, 6, regions, dst, src, len, sizeof(__m512i)*2, coefficients);
-	_mm256_zeroupper();
-	return region;
-#else
-	UNUSED(scratch); UNUSED(regions); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficients);
-	return 0;
-#endif
-}
-
-void gf16_affine_muladd_multi_packpf_avx512(const void *HEDLEY_RESTRICT scratch, unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch, const void* HEDLEY_RESTRICT prefetchIn, const void* HEDLEY_RESTRICT prefetchOut) {
-	UNUSED(mutScratch);
-#if defined(__GFNI__) && defined(__AVX512BW__) && defined(__AVX512VL__) && defined(PLATFORM_AMD64)
-	gf16_muladd_multi_packpf(scratch, &gf16_affine_muladd_x_avx512, 6, regions, dst, src, len, sizeof(__m512i)*2, coefficients, 1, prefetchIn, prefetchOut);
-	_mm256_zeroupper();
-#else
-	UNUSED(scratch); UNUSED(regions); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficients); UNUSED(prefetchIn); UNUSED(prefetchOut);
-#endif
-}
 
 
 #if defined(__GFNI__) && defined(__AVX512BW__) && defined(__AVX512VL__)
@@ -520,51 +493,14 @@ void gf16_affine2x_muladd_avx512(const void *HEDLEY_RESTRICT scratch, void *HEDL
 }
 
 
-unsigned gf16_affine2x_muladd_multi_avx512(const void *HEDLEY_RESTRICT scratch, unsigned regions, size_t offset, void *HEDLEY_RESTRICT dst, const void* const*HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch) {
-	UNUSED(mutScratch);
 #if defined(__GFNI__) && defined(__AVX512BW__) && defined(__AVX512VL__)
 # ifdef PLATFORM_AMD64
-	// TODO: review max number of regions
-	unsigned region = gf16_muladd_multi(scratch, &gf16_affine2x_muladd_x_avx512, 10, regions, offset, dst, src, len, coefficients);
+// TODO: may not want 12 regions for non-packed variant
+GF16_MULADD_MULTI_FUNCS(gf16_affine2x, _avx512, gf16_affine2x_muladd_x_avx512, 12, sizeof(__m512i), 0, _mm256_zeroupper())
 # else
-	// if only 8 registers available, only allow 2 parallel regions
-	unsigned region = gf16_muladd_multi(scratch, &gf16_affine2x_muladd_x_avx512, 2, regions, offset, dst, src, len, coefficients);
+// if only 8 registers available, only allow 2 parallel regions
+GF16_MULADD_MULTI_FUNCS(gf16_affine2x, _avx512, gf16_affine2x_muladd_x_avx512, 2, sizeof(__m512i), 0, _mm256_zeroupper())
 # endif
-	_mm256_zeroupper();
-	return region;
 #else
-	UNUSED(scratch); UNUSED(regions); UNUSED(offset); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficients);
-	return 0;
+GF16_MULADD_MULTI_FUNCS_STUB(gf16_affine2x, _avx512)
 #endif
-}
-
-unsigned gf16_affine2x_muladd_multi_packed_avx512(const void *HEDLEY_RESTRICT scratch, unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch) {
-	UNUSED(mutScratch);
-#if defined(__GFNI__) && defined(__AVX512BW__) && defined(__AVX512VL__)
-# ifdef PLATFORM_AMD64
-	unsigned region = gf16_muladd_multi_packed(scratch, &gf16_affine2x_muladd_x_avx512, 12, regions, dst, src, len, sizeof(__m512i), coefficients);
-# else
-	// if only 8 registers available, only allow 2 parallel regions
-	unsigned region = gf16_muladd_multi_packed(scratch, &gf16_affine2x_muladd_x_avx512, 2, regions, dst, src, len, sizeof(__m512i), coefficients);
-# endif
-	_mm256_zeroupper();
-	return region;
-#else
-	UNUSED(scratch); UNUSED(regions); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficients);
-	return 0;
-#endif
-}
-
-void gf16_affine2x_muladd_multi_packpf_avx512(const void *HEDLEY_RESTRICT scratch, unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch, const void* HEDLEY_RESTRICT prefetchIn, const void* HEDLEY_RESTRICT prefetchOut) {
-	UNUSED(mutScratch);
-#if defined(__GFNI__) && defined(__AVX512BW__) && defined(__AVX512VL__)
-# ifdef PLATFORM_AMD64
-	gf16_muladd_multi_packpf(scratch, &gf16_affine2x_muladd_x_avx512, 12, regions, dst, src, len, sizeof(__m512i), coefficients, 0, prefetchIn, prefetchOut);
-# else
-	gf16_muladd_multi_packpf(scratch, &gf16_affine2x_muladd_x_avx512, 2, regions, dst, src, len, sizeof(__m512i), coefficients, 0, prefetchIn, prefetchOut);
-# endif
-	_mm256_zeroupper();
-#else
-	UNUSED(scratch); UNUSED(regions); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficients); UNUSED(prefetchIn); UNUSED(prefetchOut);
-#endif
-}

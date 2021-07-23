@@ -1,4 +1,6 @@
 
+#include "gf16_muladd_multi.h"
+
 #if defined(_AVAILABLE) && defined(SVE_CALC_TABLE_MUL16)
 static HEDLEY_ALWAYS_INLINE void gf16_shuffle128_sve_calc_tables(const void *HEDLEY_RESTRICT scratch, const unsigned srcCount, const uint16_t *HEDLEY_RESTRICT coefficients,
 	svuint8_t* tbl_Al0, svuint8_t* tbl_Al1, svuint8_t* tbl_Al2, svuint8_t* tbl_Al3, 
@@ -117,7 +119,6 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle128_sve_calc_single_table(const voi
 }
 
 
-#include "gf16_muladd_multi.h"
 static HEDLEY_ALWAYS_INLINE void _FN(gf16_shuffle_muladd_x)(
 	const void *HEDLEY_RESTRICT scratch,
 	uint8_t *HEDLEY_RESTRICT _dst, const unsigned srcScale, GF16_MULADD_MULTI_SRCLIST, size_t len,
@@ -187,35 +188,5 @@ void _FN(gf16_shuffle_muladd)(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_
 	gf16_muladd_single(scratch, &_FN(gf16_shuffle_muladd_x), dst, src, len, val);
 #else
 	UNUSED(scratch); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(val);
-#endif
-}
-
-
-unsigned _FN(gf16_shuffle_muladd_multi)(const void *HEDLEY_RESTRICT scratch, unsigned regions, size_t offset, void *HEDLEY_RESTRICT dst, const void* const*HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch) {
-	UNUSED(mutScratch);
-#ifdef _AVAILABLE
-	return gf16_muladd_multi(scratch, &_FN(gf16_shuffle_muladd_x), 3, regions, offset, dst, src, len, coefficients);
-#else
-	UNUSED(scratch); UNUSED(regions); UNUSED(offset); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficients);
-	return 0;
-#endif
-}
-
-unsigned _FN(gf16_shuffle_muladd_multi_packed)(const void *HEDLEY_RESTRICT scratch, unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch) {
-	UNUSED(mutScratch);
-#ifdef _AVAILABLE
-	return gf16_muladd_multi_packed(scratch, &_FN(gf16_shuffle_muladd_x), 3, regions, dst, src, len, svcntb()*2, coefficients);
-#else
-	UNUSED(scratch); UNUSED(regions); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficients);
-	return 0;
-#endif
-}
-
-void _FN(gf16_shuffle_muladd_multi_packpf)(const void *HEDLEY_RESTRICT scratch, unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch, const void* HEDLEY_RESTRICT prefetchIn, const void* HEDLEY_RESTRICT prefetchOut) {
-	UNUSED(mutScratch);
-#ifdef _AVAILABLE
-	gf16_muladd_multi_packpf(scratch, &_FN(gf16_shuffle_muladd_x), 3, regions, dst, src, len, svcntb()*2, coefficients, 0, prefetchIn, prefetchOut);
-#else
-	UNUSED(scratch); UNUSED(regions); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficients); UNUSED(prefetchIn); UNUSED(prefetchOut);
 #endif
 }

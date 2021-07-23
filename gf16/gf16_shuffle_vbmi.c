@@ -22,6 +22,7 @@
 # undef _mword
 # undef MWORD_SIZE
 
+#include "gf16_muladd_multi.h"
 
 int gf16_shuffle_available_vbmi = 1;
 
@@ -264,7 +265,6 @@ int gf16_shuffle_available_vbmi = 0;
 #endif
 
 #if defined(__AVX512VBMI__) && defined(__AVX512VL__)
-#include "gf16_muladd_multi.h"
 static HEDLEY_ALWAYS_INLINE void gf16_shuffle_muladd_x_vbmi(
 	const void *HEDLEY_RESTRICT scratch, uint8_t *HEDLEY_RESTRICT _dst, const unsigned srcScale,
 	GF16_MULADD_MULTI_SRCLIST,
@@ -437,40 +437,11 @@ void gf16_shuffle_muladd_prefetch_vbmi(const void *HEDLEY_RESTRICT scratch, void
 #endif
 }
 
-unsigned gf16_shuffle_muladd_multi_vbmi(const void *HEDLEY_RESTRICT scratch, unsigned regions, size_t offset, void *HEDLEY_RESTRICT dst, const void* const*HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch) {
-	UNUSED(mutScratch);
 #if defined(__AVX512VBMI__) && defined(__AVX512VL__) && defined(PLATFORM_AMD64)
-	unsigned region = gf16_muladd_multi(scratch, &gf16_shuffle_muladd_x_vbmi, 4, regions, offset, dst, src, len, coefficients);
-	_mm256_zeroupper();
-	return region;
+GF16_MULADD_MULTI_FUNCS(gf16_shuffle, _vbmi, gf16_shuffle_muladd_x_vbmi, 4, sizeof(__m512i)*2, 1, _mm256_zeroupper())
 #else
-	UNUSED(scratch); UNUSED(regions); UNUSED(offset); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficients);
-	return 0;
+GF16_MULADD_MULTI_FUNCS_STUB(gf16_shuffle, _vbmi)
 #endif
-}
-
-unsigned gf16_shuffle_muladd_multi_packed_vbmi(const void *HEDLEY_RESTRICT scratch, unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch) {
-	UNUSED(mutScratch);
-#if defined(__AVX512VBMI__) && defined(__AVX512VL__) && defined(PLATFORM_AMD64)
-	unsigned region = gf16_muladd_multi_packed(scratch, &gf16_shuffle_muladd_x_vbmi, 4, regions, dst, src, len, sizeof(__m512i)*2, coefficients);
-	_mm256_zeroupper();
-	return region;
-#else
-	UNUSED(scratch); UNUSED(regions); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficients);
-	return 0;
-#endif
-}
-
-void gf16_shuffle_muladd_multi_packpf_vbmi(const void *HEDLEY_RESTRICT scratch, unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch, const void* HEDLEY_RESTRICT prefetchIn, const void* HEDLEY_RESTRICT prefetchOut) {
-	UNUSED(mutScratch);
-#if defined(__AVX512VBMI__) && defined(__AVX512VL__) && defined(PLATFORM_AMD64)
-	gf16_muladd_multi_packpf(scratch, &gf16_shuffle_muladd_x_vbmi, 4, regions, dst, src, len, sizeof(__m512i)*2, coefficients, 1, prefetchIn, prefetchOut);
-	_mm256_zeroupper();
-#else
-	UNUSED(scratch); UNUSED(regions); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficients); UNUSED(prefetchIn); UNUSED(prefetchOut);
-#endif
-}
-
 
 
 void gf16_shuffle_prepare_packed_vbmi(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen, size_t sliceLen, unsigned inputPackSize, unsigned inputNum, size_t chunkLen) {

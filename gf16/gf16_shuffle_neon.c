@@ -1,5 +1,7 @@
 
 #include "gf16_neon_common.h"
+#include "gf16_muladd_multi.h"
+
 #if defined(__ARM_NEON)
 int gf16_available_neon = 1;
 #else
@@ -192,7 +194,6 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle_neon_round(uint8x16x2_t va, uint8x
 	*rh = veorq_u8(*rh, vqtbl1q_u8(tbl_h[3], va.val[1]));
 }
 
-#include "gf16_muladd_multi.h"
 static HEDLEY_ALWAYS_INLINE void gf16_shuffle_muladd_x_neon(
 	const void *HEDLEY_RESTRICT scratch,
 	uint8_t *HEDLEY_RESTRICT _dst, const unsigned srcScale, GF16_MULADD_MULTI_SRCLIST, size_t len,
@@ -307,36 +308,11 @@ void gf16_shuffle_muladd_neon(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_
 }
 
 
-unsigned gf16_shuffle_muladd_multi_neon(const void *HEDLEY_RESTRICT scratch, unsigned regions, size_t offset, void *HEDLEY_RESTRICT dst, const void* const*HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch) {
-	UNUSED(mutScratch);
-#if defined(__ARM_NEON) && defined(__aarch64__)
-	// GCC/Clang seem to spill some registers with 3 regions, so max out at 2 for now
-	return gf16_muladd_multi(scratch, &gf16_shuffle_muladd_x_neon, 2, regions, offset, dst, src, len, coefficients);
+#if defined(__ARM_NEON)
+GF16_MULADD_MULTI_FUNCS(gf16_shuffle, _neon, gf16_shuffle_muladd_x_neon, 2, sizeof(uint8x16_t)*2, 0, (void)0)
 #else
-	UNUSED(scratch); UNUSED(regions); UNUSED(offset); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficients);
-	return 0;
+GF16_MULADD_MULTI_FUNCS_STUB(gf16_shuffle, _neon)
 #endif
-}
-
-unsigned gf16_shuffle_muladd_multi_packed_neon(const void *HEDLEY_RESTRICT scratch, unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch) {
-	UNUSED(mutScratch);
-#if defined(__ARM_NEON) && defined(__aarch64__)
-	return gf16_muladd_multi_packed(scratch, &gf16_shuffle_muladd_x_neon, 2, regions, dst, src, len, sizeof(uint8x16_t)*2, coefficients);
-#else
-	UNUSED(scratch); UNUSED(regions); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficients);
-	return 0;
-#endif
-}
-
-void gf16_shuffle_muladd_multi_packpf_neon(const void *HEDLEY_RESTRICT scratch, unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch, const void* HEDLEY_RESTRICT prefetchIn, const void* HEDLEY_RESTRICT prefetchOut) {
-	UNUSED(mutScratch);
-#if defined(__ARM_NEON) && defined(__aarch64__)
-	gf16_muladd_multi_packpf(scratch, &gf16_shuffle_muladd_x_neon, 2, regions, dst, src, len, sizeof(uint8x16_t)*2, coefficients, 0, prefetchIn, prefetchOut);
-#else
-	UNUSED(scratch); UNUSED(regions); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficients); UNUSED(prefetchIn); UNUSED(prefetchOut);
-#endif
-}
-
 
 
 void gf16_shuffle_prepare_packed_neon(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen, size_t sliceLen, unsigned inputPackSize, unsigned inputNum, size_t chunkLen) {

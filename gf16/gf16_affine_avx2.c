@@ -29,6 +29,8 @@ int gf16_affine_available_avx2 = 0;
 #undef _mword
 #undef MWORD_SIZE
 
+#include "gf16_muladd_multi.h"
+
 
 void gf16_affine_prepare_packed_avx2(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen, size_t sliceLen, unsigned inputPackSize, unsigned inputNum, size_t chunkLen) {
 #if defined(__GFNI__) && defined(__AVX2__)
@@ -119,7 +121,6 @@ static HEDLEY_ALWAYS_INLINE void gf16_affine_muladd_round(const __m256i* src, __
 	*tph = _mm256_xor_si256(*tph, _mm256_gf2p8affine_epi64_epi8(ta, mat_hh, 0));
 	*tph = _mm256_xor_si256(*tph, _mm256_gf2p8affine_epi64_epi8(tb, mat_hl, 0));
 }
-#include "gf16_muladd_multi.h"
 static HEDLEY_ALWAYS_INLINE void gf16_affine_muladd_x_avx2(
 	const void *HEDLEY_RESTRICT scratch,
 	uint8_t *HEDLEY_RESTRICT _dst, const unsigned srcScale,
@@ -192,39 +193,12 @@ void gf16_affine_muladd_prefetch_avx2(const void *HEDLEY_RESTRICT scratch, void 
 #endif
 }
 
-unsigned gf16_affine_muladd_multi_avx2(const void *HEDLEY_RESTRICT scratch, unsigned regions, size_t offset, void *HEDLEY_RESTRICT dst, const void* const*HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch) {
-	UNUSED(mutScratch);
-#if defined(__GFNI__) && defined(__AVX2__) && defined(PLATFORM_AMD64)
-	unsigned region = gf16_muladd_multi(scratch, &gf16_affine_muladd_x_avx2, 3, regions, offset, dst, src, len, coefficients);
-	_mm256_zeroupper();
-	return region;
-#else
-	UNUSED(scratch); UNUSED(regions); UNUSED(offset); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficients);
-	return 0;
-#endif
-}
 
-unsigned gf16_affine_muladd_multi_packed_avx2(const void *HEDLEY_RESTRICT scratch, unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch) {
-	UNUSED(mutScratch);
 #if defined(__GFNI__) && defined(__AVX2__) && defined(PLATFORM_AMD64)
-	unsigned region = gf16_muladd_multi_packed(scratch, &gf16_affine_muladd_x_avx2, 3, regions, dst, src, len, sizeof(__m256i)*2, coefficients);
-	_mm256_zeroupper();
-	return region;
+GF16_MULADD_MULTI_FUNCS(gf16_affine, _avx2, gf16_affine_muladd_x_avx2, 3, sizeof(__m256i)*2, 1, _mm256_zeroupper())
 #else
-	UNUSED(scratch); UNUSED(regions); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficients);
-	return 0;
+GF16_MULADD_MULTI_FUNCS_STUB(gf16_affine, _avx2)
 #endif
-}
-
-void gf16_affine_muladd_multi_packpf_avx2(const void *HEDLEY_RESTRICT scratch, unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch, const void* HEDLEY_RESTRICT prefetchIn, const void* HEDLEY_RESTRICT prefetchOut) {
-	UNUSED(mutScratch);
-#if defined(__GFNI__) && defined(__AVX2__) && defined(PLATFORM_AMD64)
-	gf16_muladd_multi_packpf(scratch, &gf16_affine_muladd_x_avx2, 3, regions, dst, src, len, sizeof(__m256i)*2, coefficients, 0, prefetchIn, prefetchOut);
-	_mm256_zeroupper();
-#else
-	UNUSED(scratch); UNUSED(regions); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficients); UNUSED(prefetchIn); UNUSED(prefetchOut);
-#endif
-}
 
 
 #if defined(__GFNI__) && defined(__AVX2__)
@@ -392,51 +366,13 @@ void gf16_affine2x_muladd_avx2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY
 #endif
 }
 
-unsigned gf16_affine2x_muladd_multi_avx2(const void *HEDLEY_RESTRICT scratch, unsigned regions, size_t offset, void *HEDLEY_RESTRICT dst, const void* const*HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch) {
-	UNUSED(mutScratch);
+
 #if defined(__GFNI__) && defined(__AVX2__)
 # ifdef PLATFORM_AMD64
-	unsigned region = gf16_muladd_multi(scratch, &gf16_affine2x_muladd_x_avx2, 6, regions, offset, dst, src, len, coefficients);
+GF16_MULADD_MULTI_FUNCS(gf16_affine2x, _avx2, gf16_affine2x_muladd_x_avx2, 6, sizeof(__m256i), 0, _mm256_zeroupper())
 # else
-	// if only 8 registers available, only allow 2 parallel regions
-	unsigned region = gf16_muladd_multi(scratch, &gf16_affine2x_muladd_x_avx2, 2, regions, offset, dst, src, len, coefficients);
+GF16_MULADD_MULTI_FUNCS(gf16_affine2x, _avx2, gf16_affine2x_muladd_x_avx2, 2, sizeof(__m256i), 0, _mm256_zeroupper())
 # endif
-	_mm256_zeroupper();
-	return region;
 #else
-	UNUSED(scratch); UNUSED(regions); UNUSED(offset); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficients);
-	return 0;
+GF16_MULADD_MULTI_FUNCS_STUB(gf16_affine2x, _avx2)
 #endif
-}
-
-unsigned gf16_affine2x_muladd_multi_packed_avx2(const void *HEDLEY_RESTRICT scratch, unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch) {
-	UNUSED(mutScratch);
-#if defined(__GFNI__) && defined(__AVX2__)
-# ifdef PLATFORM_AMD64
-	unsigned region = gf16_muladd_multi_packed(scratch, &gf16_affine2x_muladd_x_avx2, 6, regions, dst, src, len, sizeof(__m256i), coefficients);
-# else
-	// if only 8 registers available, only allow 2 parallel regions
-	unsigned region = gf16_muladd_multi_packed(scratch, &gf16_affine2x_muladd_x_avx2, 2, regions, dst, src, len, sizeof(__m256i), coefficients);
-# endif
-	_mm256_zeroupper();
-	return region;
-#else
-	UNUSED(scratch); UNUSED(regions); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficients);
-	return 0;
-#endif
-}
-
-void gf16_affine2x_muladd_multi_packpf_avx2(const void *HEDLEY_RESTRICT scratch, unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch, const void* HEDLEY_RESTRICT prefetchIn, const void* HEDLEY_RESTRICT prefetchOut) {
-	UNUSED(mutScratch);
-#if defined(__GFNI__) && defined(__AVX2__)
-# ifdef PLATFORM_AMD64
-	gf16_muladd_multi_packpf(scratch, &gf16_affine2x_muladd_x_avx2, 6, regions, dst, src, len, sizeof(__m256i), coefficients, 0, prefetchIn, prefetchOut);
-# else
-	gf16_muladd_multi_packpf(scratch, &gf16_affine2x_muladd_x_avx2, 2, regions, dst, src, len, sizeof(__m256i), coefficients, 0, prefetchIn, prefetchOut);
-# endif
-	_mm256_zeroupper();
-#else
-	UNUSED(scratch); UNUSED(regions); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficients); UNUSED(prefetchIn); UNUSED(prefetchOut);
-#endif
-}
-

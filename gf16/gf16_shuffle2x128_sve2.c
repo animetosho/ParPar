@@ -1,5 +1,6 @@
 
 #include "gf16_sve_common.h"
+#include "gf16_muladd_multi.h"
 
 
 #if defined(__ARM_FEATURE_SVE2)
@@ -195,7 +196,6 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle2x128_sve2_round(svuint8_t data, sv
 	*rs2 = svtbl_u8(tbl_hs, tmp2);
 }
 
-#include "gf16_muladd_multi.h"
 static HEDLEY_ALWAYS_INLINE void gf16_shuffle2x_muladd_x_sve2(
 	const void *HEDLEY_RESTRICT scratch,
 	uint8_t *HEDLEY_RESTRICT _dst, const unsigned srcScale, GF16_MULADD_MULTI_SRCLIST, size_t len,
@@ -260,34 +260,11 @@ void gf16_shuffle2x_muladd_128_sve2(const void *HEDLEY_RESTRICT scratch, void *H
 #endif
 }
 
-unsigned gf16_shuffle2x_muladd_multi_128_sve2(const void *HEDLEY_RESTRICT scratch, unsigned regions, size_t offset, void *HEDLEY_RESTRICT dst, const void* const*HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch) {
-	UNUSED(mutScratch);
 #if defined(__ARM_FEATURE_SVE2)
-	return gf16_muladd_multi(scratch, &gf16_shuffle2x_muladd_x_sve2, 6, regions, offset, dst, src, len, coefficients);
+GF16_MULADD_MULTI_FUNCS(gf16_shuffle2x, _128_sve2, gf16_shuffle2x_muladd_x_sve2, 6, svcntb(), 0, (void)0)
 #else
-	UNUSED(scratch); UNUSED(regions); UNUSED(offset); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficients);
-	return 0;
+GF16_MULADD_MULTI_FUNCS_STUB(gf16_shuffle2x, _128_sve2)
 #endif
-}
-
-unsigned gf16_shuffle2x_muladd_multi_packed_128_sve2(const void *HEDLEY_RESTRICT scratch, unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch) {
-	UNUSED(mutScratch);
-#if defined(__ARM_FEATURE_SVE2)
-	return gf16_muladd_multi_packed(scratch, &gf16_shuffle2x_muladd_x_sve2, 6, regions, dst, src, len, svcntb(), coefficients);
-#else
-	UNUSED(scratch); UNUSED(regions); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficients);
-	return 0;
-#endif
-}
-
-void gf16_shuffle2x_muladd_multi_packpf_128_sve2(const void *HEDLEY_RESTRICT scratch, unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch, const void* HEDLEY_RESTRICT prefetchIn, const void* HEDLEY_RESTRICT prefetchOut) {
-	UNUSED(mutScratch);
-#if defined(__ARM_FEATURE_SVE2)
-	gf16_muladd_multi_packpf(scratch, &gf16_shuffle2x_muladd_x_sve2, 6, regions, dst, src, len, svcntb(), coefficients, 0, prefetchIn, prefetchOut);
-#else
-	UNUSED(scratch); UNUSED(regions); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficients); UNUSED(prefetchIn); UNUSED(prefetchOut);
-#endif
-}
 
 
 // checksum stuff

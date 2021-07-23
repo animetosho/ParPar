@@ -17,6 +17,44 @@
 	if(max < 12) UNUSED(_src12); \
 	if(max < 13) UNUSED(_src13)
 
+#define GF16_MULADD_MULTI_FUNCS(fnpre, fnsuf, xfn, procRegions, blocksize, pfFactor, finisher) \
+unsigned fnpre ## _muladd_multi ## fnsuf(const void *HEDLEY_RESTRICT scratch, unsigned regions, size_t offset, void *HEDLEY_RESTRICT dst, const void* const*HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch) { \
+	UNUSED(mutScratch); \
+	unsigned region = gf16_muladd_multi(scratch, &xfn, procRegions, regions, offset, dst, src, len, coefficients); \
+	finisher; \
+	return region; \
+} \
+unsigned fnpre ## _muladd_multi_packed ## fnsuf(const void *HEDLEY_RESTRICT scratch, unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch) { \
+	UNUSED(mutScratch); \
+	unsigned region = gf16_muladd_multi_packed(scratch, &xfn, procRegions, regions, dst, src, len, blocksize, coefficients); \
+	finisher; \
+	return region; \
+} \
+void fnpre ## _muladd_multi_packpf ## fnsuf(const void *HEDLEY_RESTRICT scratch, unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch, const void* HEDLEY_RESTRICT prefetchIn, const void* HEDLEY_RESTRICT prefetchOut) { \
+	UNUSED(mutScratch); \
+	gf16_muladd_multi_packpf(scratch, &xfn, procRegions, regions, dst, src, len, blocksize, coefficients, pfFactor, prefetchIn, prefetchOut); \
+	finisher; \
+}
+
+#define GF16_MULADD_MULTI_FUNCS_STUB(fnpre, fnsuf) \
+unsigned fnpre ## _muladd_multi ## fnsuf(const void *HEDLEY_RESTRICT scratch, unsigned regions, size_t offset, void *HEDLEY_RESTRICT dst, const void* const*HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch) { \
+	UNUSED(mutScratch); \
+	UNUSED(scratch); UNUSED(regions); UNUSED(offset); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficients); \
+	return 0; \
+} \
+unsigned fnpre ## _muladd_multi_packed ## fnsuf(const void *HEDLEY_RESTRICT scratch, unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch) { \
+	UNUSED(mutScratch); \
+	UNUSED(scratch); UNUSED(regions); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficients); \
+	return 0; \
+} \
+void fnpre ## _muladd_multi_packpf ## fnsuf(const void *HEDLEY_RESTRICT scratch, unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch, const void* HEDLEY_RESTRICT prefetchIn, const void* HEDLEY_RESTRICT prefetchOut) { \
+	UNUSED(mutScratch); \
+	UNUSED(scratch); UNUSED(regions); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficients); UNUSED(prefetchIn); UNUSED(prefetchOut); \
+}
+
+
+
+
 #if defined(__GNUC__) && !defined(__clang__) && !defined(__OPTIMIZE__)
 // GCC, for some reason, doesn't like const pointers when forced to inline without optimizations
 typedef void (*fMuladdPF)

@@ -92,6 +92,12 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle128_sve_round(svuint8x2_t va, svuin
 #endif
 
 
+#if defined(__ARM_FEATURE_SVE)
+GF16_MULADD_MULTI_FUNCS(gf16_shuffle, _128_sve, gf16_shuffle_muladd_x_128_sve, 3, svcntb()*2, 0, (void)0)
+#else
+GF16_MULADD_MULTI_FUNCS_STUB(gf16_shuffle, _128_sve)
+#endif
+
 
 // checksum stuff
 #include "gf16_checksum_sve.h"
