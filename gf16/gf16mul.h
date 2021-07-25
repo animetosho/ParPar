@@ -9,6 +9,7 @@ typedef void(*Galois16MulTransformPacked) (void *HEDLEY_RESTRICT dst, const void
 typedef void(*Galois16MulUntransform) (void *HEDLEY_RESTRICT dst, size_t len);
 typedef void(*Galois16MulUntransformPacked) (void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t sliceLen, unsigned numOutputs, unsigned outputNum, size_t chunkLen);
 typedef int(*Galois16MulUntransformPackedCksum) (void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t sliceLen, unsigned numOutputs, unsigned outputNum, size_t chunkLen);
+
 typedef void(*Galois16MulFunc) (const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch);
 typedef void(*Galois16MulPfFunc) (const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch, const void *HEDLEY_RESTRICT prefetch);
 typedef void(*Galois16PowFunc) (const void *HEDLEY_RESTRICT scratch, unsigned outputs, size_t offset, void **HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch);
@@ -16,6 +17,9 @@ typedef unsigned(*Galois16MulMultiFunc) (const void *HEDLEY_RESTRICT scratch, un
 typedef unsigned(*Galois16MulPackedFunc) (const void *HEDLEY_RESTRICT scratch, unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch);
 typedef void(*Galois16MulPackPfFunc) (const void *HEDLEY_RESTRICT scratch, unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch, const void* HEDLEY_RESTRICT prefetchIn, const void* HEDLEY_RESTRICT prefetchOut);
 typedef void(*Galois16AddFunc) (void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len);
+typedef unsigned(*Galois16AddMultiFunc) (unsigned regions, size_t offset, void *HEDLEY_RESTRICT dst, const void* const*HEDLEY_RESTRICT src, size_t len);
+typedef unsigned(*Galois16AddPackedFunc) (unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len);
+typedef void(*Galois16AddPackPfFunc) (unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, const void* HEDLEY_RESTRICT prefetchIn, const void* HEDLEY_RESTRICT prefetchOut);
 
 
 
@@ -96,11 +100,9 @@ private:
 	void* scratch;
 	Galois16MethodInfo _info;
 	
-	static void addGeneric(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len);
 	Galois16MulFunc _mul;
 	Galois16MulFunc _mul_add;
 	Galois16MulPfFunc _mul_add_pf;
-	Galois16AddFunc _add;
 	Galois16PowFunc _pow;
 	Galois16PowFunc _pow_add;
 	Galois16MulMultiFunc _mul_add_multi;
@@ -184,6 +186,9 @@ public:
 	Galois16MulUntransform finish;
 	Galois16MulUntransformPacked finish_packed;
 	Galois16MulUntransformPackedCksum finish_packed_cksum;
+	Galois16AddMultiFunc add_multi;
+	Galois16AddPackedFunc add_multi_packed;
+	Galois16AddPackPfFunc add_multi_packpf;
 	
 	void* mutScratch_alloc() const;
 	void mutScratch_free(void* mutScratch) const;
@@ -213,14 +218,8 @@ public:
 		assert(isMultipleOfStride(len));
 		assert(len > 0);
 		
-		if(!(coefficient & 0xfffe)) {
-			if(coefficient == 0)
-				return;
-			else
-				_add(dst, src, len);
-		}
-		else
-			_mul_add(scratch, dst, src, len, coefficient, mutScratch);
+		if(coefficient == 0) return;
+		_mul_add(scratch, dst, src, len, coefficient, mutScratch);
 	}
 	
 	inline void pow(unsigned outputs, size_t offset, void **HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch) const {
@@ -267,15 +266,8 @@ public:
 		assert(len > 0);
 		assert(outputs > 0);
 		
-		if(!(coefficient & 0xfffe)) {
-			if(coefficient == 0)
-				return;
-			else
-				for(unsigned output = 0; output < outputs; output++)
-					_add((uint8_t*)dst[output] + offset, (uint8_t*)src + offset, len);
-		}
-		else
-			_pow_add(scratch, outputs, offset, dst, src, len, coefficient, mutScratch);
+		if(coefficient == 0) return;
+		_pow_add(scratch, outputs, offset, dst, src, len, coefficient, mutScratch);
 	}
 	
 	inline void mul_add_multi(unsigned regions, size_t offset, void *HEDLEY_RESTRICT dst, const void* const*HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch) const {
@@ -283,9 +275,7 @@ public:
 		assert(len > 0);
 		assert(regions > 0);
 		
-		unsigned region;
-		
-		region = _mul_add_multi(scratch, regions, offset, dst, src, len, coefficients, mutScratch);
+		unsigned region = _mul_add_multi(scratch, regions, offset, dst, src, len, coefficients, mutScratch);
 		
 		// process remaining regions
 		for(; region<regions; region++) {

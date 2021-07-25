@@ -1,6 +1,7 @@
 
 #include "gf16_global.h"
 #include "platform.h"
+#include "gf16_muladd_multi.h"
 
 #if defined(__AVX512VBMI__) && defined(__AVX512VL__)
 
@@ -21,8 +22,6 @@
 # undef _MM
 # undef _mword
 # undef MWORD_SIZE
-
-#include "gf16_muladd_multi.h"
 
 int gf16_shuffle_available_vbmi = 1;
 
