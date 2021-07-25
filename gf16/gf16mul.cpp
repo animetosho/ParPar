@@ -974,7 +974,7 @@ Galois16Mul::Galois16Mul(Galois16Methods method) {
 	add_multi = &gf_add_multi_generic;
 	add_multi_packed = &gf_add_multi_packed_generic;
 	add_multi_packpf = &gf_add_multi_packpf_generic;
-	_mul_add_multi = &Galois16Mul::_mul_add_multi_none;
+	_mul_add_multi = NULL;
 	_mul_add_multi_packed = NULL;
 	_mul_add_multi_packpf = NULL;
 	
@@ -1175,10 +1175,6 @@ std::vector<Galois16Methods> Galois16Mul::availableMethods(bool checkCpuid) {
 #endif
 	
 	return ret;
-}
-
-unsigned Galois16Mul::_mul_add_multi_none(const void *HEDLEY_RESTRICT, unsigned, size_t, void *HEDLEY_RESTRICT, const void* const*HEDLEY_RESTRICT, size_t, const uint16_t *HEDLEY_RESTRICT, void *HEDLEY_RESTRICT) {
-	return 0;
 }
 
 void Galois16Mul::_prepare_packed_none(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen, size_t sliceLen, unsigned inputPackSize, unsigned inputNum, size_t chunkLen) {

@@ -47,14 +47,14 @@ static HEDLEY_ALWAYS_INLINE void gf_add_x_generic(
 	}
 }
 
-unsigned gf_add_multi_generic(unsigned regions, size_t offset, void *HEDLEY_RESTRICT dst, const void* const*HEDLEY_RESTRICT src, size_t len) {
-	return gf16_muladd_multi(NULL, &gf_add_x_generic, 4, regions, offset, dst, src, len, NULL);
+void gf_add_multi_generic(unsigned regions, size_t offset, void *HEDLEY_RESTRICT dst, const void* const*HEDLEY_RESTRICT src, size_t len) {
+	gf16_muladd_multi(NULL, &gf_add_x_generic, 4, regions, offset, dst, src, len, NULL);
 }
 
 // assumes word-size packing (for lookup algorithms)
 #include "gf16_lookup.h"
-unsigned gf_add_multi_packed_generic(unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len) {
-	return gf16_muladd_multi_packed(NULL, &gf_add_x_generic, 1, 4, regions, dst, src, len, gf16_lookup_stride(), NULL);
+void gf_add_multi_packed_generic(unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len) {
+	gf16_muladd_multi_packed(NULL, &gf_add_x_generic, 1, 4, regions, dst, src, len, gf16_lookup_stride(), NULL);
 }
 void gf_add_multi_packpf_generic(unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, const void* HEDLEY_RESTRICT prefetchIn, const void* HEDLEY_RESTRICT prefetchOut) {
 	// no support for prefetching on generic implementation, so defer to regular function
@@ -62,8 +62,8 @@ void gf_add_multi_packpf_generic(unsigned regions, void *HEDLEY_RESTRICT dst, co
 	gf16_muladd_multi_packed(NULL, &gf_add_x_generic, 1, 4, regions, dst, src, len, gf16_lookup_stride(), NULL);
 }
 
-unsigned gf_add_multi_packed_lookup3(unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len) {
-	return gf16_muladd_multi_packed((void*)1, &gf_add_x_generic, 1, 4, regions, dst, src, len, gf16_lookup_stride(), NULL);
+void gf_add_multi_packed_lookup3(unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len) {
+	gf16_muladd_multi_packed((void*)1, &gf_add_x_generic, 1, 4, regions, dst, src, len, gf16_lookup_stride(), NULL);
 }
 void gf_add_multi_packpf_lookup3(unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, const void* HEDLEY_RESTRICT prefetchIn, const void* HEDLEY_RESTRICT prefetchOut) {
 	UNUSED(prefetchIn); UNUSED(prefetchOut);

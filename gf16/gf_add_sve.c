@@ -69,21 +69,19 @@ static HEDLEY_ALWAYS_INLINE void gf_add_x_sve(
 }
 #endif
 
-unsigned gf_add_multi_sve(unsigned regions, size_t offset, void *HEDLEY_RESTRICT dst, const void* const*HEDLEY_RESTRICT src, size_t len) {
+void gf_add_multi_sve(unsigned regions, size_t offset, void *HEDLEY_RESTRICT dst, const void* const*HEDLEY_RESTRICT src, size_t len) {
 #ifdef __ARM_FEATURE_SVE
-	return gf16_muladd_multi(NULL, &gf_add_x_sve, 4, regions, offset, dst, src, len, NULL);
+	gf16_muladd_multi(NULL, &gf_add_x_sve, 4, regions, offset, dst, src, len, NULL);
 #else
 	UNUSED(regions); UNUSED(offset); UNUSED(dst); UNUSED(src); UNUSED(len);
-	return 0;
 #endif
 }
 
-unsigned gf_add_multi_packed_sve(unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len) {
+void gf_add_multi_packed_sve(unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len) {
 #ifdef __ARM_FEATURE_SVE
-	return gf16_muladd_multi_packed(NULL, &gf_add_x_sve, 3, 12, regions, dst, src, len, svcntb()*2, NULL);
+	gf16_muladd_multi_packed(NULL, &gf_add_x_sve, 3, 12, regions, dst, src, len, svcntb()*2, NULL);
 #else
 	UNUSED(regions); UNUSED(dst); UNUSED(src); UNUSED(len);
-	return 0;
 #endif
 }
 

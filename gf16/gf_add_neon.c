@@ -70,37 +70,34 @@ static HEDLEY_ALWAYS_INLINE void gf_add_x_neon(
 }
 #endif
 
-unsigned gf_add_multi_neon(unsigned regions, size_t offset, void *HEDLEY_RESTRICT dst, const void* const*HEDLEY_RESTRICT src, size_t len) {
+void gf_add_multi_neon(unsigned regions, size_t offset, void *HEDLEY_RESTRICT dst, const void* const*HEDLEY_RESTRICT src, size_t len) {
 #ifdef __ARM_NEON
-	return gf16_muladd_multi(NULL, &gf_add_x_neon, 4, regions, offset, dst, src, len, NULL);
+	gf16_muladd_multi(NULL, &gf_add_x_neon, 4, regions, offset, dst, src, len, NULL);
 #else
 	UNUSED(regions); UNUSED(offset); UNUSED(dst); UNUSED(src); UNUSED(len);
-	return 0;
 #endif
 }
 
-unsigned gf_add_multi_packed_shuffle_neon(unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len) {
+void gf_add_multi_packed_shuffle_neon(unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len) {
 #ifdef __ARM_NEON
 # ifdef __aarch64__
-	return gf16_muladd_multi_packed(NULL, &gf_add_x_neon, 2, 8, regions, dst, src, len, sizeof(uint8x16_t)*2, NULL);
+	gf16_muladd_multi_packed(NULL, &gf_add_x_neon, 2, 8, regions, dst, src, len, sizeof(uint8x16_t)*2, NULL);
 # else
-	return gf16_muladd_multi_packed(NULL, &gf_add_x_neon, 1, 6, regions, dst, src, len, sizeof(uint8x16_t)*2, NULL);
+	gf16_muladd_multi_packed(NULL, &gf_add_x_neon, 1, 6, regions, dst, src, len, sizeof(uint8x16_t)*2, NULL);
 # endif
 #else
 	UNUSED(regions); UNUSED(dst); UNUSED(src); UNUSED(len);
-	return 0;
 #endif
 }
-unsigned gf_add_multi_packed_clmul_neon(unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len) {
+void gf_add_multi_packed_clmul_neon(unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len) {
 #ifdef __ARM_NEON
 # ifdef __aarch64__
-	return gf16_muladd_multi_packed(NULL, &gf_add_x_neon, 8, 16, regions, dst, src, len, sizeof(uint8x16_t)*2, NULL);
+	gf16_muladd_multi_packed(NULL, &gf_add_x_neon, 8, 16, regions, dst, src, len, sizeof(uint8x16_t)*2, NULL);
 # else
-	return gf16_muladd_multi_packed(NULL, &gf_add_x_neon, 3, 12, regions, dst, src, len, sizeof(uint8x16_t)*2, NULL);
+	gf16_muladd_multi_packed(NULL, &gf_add_x_neon, 3, 12, regions, dst, src, len, sizeof(uint8x16_t)*2, NULL);
 # endif
 #else
 	UNUSED(regions); UNUSED(dst); UNUSED(src); UNUSED(len);
-	return 0;
 #endif
 }
 
