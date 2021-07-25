@@ -43,9 +43,9 @@ static HEDLEY_ALWAYS_INLINE void gf_add_x_neon(
 		vst1q_u8_x2_align(_dst+ptr, data);
 		
 		if(doPrefetch == 1)
-			PREFETCH_MEM(_pf+ptr, 1);
+			PREFETCH_MEM(_pf+(ptr>>1), 1);
 		if(doPrefetch == 2)
-			PREFETCH_MEM(_pf+ptr, 0);
+			PREFETCH_MEM(_pf+(ptr>>1), 0);
 	}
 }
 #endif

@@ -139,11 +139,11 @@ static HEDLEY_ALWAYS_INLINE void _FN(gf16_shuffle_muladd_x)(
 	for(intptr_t ptr = -(intptr_t)len; ptr; ptr += svcntb()*2) {
 		if(doPrefetch == 1) {
 			svprfb(svptrue_b8(), _pf+ptr, SV_PLDL1KEEP);
-			svprfb(svptrue_b8(), _pf+ptr + svcntb(), SV_PLDL1KEEP);
+			svprfb_vnum(svptrue_b8(), _pf+ptr, 1, SV_PLDL1KEEP);
 		}
 		if(doPrefetch == 2) {
 			svprfb(svptrue_b8(), _pf+ptr, SV_PLDL2KEEP);
-			svprfb(svptrue_b8(), _pf+ptr + svcntb(), SV_PLDL2KEEP);
+			svprfb_vnum(svptrue_b8(), _pf+ptr, 1, SV_PLDL2KEEP);
 		}
 		
 		svuint8x2_t vb = svld2_u8(svptrue_b8(), _dst+ptr);

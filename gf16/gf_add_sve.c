@@ -42,9 +42,9 @@ static HEDLEY_ALWAYS_INLINE void gf_add_x_sve(
 		svst1_vnum_u8(svptrue_b8(), _dst+ptr, 1, data2);
 		
 		if(doPrefetch == 1)
-			svprfb(svptrue_b8(), _pf+ptr, SV_PLDL1KEEP);
+			svprfb(svptrue_b8(), _pf+(ptr>>1), SV_PLDL1KEEP);
 		if(doPrefetch == 2)
-			svprfb(svptrue_b8(), _pf+ptr, SV_PLDL2KEEP);
+			svprfb(svptrue_b8(), _pf+(ptr>>1), SV_PLDL2KEEP);
 	}
 }
 #endif

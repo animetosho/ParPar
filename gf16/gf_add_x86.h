@@ -45,10 +45,43 @@ static HEDLEY_ALWAYS_INLINE void _FN(gf_add_x)(
 			_MMI(store)((_mword*)(_dst+ptr) + v, data);
 		}
 		
-		if(doPrefetch == 1)
-			_mm_prefetch(_pf+(ptr/vecStride), MM_HINT_WT1);
-		if(doPrefetch == 2)
-			_mm_prefetch(_pf+(ptr/vecStride), _MM_HINT_T1);
+		if(vecStride == 16) {
+			// for xor kernels, need to do 4x prefetch
+			const char* pfBase = _pf+(ptr>>1);
+			if(doPrefetch == 1) {
+				_mm_prefetch(pfBase, MM_HINT_WT1);
+				_mm_prefetch(pfBase+64, MM_HINT_WT1);
+				if(sizeof(_mword) > 16) {
+					_mm_prefetch(pfBase+128, MM_HINT_WT1);
+					_mm_prefetch(pfBase+192, MM_HINT_WT1);
+				}
+				if(sizeof(_mword) > 32) {
+					_mm_prefetch(pfBase+256, MM_HINT_WT1);
+					_mm_prefetch(pfBase+320, MM_HINT_WT1);
+					_mm_prefetch(pfBase+384, MM_HINT_WT1);
+					_mm_prefetch(pfBase+448, MM_HINT_WT1);
+				}
+			}
+			if(doPrefetch == 2) {
+				_mm_prefetch(pfBase, _MM_HINT_T1);
+				_mm_prefetch(pfBase+64, _MM_HINT_T1);
+				if(sizeof(_mword) > 16) {
+					_mm_prefetch(pfBase+128, _MM_HINT_T1);
+					_mm_prefetch(pfBase+192, _MM_HINT_T1);
+				}
+				if(sizeof(_mword) > 32) {
+					_mm_prefetch(pfBase+256, _MM_HINT_T1);
+					_mm_prefetch(pfBase+320, _MM_HINT_T1);
+					_mm_prefetch(pfBase+384, _MM_HINT_T1);
+					_mm_prefetch(pfBase+448, _MM_HINT_T1);
+				}
+			}
+		} else {
+			if(doPrefetch == 1)
+				_mm_prefetch(_pf+(ptr/vecStride), MM_HINT_WT1);
+			if(doPrefetch == 2)
+				_mm_prefetch(_pf+(ptr/vecStride), _MM_HINT_T1);
+		}
 	}
 }
 #endif
