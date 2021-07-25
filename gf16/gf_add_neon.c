@@ -19,7 +19,7 @@ static HEDLEY_ALWAYS_INLINE void gf_add_x_neon(
 	assert(((uintptr_t)_dst & (sizeof(uint8x16_t)-1)) == 0);
 	assert(len > 0);
 	
-	GF16_MULADD_MULTI_SRC_UNUSED(8);
+	GF16_MULADD_MULTI_SRC_UNUSED(18);
 	UNUSED(scratch); UNUSED(coefficients);
 	
 	for(intptr_t ptr = -(intptr_t)len; ptr; ptr += sizeof(uint8x16_t)*2) {
@@ -40,6 +40,26 @@ static HEDLEY_ALWAYS_INLINE void gf_add_x_neon(
 			data = veorq_u8_x2(data, vld1q_u8_x2(_src7+ptr*srcScale));
 		if(srcCount >= 8)
 			data = veorq_u8_x2(data, vld1q_u8_x2(_src8+ptr*srcScale));
+		if(srcCount >= 9)
+			data = veorq_u8_x2(data, vld1q_u8_x2(_src9+ptr*srcScale));
+		if(srcCount >= 10)
+			data = veorq_u8_x2(data, vld1q_u8_x2(_src10+ptr*srcScale));
+		if(srcCount >= 11)
+			data = veorq_u8_x2(data, vld1q_u8_x2(_src11+ptr*srcScale));
+		if(srcCount >= 12)
+			data = veorq_u8_x2(data, vld1q_u8_x2(_src12+ptr*srcScale));
+		if(srcCount >= 13)
+			data = veorq_u8_x2(data, vld1q_u8_x2(_src13+ptr*srcScale));
+		if(srcCount >= 14)
+			data = veorq_u8_x2(data, vld1q_u8_x2(_src14+ptr*srcScale));
+		if(srcCount >= 15)
+			data = veorq_u8_x2(data, vld1q_u8_x2(_src15+ptr*srcScale));
+		if(srcCount >= 16)
+			data = veorq_u8_x2(data, vld1q_u8_x2(_src16+ptr*srcScale));
+		if(srcCount >= 17)
+			data = veorq_u8_x2(data, vld1q_u8_x2(_src17+ptr*srcScale));
+		if(srcCount >= 18)
+			data = veorq_u8_x2(data, vld1q_u8_x2(_src18+ptr*srcScale));
 		vst1q_u8_x2_align(_dst+ptr, data);
 		
 		if(doPrefetch == 1)
@@ -62,7 +82,7 @@ unsigned gf_add_multi_neon(unsigned regions, size_t offset, void *HEDLEY_RESTRIC
 unsigned gf_add_multi_packed_shuffle_neon(unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len) {
 #ifdef __ARM_NEON
 # ifdef __aarch64__
-	return gf16_muladd_multi_packed(NULL, &gf_add_x_neon, 2, 6, regions, dst, src, len, sizeof(uint8x16_t)*2, NULL);
+	return gf16_muladd_multi_packed(NULL, &gf_add_x_neon, 2, 8, regions, dst, src, len, sizeof(uint8x16_t)*2, NULL);
 # else
 	return gf16_muladd_multi_packed(NULL, &gf_add_x_neon, 1, 6, regions, dst, src, len, sizeof(uint8x16_t)*2, NULL);
 # endif
@@ -74,9 +94,9 @@ unsigned gf_add_multi_packed_shuffle_neon(unsigned regions, void *HEDLEY_RESTRIC
 unsigned gf_add_multi_packed_clmul_neon(unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len) {
 #ifdef __ARM_NEON
 # ifdef __aarch64__
-	return gf16_muladd_multi_packed(NULL, &gf_add_x_neon, 8, 8, regions, dst, src, len, sizeof(uint8x16_t)*2, NULL);
+	return gf16_muladd_multi_packed(NULL, &gf_add_x_neon, 8, 16, regions, dst, src, len, sizeof(uint8x16_t)*2, NULL);
 # else
-	return gf16_muladd_multi_packed(NULL, &gf_add_x_neon, 3, 6, regions, dst, src, len, sizeof(uint8x16_t)*2, NULL);
+	return gf16_muladd_multi_packed(NULL, &gf_add_x_neon, 3, 12, regions, dst, src, len, sizeof(uint8x16_t)*2, NULL);
 # endif
 #else
 	UNUSED(regions); UNUSED(dst); UNUSED(src); UNUSED(len);
@@ -87,7 +107,7 @@ unsigned gf_add_multi_packed_clmul_neon(unsigned regions, void *HEDLEY_RESTRICT 
 void gf_add_multi_packpf_shuffle_neon(unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, const void* HEDLEY_RESTRICT prefetchIn, const void* HEDLEY_RESTRICT prefetchOut) {
 #ifdef __ARM_NEON
 # ifdef __aarch64__
-	gf16_muladd_multi_packpf(NULL, &gf_add_x_neon, 2, 6, regions, dst, src, len, sizeof(uint8x16_t)*2, NULL, 1, prefetchIn, prefetchOut);
+	gf16_muladd_multi_packpf(NULL, &gf_add_x_neon, 2, 8, regions, dst, src, len, sizeof(uint8x16_t)*2, NULL, 1, prefetchIn, prefetchOut);
 # else
 	gf16_muladd_multi_packpf(NULL, &gf_add_x_neon, 1, 6, regions, dst, src, len, sizeof(uint8x16_t)*2, NULL, 1, prefetchIn, prefetchOut);
 # endif
@@ -98,9 +118,9 @@ void gf_add_multi_packpf_shuffle_neon(unsigned regions, void *HEDLEY_RESTRICT ds
 void gf_add_multi_packpf_clmul_neon(unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, const void* HEDLEY_RESTRICT prefetchIn, const void* HEDLEY_RESTRICT prefetchOut) {
 #ifdef __ARM_NEON
 # ifdef __aarch64__
-	gf16_muladd_multi_packpf(NULL, &gf_add_x_neon, 8, 8, regions, dst, src, len, sizeof(uint8x16_t)*2, NULL, 1, prefetchIn, prefetchOut);
+	gf16_muladd_multi_packpf(NULL, &gf_add_x_neon, 8, 16, regions, dst, src, len, sizeof(uint8x16_t)*2, NULL, 1, prefetchIn, prefetchOut);
 # else
-	gf16_muladd_multi_packpf(NULL, &gf_add_x_neon, 3, 6, regions, dst, src, len, sizeof(uint8x16_t)*2, NULL, 1, prefetchIn, prefetchOut);
+	gf16_muladd_multi_packpf(NULL, &gf_add_x_neon, 3, 12, regions, dst, src, len, sizeof(uint8x16_t)*2, NULL, 1, prefetchIn, prefetchOut);
 # endif
 #else
 	UNUSED(regions); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(prefetchIn); UNUSED(prefetchOut);

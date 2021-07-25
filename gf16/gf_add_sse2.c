@@ -49,10 +49,10 @@ void gf_add_multi_packpf_v##vs##i##il##_sse2(unsigned regions, void *HEDLEY_REST
 }
 #endif
 
-PACKED_FUNC(1, 2, 6)
-PACKED_FUNC(1, 6, 6)
-PACKED_FUNC(2, 1, 6)
-PACKED_FUNC(2, 3, 6)
-PACKED_FUNC(16, 1, 6)
+PACKED_FUNC(1, 2, 8)
+PACKED_FUNC(1, 6, 18)
+PACKED_FUNC(2, 1, 4)
+PACKED_FUNC(2, 3, 12)
+PACKED_FUNC(16, 1, 4)
 
 #undef PACKED_FUNC

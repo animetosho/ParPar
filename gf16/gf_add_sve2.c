@@ -19,7 +19,7 @@ static HEDLEY_ALWAYS_INLINE void gf_add_x_sve2(
 ) {
 	assert(len > 0);
 	
-	GF16_MULADD_MULTI_SRC_UNUSED(8);
+	GF16_MULADD_MULTI_SRC_UNUSED(18);
 	UNUSED(coefficients);
 	
 	unsigned vecStride = (unsigned)((uintptr_t)scratch); // abuse this otherwise unused variable
@@ -31,6 +31,11 @@ static HEDLEY_ALWAYS_INLINE void gf_add_x_sve2(
 			gf_add2_sve2(srcCount-2, &data, v, _src3+ptr*srcScale, _src4+ptr*srcScale);
 			gf_add2_sve2(srcCount-4, &data, v, _src5+ptr*srcScale, _src6+ptr*srcScale);
 			gf_add2_sve2(srcCount-6, &data, v, _src7+ptr*srcScale, _src8+ptr*srcScale);
+			gf_add2_sve2(srcCount-8, &data, v, _src9+ptr*srcScale, _src10+ptr*srcScale);
+			gf_add2_sve2(srcCount-10, &data, v, _src11+ptr*srcScale, _src12+ptr*srcScale);
+			gf_add2_sve2(srcCount-12, &data, v, _src13+ptr*srcScale, _src14+ptr*srcScale);
+			gf_add2_sve2(srcCount-14, &data, v, _src15+ptr*srcScale, _src16+ptr*srcScale);
+			gf_add2_sve2(srcCount-16, &data, v, _src17+ptr*srcScale, _src18+ptr*srcScale);
 			
 			svst1_vnum_u8(svptrue_b8(), _dst+ptr, v, data);
 		}
@@ -70,9 +75,9 @@ void gf_add_multi_packpf_v##vs##i##il##_sve2(unsigned regions, void *HEDLEY_REST
 }
 #endif
 
-PACKED_FUNC(1, 6, 6)
-PACKED_FUNC(2, 3, 6)
-PACKED_FUNC(2, 4, 4)
-PACKED_FUNC(2, 8, 8)
+PACKED_FUNC(1, 6, 18)
+PACKED_FUNC(2, 3, 12)
+PACKED_FUNC(2, 4, 12)
+PACKED_FUNC(2, 8, 16)
 
 #undef PACKED_FUNC

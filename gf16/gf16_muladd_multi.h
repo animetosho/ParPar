@@ -1,7 +1,8 @@
 
 #define GF16_MULADD_MULTI_SRCLIST const int srcCount, \
 	const uint8_t* _src1, const uint8_t* _src2, const uint8_t* _src3, const uint8_t* _src4, const uint8_t* _src5, const uint8_t* _src6, \
-	const uint8_t* _src7, const uint8_t* _src8, const uint8_t* _src9, const uint8_t* _src10, const uint8_t* _src11, const uint8_t* _src12, const uint8_t* _src13
+	const uint8_t* _src7, const uint8_t* _src8, const uint8_t* _src9, const uint8_t* _src10, const uint8_t* _src11, const uint8_t* _src12, \
+	const uint8_t* _src13, const uint8_t* _src14, const uint8_t* _src15, const uint8_t* _src16, const uint8_t* _src17, const uint8_t* _src18
 #define GF16_MULADD_MULTI_SRC_UNUSED(max) \
 	HEDLEY_ASSUME(srcCount <= max); \
 	if(max < 2) UNUSED(_src2); \
@@ -15,7 +16,12 @@
 	if(max < 10) UNUSED(_src10); \
 	if(max < 11) UNUSED(_src11); \
 	if(max < 12) UNUSED(_src12); \
-	if(max < 13) UNUSED(_src13)
+	if(max < 13) UNUSED(_src13); \
+	if(max < 14) UNUSED(_src14); \
+	if(max < 15) UNUSED(_src15); \
+	if(max < 16) UNUSED(_src16); \
+	if(max < 17) UNUSED(_src17); \
+	if(max < 18) UNUSED(_src18)
 
 #define GF16_MULADD_MULTI_FUNCS(fnpre, fnsuf, xfn, procRegions, blocksize, pfFactor, finisher) \
 unsigned fnpre ## _muladd_multi ## fnsuf(const void *HEDLEY_RESTRICT scratch, unsigned regions, size_t offset, void *HEDLEY_RESTRICT dst, const void* const*HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch) { \
@@ -75,6 +81,8 @@ static HEDLEY_ALWAYS_INLINE void gf16_muladd_single(const void *HEDLEY_RESTRICT 
 		NULL, NULL, NULL, NULL,
 		NULL, NULL, NULL, NULL,
 		NULL, NULL, NULL, NULL,
+		NULL, NULL, NULL, NULL,
+		NULL,
 		len, &val, 0, NULL
 	);
 }
@@ -86,11 +94,13 @@ static HEDLEY_ALWAYS_INLINE void gf16_muladd_prefetch_single(const void *HEDLEY_
 		NULL, NULL, NULL, NULL,
 		NULL, NULL, NULL, NULL,
 		NULL, NULL, NULL, NULL,
+		NULL, NULL, NULL, NULL,
+		NULL,
 		len, &val, 2, prefetch
 	);
 }
 
-#define REMAINING_CASES CASE(12); CASE(11); CASE(10); CASE( 9); CASE( 8); CASE( 7); CASE( 6); CASE( 5); CASE( 4); CASE( 3); CASE( 2); CASE( 1)
+#define REMAINING_CASES CASE(17); CASE(16); CASE(15); CASE(14); CASE(13); CASE(12); CASE(11); CASE(10); CASE( 9); CASE( 8); CASE( 7); CASE( 6); CASE( 5); CASE( 4); CASE( 3); CASE( 2); CASE( 1)
 
 static HEDLEY_ALWAYS_INLINE unsigned gf16_muladd_multi(const void *HEDLEY_RESTRICT scratch, fMuladdPF muladd_pf, const unsigned interleave, unsigned regions, size_t offset, void *HEDLEY_RESTRICT dst, const void* const*HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients) {
 	uint8_t* _dst = (uint8_t*)dst + offset + len;
@@ -104,6 +114,8 @@ static HEDLEY_ALWAYS_INLINE unsigned gf16_muladd_multi(const void *HEDLEY_RESTRI
 			_SRC(interleave, 1), _SRC(interleave,  2), _SRC(interleave,  3), _SRC(interleave,  4),
 			_SRC(interleave, 5), _SRC(interleave,  6), _SRC(interleave,  7), _SRC(interleave,  8),
 			_SRC(interleave, 9), _SRC(interleave, 10), _SRC(interleave, 11), _SRC(interleave, 12),
+			_SRC(interleave,13), _SRC(interleave, 14), _SRC(interleave, 15), _SRC(interleave, 16),
+			_SRC(interleave,17),
 			len, coefficients + region, 0, NULL
 		);
 		region += interleave;
@@ -120,6 +132,8 @@ static HEDLEY_ALWAYS_INLINE unsigned gf16_muladd_multi(const void *HEDLEY_RESTRI
 					_SRC(x, 1), _SRC(x,  2), _SRC(x,  3), _SRC(x,  4), \
 					_SRC(x, 5), _SRC(x,  6), _SRC(x,  7), _SRC(x,  8), \
 					_SRC(x, 9), _SRC(x, 10), _SRC(x, 11), _SRC(x, 12), \
+					_SRC(x,13), _SRC(x, 14), _SRC(x, 15), _SRC(x, 16), \
+					_SRC(x,17), \
 					len, coefficients + region, 0, NULL \
 				); \
 				region += x; \
@@ -158,6 +172,11 @@ static HEDLEY_ALWAYS_INLINE unsigned gf16_muladd_multi_packed(const void *HEDLEY
 			srcEnd + len*interleave*(10/interleave) + blockLen*(10%interleave),
 			srcEnd + len*interleave*(11/interleave) + blockLen*(11%interleave),
 			srcEnd + len*interleave*(12/interleave) + blockLen*(12%interleave),
+			srcEnd + len*interleave*(13/interleave) + blockLen*(13%interleave),
+			srcEnd + len*interleave*(14/interleave) + blockLen*(14%interleave),
+			srcEnd + len*interleave*(15/interleave) + blockLen*(15%interleave),
+			srcEnd + len*interleave*(16/interleave) + blockLen*(16%interleave),
+			srcEnd + len*interleave*(17/interleave) + blockLen*(17%interleave),
 			len, coefficients + region, 0, NULL
 		);
 		region += regionsPerCall;
@@ -186,6 +205,11 @@ static HEDLEY_ALWAYS_INLINE unsigned gf16_muladd_multi_packed(const void *HEDLEY
 						srcEnd + len*interleave*(10/interleave) + blockLen*(10%interleave), \
 						srcEnd + len*interleave*(11/interleave) + blockLen*(11%interleave), \
 						srcEnd + len*interleave*(12/interleave) + blockLen*(12%interleave), \
+						srcEnd + len*interleave*(13/interleave) + blockLen*(13%interleave), \
+						srcEnd + len*interleave*(14/interleave) + blockLen*(14%interleave), \
+						srcEnd + len*interleave*(15/interleave) + blockLen*(15%interleave), \
+						srcEnd + len*interleave*(16/interleave) + blockLen*(16%interleave), \
+						srcEnd + len*interleave*(17/interleave) + blockLen*(17%interleave), \
 						len, coefficients + region, 0, NULL \
 					); \
 					region += x; \
@@ -218,6 +242,11 @@ static HEDLEY_ALWAYS_INLINE unsigned gf16_muladd_multi_packed(const void *HEDLEY
 					srcEnd + blockLen*10, \
 					srcEnd + blockLen*11, \
 					srcEnd + blockLen*12, \
+					srcEnd + blockLen*13, \
+					srcEnd + blockLen*14, \
+					srcEnd + blockLen*15, \
+					srcEnd + blockLen*16, \
+					srcEnd + blockLen*17, \
 					len, coefficients + region, 0, NULL \
 				); \
 				region += x; \
@@ -262,6 +291,11 @@ static HEDLEY_ALWAYS_INLINE void gf16_muladd_multi_packpf(const void *HEDLEY_RES
 				srcEnd + len*interleave*(10/interleave) + blockLen*(10%interleave),
 				srcEnd + len*interleave*(11/interleave) + blockLen*(11%interleave),
 				srcEnd + len*interleave*(12/interleave) + blockLen*(12%interleave),
+				srcEnd + len*interleave*(13/interleave) + blockLen*(13%interleave),
+				srcEnd + len*interleave*(14/interleave) + blockLen*(14%interleave),
+				srcEnd + len*interleave*(15/interleave) + blockLen*(15%interleave),
+				srcEnd + len*interleave*(16/interleave) + blockLen*(16%interleave),
+				srcEnd + len*interleave*(17/interleave) + blockLen*(17%interleave),
 				len, coefficients + region, 1, _pf
 			);
 			region += regionsPerCall;
@@ -295,6 +329,11 @@ static HEDLEY_ALWAYS_INLINE void gf16_muladd_multi_packpf(const void *HEDLEY_RES
 							srcEnd + len*interleave*(10/interleave) + blockLen*(10%interleave), \
 							srcEnd + len*interleave*(11/interleave) + blockLen*(11%interleave), \
 							srcEnd + len*interleave*(12/interleave) + blockLen*(12%interleave), \
+							srcEnd + len*interleave*(13/interleave) + blockLen*(13%interleave), \
+							srcEnd + len*interleave*(14/interleave) + blockLen*(14%interleave), \
+							srcEnd + len*interleave*(15/interleave) + blockLen*(15%interleave), \
+							srcEnd + len*interleave*(16/interleave) + blockLen*(16%interleave), \
+							srcEnd + len*interleave*(17/interleave) + blockLen*(17%interleave), \
 							len, coefficients + region, 1, _pf \
 						); \
 						region += x; \
@@ -331,6 +370,11 @@ static HEDLEY_ALWAYS_INLINE void gf16_muladd_multi_packpf(const void *HEDLEY_RES
 							srcEnd + blockLen*10, \
 							srcEnd + blockLen*11, \
 							srcEnd + blockLen*12, \
+							srcEnd + blockLen*13, \
+							srcEnd + blockLen*14, \
+							srcEnd + blockLen*15, \
+							srcEnd + blockLen*16, \
+							srcEnd + blockLen*17, \
 							len, coefficients + region, 1, _pf \
 						); \
 						region += x; \
@@ -363,6 +407,11 @@ static HEDLEY_ALWAYS_INLINE void gf16_muladd_multi_packpf(const void *HEDLEY_RES
 				srcEnd + len*interleave*(10/interleave) + blockLen*(10%interleave),
 				srcEnd + len*interleave*(11/interleave) + blockLen*(11%interleave),
 				srcEnd + len*interleave*(12/interleave) + blockLen*(12%interleave),
+				srcEnd + len*interleave*(13/interleave) + blockLen*(13%interleave),
+				srcEnd + len*interleave*(14/interleave) + blockLen*(14%interleave),
+				srcEnd + len*interleave*(15/interleave) + blockLen*(15%interleave),
+				srcEnd + len*interleave*(16/interleave) + blockLen*(16%interleave),
+				srcEnd + len*interleave*(17/interleave) + blockLen*(17%interleave),
 				len, coefficients + region, 2, _pf
 			);
 			region += regionsPerCall;
@@ -386,6 +435,11 @@ static HEDLEY_ALWAYS_INLINE void gf16_muladd_multi_packpf(const void *HEDLEY_RES
 			srcEnd + len*interleave*(10/interleave) + blockLen*(10%interleave),
 			srcEnd + len*interleave*(11/interleave) + blockLen*(11%interleave),
 			srcEnd + len*interleave*(12/interleave) + blockLen*(12%interleave),
+			srcEnd + len*interleave*(13/interleave) + blockLen*(13%interleave),
+			srcEnd + len*interleave*(14/interleave) + blockLen*(14%interleave),
+			srcEnd + len*interleave*(15/interleave) + blockLen*(15%interleave),
+			srcEnd + len*interleave*(16/interleave) + blockLen*(16%interleave),
+			srcEnd + len*interleave*(17/interleave) + blockLen*(17%interleave),
 			len, coefficients + region, 0, NULL
 		);
 		region += regionsPerCall;
@@ -415,6 +469,11 @@ static HEDLEY_ALWAYS_INLINE void gf16_muladd_multi_packpf(const void *HEDLEY_RES
 						srcEnd + len*interleave*(10/interleave) + blockLen*(10%interleave), \
 						srcEnd + len*interleave*(11/interleave) + blockLen*(11%interleave), \
 						srcEnd + len*interleave*(12/interleave) + blockLen*(12%interleave), \
+						srcEnd + len*interleave*(13/interleave) + blockLen*(13%interleave), \
+						srcEnd + len*interleave*(14/interleave) + blockLen*(14%interleave), \
+						srcEnd + len*interleave*(15/interleave) + blockLen*(15%interleave), \
+						srcEnd + len*interleave*(16/interleave) + blockLen*(16%interleave), \
+						srcEnd + len*interleave*(17/interleave) + blockLen*(17%interleave), \
 						len, coefficients + region, 0, NULL \
 					); \
 					region += x; \
@@ -447,6 +506,11 @@ static HEDLEY_ALWAYS_INLINE void gf16_muladd_multi_packpf(const void *HEDLEY_RES
 					srcEnd + blockLen*10, \
 					srcEnd + blockLen*11, \
 					srcEnd + blockLen*12, \
+					srcEnd + blockLen*13, \
+					srcEnd + blockLen*14, \
+					srcEnd + blockLen*15, \
+					srcEnd + blockLen*16, \
+					srcEnd + blockLen*17, \
 					len, coefficients + region, 0, NULL \
 				); \
 				region += x; \

@@ -24,7 +24,7 @@
 
 unsigned gf_add_multi_avx512(unsigned regions, size_t offset, void *HEDLEY_RESTRICT dst, const void* const*HEDLEY_RESTRICT src, size_t len) {
 #ifdef __AVX512F__
-	unsigned region = gf16_muladd_multi((void*)1, &gf_add_x_avx512, 4, regions, offset, dst, src, len, NULL);
+	unsigned region = gf16_muladd_multi((void*)1, &gf_add_x_avx512, 6, regions, offset, dst, src, len, NULL);
 	_mm256_zeroupper();
 	return region;
 #else
@@ -57,16 +57,16 @@ void gf_add_multi_packpf_v##vs##i##il##_avx512(unsigned regions, void *HEDLEY_RE
 #endif
 
 PACKED_FUNC(1, 1, 6)
-PACKED_FUNC(1, 2, 6)
-PACKED_FUNC(1, 3, 6)
-PACKED_FUNC(1, 6, 6)
+PACKED_FUNC(1, 2, 8)
+PACKED_FUNC(1, 3, 12)
+PACKED_FUNC(1, 6, 18)
 PACKED_FUNC(1, 12, 12)
 PACKED_FUNC(2, 1, 6)
-PACKED_FUNC(2, 2, 6)
-PACKED_FUNC(2, 3, 6)
-PACKED_FUNC(2, 4, 4)
-PACKED_FUNC(2, 6, 6)
-PACKED_FUNC(16, 6, 6)
+PACKED_FUNC(2, 2, 8)
+PACKED_FUNC(2, 3, 12)
+PACKED_FUNC(2, 4, 12)
+PACKED_FUNC(2, 6, 18)
+PACKED_FUNC(16, 6, 18)
 
 #undef PACKED_FUNC
 

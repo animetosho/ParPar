@@ -12,7 +12,7 @@ static HEDLEY_ALWAYS_INLINE void _FN(gf_add_x)(
 	assert(((uintptr_t)_dst & (sizeof(_mword)-1)) == 0);
 	assert(len > 0);
 	
-	GF16_MULADD_MULTI_SRC_UNUSED(12);
+	GF16_MULADD_MULTI_SRC_UNUSED(18);
 	UNUSED(coefficients);
 	unsigned vecStride = (unsigned)((uintptr_t)scratch); // abuse this otherwise unused variable
 	
@@ -41,6 +41,9 @@ static HEDLEY_ALWAYS_INLINE void _FN(gf_add_x)(
 			ADD_PAIR(7, 8);
 			ADD_PAIR(9, 10);
 			ADD_PAIR(11, 12);
+			ADD_PAIR(13, 14);
+			ADD_PAIR(15, 16);
+			ADD_PAIR(17, 18);
 			#undef ADD_PAIR
 			_MMI(store)((_mword*)(_dst+ptr) + v, data);
 		}
