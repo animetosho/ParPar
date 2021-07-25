@@ -102,7 +102,8 @@
       "defines": ["NDEBUG"],
       "sources": [
         "gf16/gf16mul.cpp",
-        "gf16/gf16_lookup.c"
+        "gf16/gf16_lookup.c",
+        "gf16/gf_add_generic.c"
       ],
       "cflags": ["-Wno-unused-function"],
       "xcode_settings": {
@@ -121,7 +122,8 @@
       "defines": ["NDEBUG"],
       "sources": [
         "gf16/gf16_xor_sse2.c",
-        "gf16/gf16_lookup_sse2.c"
+        "gf16/gf16_lookup_sse2.c",
+        "gf16/gf_add_sse2.c"
       ],
       "cflags": ["-Wno-unused-function"],
       "xcode_settings": {
@@ -201,7 +203,8 @@
       "defines": ["NDEBUG"],
       "sources": [
         "gf16/gf16_xor_avx2.c",
-        "gf16/gf16_shuffle_avx2.c"
+        "gf16/gf16_shuffle_avx2.c",
+        "gf16/gf_add_avx2.c"
       ],
       "cflags": ["-Wno-unused-function"],
       "xcode_settings": {
@@ -238,7 +241,8 @@
       "defines": ["NDEBUG"],
       "sources": [
         "gf16/gf16_xor_avx512.c",
-        "gf16/gf16_shuffle_avx512.c"
+        "gf16/gf16_shuffle_avx512.c",
+        "gf16/gf_add_avx512.c"
       ],
       "cflags": ["-Wno-unused-function"],
       "xcode_settings": {
@@ -410,7 +414,8 @@
       "defines": ["NDEBUG"],
       "sources": [
         "gf16/gf16_shuffle_neon.c",
-        "gf16/gf16_clmul_neon.c"
+        "gf16/gf16_clmul_neon.c",
+        "gf16/gf_add_neon.c"
       ],
       "cflags": ["-Wno-unused-function"],
       "xcode_settings": {
@@ -439,7 +444,8 @@
       "type": "static_library",
       "defines": ["NDEBUG"],
       "sources": [
-        "gf16/gf16_shuffle128_sve.c"
+        "gf16/gf16_shuffle128_sve.c",
+        "gf16/gf_add_sve.c"
       ],
       "cflags": ["-Wno-unused-function"],
       "xcode_settings": {
@@ -472,7 +478,8 @@
         "gf16/gf16_shuffle128_sve2.c",
         "gf16/gf16_shuffle2x128_sve2.c",
         "gf16/gf16_shuffle512_sve2.c",
-        "gf16/gf16_clmul_sve2.c"
+        "gf16/gf16_clmul_sve2.c",
+        "gf16/gf_add_sve2.c"
       ],
       "cflags": ["-Wno-unused-function"],
       "xcode_settings": {

@@ -69,10 +69,12 @@ void ppgf_multiply_mat(const void* const* inputs, uint_fast16_t* iNums, unsigned
 	// pre-calc all coefficients
 	// calculation does lookups, so faster to do it first and avoid memory penalties later on
 	uint16_t* factors = new uint16_t[numInputs * numOutputs];
-	for(unsigned out=0; out<numOutputs; out++)
+	for(unsigned out=0; out<numOutputs; out++) {
+		if(!oNums[out]) continue; // 0th powers are never used, so skip these
 		for(unsigned inp=0; inp<numInputs; inp++) {
 			factors[inp + out*numInputs] = gfmat_coeff(iNums[inp], oNums[out]);
 		}
+	}
 	
 	
 	// break the slice into smaller chunks so that we maximise CPU cache usage
@@ -98,7 +100,10 @@ void ppgf_multiply_mat(const void* const* inputs, uint_fast16_t* iNums, unsigned
 #endif
 
 		if(!add) memset(((uint8_t*)outputs[out])+offset, 0, procSize);
-		gf->mul_add_multi(numInputs, offset, outputs[out], inputs, procSize, factors + out*numInputs, gfScratch[threadNum]);
+		if(oNums[out])
+			gf->mul_add_multi(numInputs, offset, outputs[out], inputs, procSize, factors + out*numInputs, gfScratch[threadNum]);
+		else // pow(x, 0) == 1, so everything will be an add
+			gf->add_multi(numInputs, offset, outputs[out], inputs, procSize);
 	}
 	
 	delete[] factors;
