@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 
 "use strict";
-process.title = 'ParPar';
 
 var ParPar = require('../');
 var error = function(msg) {
