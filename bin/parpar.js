@@ -316,7 +316,7 @@ var inputFiles = argv._;
 			input = input|0;
 			if(!isRec && input < 0) error('Invalid value specified for `'+arg+'`');
 			return {unit: 'count', value: input};
-		} else if(m = input.match(/^(-?[0-9.]+)([%bkmgtpelswn]|[lswn][*\/][0-9.]+)$/i)) {
+		} else if(m = input.match(/^(-?[0-9.]+)([%bkmgtpelswon]|[lswn][*\/][0-9.]+)$/i)) {
 			var n = +(m[1]);
 			if(isNaN(n) || !isFinite(n) || (!isRec && n < 0))
 				error('Invalid value specified for `'+arg+'`');
@@ -324,7 +324,7 @@ var inputFiles = argv._;
 				if(!isRec)
 					error('Invalid value specified for `'+arg+'`');
 				return {unit: 'ratio', value: n/100};
-			} else if(['l','L','s','S','w','W','n','N'].indexOf(m[2][0]) >= 0) {
+			} else if(['l','L','s','S','w','W','o','O','n','N'].indexOf(m[2][0]) >= 0) {
 				if(!isRec)
 					error('Invalid value specified for `'+arg+'`');
 				var scale = 1;
@@ -337,7 +337,7 @@ var inputFiles = argv._;
 					}
 				}
 				return {unit: {
-					l:'largest_files', s:'smallest_files', w:'power', n:'ilog'
+					l:'largest_files', s:'smallest_files', w:'power', o:'log', n:'ilog'
 				}[m[2][0].toLowerCase()], value: n, scale: scale};
 			} else {
 				switch(m[2].toUpperCase()) {

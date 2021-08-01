@@ -51,6 +51,9 @@ PAR2 Options:
                                            root of the total number of input
                                            slices (or input_slices**0.5 where
                                            ** denotes power)
+                                 `-r1.5o`: recovery slices equals the logarithm
+                                           base 1.5 of the total number of input
+                                           slices
                                  `-r1n`: computes r = s/max(1,log2(s)), where
                                          'r' denotes number of recovery slices,
                                          'log2' denotes logarithm base 2, and
@@ -60,9 +63,9 @@ PAR2 Options:
                                          This curve encourages a higher ratio
                                          of recovery slices to be chosen for
                                          smaller inputs
-                             The 'l', 's', 'w' and 'n' suffixes can be followed
-                             by a scale factor, e.g. `-r1l*1.5` takes the
-                             number of slices in the largest file and
+                             The 'l', 's', 'w', 'o' and 'n' suffixes can be
+                             followed by a scale factor, e.g. `-r1l*1.5` takes
+                             the number of slices in the largest file and
                              multiplies it by 1.5.
                              You can also specify multiple values by joining
                              them with `+` or `-`, e.g. `-r10%+2` will generate
