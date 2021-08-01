@@ -171,8 +171,9 @@ Performance Options:
                              slices. If all recovery slices cannot be held in
                              memory, ParPar will run multiple passes on input
                              data to generate recovery, so increasing this
-                             value as much as possible, will greatly improve
-                             performance. Default `256M`.
+                             value can improve performance. Default is auto-
+                             detected based on total/free RAM, typically 75% of
+                             free RAM up to 8192MB.
                              Note that additional memory is used during
                              processing, particularly if large slice sizes are
                              being used.
