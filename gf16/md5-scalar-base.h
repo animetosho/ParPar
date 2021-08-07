@@ -1,14 +1,7 @@
 #include <string.h> // memcpy+memset
 #include "../src/stdint.h"
+#include "platform.h"
 
-#ifdef _MSC_VER
-# ifndef __BYTE_ORDER__
-#  define __BYTE_ORDER__ 1234
-# endif
-# ifndef __ORDER_BIG_ENDIAN__
-#  define __ORDER_BIG_ENDIAN__ 4321
-# endif
-#endif
 
 #define ADD(a, b) (a+b)
 #define VAL(k) (k)

@@ -216,6 +216,10 @@
 //#include <xmmintrin.h>
 #endif // __linux__
 
+#if defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__) || defined(__DragonFly__)
+#include <stdlib.h>
+#endif
+
 #include <cstring>
 
 

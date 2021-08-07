@@ -1,15 +1,6 @@
 
 #include "gf16_global.h"
 
-#ifdef _MSC_VER
-# ifndef __BYTE_ORDER__
-#  define __BYTE_ORDER__ 1234
-# endif
-# ifndef __ORDER_BIG_ENDIAN__
-#  define __ORDER_BIG_ENDIAN__ 4321
-# endif
-#endif
-
 
 #define GF16_MULTBY_TWO_X2(p) ((((p) << 1) & 0xffffffff) ^ ((GF16_POLYNOMIAL ^ ((GF16_POLYNOMIAL&0xffff) << 16)) & -((p) >> 31)))
 #define GF16_MULTBY_TWO_X4(p) ( \
@@ -39,17 +30,31 @@
 #if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
 # define PACK_2X16(a, b) (((uint32_t)(a) << 16) | (b))
 # define PACK_4X16(a, b, c, d) (((uint64_t)(a) << 48) | ((uint64_t)(b) << 32) | ((uint64_t)(c) << 16) | (uint64_t)(d))
-# define XTRACT_BITS(a, s, c) (((a) >> (sizeof(a) - s - c)) & ((1 << c)-1))
+# define XTRACT_BYTE(a, b) (((a) >> 8*(sizeof(a)-1 - b)) & 255)
+static HEDLEY_ALWAYS_INLINE uint64_t SWAP64(uint64_t n) {
+	n = (n << 32) | (n >> 32);
+	n = ((n & 0xffff0000ffffULL) << 16) | ((n >> 16) & 0xffff0000ffffULL);
+	n = ((n & 0xff00ff00ff00ffULL) << 8) | ((n >> 8) & 0xff00ff00ff00ffULL);
+	return n;
+}
+static HEDLEY_ALWAYS_INLINE uint32_t SWAP32(uint32_t n) {
+	return ((n&0xff) << 24) | ((n&0xff00) << 8) | ((n>>8) & 0xff00) | (n >> 24);
+}
+static HEDLEY_ALWAYS_INLINE uint16_t SWAP16(uint16_t n) {
+	return ((n&0xff) << 8) | (n >> 8);
+}
 #else
 # define PACK_2X16(a, b) (((uint32_t)(b) << 16) | (a))
 # define PACK_4X16(a, b, c, d) (((uint64_t)(d) << 48) | ((uint64_t)(c) << 32) | ((uint64_t)(b) << 16) | (uint64_t)(a))
-# define XTRACT_BITS(a, s, c) (((a) >> s) & ((1 << c)-1))
+# define XTRACT_BYTE(a, b) (((a) >> b*8) & 255)
+# define SWAP64(n) (n)
+# define SWAP32(n) (n)
+# define SWAP16(n) (n)
 #endif
 
 #if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
-# define FLIP_16(n) ((((n)&0xff) << 8) | ((n) >> 8))
-# define FLIP_2X16(n) ((((n)&0xff00ff) << 8) | (((n) >> 8) & 0xff00ff))
-# define FLIP_4X16(n) ((((n)&0xff00ff00ff00ffULL) << 8) | (((n) >> 8) & 0xff00ff00ff00ffULL))
+# define SWAP16x2(n) ((((n)&0xff00ff) << 8) | (((n) >> 8) & 0xff00ff))
+# define SWAP16x4(n) ((((n)&0xff00ff00ff00ffULL) << 8) | (((n) >> 8) & 0xff00ff00ff00ffULL))
 static HEDLEY_ALWAYS_INLINE void calc_table(uint16_t coefficient, uint16_t* lhtable) {
 	int j, k;
 	
@@ -57,57 +62,57 @@ static HEDLEY_ALWAYS_INLINE void calc_table(uint16_t coefficient, uint16_t* lhta
 		uint64_t* lhtable64 = (uint64_t*)lhtable;
 		uint32_t coefficient2 = (coefficient << 16) | coefficient; // [*1, *1]
 		coefficient2 = GF16_MULTBY_TWO_X2(coefficient2);           // [*2, *2]
-		lhtable64[0] = FLIP_4X16(((uint64_t)coefficient << 32) | ((uint64_t)(coefficient2^coefficient))); // [*0, *1, *2, *3]
+		lhtable64[0] = SWAP16x4(((uint64_t)coefficient << 32) | ((uint64_t)(coefficient2^coefficient))); // [*0, *1, *2, *3]
 		uint64_t coefficient4 = coefficient2 | ((uint64_t)coefficient2 << 32); // [*2, *2, *2, *2]
 		coefficient4 = GF16_MULTBY_TWO_X4(coefficient4);          // [*4, *4, *4, *4]
-		uint64_t coeffFlip = FLIP_4X16(coefficient4);
+		uint64_t coeffFlip = SWAP16x4(coefficient4);
 		for (j = 1; j < 64; j <<= 1) {
 			for (k = 0; k < j; k++) lhtable64[k+j] = (coeffFlip ^ lhtable64[k]);
 			coefficient4 = GF16_MULTBY_TWO_X4(coefficient4);
-			coeffFlip = FLIP_4X16(coefficient4);
+			coeffFlip = SWAP16x4(coefficient4);
 		}
 		uint64_t tmp = coefficient4 & 0xffff0000ffffULL;      // [*0, *256, *0, *256]
 		coefficient4 = GF16_MULTBY_TWO_X4(coefficient4);      // [*512, *512, *512, *512]
-		lhtable64[64] = FLIP_4X16(tmp ^ (coefficient4 & 0xffffffff)); // [*0, *256, *512, *768]
+		lhtable64[64] = SWAP16x4(tmp ^ (coefficient4 & 0xffffffff)); // [*0, *256, *512, *768]
 		coefficient4 = GF16_MULTBY_TWO_X4(coefficient4);      // [*1024, *1024, *1024, *1024]
-		coeffFlip = FLIP_4X16(coefficient4);
+		coeffFlip = SWAP16x4(coefficient4);
 		for (j = 1; j < 64; j <<= 1) {
 			for (k = 0; k < j; k++) lhtable64[64 + k+j] = (coeffFlip ^ lhtable64[64 + k]);
 			coefficient4 = GF16_MULTBY_TWO_X4(coefficient4);
-			coeffFlip = FLIP_4X16(coefficient4);
+			coeffFlip = SWAP16x4(coefficient4);
 		}
 	} else if(sizeof(uintptr_t) >= 4) {
 		uint32_t* lhtable32 = (uint32_t*)lhtable;
-		lhtable32[0] = FLIP_16(coefficient);
+		lhtable32[0] = SWAP16(coefficient);
 		uint32_t coefficient2 = coefficient | (coefficient << 16);
 		coefficient2 = GF16_MULTBY_TWO_X2(coefficient2);
-		uint32_t coeffFlip = FLIP_2X16(coefficient2);
+		uint32_t coeffFlip = SWAP16x2(coefficient2);
 		for (j = 1; j < 128; j <<= 1) {
 			for (k = 0; k < j; k++) lhtable32[k+j] = (coeffFlip ^ lhtable32[k]);
 			coefficient2 = GF16_MULTBY_TWO_X2(coefficient2);
-			coeffFlip = FLIP_2X16(coefficient2);
+			coeffFlip = SWAP16x2(coefficient2);
 		}
-		lhtable32[128] = FLIP_16(coefficient2 & 0xffff);
+		lhtable32[128] = SWAP16(coefficient2 & 0xffff); // coeffFlip & 0xffff
 		coefficient2 = GF16_MULTBY_TWO_X2(coefficient2);
-		coeffFlip = FLIP_2X16(coefficient2);
+		coeffFlip = SWAP16x2(coefficient2);
 		for (j = 1; j < 128; j <<= 1) {
 			for (k = 0; k < j; k++) lhtable32[128 + k+j] = (coeffFlip ^ lhtable32[128 + k]);
 			coefficient2 = GF16_MULTBY_TWO_X2(coefficient2);
-			coeffFlip = FLIP_2X16(coefficient2);
+			coeffFlip = SWAP16x2(coefficient2);
 		}
 	} else {
-		uint16_t coeffFlip = FLIP_16(coefficient);
+		uint16_t coeffFlip = SWAP16(coefficient);
 		lhtable[0] = 0;
 		for (j = 1; j < 256; j <<= 1) {
 			for (k = 0; k < j; k++) lhtable[k+j] = (coeffFlip ^ lhtable[k]);
 			coefficient = GF16_MULTBY_TWO(coefficient);
-			coeffFlip = FLIP_16(coefficient);
+			coeffFlip = SWAP16(coefficient);
 		}
 		lhtable[256] = 0;
 		for (j = 1; j < 256; j <<= 1) {
 			for (k = 0; k < j; k++) lhtable[256 + k+j] = (coeffFlip ^ lhtable[256 + k]);
 			coefficient = GF16_MULTBY_TWO(coefficient);
-			coeffFlip = FLIP_16(coefficient);
+			coeffFlip = SWAP16(coefficient);
 		}
 	}
 }
@@ -252,10 +257,10 @@ void gf16_lookup_powadd(const void *HEDLEY_RESTRICT scratch, unsigned outputs, s
 			uint16_t res4 = lhtable[_src[ptr + 6]] ^ lhtable[256 + _src[ptr + 7]];
 			*(uint64_t*)((uint8_t*)dst[0] + dstPtr) ^= PACK_4X16(res1, res2, res3, res4);
 			for(unsigned output = 1; output < outputs; output++) {
-				res1 = lhtable[XTRACT_BITS(res1, 0, 8)] ^ lhtable[256 + XTRACT_BITS(res1, 8, 8)];
-				res2 = lhtable[XTRACT_BITS(res2, 0, 8)] ^ lhtable[256 + XTRACT_BITS(res2, 8, 8)];
-				res3 = lhtable[XTRACT_BITS(res3, 0, 8)] ^ lhtable[256 + XTRACT_BITS(res3, 8, 8)];
-				res4 = lhtable[XTRACT_BITS(res4, 0, 8)] ^ lhtable[256 + XTRACT_BITS(res4, 8, 8)];
+				res1 = lhtable[XTRACT_BYTE(res1, 0)] ^ lhtable[256 + XTRACT_BYTE(res1, 1)];
+				res2 = lhtable[XTRACT_BYTE(res2, 0)] ^ lhtable[256 + XTRACT_BYTE(res2, 1)];
+				res3 = lhtable[XTRACT_BYTE(res3, 0)] ^ lhtable[256 + XTRACT_BYTE(res3, 1)];
+				res4 = lhtable[XTRACT_BYTE(res4, 0)] ^ lhtable[256 + XTRACT_BYTE(res4, 1)];
 				*(uint64_t*)((uint8_t*)dst[output] + dstPtr) ^= PACK_4X16(res1, res2, res3, res4);
 			}
 		}
@@ -267,8 +272,8 @@ void gf16_lookup_powadd(const void *HEDLEY_RESTRICT scratch, unsigned outputs, s
 			uint16_t res2 = lhtable[_src[ptr + 2]] ^ lhtable[256 + _src[ptr + 3]];
 			*(uint32_t*)((uint8_t*)dst[0] + dstPtr) ^= PACK_2X16(res1, res2);
 			for(unsigned output = 1; output < outputs; output++) {
-				res1 = lhtable[XTRACT_BITS(res1, 0, 8)] ^ lhtable[256 + XTRACT_BITS(res1, 8, 8)];
-				res2 = lhtable[XTRACT_BITS(res2, 0, 8)] ^ lhtable[256 + XTRACT_BITS(res2, 8, 8)];
+				res1 = lhtable[XTRACT_BYTE(res1, 0)] ^ lhtable[256 + XTRACT_BYTE(res1, 1)];
+				res2 = lhtable[XTRACT_BYTE(res2, 0)] ^ lhtable[256 + XTRACT_BYTE(res2, 1)];
 				*(uint32_t*)((uint8_t*)dst[output] + dstPtr) ^= PACK_2X16(res1, res2);
 			}
 			
@@ -279,7 +284,7 @@ void gf16_lookup_powadd(const void *HEDLEY_RESTRICT scratch, unsigned outputs, s
 			size_t dstPtr = ptr + lenPlusOffset;
 			uint16_t data = *(uint16_t*)(_src + ptr);
 			for(unsigned output = 0; output < outputs; output++) {
-				data = lhtable[XTRACT_BITS(data, 0, 8)] ^ lhtable[256 + XTRACT_BITS(data, 8, 8)];
+				data = lhtable[XTRACT_BYTE(data, 0)] ^ lhtable[256 + XTRACT_BYTE(data, 1)];
 				*(uint16_t*)((uint8_t*)dst[output] + dstPtr) ^= data;
 			}
 		}
@@ -602,7 +607,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_lookup_checksum_blocku(const void *HEDLEY_
 			amount -= sizeof(uint64_t);
 		}
 		uint64_t* _checksum = (uint64_t*)checksum;
-		*_checksum = (uint64_t)gf16_lookup_multi_mul2(*_checksum) ^ data;
+		*_checksum = (uint64_t)gf16_lookup_multi_mul2(*_checksum) ^ SWAP64(data);
 	} else if(sizeof(uintptr_t) >= 4) {
 		uint32_t data = 0;
 		size_t remaining = amount & (sizeof(uint32_t)-1);
@@ -617,7 +622,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_lookup_checksum_blocku(const void *HEDLEY_
 			amount -= sizeof(uint32_t);
 		}
 		uint32_t* _checksum = (uint32_t*)checksum;
-		*_checksum = (uint32_t)gf16_lookup_multi_mul2(*_checksum) ^ data;
+		*_checksum = (uint32_t)gf16_lookup_multi_mul2(*_checksum) ^ SWAP32(data);
 	} else {
 		uint16_t data = 0;
 		if(amount & 1) {
@@ -631,7 +636,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_lookup_checksum_blocku(const void *HEDLEY_
 			amount -= sizeof(uint16_t);
 		}
 		uint16_t* _checksum = (uint16_t*)checksum;
-		*_checksum = (uint16_t)gf16_lookup_multi_mul2(*_checksum) ^ data;
+		*_checksum = (uint16_t)gf16_lookup_multi_mul2(*_checksum) ^ SWAP16(data);
 	}
 }
 static HEDLEY_ALWAYS_INLINE void gf16_lookup_checksum_block(const void *HEDLEY_RESTRICT src, void *HEDLEY_RESTRICT checksum, const size_t blockLen, const int aligned) {
@@ -676,13 +681,22 @@ static HEDLEY_ALWAYS_INLINE void gf16_lookup_checksum_zeroes(void *HEDLEY_RESTRI
 
 static HEDLEY_ALWAYS_INLINE void gf16_lookup_checksum_prepare(void *HEDLEY_RESTRICT dst, void *HEDLEY_RESTRICT checksum, const size_t blockLen, gf16_prepare_block prepareBlock) {
 	UNUSED(prepareBlock);
-	size_t cksumLen = gf16_lookup_stride();
-	memcpy(dst, checksum, cksumLen);
-	memset((char*)dst+cksumLen, 0, blockLen-cksumLen);
+	memset(dst, 0, blockLen);
+	if(sizeof(uintptr_t) >= 8)
+		*(uint64_t*)dst = SWAP64(*(uint64_t*)checksum);
+	else if(sizeof(uintptr_t) >= 4)
+		*(uint32_t*)dst = SWAP32(*(uint32_t*)checksum);
+	else
+		*(uint16_t*)dst = SWAP16(*(uint16_t*)checksum);
 }
 static HEDLEY_ALWAYS_INLINE int gf16_lookup_checksum_finish(const void *HEDLEY_RESTRICT src, void *HEDLEY_RESTRICT checksum, const size_t blockLen, gf16_finish_copy_block finishBlock) {
 	UNUSED(blockLen); UNUSED(finishBlock);
-	return memcmp(src, checksum, gf16_lookup_stride()) == 0;
+	if(sizeof(uintptr_t) >= 8)
+		return *(uint64_t*)src == SWAP64(*(uint64_t*)checksum);
+	else if(sizeof(uintptr_t) >= 4)
+		return *(uint32_t*)src == SWAP32(*(uint32_t*)checksum);
+	else
+		return *(uint16_t*)src == SWAP16(*(uint16_t*)checksum);
 }
 
 static HEDLEY_ALWAYS_INLINE void gf16_lookup_copy_block(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src) {

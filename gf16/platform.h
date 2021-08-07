@@ -35,6 +35,15 @@
 	#define PLATFORM_ARM 1
 #endif
 
+#ifdef _MSC_VER
+# ifndef __BYTE_ORDER__
+#  define __BYTE_ORDER__ 1234
+# endif
+# ifndef __ORDER_BIG_ENDIAN__
+#  define __ORDER_BIG_ENDIAN__ 4321
+# endif
+#endif
+
 # ifdef _M_ARM64
 	#define __ARM_NEON 1
 	#define __aarch64__ 1

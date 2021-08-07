@@ -80,10 +80,10 @@ uint16_t val, qtbl_t* tbl_l, qtbl_t* tbl_h) {
 	
 	/*
 	uint16_t* multbl = (uint16_t*)(ltd->poly + 1);
-	uint16x8_t factor0 = vld1q_u16(multbl + ((val & 0xf) << 3));
-	factor0 = veorq_u16(factor0, vld1q_u16(multbl + ((16 + ((val & 0xf0) >> 4)) << 3)));
-	factor0 = veorq_u16(factor0, vld1q_u16(multbl + ((32 + ((val & 0xf00) >> 8)) << 3)));
-	factor0 = veorq_u16(factor0, vld1q_u16(multbl + ((48 + ((val & 0xf000) >> 12)) << 3)));
+	uint16x8_t factor0 = vreinterpret_u16_u8(vld1q_u8(multbl + ((val & 0xf) << 3)));
+	factor0 = veorq_u16(factor0, vreinterpret_u16_u8(vld1q_u8(multbl + ((16 + ((val & 0xf0) >> 4)) << 3))));
+	factor0 = veorq_u16(factor0, vreinterpret_u16_u8(vld1q_u8(multbl + ((32 + ((val & 0xf00) >> 8)) << 3))));
+	factor0 = veorq_u16(factor0, vreinterpret_u16_u8(vld1q_u8(multbl + ((48 + ((val & 0xf000) >> 12)) << 3))));
 	
 	uint16x8_t factor8 = vdupq_lane_u16(vget_low_u16(factor0), 0);
 	factor0 = vsetq_lane_u16(0, factor0, 0);
@@ -325,7 +325,7 @@ void gf16_shuffle_prepare_packed_neon(void *HEDLEY_RESTRICT dst, const void *HED
 
 void gf16_shuffle_prepare_packed_cksum_neon(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen, size_t sliceLen, unsigned inputPackSize, unsigned inputNum, size_t chunkLen) {
 #if defined(__ARM_NEON)
-	int16x8_t checksum = vdupq_n_s16(0);
+	uint8x16_t checksum = vdupq_n_u8(0);
 	gf16_prepare_packed(dst, src, srcLen, sliceLen, sizeof(uint8x16x2_t), &gf16_prepare_block_neon, &gf16_prepare_blocku_neon, inputPackSize, inputNum, chunkLen,
 #ifdef __aarch64__
 	2
@@ -340,7 +340,7 @@ void gf16_shuffle_prepare_packed_cksum_neon(void *HEDLEY_RESTRICT dst, const voi
 
 int gf16_shuffle_finish_packed_cksum_neon(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t sliceLen, unsigned numOutputs, unsigned outputNum, size_t chunkLen) {
 #if defined(__ARM_NEON)
-	int16x8_t checksum = vdupq_n_s16(0);
+	uint8x16_t checksum = vdupq_n_u8(0);
 	return gf16_finish_packed(dst, src, sliceLen, sizeof(uint8x16x2_t), &gf16_prepare_block_neon, numOutputs, outputNum, chunkLen, 1, &checksum, &gf16_checksum_block_neon, &gf16_checksum_finish_neon);
 #else
 	UNUSED(dst); UNUSED(src); UNUSED(sliceLen); UNUSED(numOutputs); UNUSED(outputNum); UNUSED(chunkLen);
@@ -393,7 +393,7 @@ void* gf16_shuffle_init_arm(int polynomial) {
 			
 			// put in *8 factor so we don't have to calculate it later
 			r = vsetq_lane_u16(GF16_MULTBY_TWO(val4), r, 0);
-			vst1q_u16(multbl + ((shift*4 + i) << 3), r);
+			vst1q_u8(multbl + ((shift*4 + i) << 3), vreinterpret_u8_u16(r));
 		}
 	}
 	*/
