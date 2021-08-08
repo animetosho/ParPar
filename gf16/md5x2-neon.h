@@ -1,6 +1,11 @@
 
 #include <arm_neon.h>
 
+#ifdef __GNUC__
+# define MD5_USE_ASM
+# include "md5x2-neon-asm.h"
+#endif
+
 #ifdef __ARM_NEON
 #define ADD vadd_u32
 #define VAL vdup_n_u32
@@ -77,4 +82,8 @@ static HEDLEY_ALWAYS_INLINE void md5_extract_x2_neon(void* dst, void* state, con
 	vst1_u32((uint32_t*)dst, tmp1.val[idx]);
 	vst1_u32((uint32_t*)dst + 2, tmp2.val[idx]);
 }
+#endif
+
+#ifdef MD5_USE_ASM
+# undef MD5_USE_ASM
 #endif

@@ -5,6 +5,10 @@
 # define MD5_USE_ASM
 # include "md5x2-x86-asm.h"
 #endif
+#if defined(__GNUC__) && defined(PLATFORM_ARM)
+# define MD5_USE_ASM
+# include "md5x2-arm-asm.h"
+#endif
 
 static HEDLEY_ALWAYS_INLINE void md5_init_lane_x2_scalar(void* state, const int idx) {
 	uint32_t* state_ = (uint32_t*)state;
