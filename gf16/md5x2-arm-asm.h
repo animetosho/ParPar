@@ -188,8 +188,8 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_x2_scalar(uint32_t* state, co
 		ROUND_I(D1, A1, B1, C1, D2, A2, B2, C2, "[%[i0], #8]", "[%[i1], #8]", 0xf235, 0xbd3a, 22)
 		ROUND_I(C1, D1, A1, B1, C2, D2, A2, B2, "[%[i0], #36]", "[%[i1], #36]", 0xd2bb, 0x2ad7, 17)
 		ROUND_I_LAST(B1, C1, D1, A1, B2, C2, D2, A2, 0xd391, 0xeb86, 11)
-	: [A1]"+r"(A1), [B1]"+r"(B1), [C1]"+r"(C1), [D1]"+r"(D1),
-	  [A2]"+r"(A2), [B2]"+r"(B2), [C2]"+r"(C2), [D2]"+r"(D2),
+	: [A1]"+&r"(A1), [B1]"+&r"(B1), [C1]"+&r"(C1), [D1]"+&r"(D1),
+	  [A2]"+&r"(A2), [B2]"+&r"(B2), [C2]"+&r"(C2), [D2]"+&r"(D2),
 	  [TMP1]"=&r"(tmp1), [TMP2]"=&r"(tmp2)
 	: [i0]"r"(data[0]), [i1]"r"(data[1])
 	:

@@ -121,9 +121,9 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_x2_scalar(uint32_t* state, co
 	"addl %k[" STR(B2) "], %k[" STR(A2) "]\n"
 
 #define ASM_PARAMS(i0, i1) \
-	[A1]"+r"(A1), [B1]"+r"(B1), [C1]"+r"(C1), [D1]"+r"(D1), \
-	[A2]"+r"(A2), [B2]"+r"(B2), [C2]"+r"(C2), [D2]"+r"(D2), \
-	[TMP1]"+r"(tmp1), [TMP2]"+r"(tmp2) \
+	[A1]"+&r"(A1), [B1]"+&r"(B1), [C1]"+&r"(C1), [D1]"+&r"(D1), \
+	[A2]"+&r"(A2), [B2]"+&r"(B2), [C2]"+&r"(C2), [D2]"+&r"(D2), \
+	[TMP1]"=&r"(tmp1), [TMP2]"=&r"(tmp2) \
 : [i0_0]"m"(_data[0][i0]), [i0_1]"m"(_data[0][i1]), \
   [i1_0]"m"(_data[1][i0]), [i1_1]"m"(_data[1][i1]) \
 :
@@ -162,7 +162,6 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_x2_scalar(uint32_t* state, co
 	
 	A1 += _data[0][0];
 	A2 += _data[1][0];
-	asm("" : "=r"(tmp1), "=r"(tmp2) ::); // silence compiler warning
 	
 	RF4( 1,  2,  3,  4,  -0x28955b88, -0x173848aa, 0x242070db, -0x3e423112)
 	RF4( 5,  6,  7,  8,  -0x0a83f051, 0x4787c62a, -0x57cfb9ed, -0x02b96aff)

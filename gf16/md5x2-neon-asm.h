@@ -155,7 +155,7 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_x2_neon(uint32x2_t* state, co
 		RI4("v27", "v28", "v30", "v24")
 		RI4("v26", "v31", "v29", "v27")
 		RI4("v25", "v30", "v28", "v26")
-	: [A]"+w"(A), [B]"+w"(B), [C]"+w"(C), [D]"+w"(D), [k]"+r"(k)
+	: [A]"+&w"(A), [B]"+&w"(B), [C]"+&w"(C), [D]"+&w"(D), [k]"+r"(k)
 	: [i0]"r"(data[0]), [i1]"r"(data[1])
 	: "v16", "v17", "v18", "v19", "v20", "v21", "v22", "v23", "v24", "v25", "v26", "v27", "v28", "v29", "v30", "v31"
 	);
@@ -260,7 +260,7 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_x2_neon(uint32x2_t* state, co
 		RI4("d22", "d25", "d28", "d17")
 		RI4("d20", "d31", "d26", "d23")
 		RI4("d18", "d29", "d24", "d21")
-	: [A]"+w"(A), [B]"+w"(B), [C]"+w"(C), [D]"+w"(D), [k]"+r"(k)
+	: [A]"+&w"(A), [B]"+&w"(B), [C]"+&w"(C), [D]"+&w"(D), [k]"+r"(k)
 	: [i0]"r"(data[0]), [i1]"r"(data[1])
 	: "d11", "q6", "q7", "q8", "q9", "q10", "q11", "q12", "q13", "q14", "q15", "r4", "r5"
 	);
