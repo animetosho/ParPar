@@ -147,7 +147,6 @@
 #ifdef _WIN32
 
 #include <windows.h>
-#include <malloc.h>
 #include <iterator>
 #include <intrin.h>
 
@@ -208,17 +207,19 @@
 #include <string>
 #endif 
 
-#if defined(__linux__) || defined(__APPLE__) || defined(__MACOSX)
-#include <alloca.h>
 
-// these are already included from platform.h, so not required here
-//#include <emmintrin.h>
-//#include <xmmintrin.h>
-#endif // __linux__
-
-#if defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__) || defined(__DragonFly__)
-#include <stdlib.h>
+#ifdef __GNUC__
+# define Alloca __builtin_alloca
+#elif defined(_MSC_VER)
+# define Alloca _alloca
+#else
+# include <stdlib.h>
+# define Alloca alloca
+# if defined(__linux__) || defined(__APPLE__) || defined(__MACOSX)
+#  include <alloca.h>
+# endif // __linux__
 #endif
+
 
 #include <cstring>
 
@@ -1114,7 +1115,7 @@ inline cl_int getInfoHelper(Func f, cl_uint name, VECTOR_CLASS<T>* param, long)
         return err;
     }
 
-    T* value = (T*) alloca(required);
+    T* value = (T*) Alloca(required);
     err = f(name, required, value, NULL);
     if (err != CL_SUCCESS) {
         return err;
@@ -1139,7 +1140,7 @@ inline cl_int getInfoHelper(Func f, cl_uint name, VECTOR_CLASS<T>* param, int, t
         return err;
     }
 
-    typename T::cl_type * value = (typename T::cl_type *) alloca(required);
+    typename T::cl_type * value = (typename T::cl_type *) Alloca(required);
     err = f(name, required, value, NULL);
     if (err != CL_SUCCESS) {
         return err;
@@ -1183,7 +1184,7 @@ inline cl_int getInfoHelper(Func f, cl_uint name, STRING_CLASS* param, long)
         return err;
     }
 
-    char* value = (char*) alloca(required);
+    char* value = (char*) Alloca(required);
     err = f(name, required, value, NULL);
     if (err != CL_SUCCESS) {
         return err;
@@ -1203,7 +1204,7 @@ inline cl_int getInfoHelper(Func f, cl_uint name, size_t<N>* param, long)
         return err;
     }
 
-    ::size_t* value = (::size_t*) alloca(required);
+    ::size_t* value = (::size_t*) Alloca(required);
     err = f(name, required, value, NULL);
     if (err != CL_SUCCESS) {
         return err;
@@ -1701,7 +1702,7 @@ static cl_uint getPlatformVersion(cl_platform_id platform)
 {
     ::size_t size = 0;
     clGetPlatformInfo(platform, CL_PLATFORM_VERSION, 0, NULL, &size);
-    char *versionInfo = (char *) alloca(size);
+    char *versionInfo = (char *) Alloca(size);
     clGetPlatformInfo(platform, CL_PLATFORM_VERSION, size, &versionInfo[0], &size);
     return getVersion(versionInfo);
 }
@@ -1722,7 +1723,7 @@ static cl_uint getContextPlatformVersion(cl_context context)
     clGetContextInfo(context, CL_CONTEXT_DEVICES, 0, NULL, &size);
     if (size == 0)
         return 0;
-    cl_device_id *devices = (cl_device_id *) alloca(size);
+    cl_device_id *devices = (cl_device_id *) Alloca(size);
     clGetContextInfo(context, CL_CONTEXT_DEVICES, size, devices, NULL);
     return getDevicePlatformVersion(devices[0]);
 }
@@ -2002,7 +2003,7 @@ public:
             return detail::errHandler(err, __CREATE_SUB_DEVICES);
         }
 
-        cl_device_id* ids = (cl_device_id*) alloca(n * sizeof(cl_device_id));
+        cl_device_id* ids = (cl_device_id*) Alloca(n * sizeof(cl_device_id));
         err = clCreateSubDevices(object_, properties, n, ids, NULL);
         if (err != CL_SUCCESS) {
             return detail::errHandler(err, __CREATE_SUB_DEVICES);
@@ -2039,7 +2040,7 @@ public:
             return detail::errHandler(err, __CREATE_SUB_DEVICES);
         }
 
-        cl_device_id* ids = (cl_device_id*) alloca(n * sizeof(cl_device_id));
+        cl_device_id* ids = (cl_device_id*) Alloca(n * sizeof(cl_device_id));
         err = pfn_clCreateSubDevicesEXT(object_, properties, n, ids, NULL);
         if (err != CL_SUCCESS) {
             return detail::errHandler(err, __CREATE_SUB_DEVICES);
@@ -2138,7 +2139,7 @@ public:
             return detail::errHandler(err, __GET_DEVICE_IDS_ERR);
         }
 
-        cl_device_id* ids = (cl_device_id*) alloca(n * sizeof(cl_device_id));
+        cl_device_id* ids = (cl_device_id*) Alloca(n * sizeof(cl_device_id));
         err = ::clGetDeviceIDs(object_, type, n, ids, NULL);
         if (err != CL_SUCCESS) {
             return detail::errHandler(err, __GET_DEVICE_IDS_ERR);
@@ -2207,7 +2208,7 @@ public:
             return detail::errHandler(err, __GET_DEVICE_IDS_ERR);
         }
 
-        cl_device_id* ids = (cl_device_id*) alloca(n * sizeof(cl_device_id));
+        cl_device_id* ids = (cl_device_id*) Alloca(n * sizeof(cl_device_id));
         err = pfn_clGetDeviceIDsFromD3D10KHR(
             object_, 
             d3d_device_source, 
@@ -2243,7 +2244,7 @@ public:
             return detail::errHandler(err, __GET_PLATFORM_IDS_ERR);
         }
 
-        cl_platform_id* ids = (cl_platform_id*) alloca(
+        cl_platform_id* ids = (cl_platform_id*) Alloca(
             n * sizeof(cl_platform_id));
         err = ::clGetPlatformIDs(n, ids, NULL);
         if (err != CL_SUCCESS) {
@@ -2272,7 +2273,7 @@ public:
             return detail::errHandler(err, __GET_PLATFORM_IDS_ERR);
         }
 
-        cl_platform_id* ids = (cl_platform_id*) alloca(
+        cl_platform_id* ids = (cl_platform_id*) Alloca(
             n * sizeof(cl_platform_id));
         err = ::clGetPlatformIDs(n, ids, NULL);
         if (err != CL_SUCCESS) {
@@ -2300,7 +2301,7 @@ public:
             }
         }
 
-        cl_platform_id* ids = (cl_platform_id*) alloca(
+        cl_platform_id* ids = (cl_platform_id*) Alloca(
             n * sizeof(cl_platform_id));
         err = ::clGetPlatformIDs(n, ids, NULL);
 
@@ -2389,7 +2390,7 @@ public:
         cl_int error;
 
         ::size_t numDevices = devices.size();
-        cl_device_id* deviceIDs = (cl_device_id*) alloca(numDevices * sizeof(cl_device_id));
+        cl_device_id* deviceIDs = (cl_device_id*) Alloca(numDevices * sizeof(cl_device_id));
         for( ::size_t deviceIndex = 0; deviceIndex < numDevices; ++deviceIndex ) {
             deviceIDs[deviceIndex] = (devices[deviceIndex])();
         }
@@ -2609,7 +2610,7 @@ public:
         }
 
         ImageFormat* value = (ImageFormat*)
-            alloca(numEntries * sizeof(ImageFormat));
+            Alloca(numEntries * sizeof(ImageFormat));
         err = ::clGetSupportedImageFormats(
             object_, 
             flags, 
@@ -4317,8 +4318,8 @@ public:
         cl_int error;
 
         const ::size_t n = (::size_t)sources.size();
-        ::size_t* lengths = (::size_t*) alloca(n * sizeof(::size_t));
-        const char** strings = (const char**) alloca(n * sizeof(const char*));
+        ::size_t* lengths = (::size_t*) Alloca(n * sizeof(::size_t));
+        const char** strings = (const char**) Alloca(n * sizeof(const char*));
 
         for (::size_t i = 0; i < n; ++i) {
             strings[i] = sources[(int)i].first;
@@ -4374,15 +4375,15 @@ public:
             return;
         }
 
-        ::size_t* lengths = (::size_t*) alloca(numDevices * sizeof(::size_t));
-        const unsigned char** images = (const unsigned char**) alloca(numDevices * sizeof(const unsigned char**));
+        ::size_t* lengths = (::size_t*) Alloca(numDevices * sizeof(::size_t));
+        const unsigned char** images = (const unsigned char**) Alloca(numDevices * sizeof(const unsigned char**));
 
         for (::size_t i = 0; i < numDevices; ++i) {
             images[i] = (const unsigned char*)binaries[i].first;
             lengths[i] = binaries[(int)i].second;
         }
 
-        cl_device_id* deviceIDs = (cl_device_id*) alloca(numDevices * sizeof(cl_device_id));
+        cl_device_id* deviceIDs = (cl_device_id*) Alloca(numDevices * sizeof(cl_device_id));
         for( ::size_t deviceIndex = 0; deviceIndex < numDevices; ++deviceIndex ) {
             deviceIDs[deviceIndex] = (devices[deviceIndex])();
         }
@@ -4420,7 +4421,7 @@ public:
 
 
         ::size_t numDevices = devices.size();
-        cl_device_id* deviceIDs = (cl_device_id*) alloca(numDevices * sizeof(cl_device_id));
+        cl_device_id* deviceIDs = (cl_device_id*) Alloca(numDevices * sizeof(cl_device_id));
         for( ::size_t deviceIndex = 0; deviceIndex < numDevices; ++deviceIndex ) {
             deviceIDs[deviceIndex] = (devices[deviceIndex])();
         }
@@ -4466,7 +4467,7 @@ public:
         void* data = NULL) const
     {
         ::size_t numDevices = devices.size();
-        cl_device_id* deviceIDs = (cl_device_id*) alloca(numDevices * sizeof(cl_device_id));
+        cl_device_id* deviceIDs = (cl_device_id*) Alloca(numDevices * sizeof(cl_device_id));
         for( ::size_t deviceIndex = 0; deviceIndex < numDevices; ++deviceIndex ) {
             deviceIDs[deviceIndex] = (devices[deviceIndex])();
         }
@@ -4572,7 +4573,7 @@ public:
             return detail::errHandler(err, __CREATE_KERNELS_IN_PROGRAM_ERR);
         }
 
-        Kernel* value = (Kernel*) alloca(numKernels * sizeof(Kernel));
+        Kernel* value = (Kernel*) Alloca(numKernels * sizeof(Kernel));
         err = ::clCreateKernelsInProgram(
             object_, numKernels, (cl_kernel*) value, NULL);
         if (err != CL_SUCCESS) {
@@ -4627,7 +4628,7 @@ inline Program linkProgram(
 {
     cl_int err_local = CL_SUCCESS;
 
-    cl_program * programs = (cl_program*) alloca(inputPrograms.size() * sizeof(cl_program));
+    cl_program * programs = (cl_program*) Alloca(inputPrograms.size() * sizeof(cl_program));
 
     if (programs != NULL) {
         for (unsigned int i = 0; i < inputPrograms.size(); i++) {
@@ -5452,7 +5453,7 @@ public:
     {
         cl_event tmp;
         
-        cl_mem* localMemObjects = static_cast<cl_mem*>(alloca(memObjects.size() * sizeof(cl_mem)));
+        cl_mem* localMemObjects = static_cast<cl_mem*>(Alloca(memObjects.size() * sizeof(cl_mem)));
         for( int i = 0; i < (int)memObjects.size(); ++i ) {
             localMemObjects[i] = memObjects[i]();
         }
@@ -5531,7 +5532,7 @@ public:
         Event* event = NULL) const
     {
         cl_mem * mems = (mem_objects != NULL && mem_objects->size() > 0) 
-            ? (cl_mem*) alloca(mem_objects->size() * sizeof(cl_mem))
+            ? (cl_mem*) Alloca(mem_objects->size() * sizeof(cl_mem))
             : NULL;
 
         if (mems != NULL) {
