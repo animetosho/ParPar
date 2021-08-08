@@ -20,6 +20,17 @@
 }
 #ifdef __SSE2__
 #include <emmintrin.h>
+#define md5_init_lane_x2_sse(state, idx) { \
+	__m128i* state_ = (__m128i*)state; \
+	state_[0] = _mm_insert_epi16(state_[0], 0x2301, idx*4); \
+	state_[0] = _mm_insert_epi16(state_[0], 0x6745, idx*4 + 1); \
+	state_[1] = _mm_insert_epi16(state_[1], 0xab89, idx*4); \
+	state_[1] = _mm_insert_epi16(state_[1], 0xefcd, idx*4 + 1); \
+	state_[2] = _mm_insert_epi16(state_[2], 0xdcfe, idx*4); \
+	state_[2] = _mm_insert_epi16(state_[2], 0x98ba, idx*4 + 1); \
+	state_[3] = _mm_insert_epi16(state_[3], 0x5476, idx*4); \
+	state_[3] = _mm_insert_epi16(state_[3], 0x1032, idx*4 + 1); \
+}
 // simulate a 32b rotate by duplicating lanes and doing a single 64b shift
 #define ROTATE(a, r) _mm_srli_epi64(_mm_shuffle_epi32(a, _MM_SHUFFLE(2,2,0,0)), 32-r)
 #define _FN(f) f##_sse
@@ -54,25 +65,10 @@ static HEDLEY_ALWAYS_INLINE void md5_extract_x2_sse(void* dst, void* state, cons
 		_mm_storeu_ps((float*)dst, _mm_shuffle_ps(tmp1, tmp2, _MM_SHUFFLE(3,1,3,1)));
 	}
 }
-#define md5_init_lane_x2_sse(state, idx) { \
-	__m128i* state_ = (__m128i*)state; \
-	state_[0] = _mm_insert_epi16(state_[0], 0x2301, idx*4); \
-	state_[0] = _mm_insert_epi16(state_[0], 0x6745, idx*4 + 1); \
-	state_[1] = _mm_insert_epi16(state_[1], 0xab89, idx*4); \
-	state_[1] = _mm_insert_epi16(state_[1], 0xefcd, idx*4 + 1); \
-	state_[2] = _mm_insert_epi16(state_[2], 0xdcfe, idx*4); \
-	state_[2] = _mm_insert_epi16(state_[2], 0x98ba, idx*4 + 1); \
-	state_[3] = _mm_insert_epi16(state_[3], 0x5476, idx*4); \
-	state_[3] = _mm_insert_epi16(state_[3], 0x1032, idx*4 + 1); \
-}
 #endif
 
 
 #ifdef __AVX__
-# define _FN(f) f##_avx
-# include "md5x2-base.h"
-# undef _FN
-# define md5_extract_x2_avx md5_extract_x2_sse
 #define md5_init_lane_x2_avx(state, idx) { \
 	__m128i* state_ = (__m128i*)state; \
 	state_[0] = _mm_insert_epi32(state_[0], 0x67452301L, idx*2); \
@@ -80,6 +76,10 @@ static HEDLEY_ALWAYS_INLINE void md5_extract_x2_sse(void* dst, void* state, cons
 	state_[2] = _mm_insert_epi32(state_[2], 0x98badcfeL, idx*2); \
 	state_[3] = _mm_insert_epi32(state_[3], 0x10325476L, idx*2); \
 }
+# define _FN(f) f##_avx
+# include "md5x2-base.h"
+# undef _FN
+# define md5_extract_x2_avx md5_extract_x2_sse
 #endif
 #ifdef ROTATE
 # undef ROTATE
@@ -91,6 +91,7 @@ static HEDLEY_ALWAYS_INLINE void md5_extract_x2_sse(void* dst, void* state, cons
 
 #ifdef __AVX512VL__
 #include <immintrin.h>
+#define md5_init_lane_x2_avx512 md5_init_lane_x2_avx
 #define ROTATE _mm_rol_epi32
 #define _FN(f) f##_avx512
 
@@ -109,7 +110,6 @@ static HEDLEY_ALWAYS_INLINE void md5_extract_x2_sse(void* dst, void* state, cons
 #undef ROTATE
 
 #define md5_extract_x2_avx512 md5_extract_x2_sse
-#define md5_init_lane_x2_avx512 md5_init_lane_x2_avx
 #endif
 
 
