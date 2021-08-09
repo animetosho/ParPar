@@ -2,7 +2,7 @@
 #include "gf16_sve_common.h"
 
 // only support our target polynomial
-#if defined(__ARM_FEATURE_SVE) && (GF16_POLYNOMIAL | 0x1f) == 0x1101f
+#if defined(__ARM_FEATURE_SVE) && (GF16_POLYNOMIAL | 0x1f) == 0x1101f && __BYTE_ORDER__ != __ORDER_BIG_ENDIAN__
 int gf16_available_sve = 1;
 #else
 int gf16_available_sve = 0;

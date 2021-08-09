@@ -1,7 +1,6 @@
 
+#if defined(__ARM_FEATURE_SVE2) && __BYTE_ORDER__ != __ORDER_BIG_ENDIAN__
 #include <arm_sve.h>
-
-#ifdef __ARM_FEATURE_SVE2
 
 // have found Clang 11 to mis-compile this, but works on 12
 #if defined(__clang__) && __clang_major__ < 12 && defined(__OPTIMIZE__)
