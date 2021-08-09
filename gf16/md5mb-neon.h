@@ -8,8 +8,14 @@
 #define INPUT(k, set, ptr, offs, idx, var) ADD(var, VAL(k))
 #define LOAD INPUT
 #define LOAD4(set, ptr, offs, idx, var0, var1, var2, var3) { \
-	uint32x4x2_t in01 = vzipq_u32(vld1q_u32((uint32_t*)(ptr[0+set*4] + offs + idx*4)), vld1q_u32((uint32_t*)(ptr[1+set*4] + offs + idx*4))); \
-	uint32x4x2_t in23 = vzipq_u32(vld1q_u32((uint32_t*)(ptr[2+set*4] + offs + idx*4)), vld1q_u32((uint32_t*)(ptr[3+set*4] + offs + idx*4))); \
+	uint32x4x2_t in01 = vzipq_u32( \
+		vreinterpretq_u32_u8(vld1q_u8((uint8_t*)ptr[0+set*4] + offs + idx*4)), \
+		vreinterpretq_u32_u8(vld1q_u8((uint8_t*)ptr[1+set*4] + offs + idx*4)) \
+	); \
+	uint32x4x2_t in23 = vzipq_u32( \
+		vreinterpretq_u32_u8(vld1q_u8((uint8_t*)ptr[2+set*4] + offs + idx*4)), \
+		vreinterpretq_u32_u8(vld1q_u8((uint8_t*)ptr[3+set*4] + offs + idx*4)) \
+	); \
 	var0 = vcombine_u32(vget_low_u32(in01.val[0]), vget_low_u32(in23.val[0])); \
 	var1 = vcombine_u32(vget_high_u32(in01.val[0]), vget_high_u32(in23.val[0])); \
 	var2 = vcombine_u32(vget_low_u32(in01.val[1]), vget_low_u32(in23.val[1])); \
@@ -62,12 +68,12 @@ static HEDLEY_ALWAYS_INLINE void md5_extract_mb_neon(void* dst, void* state, int
 	
 	idx &= 3;
 	if(idx == 0)
-		vst1q_u32((uint32_t*)dst, vcombine_u32(vget_low_u32(tmp1.val[0]), vget_low_u32(tmp2.val[0])));
+		vst1q_u8((uint8_t*)dst, vreinterpretq_u8_u32(vcombine_u32(vget_low_u32(tmp1.val[0]), vget_low_u32(tmp2.val[0]))));
 	if(idx == 1)
-		vst1q_u32((uint32_t*)dst, vcombine_u32(vget_high_u32(tmp1.val[0]), vget_high_u32(tmp2.val[0])));
+		vst1q_u8((uint8_t*)dst, vreinterpretq_u8_u32(vcombine_u32(vget_high_u32(tmp1.val[0]), vget_high_u32(tmp2.val[0]))));
 	if(idx == 2)
-		vst1q_u32((uint32_t*)dst, vcombine_u32(vget_low_u32(tmp1.val[1]), vget_low_u32(tmp2.val[1])));
+		vst1q_u8((uint8_t*)dst, vreinterpretq_u8_u32(vcombine_u32(vget_low_u32(tmp1.val[1]), vget_low_u32(tmp2.val[1]))));
 	if(idx == 3)
-		vst1q_u32((uint32_t*)dst, vcombine_u32(vget_high_u32(tmp1.val[1]), vget_high_u32(tmp2.val[1])));
+		vst1q_u8((uint8_t*)dst, vreinterpretq_u8_u32(vcombine_u32(vget_high_u32(tmp1.val[1]), vget_high_u32(tmp2.val[1]))));
 }
 #endif

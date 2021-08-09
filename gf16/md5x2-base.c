@@ -54,5 +54,13 @@ void md5_final_block(void* state, const void *HEDLEY_RESTRICT data, uint64_t tot
 			loopState = 1;
 		}
 	}
+	
+#if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+	uint32_t* hash = (uint32_t*)state;
+	hash[0] = BSWAP(hash[0]);
+	hash[1] = BSWAP(hash[1]);
+	hash[2] = BSWAP(hash[2]);
+	hash[3] = BSWAP(hash[3]);
+#endif
 }
 

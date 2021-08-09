@@ -50,6 +50,19 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_x2_scalar(uint32_t* state, co
 # define ORN1(dst, src1, src2) "mvn " dst ", " src2 "\n"
 # define ORN2(dst, src1, src2) "orr " dst ", " dst ", " src1 "\n"
 #endif
+
+#if __BYTE_ORDER__ != __ORDER_BIG_ENDIAN__
+# define LD2(NEXT_IN1, NEXT_IN2) \
+	"ldr " REG(TMP1) ", " NEXT_IN1 "\n" \
+	"ldr " REG(TMP2) ", " NEXT_IN2 "\n"
+#else
+# define LD2(NEXT_IN1, NEXT_IN2) \
+	"ldr " REG(TMP1) ", " NEXT_IN1 "\n" \
+	"ldr " REG(TMP2) ", " NEXT_IN2 "\n" \
+	"rev " REG(TMP1) ", " REG(TMP1) "\n" \
+	"rev " REG(TMP2) ", " REG(TMP2) "\n"
+#endif
+
 #define ROUND_F(A1, B1, C1, D1, A2, B2, C2, D2, NEXT_IN1, NEXT_IN2, KL, KH, R) \
 	"add " REG(A1) ", " REG(A1) ", " REG(TMP1) "\n" \
 	SETI_L("TMP1", KL) \
@@ -65,8 +78,7 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_x2_scalar(uint32_t* state, co
 	"eor " REG(TMP1) ", " REG(TMP1) ", " REG(D1) "\n" \
 	"add " REG(A2) ", " REG(A2) ", " REG(TMP2) "\n" \
 	"add " REG(A1) ", " REG(A1) ", " REG(TMP1) "\n" \
-	"ldr " REG(TMP1) ", " NEXT_IN1 "\n" \
-	"ldr " REG(TMP2) ", " NEXT_IN2 "\n" \
+	LD2(NEXT_IN1, NEXT_IN2) \
 	ROR_ADD(A1, B1, A2, B2, R)
 #define ROUND_H(A1, B1, C1, D1, A2, B2, C2, D2, NEXT_IN1, NEXT_IN2, KL, KH, R) \
 	"add " REG(A1) ", " REG(A1) ", " REG(TMP1) "\n" \
@@ -81,8 +93,7 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_x2_scalar(uint32_t* state, co
 	"eor " REG(TMP1) ", " REG(TMP1) ", " REG(B1) "\n" \
 	"add " REG(A2) ", " REG(A2) ", " REG(TMP2) "\n" \
 	"add " REG(A1) ", " REG(A1) ", " REG(TMP1) "\n" \
-	"ldr " REG(TMP1) ", " NEXT_IN1 "\n" \
-	"ldr " REG(TMP2) ", " NEXT_IN2 "\n" \
+	LD2(NEXT_IN1, NEXT_IN2) \
 	ROR_ADD(A1, B1, A2, B2, R)
 #define ROUND_I(A1, B1, C1, D1, A2, B2, C2, D2, NEXT_IN1, NEXT_IN2, KL, KH, R) \
 	"add " REG(A1) ", " REG(A1) ", " REG(TMP1) "\n" \
@@ -99,8 +110,7 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_x2_scalar(uint32_t* state, co
 	"eor " REG(TMP1) ", " REG(TMP1) ", " REG(C1) "\n" \
 	"add " REG(A2) ", " REG(A2) ", " REG(TMP2) "\n" \
 	"add " REG(A1) ", " REG(A1) ", " REG(TMP1) "\n" \
-	"ldr " REG(TMP1) ", " NEXT_IN1 "\n" \
-	"ldr " REG(TMP2) ", " NEXT_IN2 "\n" \
+	LD2(NEXT_IN1, NEXT_IN2) \
 	ROR_ADD(A1, B1, A2, B2, R)
 #define ROUND_I_LAST(A1, B1, C1, D1, A2, B2, C2, D2, KL, KH, R) \
 	"add " REG(A1) ", " REG(A1) ", " REG(TMP1) "\n" \
@@ -134,8 +144,7 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_x2_scalar(uint32_t* state, co
 	"and " REG(TMP1) ", " REG(B1) ", " REG(D1) "\n" \
 	"add " REG(A2) ", " REG(A2) ", " REG(TMP2) "\n" \
 	"add " REG(A1) ", " REG(A1) ", " REG(TMP1) "\n" \
-	"ldr " REG(TMP1) ", " NEXT_IN1 "\n" \
-	"ldr " REG(TMP2) ", " NEXT_IN2 "\n" \
+	LD2(NEXT_IN1, NEXT_IN2) \
 	ROR_ADD(A1, B1, A2, B2, R)
 
 #define RF4(i0, i1, i2, i3, k0l, k0h, k1l, k1h, k2l, k2h, k3l, k3h) \
@@ -165,6 +174,10 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_x2_scalar(uint32_t* state, co
 	asm(
 		"ldr " REG(TMP1) ", [%[i0]]\n"
 		"ldr " REG(TMP2) ", [%[i1]]\n"
+#if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+		"rev " REG(TMP1) ", " REG(TMP1) "\n"
+		"rev " REG(TMP2) ", " REG(TMP2) "\n"
+#endif
 		RF4( 4,  8, 12, 16,  0xa478, 0xd76a, 0xb756, 0xe8c7, 0x70db, 0x2420, 0xceee, 0xc1bd)
 		RF4(20, 24, 28, 32,  0x0faf, 0xf57c, 0xc62a, 0x4787, 0x4613, 0xa830, 0x9501, 0xfd46)
 		RF4(36, 40, 44, 48,  0x98d8, 0x6980, 0xf7af, 0x8b44, 0x5bb1, 0xffff, 0xd7be, 0x895c)

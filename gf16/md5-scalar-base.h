@@ -11,7 +11,7 @@
 # define LOAD(k, set, ptr, offs, idx, var) (memcpy(&var, ((uint32_t*)(ptr[set])) + idx, 4), var + k)
 #else
 /* big-endian -> need to byteswap */
-# define BSWAP(v) (((v&0xff) << 24) | ((v&0xff00) << 8) | ((v>>8) & 0xff00) | (v>>24))
+# define BSWAP(v) ((((v)&0xff) << 24) | (((v)&0xff00) << 8) | (((v)>>8) & 0xff00) | (((v)>>24) & 0xff))
 # define LOAD(k, set, ptr, offs, idx, var) (memcpy(&var, ((uint32_t*)(ptr[set])) + idx, 4), var = BSWAP(var), var + k)
 #endif
 

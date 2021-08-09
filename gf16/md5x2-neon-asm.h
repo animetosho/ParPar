@@ -235,12 +235,12 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_x2_neon(uint32x2_t* state, co
 	ROUND_I(B, C, D, A, "d15", 11, 21)
 	
 	asm(
-		"vld1.32 {d16-d19}, [%[i0]]\n"
+		"vld1.8 {d16-d19}, [%[i0]]\n"
 		"add r4, %[i0], #32\n"
-		"vld1.32 {d24-d27}, [%[i1]]\n"
+		"vld1.8 {d24-d27}, [%[i1]]\n"
 		"add r5, %[i1], #32\n"
-		"vld1.32 {d20-d23}, [r4]\n"
-		"vld1.32 {d28-d31}, [r5]\n"
+		"vld1.8 {d20-d23}, [r4]\n"
+		"vld1.8 {d28-d31}, [r5]\n"
 		RF4("q8", "q12")
 		RF4("q9", "q13")
 		RF4("q10", "q14")

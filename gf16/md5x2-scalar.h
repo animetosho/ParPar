@@ -48,12 +48,5 @@ static HEDLEY_ALWAYS_INLINE void md5_init_lane_x2_scalar(void* state, const int 
 #endif
 
 static HEDLEY_ALWAYS_INLINE void md5_extract_x2_scalar(void* dst, void* state, const int idx) {
-#if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
-	uint32_t* state_ = (uint32_t*)state + idx*4;
-	uint32_t* dst_ = (uint32_t*)dst;
-	for(int i=0; i<4; i++)
-		dst_[i] = BSWAP(state_[i]);
-#else
 	memcpy(dst, (uint32_t*)state + idx*4, 16);
-#endif
 }
