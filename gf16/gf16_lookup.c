@@ -679,7 +679,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_lookup_checksum_zeroes(void *HEDLEY_RESTRI
 	}
 }
 
-static HEDLEY_ALWAYS_INLINE void gf16_lookup_checksum_prepare(void *HEDLEY_RESTRICT dst, void *HEDLEY_RESTRICT checksum, const size_t blockLen, gf16_prepare_block prepareBlock) {
+static HEDLEY_ALWAYS_INLINE void gf16_lookup_checksum_prepare(void *HEDLEY_RESTRICT dst, void *HEDLEY_RESTRICT checksum, const size_t blockLen, gf16_transform_block prepareBlock) {
 	UNUSED(prepareBlock);
 	memset(dst, 0, blockLen);
 	if(sizeof(uintptr_t) >= 8)
@@ -689,7 +689,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_lookup_checksum_prepare(void *HEDLEY_RESTR
 	else
 		*(uint16_t*)dst = SWAP16(*(uint16_t*)checksum);
 }
-static HEDLEY_ALWAYS_INLINE int gf16_lookup_checksum_finish(const void *HEDLEY_RESTRICT src, void *HEDLEY_RESTRICT checksum, const size_t blockLen, gf16_finish_copy_block finishBlock) {
+static HEDLEY_ALWAYS_INLINE int gf16_lookup_checksum_finish(const void *HEDLEY_RESTRICT src, void *HEDLEY_RESTRICT checksum, const size_t blockLen, gf16_transform_block finishBlock) {
 	UNUSED(blockLen); UNUSED(finishBlock);
 	if(sizeof(uintptr_t) >= 8)
 		return *(uint64_t*)src == SWAP64(*(uint64_t*)checksum);
@@ -722,7 +722,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_lookup3_prepare_blocku(void *HEDLEY_RESTRI
 	memcpy(&data, src, remaining);
 	gf16_lookup3_prepare_block(dst, &data);
 }
-static HEDLEY_ALWAYS_INLINE void gf16_lookup3_checksum_prepare(void *HEDLEY_RESTRICT dst, void *HEDLEY_RESTRICT checksum, const size_t blockLen, gf16_prepare_block prepareBlock) {
+static HEDLEY_ALWAYS_INLINE void gf16_lookup3_checksum_prepare(void *HEDLEY_RESTRICT dst, void *HEDLEY_RESTRICT checksum, const size_t blockLen, gf16_transform_block prepareBlock) {
 	UNUSED(prepareBlock);
 	gf16_lookup3_prepare_block(dst, checksum);
 	memset((char*)dst+gf16_lookup3_stride(), 0, blockLen-gf16_lookup3_stride());

@@ -173,7 +173,7 @@ static HEDLEY_ALWAYS_INLINE void _FN(gf16_checksum_prepare)(void *HEDLEY_RESTRIC
 	}
 #undef _X
 }
-static HEDLEY_ALWAYS_INLINE int _FN(gf16_checksum_finish)(const void *HEDLEY_RESTRICT src, void *HEDLEY_RESTRICT checksum, const size_t blockLen, gf16_finish_copy_block finishBlock) {
+static HEDLEY_ALWAYS_INLINE int _FN(gf16_checksum_finish)(const void *HEDLEY_RESTRICT src, void *HEDLEY_RESTRICT checksum, const size_t blockLen, gf16_transform_block finishBlock) {
 #define _X(bl) \
 	ALIGN_TO(MWORD_SIZE, uint8_t tmp[bl]); \
 	finishBlock(tmp, src); \
