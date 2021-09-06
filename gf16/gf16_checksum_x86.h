@@ -86,6 +86,14 @@ static inline _mword partial_load(const void* ptr, size_t bytes) {
 #endif
 }
 
+static inline void partial_store(void* ptr, _mword data, size_t bytes) {
+#if MWORD_SIZE == 64
+	_mm512_mask_storeu_epi8(ptr, (1ULL<<bytes)-1, data);
+#else
+	memcpy(ptr, &data, bytes);
+#endif
+}
+
 static HEDLEY_ALWAYS_INLINE void _FN(gf16_checksum_blocku)(const void *HEDLEY_RESTRICT src, size_t amount, void *HEDLEY_RESTRICT checksum) {
 	_mword v = *(_mword*)checksum;
 	v = _FN(gf16_vec_mul2)(v);
@@ -148,7 +156,7 @@ static HEDLEY_ALWAYS_INLINE int _FN(gf16_checksum_vec_isequal)(_mword a, _mword 
 #endif
 }
 
-static HEDLEY_ALWAYS_INLINE void _FN(gf16_checksum_prepare)(void *HEDLEY_RESTRICT dst, void *HEDLEY_RESTRICT checksum, const size_t blockLen, gf16_prepare_block prepareBlock) {
+static HEDLEY_ALWAYS_INLINE void _FN(gf16_checksum_prepare)(void *HEDLEY_RESTRICT dst, void *HEDLEY_RESTRICT checksum, const size_t blockLen, gf16_transform_block prepareBlock) {
 	// because some compilers don't like `tmp[blockLen]` despite blockLen being constant, just implement every possibility
 #define _X(bl) \
 	ALIGN_TO(MWORD_SIZE, uint8_t tmp[bl]) = {0}; \

@@ -178,7 +178,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_lookup_prepare_block_sse2(void *HEDLEY_RES
 	_mm_store_si128((__m128i*)dst, _mm_loadu_si128(src));
 }
 static HEDLEY_ALWAYS_INLINE void gf16_lookup_finish_block_sse2(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src) {
-	_mm_store_si128((__m128i*)dst, _mm_load_si128(src));
+	_mm_storeu_si128((__m128i*)dst, _mm_load_si128(src));
 }
 static HEDLEY_ALWAYS_INLINE void gf16_lookup_prepare_blocku(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t remaining) {
 	memcpy(dst, src, remaining);
@@ -216,7 +216,7 @@ void gf16_lookup_prepare_packed_cksum_sse2(void *HEDLEY_RESTRICT dst, const void
 int gf16_lookup_finish_packed_cksum_sse2(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t sliceLen, unsigned numOutputs, unsigned outputNum, size_t chunkLen) {
 #ifdef __SSE2__
 	__m128i checksum = _mm_setzero_si128();
-	return gf16_finish_packed(dst, src, sliceLen, sizeof(__m128i), &gf16_lookup_finish_block_sse2, numOutputs, outputNum, chunkLen, 1, &checksum, &gf16_checksum_block_sse2, &gf16_checksum_finish_sse2);
+	return gf16_finish_packed(dst, src, sliceLen, sizeof(__m128i), &gf16_lookup_finish_block_sse2, &gf16_copy_blocku, numOutputs, outputNum, chunkLen, 1, &checksum, &gf16_checksum_block_sse2, &gf16_checksum_finish_sse2);
 #else
 	UNUSED(dst); UNUSED(src); UNUSED(sliceLen); UNUSED(numOutputs); UNUSED(outputNum); UNUSED(chunkLen);
 	return 0;

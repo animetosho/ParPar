@@ -54,6 +54,7 @@ HEDLEY_ALWAYS_INLINE void gf16_finish(void *HEDLEY_RESTRICT dst, size_t len, con
 		finishBlock(_dst+ptr);
 }
 
+void gf16_copy_blocku(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len);
 
 #include <assert.h>
 #include <string.h>
@@ -166,7 +167,7 @@ HEDLEY_ALWAYS_INLINE void gf16_prepare_packed(
 }
 
 HEDLEY_ALWAYS_INLINE int gf16_finish_packed(
-	void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t sliceLen, const size_t blockLen, gf16_transform_block finishBlock,
+	void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t sliceLen, const size_t blockLen, gf16_transform_block finishBlock, gf16_transform_blocku finishBlockU,
 	unsigned numOutputs, unsigned outputNum, size_t chunkLen, const unsigned interleaveSize,
 	void *HEDLEY_RESTRICT checksum, gf16_checksum_block checksumBlock, gf16_finish_checksum finishChecksum
 ) {

@@ -53,6 +53,22 @@ static HEDLEY_ALWAYS_INLINE void _FN(gf16_shuffle_finish_copy_block)(void *HEDLE
 	_mword ta = _MMI(load)((_mword*)src);
 	_mword tb = _MMI(load)((_mword*)src + 1);
 
-	_MMI(store)((_mword*)dst, _MM(unpacklo_epi8)(tb, ta));
-	_MMI(store)((_mword*)dst + 1, _MM(unpackhi_epi8)(tb, ta));
+	_MMI(storeu)((_mword*)dst, _MM(unpacklo_epi8)(tb, ta));
+	_MMI(storeu)((_mword*)dst + 1, _MM(unpackhi_epi8)(tb, ta));
+}
+
+static HEDLEY_ALWAYS_INLINE void _FN(gf16_shuffle_finish_copy_blocku)(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t bytes) {
+	_mword ta = _MMI(load)((_mword*)src);
+	_mword tb = _MMI(load)((_mword*)src + 1);
+	
+	_mword a = _MM(unpacklo_epi8)(tb, ta);
+	_mword b = _MM(unpackhi_epi8)(tb, ta);
+	
+	if(bytes & sizeof(_mword)) {
+		_MMI(storeu)((_mword*)dst, a);
+		bytes ^= sizeof(_mword);
+		if(bytes)
+			partial_store((_mword*)dst + 1, b, bytes);
+	} else
+		partial_store(dst, a, bytes);
 }

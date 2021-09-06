@@ -706,6 +706,9 @@ static HEDLEY_ALWAYS_INLINE void gf16_lookup_prepare_blocku(void *HEDLEY_RESTRIC
 	memcpy(dst, src, remaining);
 	memset((char*)dst + remaining, 0, gf16_lookup_stride()-remaining);
 }
+void gf16_copy_blocku(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len) {
+	memcpy(dst, src, len);
+}
 
 static HEDLEY_ALWAYS_INLINE void gf16_lookup3_prepare_block(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src) {
 	// pack bits so that we have: 0...10,16...26,11...15,27...31
@@ -742,5 +745,5 @@ void gf16_lookup3_prepare_packed_cksum(void *HEDLEY_RESTRICT dst, const void *HE
 }
 int gf16_lookup_finish_packed_cksum(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t sliceLen, unsigned numOutputs, unsigned outputNum, size_t chunkLen) {
 	uintptr_t checksum = 0;
-	return gf16_finish_packed(dst, src, sliceLen, gf16_lookup_stride(), &gf16_lookup_copy_block, numOutputs, outputNum, chunkLen, 1, &checksum, &gf16_lookup_checksum_block, &gf16_lookup_checksum_finish);
+	return gf16_finish_packed(dst, src, sliceLen, gf16_lookup_stride(), &gf16_lookup_copy_block, &gf16_copy_blocku, numOutputs, outputNum, chunkLen, 1, &checksum, &gf16_lookup_checksum_block, &gf16_lookup_checksum_finish);
 }
