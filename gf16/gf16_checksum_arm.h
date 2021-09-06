@@ -110,7 +110,7 @@ static HEDLEY_ALWAYS_INLINE int gf16_checksum_finish_neon(const void *HEDLEY_RES
 	
 	uint8x16_t cmp = veorq_u8(data, gf16_checksum_load(checksum));
 # ifdef __aarch64__
-	return !(vget_lane_u64(vreinterpretq_u64_u32(vqmovn_u64(vreinterpretq_u64_u8(cmp))), 0));
+	return !(vget_lane_u64(vreinterpret_u64_u32(vqmovn_u64(vreinterpretq_u64_u8(cmp))), 0));
 # else
 	uint32x4_t tmp1 = vreinterpretq_u32_u8(cmp);
 	uint32x2_t tmp2 = vorr_u32(vget_low_u32(tmp1), vget_high_u32(tmp1));
