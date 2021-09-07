@@ -1170,7 +1170,7 @@ void gf16_xor_finish_copy_blocku_avx512(void *HEDLEY_RESTRICT dst, const void* H
 #define _mword __m512i
 #define _MM(f) _mm512_ ## f
 #define _MMI(f) _mm512_ ## f ## _si512
-#define _FN(f) f ## _avx512
+#define _FNSUFFIX _avx512
 #define _MM_END _mm256_zeroupper();
 
 #if defined(__AVX512BW__) && defined(__AVX512VL__) && defined(PLATFORM_AMD64)
@@ -1184,30 +1184,15 @@ void gf16_xor_finish_copy_blocku_avx512(void *HEDLEY_RESTRICT dst, const void* H
 #undef _mword
 #undef _MM
 #undef _MMI
-#undef _FN
+#undef _FNSUFFIX
 #undef _MM_END
 
 
-void gf16_xor_finish_packed_avx512(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t sliceLen, unsigned numOutputs, unsigned outputNum, size_t chunkLen) {
 #if defined(__AVX512BW__) && defined(__AVX512VL__) && defined(PLATFORM_AMD64)
-	gf16_finish_packed(dst, src, sliceLen, sizeof(__m512i)*16, &gf16_xor_finish_copy_block_avx512, &gf16_xor_finish_copy_blocku_avx512, numOutputs, outputNum, chunkLen, 1, NULL, NULL, NULL, NULL);
-	_mm256_zeroupper();
+GF_FINISH_PACKED_FUNCS(gf16_xor, _avx512, sizeof(__m512i)*16, gf16_xor_finish_copy_block_avx512, gf16_xor_finish_copy_blocku_avx512, 1, _mm256_zeroupper(), __m512i checksum = _mm512_setzero_si512(), gf16_checksum_block_avx512, gf16_checksum_blocku_avx512, gf16_checksum_finish_avx512)
 #else
-	UNUSED(dst); UNUSED(src); UNUSED(sliceLen); UNUSED(numOutputs); UNUSED(outputNum); UNUSED(chunkLen);
+GF_FINISH_PACKED_FUNCS_STUB(gf16_xor, _avx512)
 #endif
-}
-
-int gf16_xor_finish_packed_cksum_avx512(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t sliceLen, unsigned numOutputs, unsigned outputNum, size_t chunkLen) {
-#if defined(__AVX512BW__) && defined(__AVX512VL__) && defined(PLATFORM_AMD64)
-	__m512i checksum = _mm512_setzero_si512();
-	int ret = gf16_finish_packed(dst, src, sliceLen, sizeof(__m512i)*16, &gf16_xor_finish_copy_block_avx512, &gf16_xor_finish_copy_blocku_avx512, numOutputs, outputNum, chunkLen, 1, &checksum, &gf16_checksum_block_avx512, &gf16_checksum_blocku_avx512, &gf16_checksum_finish_avx512);
-	_mm256_zeroupper();
-	return ret;
-#else
-	UNUSED(dst); UNUSED(src); UNUSED(sliceLen); UNUSED(numOutputs); UNUSED(outputNum); UNUSED(chunkLen);
-	return 0;
-#endif
-}
 
 
 void* gf16_xor_jit_init_avx512(int polynomial, int jitOptStrat) {

@@ -1136,7 +1136,7 @@ void gf16_xor_finish_copy_blocku_sse2(void *HEDLEY_RESTRICT dst, const void *HED
 #define _mword __m128i
 #define _MM(f) _mm_ ## f
 #define _MMI(f) _mm_ ## f ## _si128
-#define _FN(f) f ## _sse2
+#define _FNSUFFIX _sse2
 #define _MM_END
 
 #if defined(__SSE2__)
@@ -1150,27 +1150,15 @@ void gf16_xor_finish_copy_blocku_sse2(void *HEDLEY_RESTRICT dst, const void *HED
 #undef _mword
 #undef _MM
 #undef _MMI
-#undef _FN
+#undef _FNSUFFIX
 #undef _MM_END
 
 
-void gf16_xor_finish_packed_sse2(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t sliceLen, unsigned numOutputs, unsigned outputNum, size_t chunkLen) {
 #ifdef __SSE2__
-	gf16_finish_packed(dst, src, sliceLen, sizeof(__m128i)*16, &gf16_xor_finish_copy_block_sse2, &gf16_xor_finish_copy_blocku_sse2, numOutputs, outputNum, chunkLen, 1, NULL, NULL, NULL, NULL);
+GF_FINISH_PACKED_FUNCS(gf16_xor, _sse2, sizeof(__m128i)*16, gf16_xor_finish_copy_block_sse2, gf16_xor_finish_copy_blocku_sse2, 1, (void)0, __m128i checksum = _mm_setzero_si128(), gf16_checksum_block_sse2, gf16_checksum_blocku_sse2, gf16_checksum_finish_sse2)
 #else
-	UNUSED(dst); UNUSED(src); UNUSED(sliceLen); UNUSED(numOutputs); UNUSED(outputNum); UNUSED(chunkLen);
+GF_FINISH_PACKED_FUNCS_STUB(gf16_xor, _sse2)
 #endif
-}
-
-int gf16_xor_finish_packed_cksum_sse2(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t sliceLen, unsigned numOutputs, unsigned outputNum, size_t chunkLen) {
-#ifdef __SSE2__
-	__m128i checksum = _mm_setzero_si128();
-	return gf16_finish_packed(dst, src, sliceLen, sizeof(__m128i)*16, &gf16_xor_finish_copy_block_sse2, &gf16_xor_finish_copy_blocku_sse2, numOutputs, outputNum, chunkLen, 1, &checksum, &gf16_checksum_block_sse2, &gf16_checksum_blocku_sse2, &gf16_checksum_finish_sse2);
-#else
-	UNUSED(dst); UNUSED(src); UNUSED(sliceLen); UNUSED(numOutputs); UNUSED(outputNum); UNUSED(chunkLen);
-	return 0;
-#endif
-}
 
 
 #include "gf16_bitdep_init_sse2.h"

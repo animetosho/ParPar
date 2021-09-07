@@ -4,7 +4,7 @@
 #define _mword __m512i
 #define _MM(f) _mm512_ ## f
 #define _MMI(f) _mm512_ ## f ## _si512
-#define _FN(f) f ## _avx512
+#define _FNSUFFIX _avx512
 #ifdef __AVX512F__
 # define _AVAILABLE
 #endif
@@ -16,7 +16,7 @@
 #ifdef _AVAILABLE
 # undef _AVAILABLE
 #endif
-#undef _FN
+#undef _FNSUFFIX
 #undef _MMI
 #undef _MM
 #undef _mword

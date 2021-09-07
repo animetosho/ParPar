@@ -5,7 +5,7 @@
 #define _mword __m128i
 #define _MM(f) _mm_ ## f
 #define _MMI(f) _mm_ ## f ## _si128
-#define _FN(f) f ## _ssse3
+#define _FNSUFFIX _ssse3
 #define _MM_END
 
 #if defined(__SSSE3__)
@@ -18,7 +18,7 @@
 #undef _mword
 #undef _MM
 #undef _MMI
-#undef _FN
+#undef _FNSUFFIX
 #undef _MM_END
 
 

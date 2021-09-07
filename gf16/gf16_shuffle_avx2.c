@@ -5,7 +5,7 @@
 #define _mword __m256i
 #define _MM(f) _mm256_ ## f
 #define _MMI(f) _mm256_ ## f ## _si256
-#define _FN(f) f ## _avx2
+#define _FNSUFFIX _avx2
 #define _MM_END _mm256_zeroupper();
 
 #if defined(__AVX2__)
@@ -180,6 +180,6 @@ void gf16_shuffle2x_muladd_avx2(const void *HEDLEY_RESTRICT scratch, void *HEDLE
 #undef _mword
 #undef _MM
 #undef _MMI
-#undef _FN
+#undef _FNSUFFIX
 #undef _MM_END
 

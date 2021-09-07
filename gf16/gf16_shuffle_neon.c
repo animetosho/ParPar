@@ -338,23 +338,12 @@ void gf16_shuffle_prepare_packed_cksum_neon(void *HEDLEY_RESTRICT dst, const voi
 #endif
 }
 
-void gf16_shuffle_finish_packed_neon(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t sliceLen, unsigned numOutputs, unsigned outputNum, size_t chunkLen) {
-#if defined(__ARM_NEON)
-	gf16_finish_packed(dst, src, sliceLen, sizeof(uint8x16x2_t), &gf16_prepare_block_neon, &gf16_copy_blocku, numOutputs, outputNum, chunkLen, 1, NULL, NULL, NULL, NULL);
+#ifdef __ARM_NEON
+GF_FINISH_PACKED_FUNCS(gf16_shuffle, _neon, sizeof(uint8x16x2_t), gf16_prepare_block_neon, gf16_copy_blocku, 1, (void)0, uint8x16_t checksum = vdupq_n_u8(0), gf16_checksum_block_neon, gf16_checksum_blocku_neon, gf16_checksum_finish_neon)
 #else
-	UNUSED(dst); UNUSED(src); UNUSED(sliceLen); UNUSED(numOutputs); UNUSED(outputNum); UNUSED(chunkLen);
+GF_FINISH_PACKED_FUNCS_STUB(gf16_shuffle, _neon)
 #endif
-}
 
-int gf16_shuffle_finish_packed_cksum_neon(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t sliceLen, unsigned numOutputs, unsigned outputNum, size_t chunkLen) {
-#if defined(__ARM_NEON)
-	uint8x16_t checksum = vdupq_n_u8(0);
-	return gf16_finish_packed(dst, src, sliceLen, sizeof(uint8x16x2_t), &gf16_prepare_block_neon, &gf16_copy_blocku, numOutputs, outputNum, chunkLen, 1, &checksum, &gf16_checksum_block_neon, &gf16_checksum_blocku_neon, &gf16_checksum_finish_neon);
-#else
-	UNUSED(dst); UNUSED(src); UNUSED(sliceLen); UNUSED(numOutputs); UNUSED(outputNum); UNUSED(chunkLen);
-	return 0;
-#endif
-}
 
 
 void* gf16_shuffle_init_arm(int polynomial) {

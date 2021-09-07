@@ -861,8 +861,8 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			add_multi_packpf = &gf_add_multi_packpf_lookup3;
 			prepare_packed = &gf16_lookup3_prepare_packed;
 			prepare_packed_cksum = &gf16_lookup3_prepare_packed_cksum;
-			finish_packed = &gf16_lookup_finish_packed;
-			finish_packed_cksum = &gf16_lookup_finish_packed_cksum;
+			finish_packed = &gf16_lookup_finish_packed_generic;
+			finish_packed_cksum = &gf16_lookup_finish_packed_cksum_generic;
 			_info.stride = gf16_lookup3_stride();
 			_info.alignment = _info.stride; // assume platform doesn't like misalignment
 			if(_info.stride)
@@ -874,8 +874,8 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			_mul_add = &gf16_lookup_muladd;
 			_pow_add = &gf16_lookup_powadd;
 			prepare_packed_cksum = &gf16_lookup_prepare_packed_cksum;
-			finish_packed = &gf16_lookup_finish_packed;
-			finish_packed_cksum = &gf16_lookup_finish_packed_cksum;
+			finish_packed = &gf16_lookup_finish_packed_generic;
+			finish_packed_cksum = &gf16_lookup_finish_packed_cksum_generic;
 			_info.stride = gf16_lookup_stride();
 			_info.alignment = _info.stride; // assume platform doesn't like misalignment
 		break;

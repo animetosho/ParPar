@@ -6,7 +6,7 @@
 #define _mword __m256i
 #define _MM(f) _mm256_ ## f
 #define _MMI(f) _mm256_ ## f ## _si256
-#define _FN(f) f ## _avx2
+#define _FNSUFFIX _avx2
 #define _MM_END _mm256_zeroupper();
 
 #if defined(__GFNI__) && defined(__AVX2__)
@@ -23,7 +23,7 @@ int gf16_affine_available_avx2 = 0;
 # undef _AVAILABLE
 #endif
 #undef _MM_END
-#undef _FN
+#undef _FNSUFFIX
 #undef _MMI
 #undef _MM
 #undef _mword

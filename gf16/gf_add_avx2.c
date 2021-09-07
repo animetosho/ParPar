@@ -4,7 +4,7 @@
 #define _mword __m256i
 #define _MM(f) _mm256_ ## f
 #define _MMI(f) _mm256_ ## f ## _si256
-#define _FN(f) f ## _avx2
+#define _FNSUFFIX _avx2
 #ifdef __AVX2__
 # define _AVAILABLE
 #endif
@@ -14,7 +14,7 @@
 #ifdef _AVAILABLE
 # undef _AVAILABLE
 #endif
-#undef _FN
+#undef _FNSUFFIX
 #undef _MMI
 #undef _MM
 #undef _mword

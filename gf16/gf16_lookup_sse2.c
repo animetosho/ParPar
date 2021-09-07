@@ -190,7 +190,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_lookup_prepare_blocku(void *HEDLEY_RESTRIC
 #define _mword __m128i
 #define _MM(f) _mm_ ## f
 #define _MMI(f) _mm_ ## f ## _si128
-#define _FN(f) f ## _sse2
+#define _FNSUFFIX _sse2
 #define _MM_END
 
 #include "gf16_checksum_x86.h"
@@ -199,7 +199,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_lookup_prepare_blocku(void *HEDLEY_RESTRIC
 #undef _mword
 #undef _MM
 #undef _MMI
-#undef _FN
+#undef _FNSUFFIX
 #undef _MM_END
 
 #endif
@@ -213,19 +213,9 @@ void gf16_lookup_prepare_packed_cksum_sse2(void *HEDLEY_RESTRICT dst, const void
 	UNUSED(dst); UNUSED(src); UNUSED(srcLen); UNUSED(sliceLen); UNUSED(inputPackSize); UNUSED(inputNum); UNUSED(chunkLen);
 #endif
 }
-void gf16_lookup_finish_packed_sse2(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t sliceLen, unsigned numOutputs, unsigned outputNum, size_t chunkLen) {
+
 #ifdef __SSE2__
-	gf16_finish_packed(dst, src, sliceLen, sizeof(__m128i), &gf16_lookup_finish_block_sse2, &gf16_copy_blocku, numOutputs, outputNum, chunkLen, 1, NULL, NULL, NULL, NULL);
+GF_FINISH_PACKED_FUNCS(gf16_lookup, _sse2, sizeof(__m128i), gf16_lookup_finish_block_sse2, gf16_copy_blocku, 1, (void)0, __m128i checksum = _mm_setzero_si128(), gf16_checksum_block_sse2, gf16_checksum_blocku_sse2, gf16_checksum_finish_sse2)
 #else
-	UNUSED(dst); UNUSED(src); UNUSED(sliceLen); UNUSED(numOutputs); UNUSED(outputNum); UNUSED(chunkLen);
+GF_FINISH_PACKED_FUNCS_STUB(gf16_lookup, _sse2)
 #endif
-}
-int gf16_lookup_finish_packed_cksum_sse2(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t sliceLen, unsigned numOutputs, unsigned outputNum, size_t chunkLen) {
-#ifdef __SSE2__
-	__m128i checksum = _mm_setzero_si128();
-	return gf16_finish_packed(dst, src, sliceLen, sizeof(__m128i), &gf16_lookup_finish_block_sse2, &gf16_copy_blocku, numOutputs, outputNum, chunkLen, 1, &checksum, &gf16_checksum_block_sse2, &gf16_checksum_blocku_sse2, &gf16_checksum_finish_sse2);
-#else
-	UNUSED(dst); UNUSED(src); UNUSED(sliceLen); UNUSED(numOutputs); UNUSED(outputNum); UNUSED(chunkLen);
-	return 0;
-#endif
-}

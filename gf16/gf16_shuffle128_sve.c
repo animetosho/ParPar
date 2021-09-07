@@ -79,9 +79,9 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle128_sve_round(svuint8x2_t va, svuin
 #define SVE_CALC_TABLE_LOAD_SCRATCH(s) svuint8_t poly = svld1rq_u8(svptrue_b8(), s)
 #define SVE_ROUND1 gf16_shuffle128_sve_round1
 #define SVE_ROUND gf16_shuffle128_sve_round
-#define _FN(f) f##_128_sve
+#define _FNSUFFIX _128_sve
 #include "gf16_shuffle128_sve_common.h"
-#undef _FN
+#undef _FNSUFFIX
 #undef SVE_ROUND
 #undef SVE_ROUND1
 #undef SVE_CALC_TABLE_LOAD_SCRATCH
@@ -111,22 +111,12 @@ void gf16_shuffle_prepare_packed_cksum_sve(void *HEDLEY_RESTRICT dst, const void
 #endif
 }
 
-void gf16_shuffle_finish_packed_sve(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t sliceLen, unsigned numOutputs, unsigned outputNum, size_t chunkLen) {
 #ifdef __ARM_FEATURE_SVE
-	gf16_finish_packed(dst, src, sliceLen, svcntb()*2, &gf16_prepare_block_sve, &gf16_prepare_blocku_sve, numOutputs, outputNum, chunkLen, 1, NULL, NULL, NULL, NULL);
+GF_FINISH_PACKED_FUNCS(gf16_shuffle, _sve, svcntb()*2, gf16_prepare_block_sve, gf16_prepare_blocku_sve, 1, (void)0, svint16_t checksum = svdup_n_s16(0), gf16_checksum_block_sve, gf16_checksum_blocku_sve, gf16_checksum_finish_sve)
 #else
-	UNUSED(dst); UNUSED(src); UNUSED(sliceLen); UNUSED(numOutputs); UNUSED(outputNum); UNUSED(chunkLen);
+GF_FINISH_PACKED_FUNCS_STUB(gf16_shuffle, _sve)
 #endif
-}
-int gf16_shuffle_finish_packed_cksum_sve(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t sliceLen, unsigned numOutputs, unsigned outputNum, size_t chunkLen) {
-#ifdef __ARM_FEATURE_SVE
-	svint16_t checksum = svdup_n_s16(0);
-	return gf16_finish_packed(dst, src, sliceLen, svcntb()*2, &gf16_prepare_block_sve, &gf16_prepare_blocku_sve, numOutputs, outputNum, chunkLen, 1, &checksum, &gf16_checksum_block_sve, &gf16_checksum_blocku_sve, &gf16_checksum_finish_sve);
-#else
-	UNUSED(dst); UNUSED(src); UNUSED(sliceLen); UNUSED(numOutputs); UNUSED(outputNum); UNUSED(chunkLen);
-	return 0;
-#endif
-}
+
 
 void gf16_shuffle_prepare_packed_sve(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen, size_t sliceLen, unsigned inputPackSize, unsigned inputNum, size_t chunkLen) {
 #ifdef __ARM_FEATURE_SVE

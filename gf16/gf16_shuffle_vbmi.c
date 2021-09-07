@@ -9,7 +9,7 @@
 # define _mword __m512i
 # define _MM(f) _mm512_ ## f
 # define _MMI(f) _mm512_ ## f ## _si512
-# define _FN(f) f ## _vbmi
+# define _FNSUFFIX _vbmi
 # define _AVAILABLE_AVX 1
 # define _AVAILABLE 1
 # include "gf16_shuffle_x86_common.h"
@@ -17,7 +17,7 @@
 # include "gf16_checksum_x86.h"
 # undef _AVAILABLE
 # undef _AVAILABLE_AVX
-# undef _FN
+# undef _FNSUFFIX
 # undef _MMI
 # undef _MM
 # undef _mword

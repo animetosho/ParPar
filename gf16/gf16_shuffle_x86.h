@@ -59,26 +59,12 @@ void _FN(gf16_shuffle_finish)(void *HEDLEY_RESTRICT dst, size_t len) {
 #endif
 }
 
-void _FN(gf16_shuffle_finish_packed)(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t sliceLen, unsigned numOutputs, unsigned outputNum, size_t chunkLen) {
 #ifdef _AVAILABLE
-	gf16_finish_packed(dst, src, sliceLen, sizeof(_mword)*2, &_FN(gf16_shuffle_finish_copy_block), &_FN(gf16_shuffle_finish_copy_blocku), numOutputs, outputNum, chunkLen, 1, NULL, NULL, NULL, NULL);
-	_MM_END
+GF_FINISH_PACKED_FUNCS(gf16_shuffle, _FNSUFFIX, sizeof(_mword)*2, _FN(gf16_shuffle_finish_copy_block), _FN(gf16_shuffle_finish_copy_blocku), 1, _MM_END, _mword checksum = _MMI(setzero)(), _FN(gf16_checksum_block), _FN(gf16_checksum_blocku), _FN(gf16_checksum_finish))
 #else
-	UNUSED(dst); UNUSED(src); UNUSED(sliceLen); UNUSED(numOutputs); UNUSED(outputNum); UNUSED(chunkLen);
+GF_FINISH_PACKED_FUNCS_STUB(gf16_shuffle, _FNSUFFIX)
 #endif
-}
 
-int _FN(gf16_shuffle_finish_packed_cksum)(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t sliceLen, unsigned numOutputs, unsigned outputNum, size_t chunkLen) {
-#ifdef _AVAILABLE
-	_mword checksum = _MMI(setzero)();
-	int ret = gf16_finish_packed(dst, src, sliceLen, sizeof(_mword)*2, &_FN(gf16_shuffle_finish_copy_block), &_FN(gf16_shuffle_finish_copy_blocku), numOutputs, outputNum, chunkLen, 1, &checksum, &_FN(gf16_checksum_block), &_FN(gf16_checksum_blocku), &_FN(gf16_checksum_finish));
-	_MM_END
-	return ret;
-#else
-	UNUSED(dst); UNUSED(src); UNUSED(sliceLen); UNUSED(numOutputs); UNUSED(outputNum); UNUSED(chunkLen);
-	return 0;
-#endif
-}
 
 #if MWORD_SIZE >= 32
 # ifdef _AVAILABLE
