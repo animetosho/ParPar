@@ -169,50 +169,67 @@ HEDLEY_ALWAYS_INLINE void gf16_prepare_packed(
 HEDLEY_ALWAYS_INLINE int gf16_finish_packed(
 	void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t sliceLen, const size_t blockLen, gf16_transform_block finishBlock, gf16_transform_blocku finishBlockU,
 	unsigned numOutputs, unsigned outputNum, size_t chunkLen, const unsigned interleaveSize,
-	void *HEDLEY_RESTRICT checksum, gf16_checksum_block checksumBlock, gf16_finish_checksum finishChecksum
+	void *HEDLEY_RESTRICT checksum, gf16_checksum_block checksumBlock, gf16_checksum_blocku checksumBlockU, gf16_finish_checksum finishChecksum
 ) {
 	size_t checksumLen = checksumBlock ? blockLen : 0;
+	size_t alignedSliceLen = sliceLen + blockLen-1;
+	alignedSliceLen -= alignedSliceLen % blockLen;
 	assert(outputNum < numOutputs);
-	assert(chunkLen <= sliceLen+checksumLen);
+	assert(chunkLen <= alignedSliceLen+checksumLen);
 	assert(chunkLen % blockLen == 0);
-	assert(sliceLen % blockLen == 0);
+	assert(sliceLen % 2 == 0); // PAR2 requires a multiple of 4, but we'll support 2 (actually, the code should also work with any multiple)
 	
 	size_t dataChunkLen = chunkLen;
-	if(dataChunkLen > sliceLen) dataChunkLen = sliceLen;
+	if(dataChunkLen > alignedSliceLen) dataChunkLen = alignedSliceLen;
 	
 	unsigned interleaveBy = (outputNum >= numOutputs - (numOutputs%interleaveSize)) ?
 		numOutputs%interleaveSize : interleaveSize;
 	
 	uint8_t* srcBase = (uint8_t*)src + (outputNum/interleaveSize) * chunkLen * interleaveSize + (outputNum%interleaveSize) * blockLen;
-	size_t effectiveSliceLen = sliceLen + checksumLen;
 	
-	unsigned fullChunks = (unsigned)(sliceLen/dataChunkLen);
+	unsigned fullChunks = (unsigned)(alignedSliceLen/dataChunkLen);
 	size_t chunkStride = chunkLen * numOutputs;
 	for(unsigned chunk=0; chunk<fullChunks; chunk++) {
 		uint8_t* _src = srcBase + chunkStride*chunk;
 		uint8_t* _dst = (uint8_t*)dst + dataChunkLen*chunk;
-		for(size_t pos=0; pos<dataChunkLen; pos+=blockLen) {
-			finishBlock(_dst + pos, _src + pos*interleaveBy);
-			if(checksumBlock) checksumBlock(_dst + pos, checksum, blockLen, 1);
-		}
+		if(dataChunkLen*(chunk+1) > sliceLen) {
+			// last block doesn't align to stride
+			size_t pos=0;
+			for(; pos<dataChunkLen-blockLen; pos+=blockLen) {
+				finishBlock(_dst + pos, _src + pos*interleaveBy);
+				if(checksumBlock) checksumBlock(_dst + pos, checksum, blockLen, 0);
+			}
+			size_t remaining = sliceLen - dataChunkLen*chunk - pos;
+			finishBlockU(_dst + pos, _src + pos*interleaveBy, remaining);
+			if(checksumBlock) checksumBlockU(_dst + pos, remaining, checksum);
+		} else
+			for(size_t pos=0; pos<dataChunkLen; pos+=blockLen) {
+				finishBlock(_dst + pos, _src + pos*interleaveBy);
+				if(checksumBlock) checksumBlock(_dst + pos, checksum, blockLen, 0);
+			}
 	}
 	
 	// do final chunk
-	size_t remaining = sliceLen % dataChunkLen;
-	size_t effectiveLastChunkLen = effectiveSliceLen % chunkLen;
+	size_t remaining = alignedSliceLen % dataChunkLen;
+	size_t effectiveLastChunkLen = (alignedSliceLen + checksumLen) % chunkLen;
 	if(effectiveLastChunkLen == 0) effectiveLastChunkLen = chunkLen;
 	if(remaining) {
 		uint8_t* _src = (uint8_t*)src + (outputNum/interleaveSize) * effectiveLastChunkLen * interleaveSize + (outputNum%interleaveSize) * blockLen + chunkStride*fullChunks;
 		uint8_t* _dst = (uint8_t*)dst + dataChunkLen*fullChunks;
 		
-		for(size_t pos=0; pos<remaining; pos+=blockLen) {
+		size_t pos=0;
+		for(; pos < (remaining - (remaining%blockLen)); pos+=blockLen) {
 			finishBlock(_dst + pos, _src + pos*interleaveBy);
-			if(checksumBlock) checksumBlock(_dst + pos, checksum, blockLen, 1);
+			if(checksumBlock) checksumBlock(_dst + pos, checksum, blockLen, 0);
+		}
+		if(pos < remaining) {
+			finishBlockU(_dst + pos, _src + pos*interleaveBy, remaining - pos);
+			if(checksumBlock) checksumBlockU(_dst + pos, remaining-pos, checksum);
 		}
 	}
 	
 	if(checksumBlock) {
-		fullChunks = (unsigned)(sliceLen / chunkLen);
+		fullChunks = (unsigned)(alignedSliceLen / chunkLen);
 		uint8_t* _src = (uint8_t*)src + (outputNum%interleaveSize) * blockLen + chunkStride*fullChunks + (outputNum/interleaveSize) * effectiveLastChunkLen * interleaveSize;
 		_src += effectiveLastChunkLen * interleaveBy - blockLen*interleaveBy;
 		return finishChecksum(_src, checksum, blockLen, finishBlock);

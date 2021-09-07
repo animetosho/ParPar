@@ -117,7 +117,7 @@ void _FN(gf16_affine2x_finish)(void *HEDLEY_RESTRICT dst, size_t len) {
 
 void _FN(gf16_affine2x_finish_packed)(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t sliceLen, unsigned numOutputs, unsigned outputNum, size_t chunkLen) {
 #ifdef _AVAILABLE
-	gf16_finish_packed(dst, src, sliceLen, sizeof(_mword), &_FN(gf16_affine2x_finish_copy_block), &_FN(gf16_affine2x_finish_copy_blocku), numOutputs, outputNum, chunkLen, 1, NULL, NULL, NULL);
+	gf16_finish_packed(dst, src, sliceLen, sizeof(_mword), &_FN(gf16_affine2x_finish_copy_block), &_FN(gf16_affine2x_finish_copy_blocku), numOutputs, outputNum, chunkLen, 1, NULL, NULL, NULL, NULL);
 	_MM_END
 #else
 	UNUSED(dst); UNUSED(src); UNUSED(sliceLen); UNUSED(numOutputs); UNUSED(outputNum); UNUSED(chunkLen);
@@ -127,7 +127,7 @@ void _FN(gf16_affine2x_finish_packed)(void *HEDLEY_RESTRICT dst, const void *HED
 int _FN(gf16_affine2x_finish_packed_cksum)(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t sliceLen, unsigned numOutputs, unsigned outputNum, size_t chunkLen) {
 #ifdef _AVAILABLE
 	_mword checksum = _MMI(setzero)();
-	int ret = gf16_finish_packed(dst, src, sliceLen, sizeof(_mword), &_FN(gf16_affine2x_finish_copy_block), &_FN(gf16_affine2x_finish_copy_blocku), numOutputs, outputNum, chunkLen, 1, &checksum, &_FN(gf16_checksum_block), &_FN(gf16_checksum_finish));
+	int ret = gf16_finish_packed(dst, src, sliceLen, sizeof(_mword), &_FN(gf16_affine2x_finish_copy_block), &_FN(gf16_affine2x_finish_copy_blocku), numOutputs, outputNum, chunkLen, 1, &checksum, &_FN(gf16_checksum_block), &_FN(gf16_checksum_blocku), &_FN(gf16_checksum_finish));
 	_MM_END
 	return ret;
 #else

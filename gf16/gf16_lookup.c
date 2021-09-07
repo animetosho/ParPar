@@ -743,7 +743,10 @@ void gf16_lookup3_prepare_packed_cksum(void *HEDLEY_RESTRICT dst, const void *HE
 	uintptr_t checksum = 0;
 	gf16_prepare_packed(dst, src, srcLen, sliceLen, gf16_lookup3_stride(), &gf16_lookup3_prepare_block, &gf16_lookup3_prepare_blocku, inputPackSize, inputNum, chunkLen, 1, &checksum, &gf16_lookup_checksum_block, &gf16_lookup_checksum_blocku, &gf16_lookup_checksum_zeroes, &gf16_lookup3_checksum_prepare);
 }
+void gf16_lookup_finish_packed(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t sliceLen, unsigned numOutputs, unsigned outputNum, size_t chunkLen) {
+	gf16_finish_packed(dst, src, sliceLen, gf16_lookup_stride(), &gf16_lookup_copy_block, &gf16_copy_blocku, numOutputs, outputNum, chunkLen, 1, NULL, NULL, NULL, NULL);
+}
 int gf16_lookup_finish_packed_cksum(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t sliceLen, unsigned numOutputs, unsigned outputNum, size_t chunkLen) {
 	uintptr_t checksum = 0;
-	return gf16_finish_packed(dst, src, sliceLen, gf16_lookup_stride(), &gf16_lookup_copy_block, &gf16_copy_blocku, numOutputs, outputNum, chunkLen, 1, &checksum, &gf16_lookup_checksum_block, &gf16_lookup_checksum_finish);
+	return gf16_finish_packed(dst, src, sliceLen, gf16_lookup_stride(), &gf16_lookup_copy_block, &gf16_copy_blocku, numOutputs, outputNum, chunkLen, 1, &checksum, &gf16_lookup_checksum_block, &gf16_lookup_checksum_blocku, &gf16_lookup_checksum_finish);
 }

@@ -445,6 +445,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			add_multi_packed = &gf_add_multi_packed_shuffle_neon;
 			add_multi_packpf = &gf_add_multi_packpf_shuffle_neon;
 			prepare_packed_cksum = &gf16_shuffle_prepare_packed_cksum_neon;
+			finish_packed = &gf16_shuffle_finish_packed_neon;
 			finish_packed_cksum = &gf16_shuffle_finish_packed_cksum_neon;
 		break;
 		
@@ -469,6 +470,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			_info.idealInputMultiple = 3;
 			#endif
 			prepare_packed_cksum = &gf16_clmul_prepare_packed_cksum_neon;
+			finish_packed = &gf16_shuffle_finish_packed_neon;
 			finish_packed_cksum = &gf16_shuffle_finish_packed_cksum_neon; // re-use shuffle routine
 		break;
 		
@@ -490,6 +492,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			prepare_packed = &gf16_shuffle_prepare_packed_sve;
 			_info.idealInputMultiple = 3;
 			prepare_packed_cksum = &gf16_shuffle_prepare_packed_cksum_sve;
+			finish_packed = &gf16_shuffle_finish_packed_sve;
 			finish_packed_cksum = &gf16_shuffle_finish_packed_cksum_sve;
 		break;
 		
@@ -510,6 +513,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			prepare_packed = &gf16_shuffle_prepare_packed_sve;
 			_info.idealInputMultiple = 3;
 			prepare_packed_cksum = &gf16_shuffle_prepare_packed_cksum_sve;
+			finish_packed = &gf16_shuffle_finish_packed_sve;
 			finish_packed_cksum = &gf16_shuffle_finish_packed_cksum_sve;
 		break;
 		
@@ -529,6 +533,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			prepare_packed = &gf16_shuffle2x_prepare_packed_sve;
 			_info.idealInputMultiple = 6;
 			prepare_packed_cksum = &gf16_shuffle2x_prepare_packed_cksum_sve;
+			finish_packed = &gf16_shuffle2x_finish_packed_sve;
 			finish_packed_cksum = &gf16_shuffle2x_finish_packed_cksum_sve;
 		break;
 		
@@ -550,6 +555,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			prepare_packed = &gf16_shuffle_prepare_packed_512_sve2;
 			_info.idealInputMultiple = 4;
 			prepare_packed_cksum = &gf16_shuffle_prepare_packed_cksum_512_sve2;
+			finish_packed = &gf16_shuffle_finish_packed_sve;
 			finish_packed_cksum = &gf16_shuffle_finish_packed_cksum_sve;
 		break;
 
@@ -569,6 +575,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			prepare_packed = &gf16_clmul_prepare_packed_sve2;
 			_info.idealInputMultiple = 8;
 			prepare_packed_cksum = &gf16_clmul_prepare_packed_cksum_sve2;
+			finish_packed = &gf16_shuffle_finish_packed_sve;
 			finish_packed_cksum = &gf16_shuffle_finish_packed_cksum_sve; // reuse shuffle
 		break;
 		
@@ -840,6 +847,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			_mul = &gf16_lookup_mul_sse2;
 			_mul_add = &gf16_lookup_muladd_sse2;
 			prepare_packed_cksum = &gf16_lookup_prepare_packed_cksum_sse2;
+			finish_packed = &gf16_lookup_finish_packed_sse2;
 			finish_packed_cksum = &gf16_lookup_finish_packed_cksum_sse2;
 			_info.alignment = 16;
 			_info.stride = 16;
@@ -853,6 +861,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			add_multi_packpf = &gf_add_multi_packpf_lookup3;
 			prepare_packed = &gf16_lookup3_prepare_packed;
 			prepare_packed_cksum = &gf16_lookup3_prepare_packed_cksum;
+			finish_packed = &gf16_lookup_finish_packed;
 			finish_packed_cksum = &gf16_lookup_finish_packed_cksum;
 			_info.stride = gf16_lookup3_stride();
 			_info.alignment = _info.stride; // assume platform doesn't like misalignment
@@ -865,6 +874,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			_mul_add = &gf16_lookup_muladd;
 			_pow_add = &gf16_lookup_powadd;
 			prepare_packed_cksum = &gf16_lookup_prepare_packed_cksum;
+			finish_packed = &gf16_lookup_finish_packed;
 			finish_packed_cksum = &gf16_lookup_finish_packed_cksum;
 			_info.stride = gf16_lookup_stride();
 			_info.alignment = _info.stride; // assume platform doesn't like misalignment
@@ -899,7 +909,7 @@ Galois16Mul::Galois16Mul(Galois16Methods method) {
 	prepare = &Galois16Mul::_prepare_none;
 	prepare_packed = &Galois16Mul::_prepare_packed_none;
 	finish = &Galois16Mul::_finish_none;
-	finish_packed = &Galois16Mul::_finish_packed_none;
+	finish_packed = NULL;
 	_info.alignment = 2;
 	_info.stride = 2;
 	
@@ -1149,23 +1159,6 @@ void Galois16Mul::_prepare_packed_none(void *HEDLEY_RESTRICT dst, const void *HE
 	remaining = sliceLen % chunkLen;
 	if(remaining) {
 		memset((uint8_t*)dst + chunkStride * sliceFullChunks + remaining*inputNum, 0, remaining);
-	}
-}
-
-void Galois16Mul::_finish_packed_none(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t sliceLen, unsigned numOutputs, unsigned outputNum, size_t chunkLen) {
-	assert(outputNum < numOutputs);
-	assert(chunkLen <= sliceLen);
-	
-	uint8_t* srcBase = (uint8_t*)src + outputNum * chunkLen;
-	unsigned fullChunks = (unsigned)(sliceLen/chunkLen);
-	size_t chunkStride = chunkLen * numOutputs;
-	for(unsigned chunk=0; chunk<fullChunks; chunk++) {
-		memcpy((uint8_t*)dst + chunkLen*chunk, srcBase + chunkStride*chunk, chunkLen);
-	}
-	
-	size_t remaining = sliceLen % chunkLen;
-	if(remaining) {
-		memcpy((uint8_t*)dst + chunkLen*fullChunks, (uint8_t*)src + chunkStride * fullChunks + remaining*outputNum, remaining);
 	}
 }
 

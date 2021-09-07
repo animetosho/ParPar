@@ -657,7 +657,7 @@ void gf16_xor_finish_copy_blocku_avx2(void *HEDLEY_RESTRICT dst, const void *HED
 
 void gf16_xor_finish_packed_avx2(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t sliceLen, unsigned numOutputs, unsigned outputNum, size_t chunkLen) {
 #if defined(__AVX2__) && defined(PLATFORM_AMD64)
-	gf16_finish_packed(dst, src, sliceLen, sizeof(__m256i)*16, &gf16_xor_finish_copy_block_avx2, &gf16_xor_finish_copy_blocku_avx2, numOutputs, outputNum, chunkLen, 1, NULL, NULL, NULL);
+	gf16_finish_packed(dst, src, sliceLen, sizeof(__m256i)*16, &gf16_xor_finish_copy_block_avx2, &gf16_xor_finish_copy_blocku_avx2, numOutputs, outputNum, chunkLen, 1, NULL, NULL, NULL, NULL);
 	_mm256_zeroupper();
 #else
 	UNUSED(dst); UNUSED(src); UNUSED(sliceLen); UNUSED(numOutputs); UNUSED(outputNum); UNUSED(chunkLen);
@@ -667,7 +667,7 @@ void gf16_xor_finish_packed_avx2(void *HEDLEY_RESTRICT dst, const void *HEDLEY_R
 int gf16_xor_finish_packed_cksum_avx2(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t sliceLen, unsigned numOutputs, unsigned outputNum, size_t chunkLen) {
 #if defined(__AVX2__) && defined(PLATFORM_AMD64)
 	__m256i checksum = _mm256_setzero_si256();
-	int ret = gf16_finish_packed(dst, src, sliceLen, sizeof(__m256i)*16, &gf16_xor_finish_copy_block_avx2, &gf16_xor_finish_copy_blocku_avx2, numOutputs, outputNum, chunkLen, 1, &checksum, &gf16_checksum_block_avx2, &gf16_checksum_finish_avx2);
+	int ret = gf16_finish_packed(dst, src, sliceLen, sizeof(__m256i)*16, &gf16_xor_finish_copy_block_avx2, &gf16_xor_finish_copy_blocku_avx2, numOutputs, outputNum, chunkLen, 1, &checksum, &gf16_checksum_block_avx2, &gf16_checksum_blocku_avx2, &gf16_checksum_finish_avx2);
 	_mm256_zeroupper();
 	return ret;
 #else

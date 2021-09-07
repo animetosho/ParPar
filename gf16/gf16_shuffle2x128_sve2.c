@@ -287,10 +287,17 @@ void gf16_shuffle2x_prepare_packed_cksum_sve(void *HEDLEY_RESTRICT dst, const vo
 #endif
 }
 
+void gf16_shuffle2x_finish_packed_sve(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t sliceLen, unsigned numOutputs, unsigned outputNum, size_t chunkLen) {
+#ifdef __ARM_FEATURE_SVE2
+	gf16_finish_packed(dst, src, sliceLen, svcntb(), &gf16_prepare_half_block_sve, &gf16_prepare_half_blocku_sve, numOutputs, outputNum, chunkLen, 1, NULL, NULL, NULL, NULL);
+#else
+	UNUSED(dst); UNUSED(src); UNUSED(sliceLen); UNUSED(numOutputs); UNUSED(outputNum); UNUSED(chunkLen);
+#endif
+}
 int gf16_shuffle2x_finish_packed_cksum_sve(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t sliceLen, unsigned numOutputs, unsigned outputNum, size_t chunkLen) {
 #ifdef __ARM_FEATURE_SVE2
 	svint16_t checksum = svdup_n_s16(0);
-	return gf16_finish_packed(dst, src, sliceLen, svcntb(), &gf16_prepare_half_block_sve, &gf16_prepare_half_blocku_sve, numOutputs, outputNum, chunkLen, 1, &checksum, &gf16_checksum_block_sve, &gf16_checksum_finish_sve);
+	return gf16_finish_packed(dst, src, sliceLen, svcntb(), &gf16_prepare_half_block_sve, &gf16_prepare_half_blocku_sve, numOutputs, outputNum, chunkLen, 1, &checksum, &gf16_checksum_block_sve, &gf16_checksum_blocku_sve, &gf16_checksum_finish_sve);
 #else
 	UNUSED(dst); UNUSED(src); UNUSED(sliceLen); UNUSED(numOutputs); UNUSED(outputNum); UNUSED(chunkLen);
 	return 0;
