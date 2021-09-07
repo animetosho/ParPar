@@ -443,36 +443,15 @@ GF16_MULADD_MULTI_FUNCS_STUB(gf16_shuffle, _vbmi)
 #endif
 
 
-void gf16_shuffle_prepare_packed_vbmi(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen, size_t sliceLen, unsigned inputPackSize, unsigned inputNum, size_t chunkLen) {
 #if defined(__AVX512VBMI__) && defined(__AVX512VL__)
-	gf16_prepare_packed(dst, src, srcLen, sliceLen, sizeof(__m512i)*2, &gf16_shuffle_prepare_block_vbmi, &gf16_shuffle_prepare_blocku_vbmi, inputPackSize, inputNum, chunkLen,
-#ifdef PLATFORM_AMD64
-		4
+# ifdef PLATFORM_AMD64
+GF_PREPARE_PACKED_FUNCS(gf16_shuffle, _vbmi, sizeof(__m512i)*2, gf16_shuffle_prepare_block_vbmi, gf16_shuffle_prepare_blocku_vbmi, 4, _mm256_zeroupper(), __m512i checksum = _mm512_setzero_si512(), gf16_checksum_block_vbmi, gf16_checksum_blocku_vbmi, gf16_checksum_zeroes_vbmi, gf16_checksum_prepare_vbmi)
+# else
+GF_PREPARE_PACKED_FUNCS(gf16_shuffle, _vbmi, sizeof(__m512i)*2, gf16_shuffle_prepare_block_vbmi, gf16_shuffle_prepare_blocku_vbmi, 1, _mm256_zeroupper(), __m512i checksum = _mm512_setzero_si512(), gf16_checksum_block_vbmi, gf16_checksum_blocku_vbmi, gf16_checksum_zeroes_vbmi, gf16_checksum_prepare_vbmi)
+# endif
 #else
-		1
+GF_PREPARE_PACKED_FUNCS_STUB(gf16_shuffle, _vbmi)
 #endif
-	, NULL, NULL, NULL, NULL, NULL);
-	_mm256_zeroupper();
-#else
-	UNUSED(dst); UNUSED(src); UNUSED(srcLen); UNUSED(sliceLen); UNUSED(inputPackSize); UNUSED(inputNum); UNUSED(chunkLen);
-#endif
-}
-
-void gf16_shuffle_prepare_packed_cksum_vbmi(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen, size_t sliceLen, unsigned inputPackSize, unsigned inputNum, size_t chunkLen) {
-#if defined(__AVX512VBMI__) && defined(__AVX512VL__)
-	__m512i checksum = _mm512_setzero_si512();
-	gf16_prepare_packed(dst, src, srcLen, sliceLen, sizeof(__m512i)*2, &gf16_shuffle_prepare_block_vbmi, &gf16_shuffle_prepare_blocku_vbmi, inputPackSize, inputNum, chunkLen,
-#ifdef PLATFORM_AMD64
-		4
-#else
-		1
-#endif
-	, &checksum, &gf16_checksum_block_vbmi, &gf16_checksum_blocku_vbmi, &gf16_checksum_zeroes_vbmi, &gf16_checksum_prepare_vbmi);
-	_mm256_zeroupper();
-#else
-	UNUSED(dst); UNUSED(src); UNUSED(srcLen); UNUSED(sliceLen); UNUSED(inputPackSize); UNUSED(inputNum); UNUSED(chunkLen);
-#endif
-}
 
 
 void* gf16_shuffle_init_vbmi(int polynomial) {

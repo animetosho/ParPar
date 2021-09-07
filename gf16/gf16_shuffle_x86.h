@@ -19,36 +19,16 @@ void _FN(gf16_shuffle_prepare)(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RES
 #endif
 }
 
-void _FN(gf16_shuffle_prepare_packed)(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen, size_t sliceLen, unsigned inputPackSize, unsigned inputNum, size_t chunkLen) {
 #ifdef _AVAILABLE
-	gf16_prepare_packed(dst, src, srcLen, sliceLen, sizeof(_mword)*2, &_FN(gf16_shuffle_prepare_block), &_FN(gf16_shuffle_prepare_blocku), inputPackSize, inputNum, chunkLen,
-#if MWORD_SIZE==64 && defined(PLATFORM_AMD64)
-		3
+# if MWORD_SIZE==64 && defined(PLATFORM_AMD64)
+GF_PREPARE_PACKED_FUNCS(gf16_shuffle, _FNSUFFIX, sizeof(_mword)*2, _FN(gf16_shuffle_prepare_block), _FN(gf16_shuffle_prepare_blocku), 3, _MM_END, _mword checksum = _MMI(setzero)(), _FN(gf16_checksum_block), _FN(gf16_checksum_blocku), _FN(gf16_checksum_zeroes), _FN(gf16_checksum_prepare))
+# else
+GF_PREPARE_PACKED_FUNCS(gf16_shuffle, _FNSUFFIX, sizeof(_mword)*2, _FN(gf16_shuffle_prepare_block), _FN(gf16_shuffle_prepare_blocku), 1, _MM_END, _mword checksum = _MMI(setzero)(), _FN(gf16_checksum_block), _FN(gf16_checksum_blocku), _FN(gf16_checksum_zeroes), _FN(gf16_checksum_prepare))
+# endif
 #else
-		1
+GF_PREPARE_PACKED_FUNCS_STUB(gf16_shuffle, _FNSUFFIX)
 #endif
-	, NULL, NULL, NULL, NULL, NULL);
-	_MM_END
-#else
-	UNUSED(dst); UNUSED(src); UNUSED(srcLen); UNUSED(sliceLen); UNUSED(inputPackSize); UNUSED(inputNum); UNUSED(chunkLen);
-#endif
-}
 
-void _FN(gf16_shuffle_prepare_packed_cksum)(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen, size_t sliceLen, unsigned inputPackSize, unsigned inputNum, size_t chunkLen) {
-#ifdef _AVAILABLE
-	_mword checksum = _MMI(setzero)();
-	gf16_prepare_packed(dst, src, srcLen, sliceLen, sizeof(_mword)*2, &_FN(gf16_shuffle_prepare_block), &_FN(gf16_shuffle_prepare_blocku), inputPackSize, inputNum, chunkLen,
-#if MWORD_SIZE==64 && defined(PLATFORM_AMD64)
-		3
-#else
-		1
-#endif
-	, &checksum, &_FN(gf16_checksum_block), &_FN(gf16_checksum_blocku), &_FN(gf16_checksum_zeroes), &_FN(gf16_checksum_prepare));
-	_MM_END
-#else
-	UNUSED(dst); UNUSED(src); UNUSED(srcLen); UNUSED(sliceLen); UNUSED(inputPackSize); UNUSED(inputNum); UNUSED(chunkLen);
-#endif
-}
 
 void _FN(gf16_shuffle_finish)(void *HEDLEY_RESTRICT dst, size_t len) {
 #ifdef _AVAILABLE

@@ -859,8 +859,8 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			_mul_add_multi_packed = &gf16_lookup3_muladd_multi_packed;
 			add_multi_packed = &gf_add_multi_packed_lookup3;
 			add_multi_packpf = &gf_add_multi_packpf_lookup3;
-			prepare_packed = &gf16_lookup3_prepare_packed;
-			prepare_packed_cksum = &gf16_lookup3_prepare_packed_cksum;
+			prepare_packed = &gf16_lookup3_prepare_packed_generic;
+			prepare_packed_cksum = &gf16_lookup3_prepare_packed_cksum_generic;
 			finish_packed = &gf16_lookup_finish_packed_generic;
 			finish_packed_cksum = &gf16_lookup_finish_packed_cksum_generic;
 			_info.stride = gf16_lookup3_stride();

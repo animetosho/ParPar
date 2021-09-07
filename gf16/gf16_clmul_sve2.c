@@ -187,29 +187,12 @@ void gf16_clmul_muladd_sve2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RE
 #endif
 }
 
+#include "gf16_checksum_sve.h"
 
 #if defined(__ARM_FEATURE_SVE2)
 GF16_MULADD_MULTI_FUNCS(gf16_clmul, _sve2, gf16_clmul_muladd_x_sve2, CLMUL_NUM_REGIONS, svcntb()*2, 0, (void)0)
+GF_PREPARE_PACKED_FUNCS(gf16_clmul, _sve2, svcntb()*2, gf16_prepare_block_sve, gf16_prepare_blocku_sve, CLMUL_NUM_REGIONS, (void)0, svint16_t checksum = svdup_n_s16(0), gf16_checksum_block_sve, gf16_checksum_blocku_sve, gf16_checksum_zeroes_sve, gf16_checksum_prepare_sve)
 #else
 GF16_MULADD_MULTI_FUNCS_STUB(gf16_clmul, _sve2)
+GF_PREPARE_PACKED_FUNCS_STUB(gf16_clmul, _sve2)
 #endif
-
-// checksum stuff
-#include "gf16_checksum_sve.h"
-
-void gf16_clmul_prepare_packed_sve2(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen, size_t sliceLen, unsigned inputPackSize, unsigned inputNum, size_t chunkLen) {
-#if defined(__ARM_FEATURE_SVE2)
-	gf16_prepare_packed(dst, src, srcLen, sliceLen, svcntb()*2, &gf16_prepare_block_sve, &gf16_prepare_blocku_sve, inputPackSize, inputNum, chunkLen, CLMUL_NUM_REGIONS, NULL, NULL, NULL, NULL, NULL);
-#else
-	UNUSED(dst); UNUSED(src); UNUSED(srcLen); UNUSED(sliceLen); UNUSED(inputPackSize); UNUSED(inputNum); UNUSED(chunkLen);
-#endif
-}
-
-void gf16_clmul_prepare_packed_cksum_sve2(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen, size_t sliceLen, unsigned inputPackSize, unsigned inputNum, size_t chunkLen) {
-#if defined(__ARM_FEATURE_SVE2)
-	svint16_t checksum = svdup_n_s16(0);
-	gf16_prepare_packed(dst, src, srcLen, sliceLen, svcntb()*2, &gf16_prepare_block_sve, &gf16_prepare_blocku_sve, inputPackSize, inputNum, chunkLen, CLMUL_NUM_REGIONS, &checksum, &gf16_checksum_block_sve, &gf16_checksum_blocku_sve, &gf16_checksum_zeroes_sve, &gf16_checksum_prepare_sve);
-#else
-	UNUSED(dst); UNUSED(src); UNUSED(srcLen); UNUSED(sliceLen); UNUSED(inputPackSize); UNUSED(inputNum); UNUSED(chunkLen);
-#endif
-}

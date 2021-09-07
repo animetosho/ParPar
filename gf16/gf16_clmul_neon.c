@@ -254,22 +254,11 @@ GF16_MULADD_MULTI_FUNCS_STUB(gf16_clmul, _neon)
 #endif
 
 
-void gf16_clmul_prepare_packed_neon(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen, size_t sliceLen, unsigned inputPackSize, unsigned inputNum, size_t chunkLen) {
 #if defined(__ARM_NEON)
-	gf16_prepare_packed(dst, src, srcLen, sliceLen, sizeof(uint8x16x2_t), &gf16_prepare_block_neon, &gf16_prepare_blocku_neon, inputPackSize, inputNum, chunkLen, CLMUL_NUM_REGIONS, NULL, NULL, NULL, NULL, NULL);
+GF_PREPARE_PACKED_FUNCS(gf16_clmul, _neon, sizeof(uint8x16x2_t), gf16_prepare_block_neon, gf16_prepare_blocku_neon, CLMUL_NUM_REGIONS, (void)0, uint8x16_t checksum = vdupq_n_u8(0), gf16_checksum_block_neon, gf16_checksum_blocku_neon, gf16_checksum_zeroes_neon, gf16_checksum_prepare_neon)
 #else
-	UNUSED(dst); UNUSED(src); UNUSED(srcLen); UNUSED(sliceLen); UNUSED(inputPackSize); UNUSED(inputNum); UNUSED(chunkLen);
+GF_PREPARE_PACKED_FUNCS_STUB(gf16_clmul, _neon)
 #endif
-}
-
-void gf16_clmul_prepare_packed_cksum_neon(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen, size_t sliceLen, unsigned inputPackSize, unsigned inputNum, size_t chunkLen) {
-#if defined(__ARM_NEON)
-	uint8x16_t checksum = vdupq_n_u8(0);
-	gf16_prepare_packed(dst, src, srcLen, sliceLen, sizeof(uint8x16x2_t), &gf16_prepare_block_neon, &gf16_prepare_blocku_neon, inputPackSize, inputNum, chunkLen, CLMUL_NUM_REGIONS, &checksum, &gf16_checksum_block_neon, &gf16_checksum_blocku_neon, &gf16_checksum_zeroes_neon, &gf16_checksum_prepare_neon);
-#else
-	UNUSED(dst); UNUSED(src); UNUSED(srcLen); UNUSED(sliceLen); UNUSED(inputPackSize); UNUSED(inputNum); UNUSED(chunkLen);
-#endif
-}
 
 
 void* gf16_clmul_init_arm(int polynomial) {

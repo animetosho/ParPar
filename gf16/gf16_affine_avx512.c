@@ -31,36 +31,15 @@ int gf16_affine_available_avx512 = 0;
 
 #include "gf16_muladd_multi.h"
 
-void gf16_affine_prepare_packed_avx512(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen, size_t sliceLen, unsigned inputPackSize, unsigned inputNum, size_t chunkLen) {
 #if defined(__GFNI__) && defined(__AVX512BW__) && defined(__AVX512VL__)
-	gf16_prepare_packed(dst, src, srcLen, sliceLen, sizeof(__m512i)*2, &gf16_shuffle_prepare_block_avx512, &gf16_shuffle_prepare_blocku_avx512, inputPackSize, inputNum, chunkLen,
-#ifdef PLATFORM_AMD64
-		6
+# ifdef PLATFORM_AMD64
+GF_PREPARE_PACKED_FUNCS(gf16_affine, _avx512, sizeof(__m512i)*2, gf16_shuffle_prepare_block_avx512, gf16_shuffle_prepare_blocku_avx512, 6, _mm256_zeroupper(), __m512i checksum = _mm512_setzero_si512(), gf16_checksum_block_avx512, gf16_checksum_blocku_avx512, gf16_checksum_zeroes_avx512, gf16_checksum_prepare_avx512)
+# else
+GF_PREPARE_PACKED_FUNCS(gf16_affine, _avx512, sizeof(__m512i)*2, gf16_shuffle_prepare_block_avx512, gf16_shuffle_prepare_blocku_avx512, 1, _mm256_zeroupper(), __m512i checksum = _mm512_setzero_si512(), gf16_checksum_block_avx512, gf16_checksum_blocku_avx512, gf16_checksum_zeroes_avx512, gf16_checksum_prepare_avx512)
+# endif
 #else
-		1
+GF_PREPARE_PACKED_FUNCS_STUB(gf16_affine, _avx512)
 #endif
-	, NULL, NULL, NULL, NULL, NULL);
-	_mm256_zeroupper();
-#else
-	UNUSED(dst); UNUSED(src); UNUSED(srcLen); UNUSED(sliceLen); UNUSED(inputPackSize); UNUSED(inputNum); UNUSED(chunkLen);
-#endif
-}
-
-void gf16_affine_prepare_packed_cksum_avx512(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen, size_t sliceLen, unsigned inputPackSize, unsigned inputNum, size_t chunkLen) {
-#if defined(__GFNI__) && defined(__AVX512BW__) && defined(__AVX512VL__)
-	__m512i checksum = _mm512_setzero_si512();
-	gf16_prepare_packed(dst, src, srcLen, sliceLen, sizeof(__m512i)*2, &gf16_shuffle_prepare_block_avx512, &gf16_shuffle_prepare_blocku_avx512, inputPackSize, inputNum, chunkLen,
-#ifdef PLATFORM_AMD64
-		6
-#else
-		1
-#endif
-	, &checksum, &gf16_checksum_block_avx512, &gf16_checksum_blocku_avx512, &gf16_checksum_zeroes_avx512, &gf16_checksum_prepare_avx512);
-	_mm256_zeroupper();
-#else
-	UNUSED(dst); UNUSED(src); UNUSED(srcLen); UNUSED(sliceLen); UNUSED(inputPackSize); UNUSED(inputNum); UNUSED(chunkLen);
-#endif
-}
 
 
 #if defined(__GFNI__) && defined(__AVX512BW__) && defined(__AVX512VL__)

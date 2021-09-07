@@ -330,22 +330,11 @@ GF16_MULADD_MULTI_FUNCS_STUB(gf16_shuffle, _512_sve2)
 // checksum stuff
 #include "gf16_checksum_sve.h"
 
-void gf16_shuffle_prepare_packed_cksum_512_sve2(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen, size_t sliceLen, unsigned inputPackSize, unsigned inputNum, size_t chunkLen) {
-#ifdef __ARM_FEATURE_SVE2
-	svint16_t checksum = svdup_n_s16(0);
-	gf16_prepare_packed(dst, src, srcLen, sliceLen, svcntb()*2, &gf16_prepare_block_sve, &gf16_prepare_blocku_sve, inputPackSize, inputNum, chunkLen, 4, &checksum, &gf16_checksum_block_sve, &gf16_checksum_blocku_sve, &gf16_checksum_zeroes_sve, &gf16_checksum_prepare_sve);
+#if defined(__ARM_FEATURE_SVE2)
+GF_PREPARE_PACKED_FUNCS(gf16_shuffle, _512_sve2, svcntb()*2, gf16_prepare_block_sve, gf16_prepare_blocku_sve, 4, (void)0, svint16_t checksum = svdup_n_s16(0), gf16_checksum_block_sve, gf16_checksum_blocku_sve, gf16_checksum_zeroes_sve, gf16_checksum_prepare_sve)
 #else
-	UNUSED(dst); UNUSED(src); UNUSED(srcLen); UNUSED(sliceLen); UNUSED(inputPackSize); UNUSED(inputNum); UNUSED(chunkLen);
+GF_PREPARE_PACKED_FUNCS_STUB(gf16_shuffle, _512_sve2)
 #endif
-}
-
-void gf16_shuffle_prepare_packed_512_sve2(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen, size_t sliceLen, unsigned inputPackSize, unsigned inputNum, size_t chunkLen) {
-#ifdef __ARM_FEATURE_SVE2
-	gf16_prepare_packed(dst, src, srcLen, sliceLen, svcntb()*2, &gf16_prepare_block_sve, &gf16_prepare_blocku_sve, inputPackSize, inputNum, chunkLen, 4, NULL, NULL, NULL, NULL, NULL);
-#else
-	UNUSED(dst); UNUSED(src); UNUSED(srcLen); UNUSED(sliceLen); UNUSED(inputPackSize); UNUSED(inputNum); UNUSED(chunkLen);
-#endif
-}
 
 
 void* gf16_shuffle_init_512_sve(int polynomial) {

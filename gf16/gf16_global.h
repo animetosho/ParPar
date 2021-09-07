@@ -244,6 +244,27 @@ HEDLEY_ALWAYS_INLINE int gf16_finish_packed(
 #define _FN(f) TOKENPASTE2(f, _FNSUFFIX)
 
 
+#define GF_PREPARE_PACKED_FUNCS(fnpre, fnsuf, blksize, prepfn, prepufn, interleave, finisher, cksumInit, cksumfn, cksumufn, cksumzfn, cksumprepfn) TOKENPASTE5( \
+void fnpre , _prepare_packed , fnsuf(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen, size_t sliceLen, unsigned inputPackSize, unsigned inputNum, size_t chunkLen) { \
+	gf16_prepare_packed(dst, src, srcLen, sliceLen, blksize, &prepfn, &prepufn, inputPackSize, inputNum, chunkLen, interleave, NULL, NULL, NULL, NULL, NULL); \
+	finisher; \
+} \
+void fnpre , _prepare_packed_cksum , fnsuf(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen, size_t sliceLen, unsigned inputPackSize, unsigned inputNum, size_t chunkLen) { \
+	cksumInit; \
+	gf16_prepare_packed(dst, src, srcLen, sliceLen, blksize, &prepfn, &prepufn, inputPackSize, inputNum, chunkLen, interleave, &checksum, &cksumfn, &cksumufn, &cksumzfn, &cksumprepfn); \
+	finisher; \
+} \
+)
+#define GF_PREPARE_PACKED_FUNCS_STUB(fnpre, fnsuf) TOKENPASTE5( \
+void fnpre , _prepare_packed , fnsuf(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen, size_t sliceLen, unsigned inputPackSize, unsigned inputNum, size_t chunkLen) { \
+	UNUSED(dst); UNUSED(src); UNUSED(srcLen); UNUSED(sliceLen); UNUSED(inputPackSize); UNUSED(inputNum); UNUSED(chunkLen); \
+} \
+void fnpre , _prepare_packed_cksum , fnsuf(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen, size_t sliceLen, unsigned inputPackSize, unsigned inputNum, size_t chunkLen) { \
+	UNUSED(dst); UNUSED(src); UNUSED(srcLen); UNUSED(sliceLen); UNUSED(inputPackSize); UNUSED(inputNum); UNUSED(chunkLen); \
+} \
+)
+
+
 #define GF_FINISH_PACKED_FUNCS(fnpre, fnsuf, blksize, finfn, finufn, interleave, finisher, cksumInit, cksumfn, cksumufn, cksumfinfn) TOKENPASTE5( \
 void fnpre , _finish_packed , fnsuf(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t sliceLen, unsigned numOutputs, unsigned outputNum, size_t chunkLen) { \
 	gf16_finish_packed(dst, src, sliceLen, blksize, &finfn, &finufn, numOutputs, outputNum, chunkLen, interleave, NULL, NULL, NULL, NULL); \

@@ -31,38 +31,15 @@ int gf16_affine_available_avx2 = 0;
 
 #include "gf16_muladd_multi.h"
 
-
-void gf16_affine_prepare_packed_avx2(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen, size_t sliceLen, unsigned inputPackSize, unsigned inputNum, size_t chunkLen) {
 #if defined(__GFNI__) && defined(__AVX2__)
-	gf16_prepare_packed(dst, src, srcLen, sliceLen, sizeof(__m256i)*2, &gf16_shuffle_prepare_block_avx2, &gf16_shuffle_prepare_blocku_avx2, inputPackSize, inputNum, chunkLen,
-#ifdef PLATFORM_AMD64
-		3
+# ifdef PLATFORM_AMD64
+GF_PREPARE_PACKED_FUNCS(gf16_affine, _avx2, sizeof(__m256i)*2, gf16_shuffle_prepare_block_avx2, gf16_shuffle_prepare_blocku_avx2, 3, _mm256_zeroupper(), __m256i checksum = _mm256_setzero_si256(), gf16_checksum_block_avx2, gf16_checksum_blocku_avx2, gf16_checksum_zeroes_avx2, gf16_checksum_prepare_avx2)
+# else
+GF_PREPARE_PACKED_FUNCS(gf16_affine, _avx2, sizeof(__m256i)*2, gf16_shuffle_prepare_block_avx2, gf16_shuffle_prepare_blocku_avx2, 1, _mm256_zeroupper(), __m256i checksum = _mm256_setzero_si256(), gf16_checksum_block_avx2, gf16_checksum_blocku_avx2, gf16_checksum_zeroes_avx2, gf16_checksum_prepare_avx2)
+# endif
 #else
-		1
+GF_PREPARE_PACKED_FUNCS_STUB(gf16_affine, _avx2)
 #endif
-	, NULL, NULL, NULL, NULL, NULL);
-	_mm256_zeroupper();
-#else
-	UNUSED(dst); UNUSED(src); UNUSED(srcLen); UNUSED(sliceLen); UNUSED(inputPackSize); UNUSED(inputNum); UNUSED(chunkLen);
-#endif
-}
-
-void gf16_affine_prepare_packed_cksum_avx2(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen, size_t sliceLen, unsigned inputPackSize, unsigned inputNum, size_t chunkLen) {
-#if defined(__GFNI__) && defined(__AVX2__)
-	__m256i checksum = _mm256_setzero_si256();
-	gf16_prepare_packed(dst, src, srcLen, sliceLen, sizeof(__m256i)*2, &gf16_shuffle_prepare_block_avx2, &gf16_shuffle_prepare_blocku_avx2, inputPackSize, inputNum, chunkLen,
-#ifdef PLATFORM_AMD64
-		3
-#else
-		1
-#endif
-	, &checksum, &gf16_checksum_block_avx2, &gf16_checksum_blocku_avx2, &gf16_checksum_zeroes_avx2, &gf16_checksum_prepare_avx2);
-	_mm256_zeroupper();
-#else
-	UNUSED(dst); UNUSED(src); UNUSED(srcLen); UNUSED(sliceLen); UNUSED(inputPackSize); UNUSED(inputNum); UNUSED(chunkLen);
-#endif
-}
-
 
 #if defined(__GFNI__) && defined(__AVX2__)
 static HEDLEY_ALWAYS_INLINE __m256i gf16_affine_load_matrix(const void *HEDLEY_RESTRICT scratch, uint16_t coefficient) {

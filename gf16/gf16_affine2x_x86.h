@@ -71,40 +71,16 @@ void _FN(gf16_affine2x_prepare)(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RE
 #endif
 }
 
-void _FN(gf16_affine2x_prepare_packed)(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen, size_t sliceLen, unsigned inputPackSize, unsigned inputNum, size_t chunkLen) {
 #ifdef _AVAILABLE
-	gf16_prepare_packed(dst, src, srcLen, sliceLen, sizeof(_mword), &_FN(gf16_affine2x_prepare_block), &_FN(gf16_affine2x_prepare_blocku), inputPackSize, inputNum, chunkLen,
-#if MWORD_SIZE==64 && defined(PLATFORM_AMD64)
-		12
-#elif PLATFORM_AMD64
-		6
+# ifdef PLATFORM_AMD64
+GF_PREPARE_PACKED_FUNCS(gf16_affine2x, _FNSUFFIX, sizeof(_mword), _FN(gf16_affine2x_prepare_block), _FN(gf16_affine2x_prepare_blocku), 6 + (MWORD_SIZE==64)*6, _MM_END, _mword checksum = _MMI(setzero)(), _FN(gf16_checksum_block), _FN(gf16_checksum_blocku), _FN(gf16_checksum_zeroes), _FN(gf16_checksum_prepare))
+# else
+GF_PREPARE_PACKED_FUNCS(gf16_affine2x, _FNSUFFIX, sizeof(_mword), _FN(gf16_affine2x_prepare_block), _FN(gf16_affine2x_prepare_blocku), 2, _MM_END, _mword checksum = _MMI(setzero)(), _FN(gf16_checksum_block), _FN(gf16_checksum_blocku), _FN(gf16_checksum_zeroes), _FN(gf16_checksum_prepare))
+# endif
 #else
-		2
+GF_PREPARE_PACKED_FUNCS_STUB(gf16_affine2x, _FNSUFFIX)
 #endif
-	, NULL, NULL, NULL, NULL, NULL);
-	_MM_END
-#else
-	UNUSED(dst); UNUSED(src); UNUSED(srcLen); UNUSED(sliceLen); UNUSED(inputPackSize); UNUSED(inputNum); UNUSED(chunkLen);
-#endif
-}
 
-void _FN(gf16_affine2x_prepare_packed_cksum)(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen, size_t sliceLen, unsigned inputPackSize, unsigned inputNum, size_t chunkLen) {
-#ifdef _AVAILABLE
-	_mword checksum = _MMI(setzero)();
-	gf16_prepare_packed(dst, src, srcLen, sliceLen, sizeof(_mword), &_FN(gf16_affine2x_prepare_block), &_FN(gf16_affine2x_prepare_blocku), inputPackSize, inputNum, chunkLen,
-#if MWORD_SIZE==64 && defined(PLATFORM_AMD64)
-		12
-#elif PLATFORM_AMD64
-		6
-#else
-		2
-#endif
-	, &checksum, &_FN(gf16_checksum_block), &_FN(gf16_checksum_blocku), &_FN(gf16_checksum_zeroes), &_FN(gf16_checksum_prepare));
-	_MM_END
-#else
-	UNUSED(dst); UNUSED(src); UNUSED(srcLen); UNUSED(sliceLen); UNUSED(inputPackSize); UNUSED(inputNum); UNUSED(chunkLen);
-#endif
-}
 
 void _FN(gf16_affine2x_finish)(void *HEDLEY_RESTRICT dst, size_t len) {
 #ifdef _AVAILABLE
@@ -115,23 +91,8 @@ void _FN(gf16_affine2x_finish)(void *HEDLEY_RESTRICT dst, size_t len) {
 #endif
 }
 
-void _FN(gf16_affine2x_finish_packed)(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t sliceLen, unsigned numOutputs, unsigned outputNum, size_t chunkLen) {
 #ifdef _AVAILABLE
-	gf16_finish_packed(dst, src, sliceLen, sizeof(_mword), &_FN(gf16_affine2x_finish_copy_block), &_FN(gf16_affine2x_finish_copy_blocku), numOutputs, outputNum, chunkLen, 1, NULL, NULL, NULL, NULL);
-	_MM_END
+GF_FINISH_PACKED_FUNCS(gf16_affine2x, _FNSUFFIX, sizeof(_mword), _FN(gf16_affine2x_finish_copy_block), _FN(gf16_affine2x_finish_copy_blocku), 1, _MM_END, _mword checksum = _MMI(setzero)(), _FN(gf16_checksum_block), _FN(gf16_checksum_blocku), _FN(gf16_checksum_finish))
 #else
-	UNUSED(dst); UNUSED(src); UNUSED(sliceLen); UNUSED(numOutputs); UNUSED(outputNum); UNUSED(chunkLen);
+GF_FINISH_PACKED_FUNCS_STUB(gf16_affine2x, _FNSUFFIX)
 #endif
-}
-
-int _FN(gf16_affine2x_finish_packed_cksum)(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t sliceLen, unsigned numOutputs, unsigned outputNum, size_t chunkLen) {
-#ifdef _AVAILABLE
-	_mword checksum = _MMI(setzero)();
-	int ret = gf16_finish_packed(dst, src, sliceLen, sizeof(_mword), &_FN(gf16_affine2x_finish_copy_block), &_FN(gf16_affine2x_finish_copy_blocku), numOutputs, outputNum, chunkLen, 1, &checksum, &_FN(gf16_checksum_block), &_FN(gf16_checksum_blocku), &_FN(gf16_checksum_finish));
-	_MM_END
-	return ret;
-#else
-	UNUSED(dst); UNUSED(src); UNUSED(sliceLen); UNUSED(numOutputs); UNUSED(outputNum); UNUSED(chunkLen);
-	return 0;
-#endif
-}

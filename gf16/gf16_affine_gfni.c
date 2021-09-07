@@ -32,34 +32,15 @@ int gf16_affine_available_gfni = 0;
 
 #include "gf16_muladd_multi.h"
 
-void gf16_affine_prepare_packed_gfni(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen, size_t sliceLen, unsigned inputPackSize, unsigned inputNum, size_t chunkLen) {
 #if defined(__GFNI__) && defined(__SSSE3__)
-	gf16_prepare_packed(dst, src, srcLen, sliceLen, sizeof(__m128i)*2, &gf16_shuffle_prepare_block_gfni, &gf16_shuffle_prepare_blocku_gfni, inputPackSize, inputNum, chunkLen,
-#ifdef PLATFORM_AMD64
-		3
+# ifdef PLATFORM_AMD64
+GF_PREPARE_PACKED_FUNCS(gf16_affine, _gfni, sizeof(__m128i)*2, gf16_shuffle_prepare_block_gfni, gf16_shuffle_prepare_blocku_gfni, 3, (void)0, __m128i checksum = _mm_setzero_si128(), gf16_checksum_block_gfni, gf16_checksum_blocku_gfni, gf16_checksum_zeroes_gfni, gf16_checksum_prepare_gfni)
+# else
+GF_PREPARE_PACKED_FUNCS(gf16_affine, _gfni, sizeof(__m128i)*2, gf16_shuffle_prepare_block_gfni, gf16_shuffle_prepare_blocku_gfni, 1, (void)0, __m128i checksum = _mm_setzero_si128(), gf16_checksum_block_gfni, gf16_checksum_blocku_gfni, gf16_checksum_zeroes_gfni, gf16_checksum_prepare_gfni)
+# endif
 #else
-		1
+GF_PREPARE_PACKED_FUNCS_STUB(gf16_affine, _gfni)
 #endif
-	, NULL, NULL, NULL, NULL, NULL);
-#else
-	UNUSED(dst); UNUSED(src); UNUSED(srcLen); UNUSED(sliceLen); UNUSED(inputPackSize); UNUSED(inputNum); UNUSED(chunkLen);
-#endif
-}
-
-void gf16_affine_prepare_packed_cksum_gfni(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen, size_t sliceLen, unsigned inputPackSize, unsigned inputNum, size_t chunkLen) {
-#if defined(__GFNI__) && defined(__SSSE3__)
-	__m128i checksum = _mm_setzero_si128();
-	gf16_prepare_packed(dst, src, srcLen, sliceLen, sizeof(__m128i)*2, &gf16_shuffle_prepare_block_gfni, &gf16_shuffle_prepare_blocku_gfni, inputPackSize, inputNum, chunkLen,
-#ifdef PLATFORM_AMD64
-		3
-#else
-		1
-#endif
-	, &checksum, &gf16_checksum_block_gfni, &gf16_checksum_blocku_gfni, &gf16_checksum_zeroes_gfni, &gf16_checksum_prepare_gfni);
-#else
-	UNUSED(dst); UNUSED(src); UNUSED(srcLen); UNUSED(sliceLen); UNUSED(inputPackSize); UNUSED(inputNum); UNUSED(chunkLen);
-#endif
-}
 
 
 #if defined(__GFNI__) && defined(__SSSE3__)
