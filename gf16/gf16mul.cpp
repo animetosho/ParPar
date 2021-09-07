@@ -534,10 +534,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 		
 		case GF16_SHUFFLE_512_SVE2:
 			METHOD_REQUIRES(gf16_available_sve2 && gf16_sve_get_size() >= 64)
-			if(!gf16_available_sve2 || gf16_sve_get_size() < 64) {
-				setupMethod(GF16_AUTO);
-				return;
-			}
+			// TODO: this could be made to work on vect-size>=256b using TBL2
 			
 			_info.alignment = 64;
 			_info.stride = gf16_sve_get_size()*2;
