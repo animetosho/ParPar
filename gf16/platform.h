@@ -92,13 +92,50 @@
 #ifdef __SSE4_1__
 # include <smmintrin.h>
 #endif
-#if defined(__AVX__) || defined(__GFNI__)
-# include <immintrin.h>
+
+#ifdef __GFNI__
+// workaround for bug in ClangCL < 12: GFNI defines assume AVX512BW is enabled on MSVC
+// the guards put in place seem to be a performance thing for MSVC, but actually stops it from working here: http://reviews.llvm.org/D20291
+# if defined(_MSC_VER) && defined(__clang__) && __clang_major__ < 12 && !defined(__AVX512BW__)
+#  ifdef __AVX512F__
+#   define __AVX512BW__
+#   include <immintrin.h>
+#   undef __AVX512BW__
+#  elif defined(__AVX2__)
+#   define __AVX512F__
+#   define __AVX512BW__
+#   include <immintrin.h>
+#   undef __AVX512F__
+#   undef __AVX512BW__
+#  elif defined(__AVX__)
+#   define __AVX2__
+#   define __AVX512F__
+#   define __AVX512BW__
+#   include <immintrin.h>
+#   undef __AVX2__
+#   undef __AVX512F__
+#   undef __AVX512BW__
+#  else
+#   include <tmmintrin.h>
+#   include <smmintrin.h>
+#   define __AVX__
+#   define __AVX2__
+#   define __AVX512F__
+#   define __AVX512BW__
+#   include <immintrin.h>
+#   undef __AVX__
+#   undef __AVX2__
+#   undef __AVX512F__
+#   undef __AVX512BW__
+#  endif
+# else
+#  include <immintrin.h>
+# endif
 #endif
 
-
-
-
+#ifdef __AVX__
+# include <immintrin.h>
+#endif
 
 // x86 vector upcasts, where upper is defined to be 0
 #if (defined(__clang__) && __clang_major__ >= 5 && (!defined(__APPLE__) || __clang_major__ >= 7)) || (defined(__GNUC__) && __GNUC__ >= 10)
