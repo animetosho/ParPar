@@ -523,8 +523,8 @@ static HEDLEY_ALWAYS_INLINE void calc_2table(uint16_t coefficient, struct gf16_l
 }
 
 
-unsigned gf16_lookup3_muladd_multi_packed(const void *HEDLEY_RESTRICT scratch, unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch) {
-	UNUSED(scratch); UNUSED(mutScratch);
+unsigned gf16_lookup3_muladd_multi_packed(const void *HEDLEY_RESTRICT scratch, unsigned packRegions, unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch) {
+	UNUSED(scratch); UNUSED(packRegions); UNUSED(mutScratch);
 	
 	uint8_t* _dst = (uint8_t*)dst + len;
 	uint8_t* _src = (uint8_t*)src;

@@ -29,14 +29,14 @@ void fnpre ## _muladd_multi ## fnsuf(const void *HEDLEY_RESTRICT scratch, unsign
 	gf16_muladd_multi(scratch, &xfn, procRegions, regions, offset, dst, src, len, coefficients); \
 	finisher; \
 } \
-void fnpre ## _muladd_multi_packed ## fnsuf(const void *HEDLEY_RESTRICT scratch, unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch) { \
+void fnpre ## _muladd_multi_packed ## fnsuf(const void *HEDLEY_RESTRICT scratch, unsigned packedRegions, unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch) { \
 	UNUSED(mutScratch); \
-	gf16_muladd_multi_packed(scratch, &xfn, procRegions, procRegions, regions, dst, src, len, blocksize, coefficients); \
+	gf16_muladd_multi_packed(scratch, &xfn, procRegions, procRegions, packedRegions, regions, dst, src, len, blocksize, coefficients); \
 	finisher; \
 } \
-void fnpre ## _muladd_multi_packpf ## fnsuf(const void *HEDLEY_RESTRICT scratch, unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch, const void* HEDLEY_RESTRICT prefetchIn, const void* HEDLEY_RESTRICT prefetchOut) { \
+void fnpre ## _muladd_multi_packpf ## fnsuf(const void *HEDLEY_RESTRICT scratch, unsigned packedRegions, unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch, const void* HEDLEY_RESTRICT prefetchIn, const void* HEDLEY_RESTRICT prefetchOut) { \
 	UNUSED(mutScratch); \
-	gf16_muladd_multi_packpf(scratch, &xfn, procRegions, procRegions, regions, dst, src, len, blocksize, coefficients, pfFactor, prefetchIn, prefetchOut); \
+	gf16_muladd_multi_packpf(scratch, &xfn, procRegions, procRegions, packedRegions, regions, dst, src, len, blocksize, coefficients, pfFactor, prefetchIn, prefetchOut); \
 	finisher; \
 }
 
@@ -45,13 +45,13 @@ void fnpre ## _muladd_multi ## fnsuf(const void *HEDLEY_RESTRICT scratch, unsign
 	UNUSED(mutScratch); \
 	UNUSED(scratch); UNUSED(regions); UNUSED(offset); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficients); \
 } \
-void fnpre ## _muladd_multi_packed ## fnsuf(const void *HEDLEY_RESTRICT scratch, unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch) { \
+void fnpre ## _muladd_multi_packed ## fnsuf(const void *HEDLEY_RESTRICT scratch, unsigned packedRegions, unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch) { \
 	UNUSED(mutScratch); \
-	UNUSED(scratch); UNUSED(regions); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficients); \
+	UNUSED(scratch); UNUSED(packedRegions); UNUSED(regions); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficients); \
 } \
-void fnpre ## _muladd_multi_packpf ## fnsuf(const void *HEDLEY_RESTRICT scratch, unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch, const void* HEDLEY_RESTRICT prefetchIn, const void* HEDLEY_RESTRICT prefetchOut) { \
+void fnpre ## _muladd_multi_packpf ## fnsuf(const void *HEDLEY_RESTRICT scratch, unsigned packedRegions, unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch, const void* HEDLEY_RESTRICT prefetchIn, const void* HEDLEY_RESTRICT prefetchOut) { \
 	UNUSED(mutScratch); \
-	UNUSED(scratch); UNUSED(regions); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficients); UNUSED(prefetchIn); UNUSED(prefetchOut); \
+	UNUSED(scratch); UNUSED(packedRegions); UNUSED(regions); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficients); UNUSED(prefetchIn); UNUSED(prefetchOut); \
 }
 
 
@@ -141,7 +141,9 @@ static HEDLEY_ALWAYS_INLINE void gf16_muladd_multi(const void *HEDLEY_RESTRICT s
 }
 
 
-static HEDLEY_ALWAYS_INLINE void gf16_muladd_multi_packed(const void *HEDLEY_RESTRICT scratch, fMuladdPF muladd_pf, const unsigned interleave, unsigned regionsPerCall, unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, size_t blockLen, const uint16_t *HEDLEY_RESTRICT coefficients) {
+static HEDLEY_ALWAYS_INLINE void gf16_muladd_multi_packed(const void *HEDLEY_RESTRICT scratch, fMuladdPF muladd_pf, const unsigned interleave, unsigned regionsPerCall, unsigned inputPackSize, unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, size_t blockLen, const uint16_t *HEDLEY_RESTRICT coefficients) {
+	assert(regions <= inputPackSize);
+	
 	uint8_t* _dst = (uint8_t*)dst + len;
 	const uint8_t* _src = (const uint8_t*)src;
 	const uint8_t* srcEnd;
@@ -216,13 +218,15 @@ static HEDLEY_ALWAYS_INLINE void gf16_muladd_multi_packed(const void *HEDLEY_RES
 	}
 	HEDLEY_ASSUME(remaining < interleave);
 	
+	unsigned lastInterleave = inputPackSize - region > interleave ? interleave : inputPackSize - region;
 	switch(remaining) {
 		#define CASE(x) \
 			case x: \
 				HEDLEY_ASSUME(x < interleave); \
-				srcEnd = _src + region * len + len*x; \
+				HEDLEY_ASSUME(x <= lastInterleave); \
+				srcEnd = _src + region * len + len*lastInterleave; \
 				muladd_pf( \
-					scratch, _dst, x, x, \
+					scratch, _dst, lastInterleave, x, \
 					srcEnd, \
 					srcEnd + blockLen* 1, \
 					srcEnd + blockLen* 2, \
@@ -256,7 +260,9 @@ static HEDLEY_ALWAYS_INLINE void gf16_muladd_multi_packed(const void *HEDLEY_RES
 # define MM_HINT_WT1 _MM_HINT_ET1
 #endif
 
-static HEDLEY_ALWAYS_INLINE void gf16_muladd_multi_packpf(const void *HEDLEY_RESTRICT scratch, fMuladdPF muladd_pf, const unsigned interleave, unsigned regionsPerCall, unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, size_t blockLen, const uint16_t *HEDLEY_RESTRICT coefficients, const unsigned pfFactor, const void* HEDLEY_RESTRICT prefetchIn, const void* HEDLEY_RESTRICT prefetchOut) {
+static HEDLEY_ALWAYS_INLINE void gf16_muladd_multi_packpf(const void *HEDLEY_RESTRICT scratch, fMuladdPF muladd_pf, const unsigned interleave, unsigned regionsPerCall, unsigned inputPackSize, unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, size_t blockLen, const uint16_t *HEDLEY_RESTRICT coefficients, const unsigned pfFactor, const void* HEDLEY_RESTRICT prefetchIn, const void* HEDLEY_RESTRICT prefetchOut) {
+	assert(regions <= inputPackSize);
+	
 	uint8_t* _dst = (uint8_t*)dst + len;
 	const uint8_t* _src = (const uint8_t*)src;
 	const uint8_t* srcEnd;
@@ -342,13 +348,15 @@ static HEDLEY_ALWAYS_INLINE void gf16_muladd_multi_packpf(const void *HEDLEY_RES
 		}
 		
 		if(_pf) {
+			unsigned lastInterleave = inputPackSize - region > interleave ? interleave : inputPackSize - region;
 			switch(remaining) {
 				#define CASE(x) \
 					case x: \
 						HEDLEY_ASSUME(x <= interleave); \
-						srcEnd = _src + region * len + len*x; \
+						HEDLEY_ASSUME(x <= lastInterleave); \
+						srcEnd = _src + region * len + len*lastInterleave; \
 						muladd_pf( \
-							scratch, _dst, x, x, \
+							scratch, _dst, lastInterleave, x, \
 							srcEnd, \
 							srcEnd + blockLen* 1, \
 							srcEnd + blockLen* 2, \
@@ -478,13 +486,15 @@ static HEDLEY_ALWAYS_INLINE void gf16_muladd_multi_packpf(const void *HEDLEY_RES
 	}
 	HEDLEY_ASSUME(remaining < interleave);
 	
+	unsigned lastInterleave = inputPackSize - region > interleave ? interleave : inputPackSize - region;
 	switch(remaining) {
 		#define CASE(x) \
 			case x: \
 				HEDLEY_ASSUME(x <= interleave); \
-				srcEnd = _src + region * len + len*x; \
+				HEDLEY_ASSUME(x <= lastInterleave); \
+				srcEnd = _src + region * len + len*lastInterleave; \
 				muladd_pf( \
-					scratch, _dst, x, x, \
+					scratch, _dst, lastInterleave, x, \
 					srcEnd, \
 					srcEnd + blockLen* 1, \
 					srcEnd + blockLen* 2, \

@@ -33,22 +33,22 @@ void gf_add_multi_avx512(unsigned regions, size_t offset, void *HEDLEY_RESTRICT 
 
 #ifdef __AVX512F__
 # define PACKED_FUNC(vs, il, it) \
-void gf_add_multi_packed_v##vs##i##il##_avx512(unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len) { \
-	gf16_muladd_multi_packed((void*)vs, &gf_add_x_avx512, il, it, regions, dst, src, len, sizeof(__m512i)*vs, NULL); \
+void gf_add_multi_packed_v##vs##i##il##_avx512(unsigned packedRegions, unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len) { \
+	gf16_muladd_multi_packed((void*)vs, &gf_add_x_avx512, il, it, packedRegions, regions, dst, src, len, sizeof(__m512i)*vs, NULL); \
 	_mm256_zeroupper(); \
 } \
-void gf_add_multi_packpf_v##vs##i##il##_avx512(unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, const void* HEDLEY_RESTRICT prefetchIn, const void* HEDLEY_RESTRICT prefetchOut) { \
-	gf16_muladd_multi_packpf((void*)vs, &gf_add_x_avx512, il, it, regions, dst, src, len, sizeof(__m512i)*vs, NULL, vs>1, prefetchIn, prefetchOut); \
+void gf_add_multi_packpf_v##vs##i##il##_avx512(unsigned packedRegions, unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, const void* HEDLEY_RESTRICT prefetchIn, const void* HEDLEY_RESTRICT prefetchOut) { \
+	gf16_muladd_multi_packpf((void*)vs, &gf_add_x_avx512, il, it, packedRegions, regions, dst, src, len, sizeof(__m512i)*vs, NULL, vs>1, prefetchIn, prefetchOut); \
 	_mm256_zeroupper(); \
 }
 
 #else
 # define PACKED_FUNC(vs, il, it) \
-void gf_add_multi_packed_v##vs##i##il##_avx512(unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len) { \
-	UNUSED(regions); UNUSED(dst); UNUSED(src); UNUSED(len); \
+void gf_add_multi_packed_v##vs##i##il##_avx512(unsigned packedRegions, unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len) { \
+	UNUSED(packedRegions); UNUSED(regions); UNUSED(dst); UNUSED(src); UNUSED(len); \
 }\
-void gf_add_multi_packpf_v##vs##i##il##_avx512(unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, const void* HEDLEY_RESTRICT prefetchIn, const void* HEDLEY_RESTRICT prefetchOut) { \
-	UNUSED(regions); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(prefetchIn); UNUSED(prefetchOut); \
+void gf_add_multi_packpf_v##vs##i##il##_avx512(unsigned packedRegions, unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, const void* HEDLEY_RESTRICT prefetchIn, const void* HEDLEY_RESTRICT prefetchOut) { \
+	UNUSED(packedRegions); UNUSED(regions); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(prefetchIn); UNUSED(prefetchOut); \
 }
 #endif
 

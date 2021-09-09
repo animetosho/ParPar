@@ -905,7 +905,7 @@ void gf16_xor_jit_muladd_multi_avx512(const void *HEDLEY_RESTRICT scratch, unsig
 #endif
 }
 
-void gf16_xor_jit_muladd_multi_packed_avx512(const void *HEDLEY_RESTRICT scratch, unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch) {
+void gf16_xor_jit_muladd_multi_packed_avx512(const void *HEDLEY_RESTRICT scratch, unsigned packRegions, unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch) {
 #if defined(__AVX512BW__) && defined(__AVX512VL__) && defined(PLATFORM_AMD64)
 	const struct gf16_xor_scratch *HEDLEY_RESTRICT info = (const struct gf16_xor_scratch*)scratch;
 	jit_wx_pair* jit = (jit_wx_pair*)mutScratch;
@@ -915,7 +915,11 @@ void gf16_xor_jit_muladd_multi_packed_avx512(const void *HEDLEY_RESTRICT scratch
 	
 	for(unsigned region=0; region<regions; region += XOR512_MULTI_REGIONS) {
 		unsigned numRegions = regions - region;
-		if(numRegions > XOR512_MULTI_REGIONS) numRegions = XOR512_MULTI_REGIONS;
+		unsigned lastRegions = packRegions - region;
+		if(numRegions > XOR512_MULTI_REGIONS)
+			numRegions = XOR512_MULTI_REGIONS;
+		if(lastRegions > XOR512_MULTI_REGIONS)
+			lastRegions = XOR512_MULTI_REGIONS;
 		
 		uint8_t* jitptr = jitCode;
 		uint8_t* jitdst = jitptr;
@@ -945,6 +949,10 @@ void gf16_xor_jit_muladd_multi_packed_avx512(const void *HEDLEY_RESTRICT scratch
 			jitptr = xor_write_jit_avx512_multi(info, jitptr, DX, coefficients[region+in], 1);
 		}
 		
+		if(numRegions < lastRegions) {
+			// last group of regions, and some regions need to be ignored
+			jitptr += _jit_add_i(jitptr, DX, 1024 * (lastRegions - numRegions));
+		}
 		
 		// write out registers
 		for(int i=0; i<16; i+=2) {
@@ -1000,7 +1008,7 @@ void gf16_xor_jit_muladd_multi_packed_avx512(const void *HEDLEY_RESTRICT scratch
 	
 	_mm256_zeroupper();
 #else
-	UNUSED(scratch); UNUSED(regions); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficients); UNUSED(mutScratch);
+	UNUSED(scratch); UNUSED(packRegions); UNUSED(regions); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficients); UNUSED(mutScratch);
 #endif
 }
 

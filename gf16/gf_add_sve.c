@@ -77,18 +77,18 @@ void gf_add_multi_sve(unsigned regions, size_t offset, void *HEDLEY_RESTRICT dst
 #endif
 }
 
-void gf_add_multi_packed_sve(unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len) {
+void gf_add_multi_packed_sve(unsigned packedRegions, unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len) {
 #ifdef __ARM_FEATURE_SVE
-	gf16_muladd_multi_packed(NULL, &gf_add_x_sve, 3, 12, regions, dst, src, len, svcntb()*2, NULL);
+	gf16_muladd_multi_packed(NULL, &gf_add_x_sve, 3, 12, packedRegions, regions, dst, src, len, svcntb()*2, NULL);
 #else
-	UNUSED(regions); UNUSED(dst); UNUSED(src); UNUSED(len);
+	UNUSED(packedRegions); UNUSED(regions); UNUSED(dst); UNUSED(src); UNUSED(len);
 #endif
 }
 
-void gf_add_multi_packpf_sve(unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, const void* HEDLEY_RESTRICT prefetchIn, const void* HEDLEY_RESTRICT prefetchOut) {
+void gf_add_multi_packpf_sve(unsigned packedRegions, unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, const void* HEDLEY_RESTRICT prefetchIn, const void* HEDLEY_RESTRICT prefetchOut) {
 #ifdef __ARM_FEATURE_SVE
-	gf16_muladd_multi_packpf(NULL, &gf_add_x_sve, 3, 12, regions, dst, src, len, svcntb()*2, NULL, 1, prefetchIn, prefetchOut);
+	gf16_muladd_multi_packpf(NULL, &gf_add_x_sve, 3, 12, packedRegions, regions, dst, src, len, svcntb()*2, NULL, 1, prefetchIn, prefetchOut);
 #else
-	UNUSED(regions); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(prefetchIn); UNUSED(prefetchOut);
+	UNUSED(packedRegions); UNUSED(regions); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(prefetchIn); UNUSED(prefetchOut);
 #endif
 }
