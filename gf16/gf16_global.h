@@ -188,6 +188,7 @@ HEDLEY_ALWAYS_INLINE int gf16_finish_packed(
 	uint8_t* srcBase = (uint8_t*)src + (outputNum/interleaveSize) * chunkLen * interleaveSize + (outputNum%interleaveSize) * blockLen;
 	
 	unsigned fullChunks = (unsigned)(alignedSliceLen/dataChunkLen);
+	size_t remaining = sliceLen - fullChunks*dataChunkLen; // can be negative - if so, will be fixed below
 	size_t chunkStride = chunkLen * numOutputs;
 	for(unsigned chunk=0; chunk<fullChunks; chunk++) {
 		uint8_t* _src = srcBase + chunkStride*chunk;
@@ -199,9 +200,10 @@ HEDLEY_ALWAYS_INLINE int gf16_finish_packed(
 				finishBlock(_dst + pos, _src + pos*interleaveBy);
 				if(checksumBlock) checksumBlock(_dst + pos, checksum, blockLen, 0);
 			}
-			size_t remaining = sliceLen - dataChunkLen*chunk - pos;
+			remaining = sliceLen - dataChunkLen*chunk - pos;
 			finishBlockU(_dst + pos, _src + pos*interleaveBy, remaining);
 			if(checksumBlock) checksumBlockU(_dst + pos, remaining, checksum);
+			remaining = 0;
 		} else
 			for(size_t pos=0; pos<dataChunkLen; pos+=blockLen) {
 				finishBlock(_dst + pos, _src + pos*interleaveBy);
@@ -210,7 +212,6 @@ HEDLEY_ALWAYS_INLINE int gf16_finish_packed(
 	}
 	
 	// do final chunk
-	size_t remaining = alignedSliceLen % dataChunkLen;
 	size_t effectiveLastChunkLen = (alignedSliceLen + checksumLen) % chunkLen;
 	if(effectiveLastChunkLen == 0) effectiveLastChunkLen = chunkLen;
 	if(remaining) {
