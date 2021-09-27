@@ -1,4 +1,5 @@
 #include "platform.h"
+#include "../src/stdint.h"
 
 #ifndef STR
 # define STR_HELPER(x) #x

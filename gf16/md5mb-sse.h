@@ -13,6 +13,8 @@
 #define ADD _mm_add_epi32
 #define VAL _mm_set1_epi32
 #define word_t __m128i
+// TODO: for SSE, might be better to use shufps because it enables movaps which is 1 byte shorter
+// probably worse for AVX since all instructions are 4 bytes (and shufps has an immediate byte)
 #define LOAD4(set, ptr, offs, idx, var0, var1, var2, var3) { \
 	__m128i in0 = _mm_load_si128((__m128i*)(ptr[0+set*4] + offs + idx*4)); \
 	__m128i in1 = _mm_load_si128((__m128i*)(ptr[1+set*4] + offs + idx*4)); \

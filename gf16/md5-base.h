@@ -42,7 +42,7 @@
 
 #ifndef MD5_USE_ASM
 static HEDLEY_ALWAYS_INLINE void FNB(md5_process_block)(word_t* state, const char* const* HEDLEY_RESTRICT data, size_t offset) {
-	UNUSED(offset);
+	UNUSED(offset); // only ignored in x2
 	word_t A, B, C, D;
 	word_t oA, oB, oC, oD;
 	/* some compilers don't optimise arrays well (i.e. register spills), so use local variables */
