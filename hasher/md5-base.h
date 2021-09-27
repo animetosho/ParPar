@@ -1,5 +1,5 @@
 
-#include "../gf16/platform.h"
+#include "../src/platform.h"
 #include "../src/hedley.h"
 
 #ifndef UNUSED

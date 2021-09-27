@@ -1,6 +1,6 @@
 
 #include "../src/hedley.h"
-#include "platform.h"
+#include "../src/platform.h"
 
 #define GF16_BITDEP_INIT128_GEN_XOR 0
 #define GF16_BITDEP_INIT128_GEN_XORJIT 1

@@ -1,5 +1,5 @@
 #include "gf16_global.h"
-#include "platform.h"
+#include "../src/platform.h"
 
 #define _mword __m512i
 #define _MM(f) _mm512_ ## f

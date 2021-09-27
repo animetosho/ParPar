@@ -1,4 +1,4 @@
-#include "../gf16/platform.h"
+#include "../src/platform.h"
 
 #ifndef STR
 # define STR_HELPER(x) #x

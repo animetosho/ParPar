@@ -1,6 +1,6 @@
 
 #include "gf16_global.h"
-#include "platform.h"
+#include "../src/platform.h"
 
 #ifdef __SSE2__
 static HEDLEY_ALWAYS_INLINE void calc_table(uint16_t val, uint16_t* lhtable) {

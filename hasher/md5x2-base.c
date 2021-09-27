@@ -1,4 +1,4 @@
-#include "../gf16/platform.h"
+#include "../src/platform.h"
 #include <string.h>
 
 // single scalar implementation for finishing block

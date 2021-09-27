@@ -12,7 +12,7 @@ extern "C" {
 }
 
 // CPUID stuff
-#include "platform.h"
+#include "../src/platform.h"
 #ifdef PLATFORM_X86
 # ifdef _MSC_VER
 	#include <intrin.h>

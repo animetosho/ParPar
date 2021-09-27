@@ -1,6 +1,6 @@
 #include <string.h> // memcpy+memset
 #include "../src/stdint.h"
-#include "../gf16/platform.h"
+#include "../src/platform.h"
 
 
 #define ADD(a, b) (a+b)

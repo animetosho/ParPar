@@ -1,6 +1,6 @@
 
 #include "gf16_global.h"
-#include "platform.h"
+#include "../src/platform.h"
 
 
 #if defined(__ARM_FEATURE_SVE)

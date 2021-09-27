@@ -1,6 +1,6 @@
 
 #include "gf16_global.h"
-#include "platform.h"
+#include "../src/platform.h"
 
 #define MWORD_SIZE 32
 #define _mword __m256i

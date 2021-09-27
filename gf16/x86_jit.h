@@ -2,7 +2,7 @@
 #define __GF_XOR_JIT__
 
 #include "gf16_global.h"
-#include "platform.h"
+#include "../src/platform.h"
 
 /* registers */
 #define AX 0

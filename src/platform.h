@@ -1,8 +1,8 @@
 
-#ifndef GF16_PLATFORM_H
-#define GF16_PLATFORM_H
+#ifndef PP_PLATFORM_H
+#define PP_PLATFORM_H
 
-#include "../src/hedley.h"
+#include "hedley.h"
 
 #if defined(__x86_64__) || \
     defined(__amd64__ ) || \
@@ -195,4 +195,4 @@ HEDLEY_WARNING("Compiling AVX code on MinGW GCC may cause crashing due to stack 
 #endif
 
 
-#endif /* GF16_PLATFORM_H */
+#endif /* PP_PLATFORM_H */

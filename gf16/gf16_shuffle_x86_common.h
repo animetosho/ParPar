@@ -2,7 +2,7 @@
 #define _GF16_SHUFFLE_X86_COMMON_
 
 #include "gf16_global.h"
-#include "platform.h"
+#include "../src/platform.h"
 
 #if (GF16_POLYNOMIAL | 0x1f) == 0x1101f
 // enable special routine if targeting our default 0x1100b polynomial

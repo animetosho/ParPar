@@ -1,6 +1,6 @@
 
 #include "gf16_global.h"
-#include "platform.h"
+#include "../src/platform.h"
 #include "gf16_muladd_multi.h"
 
 #if defined(__AVX512VBMI__) && defined(__AVX512VL__)
