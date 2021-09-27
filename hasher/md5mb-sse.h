@@ -1,5 +1,5 @@
 
-#include "platform.h"
+#include "../gf16/platform.h"
 #ifdef PLATFORM_AMD64
 #define MD5X2
 #endif
