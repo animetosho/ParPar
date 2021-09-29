@@ -1,0 +1,35 @@
+#include "../src/platform.h"
+#include "crc_slice4.h"
+
+
+#define HasherInput HasherInput_SSE
+#define _FNMD5x2(f) f##_sse
+#define _FNCRC(f) f##_slice4
+#define MD5Multi MD5Multi_SSE
+#define _FNMD5mb(f) f##_sse
+#define _FNMD5mb2(f) f##_sse
+#define md5mb_regions md5mb_regions_sse
+#define md5mb_alignment md5mb_alignment_sse
+#define CLEAR_VEC (void)0
+
+#ifdef __SSE2__
+# include "md5x2-sse.h"
+# include "md5mb-sse.h"
+# include "hasher_base.h"
+#else
+# include "hasher_stub.h"
+#endif
+
+#undef HasherInput
+#undef MD5Multi
+#undef _FNMD5mb2
+#undef md5mb_regions
+#define MD5Multi MD5Multi2_SSE
+#define _FNMD5mb2(f) f##2_sse
+#define md5mb_regions md5mb_regions_sse*2
+
+#if defined(__SSE2__) && defined(PLATFORM_AMD64)
+# include "hasher_base.h"
+#else
+# include "hasher_stub.h"
+#endif

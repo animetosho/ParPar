@@ -57,6 +57,10 @@
 # if (defined(_M_IX86_FP) && _M_IX86_FP == 2) || defined(_M_X64)
 	#define __SSE2__ 1
 	#define __SSSE3__ 1
+	#define __SSE4_1__ 1
+# endif
+# if !defined(__PCLMUL__) && (_MSC_VER >= 1600 && defined(__SSE2__))
+	#define __PCLMUL__ 1
 # endif
 # if !defined(__AVX__) && (_MSC_VER >= 1700 && defined(__SSE2__))
 	#define __AVX__ 1
@@ -91,6 +95,9 @@
 #endif
 #ifdef __SSE4_1__
 # include <smmintrin.h>
+#endif
+#ifdef __PCLMUL__
+# include <wmmintrin.h>
 #endif
 
 #ifdef __GFNI__
@@ -190,7 +197,7 @@ HEDLEY_WARNING("Compiling AVX code on MinGW GCC may cause crashing due to stack 
 	#define ALIGN_FREE _aligned_free
 #else
 	#include <stdlib.h>
-	#define ALIGN_ALLOC(buf, len, align) if(posix_memalign((void**)&(buf), align, (len))) (buf) = NULL
+	#define ALIGN_ALLOC(buf, len, align) if(posix_memalign((void**)&(buf), (align < sizeof(void*) ? sizeof(void*) : align), (len))) (buf) = NULL
 	#define ALIGN_FREE free
 #endif
 
