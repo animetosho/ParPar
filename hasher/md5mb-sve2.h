@@ -158,17 +158,10 @@ HEDLEY_WARNING("Clang prior to version 12 may break SVE2 MD5 code");
 	var0 = svtrn1_u32(data0, data1); \
 	var1 = svtrn2_u32(data0, data1); \
 }
-#define MD5X2
 
 #define ROTATE(a, r) svxar_n_u32(a, svdup_u32(0), 32-r)
-#define _FN(f) f##_sve2
-#ifdef MD5X2
-# define md5mb_regions_sve2 svcnth()
-# define md5mb_max_regions_sve2 128
-#else
-# define md5mb_regions_sve2 svcntw()
-# define md5mb_max_regions_sve2 64
-#endif
+#define md5mb_regions_sve2 svcntw()
+#define md5mb_max_regions_sve2 64
 #define md5mb_alignment_sve2 16
 
 #define F(b,c,d) svbsl_u32(c, d, b)
@@ -176,14 +169,16 @@ HEDLEY_WARNING("Clang prior to version 12 may break SVE2 MD5 code");
 #define H(b,c,d) sveor3_u32(c, d, b)
 #define I(b,c,d) svnbsl_u32(c, sveor_u32_x(svptrue_b32(), c, d), b)
 
-#include "md5mb-base.h"
 
-#ifdef MD5X2
-# undef MD5X2
-#endif
+#define _FN(f) f##_sve2
+#include "md5mb-base.h"
+#define MD5X2
+#include "md5mb-base.h"
+#undef MD5X2
+#undef _FN
+
 
 #undef ROTATE
-#undef _FN
 #undef ADD
 #undef VAL
 #undef word_t
@@ -202,8 +197,10 @@ HEDLEY_WARNING("Clang prior to version 12 may break SVE2 MD5 code");
 
 static HEDLEY_ALWAYS_INLINE void md5_extract_mb_sve2(void* dst, void* state, int idx) {
 	uint32_t* state_ = (uint32_t*)state;
-	if(idx >= (int)svcntw())
+	if(idx >= (int)svcntw()) {
 		state_ += 4*svcntw();
+		idx -= svcntw();
+	}
 	// re-arrange to pairs
 	svuint64_t tmp0 = svreinterpret_u64_u32(svzip1_u32(svld1_u32(svptrue_b32(), state_), svld1_vnum_u32(svptrue_b32(), state_, 1)));
 	svuint64_t tmp1 = svreinterpret_u64_u32(svzip2_u32(svld1_u32(svptrue_b32(), state_), svld1_vnum_u32(svptrue_b32(), state_, 1)));
@@ -211,7 +208,6 @@ static HEDLEY_ALWAYS_INLINE void md5_extract_mb_sve2(void* dst, void* state, int
 	svuint64_t tmp3 = svreinterpret_u64_u32(svzip2_u32(svld1_vnum_u32(svptrue_b32(), state_, 2), svld1_vnum_u32(svptrue_b32(), state_, 3)));
 	
 	// construct target vector
-	idx %= svcntw();
 	svuint32_t vect;
 	switch(idx / (svcntw()/4)) {
 	case 0:

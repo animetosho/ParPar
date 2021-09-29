@@ -1,8 +1,5 @@
 
 #include "../src/platform.h"
-#ifdef PLATFORM_AMD64
-#define MD5X2
-#endif
 
 #define INPUT(k, set, ptr, offs, idx, var) ADD(var, VAL(k))
 #define LOAD INPUT
@@ -35,12 +32,7 @@
 	_mm_shufflehi_epi16(_mm_shufflelo_epi16(a, 0xb1), 0xb1) \
 	: _mm_or_si128(_mm_slli_epi32(a, r), _mm_srli_epi32(a, 32-r)) \
 )
-#define _FN(f) f##_sse
-#ifdef MD5X2
-#define md5mb_regions_sse 8
-#else
 #define md5mb_regions_sse 4
-#endif
 #define md5mb_max_regions_sse md5mb_regions_sse
 #define md5mb_alignment_sse 16
 
@@ -57,9 +49,16 @@
 	) \
 )
 
-#include "md5mb-base.h"
 
+#define _FN(f) f##_sse
+#include "md5mb-base.h"
+#ifdef PLATFORM_AMD64
+# define MD5X2
+# include "md5mb-base.h"
+# undef MD5X2
+#endif
 #undef _FN
+
 
 static HEDLEY_ALWAYS_INLINE void md5_extract_mb_sse(void* dst, void* state, int idx) {
 	HEDLEY_ASSUME(idx < md5mb_regions_sse);
@@ -83,12 +82,19 @@ static HEDLEY_ALWAYS_INLINE void md5_extract_mb_sse(void* dst, void* state, int 
 
 
 #ifdef __AVX__
-# define _FN(f) f##_avx
 # define md5mb_regions_avx md5mb_regions_sse
 # define md5mb_max_regions_avx md5mb_regions_avx
-#define md5mb_alignment_avx md5mb_alignment_sse
+# define md5mb_alignment_avx md5mb_alignment_sse
+
+# define _FN(f) f##_avx
 # include "md5mb-base.h"
+# ifdef PLATFORM_AMD64
+#  define MD5X2
+#  include "md5mb-base.h"
+#  undef MD5X2
+# endif
 # undef _FN
+
 # define md5_extract_mb_avx md5_extract_mb_sse
 #endif
 #ifdef ROTATE
@@ -98,7 +104,6 @@ static HEDLEY_ALWAYS_INLINE void md5_extract_mb_sse(void* dst, void* state, int 
 #ifdef __XOP__
 #include <x86intrin.h>
 #define ROTATE _mm_roti_epi32
-#define _FN(f) f##_xop
 #define md5mb_regions_xop md5mb_regions_sse
 #define md5mb_max_regions_xop md5mb_regions_xop
 #define md5mb_alignment_xop md5mb_alignment_sse
@@ -114,9 +119,17 @@ static HEDLEY_ALWAYS_INLINE void md5_extract_mb_sse(void* dst, void* state, int 
 //#define I(b,c,d) _mm_xor_si128(_mm_or_si128(_mm_xor_si128(d, _mm_set1_epi8(-1)), b), c)
 #define I(b,c,d) _mm_cmov_si128(_mm_xor_si128(c, _mm_set1_epi8(-1)), _mm_xor_si128(d, _mm_xor_si128(c, _mm_set1_epi8(-1))), b)
 
-#include "md5mb-base.h"
 
+#define _FN(f) f##_xop
+#include "md5mb-base.h"
+#ifdef PLATFORM_AMD64
+# define MD5X2
+# include "md5mb-base.h"
+# undef MD5X2
+#endif
 #undef _FN
+
+
 #undef ROTATE
 
 #define md5_extract_mb_xop md5_extract_mb_sse
@@ -184,12 +197,7 @@ static HEDLEY_ALWAYS_INLINE void md5_extract_mb_sse(void* dst, void* state, int 
 	_mm256_shufflehi_epi16(_mm256_shufflelo_epi16(a, 0xb1), 0xb1) \
 	: _mm256_or_si256(_mm256_slli_epi32(a, r), _mm256_srli_epi32(a, 32-r)) \
 )
-#define _FN(f) f##_avx2
-#ifdef MD5X2
-#define md5mb_regions_avx2 16
-#else
 #define md5mb_regions_avx2 8
-#endif
 #define md5mb_max_regions_avx2 md5mb_regions_avx2
 #define md5mb_alignment_avx2 32
 
@@ -207,9 +215,16 @@ static HEDLEY_ALWAYS_INLINE void md5_extract_mb_sse(void* dst, void* state, int 
 	) \
 )
 
-#include "md5mb-base.h"
 
+#define _FN(f) f##_avx2
+#include "md5mb-base.h"
+#ifdef PLATFORM_AMD64
+# define MD5X2
+# include "md5mb-base.h"
+# undef MD5X2
+#endif
 #undef _FN
+
 
 static HEDLEY_ALWAYS_INLINE void md5_extract_mb_avx2(void* dst, void* state, int idx) {
 	HEDLEY_ASSUME(idx < md5mb_regions_avx2);
@@ -346,12 +361,7 @@ static HEDLEY_ALWAYS_INLINE void md5_extract_mb_avx2(void* dst, void* state, int
 
 
 #define ROTATE _mm512_rol_epi32
-#define _FN(f) f##_avx512
-#ifdef MD5X2
-#define md5mb_regions_avx512 32
-#else
 #define md5mb_regions_avx512 16
-#endif
 #define md5mb_max_regions_avx512 md5mb_regions_avx512
 #define md5mb_alignment_avx512 64
 
@@ -366,9 +376,17 @@ static HEDLEY_ALWAYS_INLINE void md5_extract_mb_avx2(void* dst, void* state, int
 # define H(b,c,d) _mm512_ternarylogic_epi32(d,c,b,0x96)
 # define I(b,c,d) _mm512_ternarylogic_epi32(d,c,b,0x63)
 
-#include "md5mb-base.h"
 
+#define _FN(f) f##_avx512
+#include "md5mb-base.h"
+#ifdef PLATFORM_AMD64
+# define MD5X2
+# include "md5mb-base.h"
+# undef MD5X2
+#endif
 #undef _FN
+
+
 #undef ROTATE
 #undef LOAD16
 
@@ -439,6 +457,3 @@ static HEDLEY_ALWAYS_INLINE void md5_extract_mb_avx512(void* dst, void* state, i
 
 #undef INPUT
 #undef LOAD
-#ifdef MD5X2
-#undef MD5X2
-#endif

@@ -21,15 +21,10 @@
 	var2 = vcombine_u32(vget_low_u32(in01.val[1]), vget_low_u32(in23.val[1])); \
 	var3 = vcombine_u32(vget_high_u32(in01.val[1]), vget_high_u32(in23.val[1])); \
 }
-#define MD5X2
 
 #define ROTATE(a, r) r==16 ? vreinterpretq_u32_u16(vrev32q_u16(vreinterpretq_u16_u32(a))) : vsliq_n_u32(vshrq_n_u32(a, 32-r), a, r)
-#define _FN(f) f##_neon
-#ifdef MD5X2
-# define md5mb_regions_neon 8
-#else
-# define md5mb_regions_neon 4
-#endif
+
+#define md5mb_regions_neon 4
 #define md5mb_max_regions_neon md5mb_regions_neon
 #define md5mb_alignment_neon 16
 
@@ -39,14 +34,16 @@
 #define I(b,c,d) veorq_u32(vornq_u32(b, d), c)
 //#define I(b,c,d) vbslq_u32(b, vmvnq_u32(c), veorq_u32(vmvnq_u32(c), d))
 
-#include "md5mb-base.h"
 
-#ifdef MD5X2
-# undef MD5X2
-#endif
+#define _FN(f) f##_neon
+#include "md5mb-base.h"
+#define MD5X2
+#include "md5mb-base.h"
+#undef MD5X2
+#undef _FN
+
 
 #undef ROTATE
-#undef _FN
 #undef ADD
 #undef VAL
 #undef word_t

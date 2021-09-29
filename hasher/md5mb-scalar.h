@@ -1,18 +1,18 @@
 #include "md5-scalar-base.h"
 
-#define _FN(f) f##_scalar
-#define md5mb_regions_scalar 2
-#define md5mb_max_regions_scalar 2
+#define md5mb_regions_scalar 1
+#define md5mb_max_regions_scalar 1
 #define md5mb_alignment_scalar 4
-#define MD5X2
 
+
+#define _FN(f) f##_scalar
 #include "md5mb-base.h"
-
-#ifdef MD5X2
-# undef MD5X2
-#endif
-
+#define MD5X2
+#include "md5mb-base.h"
+#undef MD5X2
 #undef _FN
+
+
 #undef ROTATE
 #undef ADD
 #undef VAL

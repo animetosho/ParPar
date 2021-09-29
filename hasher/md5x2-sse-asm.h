@@ -1,8 +1,12 @@
 #include "../src/platform.h"
+#include "../src/stdint.h"
 
 #ifndef STR
 # define STR_HELPER(x) #x
 # define STR(x) STR_HELPER(x)
+#endif
+#ifndef UNUSED
+# define UNUSED(...) (void)(__VA_ARGS__)
 #endif
 
 ALIGN_TO(16, static const uint32_t md5_constants[128]) = {
