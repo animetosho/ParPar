@@ -14,26 +14,7 @@ extern "C" {
 // CPUID stuff
 #include "../src/platform.h"
 #ifdef PLATFORM_X86
-# ifdef _MSC_VER
-	#include <intrin.h>
-	#define _cpuid __cpuid
-	#define _cpuidX __cpuidex
-	#if _MSC_VER >= 1600
-		#include <immintrin.h>
-		#define _GET_XCR() _xgetbv(_XCR_XFEATURE_ENABLED_MASK)
-	#endif
-# else
-	#include <cpuid.h>
-	/* GCC seems to support this, I assume everyone else does too? */
-	#define _cpuid(ar, eax) __cpuid(eax, ar[0], ar[1], ar[2], ar[3])
-	#define _cpuidX(ar, eax, ecx) __cpuid_count(eax, ecx, ar[0], ar[1], ar[2], ar[3])
-	
-	static inline int _GET_XCR() {
-		int xcr0;
-		__asm__ __volatile__("xgetbv" : "=a" (xcr0) : "c" (0) : "%edx");
-		return xcr0;
-	}
-# endif
+# include "../src/cpuid.h"
 # include "x86_jit.h"
 struct CpuCap {
 	bool hasSSE2, hasSSSE3, hasAVX, hasAVX2, hasAVX512VLBW, hasAVX512VBMI, hasGFNI;
@@ -73,7 +54,7 @@ struct CpuCap {
 		bool isAtom = false, isICoreOld = false, isICoreNew = false;
 		if(family == 6) {
 			/* from handy table at http://a4lg.com/tech/x86/database/x86-families-and-models.en.html */
-			if(model == 0x1C || model == 0x26 || model == 0x27 || model == 0x35 || model == 0x36 || model == 0x37 || model == 0x4A || model == 0x4C || model == 0x4D || model == 0x5A || model == 0x5D) {
+			if(CPU_MODEL_IS_BNL_SLM(model)) {
 				/* we have a Bonnell/Silvermont CPU with a really slow pshufb instruction; pretend SSSE3 doesn't exist, as XOR_DEPENDS is much faster */
 				propPrefShuffleThresh = 2048;
 				isAtom = true;
@@ -107,13 +88,10 @@ struct CpuCap {
 				isAtom = true;
 			}
 			
-			if((model == 0x5C || model == 0x5F) // Goldmont
-			|| (model == 0x7A) // Goldmont Plus
-			|| (model == 0x86 || model == 0x96 || model == 0x9C) // Tremont
-			)
+			if(CPU_MODEL_IS_GLM(model) || CPU_MODEL_IS_TMT(model))
 				isAtom = true;
 		}
-		if((family == 0x5f && (model == 0 || model == 1 || model == 2)) || (family == 0x6f && (model == 0 || model == 0x10 || model == 0x20 || model == 0x30))) {
+		if(CPU_FAMMDL_IS_AMDCAT(family, model)) {
 			/* Jaguar has a slow shuffle instruction and XOR is much faster; presumably the same for Bobcat/Puma */
 			propPrefShuffleThresh = 2048;
 		}
@@ -177,29 +155,7 @@ struct CpuCap {
 };
 #endif
 #ifdef PLATFORM_ARM
-# ifdef __ANDROID__
-#  include <cpu-features.h>
-# elif defined(__linux__) || (defined(__FreeBSD__) && __FreeBSD__ >= 12)
-#  include <sys/auxv.h>
-#  include <asm/hwcap.h>
-# elif (defined(__FreeBSD__) && __FreeBSD__ < 12)
-#  include <sys/sysctl.h>
-#  include <asm/hwcap.h>
-# elif defined(_WIN32)
-#  define WIN32_LEAN_AND_MEAN
-#  define NOMINMAX
-#  include <Windows.h>
-# elif defined(__APPLE__)
-#  include <sys/types.h>
-#  include <sys/sysctl.h>
-# endif
-# ifdef __FreeBSD__
-static unsigned long getauxval(unsigned long cap) {
-	unsigned long ret;
-	elf_aux_info(cap, &ret, sizeof(ret));
-	return ret;
-}
-# endif
+# include "../src/cpuid.h"
 
 struct CpuCap {
 	bool hasNEON;
@@ -207,36 +163,9 @@ struct CpuCap {
 	bool hasSVE2;
 	CpuCap(bool detect) : hasNEON(true), hasSVE(true), hasSVE2(true) {
 		if(!detect) return;
-		hasNEON = false;
-		hasSVE = false;
-		hasSVE2 = false;
-		
-# if defined(AT_HWCAP)
-#  ifdef __aarch64__
-		hasNEON = getauxval(AT_HWCAP) & HWCAP_ASIMD;
-#   if defined(HWCAP_SVE)
-		hasSVE = getauxval(AT_HWCAP) & HWCAP_SVE;
-#   endif
-#   if defined(AT_HWCAP2) && defined(HWCAP2_SVE2)
-		hasSVE2 = getauxval(AT_HWCAP2) & HWCAP2_SVE2;
-#   endif
-#  else
-		hasNEON = getauxval(AT_HWCAP) & HWCAP_NEON;
-#  endif
-# elif defined(ANDROID_CPU_FAMILY_ARM)
-#  ifdef __aarch64__
-		hasNEON = android_getCpuFeatures() & ANDROID_CPU_ARM64_FEATURE_ASIMD;
-#  else
-		hasNEON = android_getCpuFeatures() & ANDROID_CPU_ARM_FEATURE_NEON;
-#  endif
-# elif defined(_WIN32)
-		hasNEON = IsProcessorFeaturePresent(PF_ARM_NEON_INSTRUCTIONS_AVAILABLE);
-# elif defined(__APPLE__)
-		int supported = 0;
-		size_t len = sizeof(supported);
-		if(sysctlbyname("hw.optional.neon", &supported, &len, NULL, 0) == 0)
-			hasNEON = (bool)supported;
-# endif
+		hasNEON = CPU_HAS_NEON;
+		hasSVE = CPU_HAS_SVE;
+		hasSVE2 = CPU_HAS_SVE2;
 	}
 };
 #endif
