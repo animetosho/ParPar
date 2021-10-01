@@ -4,7 +4,7 @@
 #undef FNB
 
 static HEDLEY_ALWAYS_INLINE void _FN(md5_update_block_x2)(void* state, const void* src1, const void* src2) {
-	const char* const src[] = {(const char*)src1, (const char*)src2};
+	const uint8_t* const src[] = {(const uint8_t*)src1, (const uint8_t*)src2};
 	_FN(md5_process_block_x2)((word_t*)state, src, 0);
 }
 

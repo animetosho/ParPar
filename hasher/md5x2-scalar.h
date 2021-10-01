@@ -1,5 +1,6 @@
 #include <string.h> // memcpy+memset
 #include "../src/platform.h"
+#include "../src/stdint.h"
 
 #if defined(__GNUC__) && defined(PLATFORM_AMD64)
 # define MD5_USE_ASM

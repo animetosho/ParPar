@@ -52,11 +52,9 @@
 
 #define _FN(f) f##_sse
 #include "md5mb-base.h"
-#ifdef PLATFORM_AMD64
-# define MD5X2
-# include "md5mb-base.h"
-# undef MD5X2
-#endif
+#define MD5X2
+#include "md5mb-base.h"
+#undef MD5X2
 #undef _FN
 
 
@@ -88,11 +86,9 @@ static HEDLEY_ALWAYS_INLINE void md5_extract_mb_sse(void* dst, void* state, int 
 
 # define _FN(f) f##_avx
 # include "md5mb-base.h"
-# ifdef PLATFORM_AMD64
-#  define MD5X2
-#  include "md5mb-base.h"
-#  undef MD5X2
-# endif
+# define MD5X2
+# include "md5mb-base.h"
+# undef MD5X2
 # undef _FN
 
 # define md5_extract_mb_avx md5_extract_mb_sse
@@ -102,7 +98,11 @@ static HEDLEY_ALWAYS_INLINE void md5_extract_mb_sse(void* dst, void* state, int 
 #endif
 
 #ifdef __XOP__
-#include <x86intrin.h>
+#ifdef _MSC_VER
+# include <intrin.h>
+#else
+# include <x86intrin.h>
+#endif
 #define ROTATE _mm_roti_epi32
 #define md5mb_regions_xop md5mb_regions_sse
 #define md5mb_max_regions_xop md5mb_regions_xop
@@ -122,11 +122,9 @@ static HEDLEY_ALWAYS_INLINE void md5_extract_mb_sse(void* dst, void* state, int 
 
 #define _FN(f) f##_xop
 #include "md5mb-base.h"
-#ifdef PLATFORM_AMD64
-# define MD5X2
-# include "md5mb-base.h"
-# undef MD5X2
-#endif
+#define MD5X2
+#include "md5mb-base.h"
+#undef MD5X2
 #undef _FN
 
 
@@ -218,11 +216,9 @@ static HEDLEY_ALWAYS_INLINE void md5_extract_mb_sse(void* dst, void* state, int 
 
 #define _FN(f) f##_avx2
 #include "md5mb-base.h"
-#ifdef PLATFORM_AMD64
-# define MD5X2
-# include "md5mb-base.h"
-# undef MD5X2
-#endif
+#define MD5X2
+#include "md5mb-base.h"
+#undef MD5X2
 #undef _FN
 
 
@@ -379,11 +375,9 @@ static HEDLEY_ALWAYS_INLINE void md5_extract_mb_avx2(void* dst, void* state, int
 
 #define _FN(f) f##_avx512
 #include "md5mb-base.h"
-#ifdef PLATFORM_AMD64
-# define MD5X2
-# include "md5mb-base.h"
-# undef MD5X2
-#endif
+#define MD5X2
+#include "md5mb-base.h"
+#undef MD5X2
 #undef _FN
 
 

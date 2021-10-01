@@ -11,7 +11,7 @@
 #endif
 
 
-static HEDLEY_ALWAYS_INLINE void md5_process_block_x2_scalar(uint32_t* state, const char* const* HEDLEY_RESTRICT data, size_t offset) {
+static HEDLEY_ALWAYS_INLINE void md5_process_block_x2_scalar(uint32_t* state, const uint8_t* const* HEDLEY_RESTRICT data, size_t offset) {
 	UNUSED(offset);
 	uint32_t A1 = state[0];
 	uint32_t B1 = state[1];

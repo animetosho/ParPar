@@ -1,14 +1,17 @@
 #include "../src/hedley.h"
 #include "../src/stdint.h"
 
+// workaround MSVC complaining "unary minus operator applied to unsigned type, result still unsigned"
+#define NEGATE(n) (uint32_t)(-((int32_t)(n)))
+
 static HEDLEY_ALWAYS_INLINE uint32_t crc_multiply(uint32_t a, uint32_t b) {
 	uint32_t res = 0;
 	for(int i=0; i<31; i++) {
-		res ^= -(b>>31) & a;
-		a = ((a >> 1) ^ (0xEDB88320 & -(a&1)));
+		res ^= NEGATE(b>>31) & a;
+		a = ((a >> 1) ^ (0xEDB88320 & NEGATE(a&1)));
 		b <<= 1;
 	}
-	res ^= -(b>>31) & a;
+	res ^= NEGATE(b>>31) & a;
 	return res;
 }
 

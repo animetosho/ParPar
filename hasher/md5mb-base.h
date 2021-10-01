@@ -14,12 +14,12 @@
 
 
 static HEDLEY_ALWAYS_INLINE void FNB(md5_update_block)(void* state, const void* const* data, size_t offset) {
-	FNB(md5_process_block)((word_t*)state, (const char* const*)data, offset);
+	FNB(md5_process_block)((word_t*)state, (const uint8_t* const*)data, offset);
 }
 
 static HEDLEY_ALWAYS_INLINE void FNB(md5_final_block)(void* state, const void *HEDLEY_RESTRICT const*HEDLEY_RESTRICT data, size_t offset, uint64_t totalLength) {
-	ALIGN_TO(_FN(md5mb_alignment), char block[FN_REGIONS(max_regions)][64]);
-	const char* blockPtr[FN_REGIONS(max_regions)];
+	ALIGN_TO(_FN(md5mb_alignment), uint8_t block[FN_REGIONS(max_regions)][64]);
+	const uint8_t* blockPtr[FN_REGIONS(max_regions)];
 	size_t remaining = totalLength & 63;
 	for(unsigned i=0; i<FN_REGIONS(regions); i++) {
 		memcpy(block[i], (char*)data[i] + offset, remaining);

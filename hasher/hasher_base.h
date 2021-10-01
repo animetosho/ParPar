@@ -2,7 +2,7 @@
 #include "../src/stdint.h"
 #include "../src/hedley.h"
 #include "crc_zeropad.h"
-#include "hasher.h"
+#include "hasher_impl.h"
 #include <assert.h>
 #include <string.h>
 
@@ -13,7 +13,8 @@
 #endif
 
 #ifdef HasherInput
-HasherInput::HasherInput() : IHasherInput(true) {
+const bool HasherInput::isAvailable = true;
+HasherInput::HasherInput() {
 	reset();
 }
 void HasherInput::reset() {
@@ -67,7 +68,7 @@ void HasherInput::update(const void* data, size_t len) {
 		}
 	}
 	
-	while(len >= MD5_BLOCKSIZE+posOffset) {
+	while(len >= (unsigned)MD5_BLOCKSIZE+posOffset) {
 		_FNCRC(crc_process_block)(crcState, data_ + posOffset);
 		_FNMD5x2(md5_update_block_x2)(md5State, data_ + posOffset, data_);
 		data_ += MD5_BLOCKSIZE;
@@ -110,7 +111,11 @@ void HasherInput::end(void* md5) {
 
 
 #ifdef MD5Multi
-MD5Multi::MD5Multi() : IMD5Multi(md5mb_regions, md5mb_alignment, true) {
+const bool MD5Multi::isAvailable = true;
+int MD5Multi::getNumRegions() {
+	return md5mb_regions;
+}
+MD5Multi::MD5Multi() : IMD5Multi(md5mb_regions, md5mb_alignment) {
 	state = _FNMD5mb2(md5_alloc_mb)();
 	ALIGN_ALLOC(tmp, MD5_BLOCKSIZE*md5mb_regions, md5mb_alignment);
 	

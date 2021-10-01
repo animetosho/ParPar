@@ -3,15 +3,9 @@
 
 #include "../src/stdint.h"
 #include "../src/platform.h"
+#include <new>
 
 class IHasherInput {
-public:
-	virtual void update(const void* data, size_t len) = 0;
-	virtual void getBlock(void* md5, uint32_t* crc, uint64_t zeroPad) = 0;
-	virtual void end(void* md5) = 0;
-	virtual void reset() = 0;
-	virtual ~IHasherInput() {}
-	const bool isAvailable;
 protected:
 	uint8_t tmp[128];
 	// TODO: merge md5/crc for ASM routines (also prevents a lot of duplication w/ inlining)
@@ -24,14 +18,25 @@ protected:
 	uint_fast8_t tmpLen;
 	uint_fast8_t posOffset;
 	uint64_t dataLen[2];
-	explicit IHasherInput(bool avail) : isAvailable(avail) {}
+public:
+	virtual void update(const void* data, size_t len) = 0;
+	virtual void getBlock(void* md5, uint32_t* crc, uint64_t zeroPad) = 0;
+	virtual void end(void* md5) = 0;
+	virtual void reset() = 0;
+	virtual ~IHasherInput() {}
+	inline void destroy() { ALIGN_FREE(this); } \
 };
 
 #define __DECL_HASHERINPUT(name) \
 class HasherInput_##name : public IHasherInput { \
 	HasherInput_##name(); \
 public: \
-	static inline HasherInput_##name* create() { return new HasherInput_##name(); } \
+	static const bool isAvailable; \
+	static inline HEDLEY_MALLOC IHasherInput* create() { \
+		HasherInput_##name* ptr; \
+		ALIGN_ALLOC(ptr, sizeof(HasherInput_##name), 16); \
+		return new(ptr) HasherInput_##name(); \
+	} \
 	void update(const void* data, size_t len); \
 	void getBlock(void* md5, uint32_t* crc, uint64_t zeroPad); \
 	void end(void* md5); \
@@ -57,20 +62,21 @@ public:
 	virtual ~IMD5Multi() {}
 	const int numRegions;
 	const unsigned alignment;
-	const bool isAvailable;
 protected:
 	uint8_t* tmp;
 	const void** tmpPtrs;
 	uint8_t tmpLen;
 	uint64_t dataLen;
 	void* state;
-	explicit IMD5Multi(int regions, unsigned align, bool avail) : numRegions(regions), alignment(align), isAvailable(avail) {}
+	explicit IMD5Multi(int regions, unsigned align) : numRegions(regions), alignment(align) {}
 };
 
 
 #define __DECL_MD5MULTI(name) \
 class MD5Multi##name : public IMD5Multi { \
 public: \
+	static const bool isAvailable; \
+	HEDLEY_CONST static int getNumRegions(); \
 	MD5Multi##name(); \
 	~MD5Multi##name(); \
 	void update(const void* const* data, size_t len); \

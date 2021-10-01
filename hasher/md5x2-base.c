@@ -8,8 +8,8 @@
 #undef FNB
 
 void md5_final_block(void* state, const void *HEDLEY_RESTRICT data, uint64_t totalLength, uint64_t zeroPad) {
-	ALIGN_TO(8, char block[64]);
-	const char* blockPtr[] = {block};
+	ALIGN_TO(8, uint8_t block[64]);
+	const uint8_t* blockPtr[] = {block};
 	size_t remaining = totalLength & 63;
 	memcpy(block, data, remaining);
 	memset(block + remaining, 0, 64-remaining);

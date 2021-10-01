@@ -23,7 +23,7 @@
 #define _FNMD5mb2(f) f##2_avx2
 #define md5mb_regions md5mb_regions_avx2*2
 
-#if defined(__AVX2__) && defined(PLATFORM_AMD64)
+#ifdef __AVX2__
 # include "hasher_base.h"
 #else
 # include "hasher_stub.h"

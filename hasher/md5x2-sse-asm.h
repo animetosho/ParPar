@@ -84,7 +84,7 @@ ALIGN_TO(16, static const uint32_t md5_constants[128]) = {
 
 
 #ifdef __SSE2__
-static HEDLEY_ALWAYS_INLINE void md5_process_block_x2_sse(__m128i* state, const char* const* HEDLEY_RESTRICT data, size_t offset) {
+static HEDLEY_ALWAYS_INLINE void md5_process_block_x2_sse(__m128i* state, const uint8_t* const* HEDLEY_RESTRICT data, size_t offset) {
 	FN_VARS;
 	
 #define ROUND_X(A, B, I, R) \
@@ -258,7 +258,7 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_x2_sse(__m128i* state, const 
 
 
 #ifdef __AVX__
-static HEDLEY_ALWAYS_INLINE void md5_process_block_x2_avx(__m128i* state, const char* const* HEDLEY_RESTRICT data, size_t offset) {
+static HEDLEY_ALWAYS_INLINE void md5_process_block_x2_avx(__m128i* state, const uint8_t* const* HEDLEY_RESTRICT data, size_t offset) {
 	FN_VARS;
 	
 #define ROUND_X(IA, A, B, I, R) \
@@ -416,7 +416,7 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_x2_avx(__m128i* state, const 
 
 
 #ifdef __AVX512VL__
-static HEDLEY_ALWAYS_INLINE void md5_process_block_x2_avx512(__m128i* state, const char* const* HEDLEY_RESTRICT data, size_t offset) {
+static HEDLEY_ALWAYS_INLINE void md5_process_block_x2_avx512(__m128i* state, const uint8_t* const* HEDLEY_RESTRICT data, size_t offset) {
 	FN_VARS;
 	
 #define ROUND_X(IA, A, B, I, R) \

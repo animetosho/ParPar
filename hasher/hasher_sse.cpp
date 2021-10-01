@@ -28,7 +28,7 @@
 #define _FNMD5mb2(f) f##2_sse
 #define md5mb_regions md5mb_regions_sse*2
 
-#if defined(__SSE2__) && defined(PLATFORM_AMD64)
+#ifdef __SSE2__
 # include "hasher_base.h"
 #else
 # include "hasher_stub.h"

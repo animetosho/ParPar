@@ -35,7 +35,7 @@ ALIGN_TO(16, static const uint32_t md5_constants[64]) = {
 
 
 #ifdef __ARM_NEON
-static HEDLEY_ALWAYS_INLINE void md5_process_block_x2_neon(uint32x2_t* state, const char* const* HEDLEY_RESTRICT data, size_t offset) {
+static HEDLEY_ALWAYS_INLINE void md5_process_block_x2_neon(uint32x2_t* state, const uint8_t* const* HEDLEY_RESTRICT data, size_t offset) {
 	UNUSED(offset);
 	uint32x2_t A = state[0];
 	uint32x2_t B = state[1];
