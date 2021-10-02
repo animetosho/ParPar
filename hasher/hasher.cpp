@@ -57,7 +57,7 @@ void setup_hasher() {
 	_cpuid(cpuInfo, 0x80000001);
 	CpuCap.hasXOP = hasAVX && (cpuInfo[2] & 0x800);
 	
-	if(hasAVX512VL && HasherInput_AVX512::isAvailable)
+	if(hasAVX512VL && hasClMul && HasherInput_AVX512::isAvailable)
 		HasherInput_Create = &HasherInput_AVX512::create;
 	else if(hasClMul && !isSmallCore && HasherInput_ClMulScalar::isAvailable)
 		HasherInput_Create = &HasherInput_ClMulScalar::create;
