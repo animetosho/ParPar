@@ -13,10 +13,10 @@
 // TODO: for SSE, might be better to use shufps because it enables movaps which is 1 byte shorter
 // probably worse for AVX since all instructions are 4 bytes (and shufps has an immediate byte)
 #define LOAD4(set, ptr, offs, idx, var0, var1, var2, var3) { \
-	__m128i in0 = _mm_load_si128((__m128i*)(ptr[0+set*4] + offs + idx*4)); \
-	__m128i in1 = _mm_load_si128((__m128i*)(ptr[1+set*4] + offs + idx*4)); \
-	__m128i in2 = _mm_load_si128((__m128i*)(ptr[2+set*4] + offs + idx*4)); \
-	__m128i in3 = _mm_load_si128((__m128i*)(ptr[3+set*4] + offs + idx*4)); \
+	__m128i in0 = _mm_loadu_si128((__m128i*)(ptr[0+set*4] + offs + idx*4)); \
+	__m128i in1 = _mm_loadu_si128((__m128i*)(ptr[1+set*4] + offs + idx*4)); \
+	__m128i in2 = _mm_loadu_si128((__m128i*)(ptr[2+set*4] + offs + idx*4)); \
+	__m128i in3 = _mm_loadu_si128((__m128i*)(ptr[3+set*4] + offs + idx*4)); \
 	__m128i in01a = _mm_unpacklo_epi32(in0, in1); \
 	__m128i in01b = _mm_unpackhi_epi32(in0, in1); \
 	__m128i in23a = _mm_unpacklo_epi32(in2, in3); \
@@ -156,14 +156,14 @@ static HEDLEY_ALWAYS_INLINE void md5_extract_mb_sse(void* dst, void* state, int 
 #define VAL _mm256_set1_epi32
 #define word_t __m256i
 #define LOAD8(set, ptr, offs, idx, var0, var1, var2, var3, var4, var5, var6, var7) { \
-	__m256i in0 = _mm256_load_si256((__m256i*)(ptr[0+set*8] + offs + idx*4)); \
-	__m256i in1 = _mm256_load_si256((__m256i*)(ptr[1+set*8] + offs + idx*4)); \
-	__m256i in2 = _mm256_load_si256((__m256i*)(ptr[2+set*8] + offs + idx*4)); \
-	__m256i in3 = _mm256_load_si256((__m256i*)(ptr[3+set*8] + offs + idx*4)); \
-	__m256i in4 = _mm256_load_si256((__m256i*)(ptr[4+set*8] + offs + idx*4)); \
-	__m256i in5 = _mm256_load_si256((__m256i*)(ptr[5+set*8] + offs + idx*4)); \
-	__m256i in6 = _mm256_load_si256((__m256i*)(ptr[6+set*8] + offs + idx*4)); \
-	__m256i in7 = _mm256_load_si256((__m256i*)(ptr[7+set*8] + offs + idx*4)); \
+	__m256i in0 = _mm256_loadu_si256((__m256i*)(ptr[0+set*8] + offs + idx*4)); \
+	__m256i in1 = _mm256_loadu_si256((__m256i*)(ptr[1+set*8] + offs + idx*4)); \
+	__m256i in2 = _mm256_loadu_si256((__m256i*)(ptr[2+set*8] + offs + idx*4)); \
+	__m256i in3 = _mm256_loadu_si256((__m256i*)(ptr[3+set*8] + offs + idx*4)); \
+	__m256i in4 = _mm256_loadu_si256((__m256i*)(ptr[4+set*8] + offs + idx*4)); \
+	__m256i in5 = _mm256_loadu_si256((__m256i*)(ptr[5+set*8] + offs + idx*4)); \
+	__m256i in6 = _mm256_loadu_si256((__m256i*)(ptr[6+set*8] + offs + idx*4)); \
+	__m256i in7 = _mm256_loadu_si256((__m256i*)(ptr[7+set*8] + offs + idx*4)); \
 	__m256i in01a = _mm256_unpacklo_epi32(in0, in1); \
 	__m256i in01b = _mm256_unpackhi_epi32(in0, in1); \
 	__m256i in23a = _mm256_unpacklo_epi32(in2, in3); \
@@ -273,22 +273,22 @@ static HEDLEY_ALWAYS_INLINE void md5_extract_mb_avx2(void* dst, void* state, int
 #define VAL _mm512_set1_epi32
 #define word_t __m512i
 #define LOAD16(set, ptr, offs, var0, var1, var2, var3, var4, var5, var6, var7, var8, var9, var10, var11, var12, var13, var14, var15) { \
-	__m512i in0  = _mm512_load_si512(ptr[0+set*16] + offs); \
-	__m512i in1  = _mm512_load_si512(ptr[1+set*16] + offs); \
-	__m512i in2  = _mm512_load_si512(ptr[2+set*16] + offs); \
-	__m512i in3  = _mm512_load_si512(ptr[3+set*16] + offs); \
-	__m512i in4  = _mm512_load_si512(ptr[4+set*16] + offs); \
-	__m512i in5  = _mm512_load_si512(ptr[5+set*16] + offs); \
-	__m512i in6  = _mm512_load_si512(ptr[6+set*16] + offs); \
-	__m512i in7  = _mm512_load_si512(ptr[7+set*16] + offs); \
-	__m512i in8  = _mm512_load_si512(ptr[8+set*16] + offs); \
-	__m512i in9  = _mm512_load_si512(ptr[9+set*16] + offs); \
-	__m512i in10 = _mm512_load_si512(ptr[10+set*16] + offs); \
-	__m512i in11 = _mm512_load_si512(ptr[11+set*16] + offs); \
-	__m512i in12 = _mm512_load_si512(ptr[12+set*16] + offs); \
-	__m512i in13 = _mm512_load_si512(ptr[13+set*16] + offs); \
-	__m512i in14 = _mm512_load_si512(ptr[14+set*16] + offs); \
-	__m512i in15 = _mm512_load_si512(ptr[15+set*16] + offs); \
+	__m512i in0  = _mm512_loadu_si512(ptr[0+set*16] + offs); \
+	__m512i in1  = _mm512_loadu_si512(ptr[1+set*16] + offs); \
+	__m512i in2  = _mm512_loadu_si512(ptr[2+set*16] + offs); \
+	__m512i in3  = _mm512_loadu_si512(ptr[3+set*16] + offs); \
+	__m512i in4  = _mm512_loadu_si512(ptr[4+set*16] + offs); \
+	__m512i in5  = _mm512_loadu_si512(ptr[5+set*16] + offs); \
+	__m512i in6  = _mm512_loadu_si512(ptr[6+set*16] + offs); \
+	__m512i in7  = _mm512_loadu_si512(ptr[7+set*16] + offs); \
+	__m512i in8  = _mm512_loadu_si512(ptr[8+set*16] + offs); \
+	__m512i in9  = _mm512_loadu_si512(ptr[9+set*16] + offs); \
+	__m512i in10 = _mm512_loadu_si512(ptr[10+set*16] + offs); \
+	__m512i in11 = _mm512_loadu_si512(ptr[11+set*16] + offs); \
+	__m512i in12 = _mm512_loadu_si512(ptr[12+set*16] + offs); \
+	__m512i in13 = _mm512_loadu_si512(ptr[13+set*16] + offs); \
+	__m512i in14 = _mm512_loadu_si512(ptr[14+set*16] + offs); \
+	__m512i in15 = _mm512_loadu_si512(ptr[15+set*16] + offs); \
 	__m512i in01a = _mm512_unpacklo_epi32(in0, in1); \
 	__m512i in01b = _mm512_unpackhi_epi32(in0, in1); \
 	__m512i in23a = _mm512_unpacklo_epi32(in2, in3); \

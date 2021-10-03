@@ -84,9 +84,7 @@ void setup_hasher() {
 	
 }
 
-MD5Multi::MD5Multi(int srcCount, unsigned alignment) {
-	// TODO: need to tie alignment requirements across, or make multi-md5 ignore alignment altogether
-	
+MD5Multi::MD5Multi(int srcCount) {
 	// first, fill ctx with largest supported hasher
 	#define ADD_CTX2(feat) { \
 		while(srcCount >= MD5Multi2_##feat::getNumRegions()) { \

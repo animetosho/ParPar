@@ -132,16 +132,10 @@ MD5Multi::~MD5Multi() {
 }
 
 void MD5Multi::update(const void* const* data, size_t len) {
-	#ifndef NDEBUG
-	for(unsigned input=0; input < md5mb_regions; input++)
-		assert((uintptr_t)(data[input]) % md5mb_alignment == 0);
-	#endif
-	
 	dataLen += len;
 	size_t p = 0;
 	
 	if(tmpLen) {
-		assert(tmpLen % md5mb_alignment == 0);
 		uint_fast8_t wanted = MD5_BLOCKSIZE - tmpLen;
 		uint_fast8_t copy = len < wanted ? len : wanted;
 		

@@ -9,7 +9,7 @@ class MD5Multi {
 	std::vector<const void*> lastCtxData;
 	unsigned lastCtxDataDup;
 public:
-	explicit MD5Multi(int srcCount, unsigned alignment);
+	explicit MD5Multi(int srcCount);
 	~MD5Multi();
 	void update(const void* const* data, size_t len);
 	void get(unsigned index, void* md5);
