@@ -286,7 +286,8 @@ var inputFiles = argv._;
 						})
 					);
 				else
-					inputFiles = inputFiles.concat(data[1].split('\0'));
+					// ignoring all blank lines also seems feasible, but we'll be stricter for null separators and only allow a trailing null
+					inputFiles = inputFiles.concat(data[1].replace(/\0$/, '').split('\0'));
 			});
 			cb();
 		});
