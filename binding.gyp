@@ -455,7 +455,7 @@
       "cflags!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"],
       "msvs_settings": {"VCCLCompilerTool": {"BufferSecurityCheck": "false"}},
       "conditions": [
-        ['target_arch=="arm64" and OS!="win" and enable_native_tuning!=0', {
+        ['target_arch=="arm64" and OS!="win" and enable_native_tuning==0', {
           "variables": {"supports_sve%": "<!(<!(echo ${CC_target:-${CC:-cc}}) -MM -E gf16/gf16_shuffle128_sve.c -march=armv8-a+sve 2>/dev/null || true)"},
           "conditions": [
             ['supports_sve!=""', {
@@ -489,7 +489,7 @@
       "cflags!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"],
       "msvs_settings": {"VCCLCompilerTool": {"BufferSecurityCheck": "false"}},
       "conditions": [
-        ['target_arch=="arm64" and OS!="win" and enable_native_tuning!=0', {
+        ['target_arch=="arm64" and OS!="win" and enable_native_tuning==0', {
           "variables": {"supports_sve2%": "<!(<!(echo ${CC_target:-${CC:-cc}}) -MM -E gf16/gf16_shuffle128_sve2.c -march=armv8-a+sve2 2>/dev/null || true)"},
           "conditions": [
             ['supports_sve2!=""', {
