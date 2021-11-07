@@ -148,7 +148,7 @@ var par2creator = require('@animetosho/parpar').run(
     {   // options; all these are optional
         outputBase: 'my_recovery_set',
         recoverySlices: { // can also be an array of such objects, of which the sum all these are used
-            unit: 'slices', // slices/count, ratio, bytes, largest_files, smallest_files, power or ilog
+            unit: 'slices', // slices/count, ratio, bytes, largest_files, smallest_files, power, log or ilog
             value: ,
             scale: 1 // multiply the number of blocks by this amount
         },
@@ -165,7 +165,7 @@ var par2creator = require('@animetosho/parpar').run(
             value: 65537
         },
         recoveryOffset: 0,
-        memoryLimit: 256*1048576,
+        memoryLimit: null,
         minChunkSize: 128*1024, // 0 to disable chunking
         noChunkFirstPass: false,
         processBatchSize: null, // default = max(numthreads * 16, ceil(4M/chunkSize))

@@ -56,8 +56,8 @@ enum Galois16Methods {
 };
 static const char* Galois16MethodsText[] = {
 	"Auto",
-	"LH Lookup",
-	"LH Lookup (SSE2)",
+	"Lookup",
+	"Lookup (SSE2)",
 	"3-part Lookup",
 	"Shuffle (NEON)",
 	"Shuffle-128 (SVE)",
