@@ -14,11 +14,11 @@ public:
 	void update(const void* const* data, size_t len);
 	void get(unsigned index, void* md5);
 	inline void end() {
-		for(int i=0; i<ctx.size(); i++)
+		for(unsigned i=0; i<ctx.size(); i++)
 			ctx[i]->end();
 	}
 	inline void reset() {
-		for(int i=0; i<ctx.size(); i++)
+		for(unsigned i=0; i<ctx.size(); i++)
 			ctx[i]->reset();
 	}
 };

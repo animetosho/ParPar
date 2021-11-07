@@ -1,5 +1,6 @@
 #include "hasher.h"
 #include "../src/cpuid.h"
+#include <string.h>
 
 IHasherInput*(*HasherInput_Create)() = NULL;
 static struct _CpuCap {
@@ -123,9 +124,9 @@ MD5Multi::MD5Multi(int srcCount) {
 	
 	// now for last hasher, find smallest hasher which covers all remaining
 	if(srcCount) {
-		lastCtxData.resize(srcCount);
 		#define ADD_LAST_CTX(cond, impl) \
 			if(cond && srcCount <= impl::getNumRegions()) { \
+				lastCtxData.resize(impl::getNumRegions()); \
 				ctx.push_back(new impl()); \
 				lastCtxDataDup = impl::getNumRegions() - srcCount; \
 			}
@@ -157,7 +158,7 @@ MD5Multi::MD5Multi(int srcCount) {
 }
 
 MD5Multi::~MD5Multi() {
-	for(int i=0; i<ctx.size(); i++)
+	for(unsigned i=0; i<ctx.size(); i++)
 		delete ctx[i];
 }
 
@@ -184,8 +185,8 @@ void MD5Multi::update(const void* const* data, size_t len) {
 
 void MD5Multi::get(unsigned index, void* md5) {
 	// TODO: consider better method
-	for(int i=0; i<ctx.size(); i++) {
-		if(index < ctx[i]->numRegions) {
+	for(unsigned i=0; i<ctx.size(); i++) {
+		if((int)index < ctx[i]->numRegions) {
 			ctx[i]->get(index, md5);
 			return;
 		}
