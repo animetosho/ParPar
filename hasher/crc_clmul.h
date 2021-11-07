@@ -157,7 +157,7 @@ static uint32_t crc_finish_clmul(void* HEDLEY_RESTRICT state, const void* HEDLEY
 	
 	if(len > 0) {
 		__m128i xmm_shl = _mm_load_si128((__m128i *)pshufb_shf_table + (len - 1));
-		__m128i xmm_shr = _mm_xor_si128(xmm_shl, _mm_set1_epi8(0x80));
+		__m128i xmm_shr = _mm_xor_si128(xmm_shl, _mm_set1_epi8(-128));
 		
 		xmm_t0 = _mm_loadu_si128((__m128i *)_src);
 		xmm_t1 = _mm_shuffle_epi8(crc[0], xmm_shl);
