@@ -79,12 +79,17 @@ void HasherInput::update(const void* data, size_t len) {
 	tmpLen = len;
 }
 
-void HasherInput::getBlock(void* md5, uint32_t* crc, uint64_t zeroPad) {
-	_FNMD5x2(md5_extract_x2)(md5, md5State, HASH2X_BLOCK);
-	md5_final_block(md5, tmp + posOffset, dataLen[HASH2X_BLOCK], zeroPad);
+void HasherInput::getBlock(void* md5crc, uint64_t zeroPad) {
+	_FNMD5x2(md5_extract_x2)(md5crc, md5State, HASH2X_BLOCK);
+	md5_final_block(md5crc, tmp + posOffset, dataLen[HASH2X_BLOCK], zeroPad);
 	
-	*crc = _FNCRC(crc_finish)(crcState, tmp + posOffset, dataLen[HASH2X_BLOCK] & (MD5_BLOCKSIZE-1));
-	*crc = crc_zeroPad(*crc, zeroPad);
+	uint32_t crc = _FNCRC(crc_finish)(crcState, tmp + posOffset, dataLen[HASH2X_BLOCK] & (MD5_BLOCKSIZE-1));
+	crc = crc_zeroPad(crc, zeroPad);
+	uint8_t* _crc = (uint8_t*)md5crc + 16;
+	_crc[0] = crc & 0xff;
+	_crc[1] = (crc >> 8) & 0xff;
+	_crc[2] = (crc >> 16) & 0xff;
+	_crc[3] = (crc >> 24) & 0xff;
 	
 	if(tmpLen >= MD5_BLOCKSIZE) {
 		// push through one block on file hash

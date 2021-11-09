@@ -638,14 +638,8 @@ protected:
 #endif
 		
 		// return MD5+CRC32 concatenated (in same format as written directly to the IFSC packet)
-		// TODO: perhaps get the hasher to directly return data in that form
 		char* result = (char*)node::Buffer::Data(args[0]);
-		uint32_t crc;
-		self->hasher->getBlock(result, &crc, (uint64_t)zeroPad);
-		result[16] = crc & 0xff;
-		result[17] = (crc >> 8) & 0xff;
-		result[18] = (crc >> 16) & 0xff;
-		result[19] = (crc >> 24) & 0xff;
+		self->hasher->getBlock(result, (uint64_t)zeroPad);
 	}
 	
 	FUNC(End) {

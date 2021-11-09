@@ -20,7 +20,7 @@ protected:
 	uint64_t dataLen[2];
 public:
 	virtual void update(const void* data, size_t len) = 0;
-	virtual void getBlock(void* md5, uint32_t* crc, uint64_t zeroPad) = 0;
+	virtual void getBlock(void* md5crc, uint64_t zeroPad) = 0;
 	virtual void end(void* md5) = 0;
 	virtual void reset() = 0;
 	virtual ~IHasherInput() {}
@@ -40,7 +40,7 @@ public: \
 		return new(ptr) HasherInput_##name(); \
 	} \
 	void update(const void* data, size_t len); \
-	void getBlock(void* md5, uint32_t* crc, uint64_t zeroPad); \
+	void getBlock(void* md5crc, uint64_t zeroPad); \
 	void end(void* md5); \
 	void reset(); \
 }

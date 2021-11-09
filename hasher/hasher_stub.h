@@ -7,7 +7,7 @@ const bool HasherInput::isAvailable = false;
 HasherInput::HasherInput() {}
 void HasherInput::reset() {}
 void HasherInput::update(const void*, size_t) {}
-void HasherInput::getBlock(void*, uint32_t*, uint64_t) {}
+void HasherInput::getBlock(void*, uint64_t) {}
 void HasherInput::end(void*) {}
 #endif
 
