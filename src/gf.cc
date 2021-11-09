@@ -626,25 +626,26 @@ protected:
 		if(self->isRunning)
 			RETURN_ERROR("Process currently active");
 		
+		if(args.Length() < 1 || !node::Buffer::HasInstance(args[0]))
+			RETURN_ERROR("Requires a buffer");
+		
 		double zeroPad = 0; // double ensures enough range even if int is 32-bit
-		if(args.Length() >= 1)
+		if(args.Length() >= 2)
 #if NODE_VERSION_AT_LEAST(8, 0, 0)
-			zeroPad = args[0].As<Number>()->Value();
+			zeroPad = args[1].As<Number>()->Value();
 #else
-			zeroPad = args[0]->NumberValue();
+			zeroPad = args[1]->NumberValue();
 #endif
 		
 		// return MD5+CRC32 concatenated (in same format as written directly to the IFSC packet)
 		// TODO: perhaps get the hasher to directly return data in that form
-		BUFFER_TYPE hash = BUFFER_NEW(20); // TODO: perhaps consider accepting buffer to directly write into, since we should already have one, rather than always instantiate a new one
-		char* result = (char*)node::Buffer::Data(hash);
+		char* result = (char*)node::Buffer::Data(args[0]);
 		uint32_t crc;
 		self->hasher->getBlock(result, &crc, (uint64_t)zeroPad);
 		result[16] = crc & 0xff;
 		result[17] = (crc >> 8) & 0xff;
 		result[18] = (crc >> 16) & 0xff;
 		result[19] = (crc >> 24) & 0xff;
-		RETURN_BUFFER(hash);
 	}
 	
 	FUNC(End) {
@@ -653,10 +654,11 @@ protected:
 		if(self->isRunning)
 			RETURN_ERROR("Process currently active");
 		
-		BUFFER_TYPE md5 = BUFFER_NEW(16);
-		char* result = (char*)node::Buffer::Data(md5);
+		if(args.Length() < 1 || !node::Buffer::HasInstance(args[0]))
+			RETURN_ERROR("Requires a buffer");
+		
+		char* result = (char*)node::Buffer::Data(args[0]);
 		self->hasher->end(result);
-		RETURN_BUFFER(md5);
 	}
 	
 	explicit HasherInput(uv_loop_t* _loop) : ObjectWrap(), loop(_loop), isRunning(false) {
@@ -747,7 +749,7 @@ protected:
 			RETURN_ERROR("Invalid number of array items given");
 		
 		Local<Object> oBufs = ARG_TO_OBJ(args[0]);
-		size_t bufLen;
+		size_t bufLen = 0;
 		for(int i = 0; i < numBufs; i++) {
 			Local<Value> buffer = GET_ARR(oBufs, i);
 			if (!node::Buffer::HasInstance(buffer))
@@ -792,16 +794,15 @@ protected:
 		if(self->isRunning)
 			RETURN_ERROR("Process currently active");
 		
-		if(args.Length() < 1)
-			RETURN_ERROR("Region required");
-		int idx = ARG_TO_NUM(Int32, args[0]);
+		if(args.Length() < 2 || !node::Buffer::HasInstance(args[0]))
+			RETURN_ERROR("Requires a buffer and region");
+		
+		int idx = ARG_TO_NUM(Int32, args[1]);
 		if(idx < 0 || idx >= self->numRegions)
 			RETURN_ERROR("Invalid region specified");
 		
-		BUFFER_TYPE md5 = BUFFER_NEW(16);
-		char* result = (char*)node::Buffer::Data(md5);
+		char* result = (char*)node::Buffer::Data(args[0]);
 		self->hasher.get(idx, result);
-		RETURN_BUFFER(md5);
 	}
 	
 	FUNC(End) {
