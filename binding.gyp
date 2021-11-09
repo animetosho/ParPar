@@ -43,8 +43,7 @@
       ],
       "sources": ["src/gf.cc", "gf16/controller.cpp", "gf16/gfmat_coeff.c", "src/gyp_warnings.cc"],
       "include_dirs": ["gf16"],
-      "cxxflags": ["-std=c++11"],
-      "link_settings": {"libraries": ["-luv"]}
+      "cxxflags": ["-std=c++11"]
     },
     {
       "target_name": "hasher",
