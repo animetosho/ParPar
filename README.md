@@ -168,8 +168,9 @@ var par2creator = require('@animetosho/parpar').run(
         memoryLimit: null,
         minChunkSize: 128*1024, // 0 to disable chunking
         noChunkFirstPass: false,
-        processBatchSize: null, // default = max(numthreads * 16, ceil(4M/chunkSize))
-        processBufferSize: null, // default = processBatchSize
+        processBatchSize: 12,
+        inputParallelSubmit: 4,
+        hashBatchSize: 8,
         comments: [], // array of strings
         unicode: null, // null => auto, false => never, true => always generate unicode packets
         outputOverwrite: false,
@@ -186,7 +187,9 @@ var par2creator = require('@animetosho/parpar').run(
         outputAltNamingScheme: true,
         displayNameFormat: 'common', // basename, keep, common, outrel or path
         displayNameBase: '.', // base path, only used if displayNameFormat is 'path'
-        seqReadSize: 4*1048576
+        seqReadSize: 4*1048576,
+        numThreads: null, // default = number of processors
+        gfMethod: null, // default = '' (auto)
     },
     function(err) {
         console.log(err || 'Process finished');
@@ -209,19 +212,9 @@ par2creator.on('files_written', function(par, passNum, passChunkNum) {
 });
 ```
 
-Functions
----------
+## Low Level API
 
-### Buffer AlignedBuffer(int size)
-
-Returns a normal node Buffer of specified size. The only difference between this and using `new Buffer` is that this function guarantees the Buffer to be aligned to memory boundaries needed for processing. Use of this function is strictly optional, as ParPar will copy passed input into an AlignedBuffer if the supplied buffer is not aligned. So this function is only useful if you wish to avoid unnecessary memory copying.
-
-**Remaining API documentation to be done**
-
-Examples
-========
-
-Examples for the low level JS API can be found in [the examples folder](examples/).
+ParPar can be operated at a lower level API, which gives more control over the creation process, but requires a deeper understanding of how the application operates and has a number of constraints. This API is undocumented, but examples can be found in [the examples folder](examples/).
 
 Development
 ===========

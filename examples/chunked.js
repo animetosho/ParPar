@@ -165,14 +165,20 @@ async.waterfall([
 							// + ParPar.RECOVERY_HEADER_SIZE (size of recovery slice header)
 							// + sliceOffset (where we are in current slice)
 							var pos = chunk*packetSize + ParPar.RECOVERY_HEADER_SIZE + sliceOffset;
-							var data = chunker.recoveryData[chunk];
-							fs.write(fd, data, 0, data.length, pos, cb);
+							chunker.getNextRecoveryData(function(idx, data) {
+								if(chunk != idx) throw new Error("Index mismatch");
+								fs.write(fd, data.data, 0, data.data.length, pos, function(err) {
+									data.release();
+									cb(err);
+								});
+							});
 						}, function(err) {
 							fs.closeSync(fd);
 							sliceOffset += chunkSize;
 							cb(err);
 						});
-					}
+					},
+					chunker.waitForRecoveryComplete.bind(chunker) // because hashing is done alongside recovery generation, ensure that it's complete before proceeding to the next chunk
 				], cb);
 			});
 		}, function(err) {
@@ -187,10 +193,12 @@ async.waterfall([
 				var packetSize = par2.packetRecoverySize();
 				// go through each recovery slice
 				async.timesSeries(recoverySlices, function(chunk, cb) {
-					var data = chunker.getHeader(chunk);
-					// ...and write the header at the appropriate location
-					fs.write(fd, data, 0, data.length, chunk*packetSize, cb);
+					par2.getNextRecoveryPacketHeader(chunker, function(recNum, data) {
+						// ...and write the header at the appropriate location
+						fs.write(fd, data, 0, data.length, chunk*packetSize, cb);
+					});
 				}, function(err) {
+					chunker.close();
 					fs.closeSync(fd);
 					cb(err);
 				});
@@ -198,6 +206,7 @@ async.waterfall([
 		});
 	}
 ], function(err) {
+	par2.close();
 	if(err) {
 		console.error('Error: ', err);
 		return;

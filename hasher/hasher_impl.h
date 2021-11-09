@@ -30,6 +30,8 @@ public:
 #define __DECL_HASHERINPUT(name) \
 class HasherInput_##name : public IHasherInput { \
 	HasherInput_##name(); \
+	HasherInput_##name(const HasherInput_##name&); \
+	HasherInput_##name& operator=(const HasherInput_##name&); \
 public: \
 	static const bool isAvailable; \
 	static inline HEDLEY_MALLOC IHasherInput* create() { \
@@ -74,6 +76,8 @@ protected:
 
 #define __DECL_MD5MULTI(name) \
 class MD5Multi##name : public IMD5Multi { \
+	MD5Multi##name(const MD5Multi##name&); \
+	MD5Multi##name& operator=(const MD5Multi##name&); \
 public: \
 	static const bool isAvailable; \
 	HEDLEY_CONST static int getNumRegions(); \

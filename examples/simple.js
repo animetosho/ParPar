@@ -70,19 +70,27 @@ ParPar.fileInfo(files, function(err, info) {
 				
 				// note that the ordering of PAR2 packets is arbitrary
 				
-				for(var i=0; i<recoverySlices; i++)
-					data.push(par2.recoveryPackets[i]);
-				
-				pFiles.forEach(function(file) {
-					data.push(file.makePacketDescription());
-					data.push(file.getPacketChecksums());
+				async.timesSeries(recoverySlices, function(i, cb) {
+					par2.getNextRecoveryData(function(idx, recData) {
+						par2.getRecoveryPacketHeader(recData, function(recHeader) {
+							data.push(Buffer.concat([recHeader, recData.data]));
+							recData.release();
+							cb();
+						});
+					});
+				}, function() {
+					pFiles.forEach(function(file) {
+						data.push(file.makePacketDescription());
+						data.push(file.getPacketChecksums());
+					});
+					
+					data.push(par2.getPacketMain());
+					data.push(par2.makePacketCreator('ParPar example'));
+					fs.writeFile(par2output, Buffer.concat(data), cb);
 				});
-				
-				data.push(par2.getPacketMain());
-				data.push(par2.makePacketCreator('ParPar example'));
-				fs.writeFile(par2output, Buffer.concat(data), cb);
 			});
 		})(function(err) {
+			par2.close();
 			if(err) {
 				console.error('Error: ', err);
 				return;

@@ -37,57 +37,20 @@
   "targets": [
     {
       "target_name": "parpar_gf",
-      "dependencies": ["gf16", "gf16_sse2", "gf16_ssse3", "gf16_avx", "gf16_avx2", "gf16_avx512", "gf16_vbmi", "gf16_gfni", "gf16_gfni_avx2", "gf16_gfni_avx512", "gf16_neon", "gf16_sve", "gf16_sve2", "multi_md5"],
-      "sources": ["src/gf.cc", "gf16/module.cc", "gf16/gfmat_coeff.c", "src/gyp_warnings.cc"],
+      "dependencies": [
+        "gf16", "gf16_sse2", "gf16_ssse3", "gf16_avx", "gf16_avx2", "gf16_avx512", "gf16_vbmi", "gf16_gfni", "gf16_gfni_avx2", "gf16_gfni_avx512", "gf16_neon", "gf16_sve", "gf16_sve2",
+        "hasher", "hasher_sse2", "hasher_clmul", "hasher_xop", "hasher_avx2", "hasher_avx512", "hasher_avx512vl", "hasher_armcrc", "hasher_neon", "hasher_neoncrc", "hasher_sve2"
+      ],
+      "sources": ["src/gf.cc", "gf16/controller.cpp", "gf16/gfmat_coeff.c", "src/gyp_warnings.cc"],
       "include_dirs": ["gf16"],
-      "conditions": [
-        ['OS=="win"', {
-          "msvs_settings": {"VCCLCompilerTool": {"OpenMP": "true"}}
-        }, {
-          "variables": {
-            "supports_omp%": "<!(<!(echo ${CXX_target:-${CXX:-c++}}) -MM -E src/gyp_warnings.cc -fopenmp 2>/dev/null || true)",
-            "supports_omp_icc%": "<!(<!(echo ${CXX_target:-${CXX:-c++}}) -MM -E src/gyp_warnings.cc -qopenmp 2>/dev/null || true)",
-            "supports_omp_clang%": "<!(<!(echo ${CXX_target:-${CXX:-c++}}) -MM -E src/gyp_warnings.cc -fopenmp=libomp 2>/dev/null || true)"
-          },
-          "conditions": [
-            ['supports_omp_icc!=""', {
-              "cflags": ["-qopenmp"],
-              "cxxflags": ["-qopenmp"],
-              "ldflags": ["-qopenmp"],
-              "xcode_settings": {
-                "OTHER_CFLAGS": ["-qopenmp"],
-                "OTHER_CXXFLAGS": ["-qopenmp"],
-                "OTHER_LDFLAGS": ["-qopenmp"]
-              }
-            }],
-            ['supports_omp!="" and supports_omp_clang==""', {
-              "cflags": ["-fopenmp"],
-              "cxxflags": ["-fopenmp"],
-              "ldflags": ["-fopenmp"],
-              "xcode_settings": {
-                "OTHER_CFLAGS": ["-fopenmp"],
-                "OTHER_CXXFLAGS": ["-fopenmp"],
-                "OTHER_LDFLAGS": ["-fopenmp"]
-              }
-            }],
-            ['supports_omp_clang!=""', {
-              "cflags": ["-fopenmp=libomp"],
-              "cxxflags": ["-fopenmp=libomp"],
-              "ldflags": ["-fopenmp=libomp"],
-              "xcode_settings": {
-                "OTHER_CFLAGS": ["-fopenmp=libomp"],
-                "OTHER_CXXFLAGS": ["-fopenmp=libomp"],
-                "OTHER_LDFLAGS": ["-fopenmp=libomp"]
-              }
-            }]
-          ]
-        }]
-      ]
+      "cxxflags": ["-std=c++11"],
+      "link_settings": {"libraries": ["-luv"]}
     },
     {
-      "target_name": "multi_md5",
+      "target_name": "hasher",
       "type": "static_library",
-      "sources": ["md5/md5.c", "md5/md5-simd.c"],
+      "defines": ["NDEBUG"],
+      "sources": ["hasher/hasher.cpp", "hasher/crc_zeropad.c", "hasher/md5x2-base.c", "hasher/hasher_scalar.cpp"],
       "cflags!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"],
       "cxxflags!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"],
       "xcode_settings": {
@@ -95,6 +58,278 @@
         "OTHER_CXXFLAGS!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"]
       },
       "msvs_settings": {"VCCLCompilerTool": {"BufferSecurityCheck": "false"}}
+    },
+    {
+      "target_name": "hasher_sse2",
+      "type": "static_library",
+      "defines": ["NDEBUG"],
+      "sources": ["hasher/hasher_sse.cpp"],
+      "cflags!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"],
+      "cxxflags!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"],
+      "xcode_settings": {
+        "OTHER_CFLAGS!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"],
+        "OTHER_CXXFLAGS!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"]
+      },
+      "msvs_settings": {"VCCLCompilerTool": {"BufferSecurityCheck": "false"}},
+      "conditions": [
+        ['target_arch in "ia32 x64"', {
+          "cflags": ["-msse2"],
+          "cxxflags": ["-msse2"],
+          "xcode_settings": {
+            "OTHER_CFLAGS": ["-msse2"],
+            "OTHER_CXXFLAGS": ["-msse2"],
+          }
+        }]
+      ]
+    },
+    {
+      "target_name": "hasher_clmul",
+      "type": "static_library",
+      "defines": ["NDEBUG"],
+      "sources": ["hasher/hasher_clmul.cpp"],
+      "cflags!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"],
+      "cxxflags!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"],
+      "xcode_settings": {
+        "OTHER_CFLAGS!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"],
+        "OTHER_CXXFLAGS!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"]
+      },
+      "msvs_settings": {"VCCLCompilerTool": {"BufferSecurityCheck": "false"}},
+      "conditions": [
+        ['target_arch in "ia32 x64"', {
+          "cflags": ["-mpclmul", "-msse4.1"],
+          "cxxflags": ["-mpclmul", "-msse4.1"],
+          "xcode_settings": {
+            "OTHER_CFLAGS": ["-mpclmul", "-msse4.1"],
+            "OTHER_CXXFLAGS": ["-mpclmul", "-msse4.1"],
+          }
+        }]
+      ]
+    },
+    {
+      "target_name": "hasher_xop",
+      "type": "static_library",
+      "defines": ["NDEBUG"],
+      "sources": ["hasher/hasher_xop.cpp"],
+      "cflags!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"],
+      "cxxflags!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"],
+      "xcode_settings": {
+        "OTHER_CFLAGS!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"],
+        "OTHER_CXXFLAGS!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"]
+      },
+      "msvs_settings": {"VCCLCompilerTool": {"BufferSecurityCheck": "false"}},
+      "conditions": [
+        ['target_arch in "ia32 x64"', {
+          "msvs_settings": {"VCCLCompilerTool": {"EnableEnhancedInstructionSet": "3"}},
+          "cflags": ["-mxop", "-mavx"],
+          "cxxflags": ["-mxop", "-mavx"],
+          "xcode_settings": {
+            "OTHER_CFLAGS": ["-mxop", "-mavx"],
+            "OTHER_CXXFLAGS": ["-mxop", "-mavx"],
+          }
+        }]
+      ]
+    },
+    {
+      "target_name": "hasher_avx2",
+      "type": "static_library",
+      "defines": ["NDEBUG"],
+      "sources": ["hasher/hasher_avx2.cpp"],
+      "cflags!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"],
+      "cxxflags!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"],
+      "xcode_settings": {
+        "OTHER_CFLAGS!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"],
+        "OTHER_CXXFLAGS!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"]
+      },
+      "msvs_settings": {"VCCLCompilerTool": {"BufferSecurityCheck": "false"}},
+      "conditions": [
+        ['target_arch in "ia32 x64" and OS!="win"', {
+          "variables": {"supports_avx2%": "<!(<!(echo ${CC_target:-${CC:-cc}}) -MM -E hasher/hasher_avx2.cpp -mavx2 2>/dev/null || true)"},
+          "conditions": [
+            ['supports_avx2!=""', {
+              "cflags": ["-mavx2"],
+              "cxxflags": ["-mavx2"],
+              "xcode_settings": {
+                "OTHER_CFLAGS": ["-mavx2"],
+                "OTHER_CXXFLAGS": ["-mavx2"],
+              }
+            }]
+          ]
+        }],
+        ['target_arch in "ia32 x64" and OS=="win"', {
+          "msvs_settings": {"VCCLCompilerTool": {"EnableEnhancedInstructionSet": "3"}}
+        }]
+      ]
+    },
+    {
+      "target_name": "hasher_avx512",
+      "type": "static_library",
+      "defines": ["NDEBUG"],
+      "sources": ["hasher/hasher_avx512.cpp"],
+      "cflags!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"],
+      "cxxflags!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"],
+      "xcode_settings": {
+        "OTHER_CFLAGS!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"],
+        "OTHER_CXXFLAGS!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"]
+      },
+      "msvs_settings": {"VCCLCompilerTool": {"BufferSecurityCheck": "false"}},
+      "conditions": [
+        ['target_arch in "ia32 x64" and OS!="win"', {
+          "variables": {"supports_avx512f%": "<!(<!(echo ${CC_target:-${CC:-cc}}) -MM -E hasher/hasher_avx512.cpp -mavx512f 2>/dev/null || true)"},
+          "conditions": [
+            ['supports_avx512f!=""', {
+              "cflags": ["-mavx512f"],
+              "cxxflags": ["-mavx512f"],
+              "xcode_settings": {
+                "OTHER_CFLAGS": ["-mavx512f"],
+                "OTHER_CXXFLAGS": ["-mavx512f"],
+              }
+            }]
+          ]
+        }],
+        ['target_arch in "ia32 x64" and OS=="win"', {
+          "msvs_settings": {
+            "VCCLCompilerTool": {"AdditionalOptions": ["/arch:AVX512"], "EnableEnhancedInstructionSet": "0"}
+          }
+        }]
+      ]
+    },
+    {
+      "target_name": "hasher_avx512vl",
+      "type": "static_library",
+      "defines": ["NDEBUG"],
+      "sources": ["hasher/hasher_avx512vl.cpp"],
+      "cflags!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"],
+      "cxxflags!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"],
+      "xcode_settings": {
+        "OTHER_CFLAGS!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"],
+        "OTHER_CXXFLAGS!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"]
+      },
+      "msvs_settings": {"VCCLCompilerTool": {"BufferSecurityCheck": "false"}},
+      "conditions": [
+        ['target_arch in "ia32 x64" and OS!="win"', {
+          "variables": {"supports_avx512vl%": "<!(<!(echo ${CC_target:-${CC:-cc}}) -MM -E hasher/hasher_avx512vl.cpp -mavx512vl -mpclmul 2>/dev/null || true)"},
+          "conditions": [
+            ['supports_avx512vl!=""', {
+              "cflags": ["-mavx512vl", "-mpclmul"],
+              "cxxflags": ["-mavx512vl", "-mpclmul"],
+              "xcode_settings": {
+                "OTHER_CFLAGS": ["-mavx512vl", "-mpclmul"],
+                "OTHER_CXXFLAGS": ["-mavx512vl", "-mpclmul"],
+              }
+            }]
+          ]
+        }],
+        ['target_arch in "ia32 x64" and OS=="win"', {
+          "msvs_settings": {"VCCLCompilerTool": {"EnableEnhancedInstructionSet": "3"}}
+        }]
+      ]
+    },
+    {
+      "target_name": "hasher_armcrc",
+      "type": "static_library",
+      "defines": ["NDEBUG"],
+      "sources": ["hasher/hasher_armcrc.cpp"],
+      "cflags!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"],
+      "cxxflags!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"],
+      "xcode_settings": {
+        "OTHER_CFLAGS!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"],
+        "OTHER_CXXFLAGS!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"]
+      },
+      "msvs_settings": {"VCCLCompilerTool": {"BufferSecurityCheck": "false"}},
+      "conditions": [
+        ['target_arch in "arm arm64" and enable_native_tuning==0', {
+          "cflags": ["-march=armv8-a+crc"],
+          "cxxflags": ["-march=armv8-a+crc"],
+          "xcode_settings": {
+            "OTHER_CFLAGS": ["-march=armv8-a+crc"],
+            "OTHER_CXXFLAGS": ["-march=armv8-a+crc"]
+          }
+        }]
+      ]
+    },
+    {
+      "target_name": "hasher_neon",
+      "type": "static_library",
+      "defines": ["NDEBUG"],
+      "sources": ["hasher/hasher_neon.cpp"],
+      "cflags!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"],
+      "cxxflags!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"],
+      "xcode_settings": {
+        "OTHER_CFLAGS!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"],
+        "OTHER_CXXFLAGS!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"]
+      },
+      "msvs_settings": {"VCCLCompilerTool": {"BufferSecurityCheck": "false"}},
+      "conditions": [
+        ['OS!="win" and target_arch=="arm"', {
+          "cflags": ["-mfpu=neon"],
+          "xcode_settings": {
+            "OTHER_CFLAGS": ["-mfpu=neon"]
+          }
+        }],
+        ['OS!="win" and target_arch=="arm" and enable_native_tuning==0', {
+          "cflags": ["-march=armv7-a"],
+          "xcode_settings": {
+            "OTHER_CFLAGS": ["-march=armv7-a"]
+          }
+        }]
+      ]
+    },
+    {
+      "target_name": "hasher_neoncrc",
+      "type": "static_library",
+      "defines": ["NDEBUG"],
+      "sources": ["hasher/hasher_neoncrc.cpp"],
+      "cflags!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"],
+      "cxxflags!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"],
+      "xcode_settings": {
+        "OTHER_CFLAGS!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"],
+        "OTHER_CXXFLAGS!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"]
+      },
+      "msvs_settings": {"VCCLCompilerTool": {"BufferSecurityCheck": "false"}},
+      "conditions": [
+        ['target_arch in "arm arm64" and enable_native_tuning==0', {
+          "cflags": ["-march=armv8-a+crc"],
+          "cxxflags": ["-march=armv8-a+crc"],
+          "xcode_settings": {
+            "OTHER_CFLAGS": ["-march=armv8-a+crc"],
+            "OTHER_CXXFLAGS": ["-march=armv8-a+crc"]
+          }
+        }],
+        ['OS!="win" and target_arch=="arm"', {
+          "cflags": ["-mfpu=neon"],
+          "xcode_settings": {
+            "OTHER_CFLAGS": ["-mfpu=neon"]
+          }
+        }]
+      ]
+    },
+    {
+      "target_name": "hasher_sve2",
+      "type": "static_library",
+      "defines": ["NDEBUG"],
+      "sources": ["hasher/hasher_sve2.cpp"],
+      "cflags!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"],
+      "cxxflags!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"],
+      "xcode_settings": {
+        "OTHER_CFLAGS!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"],
+        "OTHER_CXXFLAGS!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"]
+      },
+      "msvs_settings": {"VCCLCompilerTool": {"BufferSecurityCheck": "false"}},
+      "conditions": [
+        ['target_arch=="arm64" and OS!="win" and enable_native_tuning==0', {
+          "variables": {"supports_sve2%": "<!(<!(echo ${CC_target:-${CC:-cc}}) -MM -E hasher/hasher_sve2.cpp -march=armv8-a+sve2 2>/dev/null || true)"},
+          "conditions": [
+            ['supports_sve2!=""', {
+              "cflags": ["-march=armv8-a+sve2"],
+              "cxxflags": ["-march=armv8-a+sve2"],
+              "xcode_settings": {
+                "OTHER_CFLAGS": ["-march=armv8-a+sve2"],
+                "OTHER_CXXFLAGS": ["-march=armv8-a+sve2"],
+              }
+            }]
+          ]
+        }]
+      ]
     },
     {
       "target_name": "gf16",

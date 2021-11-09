@@ -8,6 +8,11 @@ class MD5Multi {
 	std::vector<IMD5Multi*> ctx;
 	std::vector<const void*> lastCtxData;
 	unsigned lastCtxDataDup;
+	
+	// disable copy constructor
+	MD5Multi(const MD5Multi&);
+	MD5Multi& operator=(const MD5Multi&);
+	
 public:
 	explicit MD5Multi(int srcCount);
 	~MD5Multi();

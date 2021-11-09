@@ -193,11 +193,14 @@ Performance Options:
                              Actually buffer size will vary, and may be
                              significantly larger depending on memory limit
                              supplied. Default `4M`
-       --proc-batch-size     Number of slices to submit as a job for GF
-                             calculation.
-       --proc-buffer-size    Number of additional slices to buffer. Set to 0
-                             to disable bufferring. Default equals
-                             `--proc-batch-size`
+       --proc-batch-size     Target number of slices to submit as a batch for
+                             GF calculation. Default `12`
+       --input-buffers       Number of input buffers to concurrently submit to
+                             backend. Default `4`
+       --hash-batch-size     Number of recovery slices to submit as a batch for
+                             hashing. The number of recovery slices pulled from
+                             the backend at once is double this figure. Default
+                             `8`
        --method              Algorithm for performing GF multiplies. Process
                              can crash if CPU does not support selected method.
                              Choices are (all platforms):

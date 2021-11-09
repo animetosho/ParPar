@@ -132,7 +132,9 @@ var opts = {
 	},
 	'threads': {
 		alias: 't',
-		type: 'int'
+		type: 'int',
+		default: -1,
+		map: 'numThreads'
 	},
 	'min-chunk-size': {
 		type: 'size0',
@@ -150,13 +152,18 @@ var opts = {
 		type: 'int',
 		map: 'processBatchSize'
 	},
-	'proc-buffer-size': {
+	'input-buffers': {
 		type: 'int',
-		map: 'processBufferSize'
+		map: 'inputParallelSubmit'
+	},
+	'hash-batch-size': {
+		type: 'int',
+		map: 'hashBatchSize'
 	},
 	'method': {
 		type: 'string',
-		default: ''
+		default: '',
+		map: 'gfMethod'
 	},
 	'recurse': {
 		alias: 'R',
@@ -400,13 +407,6 @@ var inputFiles = argv._;
 	var startTime = Date.now();
 	var decimalPoint = (1.1).toLocaleString().substr(1, 1);
 
-	if(argv.threads) {
-		if(!ParPar.setMaxThreads)
-			error('This build of ParPar has not been compiled with OpenMP support, which is required for multi-threading support');
-		ParPar.setMaxThreads(argv.threads);
-	}
-	//if(argv.method == 'auto') argv.method = '';
-
 	if(argv['ascii-charset']) {
 		ParPar.setAsciiCharset(argv['ascii-charset']);
 	}
@@ -419,7 +419,6 @@ var inputFiles = argv._;
 			process.exit(1);
 		}
 		
-		ParPar.setMethod(argv.method || '', inputSliceDef.unit == 'count' ? 0 : inputSliceDef.value); // TODO: allow size hint to work if slice-count is specified + consider min/max limits
 		var g;
 		try {
 			g = new ParPar.PAR2Gen(info, inputSliceCount, ppo);
@@ -430,11 +429,6 @@ var inputFiles = argv._;
 		var currentSlice = 0;
 		var progressInterval;
 		if(!argv.quiet) {
-			var method_used = ParPar.getMethod();
-			var num_threads = ParPar.getNumThreads();
-			var thread_str = num_threads + ' thread' + (num_threads==1 ? '':'s');
-			process.stderr.write('Multiply method used: ' + method_used.description + ', ' + thread_str + '\n');
-			
 			var friendlySize = function(s) {
 				var units = ['B', 'KiB', 'MiB', 'GiB', 'TiB', 'PiB', 'EiB'];
 				for(var i=0; i<units.length; i++) {
@@ -476,7 +470,16 @@ var inputFiles = argv._;
 			}
 		}
 		
+		var infoShown = argv.quiet;
 		g.run(function(event, arg1) {
+			if(event == 'begin_pass' && !infoShown) {
+				var process_info = g.gf_info();
+				if(process_info) {
+					var thread_str = process_info.threads + ' thread' + (process_info.threads==1 ? '':'s');
+					process.stderr.write('Multiply method used: ' + process_info.method_desc + ', ' + thread_str + '\n');
+				} // else, no recovery being generated
+				infoShown = true;
+			}
 			if(event == 'processing_slice') currentSlice++;
 			// if(event == 'processing_file') process.stderr.write('Processing file ' + arg1.name + '\n');
 		}, function(err) {
