@@ -36,8 +36,9 @@ struct prepare_data {
 struct compute_req {
 	unsigned inputGrouping;
 	uint16_t numInputs, numOutputs;
-	const uint16_t *iNums;
+	uint16_t firstInput;
 	const uint16_t *oNums;
+	const uint16_t* coeffs;
 	size_t len, chunkSize;
 	unsigned numChunks;
 	const void* input;
@@ -80,6 +81,7 @@ private:
 	void* memInput[NUM_INPUT_STAGING_AREAS];
 	void reallocMemInput();
 	std::vector<uint16_t> inputNums[NUM_INPUT_STAGING_AREAS];
+	std::vector<uint16_t> procCoeffs[NUM_INPUT_STAGING_AREAS];
 	unsigned currentInputBuf, currentInputPos;
 	void* memProcessing; // TODO: break this into chunks, to avoid massive single allocation
 	bool processingAdd;

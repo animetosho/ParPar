@@ -37,6 +37,7 @@ void PAR2Proc::freeGf() {
 	for(int i=0; i<NUM_INPUT_STAGING_AREAS; i++) {
 		if(memInput[i]) ALIGN_FREE(memInput[i]);
 		inputNums[i].clear();
+		procCoeffs[i].clear();
 	}
 	memset(memInput, 0, sizeof(memInput));
 	
@@ -154,6 +155,9 @@ void PAR2Proc::setRecoverySlices(unsigned numSlices, const uint16_t* exponents) 
 	if(numSlices) {
 		outputExp.resize(numSlices);
 		memcpy(outputExp.data(), exponents, numSlices * sizeof(uint16_t));
+		
+		for(int i=0; i<NUM_INPUT_STAGING_AREAS; i++)
+			procCoeffs[i].resize(numSlices * inputGrouping);
 	}
 	
 	if(!memProcessing && numThreads && numSlices) {
@@ -211,7 +215,7 @@ PAR2Proc::~PAR2Proc() {
 // TODO: future idea: multiple prepare threads? Not sure if there's a case where it's particularly beneficial...
 
 // prepare thread process function
-static void prepare_chunk(void *req) {
+static void prepare_chunk(void* req) {
 	struct prepare_data* data = static_cast<struct prepare_data*>(req);
 	
 	if(data->src)
@@ -358,15 +362,6 @@ void PAR2Proc::getOutput(unsigned index, void* output, const PAR2ProcOutputCb& c
 static void compute_worker(void *_req) {
 	struct compute_req* req = static_cast<struct compute_req*>(_req);
 	
-	
-	// TODO: should this be done once across all threads?
-	uint16_t* factors = new uint16_t[req->numInputs * req->numOutputs];
-	for(unsigned out=0; out<req->numOutputs; out++)
-		for(unsigned inp=0; inp<req->numInputs; inp++) {
-			factors[inp + out*req->numInputs] = gfmat_coeff(req->iNums[inp], req->oNums[out]);
-		}
-	
-	
 	const Galois16MethodInfo& gfInfo = req->gf->info();
 	// compute how many inputs regions get prefetched in a muladd_multi call
 	// TODO: should this be done across all threads?
@@ -388,7 +383,7 @@ static void compute_worker(void *_req) {
 		int procSize = MIN(req->len-round*req->chunkSize, req->chunkSize);
 		const char* srcPtr = static_cast<const char*>(req->input) + round*req->chunkSize*req->inputGrouping;
 		for(unsigned out = 0; out < req->numOutputs; out++) {
-			uint16_t* vals = factors + out*req->numInputs;
+			const uint16_t* vals = req->coeffs + out*req->numInputs;
 			
 			char* dstPtr = static_cast<char*>(req->output) + out*procSize + round*req->numOutputs*req->chunkSize;
 			if(!req->add) memset(dstPtr, 0, procSize);
@@ -413,8 +408,6 @@ static void compute_worker(void *_req) {
 		}
 	}
 	
-	delete[] factors;
-	
 	// mark that we've done processing this request
 	if(req->procRefs->fetch_sub(1, std::memory_order_relaxed) <= 1) { // relaxed ordering: although we want all prior memory operations to be complete at this point, to send a cross-thread signal requires stricter ordering, so it should be fine by the time the signal is received
 		// signal this input group is done with
@@ -427,6 +420,12 @@ static void compute_worker(void *_req) {
 void PAR2Proc::do_computation(int inBuf, int numInputs) {
 	if(!memInput[0]) reallocMemInput();
 	
+	// compute matrix slice
+	for(unsigned out=0; out<outputExp.size(); out++)
+		for(int inp=0; inp<numInputs; inp++) {
+			procCoeffs[inBuf][inp + out*numInputs] = gfmat_coeff(inputNums[inBuf][inp], outputExp[out]);
+		}
+	
 	// TODO: better distribution strategy
 	procRefs[inBuf] = numChunks;
 	nextThread = 0; // this needs to be reset to ensure the same output regions get queued to the same thread (required to avoid races, and helps cache locality); this does result in uneven distribution though, so TODO: figure something better out
@@ -437,8 +436,9 @@ void PAR2Proc::do_computation(int inBuf, int numInputs) {
 		req->numInputs = numInputs;
 		req->inputGrouping = inputGrouping;
 		req->numOutputs = outputExp.size();
-		req->iNums = inputNums[inBuf].data();
+		req->firstInput = inputNums[inBuf][0];
 		req->oNums = outputExp.data();
+		req->coeffs = procCoeffs[inBuf].data();
 		req->len = thisChunkLen; // TODO: consider sending multiple chunks, instead of one at a time? allows for prefetching second chunk; alternatively, allow worker to peek into queue when prefetching?
 		req->chunkSize = thisChunkLen;
 		req->numChunks = 1;
@@ -464,7 +464,7 @@ void PAR2Proc::_after_computation() {
 		numBufUsedForProcessing--;
 		
 		// if add was blocked, allow adds to continue - calling application will need to listen to this event to know to continue
-		if(progressCb) progressCb(req->numInputs, req->iNums[0]);
+		if(progressCb) progressCb(req->numInputs, req->firstInput);
 		
 		delete req;
 	}
