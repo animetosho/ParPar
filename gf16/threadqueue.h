@@ -1,3 +1,6 @@
+#ifndef __THREADQUEUE_H__
+#define __THREADQUEUE_H__
+
 #include <uv.h>
 #include <queue>
 
@@ -188,3 +191,4 @@ public:
 	}
 };
 
+#endif // defined(__THREADQUEUE_H__)

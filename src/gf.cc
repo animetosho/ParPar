@@ -13,6 +13,7 @@
 #endif
 
 #include "../gf16/controller.h"
+#include "../gf16/threadqueue.h"
 #include "../hasher/hasher.h"
 
 
@@ -526,12 +527,13 @@ protected:
 };
 
 
-struct work_data {
-	void* hasher;
+class HasherInput;
+struct input_work_data {
+	IHasherInput* hasher;
 	const void* buffer;
 	size_t len;
 	CallbackWrapper* cb;
-	void* self;
+	HasherInput* self;
 };
 class HasherInput : public node::ObjectWrap {
 public:
@@ -556,7 +558,11 @@ public:
 private:
 	IHasherInput* hasher;
 	uv_loop_t* loop;
-	bool isRunning;
+	int queueCount;
+	
+	MessageThread thread;
+	uv_async_t threadSignal;
+	ThreadMessageQueue<struct input_work_data*> hashesDone;
 	
 	// disable copy constructor
 	HasherInput(const HasherInput&);
@@ -566,33 +572,37 @@ protected:
 	FUNC(Reset) {
 		FUNC_START;
 		HasherInput* self = node::ObjectWrap::Unwrap<HasherInput>(args.This());
-		if(self->isRunning)
+		if(self->queueCount)
 			RETURN_ERROR("Cannot reset whilst running");
 		
 		self->hasher->reset();
 	}
 	
-	static void do_update(uv_work_t *req) {
-		struct work_data* data = static_cast<struct work_data*>(req->data);
-		static_cast<IHasherInput*>(data->hasher)->update(data->buffer, data->len);
-	}
-	static void after_update(uv_work_t *req, int status) {
-		assert(status == 0);
+	static void thread_func(void* req) {
+		struct input_work_data* data = static_cast<struct input_work_data*>(req);
 		
-		struct work_data* data = static_cast<struct work_data*>(req->data);
-		static_cast<HasherInput*>(data->self)->isRunning = false;
-		data->cb->call();
-		delete data->cb;
-		delete data;
-		delete req;
+		data->hasher->update(data->buffer, data->len);
+		
+		// signal main thread that hashing has completed
+		data->self->hashesDone.push(data);
+		uv_async_send(&(data->self->threadSignal));
+	}
+	void after_process() {
+		struct input_work_data* data;
+		while(hashesDone.trypop(&data)) {
+			static_cast<HasherInput*>(data->self)->queueCount--;
+			data->cb->call();
+			delete data->cb;
+			delete data;
+		}
 	}
 	
 	FUNC(Update) {
 		FUNC_START;
 		HasherInput* self = node::ObjectWrap::Unwrap<HasherInput>(args.This());
 		// TODO: consider queueing mechanism; for now, require JS to do the queueing
-		if(self->isRunning)
-			RETURN_ERROR("Process already active");
+		if(!self->hasher)
+			RETURN_ERROR("Process already ended");
 		
 		if(args.Length() < 1 || !node::Buffer::HasInstance(args[0]))
 			RETURN_ERROR("Requires a buffer");
@@ -604,17 +614,15 @@ protected:
 			CallbackWrapper* cb = new CallbackWrapper(ISOLATE Local<Function>::Cast(args[1]));
 			cb->attachValue(args[0]);
 			
-			self->isRunning = true;
+			self->queueCount++;
 			
-			uv_work_t* req = new uv_work_t;
-			struct work_data* data = new struct work_data;
+			struct input_work_data* data = new struct input_work_data;
 			data->cb = cb;
 			data->hasher = self->hasher;
 			data->buffer = node::Buffer::Data(args[0]);
 			data->len = node::Buffer::Length(args[0]);
 			data->self = self;
-			req->data = data;
-			uv_queue_work(self->loop, req, do_update, after_update);
+			self->thread.send(data);
 		} else {
 			self->hasher->update(node::Buffer::Data(args[0]), node::Buffer::Length(args[0]));
 		}
@@ -623,8 +631,10 @@ protected:
 	FUNC(GetBlock) {
 		FUNC_START;
 		HasherInput* self = node::ObjectWrap::Unwrap<HasherInput>(args.This());
-		if(self->isRunning)
+		if(self->queueCount)
 			RETURN_ERROR("Process currently active");
+		if(!self->hasher)
+			RETURN_ERROR("Process already ended");
 		
 		if(args.Length() < 1 || !node::Buffer::HasInstance(args[0]))
 			RETURN_ERROR("Requires a buffer");
@@ -637,34 +647,59 @@ protected:
 			zeroPad = args[1]->NumberValue();
 #endif
 		
-		// return MD5+CRC32 concatenated (in same format as written directly to the IFSC packet)
 		char* result = (char*)node::Buffer::Data(args[0]);
+		// TODO: consider making this async, as zero padding can be slow
 		self->hasher->getBlock(result, (uint64_t)zeroPad);
+	}
+	
+	void deinit() {
+		if(!hasher) return;
+		hasher->destroy();
+		thread.end();
+		uv_close(reinterpret_cast<uv_handle_t*>(&threadSignal), nullptr);
+		hasher = nullptr;
 	}
 	
 	FUNC(End) {
 		FUNC_START;
 		HasherInput* self = node::ObjectWrap::Unwrap<HasherInput>(args.This());
-		if(self->isRunning)
+		if(self->queueCount)
 			RETURN_ERROR("Process currently active");
+		if(!self->hasher)
+			RETURN_ERROR("Process already ended");
 		
 		if(args.Length() < 1 || !node::Buffer::HasInstance(args[0]))
 			RETURN_ERROR("Requires a buffer");
 		
 		char* result = (char*)node::Buffer::Data(args[0]);
 		self->hasher->end(result);
+		
+		// clean up everything
+		self->deinit();
 	}
 	
-	explicit HasherInput(uv_loop_t* _loop) : ObjectWrap(), loop(_loop), isRunning(false) {
+	explicit HasherInput(uv_loop_t* _loop) : ObjectWrap(), loop(_loop), queueCount(0), thread(thread_func) {
 		hasher = HasherInput_Create();
+		uv_async_init(loop, &threadSignal, [](uv_async_t *handle) {
+			static_cast<HasherInput*>(handle->data)->after_process();
+		});
+		threadSignal.data = static_cast<void*>(this);
 	}
 	
 	~HasherInput() {
-		// TODO: if active, cancel task?
-		hasher->destroy();
+		// TODO: if active, cancel thread?
+		deinit();
 	}
 };
 
+class HasherOutput;
+struct output_work_data {
+	MD5Multi* hasher;
+	const void* const* buffer;
+	size_t len;
+	CallbackWrapper* cb;
+	HasherOutput* self;
+};
 class HasherOutput : public node::ObjectWrap {
 public:
 	static inline void AttachMethods(Local<FunctionTemplate>& t) {
@@ -713,14 +748,14 @@ protected:
 	}
 	
 	static void do_update(uv_work_t *req) {
-		struct work_data* data = static_cast<struct work_data*>(req->data);
-		static_cast<MD5Multi*>(data->hasher)->update(static_cast<const void* const*>(data->buffer), data->len);
+		struct output_work_data* data = static_cast<struct output_work_data*>(req->data);
+		data->hasher->update(data->buffer, data->len);
 	}
 	static void after_update(uv_work_t *req, int status) {
 		assert(status == 0);
 		
-		struct work_data* data = static_cast<struct work_data*>(req->data);
-		static_cast<HasherOutput*>(data->self)->isRunning = false;
+		struct output_work_data* data = static_cast<struct output_work_data*>(req->data);
+		data->self->isRunning = false;
 		data->cb->call();
 		delete data->cb;
 		delete data;
@@ -769,10 +804,10 @@ protected:
 			self->isRunning = true;
 			
 			uv_work_t* req = new uv_work_t;
-			struct work_data* data = new struct work_data;
+			struct output_work_data* data = new struct output_work_data;
 			data->cb = cb;
 			data->hasher = &(self->hasher);
-			data->buffer = static_cast<const void*>(self->buffers.data());
+			data->buffer = self->buffers.data();
 			data->len = bufLen;
 			data->self = self;
 			req->data = data;
