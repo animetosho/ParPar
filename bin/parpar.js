@@ -160,6 +160,10 @@ var opts = {
 		type: 'int',
 		map: 'hashBatchSize'
 	},
+	'recovery-buffers': {
+		type: 'int',
+		map: 'recDataSize'
+	},
 	'method': {
 		type: 'string',
 		default: '',

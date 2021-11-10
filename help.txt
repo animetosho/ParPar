@@ -198,9 +198,9 @@ Performance Options:
        --input-buffers       Number of input buffers to concurrently submit to
                              backend. Default `4`
        --hash-batch-size     Number of recovery slices to submit as a batch for
-                             hashing. The number of recovery slices pulled from
-                             the backend at once is double this figure. Default
-                             `8`
+                             hashing. Default `8`
+       --recovery-buffers    Number of recovery slices to buffer from backend.
+                             Default is `ceil(--hash-batch-size * 1.5)`
        --method              Algorithm for performing GF multiplies. Process
                              can crash if CPU does not support selected method.
                              Choices are (all platforms):

@@ -155,11 +155,11 @@ var par2creator = require('@animetosho/parpar').run(
         
         // the following are the default values for other options
         //outputBase: '', // output filename without extension
-        minSliceSize: null, // default(null) => use sliceSize; give negative number to indicate slice count
+        minSliceSize: null, // null => use sliceSize; give negative number to indicate slice count
         maxSliceSize: null,
         sliceSizeMultiple: 4,
         //recoverySlices: 0,
-        minRecoverySlices: null, // default = recoverySlices
+        minRecoverySlices: null, // null => recoverySlices
         maxRecoverySlices: {
             unit: 'slices',
             value: 65537
@@ -171,6 +171,7 @@ var par2creator = require('@animetosho/parpar').run(
         processBatchSize: 12,
         inputParallelSubmit: 4,
         hashBatchSize: 8,
+        recDataSize: null, // null => ceil(hashBatchSize*1.5)
         comments: [], // array of strings
         unicode: null, // null => auto, false => never, true => always generate unicode packets
         outputOverwrite: false,
@@ -188,8 +189,8 @@ var par2creator = require('@animetosho/parpar').run(
         displayNameFormat: 'common', // basename, keep, common, outrel or path
         displayNameBase: '.', // base path, only used if displayNameFormat is 'path'
         seqReadSize: 4*1048576,
-        numThreads: null, // default = number of processors
-        gfMethod: null, // default = '' (auto)
+        numThreads: null, // null => number of processors
+        gfMethod: null, // null => '' (auto)
     },
     function(err) {
         console.log(err || 'Process finished');
