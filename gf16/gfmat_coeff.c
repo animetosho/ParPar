@@ -50,12 +50,11 @@ HEDLEY_CONST uint16_t gfmat_input_log(uint_fast16_t inputBlock) {
 	return (inputBlock*2 + input_diff[inputBlock]);
 }
 
-HEDLEY_CONST uint16_t gfmat_coeff_log(uint_fast16_t inputBlock, uint_fast16_t recoveryBlock) {
+HEDLEY_CONST uint16_t gfmat_coeff_log(uint_fast16_t inputLog, uint_fast16_t recoveryBlock) {
 	//assert(recoveryBlock < 65535); // if ==65535, gets an invalid exponent
 	
 	// calculate POW(inputBlockConstant, recoveryBlock) in GF
-	uint_fast32_t result = gfmat_input_log(inputBlock);
-	result *= recoveryBlock;
+	uint_fast32_t result = inputLog * recoveryBlock;
 	// clever bit hack for 'result %= 65535' from MultiPar sources
 	result = (result >> 16) + (result & 65535);
 	result += result >> 16;
@@ -63,6 +62,9 @@ HEDLEY_CONST uint16_t gfmat_coeff_log(uint_fast16_t inputBlock, uint_fast16_t re
 	return result;
 }
 
+HEDLEY_CONST uint16_t gfmat_coeff_from_log(uint_fast16_t inputLog, uint_fast16_t recoveryBlock) {
+	return gf16_exp(gfmat_coeff_log(inputLog, recoveryBlock));
+}
 HEDLEY_CONST uint16_t gfmat_coeff(uint_fast16_t inputBlock, uint_fast16_t recoveryBlock) {
-	return gf16_exp(gfmat_coeff_log(inputBlock, recoveryBlock));
+	return gfmat_coeff_from_log(gfmat_input_log(inputBlock), recoveryBlock);
 }

@@ -223,8 +223,9 @@ void GF16OCL::add_input(const void* data, size_t size, unsigned inputNum) {
 	if(coeffAsLog) {
 		tmp_coeffs[inputBufferIdx][inputCount] = gfmat_input_log(inputNum);
 	} else {
+		uint16_t inputLog = gfmat_input_log(inputNum);
 		for(unsigned i=0; i<outputExponents.size(); i++)
-			tmp_coeffs[inputBufferIdx][inputCount + i*inputBatchSize] = gfmat_coeff(inputNum, outputExponents[i]);
+			tmp_coeffs[inputBufferIdx][inputCount + i*inputBatchSize] = gfmat_coeff_from_log(inputLog, outputExponents[i]);
 	}
 	
 #ifndef SKIP_TRANSFER

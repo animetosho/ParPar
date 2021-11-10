@@ -421,10 +421,12 @@ void PAR2Proc::do_computation(int inBuf, int numInputs) {
 	if(!memInput[0]) reallocMemInput();
 	
 	// compute matrix slice
-	for(unsigned out=0; out<outputExp.size(); out++)
-		for(int inp=0; inp<numInputs; inp++) {
-			procCoeffs[inBuf][inp + out*numInputs] = gfmat_coeff(inputNums[inBuf][inp], outputExp[out]);
+	for(int inp=0; inp<numInputs; inp++) {
+		uint16_t inputLog = gfmat_input_log(inputNums[inBuf][inp]);
+		for(unsigned out=0; out<outputExp.size(); out++) {
+			procCoeffs[inBuf][inp + out*numInputs] = gfmat_coeff_from_log(inputLog, outputExp[out]);
 		}
+	}
 	
 	// TODO: better distribution strategy
 	procRefs[inBuf] = numChunks;
