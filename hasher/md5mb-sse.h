@@ -134,6 +134,36 @@ static HEDLEY_ALWAYS_INLINE void md5_extract_mb_sse(void* dst, void* state, int 
 #endif
 
 
+#ifdef __AVX512VL__
+#include <immintrin.h>
+#define ROTATE _mm_rol_epi32
+#define md5mb_regions_avx512_128 md5mb_regions_sse
+#define md5mb_max_regions_avx512_128 md5mb_regions_avx512_128
+#define md5mb_alignment_avx512_128 md5mb_alignment_sse
+
+#undef F
+#undef G
+#undef H
+#undef I
+#ifdef ADDF
+# undef ADDF
+#endif
+# define F(b,c,d) _mm_ternarylogic_epi32(d,c,b,0xD8)
+# define G(b,c,d) _mm_ternarylogic_epi32(d,c,b,0xAC)
+# define H(b,c,d) _mm_ternarylogic_epi32(d,c,b,0x96)
+# define I(b,c,d) _mm_ternarylogic_epi32(d,c,b,0x63)
+
+
+#define _FN(f) f##_avx512_128
+#include "md5mb-base.h"
+#undef _FN
+
+
+#undef ROTATE
+
+#define md5_extract_mb_avx512_128 md5_extract_mb_sse
+#endif
+
 
 
 #ifdef __AVX2__
@@ -259,6 +289,32 @@ static HEDLEY_ALWAYS_INLINE void md5_extract_mb_avx2(void* dst, void* state, int
 #ifdef ADDF
 # undef ADDF
 #endif
+
+#ifdef __AVX512VL__
+#undef ROTATE
+#define ROTATE _mm256_rol_epi32
+#define md5mb_regions_avx512_256 md5mb_regions_avx2
+#define md5mb_max_regions_avx512_256 md5mb_regions_avx512_256
+#define md5mb_alignment_avx512_256 md5mb_alignment_avx2
+
+#undef F
+#undef G
+#undef H
+#undef I
+# define F(b,c,d) _mm256_ternarylogic_epi32(d,c,b,0xD8)
+# define G(b,c,d) _mm256_ternarylogic_epi32(d,c,b,0xAC)
+# define H(b,c,d) _mm256_ternarylogic_epi32(d,c,b,0x96)
+# define I(b,c,d) _mm256_ternarylogic_epi32(d,c,b,0x63)
+
+
+#define _FN(f) f##_avx512_256
+#include "md5mb-base.h"
+#undef _FN
+
+
+#define md5_extract_mb_avx512_256 md5_extract_mb_avx2
+#endif
+
 
 #ifdef __AVX512F__
 #include <immintrin.h>

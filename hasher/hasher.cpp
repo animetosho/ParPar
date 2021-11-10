@@ -5,8 +5,8 @@
 IHasherInput*(*HasherInput_Create)() = NULL;
 static struct _CpuCap {
 #ifdef PLATFORM_X86
-	bool hasSSE2, hasXOP, hasAVX2, hasAVX512F;
-	_CpuCap() : hasSSE2(false), hasXOP(false), hasAVX2(false), hasAVX512F(false) {}
+	bool hasSSE2, hasXOP, hasAVX2, hasAVX512F, hasAVX512VL;
+	_CpuCap() : hasSSE2(false), hasXOP(false), hasAVX2(false), hasAVX512F(false), hasAVX512VL(false) {}
 #endif
 #ifdef PLATFORM_ARM
 	bool hasNEON, hasSVE2;
@@ -20,7 +20,7 @@ void setup_hasher() {
 	
 	// CPU detection
 #ifdef PLATFORM_X86
-	bool hasClMul = false, hasAVX = false, hasAVX512VL = false;
+	bool hasClMul = false, hasAVX = false;
 	bool isSmallCore = false;
 	
 	int cpuInfo[4];
@@ -49,7 +49,7 @@ void setup_hasher() {
 			CpuCap.hasAVX2 = cpuInfoX[1] & 0x20;
 			if((xcr & 0xE0) == 0xE0) {
 				CpuCap.hasAVX512F = ((cpuInfoX[1] & 0x10000) == 0x10000);
-				hasAVX512VL = ((cpuInfoX[1] & 0x80010000) == 0x80010000);
+				CpuCap.hasAVX512VL = ((cpuInfoX[1] & 0x80010000) == 0x80010000);
 			}
 		}
 	}
@@ -58,7 +58,7 @@ void setup_hasher() {
 	_cpuid(cpuInfo, 0x80000001);
 	CpuCap.hasXOP = hasAVX && (cpuInfo[2] & 0x800);
 	
-	if(hasAVX512VL && hasClMul && HasherInput_AVX512::isAvailable)
+	if(CpuCap.hasAVX512VL && hasClMul && HasherInput_AVX512::isAvailable)
 		HasherInput_Create = &HasherInput_AVX512::create;
 	else if(hasClMul && !isSmallCore && HasherInput_ClMulScalar::isAvailable)
 		HasherInput_Create = &HasherInput_ClMulScalar::create;
@@ -131,13 +131,13 @@ MD5Multi::MD5Multi(int srcCount) {
 				lastCtxDataDup = impl::getNumRegions() - srcCount; \
 			}
 		
-		// TODO: consider AVX512 implementation for all widths
-		
 		ADD_LAST_CTX(1, MD5Multi_Scalar)
 		else ADD_LAST_CTX(1, MD5Multi2_Scalar)
 #ifdef PLATFORM_X86
+		else ADD_LAST_CTX(CpuCap.hasAVX512VL && MD5Multi_AVX512_128::isAvailable, MD5Multi_AVX512_128)
 		else ADD_LAST_CTX(CpuCap.hasXOP && MD5Multi_XOP::isAvailable, MD5Multi_XOP)
 		else ADD_LAST_CTX(CpuCap.hasSSE2 && MD5Multi_SSE::isAvailable, MD5Multi_SSE)
+		else ADD_LAST_CTX(CpuCap.hasAVX512VL && MD5Multi_AVX512_256::isAvailable, MD5Multi_AVX512_256)
 		else ADD_LAST_CTX(CpuCap.hasAVX2 && MD5Multi_AVX2::isAvailable, MD5Multi_AVX2)
 		else ADD_LAST_CTX(CpuCap.hasAVX512F && MD5Multi_AVX512::isAvailable, MD5Multi_AVX512)
 		else ADD_LAST_CTX(CpuCap.hasXOP && MD5Multi2_XOP::isAvailable, MD5Multi2_XOP)
