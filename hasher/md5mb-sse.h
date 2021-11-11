@@ -222,7 +222,7 @@ static HEDLEY_ALWAYS_INLINE void md5_extract_mb_sse(void* dst, void* state, int 
 
 
 #define ROTATE(a, r) (r == 16 ? \
-	_mm256_shufflehi_epi16(_mm256_shufflelo_epi16(a, 0xb1), 0xb1) \
+	_mm256_shuffle_epi8(a, _mm256_set_epi32(0x0d0c0f0e, 0x09080b0a, 0x05040706, 0x01000302, 0x0d0c0f0e, 0x09080b0a, 0x05040706, 0x01000302)) \
 	: _mm256_or_si256(_mm256_slli_epi32(a, r), _mm256_srli_epi32(a, 32-r)) \
 )
 #define md5mb_regions_avx2 8

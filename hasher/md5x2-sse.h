@@ -76,6 +76,7 @@ static HEDLEY_ALWAYS_INLINE void md5_extract_x2_sse(void* dst, void* state, cons
 	state_[2] = _mm_insert_epi32(state_[2], 0x98badcfeL, idx*2); \
 	state_[3] = _mm_insert_epi32(state_[3], 0x10325476L, idx*2); \
 }
+// TODO: consider using PSHUFB for rotate by 16
 # define _FN(f) f##_avx
 # include "md5x2-base.h"
 # undef _FN

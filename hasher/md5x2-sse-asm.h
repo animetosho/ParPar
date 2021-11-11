@@ -261,6 +261,7 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_x2_sse(__m128i* state, const 
 static HEDLEY_ALWAYS_INLINE void md5_process_block_x2_avx(__m128i* state, const uint8_t* const* HEDLEY_RESTRICT data, size_t offset) {
 	FN_VARS;
 	
+	// TODO: consider vpshufb for rotate by 16
 #define ROUND_X(IA, A, B, I, R) \
 	"vpaddd " I ", %[" STR(IA) "], %[" STR(A) "]\n" \
 	"vpaddd %[TMPF1], %[" STR(A) "], %[" STR(A) "]\n" \
