@@ -169,7 +169,6 @@ var par2creator = require('@animetosho/parpar').run(
         minChunkSize: 128*1024, // 0 to disable chunking
         noChunkFirstPass: false,
         processBatchSize: 12,
-        inputParallelSubmit: 4,
         hashBatchSize: 8,
         recDataSize: null, // null => ceil(hashBatchSize*1.5)
         comments: [], // array of strings
@@ -189,6 +188,7 @@ var par2creator = require('@animetosho/parpar').run(
         displayNameFormat: 'common', // basename, keep, common, outrel or path
         displayNameBase: '.', // base path, only used if displayNameFormat is 'path'
         seqReadSize: 4*1048576,
+        readBuffers: 4,
         numThreads: null, // null => number of processors
         gfMethod: null, // null => '' (auto)
     },
@@ -199,8 +199,8 @@ var par2creator = require('@animetosho/parpar').run(
 par2creator.on('info', function(par) {
     console.log('Creating PAR2 archive with ' + par.opts.recoverySlices*par.opts.sliceSize + ' byte(s) of recovery data from ' + par.totalSize + ' input bytes');
 });
-par2creator.on('processing_file', function(par, file) {
-    console.log('Processing input file ' + file.name);
+par2creator.on('begin_pass', function(par, passNum, passChunkNum) {
+    console.log('Begin read pass ' + passNum + ' of ' + par.passes + ' pass(es)');
 });
 par2creator.on('processing_slice', function(par, file, sliceNum) {
     console.log('Processing slice #' + sliceNum + ' of ' + par.inputSlices + ' from ' + file.name);

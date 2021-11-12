@@ -148,13 +148,13 @@ var opts = {
 		type: 'bool',
 		map: 'noChunkFirstPass'
 	},*/
+	'read-buffers': {
+		type: 'int',
+		map: 'readBuffers'
+	},
 	'proc-batch-size': {
 		type: 'int',
 		map: 'processBatchSize'
-	},
-	'input-buffers': {
-		type: 'int',
-		map: 'inputParallelSubmit'
 	},
 	'hash-batch-size': {
 		type: 'int',
