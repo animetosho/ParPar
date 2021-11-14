@@ -180,6 +180,7 @@ Performance Options:
                              Note that additional memory is used during
                              processing, particularly if large slice sizes are
                              being used.
+                             Set to 0 to disable memory limit.
   -t,  --threads             Limit number of threads to use. Default equals
                              number of CPU cores.
        --min-chunk-size      Minimum chunking size. Set to 0 to disable

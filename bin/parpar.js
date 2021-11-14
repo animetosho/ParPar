@@ -144,10 +144,6 @@ var opts = {
 		type: 'size',
 		map: 'seqReadSize'
 	},
-	/*'seq-first-pass': {
-		type: 'bool',
-		map: 'noChunkFirstPass'
-	},*/
 	'read-buffers': {
 		type: 'int',
 		map: 'readBuffers'

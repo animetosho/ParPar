@@ -165,9 +165,8 @@ var par2creator = require('@animetosho/parpar').run(
             value: 65537
         },
         recoveryOffset: 0,
-        memoryLimit: null,
+        memoryLimit: null, // 0 to specify no limit
         minChunkSize: 128*1024, // 0 to disable chunking
-        noChunkFirstPass: false,
         processBatchSize: 12,
         hashBatchSize: 8,
         recDataSize: null, // null => ceil(hashBatchSize*1.5)
