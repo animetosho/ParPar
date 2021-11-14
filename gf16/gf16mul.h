@@ -160,6 +160,7 @@ public:
 	inline const Galois16MethodInfo& info() const {
 		return _info;
 	}
+	static Galois16MethodInfo info(Galois16Methods _method);
 	
 	inline HEDLEY_CONST bool isMultipleOfStride(size_t len) const {
 #if defined(_M_ARM64) || defined(__aarch64__)

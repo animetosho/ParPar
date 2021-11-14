@@ -528,6 +528,29 @@ protected:
 	}
 };
 
+FUNC(GfInfo) {
+	FUNC_START;
+	
+	// get method
+	Galois16Methods method = args.Length() >= 1 && !args[0]->IsUndefined() && !args[0]->IsNull() ? (Galois16Methods)ARG_TO_NUM(Int32, args[0]) : GF16_AUTO;
+	
+	if(method == GF16_AUTO) {
+		// TODO: accept hints
+		method = PAR2Proc::default_method();
+	}
+	
+	auto info = PAR2Proc::info(method);
+	Local<Object> ret = NEW_OBJ(Object);
+	SET_OBJ(ret, "method", Integer::New(ISOLATE info.id));
+	SET_OBJ(ret, "method_desc", NEW_STRING(info.name));
+	SET_OBJ(ret, "alignment", Integer::New(ISOLATE info.alignment));
+	SET_OBJ(ret, "stride", Integer::New(ISOLATE info.stride));
+	SET_OBJ(ret, "target_chunk", Integer::New(ISOLATE info.idealChunkSize));
+	SET_OBJ(ret, "target_grouping", Integer::New(ISOLATE info.idealInputMultiple));
+	
+	RETURN_VAL(ret);
+}
+
 
 class HasherInput;
 static std::vector<MessageThread*> HasherInputThreadPool;
@@ -938,6 +961,8 @@ void parpar_gf_init(
 	Local<FunctionTemplate> t = FunctionTemplate::New(ISOLATE GfProc::New);
 	GfProc::AttachMethods(t);
 	SET_OBJ_FUNC(target, "GfProc", t);
+	
+	NODE_SET_METHOD(target, "gf_info", GfInfo);
 	
 	t = FunctionTemplate::New(ISOLATE HasherInput::New);
 	HasherInput::AttachMethods(t);

@@ -152,4 +152,11 @@ public:
 	inline void discardOutput() {
 		processingAdd = false;
 	}
+	
+	static inline Galois16Methods default_method() {
+		return Galois16Mul::default_method();
+	}
+	static inline Galois16MethodInfo info(Galois16Methods method) {
+		return Galois16Mul::info(method);
+	}
 };
