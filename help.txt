@@ -170,16 +170,14 @@ Output Options:
 
 Performance Options:
 
-  -m,  --memory              Maximum amount of memory to use for recovery
-                             slices. If all recovery slices cannot be held in
-                             memory, ParPar will run multiple passes on input
-                             data to generate recovery, so increasing this
-                             value can improve performance. Default is auto-
-                             detected based on total/free RAM, typically 75% of
-                             free RAM up to 8192MB.
-                             Note that additional memory is used during
-                             processing, particularly if large slice sizes are
-                             being used.
+  -m,  --memory              Maximum amount of memory to use for computing
+                             recovery. ParPar will run multiple passes on input
+                             data to generate recovery if insufficient memory
+                             is allowed, so increasing this value can improve
+                             performance. Default is auto-detected based on
+                             total/free RAM, typically 75% of free RAM up to
+                             8192MB.
+                             Note that this does not include read buffers.
                              Set to 0 to disable memory limit.
   -t,  --threads             Limit number of threads to use. Default equals
                              number of CPU cores.
@@ -190,10 +188,10 @@ Performance Options:
                              slow, but smaller values on flash based storage,
                              where random I/O is faster, relative to bandwidth.
                              Default `128K`.
-       --seq-read-size       Target read buffer size for sequential reading.
-                             Actually buffer size will vary, and may be
-                             significantly larger depending on memory limit
-                             supplied. Default `4M`
+       --seq-read-size       Maximum read buffer size for sequential reading.
+                             This option also limits the amount of recovery
+                             that can be processed per slice on each read pass.
+                             Default `4M`
        --read-buffers        Number of read buffers to read into. Default `4`
        --proc-batch-size     Target number of slices to submit as a batch for
                              GF calculation. Default `12`
