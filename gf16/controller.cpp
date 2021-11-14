@@ -18,11 +18,13 @@ static void after_computation(uv_async_t *handle) {
 }
 static void compute_worker(void *_req);
 
+PAR2ProcStaging::~PAR2ProcStaging() {
+	if(src) ALIGN_FREE(src);
+}
+
 /** initialization **/
-PAR2Proc::PAR2Proc(size_t _sliceSize, uv_loop_t* _loop) : loop(_loop), sliceSize(_sliceSize), numThreads(0), gf(NULL), memProcessing(NULL), prepareThread(prepare_chunk), endSignalled(false) {
+PAR2Proc::PAR2Proc(size_t _sliceSize, uv_loop_t* _loop, int stagingAreas) : loop(_loop), sliceSize(_sliceSize), numThreads(0), gf(NULL), staging(stagingAreas), memProcessing(NULL), prepareThread(prepare_chunk), endSignalled(false) {
 	gfmat_init();
-	
-	memset(memInput, 0, sizeof(memInput));
 	
 	uv_async_init(loop, &_preparedSignal, after_prepare_chunk);
 	uv_async_init(loop, &_doneSignal, after_computation);
@@ -34,12 +36,12 @@ PAR2Proc::PAR2Proc(size_t _sliceSize, uv_loop_t* _loop) : loop(_loop), sliceSize
 }
 
 void PAR2Proc::freeGf() {
-	for(int i=0; i<NUM_INPUT_STAGING_AREAS; i++) {
-		if(memInput[i]) ALIGN_FREE(memInput[i]);
-		inputNums[i].clear();
-		procCoeffs[i].clear();
+	for(auto& area : staging) {
+		if(area.src) ALIGN_FREE(area.src);
+		area.src = nullptr;
+		area.inputNums.clear();
+		area.procCoeffs.clear();
 	}
-	memset(memInput, 0, sizeof(memInput));
 	
 	freeProcessingMem();
 	
@@ -95,14 +97,14 @@ void PAR2Proc::init(const PAR2ProcCompleteCb& _progressCb, Galois16Methods metho
 		
 		
 		alignedSliceSize = gf->alignToStride(sliceSize) + stride; // add extra stride, because checksum requires an extra block
-		for(int i=0; i<NUM_INPUT_STAGING_AREAS; i++) {
+		for(auto& area : staging) {
 			// allocate memory for sending input numbers
-			inputNums[i].resize(inputGrouping);
+			area.inputNums.resize(inputGrouping);
 			// setup indicators to know if buffers are being used
-			bufUsedForProcessing[i] = false;
+			area.isActive = false;
 		}
 		reallocMemInput(); // allocate input staging area
-		numBufUsedForProcessing = 0;
+		stagingActiveCount = 0;
 		
 		nextThread = 0;
 		setNumThreads(numThreads); // init scratch/workers
@@ -117,9 +119,9 @@ void PAR2Proc::init(const PAR2ProcCompleteCb& _progressCb, Galois16Methods metho
 }
 
 void PAR2Proc::reallocMemInput() {
-	for(int i=0; i<NUM_INPUT_STAGING_AREAS; i++) {
-		if(memInput[i]) ALIGN_FREE(memInput[i]);
-		ALIGN_ALLOC(memInput[i], inputGrouping * alignedSliceSize, alignment);
+	for(auto& area : staging) {
+		if(area.src) ALIGN_FREE(area.src);
+		ALIGN_ALLOC(area.src, inputGrouping * alignedSliceSize, alignment);
 	}
 }
 
@@ -156,8 +158,8 @@ void PAR2Proc::setRecoverySlices(unsigned numSlices, const uint16_t* exponents) 
 		outputExp.resize(numSlices);
 		memcpy(outputExp.data(), exponents, numSlices * sizeof(uint16_t));
 		
-		for(int i=0; i<NUM_INPUT_STAGING_AREAS; i++)
-			procCoeffs[i].resize(numSlices * inputGrouping);
+		for(auto& area : staging)
+			area.procCoeffs.resize(numSlices * inputGrouping);
 	}
 	
 	if(!memProcessing && numThreads && numSlices) {
@@ -233,26 +235,27 @@ void PAR2Proc::_after_prepare_chunk() {
 			// queue async compute
 			do_computation(data->inBufId, data->submitInBufs);
 		}
-		if(data->cb && data->src) data->cb(data->src, inputNums[data->inBufId][data->index]);
+		if(data->cb && data->src) data->cb(data->src, staging[data->inBufId].inputNums[data->index]);
 		delete data;
 	}
 }
 
 bool PAR2Proc::addInput(const void* buffer, size_t size, uint16_t inputNum, bool flush, const PAR2ProcPrepareCb& cb) {
+	auto& area = staging[currentInputBuf];
 	// if we're waiting for input availability, can't add
 	// NOTE: if add fails due to being full, client resubmitting may be vulnerable to race conditions if it adds an event listener after completion event gets fired
-	if(bufUsedForProcessing[currentInputBuf]) return false;
+	if(area.isActive) return false;
 	assert(!endSignalled);
 	
-	if(!memInput[0]) reallocMemInput();
+	if(!staging[0].src) reallocMemInput();
 	
 	if(numThreads) {
-		inputNums[currentInputBuf][currentInputPos] = inputNum;
+		area.inputNums[currentInputPos] = inputNum;
 		struct prepare_data* data = new struct prepare_data;
 		data->src = buffer;
 		data->size = size;
 		data->parent = this;
-		data->dst = memInput[currentInputBuf];
+		data->dst = area.src;
 		data->dstLen = alignedCurrentSliceSize - stride;
 		data->numInputs = inputGrouping;
 		data->index = currentInputPos++;
@@ -263,10 +266,11 @@ bool PAR2Proc::addInput(const void* buffer, size_t size, uint16_t inputNum, bool
 		data->submitInBufs = (flush || currentInputPos == inputGrouping) ? currentInputPos : 0;
 		data->inBufId = currentInputBuf;
 		if(data->submitInBufs) {
-			bufUsedForProcessing[currentInputBuf] = true; // lock this buffer until processing is complete
-			numBufUsedForProcessing++;
+			area.isActive = true; // lock this buffer until processing is complete
+			stagingActiveCount++;
 			currentInputPos = 0;
-			currentInputBuf = (currentInputBuf+1) % NUM_INPUT_STAGING_AREAS;
+			if(++currentInputBuf == staging.size())
+				currentInputBuf = 0;
 		}
 		
 		prepareThread.send(data);
@@ -289,10 +293,11 @@ void PAR2Proc::flush() {
 	data->inBufId = currentInputBuf;
 	data->gf = gf;
 	
-	bufUsedForProcessing[currentInputBuf] = true; // lock this buffer until processing is complete
-	numBufUsedForProcessing++;
+	staging[currentInputBuf].isActive = true; // lock this buffer until processing is complete
+	stagingActiveCount++;
 	currentInputPos = 0;
-	currentInputBuf = (currentInputBuf+1) % NUM_INPUT_STAGING_AREAS;
+	if(++currentInputBuf == staging.size())
+		currentInputBuf = 0;
 	
 	prepareThread.send(data);
 }
@@ -303,7 +308,7 @@ void PAR2Proc::endInput(const PAR2ProcFinishedCb& _finishCb) {
 	finishCb = _finishCb;
 	prepareThread.end(); // TODO: should thread be ended here?
 	endSignalled = true;
-	if(numBufUsedForProcessing==0)
+	if(stagingActiveCount==0)
 		processing_finished();
 }
 
@@ -418,18 +423,19 @@ static void compute_worker(void *_req) {
 }
 
 void PAR2Proc::do_computation(int inBuf, int numInputs) {
-	if(!memInput[0]) reallocMemInput();
+	if(!staging[0].src) reallocMemInput();
 	
+	auto& area = staging[inBuf];
 	// compute matrix slice
 	for(int inp=0; inp<numInputs; inp++) {
-		uint16_t inputLog = gfmat_input_log(inputNums[inBuf][inp]);
+		uint16_t inputLog = gfmat_input_log(area.inputNums[inp]);
 		for(unsigned out=0; out<outputExp.size(); out++) {
-			procCoeffs[inBuf][inp + out*numInputs] = gfmat_coeff_from_log(inputLog, outputExp[out]);
+			area.procCoeffs[inp + out*numInputs] = gfmat_coeff_from_log(inputLog, outputExp[out]);
 		}
 	}
 	
 	// TODO: better distribution strategy
-	procRefs[inBuf] = numChunks;
+	area.procRefs = numChunks;
 	nextThread = 0; // this needs to be reset to ensure the same output regions get queued to the same thread (required to avoid races, and helps cache locality); this does result in uneven distribution though, so TODO: figure something better out
 	for(unsigned chunk=0; chunk<numChunks; chunk++) {
 		size_t sliceOffset = chunk*chunkLen;
@@ -438,19 +444,19 @@ void PAR2Proc::do_computation(int inBuf, int numInputs) {
 		req->numInputs = numInputs;
 		req->inputGrouping = inputGrouping;
 		req->numOutputs = outputExp.size();
-		req->firstInput = inputNums[inBuf][0];
+		req->firstInput = area.inputNums[0];
 		req->oNums = outputExp.data();
-		req->coeffs = procCoeffs[inBuf].data();
+		req->coeffs = area.procCoeffs.data();
 		req->len = thisChunkLen; // TODO: consider sending multiple chunks, instead of one at a time? allows for prefetching second chunk; alternatively, allow worker to peek into queue when prefetching?
 		req->chunkSize = thisChunkLen;
 		req->numChunks = 1;
-		req->input = static_cast<const char*>(memInput[inBuf]) + sliceOffset*inputGrouping;
+		req->input = static_cast<const char*>(area.src) + sliceOffset*inputGrouping;
 		req->output = static_cast<char*>(memProcessing) + sliceOffset*req->numOutputs;
 		req->add = processingAdd;
 		req->mutScratch = gfScratch[nextThread]; // TODO: should this be assigned to the thread instead?
 		req->gf = gf;
 		req->parent = this;
-		req->procRefs = &(procRefs[inBuf]);
+		req->procRefs = &(area.procRefs);
 		req->inBufId = inBuf;
 		
 		thWorkers[nextThread++].send(req);
@@ -462,15 +468,15 @@ void PAR2Proc::do_computation(int inBuf, int numInputs) {
 void PAR2Proc::_after_computation() {
 	struct compute_req* req;
 	while(_processedChunks.trypop(&req)) {
-		bufUsedForProcessing[req->inBufId] = false;
-		numBufUsedForProcessing--;
+		staging[req->inBufId].isActive = false;
+		stagingActiveCount--;
 		
 		// if add was blocked, allow adds to continue - calling application will need to listen to this event to know to continue
 		if(progressCb) progressCb(req->numInputs, req->firstInput);
 		
 		delete req;
 	}
-	if(endSignalled && numBufUsedForProcessing==0)
+	if(endSignalled && stagingActiveCount==0)
 		processing_finished();
 }
 
@@ -479,10 +485,10 @@ void PAR2Proc::processing_finished() {
 	endSignalled = false;
 	
 	// free memInput so that output fetching can use some of it
-	for(int i=0; i<NUM_INPUT_STAGING_AREAS; i++) {
-		if(memInput[i]) ALIGN_FREE(memInput[i]);
+	for(auto& area : staging) {
+		if(area.src) ALIGN_FREE(area.src);
+		area.src = nullptr;
 	}
-	memset(memInput, 0, sizeof(memInput));
 	
 	// close off worker threads; TODO: is this a good idea? perhaps do it during deinit instead?
 	for(auto& worker : thWorkers)

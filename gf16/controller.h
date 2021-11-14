@@ -8,8 +8,6 @@
 
 #include "gf16mul.h"
 
-// a value of 2 allows one area to be consumed from whilst the other is being filled
-#define NUM_INPUT_STAGING_AREAS 2
 
 // callback types
 typedef std::function<void(const void*, unsigned)> PAR2ProcPrepareCb;
@@ -53,6 +51,17 @@ struct compute_req {
 	PAR2Proc* parent;
 };
 
+class PAR2ProcStaging {
+public:
+	void* src;
+	std::vector<uint16_t> inputNums;
+	std::vector<uint16_t> procCoeffs;
+	std::atomic<int> procRefs;
+	bool isActive;
+	
+	PAR2ProcStaging() : src(nullptr), isActive(false) {}
+	~PAR2ProcStaging();
+};
 
 class PAR2Proc {
 private:
@@ -78,16 +87,12 @@ private:
 	void freeGf();
 	
 	// staging area from which processing is performed
-	void* memInput[NUM_INPUT_STAGING_AREAS];
+	std::vector<PAR2ProcStaging> staging;
 	void reallocMemInput();
-	std::vector<uint16_t> inputNums[NUM_INPUT_STAGING_AREAS];
-	std::vector<uint16_t> procCoeffs[NUM_INPUT_STAGING_AREAS];
 	unsigned currentInputBuf, currentInputPos;
 	void* memProcessing; // TODO: break this into chunks, to avoid massive single allocation
 	bool processingAdd;
-	std::atomic<int> procRefs[NUM_INPUT_STAGING_AREAS];
-	bool bufUsedForProcessing[NUM_INPUT_STAGING_AREAS];
-	int numBufUsedForProcessing;
+	int stagingActiveCount;
 	
 	MessageThread prepareThread;
 	
@@ -111,8 +116,8 @@ public:
 	void _after_computation();
 	void _after_prepare_chunk();
 	
-	explicit PAR2Proc(size_t _sliceSize, uv_loop_t* _loop);
-	explicit inline PAR2Proc(size_t _sliceSize) : PAR2Proc(_sliceSize, uv_default_loop()) {}
+	explicit PAR2Proc(size_t _sliceSize, uv_loop_t* _loop, int stagingAreas=2);
+	explicit inline PAR2Proc(size_t _sliceSize, int stagingAreas=2) : PAR2Proc(_sliceSize, uv_default_loop(), stagingAreas) {}
 	void deinit(PAR2ProcFinishedCb cb);
 	void deinit();
 	~PAR2Proc();

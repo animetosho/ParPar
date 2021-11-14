@@ -229,11 +229,17 @@ public:
 		// accept method if specified
 		Galois16Methods method = args.Length() >= 2 && !args[1]->IsUndefined() && !args[1]->IsNull() ? (Galois16Methods)ARG_TO_NUM(Int32, args[1]) : GF16_AUTO;
 		unsigned targetInputGrouping = args.Length() >= 3 && !args[2]->IsUndefined() && !args[2]->IsNull() ? ARG_TO_NUM(Uint32, args[2]) : 0;
+		int stagingAreas = args.Length() >= 4 && !args[3]->IsUndefined() && !args[3]->IsNull() ? ARG_TO_NUM(Int32, args[3]) : 2;
 		
 		if(targetInputGrouping > 32768)
 			RETURN_ERROR("Input grouping is invalid");
+		if(stagingAreas < 1 || stagingAreas > 32768)
+			RETURN_ERROR("Staging area count is invalid");
 		
-		GfProc *self = new GfProc(sliceSize, method, targetInputGrouping, getCurrentLoop(ISOLATE 0));
+		if(targetInputGrouping * stagingAreas > 65536)
+			RETURN_ERROR("Staging area too large");
+		
+		GfProc *self = new GfProc(sliceSize, method, targetInputGrouping, stagingAreas, getCurrentLoop(ISOLATE 0));
 		self->Wrap(args.This());
 	}
 	
@@ -502,8 +508,8 @@ protected:
 		);
 	}
 	
-	explicit GfProc(size_t sliceSize, Galois16Methods method, unsigned targetInputGrouping, uv_loop_t* loop)
-	: ObjectWrap(), isRunning(false), isClosed(false), pendingDiscardOutput(true), hasOutput(false), par2(sliceSize, loop) {
+	explicit GfProc(size_t sliceSize, Galois16Methods method, unsigned targetInputGrouping, int stagingAreas, uv_loop_t* loop)
+	: ObjectWrap(), isRunning(false), isClosed(false), pendingDiscardOutput(true), hasOutput(false), par2(sliceSize, loop, stagingAreas) {
 		par2.init([&](unsigned numInputs, uint16_t firstInput) {
 			if(progressCb.hasCallback) {
 #if NODE_VERSION_AT_LEAST(0, 11, 0)
