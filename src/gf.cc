@@ -581,14 +581,7 @@ public:
 		if(!args.IsConstructCall())
 			RETURN_ERROR("Class must be constructed with 'new'");
 		
-		bool poolEmpty = HasherInputThreadPool.empty();
-		HasherInput *self = new HasherInput(
-			getCurrentLoop(ISOLATE 0),
-			poolEmpty ? 
-				new MessageThread(thread_func) :
-				HasherInputThreadPool.back()
-		);
-		if(!poolEmpty) HasherInputThreadPool.pop_back();
+		HasherInput *self = new HasherInput(getCurrentLoop(ISOLATE 0));
 		self->Wrap(args.This());
 	}
 	
@@ -637,6 +630,18 @@ protected:
 		}
 	}
 	
+	inline void thread_send(struct input_work_data* data) {
+		if(thread == nullptr) {
+			if(HasherInputThreadPool.empty())
+				thread.reset(new MessageThread(thread_func));
+			else {
+				thread.reset(HasherInputThreadPool.back());
+				HasherInputThreadPool.pop_back();
+			}
+		}
+		thread->send(data);
+	}
+	
 	FUNC(Update) {
 		FUNC_START;
 		HasherInput* self = node::ObjectWrap::Unwrap<HasherInput>(args.This());
@@ -663,7 +668,7 @@ protected:
 			data->len = node::Buffer::Length(args[0]);
 			data->self = self;
 			data->output = nullptr;
-			self->thread->send(data);
+			self->thread_send(data);
 		} else {
 			self->hasher->update(node::Buffer::Data(args[0]), node::Buffer::Length(args[0]));
 		}
@@ -728,7 +733,7 @@ protected:
 			data->output = node::Buffer::Data(args[1]);
 			data->zeroPad = (uint64_t)zeroPad;
 			PERSIST_VALUE(data->bufOutput, args[1]);
-			self->thread->send(data);
+			self->thread_send(data);
 		} else {
 			self->hasher->update(node::Buffer::Data(args[0]), node::Buffer::Length(args[0]));
 			char* result = (char*)node::Buffer::Data(args[0]);
@@ -739,7 +744,8 @@ protected:
 	void deinit() {
 		if(!hasher) return;
 		hasher->destroy();
-		HasherInputThreadPool.push_back(thread.release());
+		if(thread != nullptr)
+			HasherInputThreadPool.push_back(thread.release());
 		uv_close(reinterpret_cast<uv_handle_t*>(&threadSignal), nullptr);
 		hasher = nullptr;
 	}
@@ -762,7 +768,7 @@ protected:
 		self->deinit();
 	}
 	
-	explicit HasherInput(uv_loop_t* _loop, MessageThread* _thread) : ObjectWrap(), loop(_loop), queueCount(0), thread(_thread) {
+	explicit HasherInput(uv_loop_t* _loop) : ObjectWrap(), loop(_loop), queueCount(0), thread(nullptr) {
 		hasher = HasherInput_Create();
 		uv_async_init(loop, &threadSignal, [](uv_async_t *handle) {
 			static_cast<HasherInput*>(handle->data)->after_process();

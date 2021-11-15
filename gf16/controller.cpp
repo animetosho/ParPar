@@ -64,11 +64,11 @@ void PAR2Proc::setNumThreads(int threads) {
 	
 	if(gf) {
 		int oldThreads = gfScratch.size();
-		gfScratch.resize(threads);
-		thWorkers.resize(threads);
 		for(int i=oldThreads-1; i>=threads; i--)
 			if(gfScratch[i])
 				gf->mutScratch_free(gfScratch[i]);
+		gfScratch.resize(threads);
+		thWorkers.resize(threads);
 		for(int i=oldThreads; i<threads; i++) {
 			gfScratch[i] = gf->mutScratch_alloc();
 			thWorkers[i].setCallback(compute_worker);
