@@ -78,9 +78,8 @@ void PAR2Proc::setNumThreads(int threads) {
 	numThreads = threads;
 }
 
-void PAR2Proc::init(const PAR2ProcCompleteCb& _progressCb, Galois16Methods method, unsigned targetInputGrouping) {
+void PAR2Proc::init(const PAR2ProcCompleteCb& _progressCb, Galois16Methods method, unsigned _inputGrouping) {
 	freeGf();
-	if(!targetInputGrouping) targetInputGrouping = 12; // default
 	if(numThreads) {
 		// TODO: accept & pass on hint info
 		gf = new Galois16Mul(method);
@@ -88,13 +87,13 @@ void PAR2Proc::init(const PAR2ProcCompleteCb& _progressCb, Galois16Methods metho
 		chunkLen = info.idealChunkSize;
 		alignment = info.alignment;
 		stride = info.stride;
-		// round targetInputGrouping to nearest idealInputMultiple
-		inputGrouping = (targetInputGrouping + info.idealInputMultiple/2);
-		inputGrouping -= inputGrouping % info.idealInputMultiple;
-		if(inputGrouping < info.idealInputMultiple) inputGrouping = info.idealInputMultiple;
-		// TODO: accept and consider a slice number hint to limit inputGrouping (e.g. for few, but large slices, may prefer smaller grouping to avoid too much mem consumption); also can help distribution (e.g. ideal grouping=3, total slices=4 -> better to use 2+2 arrangement instead of 3+1)
-		// TODO: consider limiting inputGrouping for large slice sizes, or perhaps rely on caller adjusting targetInputGrouping instead? latter may limit flexibility though
-		
+		inputGrouping = _inputGrouping;
+		if(!inputGrouping) {
+			// round 12 to nearest idealInputMultiple
+			inputGrouping = (12 + info.idealInputMultiple/2);
+			inputGrouping -= inputGrouping % info.idealInputMultiple;
+			if(inputGrouping < info.idealInputMultiple) inputGrouping = info.idealInputMultiple;
+		}
 		
 		alignedSliceSize = gf->alignToStride(sliceSize) + stride; // add extra stride, because checksum requires an extra block
 		for(auto& area : staging) {

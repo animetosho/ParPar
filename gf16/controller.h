@@ -122,7 +122,7 @@ public:
 	void deinit();
 	~PAR2Proc();
 	
-	void init(const PAR2ProcCompleteCb& _progressCb = nullptr, Galois16Methods method = GF16_AUTO, unsigned targetInputGrouping = 0);
+	void init(const PAR2ProcCompleteCb& _progressCb = nullptr, Galois16Methods method = GF16_AUTO, unsigned inputGrouping = 0);
 	void setCurrentSliceSize(size_t newSliceSize);
 	inline size_t getCurrentSliceSize() const {
 		return currentSliceSize;

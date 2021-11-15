@@ -193,8 +193,9 @@ Performance Options:
                              that can be processed per slice on each read pass.
                              Default `4M`
        --read-buffers        Number of read buffers to read into. Default `4`
-       --proc-batch-size     Target number of slices to submit as a batch for
-                             GF calculation. Default `12`
+       --proc-batch-size     Number of slices to submit as a batch for GF
+                             calculation. Default is roughly 12 (dependent on
+                             GF method)
        --hash-batch-size     Number of recovery slices to submit as a batch for
                              hashing. Default `8`
        --recovery-buffers    Number of recovery slices to buffer from backend.
