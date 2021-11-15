@@ -15,41 +15,6 @@ typedef std::function<void(const void*, unsigned, bool)> PAR2ProcOutputCb;
 typedef std::function<void(unsigned, uint16_t)> PAR2ProcCompleteCb;
 typedef std::function<void()> PAR2ProcFinishedCb;
 
-class PAR2Proc;
-
-struct prepare_data {
-	void* dst;
-	size_t dstLen;
-	const void* src;
-	size_t size;
-	unsigned numInputs;
-	unsigned index;
-	int submitInBufs;
-	int inBufId;
-	size_t chunkLen;
-	PAR2Proc* parent;
-	const Galois16Mul* gf;
-	PAR2ProcPrepareCb cb;
-};
-struct compute_req {
-	unsigned inputGrouping;
-	uint16_t numInputs, numOutputs;
-	uint16_t firstInput;
-	const uint16_t *oNums;
-	const uint16_t* coeffs;
-	size_t len, chunkSize;
-	unsigned numChunks;
-	const void* input;
-	void* output;
-	bool add;
-	int inBufId;
-	
-	void* mutScratch;
-	
-	const Galois16Mul* gf;
-	std::atomic<int>* procRefs;
-	PAR2Proc* parent;
-};
 
 class PAR2ProcStaging {
 public:
@@ -108,9 +73,9 @@ private:
 	PAR2Proc& operator=(const PAR2Proc&);
 	
 public:
-	ThreadMessageQueue<struct prepare_data*> _preparedChunks;
+	ThreadMessageQueue<void*> _preparedChunks;
 	uv_async_t _preparedSignal;
-	ThreadMessageQueue<struct compute_req*> _processedChunks;
+	ThreadMessageQueue<void*> _processedChunks;
 	uv_async_t _doneSignal;
 	
 	void _after_computation();

@@ -215,6 +215,21 @@ PAR2Proc::~PAR2Proc() {
 /** prepare **/
 // TODO: future idea: multiple prepare threads? Not sure if there's a case where it's particularly beneficial...
 
+struct prepare_data {
+	void* dst;
+	size_t dstLen;
+	const void* src;
+	size_t size;
+	unsigned numInputs;
+	unsigned index;
+	int submitInBufs;
+	int inBufId;
+	size_t chunkLen;
+	PAR2Proc* parent;
+	const Galois16Mul* gf;
+	PAR2ProcPrepareCb cb;
+};
+
 // prepare thread process function
 static void prepare_chunk(void* req) {
 	struct prepare_data* data = static_cast<struct prepare_data*>(req);
@@ -229,7 +244,7 @@ static void prepare_chunk(void* req) {
 
 void PAR2Proc::_after_prepare_chunk() {
 	struct prepare_data* data;
-	while(_preparedChunks.trypop(&data)) {
+	while(_preparedChunks.trypop(reinterpret_cast<void**>(&data))) {
 		if(data->submitInBufs) {
 			// queue async compute
 			do_computation(data->inBufId, data->submitInBufs);
@@ -363,6 +378,26 @@ void PAR2Proc::getOutput(unsigned index, void* output, const PAR2ProcOutputCb& c
 
 
 /** main processing **/
+struct compute_req {
+	unsigned inputGrouping;
+	uint16_t numInputs, numOutputs;
+	uint16_t firstInput;
+	const uint16_t *oNums;
+	const uint16_t* coeffs;
+	size_t len, chunkSize;
+	unsigned numChunks;
+	const void* input;
+	void* output;
+	bool add;
+	int inBufId;
+	
+	void* mutScratch;
+	
+	const Galois16Mul* gf;
+	std::atomic<int>* procRefs;
+	PAR2Proc* parent;
+};
+
 static void compute_worker(void *_req) {
 	struct compute_req* req = static_cast<struct compute_req*>(_req);
 	
@@ -466,7 +501,7 @@ void PAR2Proc::do_computation(int inBuf, int numInputs) {
 
 void PAR2Proc::_after_computation() {
 	struct compute_req* req;
-	while(_processedChunks.trypop(&req)) {
+	while(_processedChunks.trypop(reinterpret_cast<void**>(&req))) {
 		staging[req->inBufId].isActive = false;
 		stagingActiveCount--;
 		
