@@ -277,7 +277,7 @@ bool PAR2Proc::addInput(const void* buffer, size_t size, uint16_t inputNum, bool
 		data->gf = gf;
 		data->cb = cb;
 		
-		data->submitInBufs = (flush || currentInputPos == inputGrouping) ? currentInputPos : 0;
+		data->submitInBufs = (flush || currentInputPos == inputGrouping || (stagingActiveCount == 0 && staging.size() > 1)) ? currentInputPos : 0;
 		data->inBufId = currentInputBuf;
 		if(data->submitInBufs) {
 			area.isActive = true; // lock this buffer until processing is complete
