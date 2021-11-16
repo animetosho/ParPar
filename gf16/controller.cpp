@@ -78,8 +78,9 @@ void PAR2Proc::setNumThreads(int threads) {
 	numThreads = threads;
 }
 
-void PAR2Proc::init(const PAR2ProcCompleteCb& _progressCb, Galois16Methods method, unsigned _inputGrouping) {
+bool PAR2Proc::init(const PAR2ProcCompleteCb& _progressCb, Galois16Methods method, unsigned _inputGrouping) {
 	freeGf();
+	bool ret = true;
 	if(numThreads) {
 		// TODO: accept & pass on hint info
 		gf = new Galois16Mul(method);
@@ -102,7 +103,8 @@ void PAR2Proc::init(const PAR2ProcCompleteCb& _progressCb, Galois16Methods metho
 			// setup indicators to know if buffers are being used
 			area.isActive = false;
 		}
-		reallocMemInput(); // allocate input staging area
+		if(!reallocMemInput()) // allocate input staging area
+			ret = false;
 		stagingActiveCount = 0;
 		
 		nextThread = 0;
@@ -115,28 +117,36 @@ void PAR2Proc::init(const PAR2ProcCompleteCb& _progressCb, Galois16Methods metho
 	progressCb = _progressCb;
 	finishCb = nullptr;
 	processingAdd = false;
+	
+	return ret;
 }
 
-void PAR2Proc::reallocMemInput() {
+bool PAR2Proc::reallocMemInput() {
+	bool ret = true;
 	for(auto& area : staging) {
 		if(area.src) ALIGN_FREE(area.src);
 		ALIGN_ALLOC(area.src, inputGrouping * alignedSliceSize, alignment);
+		if(!area.src) ret = false;
 	}
+	return ret;
 }
 
-void PAR2Proc::setCurrentSliceSize(size_t newSliceSize) {
+bool PAR2Proc::setCurrentSliceSize(size_t newSliceSize) {
 	currentSliceSize = newSliceSize;
 	alignedCurrentSliceSize = gf->alignToStride(currentSliceSize) + stride; // add extra stride, because checksum requires an extra block
 	
+	bool ret = true;
 	if(currentSliceSize > sliceSize) { // should never happen, but we'll support this case anyway
 		// need to upsize allocation
 		sliceSize = currentSliceSize;
 		alignedSliceSize = alignedCurrentSliceSize;
-		reallocMemInput();
+		ret = reallocMemInput();
 		if(memProcessing) {
 			freeProcessingMem();
-			if(outputExp.size())
+			if(outputExp.size()) {
 				ALIGN_ALLOC(memProcessing, outputExp.size() * alignedSliceSize, alignment);
+				if(!memProcessing) ret = false;
+			}
 		}
 	}
 	
@@ -147,9 +157,11 @@ void PAR2Proc::setCurrentSliceSize(size_t newSliceSize) {
 	
 	// fix up numChunks with actual number (since it may have changed from aligning/rounding)
 	numChunks = CEIL_DIV(alignedCurrentSliceSize, chunkLen);
+	
+	return ret;
 }
 
-void PAR2Proc::setRecoverySlices(unsigned numSlices, const uint16_t* exponents) {
+bool PAR2Proc::setRecoverySlices(unsigned numSlices, const uint16_t* exponents) {
 	// TODO: consider throwing if numSlices > previously set, or some mechanism to resize buffer
 	
 	outputExp.clear();
@@ -168,6 +180,7 @@ void PAR2Proc::setRecoverySlices(unsigned numSlices, const uint16_t* exponents) 
 		// (will need to be careful with discard_output)
 		ALIGN_ALLOC(memProcessing, numSlices * alignedSliceSize, alignment);
 	}
+	return memProcessing != nullptr;
 }
 
 void PAR2Proc::freeProcessingMem() {

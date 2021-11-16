@@ -239,7 +239,11 @@ public:
 		if(inputGrouping * stagingAreas > 65536)
 			RETURN_ERROR("Staging area too large");
 		
-		GfProc *self = new GfProc(sliceSize, method, inputGrouping, stagingAreas, getCurrentLoop(ISOLATE 0));
+		GfProc *self = new GfProc(sliceSize, stagingAreas, getCurrentLoop(ISOLATE 0));
+		if(!self->init(method, inputGrouping)) {
+			delete self;
+			RETURN_ERROR("Failed to allocate memory");
+		}
 		self->Wrap(args.This());
 	}
 	
@@ -306,8 +310,9 @@ protected:
 		if(sliceSize < 2 || sliceSize & 1)
 			RETURN_ERROR("Slice size is invalid");
 		
-		self->par2.setCurrentSliceSize(sliceSize);
 		self->hasOutput = false;
+		if(!self->par2.setCurrentSliceSize(sliceSize))
+			RETURN_ERROR("Failed to allocate memory");
 	}
 	FUNC(SetRecoverySlices) {
 		FUNC_START;
@@ -336,8 +341,9 @@ protected:
 				RETURN_ERROR("Invalid recovery index supplied");
 		}
 		
-		self->par2.setRecoverySlices(outputs);
 		self->hasOutput = false; // probably can be retained, but we'll pretend not for consistency's sake
+		if(!self->par2.setRecoverySlices(outputs))
+			RETURN_ERROR("Failed to allocate memory");
 	}
 	
 	FUNC(SetNumThreads) {
@@ -508,9 +514,11 @@ protected:
 		);
 	}
 	
-	explicit GfProc(size_t sliceSize, Galois16Methods method, unsigned inputGrouping, int stagingAreas, uv_loop_t* loop)
-	: ObjectWrap(), isRunning(false), isClosed(false), pendingDiscardOutput(true), hasOutput(false), par2(sliceSize, loop, stagingAreas) {
-		par2.init([&](unsigned numInputs, uint16_t firstInput) {
+	explicit GfProc(size_t sliceSize, int stagingAreas, uv_loop_t* loop)
+	: ObjectWrap(), isRunning(false), isClosed(false), pendingDiscardOutput(true), hasOutput(false), par2(sliceSize, loop, stagingAreas) {}
+	
+	bool init(Galois16Methods method, unsigned inputGrouping) {
+		return par2.init([&](unsigned numInputs, uint16_t firstInput) {
 			if(progressCb.hasCallback) {
 #if NODE_VERSION_AT_LEAST(0, 11, 0)
 				HandleScope scope(progressCb.isolate);

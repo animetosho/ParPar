@@ -53,7 +53,7 @@ private:
 	
 	// staging area from which processing is performed
 	std::vector<PAR2ProcStaging> staging;
-	void reallocMemInput();
+	bool reallocMemInput();
 	unsigned currentInputBuf, currentInputPos;
 	void* memProcessing; // TODO: break this into chunks, to avoid massive single allocation
 	bool processingAdd;
@@ -87,15 +87,15 @@ public:
 	void deinit();
 	~PAR2Proc();
 	
-	void init(const PAR2ProcCompleteCb& _progressCb = nullptr, Galois16Methods method = GF16_AUTO, unsigned inputGrouping = 0);
-	void setCurrentSliceSize(size_t newSliceSize);
+	bool init(const PAR2ProcCompleteCb& _progressCb = nullptr, Galois16Methods method = GF16_AUTO, unsigned inputGrouping = 0);
+	bool setCurrentSliceSize(size_t newSliceSize);
 	inline size_t getCurrentSliceSize() const {
 		return currentSliceSize;
 	}
 	
-	void setRecoverySlices(unsigned numSlices, const uint16_t* exponents = NULL);
-	inline void setRecoverySlices(const std::vector<uint16_t>& exponents) {
-		setRecoverySlices(exponents.size(), exponents.data());
+	bool setRecoverySlices(unsigned numSlices, const uint16_t* exponents = NULL);
+	inline bool setRecoverySlices(const std::vector<uint16_t>& exponents) {
+		return setRecoverySlices(exponents.size(), exponents.data());
 	}
 	inline int getNumRecoverySlices() const {
 		return outputExp.size();
