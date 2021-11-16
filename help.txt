@@ -181,12 +181,9 @@ Performance Options:
                              Set to 0 to disable memory limit.
   -t,  --threads             Limit number of threads to use. Default equals
                              number of CPU cores.
-       --min-chunk-size      Minimum chunking size. Set to 0 to disable
-                             chunking. This is a tradeoff between sequential
-                             and random I/O. It is preferrable to use larger
-                             values (or 0) on hard disks, where random I/O is
-                             slow, but smaller values on flash based storage,
-                             where random I/O is faster, relative to bandwidth.
+       --min-chunk-size      Minimum chunking size. Allowing smaller chunks
+                             generally improves efficiency, but increases
+                             per-chunk overhead. Set to 0 to disable chunking.
                              Default `128K`.
        --seq-read-size       Maximum read buffer size for sequential reading.
                              This option also limits the amount of recovery
