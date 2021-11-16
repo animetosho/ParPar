@@ -8,7 +8,7 @@
         "msvs_settings": {"VCCLCompilerTool": {"EnableEnhancedInstructionSet": "2"}}
       }],
       ['OS!="win" and enable_native_tuning!=0', {
-        "variables": {"supports_native%": "<!(<!(echo ${CXX_target:-${CXX:-c++}}) -MM -E src/gyp_warnings.cc -march=native 2>/dev/null || true)"},
+        "variables": {"supports_native%": "<!(<!(echo ${CXX_target:-${CXX:-c++}}) -MM -E src/gf.cc -march=native 2>/dev/null || true)"},
         "conditions": [
           ['supports_native!=""', {
             "cflags": ["-march=native"],
@@ -17,8 +17,6 @@
               "OTHER_CFLAGS": ["-march=native"],
               "OTHER_CXXFLAGS": ["-march=native"],
             }
-          }, {
-            "defines": ["__GYP_WARN_NO_NATIVE"],
           }]
         ]
       }]
@@ -41,7 +39,7 @@
         "gf16", "gf16_sse2", "gf16_ssse3", "gf16_avx", "gf16_avx2", "gf16_avx512", "gf16_vbmi", "gf16_gfni", "gf16_gfni_avx2", "gf16_gfni_avx512", "gf16_neon", "gf16_sve", "gf16_sve2",
         "hasher", "hasher_sse2", "hasher_clmul", "hasher_xop", "hasher_avx2", "hasher_avx512", "hasher_avx512vl", "hasher_armcrc", "hasher_neon", "hasher_neoncrc", "hasher_sve2"
       ],
-      "sources": ["src/gf.cc", "gf16/controller.cpp", "gf16/gfmat_coeff.c", "src/gyp_warnings.cc"],
+      "sources": ["src/gf.cc", "gf16/controller.cpp", "gf16/gfmat_coeff.c"],
       "include_dirs": ["gf16"],
       "cxxflags": ["-std=c++11"]
     },
@@ -236,10 +234,14 @@
       },
       "msvs_settings": {"VCCLCompilerTool": {"BufferSecurityCheck": "false"}},
       "conditions": [
-        ['target_arch in "arm arm64" and enable_native_tuning==0', {
+        ['target_arch in "arm arm64"', {
+          "cflags!": ["-march=native"],
+          "cxxflags!": ["-march=native"],
           "cflags": ["-march=armv8-a+crc"],
           "cxxflags": ["-march=armv8-a+crc"],
           "xcode_settings": {
+            "OTHER_CFLAGS!": ["-march=native"],
+            "OTHER_CXXFLAGS!": ["-march=native"],
             "OTHER_CFLAGS": ["-march=armv8-a+crc"],
             "OTHER_CXXFLAGS": ["-march=armv8-a+crc"]
           }
@@ -286,10 +288,14 @@
       },
       "msvs_settings": {"VCCLCompilerTool": {"BufferSecurityCheck": "false"}},
       "conditions": [
-        ['target_arch in "arm arm64" and enable_native_tuning==0', {
+        ['target_arch in "arm arm64"', {
+          "cflags!": ["-march=native"],
+          "cxxflags!": ["-march=native"],
           "cflags": ["-march=armv8-a+crc"],
           "cxxflags": ["-march=armv8-a+crc"],
           "xcode_settings": {
+            "OTHER_CFLAGS!": ["-march=native"],
+            "OTHER_CXXFLAGS!": ["-march=native"],
             "OTHER_CFLAGS": ["-march=armv8-a+crc"],
             "OTHER_CXXFLAGS": ["-march=armv8-a+crc"]
           }
@@ -315,13 +321,17 @@
       },
       "msvs_settings": {"VCCLCompilerTool": {"BufferSecurityCheck": "false"}},
       "conditions": [
-        ['target_arch=="arm64" and OS!="win" and enable_native_tuning==0', {
+        ['target_arch=="arm64" and OS!="win"', {
           "variables": {"supports_sve2%": "<!(<!(echo ${CC_target:-${CC:-cc}}) -MM -E hasher/hasher_sve2.cpp -march=armv8-a+sve2 2>/dev/null || true)"},
           "conditions": [
             ['supports_sve2!=""', {
+              "cflags!": ["-march=native"],
+              "cxxflags!": ["-march=native"],
               "cflags": ["-march=armv8-a+sve2"],
               "cxxflags": ["-march=armv8-a+sve2"],
               "xcode_settings": {
+                "OTHER_CFLAGS!": ["-march=native"],
+                "OTHER_CXXFLAGS!": ["-march=native"],
                 "OTHER_CFLAGS": ["-march=armv8-a+sve2"],
                 "OTHER_CXXFLAGS": ["-march=armv8-a+sve2"],
               }
@@ -689,13 +699,17 @@
       "cflags!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"],
       "msvs_settings": {"VCCLCompilerTool": {"BufferSecurityCheck": "false"}},
       "conditions": [
-        ['target_arch=="arm64" and OS!="win" and enable_native_tuning==0', {
+        ['target_arch=="arm64" and OS!="win"', {
           "variables": {"supports_sve%": "<!(<!(echo ${CC_target:-${CC:-cc}}) -MM -E gf16/gf16_shuffle128_sve.c -march=armv8-a+sve 2>/dev/null || true)"},
           "conditions": [
             ['supports_sve!=""', {
+              "cflags!": ["-march=native"],
+              "cxxflags!": ["-march=native"],
               "cflags": ["-march=armv8-a+sve"],
               "cxxflags": ["-march=armv8-a+sve"],
               "xcode_settings": {
+                "OTHER_CFLAGS!": ["-march=native"],
+                "OTHER_CXXFLAGS!": ["-march=native"],
                 "OTHER_CFLAGS": ["-march=armv8-a+sve"],
                 "OTHER_CXXFLAGS": ["-march=armv8-a+sve"],
               }
@@ -723,13 +737,17 @@
       "cflags!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"],
       "msvs_settings": {"VCCLCompilerTool": {"BufferSecurityCheck": "false"}},
       "conditions": [
-        ['target_arch=="arm64" and OS!="win" and enable_native_tuning==0', {
+        ['target_arch=="arm64" and OS!="win"', {
           "variables": {"supports_sve2%": "<!(<!(echo ${CC_target:-${CC:-cc}}) -MM -E gf16/gf16_shuffle128_sve2.c -march=armv8-a+sve2 2>/dev/null || true)"},
           "conditions": [
             ['supports_sve2!=""', {
+              "cflags!": ["-march=native"],
+              "cxxflags!": ["-march=native"],
               "cflags": ["-march=armv8-a+sve2"],
               "cxxflags": ["-march=armv8-a+sve2"],
               "xcode_settings": {
+                "OTHER_CFLAGS!": ["-march=native"],
+                "OTHER_CXXFLAGS!": ["-march=native"],
                 "OTHER_CFLAGS": ["-march=armv8-a+sve2"],
                 "OTHER_CXXFLAGS": ["-march=armv8-a+sve2"],
               }
