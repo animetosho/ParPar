@@ -10,7 +10,7 @@
 #define MD5Multi MD5Multi_Scalar
 #define _FNMD5mb(f) f##_scalar
 #define _FNMD5mb2(f) f##_scalar
-#define md5mb_regions md5mb_regions_scalar
+#define md5mb_base_regions md5mb_regions_scalar
 #define md5mb_alignment md5mb_alignment_scalar
 #define CLEAR_VEC (void)0
 
@@ -20,9 +20,8 @@
 #undef HasherInput
 #undef MD5Multi
 #undef _FNMD5mb2
-#undef md5mb_regions
 #define MD5Multi MD5Multi2_Scalar
 #define _FNMD5mb2(f) f##2_scalar
-#define md5mb_regions md5mb_regions_scalar*2
+#define md5mb_interleave 2
 
 #include "hasher_base.h"

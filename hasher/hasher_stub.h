@@ -20,6 +20,7 @@ MD5Multi::~MD5Multi() {}
 
 void MD5Multi::update(const void* const*, size_t) {}
 void MD5Multi::end() {}
-void MD5Multi::get(unsigned, void*) {}
+void MD5Multi::get1(unsigned, void*) {}
+void MD5Multi::get(void*) {}
 void MD5Multi::reset() {}
 #endif

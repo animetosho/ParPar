@@ -803,8 +803,7 @@ public:
 		t->InstanceTemplate()->SetInternalFieldCount(1);
 		
 		NODE_SET_PROTOTYPE_METHOD(t, "update", Update);
-		NODE_SET_PROTOTYPE_METHOD(t, "get", GetHash);
-		NODE_SET_PROTOTYPE_METHOD(t, "end", End);
+		NODE_SET_PROTOTYPE_METHOD(t, "get", Get);
 		NODE_SET_PROTOTYPE_METHOD(t, "reset", Reset);
 	}
 	
@@ -914,30 +913,21 @@ protected:
 		}
 	}
 	
-	FUNC(GetHash) {
+	FUNC(Get) {
 		FUNC_START;
 		HasherOutput* self = node::ObjectWrap::Unwrap<HasherOutput>(args.This());
 		if(self->isRunning)
 			RETURN_ERROR("Process currently active");
 		
-		if(args.Length() < 2 || !node::Buffer::HasInstance(args[0]))
-			RETURN_ERROR("Requires a buffer and region");
+		if(args.Length() < 1 || !node::Buffer::HasInstance(args[0]))
+			RETURN_ERROR("Requires a buffer");
 		
-		int idx = ARG_TO_NUM(Int32, args[1]);
-		if(idx < 0 || idx >= self->numRegions)
-			RETURN_ERROR("Invalid region specified");
+		if(node::Buffer::Length(args[0]) < self->numRegions*16)
+			RETURN_ERROR("Buffer must be large enough to hold all hashes");
 		
 		char* result = (char*)node::Buffer::Data(args[0]);
-		self->hasher.get(idx, result);
-	}
-	
-	FUNC(End) {
-		FUNC_START;
-		HasherOutput* self = node::ObjectWrap::Unwrap<HasherOutput>(args.This());
-		if(self->isRunning)
-			RETURN_ERROR("Process currently active");
-		
 		self->hasher.end();
+		self->hasher.get(result);
 	}
 	
 	explicit HasherOutput(unsigned regions, uv_loop_t* _loop) : ObjectWrap(), hasher(regions), loop(_loop), numRegions(regions), isRunning(false), buffers(regions) {

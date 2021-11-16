@@ -4,7 +4,7 @@
 #define MD5Multi MD5Multi_XOP
 #define _FNMD5mb(f) f##_xop
 #define _FNMD5mb2(f) f##_xop
-#define md5mb_regions md5mb_regions_xop
+#define md5mb_base_regions md5mb_regions_xop
 #define md5mb_alignment md5mb_alignment_xop
 #define CLEAR_VEC (void)0
 
@@ -23,10 +23,9 @@
 
 #undef MD5Multi
 #undef _FNMD5mb2
-#undef md5mb_regions
 #define MD5Multi MD5Multi2_XOP
 #define _FNMD5mb2(f) f##2_xop
-#define md5mb_regions md5mb_regions_xop*2
+#define md5mb_interleave 2
 
 #ifdef __XOP__
 # include "hasher_base.h"

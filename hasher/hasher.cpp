@@ -10,7 +10,7 @@ static struct _CpuCap {
 #endif
 #ifdef PLATFORM_ARM
 	bool hasNEON, hasSVE2;
-	CpuCap() : hasNEON(false), hasSVE2(false) {}
+	_CpuCap() : hasNEON(false), hasSVE2(false) {}
 #endif
 } CpuCap;
 
@@ -166,7 +166,7 @@ void MD5Multi::update(const void* const* data, size_t len) {
 	// process data through all (but one) hashers
 	const void* const* dataPtr = data;
 	unsigned ctxI = 0;
-	for(; ctxI < ctx.size()-(lastCtxDataDup ? 1 : 0); ctxI++) {
+	for(; ctxI < ctx.size()-1; ctxI++) {
 		ctx[ctxI]->update(dataPtr, len);
 		dataPtr += ctx[ctxI]->numRegions;
 	}
@@ -180,16 +180,37 @@ void MD5Multi::update(const void* const* data, size_t len) {
 		for(unsigned i=0; i<lastCtxDataDup; i++)
 			lastData[i] = dataPtr[0];
 		ctx[ctxI]->update(lastCtxData.data(), len);
+	} else {
+		ctx[ctxI]->update(dataPtr, len);
 	}
 }
 
-void MD5Multi::get(unsigned index, void* md5) {
+void MD5Multi::get1(unsigned index, void* md5) {
 	// TODO: consider better method
 	for(unsigned i=0; i<ctx.size(); i++) {
 		if((int)index < ctx[i]->numRegions) {
-			ctx[i]->get(index, md5);
+			ctx[i]->get1(index, md5);
 			return;
 		}
 		index -= ctx[i]->numRegions;
+	}
+}
+
+void MD5Multi::get(void* md5s) {
+	char* md5_ = (char*)md5s;
+	unsigned ctxI = 0;
+	for(; ctxI<ctx.size()-1; ctxI++) {
+		ctx[ctxI]->get(md5_);
+		md5_ += 16*ctx[ctxI]->numRegions;
+	}
+	if(lastCtxDataDup) {
+		// prevent exceeding destination buffer, which isn't expecting all hashes we'd normally give it
+		// do this by writing to a temporary buffer and copy what's desired across
+		unsigned lastRegions = ctx[ctxI]->numRegions;
+		std::vector<char> tmp(16*lastRegions);
+		ctx[ctxI]->get(tmp.data());
+		memcpy(md5_, tmp.data(), 16*(lastRegions-lastCtxDataDup));
+	} else {
+		ctx[ctxI]->get(md5_);
 	}
 }

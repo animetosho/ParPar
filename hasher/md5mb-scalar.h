@@ -36,3 +36,6 @@ static HEDLEY_ALWAYS_INLINE void md5_extract_mb_scalar(void* dst, void* state, i
 	memcpy(dst, (uint32_t*)state + idx*4, 16);
 #endif
 }
+static HEDLEY_ALWAYS_INLINE void md5_extract_all_mb_scalar(void* dst, void* state, int group) {
+	md5_extract_mb_scalar(dst, state, group);
+}

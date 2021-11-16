@@ -234,4 +234,13 @@ static HEDLEY_ALWAYS_INLINE void md5_extract_mb_sve2(void* dst, void* state, int
 	);
 	svst1_u32(mask, (uint32_t*)dst - subIdx*4, vect);
 }
+static HEDLEY_ALWAYS_INLINE void md5_extract_all_mb_sve2(void* dst, void* state, int group) {
+	uint32_t* state_ = (uint32_t*)state + group*(int)svcntb();
+	svst4_u32(svptrue_b32(), (uint32_t*)dst, svcreate4_u32(
+		svld1_u32(svptrue_b32(), state_),
+		svld1_vnum_u32(svptrue_b32(), state_, 1),
+		svld1_vnum_u32(svptrue_b32(), state_, 2),
+		svld1_vnum_u32(svptrue_b32(), state_, 3)
+	));
+}
 #endif

@@ -17,7 +17,8 @@ public:
 	explicit MD5Multi(int srcCount);
 	~MD5Multi();
 	void update(const void* const* data, size_t len);
-	void get(unsigned index, void* md5);
+	void get1(unsigned index, void* md5);	
+	void get(void* md5s);
 	inline void end() {
 		for(unsigned i=0; i<ctx.size(); i++)
 			ctx[i]->end();

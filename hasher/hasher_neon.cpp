@@ -8,7 +8,7 @@
 #define MD5Multi MD5Multi_NEON
 #define _FNMD5mb(f) f##_neon
 #define _FNMD5mb2(f) f##_neon
-#define md5mb_regions md5mb_regions_neon
+#define md5mb_base_regions md5mb_regions_neon
 #define md5mb_alignment md5mb_alignment_neon
 #define CLEAR_VEC (void)0
 
@@ -23,10 +23,9 @@
 #undef HasherInput
 #undef MD5Multi
 #undef _FNMD5mb2
-#undef md5mb_regions
 #define MD5Multi MD5Multi2_NEON
 #define _FNMD5mb2(f) f##2_neon
-#define md5mb_regions md5mb_regions_neon*2
+#define md5mb_interleave 2
 
 #ifdef __ARM_NEON
 # include "hasher_base.h"

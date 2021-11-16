@@ -58,7 +58,8 @@ __DECL_HASHERINPUT(NEONCRC);
 class IMD5Multi {
 public:
 	virtual void update(const void* const* data, size_t len) = 0;
-	virtual void get(unsigned index, void* md5) = 0;
+	virtual void get1(unsigned index, void* md5) = 0;
+	virtual void get(void* md5s) = 0;
 	virtual void end() = 0;
 	virtual void reset() = 0;
 	virtual ~IMD5Multi() {}
@@ -84,7 +85,8 @@ public: \
 	MD5Multi##name(); \
 	~MD5Multi##name(); \
 	void update(const void* const* data, size_t len); \
-	void get(unsigned index, void* md5); \
+	void get1(unsigned index, void* md5); \
+	void get(void* md5s); \
 	void end(); \
 	void reset(); \
 }

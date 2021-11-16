@@ -116,6 +116,12 @@ void HasherInput::end(void* md5) {
 
 
 #ifdef MD5Multi
+#ifdef md5mb_interleave
+# define md5mb_regions md5mb_base_regions*md5mb_interleave
+#else
+# define md5mb_regions md5mb_base_regions
+#endif
+
 const bool MD5Multi::isAvailable = true;
 int MD5Multi::getNumRegions() {
 	return md5mb_regions;
@@ -174,8 +180,19 @@ void MD5Multi::end() {
 	CLEAR_VEC;
 }
 
-void MD5Multi::get(unsigned index, void* md5) {
+void MD5Multi::get1(unsigned index, void* md5) {
 	_FNMD5mb(md5_extract_mb)(md5, state, index);
+	CLEAR_VEC;
+}
+void MD5Multi::get(void* md5s) {
+	_FNMD5mb(md5_extract_all_mb)(md5s, state, 0);
+	#ifdef md5mb_interleave
+	char* md5_ = (char*)md5s;
+	for(int i=1; i<md5mb_interleave; i++) {
+		md5_ += 16*md5mb_base_regions;
+		_FNMD5mb(md5_extract_all_mb)(md5_, state, i);
+	}
+	#endif
 	CLEAR_VEC;
 }
 
@@ -186,4 +203,5 @@ void MD5Multi::reset() {
 	tmpLen = 0;
 	dataLen = 0;
 }
+#undef md5mb_regions
 #endif
