@@ -922,7 +922,7 @@ protected:
 		if(args.Length() < 1 || !node::Buffer::HasInstance(args[0]))
 			RETURN_ERROR("Requires a buffer");
 		
-		if(node::Buffer::Length(args[0]) < self->numRegions*16)
+		if(node::Buffer::Length(args[0]) < (unsigned)self->numRegions*16)
 			RETURN_ERROR("Buffer must be large enough to hold all hashes");
 		
 		char* result = (char*)node::Buffer::Data(args[0]);
