@@ -562,13 +562,17 @@ FUNC(GfInfo) {
 
 class HasherInput;
 static std::vector<MessageThread*> HasherInputThreadPool;
+struct input_blockHash {
+	uint64_t size;
+	uint64_t pos;
+	int count;
+	char* ptr;
+};
 struct input_work_data {
 	IHasherInput* hasher;
 	const void* buffer;
 	size_t len;
-	void* output;
-	uint64_t zeroPad;
-	Persistent<Value> bufOutput;
+	struct input_blockHash* bh;
 	CallbackWrapper* cb;
 	HasherInput* self;
 };
@@ -578,8 +582,6 @@ public:
 		t->InstanceTemplate()->SetInternalFieldCount(1);
 		
 		NODE_SET_PROTOTYPE_METHOD(t, "update", Update);
-		NODE_SET_PROTOTYPE_METHOD(t, "getBlock", GetBlock);
-		NODE_SET_PROTOTYPE_METHOD(t, "updateGet", UpdateGet);
 		NODE_SET_PROTOTYPE_METHOD(t, "end", End);
 		NODE_SET_PROTOTYPE_METHOD(t, "reset", Reset);
 	}
@@ -589,7 +591,25 @@ public:
 		if(!args.IsConstructCall())
 			RETURN_ERROR("Class must be constructed with 'new'");
 		
+		if(args.Length() < 2 || !node::Buffer::HasInstance(args[1]))
+			RETURN_ERROR("Requires a size and buffer");
+
+		// grab slice size + buffer to write hashes into
+		double sliceSize = 0; // double ensures enough range even if int is 32-bit
+#if NODE_VERSION_AT_LEAST(8, 0, 0)
+		sliceSize = args[0].As<Number>()->Value();
+#else
+		sliceSize = args[0]->NumberValue();
+#endif
+		
 		HasherInput *self = new HasherInput(getCurrentLoop(ISOLATE 0));
+		
+		self->bh.size = (uint64_t)sliceSize;
+		self->bh.pos = 0;
+		self->bh.count = node::Buffer::Length(args[1]) / 20;
+		self->bh.ptr = node::Buffer::Data(args[1]);
+		PERSIST_VALUE(self->ifscData, args[1]);
+		
 		self->Wrap(args.This());
 	}
 	
@@ -601,6 +621,9 @@ private:
 	std::unique_ptr<MessageThread> thread;
 	uv_async_t threadSignal;
 	ThreadMessageQueue<struct input_work_data*> hashesDone;
+	
+	struct input_blockHash bh;
+	Persistent<Value> ifscData;
 	
 	// disable copy constructor
 	HasherInput(const HasherInput&);
@@ -619,9 +642,26 @@ protected:
 	static void thread_func(void* req) {
 		struct input_work_data* data = static_cast<struct input_work_data*>(req);
 		
-		data->hasher->update(data->buffer, data->len);
-		if(data->output) // TODO: as zero padding can be slow, consider way of doing it in separate thread to not lock this one
-			data->hasher->getBlock(data->output, data->zeroPad);
+		
+		char* src_ = (char*)data->buffer;
+		size_t len = data->len;
+		// feed initial part
+		uint64_t blockLeft = data->bh->size - data->bh->pos;
+		while(len >= blockLeft) {
+			data->hasher->update(src_, blockLeft);
+			src_ += blockLeft;
+			len -= blockLeft;
+			blockLeft = data->bh->size;
+			
+			if(data->bh->count) {
+				data->hasher->getBlock(data->bh->ptr, 0);
+				data->bh->ptr += 20;
+				data->bh->count--;
+			} // else there's an overflow
+		}
+		if(len) data->hasher->update(src_, len);
+		data->bh->pos = len;
+		
 		
 		// signal main thread that hashing has completed
 		data->self->hashesDone.push(data);
@@ -631,7 +671,6 @@ protected:
 		struct input_work_data* data;
 		while(hashesDone.trypop(&data)) {
 			static_cast<HasherInput*>(data->self)->queueCount--;
-			PERSIST_CLEAR(data->bufOutput);
 			data->cb->call();
 			delete data->cb;
 			delete data;
@@ -657,96 +696,22 @@ protected:
 		if(!self->hasher)
 			RETURN_ERROR("Process already ended");
 		
-		if(args.Length() < 1 || !node::Buffer::HasInstance(args[0]))
-			RETURN_ERROR("Requires a buffer");
+		if(args.Length() < 2 || !node::Buffer::HasInstance(args[0]) || !args[1]->IsFunction())
+			RETURN_ERROR("Requires a buffer and callback");
 		
-		if(args.Length() > 1) {
-			if(!args[1]->IsFunction())
-				RETURN_ERROR("Second argument must be a callback");
-			
-			CallbackWrapper* cb = new CallbackWrapper(ISOLATE Local<Function>::Cast(args[1]));
-			cb->attachValue(args[0]);
-			
-			self->queueCount++;
-			
-			struct input_work_data* data = new struct input_work_data;
-			data->cb = cb;
-			data->hasher = self->hasher;
-			data->buffer = node::Buffer::Data(args[0]);
-			data->len = node::Buffer::Length(args[0]);
-			data->self = self;
-			data->output = nullptr;
-			self->thread_send(data);
-		} else {
-			self->hasher->update(node::Buffer::Data(args[0]), node::Buffer::Length(args[0]));
-		}
-	}
-	
-	FUNC(GetBlock) {
-		FUNC_START;
-		HasherInput* self = node::ObjectWrap::Unwrap<HasherInput>(args.This());
-		if(self->queueCount)
-			RETURN_ERROR("Process currently active");
-		if(!self->hasher)
-			RETURN_ERROR("Process already ended");
+		CallbackWrapper* cb = new CallbackWrapper(ISOLATE Local<Function>::Cast(args[1]));
+		cb->attachValue(args[0]);
 		
-		if(args.Length() < 1 || !node::Buffer::HasInstance(args[0]))
-			RETURN_ERROR("Requires a buffer");
+		self->queueCount++;
 		
-		double zeroPad = 0; // double ensures enough range even if int is 32-bit
-		if(args.Length() >= 2)
-#if NODE_VERSION_AT_LEAST(8, 0, 0)
-			zeroPad = args[1].As<Number>()->Value();
-#else
-			zeroPad = args[1]->NumberValue();
-#endif
-		
-		char* result = (char*)node::Buffer::Data(args[0]);
-		// TODO: consider making this async, as zero padding can be slow
-		self->hasher->getBlock(result, (uint64_t)zeroPad);
-	}
-	
-	FUNC(UpdateGet) {
-		FUNC_START;
-		HasherInput* self = node::ObjectWrap::Unwrap<HasherInput>(args.This());
-		if(!self->hasher)
-			RETURN_ERROR("Process already ended");
-		
-		if(args.Length() < 2 || !node::Buffer::HasInstance(args[0]) || !node::Buffer::HasInstance(args[1]))
-			RETURN_ERROR("Requires two buffers");
-		
-		double zeroPad = 0; // double ensures enough range even if int is 32-bit
-		if(args.Length() >= 3)
-#if NODE_VERSION_AT_LEAST(8, 0, 0)
-			zeroPad = args[2].As<Number>()->Value();
-#else
-			zeroPad = args[2]->NumberValue();
-#endif		
-		
-		if(args.Length() > 3) {
-			if(!args[3]->IsFunction())
-				RETURN_ERROR("Last argument must be a callback");
-			
-			CallbackWrapper* cb = new CallbackWrapper(ISOLATE Local<Function>::Cast(args[3]));
-			cb->attachValue(args[0]);
-			
-			self->queueCount++;
-			
-			struct input_work_data* data = new struct input_work_data;
-			data->cb = cb;
-			data->hasher = self->hasher;
-			data->buffer = node::Buffer::Data(args[0]);
-			data->len = node::Buffer::Length(args[0]);
-			data->self = self;
-			data->output = node::Buffer::Data(args[1]);
-			data->zeroPad = (uint64_t)zeroPad;
-			PERSIST_VALUE(data->bufOutput, args[1]);
-			self->thread_send(data);
-		} else {
-			self->hasher->update(node::Buffer::Data(args[0]), node::Buffer::Length(args[0]));
-			char* result = (char*)node::Buffer::Data(args[0]);
-			self->hasher->getBlock(result, (uint64_t)zeroPad);
-		}
+		struct input_work_data* data = new struct input_work_data;
+		data->cb = cb;
+		data->hasher = self->hasher;
+		data->buffer = node::Buffer::Data(args[0]);
+		data->len = node::Buffer::Length(args[0]);
+		data->self = self;
+		data->bh = &self->bh;
+		self->thread_send(data);
 	}
 	
 	void deinit() {
@@ -756,6 +721,8 @@ protected:
 			HasherInputThreadPool.push_back(thread.release());
 		uv_close(reinterpret_cast<uv_handle_t*>(&threadSignal), nullptr);
 		hasher = nullptr;
+		
+		PERSIST_CLEAR(ifscData);
 	}
 	
 	FUNC(End) {
@@ -768,6 +735,13 @@ protected:
 		
 		if(args.Length() < 1 || !node::Buffer::HasInstance(args[0]))
 			RETURN_ERROR("Requires a buffer");
+		if(node::Buffer::Length(args[0]) < 16)
+			RETURN_ERROR("Buffer must be at least 16 bytes long");
+		
+		// finish block hashes
+		if(self->bh.count)
+			// TODO: as zero padding can be slow, consider way of doing it in separate thread to not lock this one
+			self->hasher->getBlock(self->bh.ptr, self->bh.size - self->bh.pos);
 		
 		char* result = (char*)node::Buffer::Data(args[0]);
 		self->hasher->end(result);
