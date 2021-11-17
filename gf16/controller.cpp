@@ -71,6 +71,7 @@ void PAR2Proc::setNumThreads(int threads) {
 		thWorkers.resize(threads);
 		for(int i=oldThreads; i<threads; i++) {
 			gfScratch[i] = gf->mutScratch_alloc();
+			thWorkers[i].lowPrio = true;
 			thWorkers[i].setCallback(compute_worker);
 		}
 	}

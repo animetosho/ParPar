@@ -96,6 +96,14 @@ public:
 	}
 };
 
+
+#if defined(_WINDOWS) || defined(__WINDOWS__) || defined(_WIN32) || defined(_WIN64)
+# define NOMINMAX
+# define WIN32_LEAN_AND_MEAN
+# include <Windows.h>
+#else
+# include <pthread.h>
+#endif
 class MessageThread {
 	ThreadMessageQueue<void*> q;
 	uv_thread_t thread;
@@ -114,6 +122,45 @@ class MessageThread {
 		}
 	}
 	
+	static void thread_func_low_prio(void* parent) {
+		#if defined(_WINDOWS) || defined(__WINDOWS__) || defined(_WIN32) || defined(_WIN64)
+		HANDLE hThread = GetCurrentThread();
+		switch(GetThreadPriority(hThread)) {
+			case THREAD_PRIORITY_TIME_CRITICAL:
+				SetThreadPriority(hThread, THREAD_PRIORITY_HIGHEST);
+				break;
+			case THREAD_PRIORITY_HIGHEST:
+				SetThreadPriority(hThread, THREAD_PRIORITY_ABOVE_NORMAL);
+				break;
+			case THREAD_PRIORITY_ABOVE_NORMAL:
+				SetThreadPriority(hThread, THREAD_PRIORITY_NORMAL);
+				break;
+			case THREAD_PRIORITY_NORMAL:
+				SetThreadPriority(hThread, THREAD_PRIORITY_BELOW_NORMAL);
+				break;
+			case THREAD_PRIORITY_BELOW_NORMAL:
+				SetThreadPriority(hThread, THREAD_PRIORITY_LOWEST);
+				break;
+			case THREAD_PRIORITY_LOWEST:
+				SetThreadPriority(hThread, THREAD_PRIORITY_IDLE);
+				break;
+			case THREAD_PRIORITY_IDLE: // can't go lower
+			default: // do nothing
+				break;
+		}
+		#else
+		// it seems that threads cannot have lower priority on POSIX, unless it's scheduled realtime, however we can declare it to be CPU intensive
+		int policy;
+		struct sched_param param;
+		pthread_t self = pthread_self();
+		if(!pthread_getschedparam(self, &policy, &param)) {
+			if(policy == SCHED_OTHER)
+				pthread_setschedparam(self, SCHED_BATCH, &param);
+		}
+		#endif
+		thread_func(parent);
+	}
+	
 	// disable copy constructor
 	MessageThread(const MessageThread&);
 	MessageThread& operator=(const MessageThread&);
@@ -130,15 +177,18 @@ class MessageThread {
 	}
 	
 public:
+	bool lowPrio;
 	MessageThread() {
 		cb = NULL;
 		threadActive = false;
 		threadCreated = false;
+		lowPrio = false;
 	}
 	MessageThread(uv_thread_cb callback) {
 		cb = callback;
 		threadActive = false;
 		threadCreated = false;
+		lowPrio = false;
 	}
 	void setCallback(uv_thread_cb callback) {
 		cb = callback;
@@ -164,7 +214,7 @@ public:
 		if(threadCreated) // previously created, but end fired, so need to wait for this thread to close before starting another
 			uv_thread_join(&thread);
 		threadCreated = true;
-		uv_thread_create(&thread, thread_func, this);
+		uv_thread_create(&thread, lowPrio ? thread_func_low_prio : thread_func, this);
 	}
 	// item cannot be NULL
 	void send(void* item) {
