@@ -104,6 +104,9 @@ public:
 #else
 # include <pthread.h>
 #endif
+#if defined(__linux) || defined(__linux__)
+# include <unistd.h>
+#endif
 class MessageThread {
 	ThreadMessageQueue<void*> q;
 	uv_thread_t thread;
@@ -154,9 +157,25 @@ class MessageThread {
 		struct sched_param param;
 		pthread_t self = pthread_self();
 		if(!pthread_getschedparam(self, &policy, &param)) {
-			if(policy == SCHED_OTHER)
+			if(policy == SCHED_OTHER) {
+				#ifdef __MACH__
+				// MacOS doesn't support SCHED_BATCH, but does seem to permit priorities on SCHED_OTHER
+				int min = sched_get_priority_min(policy);
+				if(min < param.sched_priority) {
+					param.sched_priority -= 1;
+					if(param.sched_priority < min) param.sched_priority = min;
+					pthread_setschedparam(self, policy, &param);
+				}
+				#else
 				pthread_setschedparam(self, SCHED_BATCH, &param);
+				#endif
+			}
 		}
+		
+		# if defined(__linux) || defined(__linux__)
+		// ...but Linux allows per-thread priority
+		nice(1);
+		# endif
 		#endif
 		thread_func(parent);
 	}
