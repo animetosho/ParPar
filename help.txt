@@ -180,7 +180,7 @@ Performance Options:
                              Note that this does not include read buffers.
                              Set to 0 to disable memory limit.
   -t,  --threads             Limit number of threads to use. Default equals
-                             number of CPU cores.
+                             number of CPU cores/threads.
        --min-chunk-size      Minimum chunking size. Allowing smaller chunks
                              generally improves efficiency, but increases
                              per-chunk overhead. Set to 0 to disable chunking.
@@ -189,7 +189,12 @@ Performance Options:
                              This option also limits the amount of recovery
                              that can be processed per slice on each read pass.
                              Default `4M`
-       --read-buffers        Number of read buffers to read into. Default `4`
+       --read-buffers        Maximum number of read buffers to read into and
+                             send to processing backend. Default `8`
+       --read-hash-queue     Number of read buffers to queue up for hashing
+                             before reading from a different file. Lower
+                             values may be more optimal on disks with faster
+                             random access. Default `5`
        --proc-batch-size     Number of slices to submit as a batch for GF
                              calculation. Default is roughly 12 (dependent on
                              GF method)

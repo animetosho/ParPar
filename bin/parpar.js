@@ -148,6 +148,10 @@ var opts = {
 		type: 'int',
 		map: 'readBuffers'
 	},
+	'read-hash-queue': {
+		type: 'int',
+		map: 'readHashQueue'
+	},
 	'proc-batch-size': {
 		type: 'int',
 		map: 'processBatchSize'
