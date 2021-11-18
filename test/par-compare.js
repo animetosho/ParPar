@@ -188,7 +188,8 @@ function compare_files(file1, file2) {
 		if(!packet_eq(file1[k], file2[k])) {
 			//console.log('Packet mismatch for ' + k, file1[k], file2[k]);
 			var err = new Error('Packet mismatch for ' + k);
-			err.pkts = [file1[k], file2[k]];
+			//err.pkts = [file1[k], file2[k]];
+			console.log("Packet dump:", file1[k], file2[k]);
 			throw err;
 		}
 	}
@@ -228,7 +229,9 @@ function parpar_args(o) {
 	// ParPar only tests
 	if(o.memory) a.push('-m'+o.memory);
 	if(o.chunk) a.push('--min-chunk-size='+o.chunk);
-	//if(o.seqFirst) a.push('--seq-first-pass');
+	if(o.readSize) a.push('--seq-read-size='+o.readSize);
+	if(o.procBatch) a.push('--proc-batch-size='+o.procBatch);
+	if(o.recBufs) a.push('--recovery-buffers='+o.recBufs);
 	
 	return a.concat(['-o', o.out], o.in);
 }
@@ -351,17 +354,20 @@ var allTests = [
 	// 2x memory limited tests
 	{
 		in: [tmpDir + 'test64m.bin'],
-		memory: '16m',
+		memory: '24m', // 2*4*1M (procBatch) + 16M (recovery)
+		procBatch: 4,
+		recBufs: 4,
 		blockSize: 1024*1024,
 		blocks: 17,
 		cacheKey: '2'
 	},
 	{
 		in: [tmpDir + 'test1b.bin', tmpDir + 'test8b.bin', tmpDir + 'test64m.bin'],
-		memory: '8m',
-		seqFirst: true,
+		memory: '11m', // 2*3*512K (procBatch) + 8M (recovery)
 		blockSize: 1024*1024,
 		chunk: 512*1024,
+		procBatch: 3,
+		recBufs: 5,
 		blocks: 40,
 		singleFile: true,
 		cacheKey: '3'
@@ -371,7 +377,10 @@ var allTests = [
 		in: [tmpDir + 'test1b.bin', tmpDir + 'test65k.bin', tmpDir + 'test13m.bin'],
 		memory: 1048573, // prime less than 1MB
 		blockSize: 524309*4, // roughly 2MB
+		chunk: 65521,
 		blocks: 7,
+		procBatch: 8,
+		recBufs: 8,
 		singleFile: true,
 		cacheKey: '4'
 	},
@@ -380,16 +389,19 @@ var allTests = [
 		memory: '1m',
 		blockSize: 4*1048576,
 		blocks: 24,
+		procBatch: 1,
+		recBufs: 4,
 		singleFile: true,
 		cacheKey: '5'
 	},
 	{
 		in: [tmpDir + 'test1b.bin', tmpDir + 'test8b.bin', tmpDir + 'test64m.bin'],
-		memory: '8m',
-		seqFirst: true,
+		memory: '13m', // 5+8M
 		blockSize: 1024*1024,
 		chunk: 512*1024,
 		blocks: 40,
+		procBatch: 5,
+		recBufs: 1,
 		singleFile: true,
 		cacheKey: '6'
 	},
@@ -428,6 +440,15 @@ var allTests = [
 		blocks: 64,
 		singleFile: true,
 		cacheKey: '11'
+	},
+	
+	// multiple sizable files (to see if concurrent file processing causes issuse)
+	{
+		in: [tmpDir + 'test64m.bin', tmpDir + 'test13m.bin', tmpDir + 'test2200m.bin', tmpDir + 'test65k.bin'],
+		blockSize: 256*1024,
+		blocks: 10,
+		singleFile: true,
+		cacheKey: '22'
 	},
 	
 	// issue #6
@@ -492,7 +513,7 @@ var allTests = [
 	{ // max number of blocks test
 		in: [tmpDir + 'test64m.bin'],
 		blockSize: 2048,
-		blocks: 32768, // max allowed by par2cmdline; TODO: test w/ 65536
+		blocks: 32768, // max allowed by par2cmdline; TODO: test w/ 65535
 		singleFile: true,
 		cacheKey: '17'
 	},
