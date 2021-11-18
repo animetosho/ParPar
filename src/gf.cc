@@ -652,6 +652,7 @@ protected:
 			src_ += blockLeft;
 			len -= blockLeft;
 			blockLeft = data->bh->size;
+			data->bh->pos = 0;
 			
 			if(data->bh->count) {
 				data->hasher->getBlock(data->bh->ptr, 0);
@@ -660,7 +661,7 @@ protected:
 			} // else there's an overflow
 		}
 		if(len) data->hasher->update(src_, len);
-		data->bh->pos = len;
+		data->bh->pos += len;
 		
 		
 		// signal main thread that hashing has completed
