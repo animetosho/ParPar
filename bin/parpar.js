@@ -8,6 +8,7 @@ var error = function(msg) {
 	console.error('Enter `parpar --help` for usage information');
 	process.exit(1);
 };
+var arg_parser = require('../lib/arg_parser.js');
 
 var opts = {
 	'input-slices': {
@@ -21,8 +22,7 @@ var opts = {
 		type: 'string'
 	},
 	'slice-size-multiple': {
-		type: 'size',
-		map: 'sliceSizeMultiple'
+		type: 'string'
 	},
 	'auto-slice-size': {
 		alias: 'S',
@@ -200,7 +200,7 @@ var opts = {
 };
 var argv;
 try {
-	argv = require('../lib/arg_parser.js')(process.argv.slice(2), opts);
+	argv = arg_parser(process.argv.slice(2), opts);
 } catch(x) {
 	error(x.message);
 }
@@ -318,8 +318,18 @@ var inputFiles = argv._;
 		if(opts[k].map && (k in argv))
 			ppo[opts[k].map] = argv[k];
 	}
+	
+	if('slice-size-multiple' in argv) {
+		ppo.sliceSizeMultiple = arg_parser.parseSize(argv['slice-size-multiple']);
+		if(ppo.sliceSizeMultiple % 4 && ppo.sliceSizeMultiple > 100 && /[kmgtpe]$/i.test(argv['slice-size-multiple'])) {
+			// invalid multiple, but size may have been specified without enough precision
+			ppo.sliceSizeMultiple = Math.max(4, Math.round(ppo.sliceSizeMultiple/4) *4);
+		}
+	} else {
+		ppo.sliceSizeMultiple = 4; // default for now, may get overridden below
+	}
 
-	var parseSizeOrNum = function(arg, input) {
+	var parseSizeOrNum = function(arg, input, multiple) {
 		var m;
 		var isRec = (arg.substr(-15) == 'recovery-slices' || arg == 'slices-per-file' || arg == 'slices-first-file');
 		input = input || argv[arg];
@@ -351,14 +361,22 @@ var inputFiles = argv._;
 					l:'largest_files', s:'smallest_files', w:'power', o:'log', n:'ilog'
 				}[m[2][0].toLowerCase()], value: n, scale: scale};
 			} else {
+				var unit = 1;
 				switch(m[2].toUpperCase()) {
-					case 'E': n *= 1024;
-					case 'P': n *= 1024;
-					case 'T': n *= 1024;
-					case 'G': n *= 1024;
-					case 'M': n *= 1024;
-					case 'K': n *= 1024;
-					case 'B': n *= 1;
+					case 'E': unit *= 1024;
+					case 'P': unit *= 1024;
+					case 'T': unit *= 1024;
+					case 'G': unit *= 1024;
+					case 'M': unit *= 1024;
+					case 'K': unit *= 1024;
+					case 'B': unit *= 1;
+				}
+				n *= unit;
+				if(multiple && n%multiple) {
+					// if unit specified is too coarse, round to desired multiple
+					var target = Math.max(multiple, Math.round(n/multiple) * multiple);
+					if(n > multiple*25 && Math.abs(target - n) < unit*0.05)
+						n = target;
 				}
 				return {unit: 'bytes', value: Math.floor(n)};
 			}
@@ -392,7 +410,7 @@ var inputFiles = argv._;
 		}
 	});
 
-	var inputSliceDef = parseSizeOrNum('input-slices');
+	var inputSliceDef = parseSizeOrNum('input-slices', null, ppo.sliceSizeMultiple);
 	var inputSliceCount = inputSliceDef.unit == 'count' ? -inputSliceDef.value : inputSliceDef.value;
 	if(inputSliceCount < -32768) // capture potentially common mistake
 		error('Invalid number (>32768) of input slices requested. Perhaps you meant `--input-slices=' + (-inputSliceCount) + 'b` instead?');
@@ -400,7 +418,7 @@ var inputFiles = argv._;
 	['min', 'max'].forEach(function(e) {
 		var k = e + '-input-slices';
 		if(k in argv) {
-			var v = parseSizeOrNum(k);
+			var v = parseSizeOrNum(k, null, ppo.sliceSizeMultiple);
 			ppo[e + 'SliceSize'] = v.unit == 'count' ? -v.value : v.value;
 		}
 	});
