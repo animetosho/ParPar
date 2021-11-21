@@ -49,7 +49,7 @@ struct CpuCap {
 		family = ((cpuInfo[0]>>8) & 0xf) + ((cpuInfo[0]>>16) & 0xff0);
 		model = ((cpuInfo[0]>>4) & 0xf) + ((cpuInfo[0]>>12) & 0xf0);
 		
-		propPrefShuffleThresh = 131072; // it seems like XOR JIT is always faster than shuffle at ~128KB sizes
+		propPrefShuffleThresh = 32768; // it seems like XOR JIT is always faster than shuffle at 16-32K sizes
 		
 		bool isAtom = false, isICoreOld = false, isICoreNew = false;
 		if(family == 6) {
@@ -61,7 +61,7 @@ struct CpuCap {
 			}
 			if(model == 0x0F || model == 0x16) {
 				/* Conroe CPU with relatively slow pshufb; pretend SSSE3 doesn't exist, as XOR_DEPENDS is generally faster */
-				propPrefShuffleThresh = 16384;
+				propPrefShuffleThresh = 8192;
 			}
 			
 			if((model == 0x1A || model == 0x1E || model == 0x2E) /*Nehalem*/
@@ -93,7 +93,7 @@ struct CpuCap {
 		}
 		if(CPU_FAMMDL_IS_AMDCAT(family, model)) {
 			/* Jaguar has a slow shuffle instruction and XOR is much faster; presumably the same for Bobcat/Puma */
-			propPrefShuffleThresh = 2048;
+			propPrefShuffleThresh = 4096;
 		}
 		
 		propAVX128EU = ( // CPUs with 128-bit AVX units
@@ -144,9 +144,10 @@ struct CpuCap {
 		if(isICoreOld)
 			jitOptStrat = GF16_XOR_JIT_STRAT_CLR;
 		else if(isAtom || isICoreNew || family == 0x6f /*AMDfam15*/ || family == 0x1f /*K10*/)
+			// difference on Silvermont appears to be minimal (despite difference in other tests)
 			jitOptStrat = GF16_XOR_JIT_STRAT_COPYNT;
 		else if(family == 0x8f /*AMDfam17*/ || family == 0x9f /*Hygon*/ || family == 0xaf /*AMDfam19*/)
-			// despite tests, clearing seems to work better than copying
+			// despite other tests, clearing seems to work better than copying
 			// GF16_XOR_JIT_STRAT_COPY seems to perform slightly worse than doing nothing, COPYNT is *much* worse, whereas clearing is slightly better
 			jitOptStrat = GF16_XOR_JIT_STRAT_CLR;
 		else // AMDfam16, Core2 or unknown
@@ -364,18 +365,58 @@ Galois16MethodInfo Galois16Mul::info(Galois16Methods _method) {
 	// although these defaults are pretty good across most CPUs
 	switch(method) {
 		case GF16_XOR_JIT_SSE2: // JIT is a little slow, so larger blocks make things faster
+			_info.idealChunkSize = 64*1024;
+			// seems like weaker processors prefer 32K
+		break;
 		case GF16_XOR_JIT_AVX2:
+			// 64-96K generally seems ideal, but this method is most likely used on Zen, which seems to prefer 128-256K
+			_info.idealChunkSize = 128*1024;
+		break;
 		case GF16_XOR_JIT_AVX512:
-			_info.idealChunkSize = 128*1024; // half L2 cache?
+			_info.idealChunkSize = 48*1024; // peak on Skylake-X
 		break;
 		case GF16_LOOKUP:
 		case GF16_LOOKUP_SSE2:
 		case GF16_LOOKUP3:
 		case GF16_XOR_SSE2:
-			_info.idealChunkSize = 96*1024; // 2* L1 data cache size ?
+			// these seem to generally perfer larger sizes, particularly XOR
+			// lookup is mostly run on weaker processors, so prefer smaller to avoid overloading cache
+			_info.idealChunkSize = 32*1024;
 		break;
-		default: // Shuffle/Affine
-			_info.idealChunkSize = 48*1024; // ~=L1 * 1-2 data cache size seems to be efficient
+		case GF16_SHUFFLE_SSSE3:
+		case GF16_SHUFFLE_AVX:
+		case GF16_SHUFFLE_NEON:
+		case GF16_SHUFFLE_128_SVE: // may need smaller chunks for larger vector size
+		case GF16_SHUFFLE_128_SVE2:
+			_info.idealChunkSize = 16*1024;
+		break;
+		case GF16_SHUFFLE_AVX2:
+		case GF16_SHUFFLE_AVX512:
+		case GF16_SHUFFLE_VBMI:
+		case GF16_SHUFFLE2X_AVX2:
+		case GF16_SHUFFLE2X_AVX512:
+		case GF16_SHUFFLE2X_128_SVE2:
+		case GF16_SHUFFLE_512_SVE2:
+			// try to target L2
+			_info.idealChunkSize = 8*1024;
+		break;
+		case GF16_AFFINE_AVX2:
+		case GF16_AFFINE2X_AVX2:
+			_info.idealChunkSize = 4*1024; // completely untested
+		break;
+		case GF16_AFFINE_AVX512:
+		case GF16_AFFINE2X_AVX512:
+			// try to target L1 size (affine also has very fast init)
+			_info.idealChunkSize = 1*1024;
+		break;
+		case GF16_CLMUL_NEON: // faster init than Shuffle, and usually faster
+		case GF16_CLMUL_SVE2: // may want smaller chunk size for wider vectors
+		case GF16_AFFINE_GFNI:
+		case GF16_AFFINE2X_GFNI:
+			_info.idealChunkSize = 8*1024;
+		break;
+		default: // shouldn't reach here as all options are covered above
+			_info.idealChunkSize = 32*1024; // random generic size that's a rough average of everything
 	}
 	return _info;
 }
@@ -1026,9 +1067,9 @@ Galois16Methods Galois16Mul::default_method(size_t regionSizeHint, unsigned /*ou
 #ifdef PLATFORM_X86
 	if(caps.hasGFNI) {
 		if(gf16_affine_available_avx512 && caps.hasAVX512VLBW)
-			return GF16_AFFINE2X_AVX512; // better peak at 24x1KB, whereas 1x is better at 18x1KB
+			return GF16_AFFINE_AVX512;
 		if(gf16_affine_available_avx2 && caps.hasAVX2)
-			return GF16_AFFINE2X_AVX2;
+			return GF16_AFFINE_AVX2;
 	}
 	if(caps.hasAVX512VLBW) {
 		if(gf16_shuffle_available_vbmi && caps.hasAVX512VBMI)
@@ -1037,21 +1078,17 @@ Galois16Methods Galois16Mul::default_method(size_t regionSizeHint, unsigned /*ou
 			return GF16_SHUFFLE_AVX512;
 	}
 	if(caps.hasAVX2) {
-# ifndef PLATFORM_AMD64
-		if(gf16_shuffle_available_avx2 && !caps.propAVX128EU)
-			return GF16_SHUFFLE2X_AVX2;
-# endif
-		if(gf16_shuffle_available_avx2 && caps.propHT) // Intel AVX2 CPU with HT - it seems that shuffle256 is roughly same as xor256 so prefer former
-			return GF16_SHUFFLE2X_AVX2;
 # ifdef PLATFORM_AMD64
-		if(gf16_xor_available_avx2 && caps.canMemWX) // TODO: check size hint?
+		if(gf16_xor_available_avx2 && caps.canMemWX && caps.propAVX128EU) // TODO: check size hint?
+			// 128-bit AMD CPUs seem to prefer Xor-Jit over Shuffle, probably because Xor-Jit > Shuffle @ 128-bit
+			// TODO: Zen2 may prefer this over Shuffle
 			return GF16_XOR_JIT_AVX2;
-		if(gf16_shuffle_available_avx2)
-			return GF16_SHUFFLE2X_AVX2;
 # endif
+		if(gf16_shuffle_available_avx2)
+			return GF16_SHUFFLE_AVX2;
 	}
 	if(gf16_affine_available_gfni && caps.hasGFNI && gf16_shuffle_available_ssse3 && caps.hasSSSE3)
-		return GF16_AFFINE_GFNI; // presumably this beats XOR-JIT
+		return GF16_AFFINE2X_GFNI; // this should beat XOR-JIT; even seems to generally beat Shuffle2x AVX2
 	if(!regionSizeHint || regionSizeHint > caps.propPrefShuffleThresh) {
 		// TODO: if only a few recovery slices being made (e.g. 3), prefer shuffle
 		//if(gf16_xor_available_avx && caps.hasAVX && caps.canMemWX)
@@ -1068,15 +1105,12 @@ Galois16Methods Galois16Mul::default_method(size_t regionSizeHint, unsigned /*ou
 #endif
 #ifdef PLATFORM_ARM
 	if(caps.hasSVE2)
-		return gf16_sve_get_size() >= 64 ? GF16_SHUFFLE_512_SVE2 : GF16_SHUFFLE_128_SVE2;
+		return gf16_sve_get_size() >= 64 ? GF16_SHUFFLE_512_SVE2 : GF16_CLMUL_SVE2;
 	if(caps.hasSVE && gf16_sve_get_size() > 16)
 		return GF16_SHUFFLE_128_SVE;
 	if(gf16_available_neon && caps.hasNEON)
-# ifdef __aarch64__
-		return GF16_SHUFFLE_NEON;
-# else
+		// TODO: see if CLMul is ever slower than Shuffle on AArch64; testing so far seems to show it's often faster
 		return GF16_CLMUL_NEON;
-# endif
 #endif
 	
 	return GF16_LOOKUP;
@@ -1145,7 +1179,6 @@ std::vector<Galois16Methods> Galois16Mul::availableMethods(bool checkCpuid) {
 		ret.push_back(GF16_SHUFFLE_128_SVE);
 	if(gf16_available_sve2 && caps.hasSVE2) {
 		ret.push_back(GF16_SHUFFLE_128_SVE2);
-		ret.push_back(GF16_SHUFFLE2X_128_SVE2);
 		ret.push_back(GF16_CLMUL_SVE2);
 		if(gf16_sve_get_size() >= 32)
 			ret.push_back(GF16_SHUFFLE2X_128_SVE2);
