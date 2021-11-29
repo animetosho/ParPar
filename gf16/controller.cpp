@@ -79,14 +79,14 @@ void PAR2Proc::setNumThreads(int threads) {
 	numThreads = threads;
 }
 
-bool PAR2Proc::init(const PAR2ProcCompleteCb& _progressCb, Galois16Methods method, unsigned _inputGrouping) {
+bool PAR2Proc::init(const PAR2ProcCompleteCb& _progressCb, Galois16Methods method, unsigned _inputGrouping, size_t _chunkLen) {
 	freeGf();
 	bool ret = true;
 	if(numThreads) {
 		// TODO: accept & pass on hint info
 		gf = new Galois16Mul(method);
 		const Galois16MethodInfo& info = gf->info();
-		chunkLen = info.idealChunkSize;
+		chunkLen = _chunkLen ? _chunkLen : info.idealChunkSize;
 		alignment = info.alignment;
 		stride = info.stride;
 		inputGrouping = _inputGrouping;

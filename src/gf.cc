@@ -230,6 +230,7 @@ public:
 		Galois16Methods method = args.Length() >= 2 && !args[1]->IsUndefined() && !args[1]->IsNull() ? (Galois16Methods)ARG_TO_NUM(Int32, args[1]) : GF16_AUTO;
 		unsigned inputGrouping = args.Length() >= 3 && !args[2]->IsUndefined() && !args[2]->IsNull() ? ARG_TO_NUM(Uint32, args[2]) : 0;
 		int stagingAreas = args.Length() >= 4 && !args[3]->IsUndefined() && !args[3]->IsNull() ? ARG_TO_NUM(Int32, args[3]) : 2;
+		size_t chunkLen = args.Length() >= 5 && !args[4]->IsUndefined() && !args[4]->IsNull() ? ARG_TO_NUM(Uint32, args[4]) : 0;
 		
 		if(inputGrouping > 32768)
 			RETURN_ERROR("Input grouping is invalid");
@@ -240,7 +241,7 @@ public:
 			RETURN_ERROR("Staging area too large");
 		
 		GfProc *self = new GfProc(sliceSize, stagingAreas, getCurrentLoop(ISOLATE 0));
-		if(!self->init(method, inputGrouping)) {
+		if(!self->init(method, inputGrouping, chunkLen)) {
 			delete self;
 			RETURN_ERROR("Failed to allocate memory");
 		}
@@ -517,7 +518,7 @@ protected:
 	explicit GfProc(size_t sliceSize, int stagingAreas, uv_loop_t* loop)
 	: ObjectWrap(), isRunning(false), isClosed(false), pendingDiscardOutput(true), hasOutput(false), par2(sliceSize, loop, stagingAreas) {}
 	
-	bool init(Galois16Methods method, unsigned inputGrouping) {
+	bool init(Galois16Methods method, unsigned inputGrouping, size_t chunkLen) {
 		return par2.init([&](unsigned numInputs, uint16_t firstInput) {
 			if(progressCb.hasCallback) {
 #if NODE_VERSION_AT_LEAST(0, 11, 0)
@@ -528,7 +529,7 @@ protected:
 				progressCb.call({ Integer::New(numInputs), Integer::New(firstInput) });
 #endif
 			}
-		}, method, inputGrouping);
+		}, method, inputGrouping, chunkLen);
 	}
 	
 	~GfProc() {

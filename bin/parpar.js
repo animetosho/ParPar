@@ -169,6 +169,10 @@ var opts = {
 		default: '',
 		map: 'gfMethod'
 	},
+	'loop-tile-size': {
+		type: 'size',
+		map: 'loopTileSize'
+	},
 	'recurse': {
 		alias: 'R',
 		type: 'bool',

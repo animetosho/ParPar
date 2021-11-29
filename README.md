@@ -191,6 +191,7 @@ var par2creator = require('@animetosho/parpar').run(
         readHashQueue: 5,
         numThreads: null, // null => number of processors
         gfMethod: null, // null => '' (auto)
+		loopTileSize: 0, // 0 = auto
     },
     function(err) {
         console.log(err || 'Process finished');
