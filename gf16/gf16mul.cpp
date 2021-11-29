@@ -453,6 +453,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 					prepare = &gf16_shuffle_prepare_ssse3;
 					prepare_packed = &gf16_shuffle_prepare_packed_ssse3;
 					prepare_packed_cksum = &gf16_shuffle_prepare_packed_cksum_ssse3;
+					prepare_partial_packsum = &gf16_shuffle_prepare_partial_packsum_ssse3;
 					finish = &gf16_shuffle_finish_ssse3;
 					finish_packed = &gf16_shuffle_finish_packed_ssse3;
 					finish_packed_cksum = &gf16_shuffle_finish_packed_cksum_ssse3;
@@ -468,6 +469,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 					prepare = &gf16_shuffle_prepare_avx;
 					prepare_packed = &gf16_shuffle_prepare_packed_avx;
 					prepare_packed_cksum = &gf16_shuffle_prepare_packed_cksum_avx;
+					prepare_partial_packsum = &gf16_shuffle_prepare_partial_packsum_avx;
 					finish = &gf16_shuffle_finish_avx;
 					finish_packed = &gf16_shuffle_finish_packed_avx;
 					finish_packed_cksum = &gf16_shuffle_finish_packed_cksum_avx;
@@ -483,6 +485,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 					prepare = &gf16_shuffle_prepare_avx2;
 					prepare_packed = &gf16_shuffle_prepare_packed_avx2;
 					prepare_packed_cksum = &gf16_shuffle_prepare_packed_cksum_avx2;
+					prepare_partial_packsum = &gf16_shuffle_prepare_partial_packsum_avx2;
 					finish = &gf16_shuffle_finish_avx2;
 					finish_packed = &gf16_shuffle_finish_packed_avx2;
 					finish_packed_cksum = &gf16_shuffle_finish_packed_cksum_avx2;
@@ -507,6 +510,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 					prepare = &gf16_shuffle_prepare_avx512;
 					prepare_packed = &gf16_shuffle_prepare_packed_avx512;
 					prepare_packed_cksum = &gf16_shuffle_prepare_packed_cksum_avx512;
+					prepare_partial_packsum = &gf16_shuffle_prepare_partial_packsum_avx512;
 					finish = &gf16_shuffle_finish_avx512;
 					finish_packed = &gf16_shuffle_finish_packed_avx512;
 					finish_packed_cksum = &gf16_shuffle_finish_packed_cksum_avx512;
@@ -534,6 +538,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			prepare = &gf16_shuffle_prepare_avx512;
 			prepare_packed = &gf16_shuffle_prepare_packed_vbmi;
 			prepare_packed_cksum = &gf16_shuffle_prepare_packed_cksum_vbmi;
+			prepare_partial_packsum = &gf16_shuffle_prepare_partial_packsum_vbmi;
 			finish = &gf16_shuffle_finish_avx512;
 			finish_packed = &gf16_shuffle_finish_packed_avx512;
 			finish_packed_cksum = &gf16_shuffle_finish_packed_cksum_avx512;
@@ -557,6 +562,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			prepare = &gf16_shuffle2x_prepare_avx512;
 			prepare_packed = &gf16_shuffle2x_prepare_packed_avx512;
 			prepare_packed_cksum = &gf16_shuffle2x_prepare_packed_cksum_avx512;
+			prepare_partial_packsum = &gf16_shuffle2x_prepare_partial_packsum_avx512;
 			finish = &gf16_shuffle2x_finish_avx512;
 			finish_packed = &gf16_shuffle2x_finish_packed_avx512;
 			finish_packed_cksum = &gf16_shuffle2x_finish_packed_cksum_avx512;
@@ -580,6 +586,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			prepare = &gf16_shuffle2x_prepare_avx2;
 			prepare_packed = &gf16_shuffle2x_prepare_packed_avx2;
 			prepare_packed_cksum = &gf16_shuffle2x_prepare_packed_cksum_avx2;
+			prepare_partial_packsum = &gf16_shuffle2x_prepare_partial_packsum_avx2;
 			finish = &gf16_shuffle2x_finish_avx2;
 			finish_packed = &gf16_shuffle2x_finish_packed_avx2;
 			finish_packed_cksum = &gf16_shuffle2x_finish_packed_cksum_avx2;
@@ -603,6 +610,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			add_multi_packed = &gf_add_multi_packed_shuffle_neon;
 			add_multi_packpf = &gf_add_multi_packpf_shuffle_neon;
 			prepare_packed_cksum = &gf16_shuffle_prepare_packed_cksum_neon;
+			prepare_partial_packsum = &gf16_shuffle_prepare_partial_packsum_neon;
 			finish_packed = &gf16_shuffle_finish_packed_neon;
 			finish_packed_cksum = &gf16_shuffle_finish_packed_cksum_neon;
 		break;
@@ -621,6 +629,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			//_mul_add_multi_packpf = &gf16_clmul_muladd_multi_packpf_neon;
 			prepare_packed = &gf16_clmul_prepare_packed_neon;
 			prepare_packed_cksum = &gf16_clmul_prepare_packed_cksum_neon;
+			prepare_partial_packsum = &gf16_clmul_prepare_partial_packsum_neon;
 			finish_packed = &gf16_shuffle_finish_packed_neon;
 			finish_packed_cksum = &gf16_shuffle_finish_packed_cksum_neon; // re-use shuffle routine
 		break;
@@ -640,6 +649,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			add_multi_packpf = &gf_add_multi_packpf_sve;
 			prepare_packed = &gf16_shuffle_prepare_packed_sve;
 			prepare_packed_cksum = &gf16_shuffle_prepare_packed_cksum_sve;
+			prepare_partial_packsum = &gf16_shuffle_prepare_partial_packsum_sve;
 			finish_packed = &gf16_shuffle_finish_packed_sve;
 			finish_packed_cksum = &gf16_shuffle_finish_packed_cksum_sve;
 		break;
@@ -657,6 +667,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			add_multi_packpf = &gf_add_multi_packpf_v2i3_sve2;
 			prepare_packed = &gf16_shuffle_prepare_packed_sve;
 			prepare_packed_cksum = &gf16_shuffle_prepare_packed_cksum_sve;
+			prepare_partial_packsum = &gf16_shuffle_prepare_partial_packsum_sve;
 			finish_packed = &gf16_shuffle_finish_packed_sve;
 			finish_packed_cksum = &gf16_shuffle_finish_packed_cksum_sve;
 		break;
@@ -673,6 +684,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			add_multi_packpf = &gf_add_multi_packpf_v1i6_sve2;
 			prepare_packed = &gf16_shuffle2x_prepare_packed_sve;
 			prepare_packed_cksum = &gf16_shuffle2x_prepare_packed_cksum_sve;
+			prepare_partial_packsum = &gf16_shuffle2x_prepare_partial_packsum_sve;
 			finish_packed = &gf16_shuffle2x_finish_packed_sve;
 			finish_packed_cksum = &gf16_shuffle2x_finish_packed_cksum_sve;
 		break;
@@ -692,6 +704,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			add_multi_packpf = &gf_add_multi_packpf_v2i4_sve2;
 			prepare_packed = &gf16_shuffle_prepare_packed_512_sve2;
 			prepare_packed_cksum = &gf16_shuffle_prepare_packed_cksum_512_sve2;
+			prepare_partial_packsum = &gf16_shuffle_prepare_partial_packsum_512_sve2;
 			finish_packed = &gf16_shuffle_finish_packed_sve;
 			finish_packed_cksum = &gf16_shuffle_finish_packed_cksum_sve;
 		break;
@@ -708,6 +721,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			add_multi_packpf = &gf_add_multi_packpf_v2i8_sve2;
 			prepare_packed = &gf16_clmul_prepare_packed_sve2;
 			prepare_packed_cksum = &gf16_clmul_prepare_packed_cksum_sve2;
+			prepare_partial_packsum = &gf16_clmul_prepare_partial_packsum_sve2;
 			finish_packed = &gf16_shuffle_finish_packed_sve;
 			finish_packed_cksum = &gf16_shuffle_finish_packed_cksum_sve; // reuse shuffle
 		break;
@@ -732,6 +746,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			prepare = &gf16_shuffle_prepare_avx512;
 			prepare_packed = &gf16_affine_prepare_packed_avx512;
 			prepare_packed_cksum = &gf16_affine_prepare_packed_cksum_avx512;
+			prepare_partial_packsum = &gf16_affine_prepare_partial_packsum_avx512;
 			finish = &gf16_shuffle_finish_avx512;
 			finish_packed = &gf16_shuffle_finish_packed_avx512;
 			finish_packed_cksum = &gf16_shuffle_finish_packed_cksum_avx512;
@@ -757,6 +772,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			prepare = &gf16_shuffle_prepare_avx2;
 			prepare_packed = &gf16_affine_prepare_packed_avx2;
 			prepare_packed_cksum = &gf16_affine_prepare_packed_cksum_avx2;
+			prepare_partial_packsum = &gf16_affine_prepare_partial_packsum_avx2;
 			finish = &gf16_shuffle_finish_avx2;
 			finish_packed = &gf16_shuffle_finish_packed_avx2;
 			finish_packed_cksum = &gf16_shuffle_finish_packed_cksum_avx2;
@@ -782,6 +798,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			prepare = &gf16_shuffle_prepare_ssse3;
 			prepare_packed = &gf16_affine_prepare_packed_gfni;
 			prepare_packed_cksum = &gf16_affine_prepare_packed_cksum_gfni;
+			prepare_partial_packsum = &gf16_affine_prepare_partial_packsum_gfni;
 			finish = &gf16_shuffle_finish_ssse3;
 			finish_packed = &gf16_shuffle_finish_packed_ssse3;
 			finish_packed_cksum = &gf16_shuffle_finish_packed_cksum_ssse3;
@@ -805,6 +822,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			prepare = &gf16_affine2x_prepare_avx512;
 			prepare_packed = &gf16_affine2x_prepare_packed_avx512;
 			prepare_packed_cksum = &gf16_affine2x_prepare_packed_cksum_avx512;
+			prepare_partial_packsum = &gf16_affine2x_prepare_partial_packsum_avx512;
 			finish = &gf16_affine2x_finish_avx512;
 			finish_packed = &gf16_affine2x_finish_packed_avx512;
 			finish_packed_cksum = &gf16_affine2x_finish_packed_cksum_avx512;
@@ -828,6 +846,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			prepare = &gf16_affine2x_prepare_avx2;
 			prepare_packed = &gf16_affine2x_prepare_packed_avx2;
 			prepare_packed_cksum = &gf16_affine2x_prepare_packed_cksum_avx2;
+			prepare_partial_packsum = &gf16_affine2x_prepare_partial_packsum_avx2;
 			finish = &gf16_affine2x_finish_avx2;
 			finish_packed = &gf16_affine2x_finish_packed_avx2;
 			finish_packed_cksum = &gf16_affine2x_finish_packed_cksum_avx2;
@@ -851,6 +870,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			prepare = &gf16_affine2x_prepare_gfni;
 			prepare_packed = &gf16_affine2x_prepare_packed_gfni;
 			prepare_packed_cksum = &gf16_affine2x_prepare_packed_cksum_gfni;
+			prepare_partial_packsum = &gf16_affine2x_prepare_partial_packsum_gfni;
 			finish = &gf16_affine2x_finish_gfni;
 			finish_packed = &gf16_affine2x_finish_packed_gfni;
 			finish_packed_cksum = &gf16_affine2x_finish_packed_cksum_gfni;
@@ -884,6 +904,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 					prepare = &gf16_xor_prepare_sse2;
 					prepare_packed = &gf16_xor_prepare_packed_sse2;
 					prepare_packed_cksum = &gf16_xor_prepare_packed_cksum_sse2;
+					prepare_partial_packsum = &gf16_xor_prepare_partial_packsum_sse2;
 					finish = &gf16_xor_finish_sse2;
 					finish_packed = &gf16_xor_finish_packed_sse2;
 					finish_packed_cksum = &gf16_xor_finish_packed_cksum_sse2;
@@ -901,6 +922,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 					prepare = &gf16_xor_prepare_avx;
 					prepare_packed = &gf16_xor_prepare_packed_avx;
 					prepare_packed_cksum = &gf16_xor_prepare_packed_cksum_avx;
+					prepare_partial_packsum = &gf16_xor_prepare_partial_packsum_avx;
 					finish = &gf16_xor_finish_avx;
 					finish_packed = &gf16_xor_finish_packed_avx;
 					finish_packed_cksum = &gf16_xor_finish_packed_cksum_avx;
@@ -918,6 +940,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 					prepare = &gf16_xor_prepare_avx2;
 					prepare_packed = &gf16_xor_prepare_packed_avx2;
 					prepare_packed_cksum = &gf16_xor_prepare_packed_cksum_avx2;
+					prepare_partial_packsum = &gf16_xor_prepare_partial_packsum_avx2;
 					finish = &gf16_xor_finish_avx2;
 					finish_packed = &gf16_xor_finish_packed_avx2;
 					finish_packed_cksum = &gf16_xor_finish_packed_cksum_avx2;
@@ -936,6 +959,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 					prepare = &gf16_xor_prepare_avx512;
 					prepare_packed = &gf16_xor_prepare_packed_avx512;
 					prepare_packed_cksum = &gf16_xor_prepare_packed_cksum_avx512;
+					prepare_partial_packsum = &gf16_xor_prepare_partial_packsum_avx512;
 					finish = &gf16_xor_finish_avx512;
 					finish_packed = &gf16_xor_finish_packed_avx512;
 					finish_packed_cksum = &gf16_xor_finish_packed_cksum_avx512;
@@ -951,6 +975,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			_mul = &gf16_lookup_mul_sse2;
 			_mul_add = &gf16_lookup_muladd_sse2;
 			prepare_packed_cksum = &gf16_lookup_prepare_packed_cksum_sse2;
+			prepare_partial_packsum = &gf16_lookup_prepare_partial_packsum_sse2;
 			finish_packed = &gf16_lookup_finish_packed_sse2;
 			finish_packed_cksum = &gf16_lookup_finish_packed_cksum_sse2;
 		break;
@@ -963,6 +988,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			add_multi_packpf = &gf_add_multi_packpf_lookup3;
 			prepare_packed = &gf16_lookup3_prepare_packed_generic;
 			prepare_packed_cksum = &gf16_lookup3_prepare_packed_cksum_generic;
+			prepare_partial_packsum = &gf16_lookup3_prepare_partial_packsum_generic;
 			finish_packed = &gf16_lookup_finish_packed_generic;
 			finish_packed_cksum = &gf16_lookup_finish_packed_cksum_generic;
 			if(gf16_lookup3_stride())
@@ -973,7 +999,8 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			_mul = &gf16_lookup_mul;
 			_mul_add = &gf16_lookup_muladd;
 			_pow_add = &gf16_lookup_powadd;
-			prepare_packed_cksum = &gf16_lookup_prepare_packed_cksum;
+			prepare_packed_cksum = &gf16_lookup_prepare_packed_cksum_generic;
+			prepare_partial_packsum = &gf16_lookup_prepare_partial_packsum_generic;
 			finish_packed = &gf16_lookup_finish_packed_generic;
 			finish_packed_cksum = &gf16_lookup_finish_packed_cksum_generic;
 		break;
@@ -1018,6 +1045,7 @@ void Galois16Mul::move(Galois16Mul& other) {
 	prepare = other.prepare;
 	prepare_packed = other.prepare_packed;
 	prepare_packed_cksum = other.prepare_packed_cksum;
+	prepare_partial_packsum = other.prepare_partial_packsum;
 	finish = other.finish;
 	finish_packed = other.finish_packed;
 	finish_packed_cksum = other.finish_packed_cksum;

@@ -732,10 +732,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_lookup3_checksum_prepare(void *HEDLEY_REST
 }
 
 
-void gf16_lookup_prepare_packed_cksum(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen, size_t sliceLen, unsigned inputPackSize, unsigned inputNum, size_t chunkLen) {
-	uintptr_t checksum = 0;
-	gf16_prepare_packed(dst, src, srcLen, sliceLen, gf16_lookup_stride(), &gf16_lookup_copy_block, &gf16_lookup_prepare_blocku, inputPackSize, inputNum, chunkLen, 1, &checksum, &gf16_lookup_checksum_block, &gf16_lookup_checksum_blocku, &gf16_lookup_checksum_zeroes, &gf16_lookup_checksum_prepare);
-}
+GF_PREPARE_PACKED_CKSUM_FUNCS(gf16_lookup, _generic, gf16_lookup_stride(), gf16_lookup_copy_block, gf16_lookup_prepare_blocku, 1, (void)0, uintptr_t checksum = 0, gf16_lookup_checksum_block, gf16_lookup_checksum_blocku, gf16_lookup_checksum_zeroes, gf16_lookup_checksum_prepare)
 GF_PREPARE_PACKED_FUNCS(gf16_lookup3, _generic, gf16_lookup3_stride(), gf16_lookup3_prepare_block, gf16_lookup3_prepare_blocku, 1, (void)0, uintptr_t checksum = 0, gf16_lookup_checksum_block, gf16_lookup_checksum_blocku, gf16_lookup_checksum_zeroes, gf16_lookup3_checksum_prepare)
 
 GF_FINISH_PACKED_FUNCS(gf16_lookup, _generic, gf16_lookup_stride(), gf16_lookup_copy_block, gf16_copy_blocku, 1, (void)0, uintptr_t checksum = 0, gf16_lookup_checksum_block, gf16_lookup_checksum_blocku, gf16_lookup_checksum_finish)

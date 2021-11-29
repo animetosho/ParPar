@@ -6,6 +6,7 @@
 
 typedef void(*Galois16MulTransform) (void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen);
 typedef void(*Galois16MulTransformPacked) (void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen, size_t sliceLen, unsigned inputPackSize, unsigned inputNum, size_t chunkLen);
+typedef void(*Galois16MulTransformPackedPartial) (void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen, size_t sliceLen, unsigned inputPackSize, unsigned inputNum, size_t chunkLen, size_t partOffset, size_t partLen);
 typedef void(*Galois16MulUntransform) (void *HEDLEY_RESTRICT dst, size_t len);
 typedef void(*Galois16MulUntransformPacked) (void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t sliceLen, unsigned numOutputs, unsigned outputNum, size_t chunkLen);
 typedef int(*Galois16MulUntransformPackedCksum) (void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t sliceLen, unsigned numOutputs, unsigned outputNum, size_t chunkLen);
@@ -183,6 +184,7 @@ public:
 	Galois16MulTransform prepare;
 	Galois16MulTransformPacked prepare_packed;
 	Galois16MulTransformPacked prepare_packed_cksum;
+	Galois16MulTransformPackedPartial prepare_partial_packsum; // TODO: consider a nicer interface for this
 	Galois16MulUntransform finish;
 	Galois16MulUntransformPacked finish_packed;
 	Galois16MulUntransformPackedCksum finish_packed_cksum;
