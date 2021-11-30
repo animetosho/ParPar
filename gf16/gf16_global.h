@@ -326,7 +326,7 @@ HEDLEY_ALWAYS_INLINE int gf16_finish_packed(
 	if(checksumBlock && partOffset + partLen == sliceLen) {
 		// checksum is valid if it's all zeroes
 		intptr_t* checksumTest = (intptr_t*)checksum;
-		for(int i=0; i<blockLen/sizeof(intptr_t); i++) {
+		for(unsigned i=0; i<blockLen/sizeof(intptr_t); i++) {
 			if(checksumTest[i]) return 0;
 		}
 		if(blockLen % sizeof(intptr_t)) {
@@ -342,8 +342,6 @@ HEDLEY_ALWAYS_INLINE int gf16_finish_packed(
 #define TOKENPASTE2(x, y) TOKENPASTE2_(x, y)
 #define TOKENPASTE3_(a, b, c) a ## b ## c
 #define TOKENPASTE3(a, b, c) TOKENPASTE3_(a, b, c)
-#define TOKENPASTE5_(a, b, c, d, e) a ## b ## c ## d ## e
-#define TOKENPASTE5(a, b, c, d, e) TOKENPASTE5_(a, b, c, d, e)
 #define _FN(f) TOKENPASTE2(f, _FNSUFFIX)
 
 
@@ -368,48 +366,55 @@ void TOKENPASTE3(fnpre , _prepare_partial_packsum , fnsuf)(void *HEDLEY_RESTRICT
 	__GF16_GLOBAL_STACK_FREE_IF(partOffset + partLen == srcLen, checksum); \
 }
 
-#define GF_PREPARE_PACKED_FUNCS(fnpre, fnsuf, blksize, prepfn, prepufn, interleave, finisher, cksumInit, cksumfn, cksumufn, cksumxfn, cksumprepfn) TOKENPASTE3( \
-void fnpre , _prepare_packed , fnsuf(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen, size_t sliceLen, unsigned inputPackSize, unsigned inputNum, size_t chunkLen) { \
+#define GF_PREPARE_PACKED_FUNCS(fnpre, fnsuf, blksize, prepfn, prepufn, interleave, finisher, cksumInit, cksumfn, cksumufn, cksumxfn, cksumprepfn) \
+void TOKENPASTE3(fnpre , _prepare_packed , fnsuf)(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen, size_t sliceLen, unsigned inputPackSize, unsigned inputNum, size_t chunkLen) { \
 	gf16_prepare_packed(dst, src, srcLen, sliceLen, blksize, &prepfn, &prepufn, inputPackSize, inputNum, chunkLen, interleave, 0, srcLen, NULL, NULL, NULL, NULL, NULL); \
 	finisher; \
 } \
-) GF_PREPARE_PACKED_CKSUM_FUNCS(fnpre, fnsuf, blksize, prepfn, prepufn, interleave, finisher, cksumInit, cksumfn, cksumufn, cksumxfn, cksumprepfn)
+GF_PREPARE_PACKED_CKSUM_FUNCS(fnpre, fnsuf, blksize, prepfn, prepufn, interleave, finisher, cksumInit, cksumfn, cksumufn, cksumxfn, cksumprepfn)
 
-#define GF_PREPARE_PACKED_CKSUM_FUNCS_STUB(fnpre, fnsuf) TOKENPASTE5( \
-void fnpre , _prepare_packed_cksum , fnsuf(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen, size_t sliceLen, unsigned inputPackSize, unsigned inputNum, size_t chunkLen) { \
+#define GF_PREPARE_PACKED_CKSUM_FUNCS_STUB(fnpre, fnsuf) \
+void TOKENPASTE3(fnpre , _prepare_packed_cksum , fnsuf)(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen, size_t sliceLen, unsigned inputPackSize, unsigned inputNum, size_t chunkLen) { \
 	UNUSED(dst); UNUSED(src); UNUSED(srcLen); UNUSED(sliceLen); UNUSED(inputPackSize); UNUSED(inputNum); UNUSED(chunkLen); \
 } \
-void fnpre , _prepare_partial_packsum , fnsuf(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen, size_t sliceLen, unsigned inputPackSize, unsigned inputNum, size_t chunkLen, size_t partOffset, size_t partLen) { \
+void TOKENPASTE3(fnpre , _prepare_partial_packsum , fnsuf)(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen, size_t sliceLen, unsigned inputPackSize, unsigned inputNum, size_t chunkLen, size_t partOffset, size_t partLen) { \
 	UNUSED(dst); UNUSED(src); UNUSED(srcLen); UNUSED(sliceLen); UNUSED(inputPackSize); UNUSED(inputNum); UNUSED(chunkLen); UNUSED(partOffset); UNUSED(partLen); \
-} \
-)
-#define GF_PREPARE_PACKED_FUNCS_STUB(fnpre, fnsuf) TOKENPASTE3( \
-void fnpre , _prepare_packed , fnsuf(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen, size_t sliceLen, unsigned inputPackSize, unsigned inputNum, size_t chunkLen) { \
+}
+#define GF_PREPARE_PACKED_FUNCS_STUB(fnpre, fnsuf) \
+void TOKENPASTE3(fnpre , _prepare_packed , fnsuf)(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen, size_t sliceLen, unsigned inputPackSize, unsigned inputNum, size_t chunkLen) { \
 	UNUSED(dst); UNUSED(src); UNUSED(srcLen); UNUSED(sliceLen); UNUSED(inputPackSize); UNUSED(inputNum); UNUSED(chunkLen); \
 } \
-) GF_PREPARE_PACKED_CKSUM_FUNCS_STUB(fnpre, fnsuf)
+GF_PREPARE_PACKED_CKSUM_FUNCS_STUB(fnpre, fnsuf)
 
 
-#define GF_FINISH_PACKED_FUNCS(fnpre, fnsuf, blksize, finfn, finufn, interleave, finisher, cksumfn, cksumufn, cksumxfn, ilfinfn) TOKENPASTE5( \
-void fnpre , _finish_packed , fnsuf(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t sliceLen, unsigned numOutputs, unsigned outputNum, size_t chunkLen) { \
+#define GF_FINISH_PACKED_FUNCS(fnpre, fnsuf, blksize, finfn, finufn, interleave, finisher, cksumfn, cksumufn, cksumxfn, ilfinfn) \
+void TOKENPASTE3(fnpre , _finish_packed , fnsuf)(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t sliceLen, unsigned numOutputs, unsigned outputNum, size_t chunkLen) { \
 	gf16_finish_packed(dst, (void *HEDLEY_RESTRICT)src, sliceLen, blksize, &finfn, &finufn, numOutputs, outputNum, chunkLen, interleave, 0, sliceLen, NULL, NULL, NULL, NULL); \
 	finisher; \
 } \
-int fnpre , _finish_packed_cksum , fnsuf(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t sliceLen, unsigned numOutputs, unsigned outputNum, size_t chunkLen) { \
+int TOKENPASTE3(fnpre , _finish_packed_cksum , fnsuf)(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t sliceLen, unsigned numOutputs, unsigned outputNum, size_t chunkLen) { \
 	int result = gf16_finish_packed(dst, (void *HEDLEY_RESTRICT)src, sliceLen, blksize, &finfn, &finufn, numOutputs, outputNum, chunkLen, interleave, 0, sliceLen, &cksumfn, &cksumufn, &cksumxfn, ilfinfn); \
 	finisher; \
 	return result; \
 } \
-)
-#define GF_FINISH_PACKED_FUNCS_STUB(fnpre, fnsuf) TOKENPASTE5( \
-void fnpre , _finish_packed , fnsuf(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t sliceLen, unsigned numOutputs, unsigned outputNum, size_t chunkLen) { \
+int TOKENPASTE3(fnpre , _finish_partial_packsum , fnsuf)(void *HEDLEY_RESTRICT dst, void *HEDLEY_RESTRICT src, size_t sliceLen, unsigned numOutputs, unsigned outputNum, size_t chunkLen, size_t partOffset, size_t partLen) { \
+	int result = gf16_finish_packed(dst, (void *HEDLEY_RESTRICT)src, sliceLen, blksize, &finfn, &finufn, numOutputs, outputNum, chunkLen, interleave, partOffset, partLen, &cksumfn, &cksumufn, &cksumxfn, ilfinfn); \
+	finisher; \
+	return result; \
+}
+
+#define GF_FINISH_PACKED_FUNCS_STUB(fnpre, fnsuf) \
+void TOKENPASTE3(fnpre , _finish_packed , fnsuf)(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t sliceLen, unsigned numOutputs, unsigned outputNum, size_t chunkLen) { \
 	UNUSED(dst); UNUSED(src); UNUSED(sliceLen); UNUSED(numOutputs); UNUSED(outputNum); UNUSED(chunkLen); \
 } \
-int fnpre , _finish_packed_cksum , fnsuf(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t sliceLen, unsigned numOutputs, unsigned outputNum, size_t chunkLen) { \
+int TOKENPASTE3(fnpre , _finish_packed_cksum , fnsuf)(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t sliceLen, unsigned numOutputs, unsigned outputNum, size_t chunkLen) { \
 	UNUSED(dst); UNUSED(src); UNUSED(sliceLen); UNUSED(numOutputs); UNUSED(outputNum); UNUSED(chunkLen); \
 	return 0; \
 } \
-)
+int TOKENPASTE3(fnpre , _finish_partial_packsum , fnsuf)(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t sliceLen, unsigned numOutputs, unsigned outputNum, size_t chunkLen, size_t partOffset, size_t partLen) { \
+	UNUSED(dst); UNUSED(src); UNUSED(sliceLen); UNUSED(numOutputs); UNUSED(outputNum); UNUSED(chunkLen); UNUSED(partOffset); UNUSED(partLen); \
+	return 0; \
+}
 
 
 #endif
