@@ -3,6 +3,7 @@
 
 #include "../src/hedley.h"
 #include "../src/stdint.h"
+#include "../src/platform.h"
 #include <stddef.h>
 
 #define GF16_POLYNOMIAL 0x1100b
@@ -209,24 +210,13 @@ HEDLEY_ALWAYS_INLINE void gf16_prepare_packed(
 }
 
 
-#ifdef _MSC_VER
-// MSVC doesn't like arrays of length 0
-# define __GF16_GLOBAL_STACK_VLA(decl, sz) (void)0
-# define __GF16_GLOBAL_STACK_ALLOC(sz, blk) _malloca(sz)
-# define __GF16_GLOBAL_STACK_FREE_IF(cond, p) if(cond) _freea(p)
-# include <malloc.h>
-#else
-# define __GF16_GLOBAL_STACK_VLA(decl, sz) decl[sz]
-# define __GF16_GLOBAL_STACK_ALLOC(sz, blk) blk
-# define __GF16_GLOBAL_STACK_FREE_IF(cond, p) (void)0
-#endif
-
 
 HEDLEY_ALWAYS_INLINE int gf16_finish_packed(
 	void *HEDLEY_RESTRICT dst, void *HEDLEY_RESTRICT src, size_t sliceLen, const size_t blockLen, gf16_transform_block finishBlock, gf16_transform_blocku finishBlockU,
 	unsigned numOutputs, unsigned outputNum, size_t chunkLen, const unsigned interleaveSize,
 	size_t partOffset, size_t partLen,
-	gf16_checksum_block checksumBlock, gf16_checksum_blocku checksumBlockU, gf16_checksum_exp checksumExp, gf16_finish_block inlineFinishBlock
+	gf16_checksum_block checksumBlock, gf16_checksum_blocku checksumBlockU, gf16_checksum_exp checksumExp, gf16_finish_block inlineFinishBlock,
+	size_t accessAlign
 ) {
 	size_t checksumLen = checksumBlock ? blockLen : 0;
 	size_t alignedSliceLen = sliceLen + blockLen-1;
@@ -242,7 +232,6 @@ HEDLEY_ALWAYS_INLINE int gf16_finish_packed(
 	// simple hack for now
 	dst = (char*)dst - partOffset;
 	
-	__GF16_GLOBAL_STACK_VLA(char cksumBlock, blockLen);
 	void* checksum = NULL; // MSVC whines if you don't set an initial value
 	if(checksumBlock) {
 		// we only really need to update the source checksum if we're doing partial processing. If not partial processing, we can maintain const'ness of source memory
@@ -250,7 +239,7 @@ HEDLEY_ALWAYS_INLINE int gf16_finish_packed(
 		if(partLen != sliceLen)
 			checksum = cksumPtr;
 		else {
-			checksum = __GF16_GLOBAL_STACK_ALLOC(blockLen, cksumBlock);
+			ALIGN_ALLOC(checksum, blockLen, accessAlign);
 			memcpy(checksum, cksumPtr, blockLen);
 		}
 		
@@ -334,7 +323,8 @@ HEDLEY_ALWAYS_INLINE int gf16_finish_packed(
 			return !memcmp(checksumTest + blockLen/sizeof(intptr_t), &zero, blockLen % sizeof(intptr_t));
 		}
 	}
-	__GF16_GLOBAL_STACK_FREE_IF(checksumBlock && partLen == sliceLen, checksum);
+	if(checksumBlock && partLen == sliceLen)
+		ALIGN_FREE(checksum);
 	return 1;
 }
 
@@ -345,7 +335,7 @@ HEDLEY_ALWAYS_INLINE int gf16_finish_packed(
 #define _FN(f) TOKENPASTE2(f, _FNSUFFIX)
 
 
-#define GF_PREPARE_PACKED_CKSUM_FUNCS(fnpre, fnsuf, blksize, prepfn, prepufn, interleave, finisher, cksumInit, cksumfn, cksumufn, cksumxfn, cksumprepfn) \
+#define GF_PREPARE_PACKED_CKSUM_FUNCS(fnpre, fnsuf, blksize, prepfn, prepufn, interleave, finisher, cksumInit, cksumfn, cksumufn, cksumxfn, cksumprepfn, align) \
 void TOKENPASTE3(fnpre , _prepare_packed_cksum , fnsuf)(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen, size_t sliceLen, unsigned inputPackSize, unsigned inputNum, size_t chunkLen) { \
 	cksumInit; \
 	gf16_prepare_packed(dst, src, srcLen, sliceLen, blksize, &prepfn, &prepufn, inputPackSize, inputNum, chunkLen, interleave, 0, srcLen, &checksum, &cksumfn, &cksumufn, &cksumxfn, &cksumprepfn); \
@@ -354,24 +344,23 @@ void TOKENPASTE3(fnpre , _prepare_packed_cksum , fnsuf)(void *HEDLEY_RESTRICT ds
 void TOKENPASTE3(fnpre , _prepare_partial_packsum , fnsuf)(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen, size_t sliceLen, unsigned inputPackSize, unsigned inputNum, size_t chunkLen, size_t partOffset, size_t partLen) { \
 	void* dstChecksum = (void*)gf16_checksum_ptr(dst, sliceLen, blksize, inputPackSize, inputNum, chunkLen, interleave); \
 	void* checksum = dstChecksum; \
-	__GF16_GLOBAL_STACK_VLA(char cksumBlock, blksize); \
 	if(partOffset + partLen == srcLen) { \
-		checksum = __GF16_GLOBAL_STACK_ALLOC(blksize, cksumBlock); \
+		ALIGN_ALLOC(checksum, blksize, align); \
 		memcpy(checksum, dstChecksum, blksize); \
 	} \
 	if(partOffset == 0) \
 		memset(checksum, 0, blksize); \
 	gf16_prepare_packed(dst, src, srcLen, sliceLen, blksize, &prepfn, &prepufn, inputPackSize, inputNum, chunkLen, interleave, partOffset, partLen, checksum, &cksumfn, &cksumufn, &cksumxfn, &cksumprepfn); \
 	finisher; \
-	__GF16_GLOBAL_STACK_FREE_IF(partOffset + partLen == srcLen, checksum); \
+	if(partOffset + partLen == srcLen) ALIGN_FREE(checksum); \
 }
 
-#define GF_PREPARE_PACKED_FUNCS(fnpre, fnsuf, blksize, prepfn, prepufn, interleave, finisher, cksumInit, cksumfn, cksumufn, cksumxfn, cksumprepfn) \
+#define GF_PREPARE_PACKED_FUNCS(fnpre, fnsuf, blksize, prepfn, prepufn, interleave, finisher, cksumInit, cksumfn, cksumufn, cksumxfn, cksumprepfn, align) \
 void TOKENPASTE3(fnpre , _prepare_packed , fnsuf)(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen, size_t sliceLen, unsigned inputPackSize, unsigned inputNum, size_t chunkLen) { \
 	gf16_prepare_packed(dst, src, srcLen, sliceLen, blksize, &prepfn, &prepufn, inputPackSize, inputNum, chunkLen, interleave, 0, srcLen, NULL, NULL, NULL, NULL, NULL); \
 	finisher; \
 } \
-GF_PREPARE_PACKED_CKSUM_FUNCS(fnpre, fnsuf, blksize, prepfn, prepufn, interleave, finisher, cksumInit, cksumfn, cksumufn, cksumxfn, cksumprepfn)
+GF_PREPARE_PACKED_CKSUM_FUNCS(fnpre, fnsuf, blksize, prepfn, prepufn, interleave, finisher, cksumInit, cksumfn, cksumufn, cksumxfn, cksumprepfn, align)
 
 #define GF_PREPARE_PACKED_CKSUM_FUNCS_STUB(fnpre, fnsuf) \
 void TOKENPASTE3(fnpre , _prepare_packed_cksum , fnsuf)(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen, size_t sliceLen, unsigned inputPackSize, unsigned inputNum, size_t chunkLen) { \
@@ -387,18 +376,18 @@ void TOKENPASTE3(fnpre , _prepare_packed , fnsuf)(void *HEDLEY_RESTRICT dst, con
 GF_PREPARE_PACKED_CKSUM_FUNCS_STUB(fnpre, fnsuf)
 
 
-#define GF_FINISH_PACKED_FUNCS(fnpre, fnsuf, blksize, finfn, finufn, interleave, finisher, cksumfn, cksumufn, cksumxfn, ilfinfn) \
+#define GF_FINISH_PACKED_FUNCS(fnpre, fnsuf, blksize, finfn, finufn, interleave, finisher, cksumfn, cksumufn, cksumxfn, ilfinfn, align) \
 void TOKENPASTE3(fnpre , _finish_packed , fnsuf)(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t sliceLen, unsigned numOutputs, unsigned outputNum, size_t chunkLen) { \
-	gf16_finish_packed(dst, (void *HEDLEY_RESTRICT)src, sliceLen, blksize, &finfn, &finufn, numOutputs, outputNum, chunkLen, interleave, 0, sliceLen, NULL, NULL, NULL, NULL); \
+	gf16_finish_packed(dst, (void *HEDLEY_RESTRICT)src, sliceLen, blksize, &finfn, &finufn, numOutputs, outputNum, chunkLen, interleave, 0, sliceLen, NULL, NULL, NULL, NULL, align); \
 	finisher; \
 } \
 int TOKENPASTE3(fnpre , _finish_packed_cksum , fnsuf)(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t sliceLen, unsigned numOutputs, unsigned outputNum, size_t chunkLen) { \
-	int result = gf16_finish_packed(dst, (void *HEDLEY_RESTRICT)src, sliceLen, blksize, &finfn, &finufn, numOutputs, outputNum, chunkLen, interleave, 0, sliceLen, &cksumfn, &cksumufn, &cksumxfn, ilfinfn); \
+	int result = gf16_finish_packed(dst, (void *HEDLEY_RESTRICT)src, sliceLen, blksize, &finfn, &finufn, numOutputs, outputNum, chunkLen, interleave, 0, sliceLen, &cksumfn, &cksumufn, &cksumxfn, ilfinfn, align); \
 	finisher; \
 	return result; \
 } \
 int TOKENPASTE3(fnpre , _finish_partial_packsum , fnsuf)(void *HEDLEY_RESTRICT dst, void *HEDLEY_RESTRICT src, size_t sliceLen, unsigned numOutputs, unsigned outputNum, size_t chunkLen, size_t partOffset, size_t partLen) { \
-	int result = gf16_finish_packed(dst, (void *HEDLEY_RESTRICT)src, sliceLen, blksize, &finfn, &finufn, numOutputs, outputNum, chunkLen, interleave, partOffset, partLen, &cksumfn, &cksumufn, &cksumxfn, ilfinfn); \
+	int result = gf16_finish_packed(dst, (void *HEDLEY_RESTRICT)src, sliceLen, blksize, &finfn, &finufn, numOutputs, outputNum, chunkLen, interleave, partOffset, partLen, &cksumfn, &cksumufn, &cksumxfn, ilfinfn, align); \
 	finisher; \
 	return result; \
 }

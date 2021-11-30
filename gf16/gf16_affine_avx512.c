@@ -33,9 +33,9 @@ int gf16_affine_available_avx512 = 0;
 
 #if defined(__GFNI__) && defined(__AVX512BW__) && defined(__AVX512VL__)
 # ifdef PLATFORM_AMD64
-GF_PREPARE_PACKED_FUNCS(gf16_affine, _avx512, sizeof(__m512i)*2, gf16_shuffle_prepare_block_avx512, gf16_shuffle_prepare_blocku_avx512, 6, _mm256_zeroupper(), __m512i checksum = _mm512_setzero_si512(), gf16_checksum_block_avx512, gf16_checksum_blocku_avx512, gf16_checksum_exp_avx512, gf16_checksum_prepare_avx512)
+GF_PREPARE_PACKED_FUNCS(gf16_affine, _avx512, sizeof(__m512i)*2, gf16_shuffle_prepare_block_avx512, gf16_shuffle_prepare_blocku_avx512, 6, _mm256_zeroupper(), __m512i checksum = _mm512_setzero_si512(), gf16_checksum_block_avx512, gf16_checksum_blocku_avx512, gf16_checksum_exp_avx512, gf16_checksum_prepare_avx512, sizeof(__m512i))
 # else
-GF_PREPARE_PACKED_FUNCS(gf16_affine, _avx512, sizeof(__m512i)*2, gf16_shuffle_prepare_block_avx512, gf16_shuffle_prepare_blocku_avx512, 1, _mm256_zeroupper(), __m512i checksum = _mm512_setzero_si512(), gf16_checksum_block_avx512, gf16_checksum_blocku_avx512, gf16_checksum_exp_avx512, gf16_checksum_prepare_avx512)
+GF_PREPARE_PACKED_FUNCS(gf16_affine, _avx512, sizeof(__m512i)*2, gf16_shuffle_prepare_block_avx512, gf16_shuffle_prepare_blocku_avx512, 1, _mm256_zeroupper(), __m512i checksum = _mm512_setzero_si512(), gf16_checksum_block_avx512, gf16_checksum_blocku_avx512, gf16_checksum_exp_avx512, gf16_checksum_prepare_avx512, sizeof(__m512i))
 # endif
 #else
 GF_PREPARE_PACKED_FUNCS_STUB(gf16_affine, _avx512)

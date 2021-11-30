@@ -206,8 +206,8 @@ static HEDLEY_ALWAYS_INLINE void gf16_lookup_prepare_blocku(void *HEDLEY_RESTRIC
 
 
 #ifdef __SSE2__
-GF_PREPARE_PACKED_CKSUM_FUNCS(gf16_lookup, _sse2, sizeof(__m128i), gf16_lookup_prepare_block_sse2, gf16_lookup_prepare_blocku, 1, (void)0, __m128i checksum = _mm_setzero_si128(), gf16_checksum_block_sse2, gf16_checksum_blocku_sse2, gf16_checksum_exp_sse2, gf16_checksum_prepare_sse2)
-GF_FINISH_PACKED_FUNCS(gf16_lookup, _sse2, sizeof(__m128i), gf16_lookup_finish_block_sse2, gf16_copy_blocku, 1, (void)0, gf16_checksum_block_sse2, gf16_checksum_blocku_sse2, gf16_checksum_exp_sse2, NULL)
+GF_PREPARE_PACKED_CKSUM_FUNCS(gf16_lookup, _sse2, sizeof(__m128i), gf16_lookup_prepare_block_sse2, gf16_lookup_prepare_blocku, 1, (void)0, __m128i checksum = _mm_setzero_si128(), gf16_checksum_block_sse2, gf16_checksum_blocku_sse2, gf16_checksum_exp_sse2, gf16_checksum_prepare_sse2, sizeof(__m128i))
+GF_FINISH_PACKED_FUNCS(gf16_lookup, _sse2, sizeof(__m128i), gf16_lookup_finish_block_sse2, gf16_copy_blocku, 1, (void)0, gf16_checksum_block_sse2, gf16_checksum_blocku_sse2, gf16_checksum_exp_sse2, NULL, sizeof(__m128i))
 #else
 GF_PREPARE_PACKED_CKSUM_FUNCS_STUB(gf16_lookup, _sse2)
 GF_FINISH_PACKED_FUNCS_STUB(gf16_lookup, _sse2)

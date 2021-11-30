@@ -656,7 +656,7 @@ void gf16_xor_finish_copy_blocku_avx2(void *HEDLEY_RESTRICT dst, const void *HED
 
 
 #if defined(__AVX2__) && defined(PLATFORM_AMD64)
-GF_FINISH_PACKED_FUNCS(gf16_xor, _avx2, sizeof(__m256i)*16, gf16_xor_finish_copy_block_avx2, gf16_xor_finish_copy_blocku_avx2, 1, _mm256_zeroupper(), gf16_checksum_block_avx2, gf16_checksum_blocku_avx2, gf16_checksum_exp_avx2, &gf16_xor_finish_block_avx2)
+GF_FINISH_PACKED_FUNCS(gf16_xor, _avx2, sizeof(__m256i)*16, gf16_xor_finish_copy_block_avx2, gf16_xor_finish_copy_blocku_avx2, 1, _mm256_zeroupper(), gf16_checksum_block_avx2, gf16_checksum_blocku_avx2, gf16_checksum_exp_avx2, &gf16_xor_finish_block_avx2, sizeof(__m256i))
 #else
 GF_FINISH_PACKED_FUNCS_STUB(gf16_xor, _avx2)
 #endif

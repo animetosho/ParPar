@@ -331,7 +331,7 @@ GF16_MULADD_MULTI_FUNCS_STUB(gf16_shuffle, _512_sve2)
 #include "gf16_checksum_sve.h"
 
 #if defined(__ARM_FEATURE_SVE2)
-GF_PREPARE_PACKED_FUNCS(gf16_shuffle, _512_sve2, svcntb()*2, gf16_prepare_block_sve, gf16_prepare_blocku_sve, 4, (void)0, svint16_t checksum = svdup_n_s16(0), gf16_checksum_block_sve, gf16_checksum_blocku_sve, gf16_checksum_exp_sve, gf16_checksum_prepare_sve)
+GF_PREPARE_PACKED_FUNCS(gf16_shuffle, _512_sve2, svcntb()*2, gf16_prepare_block_sve, gf16_prepare_blocku_sve, 4, (void)0, svint16_t checksum = svdup_n_s16(0), gf16_checksum_block_sve, gf16_checksum_blocku_sve, gf16_checksum_exp_sve, gf16_checksum_prepare_sve, 64)
 #else
 GF_PREPARE_PACKED_FUNCS_STUB(gf16_shuffle, _512_sve2)
 #endif

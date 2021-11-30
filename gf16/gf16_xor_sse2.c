@@ -1155,7 +1155,7 @@ void gf16_xor_finish_copy_blocku_sse2(void *HEDLEY_RESTRICT dst, const void *HED
 
 
 #ifdef __SSE2__
-GF_FINISH_PACKED_FUNCS(gf16_xor, _sse2, sizeof(__m128i)*16, gf16_xor_finish_copy_block_sse2, gf16_xor_finish_copy_blocku_sse2, 1, (void)0, gf16_checksum_block_sse2, gf16_checksum_blocku_sse2, gf16_checksum_exp_sse2, &gf16_xor_finish_block_sse2)
+GF_FINISH_PACKED_FUNCS(gf16_xor, _sse2, sizeof(__m128i)*16, gf16_xor_finish_copy_block_sse2, gf16_xor_finish_copy_blocku_sse2, 1, (void)0, gf16_checksum_block_sse2, gf16_checksum_blocku_sse2, gf16_checksum_exp_sse2, &gf16_xor_finish_block_sse2, sizeof(__m128i))
 #else
 GF_FINISH_PACKED_FUNCS_STUB(gf16_xor, _sse2)
 #endif

@@ -103,8 +103,8 @@ GF16_MULADD_MULTI_FUNCS_STUB(gf16_shuffle, _128_sve)
 #include "gf16_checksum_sve.h"
 
 #ifdef __ARM_FEATURE_SVE
-GF_PREPARE_PACKED_FUNCS(gf16_shuffle, _sve, svcntb()*2, gf16_prepare_block_sve, gf16_prepare_blocku_sve, 3, (void)0, svint16_t checksum = svdup_n_s16(0), gf16_checksum_block_sve, gf16_checksum_blocku_sve, gf16_checksum_exp_sve, gf16_checksum_prepare_sve)
-GF_FINISH_PACKED_FUNCS(gf16_shuffle, _sve, svcntb()*2, gf16_prepare_block_sve, gf16_prepare_blocku_sve, 1, (void)0, gf16_checksum_block_sve, gf16_checksum_blocku_sve, gf16_checksum_exp_sve, NULL)
+GF_PREPARE_PACKED_FUNCS(gf16_shuffle, _sve, svcntb()*2, gf16_prepare_block_sve, gf16_prepare_blocku_sve, 3, (void)0, svint16_t checksum = svdup_n_s16(0), gf16_checksum_block_sve, gf16_checksum_blocku_sve, gf16_checksum_exp_sve, gf16_checksum_prepare_sve, 16)
+GF_FINISH_PACKED_FUNCS(gf16_shuffle, _sve, svcntb()*2, gf16_prepare_block_sve, gf16_prepare_blocku_sve, 1, (void)0, gf16_checksum_block_sve, gf16_checksum_blocku_sve, gf16_checksum_exp_sve, NULL, 16)
 #else
 GF_PREPARE_PACKED_FUNCS_STUB(gf16_shuffle, _sve)
 GF_FINISH_PACKED_FUNCS_STUB(gf16_shuffle, _sve)

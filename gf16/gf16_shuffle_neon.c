@@ -317,16 +317,16 @@ GF16_MULADD_MULTI_FUNCS_STUB(gf16_shuffle, _neon)
 
 #if defined(__ARM_NEON)
 # ifdef __aarch64__
-GF_PREPARE_PACKED_FUNCS(gf16_shuffle, _neon, sizeof(uint8x16x2_t), gf16_prepare_block_neon, gf16_prepare_blocku_neon, 2, (void)0, uint8x16_t checksum = vdupq_n_u8(0), gf16_checksum_block_neon, gf16_checksum_blocku_neon, gf16_checksum_exp_neon, gf16_checksum_prepare_neon)
+GF_PREPARE_PACKED_FUNCS(gf16_shuffle, _neon, sizeof(uint8x16x2_t), gf16_prepare_block_neon, gf16_prepare_blocku_neon, 2, (void)0, uint8x16_t checksum = vdupq_n_u8(0), gf16_checksum_block_neon, gf16_checksum_blocku_neon, gf16_checksum_exp_neon, gf16_checksum_prepare_neon, sizeof(uint8x16_t))
 # else
-GF_PREPARE_PACKED_FUNCS(gf16_shuffle, _neon, sizeof(uint8x16x2_t), gf16_prepare_block_neon, gf16_prepare_blocku_neon, 1, (void)0, uint8x16_t checksum = vdupq_n_u8(0), gf16_checksum_block_neon, gf16_checksum_blocku_neon, gf16_checksum_exp_neon, gf16_checksum_prepare_neon)
+GF_PREPARE_PACKED_FUNCS(gf16_shuffle, _neon, sizeof(uint8x16x2_t), gf16_prepare_block_neon, gf16_prepare_blocku_neon, 1, (void)0, uint8x16_t checksum = vdupq_n_u8(0), gf16_checksum_block_neon, gf16_checksum_blocku_neon, gf16_checksum_exp_neon, gf16_checksum_prepare_neon, sizeof(uint8x16_t))
 # endif
 #else
 GF_PREPARE_PACKED_FUNCS_STUB(gf16_shuffle, _neon)
 #endif
 
 #ifdef __ARM_NEON
-GF_FINISH_PACKED_FUNCS(gf16_shuffle, _neon, sizeof(uint8x16x2_t), gf16_prepare_block_neon, gf16_copy_blocku, 1, (void)0, gf16_checksum_block_neon, gf16_checksum_blocku_neon, gf16_checksum_exp_neon, NULL)
+GF_FINISH_PACKED_FUNCS(gf16_shuffle, _neon, sizeof(uint8x16x2_t), gf16_prepare_block_neon, gf16_copy_blocku, 1, (void)0, gf16_checksum_block_neon, gf16_checksum_blocku_neon, gf16_checksum_exp_neon, NULL, sizeof(uint8x16_t))
 #else
 GF_FINISH_PACKED_FUNCS_STUB(gf16_shuffle, _neon)
 #endif
