@@ -73,9 +73,9 @@ void _FN(gf16_affine2x_prepare)(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RE
 
 #ifdef _AVAILABLE
 # ifdef PLATFORM_AMD64
-GF_PREPARE_PACKED_FUNCS(gf16_affine2x, _FNSUFFIX, sizeof(_mword), _FN(gf16_affine2x_prepare_block), _FN(gf16_affine2x_prepare_blocku), 6 + (MWORD_SIZE==64)*6, _MM_END, _mword checksum = _MMI(setzero)(), _FN(gf16_checksum_block), _FN(gf16_checksum_blocku), _FN(gf16_checksum_zeroes), _FN(gf16_checksum_prepare))
+GF_PREPARE_PACKED_FUNCS(gf16_affine2x, _FNSUFFIX, sizeof(_mword), _FN(gf16_affine2x_prepare_block), _FN(gf16_affine2x_prepare_blocku), 6 + (MWORD_SIZE==64)*6, _MM_END, _mword checksum = _MMI(setzero)(), _FN(gf16_checksum_block), _FN(gf16_checksum_blocku), _FN(gf16_checksum_exp), _FN(gf16_checksum_prepare))
 # else
-GF_PREPARE_PACKED_FUNCS(gf16_affine2x, _FNSUFFIX, sizeof(_mword), _FN(gf16_affine2x_prepare_block), _FN(gf16_affine2x_prepare_blocku), 2, _MM_END, _mword checksum = _MMI(setzero)(), _FN(gf16_checksum_block), _FN(gf16_checksum_blocku), _FN(gf16_checksum_zeroes), _FN(gf16_checksum_prepare))
+GF_PREPARE_PACKED_FUNCS(gf16_affine2x, _FNSUFFIX, sizeof(_mword), _FN(gf16_affine2x_prepare_block), _FN(gf16_affine2x_prepare_blocku), 2, _MM_END, _mword checksum = _MMI(setzero)(), _FN(gf16_checksum_block), _FN(gf16_checksum_blocku), _FN(gf16_checksum_exp), _FN(gf16_checksum_prepare))
 # endif
 #else
 GF_PREPARE_PACKED_FUNCS_STUB(gf16_affine2x, _FNSUFFIX)
@@ -92,7 +92,7 @@ void _FN(gf16_affine2x_finish)(void *HEDLEY_RESTRICT dst, size_t len) {
 }
 
 #ifdef _AVAILABLE
-GF_FINISH_PACKED_FUNCS(gf16_affine2x, _FNSUFFIX, sizeof(_mword), _FN(gf16_affine2x_finish_copy_block), _FN(gf16_affine2x_finish_copy_blocku), 1, _MM_END, _mword checksum = _MMI(setzero)(), _FN(gf16_checksum_block), _FN(gf16_checksum_blocku), _FN(gf16_checksum_finish))
+GF_FINISH_PACKED_FUNCS(gf16_affine2x, _FNSUFFIX, sizeof(_mword), _FN(gf16_affine2x_finish_copy_block), _FN(gf16_affine2x_finish_copy_blocku), 1, _MM_END, _FN(gf16_checksum_block), _FN(gf16_checksum_blocku), _FN(gf16_checksum_exp), &_FN(gf16_affine2x_finish_block))
 #else
 GF_FINISH_PACKED_FUNCS_STUB(gf16_affine2x, _FNSUFFIX)
 #endif

@@ -1197,7 +1197,7 @@ void gf16_xor_finish_copy_blocku_avx512(void *HEDLEY_RESTRICT dst, const void* H
 
 
 #if defined(__AVX512BW__) && defined(__AVX512VL__) && defined(PLATFORM_AMD64)
-GF_FINISH_PACKED_FUNCS(gf16_xor, _avx512, sizeof(__m512i)*16, gf16_xor_finish_copy_block_avx512, gf16_xor_finish_copy_blocku_avx512, 1, _mm256_zeroupper(), __m512i checksum = _mm512_setzero_si512(), gf16_checksum_block_avx512, gf16_checksum_blocku_avx512, gf16_checksum_finish_avx512)
+GF_FINISH_PACKED_FUNCS(gf16_xor, _avx512, sizeof(__m512i)*16, gf16_xor_finish_copy_block_avx512, gf16_xor_finish_copy_blocku_avx512, 1, _mm256_zeroupper(), gf16_checksum_block_avx512, gf16_checksum_blocku_avx512, gf16_checksum_exp_avx512, &gf16_xor_finish_block_avx512)
 #else
 GF_FINISH_PACKED_FUNCS_STUB(gf16_xor, _avx512)
 #endif

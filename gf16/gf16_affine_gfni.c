@@ -34,9 +34,9 @@ int gf16_affine_available_gfni = 0;
 
 #if defined(__GFNI__) && defined(__SSSE3__)
 # ifdef PLATFORM_AMD64
-GF_PREPARE_PACKED_FUNCS(gf16_affine, _gfni, sizeof(__m128i)*2, gf16_shuffle_prepare_block_gfni, gf16_shuffle_prepare_blocku_gfni, 3, (void)0, __m128i checksum = _mm_setzero_si128(), gf16_checksum_block_gfni, gf16_checksum_blocku_gfni, gf16_checksum_zeroes_gfni, gf16_checksum_prepare_gfni)
+GF_PREPARE_PACKED_FUNCS(gf16_affine, _gfni, sizeof(__m128i)*2, gf16_shuffle_prepare_block_gfni, gf16_shuffle_prepare_blocku_gfni, 3, (void)0, __m128i checksum = _mm_setzero_si128(), gf16_checksum_block_gfni, gf16_checksum_blocku_gfni, gf16_checksum_exp_gfni, gf16_checksum_prepare_gfni)
 # else
-GF_PREPARE_PACKED_FUNCS(gf16_affine, _gfni, sizeof(__m128i)*2, gf16_shuffle_prepare_block_gfni, gf16_shuffle_prepare_blocku_gfni, 1, (void)0, __m128i checksum = _mm_setzero_si128(), gf16_checksum_block_gfni, gf16_checksum_blocku_gfni, gf16_checksum_zeroes_gfni, gf16_checksum_prepare_gfni)
+GF_PREPARE_PACKED_FUNCS(gf16_affine, _gfni, sizeof(__m128i)*2, gf16_shuffle_prepare_block_gfni, gf16_shuffle_prepare_blocku_gfni, 1, (void)0, __m128i checksum = _mm_setzero_si128(), gf16_checksum_block_gfni, gf16_checksum_blocku_gfni, gf16_checksum_exp_gfni, gf16_checksum_prepare_gfni)
 # endif
 #else
 GF_PREPARE_PACKED_FUNCS_STUB(gf16_affine, _gfni)

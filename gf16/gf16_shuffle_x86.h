@@ -21,9 +21,9 @@ void _FN(gf16_shuffle_prepare)(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RES
 
 #ifdef _AVAILABLE
 # if MWORD_SIZE==64 && defined(PLATFORM_AMD64)
-GF_PREPARE_PACKED_FUNCS(gf16_shuffle, _FNSUFFIX, sizeof(_mword)*2, _FN(gf16_shuffle_prepare_block), _FN(gf16_shuffle_prepare_blocku), 3, _MM_END, _mword checksum = _MMI(setzero)(), _FN(gf16_checksum_block), _FN(gf16_checksum_blocku), _FN(gf16_checksum_zeroes), _FN(gf16_checksum_prepare))
+GF_PREPARE_PACKED_FUNCS(gf16_shuffle, _FNSUFFIX, sizeof(_mword)*2, _FN(gf16_shuffle_prepare_block), _FN(gf16_shuffle_prepare_blocku), 3, _MM_END, _mword checksum = _MMI(setzero)(), _FN(gf16_checksum_block), _FN(gf16_checksum_blocku), _FN(gf16_checksum_exp), _FN(gf16_checksum_prepare))
 # else
-GF_PREPARE_PACKED_FUNCS(gf16_shuffle, _FNSUFFIX, sizeof(_mword)*2, _FN(gf16_shuffle_prepare_block), _FN(gf16_shuffle_prepare_blocku), 1, _MM_END, _mword checksum = _MMI(setzero)(), _FN(gf16_checksum_block), _FN(gf16_checksum_blocku), _FN(gf16_checksum_zeroes), _FN(gf16_checksum_prepare))
+GF_PREPARE_PACKED_FUNCS(gf16_shuffle, _FNSUFFIX, sizeof(_mword)*2, _FN(gf16_shuffle_prepare_block), _FN(gf16_shuffle_prepare_blocku), 1, _MM_END, _mword checksum = _MMI(setzero)(), _FN(gf16_checksum_block), _FN(gf16_checksum_blocku), _FN(gf16_checksum_exp), _FN(gf16_checksum_prepare))
 # endif
 #else
 GF_PREPARE_PACKED_FUNCS_STUB(gf16_shuffle, _FNSUFFIX)
@@ -40,7 +40,7 @@ void _FN(gf16_shuffle_finish)(void *HEDLEY_RESTRICT dst, size_t len) {
 }
 
 #ifdef _AVAILABLE
-GF_FINISH_PACKED_FUNCS(gf16_shuffle, _FNSUFFIX, sizeof(_mword)*2, _FN(gf16_shuffle_finish_copy_block), _FN(gf16_shuffle_finish_copy_blocku), 1, _MM_END, _mword checksum = _MMI(setzero)(), _FN(gf16_checksum_block), _FN(gf16_checksum_blocku), _FN(gf16_checksum_finish))
+GF_FINISH_PACKED_FUNCS(gf16_shuffle, _FNSUFFIX, sizeof(_mword)*2, _FN(gf16_shuffle_finish_copy_block), _FN(gf16_shuffle_finish_copy_blocku), 1, _MM_END, _FN(gf16_checksum_block), _FN(gf16_checksum_blocku), _FN(gf16_checksum_exp), &_FN(gf16_shuffle_finish_block))
 #else
 GF_FINISH_PACKED_FUNCS_STUB(gf16_shuffle, _FNSUFFIX)
 #endif

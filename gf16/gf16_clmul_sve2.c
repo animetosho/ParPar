@@ -191,7 +191,7 @@ void gf16_clmul_muladd_sve2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RE
 
 #if defined(__ARM_FEATURE_SVE2)
 GF16_MULADD_MULTI_FUNCS(gf16_clmul, _sve2, gf16_clmul_muladd_x_sve2, CLMUL_NUM_REGIONS, svcntb()*2, 0, (void)0)
-GF_PREPARE_PACKED_FUNCS(gf16_clmul, _sve2, svcntb()*2, gf16_prepare_block_sve, gf16_prepare_blocku_sve, CLMUL_NUM_REGIONS, (void)0, svint16_t checksum = svdup_n_s16(0), gf16_checksum_block_sve, gf16_checksum_blocku_sve, gf16_checksum_zeroes_sve, gf16_checksum_prepare_sve)
+GF_PREPARE_PACKED_FUNCS(gf16_clmul, _sve2, svcntb()*2, gf16_prepare_block_sve, gf16_prepare_blocku_sve, CLMUL_NUM_REGIONS, (void)0, svint16_t checksum = svdup_n_s16(0), gf16_checksum_block_sve, gf16_checksum_blocku_sve, gf16_checksum_exp_sve, gf16_checksum_prepare_sve)
 #else
 GF16_MULADD_MULTI_FUNCS_STUB(gf16_clmul, _sve2)
 GF_PREPARE_PACKED_FUNCS_STUB(gf16_clmul, _sve2)

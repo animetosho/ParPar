@@ -119,9 +119,8 @@ static HEDLEY_ALWAYS_INLINE void _FN(gf16_checksum_blocku)(const void *HEDLEY_RE
 }
 
 
-#include "gfmat_coeff.h"
-static HEDLEY_ALWAYS_INLINE void _FN(gf16_checksum_zeroes)(void *HEDLEY_RESTRICT checksum, size_t blocks) {
-	_mword coeff = _MM(set1_epi16)(gf16_exp(blocks % 65535));
+static HEDLEY_ALWAYS_INLINE void _FN(gf16_checksum_exp)(void *HEDLEY_RESTRICT checksum, uint16_t exp) {
+	_mword coeff = _MM(set1_epi16)(exp);
 	
 	_mword _checksum = *(_mword*)checksum;
 	_mword res = _MMI(and)(
@@ -181,30 +180,4 @@ static HEDLEY_ALWAYS_INLINE void _FN(gf16_checksum_prepare)(void *HEDLEY_RESTRIC
 	}
 #undef _X
 }
-static HEDLEY_ALWAYS_INLINE int _FN(gf16_checksum_finish)(const void *HEDLEY_RESTRICT src, void *HEDLEY_RESTRICT checksum, const size_t blockLen, gf16_transform_block finishBlock) {
-#define _X(bl) \
-	ALIGN_TO(MWORD_SIZE, uint8_t tmp[bl]); \
-	finishBlock(tmp, src); \
-	return _FN(gf16_checksum_vec_isequal)(_MMI(load)((_mword*)tmp), *(_mword*)checksum)
-	if(blockLen == 16) {
-		_X(16);
-	} else if(blockLen == 32) {
-		_X(32);
-	} else if(blockLen == 64) {
-		_X(64);
-	} else if(blockLen == 128) {
-		_X(128);
-	} else if(blockLen == 256) {
-		_X(256);
-	} else if(blockLen == 512) {
-		_X(512);
-	} else if(blockLen == 1024) {
-		_X(1024);
-	} else {
-		assert(blockLen == 0);
-		return 0;
-	}
-#undef _X
-}
-
 #endif

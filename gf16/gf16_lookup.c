@@ -644,9 +644,8 @@ static HEDLEY_ALWAYS_INLINE void gf16_lookup_checksum_block(const void *HEDLEY_R
 	gf16_lookup_checksum_blocku(src, blockLen, checksum);
 }
 
-#include "gfmat_coeff.h"
-static HEDLEY_ALWAYS_INLINE void gf16_lookup_checksum_zeroes(void *HEDLEY_RESTRICT checksum, size_t blocks) {
-	uint16_t coeff = gf16_exp(blocks % 65535);
+static HEDLEY_ALWAYS_INLINE void gf16_lookup_checksum_exp(void *HEDLEY_RESTRICT checksum, uint16_t exp) {
+	uint16_t coeff = exp;
 	
 	// multiply checksum by coeff
 	if(sizeof(uintptr_t) >= 8) {
@@ -689,15 +688,6 @@ static HEDLEY_ALWAYS_INLINE void gf16_lookup_checksum_prepare(void *HEDLEY_RESTR
 	else
 		*(uint16_t*)dst = SWAP16(*(uint16_t*)checksum);
 }
-static HEDLEY_ALWAYS_INLINE int gf16_lookup_checksum_finish(const void *HEDLEY_RESTRICT src, void *HEDLEY_RESTRICT checksum, const size_t blockLen, gf16_transform_block finishBlock) {
-	UNUSED(blockLen); UNUSED(finishBlock);
-	if(sizeof(uintptr_t) >= 8)
-		return *(uint64_t*)src == SWAP64(*(uint64_t*)checksum);
-	else if(sizeof(uintptr_t) >= 4)
-		return *(uint32_t*)src == SWAP32(*(uint32_t*)checksum);
-	else
-		return *(uint16_t*)src == SWAP16(*(uint16_t*)checksum);
-}
 
 static HEDLEY_ALWAYS_INLINE void gf16_lookup_copy_block(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src) {
 	memcpy(dst, src, gf16_lookup_stride());
@@ -732,7 +722,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_lookup3_checksum_prepare(void *HEDLEY_REST
 }
 
 
-GF_PREPARE_PACKED_CKSUM_FUNCS(gf16_lookup, _generic, gf16_lookup_stride(), gf16_lookup_copy_block, gf16_lookup_prepare_blocku, 1, (void)0, uintptr_t checksum = 0, gf16_lookup_checksum_block, gf16_lookup_checksum_blocku, gf16_lookup_checksum_zeroes, gf16_lookup_checksum_prepare)
-GF_PREPARE_PACKED_FUNCS(gf16_lookup3, _generic, gf16_lookup3_stride(), gf16_lookup3_prepare_block, gf16_lookup3_prepare_blocku, 1, (void)0, uintptr_t checksum = 0, gf16_lookup_checksum_block, gf16_lookup_checksum_blocku, gf16_lookup_checksum_zeroes, gf16_lookup3_checksum_prepare)
+GF_PREPARE_PACKED_CKSUM_FUNCS(gf16_lookup, _generic, gf16_lookup_stride(), gf16_lookup_copy_block, gf16_lookup_prepare_blocku, 1, (void)0, uintptr_t checksum = 0, gf16_lookup_checksum_block, gf16_lookup_checksum_blocku, gf16_lookup_checksum_exp, gf16_lookup_checksum_prepare)
+GF_PREPARE_PACKED_FUNCS(gf16_lookup3, _generic, gf16_lookup3_stride(), gf16_lookup3_prepare_block, gf16_lookup3_prepare_blocku, 1, (void)0, uintptr_t checksum = 0, gf16_lookup_checksum_block, gf16_lookup_checksum_blocku, gf16_lookup_checksum_exp, gf16_lookup3_checksum_prepare)
 
-GF_FINISH_PACKED_FUNCS(gf16_lookup, _generic, gf16_lookup_stride(), gf16_lookup_copy_block, gf16_copy_blocku, 1, (void)0, uintptr_t checksum = 0, gf16_lookup_checksum_block, gf16_lookup_checksum_blocku, gf16_lookup_checksum_finish)
+GF_FINISH_PACKED_FUNCS(gf16_lookup, _generic, gf16_lookup_stride(), gf16_lookup_copy_block, gf16_copy_blocku, 1, (void)0, gf16_lookup_checksum_block, gf16_lookup_checksum_blocku, gf16_lookup_checksum_exp, NULL)
