@@ -201,6 +201,9 @@ var opts = {
 	'version': {
 		type: 'bool'
 	},
+	'client-info': {
+		type: 'bool'
+	},
 };
 var argv;
 try {
@@ -208,6 +211,9 @@ try {
 } catch(x) {
 	error(x.message);
 }
+
+var version = require('../package.json').version;
+var creator = 'ParPar v' + version + ' [https://animetosho.org/app/parpar]';
 
 var fs = require('fs');
 if(argv.help) {
@@ -222,7 +228,17 @@ if(argv.help) {
 	process.exit(0);
 }
 if(argv.version) {
-	console.error(require('../package.json').version);
+	console.error(version);
+	process.exit(0);
+}
+if(argv['client-info']) {
+	var info = {
+		version: version,
+		creator: creator,
+		// available kernels?, default params
+	};
+	
+	console.log(JSON.stringify(info, null, 2));
 	process.exit(0);
 }
 
@@ -313,7 +329,7 @@ var inputFiles = argv._;
 	var ppo = {
 		outputBase: argv.out,
 		recoverySlicesUnit: 'slices',
-		creator: 'ParPar v' + require('../package.json').version + ' [https://animetosho.org/app/parpar]'
+		creator: creator
 	};
 	if(argv.out.match(/\.par2$/i))
 		ppo.outputBase = argv.out.substr(0, argv.out.length-5);
