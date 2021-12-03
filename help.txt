@@ -44,9 +44,9 @@ PAR2 Options:
                                  `-r2l`: recovery slices equals number of input
                                          slices from 2 largest files
                                  `-r1.5s`: recovery slices equals number of
-                                           input slices from smallest file,
-                                           plus half the number of input slices
-                                           for the second smallest file
+                                           input slices from smallest non-empty
+                                           file, plus half the number of input
+                                           slices for the next smallest file
                                  `-r0.5w`: recovery slices equals the square
                                            root of the total number of input
                                            slices (or input_slices**0.5 where
@@ -54,8 +54,8 @@ PAR2 Options:
                                  `-r1.5o`: recovery slices equals the logarithm
                                            base 1.5 of the total number of input
                                            slices
-                                 `-r1n`: computes r = s/max(1,log2(s)), where
-                                         'r' denotes number of recovery slices,
+                                 `-r1n`: computes c = s/max(1,log2(s)), where
+                                         'c' denotes number of recovery slices,
                                          'log2' denotes logarithm base 2, and
                                          's' denotes the number preceeding the
                                          'n' suffix (1 in this case) multiplied
