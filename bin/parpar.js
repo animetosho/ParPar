@@ -2,7 +2,7 @@
 
 "use strict";
 
-var ParPar = require('../');
+var ParPar = require('../lib/parpar.js');
 var error = function(msg) {
 	console.error(msg);
 	console.error('Enter `parpar --help` for usage information');
@@ -156,7 +156,7 @@ var opts = {
 		type: 'int',
 		map: 'processBatchSize'
 	},
-	'hash-batch-size': {
+	'md5-batch-size': {
 		type: 'int',
 		map: 'hashBatchSize'
 	},
@@ -172,6 +172,12 @@ var opts = {
 	'loop-tile-size': {
 		type: 'size',
 		map: 'loopTileSize'
+	},
+	'hash-method': {
+		type: 'string'
+	},
+	'md5-method': {
+		type: 'string'
 	},
 	'recurse': {
 		alias: 'R',
@@ -258,6 +264,14 @@ if(argv.progress == 'stdout' || argv.progress == 'stderr')
 	writeProgress = function(text) {
 		process[argv.progress].write(text + '\x1b[0G');
 	};
+
+
+if(argv['hash-method']) {
+	require('../lib/par2.js').set_inhash_method(argv['hash-method']);
+}
+if(argv['md5-method']) {
+	require('../lib/par2.js').set_outhash_method(argv['md5-method']);
+}
 
 var inputFiles = argv._;
 

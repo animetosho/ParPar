@@ -1,7 +1,29 @@
 #include "hasher_impl.h"
 #include <vector>
 
+enum HasherInputMethods {
+	INHASH_SCALAR,
+	INHASH_SIMD,
+	INHASH_CRC,
+	INHASH_SIMD_CRC,
+	INHASH_AVX512
+};
+enum MD5MultiLevels {
+	OUTHASH_SCALAR,
+	
+	OUTHASH_SSE,
+	OUTHASH_AVX2,
+	OUTHASH_XOP,
+	OUTHASH_AVX512F,
+	OUTHASH_AVX512VL,
+	
+	OUHASH_NEON,
+	OUTHASH_SVE2
+};
+
 void setup_hasher();
+bool set_hasherInput(HasherInputMethods method);
+void set_hasherOutputLevel(MD5MultiLevels level);
 extern IHasherInput*(*HasherInput_Create)();
 
 class MD5Multi {

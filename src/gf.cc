@@ -923,6 +923,25 @@ protected:
 	}
 };
 
+FUNC(SetHasherInput) {
+	FUNC_START;
+	
+	if(args.Length() < 1)
+		RETURN_ERROR("Method required");
+
+	HasherInputMethods method = (HasherInputMethods)ARG_TO_NUM(Int32, args[0]);
+	RETURN_VAL(Boolean::New(ISOLATE set_hasherInput(method)));
+}
+FUNC(SetHasherOutput) {
+	FUNC_START;
+	
+	if(args.Length() < 1)
+		RETURN_ERROR("Method required");
+
+	MD5MultiLevels level = (MD5MultiLevels)ARG_TO_NUM(Int32, args[0]);
+	set_hasherOutputLevel(level);
+}
+
 
 
 void parpar_gf_init(
@@ -953,6 +972,9 @@ void parpar_gf_init(
 	t = FunctionTemplate::New(ISOLATE HasherOutput::New);
 	HasherOutput::AttachMethods(t);
 	SET_OBJ_FUNC(target, "HasherOutput", t);
+	
+	NODE_SET_METHOD(target, "set_HasherInput", SetHasherInput);
+	NODE_SET_METHOD(target, "set_HasherOutput", SetHasherOutput);
 	
 	setup_hasher();
 }

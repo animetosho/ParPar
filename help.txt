@@ -198,7 +198,7 @@ Performance Options:
        --proc-batch-size     Number of slices to submit as a batch for GF
                              calculation. Default is roughly 12 (dependent on
                              GF method)
-       --hash-batch-size     Number of recovery slices to submit as a batch for
+       --md5-batch-size      Number of recovery slices to submit as a batch for
                              hashing. Default `8`
        --recovery-buffers    Number of recovery slices to buffer from backend.
                              Default is `ceil(--hash-batch-size * 1.5)`
@@ -228,15 +228,44 @@ Performance Options:
                                  affine2x-avx512: half width variant of affine-avx512
                              ARMv7/AArch64 only choices:
                                  shuffle-neon: NEON variant of shuffle-sse
+                                 clmul-neon: split 8-bit polynomial multiplication (NEON)
+                             AArch64 only choices:
                                  shuffle128-sve: SVE variant of shuffle-neon
                                  shuffle128-sve2: SVE2 variant of shuffle-neon
                                  shuffle2x128-sve2: half width variant of shuffle-neon (requires SVE width >= 256 bits)
                                  shuffle512-sve2: SVE2 variant of shuffle-vbmi (requires SVE width >= 512 bits)
-                                 clmul-neon: split 8-bit polynomial multiplication (NEON)
                                  clmul-sve2: SVE2 variant of clmul-neon
                              Default is auto-detected.
        --loop-tile-size      Target size used for loop tiling optimisation.
                              Default is 0 (auto-detected)
+       --hash-method         Algorithm for hashing input data. Process can
+                             crash if CPU does not support selected method.
+                             Choices are (all platforms):
+                                 scalar: generic 2x MD5 + slice-by-4 CRC
+                             x86/ARM only choices:
+                                 simd: compute 2x MD5 using SSE2 (x86) or
+                                       NEON (ARM)
+                                 crc: compute CRC using PCLMULQDQ (x86) or
+                                      ARMv8-CRC
+                                 simd-crc: combined 'simd' and 'crc'
+                             x86 only choices:
+                                 avx512: use AVX512VL and PCLMULQDQ
+       --md5-method          Highest level algorithm for hashing recovery data.
+                             This option may be limited by `--md5-batch-size`.
+                             Process can crash if CPU does not support selected
+                             method.
+                             Choices are (all platforms):
+                                 scalar: generic implementation (1-2x lanes)
+                             x86 only choices:
+                                 sse: SSE2 implementation (4-8x lanes)
+                                 avx2: AVX2 implementation (8-16x lanes)
+                                 xop: XOP implementation (4-8x lanes)
+                                 avx512f: AVX512F implementation (16-32x lanes)
+                                 avx512vl: AVX512VL 128/256-bit implementation
+                                           (4-16x lanes)
+                             ARM only choices:
+                                 neon: NEON implementation (4-8x lanes)
+                                 sve2: SVE2 implementation (4+ lanes)
 
 UI Options:
 
