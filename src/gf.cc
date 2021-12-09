@@ -429,14 +429,14 @@ protected:
 		
 		bool added = self->par2.addInput(
 			node::Buffer::Data(args[1]), node::Buffer::Length(args[1]),
-			idx, false, [ISOLATE cb](const void*, unsigned inputIndex) {
+			idx, false, [ISOLATE cb, idx]() {
 				HANDLE_SCOPE;
 #if NODE_VERSION_AT_LEAST(0, 11, 0)
 				Local<Value> buffer = Local<Value>::New(cb->isolate, cb->value);
-				cb->call({ Integer::New(cb->isolate, inputIndex), buffer });
+				cb->call({ Integer::New(cb->isolate, idx), buffer });
 #else
 				Local<Value> buffer = Local<Value>::New(cb->value);
-				cb->call({ Integer::New(inputIndex), buffer });
+				cb->call({ Integer::New(idx), buffer });
 #endif
 				delete cb;
 			}
@@ -503,14 +503,14 @@ protected:
 		self->par2.getOutput(
 			idx,
 			node::Buffer::Data(args[1]),
-			[ISOLATE cb](const void*, unsigned outputIndex, bool cksumValid) {
+			[ISOLATE cb, idx](bool cksumValid) {
 				HANDLE_SCOPE;
 #if NODE_VERSION_AT_LEAST(0, 11, 0)
 				Local<Value> buffer = Local<Value>::New(cb->isolate, cb->value);
-				cb->call({ Integer::New(cb->isolate, outputIndex), Boolean::New(cb->isolate, cksumValid), buffer });
+				cb->call({ Integer::New(cb->isolate, idx), Boolean::New(cb->isolate, cksumValid), buffer });
 #else
 				Local<Value> buffer = Local<Value>::New(cb->value);
-				cb->call({ Integer::New(outputIndex), Boolean::New(cksumValid), buffer });
+				cb->call({ Integer::New(idx), Boolean::New(cksumValid), buffer });
 #endif
 				delete cb;
 			}
@@ -518,10 +518,8 @@ protected:
 	}
 	
 	explicit GfProc(size_t sliceSize, int stagingAreas, uv_loop_t* loop)
-	: ObjectWrap(), isRunning(false), isClosed(false), pendingDiscardOutput(true), hasOutput(false), par2(sliceSize), par2cpu(loop, stagingAreas) {}
-	
-	bool init(Galois16Methods method, unsigned inputGrouping, size_t chunkLen) {
-		par2.init(&par2cpu, [&](unsigned numInputs, uint16_t firstInput) {
+	: ObjectWrap(), isRunning(false), isClosed(false), pendingDiscardOutput(true), hasOutput(false), par2cpu(loop, stagingAreas) {
+		par2.init(sliceSize, {&par2cpu}, [&](unsigned numInputs, uint16_t firstInput) {
 			if(progressCb.hasCallback) {
 #if NODE_VERSION_AT_LEAST(0, 11, 0)
 				HandleScope scope(progressCb.isolate);
@@ -532,6 +530,9 @@ protected:
 #endif
 			}
 		});
+	}
+	
+	bool init(Galois16Methods method, unsigned inputGrouping, size_t chunkLen) {
 		return par2cpu.init(method, inputGrouping, chunkLen);
 	}
 	

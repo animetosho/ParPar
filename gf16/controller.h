@@ -8,8 +8,8 @@
 
 
 // callback types
-typedef std::function<void(const void*, unsigned)> PAR2ProcPrepareCb;
-typedef std::function<void(const void*, unsigned, bool)> PAR2ProcOutputCb;
+typedef std::function<void()> PAR2ProcPrepareCb;
+typedef std::function<void(bool)> PAR2ProcOutputCb;
 typedef std::function<void(unsigned, uint16_t)> PAR2ProcCompleteCb;
 typedef std::function<void()> PAR2ProcFinishedCb;
 
@@ -17,10 +17,14 @@ typedef std::function<void()> PAR2ProcFinishedCb;
 class IPAR2ProcBackend {
 protected:
 	bool processingAdd;
+	PAR2ProcCompleteCb progressCb;
 public:
+	IPAR2ProcBackend() : processingAdd(false), progressCb(nullptr) {}
 	virtual int getNumRecoverySlices() const = 0;
 	virtual void setSliceSize(size_t size) = 0;
-	virtual void setProgressCb(const PAR2ProcCompleteCb& cb) = 0;
+	void setProgressCb(const PAR2ProcCompleteCb& _progressCb) {
+		progressCb = _progressCb;
+	}
 	virtual bool setCurrentSliceSize(size_t size) = 0;
 	virtual bool setRecoverySlices(unsigned numSlices, const uint16_t* exponents = NULL) = 0;
 	virtual bool addInput(const void* buffer, size_t size, uint16_t inputNum, bool flush, const PAR2ProcPrepareCb& cb) = 0;
@@ -36,14 +40,22 @@ public:
 	virtual void deinit() = 0;
 	virtual void deinit(PAR2ProcFinishedCb cb) = 0;
 	virtual void freeProcessingMem() = 0;
+	
+	virtual ~IPAR2ProcBackend() {}
+};
+
+struct Backend {
+	IPAR2ProcBackend* be;
+	size_t currentSliceSize;
+	bool addSuccessful;
 };
 
 class PAR2Proc {
 private:
 	bool hasAdded;
-	IPAR2ProcBackend* backend;
+	bool lastAddSuccessful;
+	std::vector<struct Backend> backends;
 	
-	size_t sliceSize; // actual whole slice size
 	size_t currentSliceSize; // current slice chunk size (<=sliceSize)
 	
 	bool endSignalled;
@@ -58,8 +70,8 @@ private:
 	PAR2Proc& operator=(const PAR2Proc&);
 	
 public:
-	explicit PAR2Proc(size_t _sliceSize);
-	void init(IPAR2ProcBackend* _backend, const PAR2ProcCompleteCb& _progressCb = nullptr);
+	explicit PAR2Proc();
+	void init(size_t sliceSize, const std::vector<IPAR2ProcBackend*>& _backends, const PAR2ProcCompleteCb& _progressCb = nullptr);
 	
 	bool setCurrentSliceSize(size_t newSliceSize);
 	inline size_t getCurrentSliceSize() const {
@@ -71,7 +83,8 @@ public:
 		return setRecoverySlices(exponents.size(), exponents.data());
 	}
 	inline int getNumRecoverySlices() const {
-		return backend->getNumRecoverySlices();
+		// TODO: need proper number if splitting recovery blocks; for now, just use the first backend as all are the same
+		return backends[0].be->getNumRecoverySlices();
 	}
 	
 	bool addInput(const void* buffer, size_t size, uint16_t inputNum, bool flush, const PAR2ProcPrepareCb& cb);
@@ -80,17 +93,18 @@ public:
 	void getOutput(unsigned index, void* output, const PAR2ProcOutputCb& cb) const;
 	inline void discardOutput() {
 		hasAdded = false;
-		backend->discardOutput();
+		for(auto& backend : backends)
+			backend.be->discardOutput();
 	}
 	
 	inline void deinit() {
-		backend->deinit();
+		for(auto& backend : backends)
+			backend.be->deinit();
 	}
-	inline void deinit(PAR2ProcFinishedCb cb) {
-		backend->deinit(cb);
-	}
+	void deinit(PAR2ProcFinishedCb cb);
 	inline void freeProcessingMem() {
-		backend->freeProcessingMem();
+		for(auto& backend : backends)
+			backend.be->freeProcessingMem();
 	}
 };
 

@@ -50,8 +50,6 @@ private:
 	
 	MessageThread prepareThread;
 	
-	PAR2ProcCompleteCb progressCb;
-	
 	void do_computation(int inBuf, int numInputs);
 	
 	// disable copy constructor
@@ -75,13 +73,7 @@ public:
 	~PAR2ProcCPU();
 	
 	bool init(Galois16Methods method = GF16_AUTO, unsigned inputGrouping = 0, size_t chunkLen = 0);
-	void setProgressCb(const PAR2ProcCompleteCb& _progressCb) {
-		progressCb = _progressCb;
-	}
 	bool setCurrentSliceSize(size_t newSliceSize);
-	inline size_t getCurrentSliceSize() const {
-		return currentSliceSize;
-	}
 	
 	bool setRecoverySlices(unsigned numSlices, const uint16_t* exponents = NULL);
 	inline int getNumRecoverySlices() const {

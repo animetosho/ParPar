@@ -23,7 +23,7 @@ PAR2ProcStaging::~PAR2ProcStaging() {
 }
 
 /** initialization **/
-PAR2ProcCPU::PAR2ProcCPU(uv_loop_t* _loop, int stagingAreas) : loop(_loop), sliceSize(0), numThreads(0), gf(NULL), staging(stagingAreas), memProcessing(NULL), prepareThread(prepare_chunk), progressCb(nullptr) {
+PAR2ProcCPU::PAR2ProcCPU(uv_loop_t* _loop, int stagingAreas) : loop(_loop), sliceSize(0), numThreads(0), gf(NULL), staging(stagingAreas), memProcessing(NULL), prepareThread(prepare_chunk) {
 	uv_async_init(loop, &_preparedSignal, after_prepare_chunk);
 	uv_async_init(loop, &_doneSignal, after_computation);
 	_preparedSignal.data = static_cast<void*>(this);
@@ -115,7 +115,6 @@ bool PAR2ProcCPU::init(Galois16Methods method, unsigned _inputGrouping, size_t _
 	setCurrentSliceSize(sliceSize); // default slice chunk size = declared slice size
 	
 	currentInputBuf = currentInputPos = 0;
-	processingAdd = false;
 	
 	return ret;
 }
@@ -172,7 +171,7 @@ bool PAR2ProcCPU::setRecoverySlices(unsigned numSlices, const uint16_t* exponent
 			area.procCoeffs.resize(numSlices * inputGrouping);
 	}
 	
-	if(!memProcessing && numThreads && numSlices) {
+	if(!memProcessing && numSlices) {
 		// allocate processing area
 		// TODO: see if we can get an aligned calloc and set processingAdd = true
 		// (investigate mmap or just use calloc and align ourself)
@@ -261,7 +260,7 @@ void PAR2ProcCPU::_after_prepare_chunk() {
 			// queue async compute
 			do_computation(data->inBufId, data->submitInBufs);
 		}
-		if(data->cb && data->src) data->cb(data->src, staging[data->inBufId].inputNums[data->index]);
+		if(data->cb && data->src) data->cb();
 		delete data;
 	}
 }
@@ -346,7 +345,7 @@ static void after_finish(uv_work_t *req, int status) {
 	
 	struct finish_data* data = static_cast<struct finish_data*>(req->data);
 	// signal output ready
-	data->cb(data->dst, data->index, data->cksumSuccess);
+	data->cb(data->cksumSuccess);
 	delete data;
 	delete req;
 }
