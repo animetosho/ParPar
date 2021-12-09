@@ -13,6 +13,7 @@
 #endif
 
 #include "../gf16/controller.h"
+#include "../gf16/controller_cpu.h"
 #include "../gf16/threadqueue.h"
 #include "../hasher/hasher.h"
 
@@ -255,6 +256,7 @@ private:
 	bool hasOutput;
 	CallbackWrapper progressCb;
 	PAR2Proc par2;
+	PAR2ProcCPU par2cpu;
 	
 	// disable copy constructor
 	GfProc(const GfProc&);
@@ -357,9 +359,9 @@ protected:
 		
 		if(args.Length() < 1)
 			RETURN_ERROR("Integer required");
-		self->par2.setNumThreads(ARG_TO_NUM(Int32, args[0]));
+		self->par2cpu.setNumThreads(ARG_TO_NUM(Int32, args[0]));
 		
-		RETURN_VAL(Integer::New(ISOLATE self->par2.getNumThreads()));
+		RETURN_VAL(Integer::New(ISOLATE self->par2cpu.getNumThreads()));
 	}
 	
 	FUNC(SetProgressCb) {
@@ -385,8 +387,8 @@ protected:
 			RETURN_ERROR("Already closed");
 		
 		Local<Object> ret = NEW_OBJ(Object);
-		SET_OBJ(ret, "threads", Integer::New(ISOLATE self->par2.getNumThreads()));
-		SET_OBJ(ret, "method_desc", NEW_STRING(self->par2.getMethodName()));
+		SET_OBJ(ret, "threads", Integer::New(ISOLATE self->par2cpu.getNumThreads()));
+		SET_OBJ(ret, "method_desc", NEW_STRING(self->par2cpu.getMethodName()));
 		// TODO: return stride, maybe info on input grouping + loop tiling size
 		
 		RETURN_VAL(ret);
@@ -516,10 +518,10 @@ protected:
 	}
 	
 	explicit GfProc(size_t sliceSize, int stagingAreas, uv_loop_t* loop)
-	: ObjectWrap(), isRunning(false), isClosed(false), pendingDiscardOutput(true), hasOutput(false), par2(sliceSize, loop, stagingAreas) {}
+	: ObjectWrap(), isRunning(false), isClosed(false), pendingDiscardOutput(true), hasOutput(false), par2(sliceSize), par2cpu(loop, stagingAreas) {}
 	
 	bool init(Galois16Methods method, unsigned inputGrouping, size_t chunkLen) {
-		return par2.init([&](unsigned numInputs, uint16_t firstInput) {
+		par2.init(&par2cpu, [&](unsigned numInputs, uint16_t firstInput) {
 			if(progressCb.hasCallback) {
 #if NODE_VERSION_AT_LEAST(0, 11, 0)
 				HandleScope scope(progressCb.isolate);
@@ -529,7 +531,8 @@ protected:
 				progressCb.call({ Integer::New(numInputs), Integer::New(firstInput) });
 #endif
 			}
-		}, method, inputGrouping, chunkLen);
+		});
+		return par2cpu.init(method, inputGrouping, chunkLen);
 	}
 	
 	~GfProc() {
@@ -545,10 +548,10 @@ FUNC(GfInfo) {
 	
 	if(method == GF16_AUTO) {
 		// TODO: accept hints
-		method = PAR2Proc::default_method();
+		method = PAR2ProcCPU::default_method();
 	}
 	
-	auto info = PAR2Proc::info(method);
+	auto info = PAR2ProcCPU::info(method);
 	Local<Object> ret = NEW_OBJ(Object);
 	SET_OBJ(ret, "id", Integer::New(ISOLATE info.id));
 	SET_OBJ(ret, "name", NEW_STRING(info.name));

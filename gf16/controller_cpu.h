@@ -1,19 +1,9 @@
-#include "../src/stdint.h"
-#include <vector>
-#include <cstring>
+#include "controller.h"
 #include <atomic>
-#include <functional>
 #include <uv.h>
 #include "threadqueue.h"
 
 #include "gf16mul.h"
-
-
-// callback types
-typedef std::function<void(const void*, unsigned)> PAR2ProcPrepareCb;
-typedef std::function<void(const void*, unsigned, bool)> PAR2ProcOutputCb;
-typedef std::function<void(unsigned, uint16_t)> PAR2ProcCompleteCb;
-typedef std::function<void()> PAR2ProcFinishedCb;
 
 
 class PAR2ProcStaging {
@@ -28,7 +18,7 @@ public:
 	~PAR2ProcStaging();
 };
 
-class PAR2Proc {
+class PAR2ProcCPU : public IPAR2ProcBackend {
 private:
 	uv_loop_t* loop; // is NULL when closed
 	
@@ -56,21 +46,17 @@ private:
 	bool reallocMemInput();
 	unsigned currentInputBuf, currentInputPos;
 	void* memProcessing; // TODO: break this into chunks, to avoid massive single allocation
-	bool processingAdd;
 	int stagingActiveCount;
 	
 	MessageThread prepareThread;
 	
 	PAR2ProcCompleteCb progressCb;
-	bool endSignalled;
-	void processing_finished();
-	PAR2ProcFinishedCb finishCb;
 	
 	void do_computation(int inBuf, int numInputs);
 	
 	// disable copy constructor
-	PAR2Proc(const PAR2Proc&);
-	PAR2Proc& operator=(const PAR2Proc&);
+	PAR2ProcCPU(const PAR2ProcCPU&);
+	PAR2ProcCPU& operator=(const PAR2ProcCPU&);
 	
 public:
 	ThreadMessageQueue<void*> _preparedChunks;
@@ -81,22 +67,23 @@ public:
 	void _after_computation();
 	void _after_prepare_chunk();
 	
-	explicit PAR2Proc(size_t _sliceSize, uv_loop_t* _loop, int stagingAreas=2);
-	explicit inline PAR2Proc(size_t _sliceSize, int stagingAreas=2) : PAR2Proc(_sliceSize, uv_default_loop(), stagingAreas) {}
+	explicit PAR2ProcCPU(uv_loop_t* _loop, int stagingAreas=2);
+	explicit inline PAR2ProcCPU(int stagingAreas=2) : PAR2ProcCPU(uv_default_loop(), stagingAreas) {}
+	void setSliceSize(size_t _sliceSize);
 	void deinit(PAR2ProcFinishedCb cb);
 	void deinit();
-	~PAR2Proc();
+	~PAR2ProcCPU();
 	
-	bool init(const PAR2ProcCompleteCb& _progressCb = nullptr, Galois16Methods method = GF16_AUTO, unsigned inputGrouping = 0, size_t chunkLen = 0);
+	bool init(Galois16Methods method = GF16_AUTO, unsigned inputGrouping = 0, size_t chunkLen = 0);
+	void setProgressCb(const PAR2ProcCompleteCb& _progressCb) {
+		progressCb = _progressCb;
+	}
 	bool setCurrentSliceSize(size_t newSliceSize);
 	inline size_t getCurrentSliceSize() const {
 		return currentSliceSize;
 	}
 	
 	bool setRecoverySlices(unsigned numSlices, const uint16_t* exponents = NULL);
-	inline bool setRecoverySlices(const std::vector<uint16_t>& exponents) {
-		return setRecoverySlices(exponents.size(), exponents.data());
-	}
 	inline int getNumRecoverySlices() const {
 		return outputExp.size();
 	}
@@ -112,11 +99,13 @@ public:
 	
 	bool addInput(const void* buffer, size_t size, uint16_t inputNum, bool flush, const PAR2ProcPrepareCb& cb);
 	void flush();
-	void endInput(const PAR2ProcFinishedCb& _finishCb);
+	void endInput();
 	void getOutput(unsigned index, void* output, const PAR2ProcOutputCb& cb) const;
-	inline void discardOutput() {
-		processingAdd = false;
+	
+	bool isEmpty() const {
+		return stagingActiveCount==0;
 	}
+	void processing_finished();
 	
 	static inline Galois16Methods default_method() {
 		return Galois16Mul::default_method();

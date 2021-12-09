@@ -1,4 +1,4 @@
-#include "controller.h"
+#include "controller_cpu.h"
 #include "../src/platform.h"
 #include "gfmat_coeff.h"
 
@@ -11,10 +11,10 @@
 // callbacks
 static void prepare_chunk(void *req);
 static void after_prepare_chunk(uv_async_t *handle) {
-	static_cast<PAR2Proc*>(handle->data)->_after_prepare_chunk();
+	static_cast<PAR2ProcCPU*>(handle->data)->_after_prepare_chunk();
 }
 static void after_computation(uv_async_t *handle) {
-	static_cast<PAR2Proc*>(handle->data)->_after_computation();
+	static_cast<PAR2ProcCPU*>(handle->data)->_after_computation();
 }
 static void compute_worker(void *_req);
 
@@ -23,9 +23,7 @@ PAR2ProcStaging::~PAR2ProcStaging() {
 }
 
 /** initialization **/
-PAR2Proc::PAR2Proc(size_t _sliceSize, uv_loop_t* _loop, int stagingAreas) : loop(_loop), sliceSize(_sliceSize), numThreads(0), gf(NULL), staging(stagingAreas), memProcessing(NULL), prepareThread(prepare_chunk), endSignalled(false) {
-	gfmat_init();
-	
+PAR2ProcCPU::PAR2ProcCPU(uv_loop_t* _loop, int stagingAreas) : loop(_loop), sliceSize(0), numThreads(0), gf(NULL), staging(stagingAreas), memProcessing(NULL), prepareThread(prepare_chunk), progressCb(nullptr) {
 	uv_async_init(loop, &_preparedSignal, after_prepare_chunk);
 	uv_async_init(loop, &_doneSignal, after_computation);
 	_preparedSignal.data = static_cast<void*>(this);
@@ -35,7 +33,11 @@ PAR2Proc::PAR2Proc(size_t _sliceSize, uv_loop_t* _loop, int stagingAreas) : loop
 	setNumThreads(-1);
 }
 
-void PAR2Proc::freeGf() {
+void PAR2ProcCPU::setSliceSize(size_t _sliceSize) {
+	sliceSize = _sliceSize;
+}
+
+void PAR2ProcCPU::freeGf() {
 	for(auto& area : staging) {
 		if(area.src) ALIGN_FREE(area.src);
 		area.src = nullptr;
@@ -55,7 +57,7 @@ void PAR2Proc::freeGf() {
 	gf = NULL;
 }
 
-void PAR2Proc::setNumThreads(int threads) {
+void PAR2ProcCPU::setNumThreads(int threads) {
 	if(threads < 0) {
 		uv_cpu_info_t *info;
 		uv_cpu_info(&info, &threads);
@@ -79,50 +81,46 @@ void PAR2Proc::setNumThreads(int threads) {
 	numThreads = threads;
 }
 
-bool PAR2Proc::init(const PAR2ProcCompleteCb& _progressCb, Galois16Methods method, unsigned _inputGrouping, size_t _chunkLen) {
+bool PAR2ProcCPU::init(Galois16Methods method, unsigned _inputGrouping, size_t _chunkLen) {
 	freeGf();
 	bool ret = true;
-	if(numThreads) {
-		// TODO: accept & pass on hint info
-		gf = new Galois16Mul(method);
-		const Galois16MethodInfo& info = gf->info();
-		chunkLen = _chunkLen ? _chunkLen : info.idealChunkSize;
-		alignment = info.alignment;
-		stride = info.stride;
-		inputGrouping = _inputGrouping;
-		if(!inputGrouping) {
-			// round 12 to nearest idealInputMultiple
-			inputGrouping = (12 + info.idealInputMultiple/2);
-			inputGrouping -= inputGrouping % info.idealInputMultiple;
-			if(inputGrouping < info.idealInputMultiple) inputGrouping = info.idealInputMultiple;
-		}
-		
-		alignedSliceSize = gf->alignToStride(sliceSize) + stride; // add extra stride, because checksum requires an extra block
-		for(auto& area : staging) {
-			// allocate memory for sending input numbers
-			area.inputNums.resize(inputGrouping);
-			// setup indicators to know if buffers are being used
-			area.isActive = false;
-		}
-		if(!reallocMemInput()) // allocate input staging area
-			ret = false;
-		stagingActiveCount = 0;
-		
-		nextThread = 0;
-		setNumThreads(numThreads); // init scratch/workers
-		setCurrentSliceSize(sliceSize); // default slice chunk size = declared slice size
+	
+	// TODO: accept & pass on hint info
+	gf = new Galois16Mul(method);
+	const Galois16MethodInfo& info = gf->info();
+	chunkLen = _chunkLen ? _chunkLen : info.idealChunkSize;
+	alignment = info.alignment;
+	stride = info.stride;
+	inputGrouping = _inputGrouping;
+	if(!inputGrouping) {
+		// round 12 to nearest idealInputMultiple
+		inputGrouping = (12 + info.idealInputMultiple/2);
+		inputGrouping -= inputGrouping % info.idealInputMultiple;
+		if(inputGrouping < info.idealInputMultiple) inputGrouping = info.idealInputMultiple;
 	}
 	
-	currentInputBuf = currentInputPos = 0;
+	alignedSliceSize = gf->alignToStride(sliceSize) + stride; // add extra stride, because checksum requires an extra block
+	for(auto& area : staging) {
+		// allocate memory for sending input numbers
+		area.inputNums.resize(inputGrouping);
+		// setup indicators to know if buffers are being used
+		area.isActive = false;
+	}
+	if(!reallocMemInput()) // allocate input staging area
+		ret = false;
+	stagingActiveCount = 0;
 	
-	progressCb = _progressCb;
-	finishCb = nullptr;
+	nextThread = 0;
+	setNumThreads(numThreads); // init scratch/workers
+	setCurrentSliceSize(sliceSize); // default slice chunk size = declared slice size
+	
+	currentInputBuf = currentInputPos = 0;
 	processingAdd = false;
 	
 	return ret;
 }
 
-bool PAR2Proc::reallocMemInput() {
+bool PAR2ProcCPU::reallocMemInput() {
 	bool ret = true;
 	for(auto& area : staging) {
 		if(area.src) ALIGN_FREE(area.src);
@@ -132,7 +130,7 @@ bool PAR2Proc::reallocMemInput() {
 	return ret;
 }
 
-bool PAR2Proc::setCurrentSliceSize(size_t newSliceSize) {
+bool PAR2ProcCPU::setCurrentSliceSize(size_t newSliceSize) {
 	currentSliceSize = newSliceSize;
 	alignedCurrentSliceSize = gf->alignToStride(currentSliceSize) + stride; // add extra stride, because checksum requires an extra block
 	
@@ -162,7 +160,7 @@ bool PAR2Proc::setCurrentSliceSize(size_t newSliceSize) {
 	return ret;
 }
 
-bool PAR2Proc::setRecoverySlices(unsigned numSlices, const uint16_t* exponents) {
+bool PAR2ProcCPU::setRecoverySlices(unsigned numSlices, const uint16_t* exponents) {
 	// TODO: consider throwing if numSlices > previously set, or some mechanism to resize buffer
 	
 	outputExp.clear();
@@ -184,7 +182,7 @@ bool PAR2Proc::setRecoverySlices(unsigned numSlices, const uint16_t* exponents) 
 	return memProcessing != nullptr;
 }
 
-void PAR2Proc::freeProcessingMem() {
+void PAR2ProcCPU::freeProcessingMem() {
 	if(memProcessing) {
 		ALIGN_FREE(memProcessing);
 		memProcessing = NULL;
@@ -194,7 +192,7 @@ struct close_data {
 	PAR2ProcFinishedCb cb;
 	int refCount;
 };
-void PAR2Proc::deinit(PAR2ProcFinishedCb cb) {
+void PAR2ProcCPU::deinit(PAR2ProcFinishedCb cb) {
 	freeGf();
 	if(!loop) return;
 	loop = nullptr;
@@ -214,7 +212,7 @@ void PAR2Proc::deinit(PAR2ProcFinishedCb cb) {
 	uv_close(reinterpret_cast<uv_handle_t*>(&_preparedSignal), closeCb);
 	uv_close(reinterpret_cast<uv_handle_t*>(&_doneSignal), closeCb);
 }
-void PAR2Proc::deinit() {
+void PAR2ProcCPU::deinit() {
 	freeGf();
 	if(!loop) return;
 	loop = nullptr;
@@ -222,7 +220,7 @@ void PAR2Proc::deinit() {
 	uv_close(reinterpret_cast<uv_handle_t*>(&_doneSignal), nullptr);
 }
 
-PAR2Proc::~PAR2Proc() {
+PAR2ProcCPU::~PAR2ProcCPU() {
 	deinit();
 }
 
@@ -239,7 +237,7 @@ struct prepare_data {
 	int submitInBufs;
 	int inBufId;
 	size_t chunkLen;
-	PAR2Proc* parent;
+	PAR2ProcCPU* parent;
 	const Galois16Mul* gf;
 	PAR2ProcPrepareCb cb;
 };
@@ -256,7 +254,7 @@ static void prepare_chunk(void* req) {
 	uv_async_send(&(data->parent->_preparedSignal));
 }
 
-void PAR2Proc::_after_prepare_chunk() {
+void PAR2ProcCPU::_after_prepare_chunk() {
 	struct prepare_data* data;
 	while(_preparedChunks.trypop(reinterpret_cast<void**>(&data))) {
 		if(data->submitInBufs) {
@@ -268,49 +266,41 @@ void PAR2Proc::_after_prepare_chunk() {
 	}
 }
 
-bool PAR2Proc::addInput(const void* buffer, size_t size, uint16_t inputNum, bool flush, const PAR2ProcPrepareCb& cb) {
+bool PAR2ProcCPU::addInput(const void* buffer, size_t size, uint16_t inputNum, bool flush, const PAR2ProcPrepareCb& cb) {
 	auto& area = staging[currentInputBuf];
 	// if we're waiting for input availability, can't add
 	// NOTE: if add fails due to being full, client resubmitting may be vulnerable to race conditions if it adds an event listener after completion event gets fired
 	if(area.isActive) return false;
-	assert(!endSignalled);
-	
 	if(!staging[0].src) reallocMemInput();
 	
-	if(numThreads) {
-		area.inputNums[currentInputPos] = inputNum;
-		struct prepare_data* data = new struct prepare_data;
-		data->src = buffer;
-		data->size = size;
-		data->parent = this;
-		data->dst = area.src;
-		data->dstLen = alignedCurrentSliceSize - stride;
-		data->numInputs = inputGrouping;
-		data->index = currentInputPos++;
-		data->chunkLen = chunkLen;
-		data->gf = gf;
-		data->cb = cb;
-		
-		data->submitInBufs = (flush || currentInputPos == inputGrouping || (stagingActiveCount == 0 && staging.size() > 1)) ? currentInputPos : 0;
-		data->inBufId = currentInputBuf;
-		if(data->submitInBufs) {
-			area.isActive = true; // lock this buffer until processing is complete
-			stagingActiveCount++;
-			currentInputPos = 0;
-			if(++currentInputBuf == staging.size())
-				currentInputBuf = 0;
-		}
-		
-		prepareThread.send(data);
-	}
-	//for each gpu
-		// async copy
-		// callback after copies to all GPUs completed
+	area.inputNums[currentInputPos] = inputNum;
+	struct prepare_data* data = new struct prepare_data;
+	data->src = buffer;
+	data->size = size;
+	data->parent = this;
+	data->dst = area.src;
+	data->dstLen = alignedCurrentSliceSize - stride;
+	data->numInputs = inputGrouping;
+	data->index = currentInputPos++;
+	data->chunkLen = chunkLen;
+	data->gf = gf;
+	data->cb = cb;
 	
+	data->submitInBufs = (flush || currentInputPos == inputGrouping || (stagingActiveCount == 0 && staging.size() > 1)) ? currentInputPos : 0;
+	data->inBufId = currentInputBuf;
+	if(data->submitInBufs) {
+		area.isActive = true; // lock this buffer until processing is complete
+		stagingActiveCount++;
+		currentInputPos = 0;
+		if(++currentInputBuf == staging.size())
+			currentInputBuf = 0;
+	}
+	
+	prepareThread.send(data);
 	return true;
 }
 
-void PAR2Proc::flush() {
+void PAR2ProcCPU::flush() {
 	if(!currentInputPos) return; // no inputs to flush
 	
 	// send a flush signal by queueing up a prepare, but with a NULL buffer
@@ -330,14 +320,8 @@ void PAR2Proc::flush() {
 	prepareThread.send(data);
 }
 
-void PAR2Proc::endInput(const PAR2ProcFinishedCb& _finishCb) {
-	assert(!endSignalled);
-	flush();
-	finishCb = _finishCb;
+void PAR2ProcCPU::endInput() {
 	prepareThread.end(); // TODO: should thread be ended here?
-	endSignalled = true;
-	if(stagingActiveCount==0)
-		processing_finished();
 }
 
 /** finish **/
@@ -367,27 +351,19 @@ static void after_finish(uv_work_t *req, int status) {
 	delete req;
 }
 
-void PAR2Proc::getOutput(unsigned index, void* output, const PAR2ProcOutputCb& cb) const {
-	if(!processingAdd) {
-		// no recovery was computed -> zero fill result
-		memset(output, 0, currentSliceSize);
-		cb(output, index, 1);
-		return;
-	}
-	if(numThreads) {
-		uv_work_t* req = new uv_work_t;
-		struct finish_data* data = new struct finish_data;
-		data->src = memProcessing;
-		data->size = currentSliceSize;
-		data->gf = gf;
-		data->dst = output;
-		data->numOutputs = outputExp.size();
-		data->index = index;
-		data->chunkLen = chunkLen;
-		data->cb = cb;
-		req->data = data;
-		uv_queue_work(loop, req, finish_output, after_finish);
-	}
+void PAR2ProcCPU::getOutput(unsigned index, void* output, const PAR2ProcOutputCb& cb) const {
+	uv_work_t* req = new uv_work_t;
+	struct finish_data* data = new struct finish_data;
+	data->src = memProcessing;
+	data->size = currentSliceSize;
+	data->gf = gf;
+	data->dst = output;
+	data->numOutputs = outputExp.size();
+	data->index = index;
+	data->chunkLen = chunkLen;
+	data->cb = cb;
+	req->data = data;
+	uv_queue_work(loop, req, finish_output, after_finish);
 }
 
 
@@ -409,7 +385,7 @@ struct compute_req {
 	
 	const Galois16Mul* gf;
 	std::atomic<int>* procRefs;
-	PAR2Proc* parent;
+	PAR2ProcCPU* parent;
 };
 
 static void compute_worker(void *_req) {
@@ -470,7 +446,7 @@ static void compute_worker(void *_req) {
 		delete req;
 }
 
-void PAR2Proc::do_computation(int inBuf, int numInputs) {
+void PAR2ProcCPU::do_computation(int inBuf, int numInputs) {
 	if(!staging[0].src) reallocMemInput();
 	
 	auto& area = staging[inBuf];
@@ -513,7 +489,7 @@ void PAR2Proc::do_computation(int inBuf, int numInputs) {
 	processingAdd = true;
 }
 
-void PAR2Proc::_after_computation() {
+void PAR2ProcCPU::_after_computation() {
 	struct compute_req* req;
 	while(_processedChunks.trypop(reinterpret_cast<void**>(&req))) {
 		staging[req->inBufId].isActive = false;
@@ -524,14 +500,10 @@ void PAR2Proc::_after_computation() {
 		
 		delete req;
 	}
-	if(endSignalled && stagingActiveCount==0)
-		processing_finished();
 }
 
 
-void PAR2Proc::processing_finished() {
-	endSignalled = false;
-	
+void PAR2ProcCPU::processing_finished() {
 	// free memInput so that output fetching can use some of it
 	for(auto& area : staging) {
 		if(area.src) ALIGN_FREE(area.src);
@@ -541,8 +513,5 @@ void PAR2Proc::processing_finished() {
 	// close off worker threads; TODO: is this a good idea? perhaps do it during deinit instead?
 	for(auto& worker : thWorkers)
 		worker.end();
-	
-	if(finishCb) finishCb();
-	finishCb = nullptr;
 }
 
