@@ -41,7 +41,7 @@ static const char* Galois16OCLMethodsText[] = {
 };
 
 
-struct GF16OCL_DeviceInfo {
+typedef struct {
 	std::string name;
 	unsigned vendorId;
 	cl_device_type type;
@@ -57,7 +57,7 @@ struct GF16OCL_DeviceInfo {
 	unsigned maxWorkGroup;
 	unsigned workGroupMultiple;
 	unsigned computeUnits;
-};
+} GF16OCL_DeviceInfo;
 
 class GF16OCL {
 	bool _initSuccess;
@@ -97,12 +97,18 @@ class GF16OCL {
 	
 	bool setup_kernels(Galois16OCLMethods method, unsigned targetInputBatch, unsigned targetIters, unsigned targetGrouping);
 	void run_kernel(unsigned buf, unsigned numInputs);
+	void _add_input(const void* buffer, size_t size);
 	
 	
 	cl::Context context;
 	static std::vector<cl::Platform> platforms;
 	
 	static size_t getWGSize(const cl::Context& context, const cl::Device& device);
+	
+	// disable copy constructor
+	GF16OCL(const GF16OCL&);
+	GF16OCL& operator=(const GF16OCL&);
+	
 	
 public:
 	static int load_runtime();
@@ -111,13 +117,14 @@ public:
 	}
 	static std::vector<std::string> getPlatforms();
 	static std::vector<GF16OCL_DeviceInfo> getDevices(int platformId = -1);
-	GF16OCL(int platformId = -1, int deviceId = -1);
+	explicit GF16OCL(int platformId = -1, int deviceId = -1);
 	~GF16OCL();
 	bool init(size_t _sliceSize, unsigned numOutputs, const uint16_t* outputExp, Galois16OCLMethods method = GF16OCL_AUTO, unsigned targetInputBatch=0, unsigned targetIters=0, unsigned targetGrouping=0);
 	inline bool init(size_t _sliceSize, std::vector<uint16_t> outputExp) {
 		return init(_sliceSize, (unsigned)outputExp.size(), outputExp.data());
 	}
 	void add_input(const void* buffer, size_t size, unsigned inputNum);
+	void add_input(const void* buffer, size_t size, const uint16_t* coeffs);
 	void flush_inputs();
 	void finish();
 	void get_output(unsigned index, void* output) const;

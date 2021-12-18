@@ -218,16 +218,7 @@ void GF16OCL::run_kernel(unsigned buf, unsigned numInputs) {
 	if(next()) next.wait();
 }
 
-void GF16OCL::add_input(const void* data, size_t size, unsigned inputNum) {
-	// compute coeffs
-	if(coeffAsLog) {
-		tmp_coeffs[inputBufferIdx][inputCount] = gfmat_input_log(inputNum);
-	} else {
-		uint16_t inputLog = gfmat_input_log(inputNum);
-		for(unsigned i=0; i<outputExponents.size(); i++)
-			tmp_coeffs[inputBufferIdx][inputCount + i*inputBatchSize] = gfmat_coeff_from_log(inputLog, outputExponents[i]);
-	}
-	
+void GF16OCL::_add_input(const void* data, size_t size) {
 #ifndef SKIP_TRANSFER
 	queue.enqueueWriteBuffer(buffer_input[inputBufferIdx], CL_TRUE, inputCount * sliceSizeAligned, size, data);
 	if(size < sliceSize) {
@@ -258,6 +249,23 @@ void GF16OCL::add_input(const void* data, size_t size, unsigned inputNum) {
 		inputCount++;
 }
 
+void GF16OCL::add_input(const void* data, size_t size, unsigned inputNum) {
+	// compute coeffs
+	if(coeffAsLog) {
+		tmp_coeffs[inputBufferIdx][inputCount] = gfmat_input_log(inputNum);
+	} else {
+		uint16_t inputLog = gfmat_input_log(inputNum);
+		for(unsigned i=0; i<numOutputs; i++)
+			tmp_coeffs[inputBufferIdx][inputCount + i*inputBatchSize] = gfmat_coeff_from_log(inputLog, outputExponents[i]);
+	}
+	_add_input(data, size);
+}
+void GF16OCL::add_input(const void* data, size_t size, const uint16_t* coeffs) {
+	for(unsigned i=0; i<numOutputs; i++)
+		tmp_coeffs[inputBufferIdx][inputCount + i*inputBatchSize] = coeffs[i];
+	_add_input(data, size);
+}
+
 void GF16OCL::flush_inputs() {
 	if(inputCount)
 		run_kernel(inputBufferIdx, inputCount);
@@ -267,10 +275,15 @@ void GF16OCL::finish() {
 	//if(inputCount) // discard any unflushed inputs for now
 	//	flush_inputs();
 	// wait for all processing to complete
-	for(unsigned i=0; i<OCL_BUFFER_COUNT; i++) {
-		if(proc[i]())
-			proc[i].wait();
+	try {
+		for(unsigned i=0; i<OCL_BUFFER_COUNT; i++) {
+			if(proc[i]())
+				proc[i].wait();
+		}
+	} catch(cl::Error const& err) {
+		std::cerr << "OpenCL error during finish: " << err.what() << "(" << err.err() << ")" << std::endl;
 	}
+	
 	queue.finish(); // TODO: do we need the above waits if finish does everything?
 	reset_state();
 }
