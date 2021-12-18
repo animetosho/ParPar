@@ -107,13 +107,17 @@ size_t GF16OCL::getWGSize(const cl::Context& context, const cl::Device& device) 
 }
 
 // _sliceSize must be divisible by 2
-bool GF16OCL::init(size_t _sliceSize, unsigned numOutputs, const uint16_t* outputExp, Galois16OCLMethods method, unsigned targetInputBatch, unsigned targetIters, unsigned targetGrouping) {
+bool GF16OCL::init(size_t _sliceSize, unsigned allocOutputs, Galois16OCLMethods method, unsigned targetInputBatch, unsigned targetIters, unsigned targetGrouping) {
 	if(!_initSuccess) return false;
 	sliceSize = _sliceSize;
+	numOutputs = allocOutputs;
 	outputExponents.resize(numOutputs);
-	memcpy(outputExponents.data(), outputExp, numOutputs*sizeof(uint16_t));
 	
 	if(method == GF16OCL_AUTO) method = default_method();
+	_setupMethod = method;
+	_setupTargetInputBatch = targetInputBatch;
+	_setupTargetIters = targetIters;
+	_setupTargetGrouping = targetGrouping;
 	if(!setup_kernels(method, targetInputBatch, targetIters, targetGrouping))
 		return false;
 	
@@ -123,6 +127,21 @@ bool GF16OCL::init(size_t _sliceSize, unsigned numOutputs, const uint16_t* outpu
 		zeroes = (uint8_t*)calloc(ZERO_MEM_SIZE, 1);
 	}
 	reset_state();
+	return true;
+}
+
+bool GF16OCL::set_outputs(unsigned _numOutputs, const uint16_t* outputExp) {
+	if(_numOutputs != numOutputs) {
+		// need to re-init as the code assumes a fixed number of outputs
+		numOutputs = _numOutputs;
+		outputExponents = std::vector<uint16_t>(numOutputs);
+		if(!setup_kernels(_setupMethod, _setupTargetInputBatch, _setupTargetIters, _setupTargetGrouping))
+			return false;
+	}
+	
+	memcpy(outputExponents.data(), outputExp, numOutputs*sizeof(uint16_t));
+	if(coeffAsLog)
+		queue.enqueueWriteBuffer(buffer_outExp, CL_TRUE, 0, numOutputs*sizeof(uint16_t), outputExp);
 	return true;
 }
 

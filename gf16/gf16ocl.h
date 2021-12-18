@@ -63,6 +63,7 @@ class GF16OCL {
 	bool _initSuccess;
 	// method/input parameters
 	unsigned inputBatchSize;
+	unsigned numOutputs;
 	std::vector<uint16_t> outputExponents;
 	size_t sliceSize;
 	size_t sliceSizeAligned;
@@ -78,6 +79,7 @@ class GF16OCL {
 	// buffers
 	cl::Buffer buffer_input[OCL_BUFFER_COUNT];
 	cl::Buffer buffer_coeffs[OCL_BUFFER_COUNT];
+	cl::Buffer buffer_outExp;
 	bool coeffAsLog;
 	std::vector<uint16_t> tmp_coeffs[OCL_BUFFER_COUNT];
 	cl::Buffer buffer_output;
@@ -94,6 +96,10 @@ class GF16OCL {
 	size_t bytesPerGroup;
 	size_t wgSize;
 	
+	
+	// remembered setup params
+	Galois16OCLMethods _setupMethod;
+	unsigned _setupTargetInputBatch, _setupTargetIters, _setupTargetGrouping;
 	
 	bool setup_kernels(Galois16OCLMethods method, unsigned targetInputBatch, unsigned targetIters, unsigned targetGrouping);
 	void run_kernel(unsigned buf, unsigned numInputs);
@@ -119,10 +125,7 @@ public:
 	static std::vector<GF16OCL_DeviceInfo> getDevices(int platformId = -1);
 	explicit GF16OCL(int platformId = -1, int deviceId = -1);
 	~GF16OCL();
-	bool init(size_t _sliceSize, unsigned numOutputs, const uint16_t* outputExp, Galois16OCLMethods method = GF16OCL_AUTO, unsigned targetInputBatch=0, unsigned targetIters=0, unsigned targetGrouping=0);
-	inline bool init(size_t _sliceSize, std::vector<uint16_t> outputExp) {
-		return init(_sliceSize, (unsigned)outputExp.size(), outputExp.data());
-	}
+	bool init(size_t _sliceSize, unsigned allocOutputs, Galois16OCLMethods method = GF16OCL_AUTO, unsigned targetInputBatch=0, unsigned targetIters=0, unsigned targetGrouping=0);
 	void add_input(const void* buffer, size_t size, unsigned inputNum);
 	void add_input(const void* buffer, size_t size, const uint16_t* coeffs);
 	void flush_inputs();
@@ -131,6 +134,10 @@ public:
 	void reset_state();
 	
 	void set_slice_size(size_t newSliceSize); // can only set to lower than allocated in init()
+	bool set_outputs(unsigned _numOutputs, const uint16_t* outputExp);
+	inline bool set_outputs(std::vector<uint16_t> outputExp) {
+		return set_outputs((unsigned)outputExp.size(), outputExp.data());
+	}
 	
 	Galois16OCLMethods default_method() const;
 	static std::vector<Galois16OCLMethods> availableMethods(int platformId = -1, int deviceId = -1);

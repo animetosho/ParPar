@@ -456,7 +456,7 @@ STRINGIFY(
 	}
 	
 	nat_uint gfmat_calc_coeff_log(nat_uint recBlock, ushort inCoeff) {
-		uint result = inCoeff * (ushort)(RECOVERY_EXP(recBlock));
+		uint result = inCoeff * (ushort)(recBlock);
 		// calc 'result %= 65535'
 		result = (result >> 16) + (result & 65535);
 		result += result >> 16;
@@ -556,7 +556,7 @@ STRINGIFY(
 "	}                                                                                            \n"\
 "	                                                                                             \n"\
 "	nat_uint curCoeff;                                                                           \n"\
-"	#ifdef GFMAT_COEFF_SHORTCUT                                                                  \n"\
+"	#ifdef GFMAT_COEFF_SEQUENTIAL                                                                \n"\
 "		curCoeff = gfmat_calc_coeff_log(outBlk, coeff[0]);                                       \n"\
 "		#pragma unroll                                                                           \n"\
 "		for (nat_uint o = 0; o < numOutputs; o++) {                                              \n"\
@@ -589,7 +589,7 @@ STRINGIFY(
 "			#endif                                                                               \n"\
 "		}                                                                                        \n"\
 "		                                                                                         \n"\
-"		#ifdef GFMAT_COEFF_SHORTCUT                                                              \n"\
+"		#ifdef GFMAT_COEFF_SEQUENTIAL                                                            \n"\
 "			curCoeff = gfmat_calc_coeff_log(outBlk, coeff[i]);                                   \n"\
 "			#pragma unroll                                                                       \n"\
 "			for (nat_uint o = 0; o < numOutputs; o++) {                                          \n"\
@@ -634,7 +634,11 @@ const static char _ocl_kernel_nolut_funcs[] =
 " #define WRITE_DST(dst, idx, val) dst[idx] ^= val\n"
 "#endif\n"
 "#ifdef OCL_METHOD_LOG\n"
-" #define GET_COEFF(o, i) gfmat_calc_coeff_log(o, coeff[i])\n"
+" #ifdef GFMAT_COEFF_SEQUENTIAL\n"
+"  #define GET_COEFF(o, i) gfmat_calc_coeff_log(o+GFMAT_COEFF_SEQUENTIAL, coeff[i])\n"
+" #else\n"
+"  #define GET_COEFF(o, i) gfmat_calc_coeff_log(outExp[o], coeff[i])\n"
+" #endif\n"
 "#else\n"
 " #define GET_COEFF(o, i) coeff[COBUF_REF(o, i)]\n"
 "#endif\n"
@@ -949,8 +953,6 @@ static inline size_t round_down_pow2(size_t v) {
 
 // _sliceSize must be divisible by 2
 bool GF16OCL::setup_kernels(Galois16OCLMethods method, unsigned targetInputBatch, unsigned targetIters, unsigned targetGrouping) {
-	unsigned numOutputs = (unsigned)outputExponents.size();
-	
 	// TODO: get device info
 	// CL_DEVICE_HOST_UNIFIED_MEMORY (deprecated?)
 	// CL_DEVICE_ADDRESS_BITS (max referencable memory)
@@ -979,7 +981,7 @@ bool GF16OCL::setup_kernels(Galois16OCLMethods method, unsigned targetInputBatch
 	std::stringstream sourceStream;
 	
 	unsigned groupIterations = 1;
-	bool usesOutGrouping = false;
+	//bool usesOutGrouping = false;
 	unsigned threadWordSize = infoShortVecSize*2;
 	unsigned sizePerWorkGroup = threadWordSize * wgSize;
 	unsigned outputGrouping = 8; // for nolut kernel; have seen some cards prefer '4' (on older cards?)
@@ -1013,7 +1015,7 @@ bool GF16OCL::setup_kernels(Galois16OCLMethods method, unsigned targetInputBatch
 		kernelCode = _ocl_kernel_nolut;
 		kernelFuncs = _ocl_kernel_nolut_funcs;
 		methodCode = _ocl_method_by2;
-		usesOutGrouping = true;
+		//usesOutGrouping = true;
 	break;
 	case GF16OCL_SHUFFLE:
 	//case GF16OCL_SHUFFLE2:
@@ -1096,7 +1098,7 @@ bool GF16OCL::setup_kernels(Galois16OCLMethods method, unsigned targetInputBatch
 		if(method == GF16OCL_LOG_TINY || method == GF16OCL_LOG_TINY_LMEM)
 			sourceStream << "#define OCL_METHOD_LOG_TINY\n";
 		methodCode = _ocl_method_log;
-		usesOutGrouping = true;
+		//usesOutGrouping = true;
 	break;
 	case GF16OCL_LOOKUP:
 	case GF16OCL_LOOKUP_HALF:
@@ -1121,7 +1123,7 @@ bool GF16OCL::setup_kernels(Galois16OCLMethods method, unsigned targetInputBatch
 			if(targetInputBatch) inputBatchSize = targetInputBatch;
 			kernelCode = _ocl_kernel_lut;
 			kernelFuncs = _ocl_kernel_lut_funcs;
-			usesOutGrouping = true;
+			//usesOutGrouping = true;
 		} else {
 			inputBatchSize = 4;
 			if(targetInputBatch) inputBatchSize = targetInputBatch;
@@ -1190,27 +1192,6 @@ bool GF16OCL::setup_kernels(Galois16OCLMethods method, unsigned targetInputBatch
 	uint16_t* tblAntiLog = NULL;
 	unsigned tblAntiLogSize = 0;
 	if(coeffAsLog) {
-		// write output exponents to remove the need to transfer it later
-		std::stringstream recoveryExpCode;
-		uint16_t recOffset = outputExponents[0];
-		bool recOffsetIsSequential = true;
-		recoveryExpCode << "__constant ushort recoveryIdx[" << numOutputs << "] = {" << outputExponents[0];
-		for(unsigned i=1; i<numOutputs; i++) {
-			recoveryExpCode << ',' << outputExponents[i];
-			if(outputExponents[i] != recOffset+i)
-				recOffsetIsSequential = false;
-		}
-		recoveryExpCode << "};\n";
-		if(recOffsetIsSequential) {
-			// if all recovery slice numbers are sequential (will be true most of the time), save some memory by cutting out the table
-			sourceStream << "#define RECOVERY_EXP(n) (ushort)(n+" << recOffset << ")\n";
-			sourceStream << "#define GFMAT_COEFF_SHORTCUT\n";
-		} else {
-			sourceStream << "#define RECOVERY_EXP(n) recoveryIdx[n]\n" << recoveryExpCode.str();
-			if(deviceAvailConstSize < numOutputs*2) return false; // TODO: may need to have option to pass it as global memory
-			deviceAvailConstSize -= numOutputs*2;
-		}
-		
 		// construct log/exp table and embed into OpenCL source
 		tblLog = new uint16_t[65536];
 		tblLog[0] = 65535; // special value to represent 0
@@ -1279,33 +1260,33 @@ bool GF16OCL::setup_kernels(Galois16OCLMethods method, unsigned targetInputBatch
 				sourceStream << "#define LMEM_SRC_TYPE __constant\n";
 			if(tblLog) {
 				if(tblAntiLog)
-					sourceStream << "#define EX_TABLE_KARGS_DECL , __global const ushort* restrict gf16_log, __global const ushort* restrict gf16_antilog_src\n";
+					sourceStream << "#define EX_TABLE_KARGS_DECL , __global const ushort* restrict outExp, __global const ushort* restrict gf16_log, __global const ushort* restrict gf16_antilog_src\n";
 				else
-					sourceStream << "#define EX_TABLE_KARGS_DECL , __global const ushort* restrict gf16_log\n";
+					sourceStream << "#define EX_TABLE_KARGS_DECL , __global const ushort* restrict outExp, __global const ushort* restrict gf16_log\n";
 				
 				sourceStream <<
-					"#define EX_TABLE_ARGS_DECL , __global const ushort* restrict gf16_log, __local const ushort* restrict gf16_antilog\n"
-					"#define EX_TABLE_ARGS , gf16_log, gf16_antilog\n";
+					"#define EX_TABLE_ARGS_DECL , __global const ushort* restrict outExp, __global const ushort* restrict gf16_log, __local const ushort* restrict gf16_antilog\n"
+					"#define EX_TABLE_ARGS , outExp, gf16_log, gf16_antilog\n";
 			} else {
 				if(tblAntiLog)
-					sourceStream << "#define EX_TABLE_KARGS_DECL , __global const ushort* restrict gf16_antilog_src\n";
+					sourceStream << "#define EX_TABLE_KARGS_DECL , __global const ushort* restrict outExp, __global const ushort* restrict gf16_antilog_src\n";
 				else
-					sourceStream << "#define EX_TABLE_KARGS_DECL\n";
+					sourceStream << "#define EX_TABLE_KARGS_DECL , __global const ushort* restrict outExp\n";
 				
 				sourceStream <<
-					"#define EX_TABLE_ARGS_DECL , __local const ushort* restrict gf16_antilog\n"
-					"#define EX_TABLE_ARGS , gf16_antilog\n";
+					"#define EX_TABLE_ARGS_DECL , __global const ushort* restrict outExp, __local const ushort* restrict gf16_antilog\n"
+					"#define EX_TABLE_ARGS , outExp, gf16_antilog\n";
 			}
 		} else {
 			if(tblLog) {
 				if(tblAntiLog) {
 					sourceStream <<
-						"#define EX_TABLE_ARGS_DECL , __global const ushort* restrict gf16_log, __global const ushort* restrict gf16_antilog\n"
-						"#define EX_TABLE_ARGS , gf16_log, gf16_antilog\n";
+						"#define EX_TABLE_ARGS_DECL , __global const ushort* restrict outExp, __global const ushort* restrict gf16_log, __global const ushort* restrict gf16_antilog\n"
+						"#define EX_TABLE_ARGS , outExp, gf16_log, gf16_antilog\n";
 				} else {
 					sourceStream <<
-						"#define EX_TABLE_ARGS_DECL , __global const ushort* restrict gf16_log\n"
-						"#define EX_TABLE_ARGS , gf16_log\n";
+						"#define EX_TABLE_ARGS_DECL , __global const ushort* restrict outExp, __global const ushort* restrict gf16_log\n"
+						"#define EX_TABLE_ARGS , outExp, gf16_log\n";
 				}
 			}
 		}
@@ -1446,16 +1427,23 @@ bool GF16OCL::setup_kernels(Galois16OCLMethods method, unsigned targetInputBatch
 	
 	extra_buffers.clear();
 	
+	if(coeffAsLog) {
+		buffer_outExp = cl::Buffer(context, CL_MEM_READ_ONLY | CL_MEM_ALLOC_HOST_PTR, numOutputs*sizeof(uint16_t));
+		kernelMul.setArg(3, buffer_outExp);
+		kernelMulAdd.setArg(3, buffer_outExp);
+		kernelMulLast.setArg(4, buffer_outExp);
+		kernelMulAddLast.setArg(4, buffer_outExp);
+	}
 	// if we couldn't embed log tables directly into the source, transfer them now
 	if(tblLog) {
 		extra_buffers.push_back(cl::Buffer(context, CL_MEM_READ_ONLY, 65536*2));
 		const cl::Buffer& buf = extra_buffers.back();
 		queue.enqueueWriteBuffer(buf, CL_TRUE, 0, 65536*2, tblLog);
 		
-		kernelMul.setArg(3, buf);
-		kernelMulAdd.setArg(3, buf);
-		kernelMulLast.setArg(4, buf);
-		kernelMulAddLast.setArg(4, buf);
+		kernelMul.setArg(4, buf);
+		kernelMulAdd.setArg(4, buf);
+		kernelMulLast.setArg(5, buf);
+		kernelMulAddLast.setArg(5, buf);
 		
 		delete[] tblLog;
 	}
@@ -1464,10 +1452,10 @@ bool GF16OCL::setup_kernels(Galois16OCLMethods method, unsigned targetInputBatch
 		const cl::Buffer& buf = extra_buffers.back();
 		queue.enqueueWriteBuffer(buf, CL_TRUE, 0, tblAntiLogSize*2, tblAntiLog);
 		
-		kernelMul.setArg(4, buf);
-		kernelMulAdd.setArg(4, buf);
-		kernelMulLast.setArg(5, buf);
-		kernelMulAddLast.setArg(5, buf);
+		kernelMul.setArg(5, buf);
+		kernelMulAdd.setArg(5, buf);
+		kernelMulLast.setArg(6, buf);
+		kernelMulAddLast.setArg(6, buf);
 		
 		delete[] tblAntiLog;
 	}
