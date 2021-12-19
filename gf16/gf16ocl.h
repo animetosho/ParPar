@@ -40,6 +40,11 @@ static const char* Galois16OCLMethodsText[] = {
 	"ByTwo"
 };
 
+enum Galois16OCLCoeffType {
+	GF16OCL_COEFF_NORMAL = 0,
+	GF16OCL_COEFF_LOG,
+	GF16OCL_COEFF_LOG_SEQ,
+};
 
 typedef struct {
 	std::string name;
@@ -81,7 +86,7 @@ class GF16OCL {
 	cl::Buffer buffer_input[OCL_BUFFER_COUNT];
 	cl::Buffer buffer_coeffs[OCL_BUFFER_COUNT];
 	cl::Buffer buffer_outExp;
-	bool coeffAsLog;
+	Galois16OCLCoeffType coeffType;
 	std::vector<uint16_t> tmp_coeffs[OCL_BUFFER_COUNT];
 	cl::Buffer buffer_output;
 	std::vector<cl::Buffer> extra_buffers;
@@ -102,7 +107,7 @@ class GF16OCL {
 	Galois16OCLMethods _setupMethod;
 	unsigned _setupTargetInputBatch, _setupTargetIters, _setupTargetGrouping;
 	
-	bool setup_kernels(Galois16OCLMethods method, unsigned targetInputBatch, unsigned targetIters, unsigned targetGrouping);
+	bool setup_kernels(Galois16OCLMethods method, unsigned targetInputBatch, unsigned targetIters, unsigned targetGrouping, bool outputSequential);
 	void run_kernel(unsigned buf, unsigned numInputs);
 	void _add_input(const void* buffer, size_t size);
 	

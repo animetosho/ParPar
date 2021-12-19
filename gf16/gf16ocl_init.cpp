@@ -456,7 +456,7 @@ STRINGIFY(
 	}
 	
 	nat_uint gfmat_calc_coeff_log(nat_uint recBlock, ushort inCoeff) {
-		uint result = inCoeff * (ushort)(recBlock);
+		uint result = inCoeff * (ushort)recBlock;
 		// calc 'result %= 65535'
 		result = (result >> 16) + (result & 65535);
 		result += result >> 16;
@@ -557,7 +557,7 @@ STRINGIFY(
 "	                                                                                             \n"\
 "	nat_uint curCoeff;                                                                           \n"\
 "	#ifdef GFMAT_COEFF_SEQUENTIAL                                                                \n"\
-"		curCoeff = gfmat_calc_coeff_log(outBlk, coeff[0]);                                       \n"\
+"		curCoeff = gfmat_calc_coeff_log(outExp+outBlk, coeff[0]);                                \n"\
 "		#pragma unroll                                                                           \n"\
 "		for (nat_uint o = 0; o < numOutputs; o++) {                                              \n"\
 "			#pragma unroll                                                                       \n"\
@@ -590,7 +590,7 @@ STRINGIFY(
 "		}                                                                                        \n"\
 "		                                                                                         \n"\
 "		#ifdef GFMAT_COEFF_SEQUENTIAL                                                            \n"\
-"			curCoeff = gfmat_calc_coeff_log(outBlk, coeff[i]);                                   \n"\
+"			curCoeff = gfmat_calc_coeff_log(outExp+outBlk, coeff[i]);                            \n"\
 "			#pragma unroll                                                                       \n"\
 "			for (nat_uint o = 0; o < numOutputs; o++) {                                          \n"\
 "				#pragma unroll                                                                   \n"\
@@ -634,11 +634,7 @@ const static char _ocl_kernel_nolut_funcs[] =
 " #define WRITE_DST(dst, idx, val) dst[idx] ^= val\n"
 "#endif\n"
 "#ifdef OCL_METHOD_LOG\n"
-" #ifdef GFMAT_COEFF_SEQUENTIAL\n"
-"  #define GET_COEFF(o, i) gfmat_calc_coeff_log(o+GFMAT_COEFF_SEQUENTIAL, coeff[i])\n"
-" #else\n"
-"  #define GET_COEFF(o, i) gfmat_calc_coeff_log(outExp[o], coeff[i])\n"
-" #endif\n"
+" #define GET_COEFF(o, i) gfmat_calc_coeff_log(outExp[o], coeff[i])\n"
 "#else\n"
 " #define GET_COEFF(o, i) coeff[COBUF_REF(o, i)]\n"
 "#endif\n"
@@ -952,7 +948,7 @@ static inline size_t round_down_pow2(size_t v) {
 }
 
 // _sliceSize must be divisible by 2
-bool GF16OCL::setup_kernels(Galois16OCLMethods method, unsigned targetInputBatch, unsigned targetIters, unsigned targetGrouping) {
+bool GF16OCL::setup_kernels(Galois16OCLMethods method, unsigned targetInputBatch, unsigned targetIters, unsigned targetGrouping, bool outputSequential) {
 	// TODO: get device info
 	// CL_DEVICE_HOST_UNIFIED_MEMORY (deprecated?)
 	// CL_DEVICE_ADDRESS_BITS (max referencable memory)
@@ -990,7 +986,7 @@ bool GF16OCL::setup_kernels(Galois16OCLMethods method, unsigned targetInputBatch
 	const char* methodCode;
 	const char* oclVerArg = "";
 	// method selector
-	coeffAsLog = false;
+	coeffType = GF16OCL_COEFF_NORMAL;
 	switch(method) {
 	case GF16OCL_BY2:
 		inputBatchSize = 16;
@@ -1061,7 +1057,7 @@ bool GF16OCL::setup_kernels(Galois16OCLMethods method, unsigned targetInputBatch
 	case GF16OCL_LOG_TINY:
 	case GF16OCL_LOG_SMALL_LMEM:
 	case GF16OCL_LOG_TINY_LMEM:
-		coeffAsLog = true;
+		coeffType = outputSequential ? GF16OCL_COEFF_LOG_SEQ : GF16OCL_COEFF_LOG;
 		inputBatchSize = 8;
 		
 		{
@@ -1191,7 +1187,7 @@ bool GF16OCL::setup_kernels(Galois16OCLMethods method, unsigned targetInputBatch
 	uint16_t* tblLog = NULL;
 	uint16_t* tblAntiLog = NULL;
 	unsigned tblAntiLogSize = 0;
-	if(coeffAsLog) {
+	if(coeffType != GF16OCL_COEFF_NORMAL) {
 		// construct log/exp table and embed into OpenCL source
 		tblLog = new uint16_t[65536];
 		tblLog[0] = 65535; // special value to represent 0
@@ -1252,6 +1248,12 @@ bool GF16OCL::setup_kernels(Galois16OCLMethods method, unsigned targetInputBatch
 			tblLog = NULL;
 		}
 		
+		const char* outExpType = "__global const ushort* restrict";
+		if(coeffType == GF16OCL_COEFF_LOG_SEQ) {
+			sourceStream << "#define GFMAT_COEFF_SEQUENTIAL\n";
+			outExpType = "nat_uint";
+		}
+		
 		if(method == GF16OCL_LOG_SMALL_LMEM || method == GF16OCL_LOG_TINY_LMEM) {
 			sourceStream << "#define LMEM_CACHE_SIZE " << tblAntiLogSize << "\n";
 			if(tblAntiLog)
@@ -1260,32 +1262,32 @@ bool GF16OCL::setup_kernels(Galois16OCLMethods method, unsigned targetInputBatch
 				sourceStream << "#define LMEM_SRC_TYPE __constant\n";
 			if(tblLog) {
 				if(tblAntiLog)
-					sourceStream << "#define EX_TABLE_KARGS_DECL , __global const ushort* restrict outExp, __global const ushort* restrict gf16_log, __global const ushort* restrict gf16_antilog_src\n";
+					sourceStream << "#define EX_TABLE_KARGS_DECL , " << outExpType << " outExp, __global const ushort* restrict gf16_log, __global const ushort* restrict gf16_antilog_src\n";
 				else
-					sourceStream << "#define EX_TABLE_KARGS_DECL , __global const ushort* restrict outExp, __global const ushort* restrict gf16_log\n";
+					sourceStream << "#define EX_TABLE_KARGS_DECL , " << outExpType << " outExp, __global const ushort* restrict gf16_log\n";
 				
 				sourceStream <<
-					"#define EX_TABLE_ARGS_DECL , __global const ushort* restrict outExp, __global const ushort* restrict gf16_log, __local const ushort* restrict gf16_antilog\n"
+					"#define EX_TABLE_ARGS_DECL , " << outExpType << " outExp, __global const ushort* restrict gf16_log, __local const ushort* restrict gf16_antilog\n"
 					"#define EX_TABLE_ARGS , outExp, gf16_log, gf16_antilog\n";
 			} else {
-				if(tblAntiLog)
-					sourceStream << "#define EX_TABLE_KARGS_DECL , __global const ushort* restrict outExp, __global const ushort* restrict gf16_antilog_src\n";
+				if(tblAntiLog) // should never be true
+					sourceStream << "#define EX_TABLE_KARGS_DECL , " << outExpType << " outExp, __global const ushort* restrict gf16_antilog_src\n";
 				else
-					sourceStream << "#define EX_TABLE_KARGS_DECL , __global const ushort* restrict outExp\n";
+					sourceStream << "#define EX_TABLE_KARGS_DECL , " << outExpType << " outExp\n";
 				
 				sourceStream <<
-					"#define EX_TABLE_ARGS_DECL , __global const ushort* restrict outExp, __local const ushort* restrict gf16_antilog\n"
+					"#define EX_TABLE_ARGS_DECL , " << outExpType << " outExp, __local const ushort* restrict gf16_antilog\n"
 					"#define EX_TABLE_ARGS , outExp, gf16_antilog\n";
 			}
 		} else {
 			if(tblLog) {
 				if(tblAntiLog) {
 					sourceStream <<
-						"#define EX_TABLE_ARGS_DECL , __global const ushort* restrict outExp, __global const ushort* restrict gf16_log, __global const ushort* restrict gf16_antilog\n"
+						"#define EX_TABLE_ARGS_DECL , " << outExpType << " outExp, __global const ushort* restrict gf16_log, __global const ushort* restrict gf16_antilog\n"
 						"#define EX_TABLE_ARGS , outExp, gf16_log, gf16_antilog\n";
 				} else {
 					sourceStream <<
-						"#define EX_TABLE_ARGS_DECL , __global const ushort* restrict outExp, __global const ushort* restrict gf16_log\n"
+						"#define EX_TABLE_ARGS_DECL , " << outExpType << " outExp, __global const ushort* restrict gf16_log\n"
 						"#define EX_TABLE_ARGS , outExp, gf16_log\n";
 				}
 			}
@@ -1405,7 +1407,7 @@ bool GF16OCL::setup_kernels(Galois16OCLMethods method, unsigned targetInputBatch
 	// should probably check for dedicated memory to determine if transferring is needed
 	for(int i=0; i<OCL_BUFFER_COUNT; i++) {
 		buffer_input[i] = cl::Buffer(context, CL_MEM_READ_ONLY | CL_MEM_ALLOC_HOST_PTR, inputBatchSize*sliceSizeAligned);
-		if(coeffAsLog) {
+		if(coeffType != GF16OCL_COEFF_NORMAL) {
 			buffer_coeffs[i] = cl::Buffer(context, CL_MEM_READ_ONLY | CL_MEM_ALLOC_HOST_PTR, inputBatchSize*sizeof(uint16_t));
 			tmp_coeffs[i].resize(inputBatchSize);
 		} else {
@@ -1427,12 +1429,14 @@ bool GF16OCL::setup_kernels(Galois16OCLMethods method, unsigned targetInputBatch
 	
 	extra_buffers.clear();
 	
-	if(coeffAsLog) {
+	if(coeffType == GF16OCL_COEFF_LOG) {
 		buffer_outExp = cl::Buffer(context, CL_MEM_READ_ONLY | CL_MEM_ALLOC_HOST_PTR, numOutputs*sizeof(uint16_t));
 		kernelMul.setArg(3, buffer_outExp);
 		kernelMulAdd.setArg(3, buffer_outExp);
 		kernelMulLast.setArg(4, buffer_outExp);
 		kernelMulAddLast.setArg(4, buffer_outExp);
+	} else {
+		buffer_outExp = cl::Buffer();
 	}
 	// if we couldn't embed log tables directly into the source, transfer them now
 	if(tblLog) {

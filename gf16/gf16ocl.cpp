@@ -127,25 +127,44 @@ bool GF16OCL::init(size_t _sliceSize, Galois16OCLMethods method, unsigned target
 		zeroes = (uint8_t*)calloc(ZERO_MEM_SIZE, 1);
 	}
 	reset_state();
+	coeffType = GF16OCL_COEFF_NORMAL;
 	return true;
 }
 
 bool GF16OCL::set_outputs(unsigned _numOutputs, const uint16_t* outputExp) {
-	if(_numOutputs != numOutputs) {
+	// check if coeffs are sequential
+	bool coeffIsSeq = false;
+	if(coeffType != GF16OCL_COEFF_LOG) {
+		coeffIsSeq = true;
+		uint16_t coeffBase = outputExp[0]; // we don't support _numOutputs < 1
+		for(unsigned i=1; i<_numOutputs; i++) {
+			if(outputExp[i] != coeffBase+i) {
+				coeffIsSeq = false;
+				break;
+			}
+		}
+	}
+	
+	if(_numOutputs != numOutputs || (coeffType == GF16OCL_COEFF_LOG_SEQ && !coeffIsSeq)) {
 		// need to re-init as the code assumes a fixed number of outputs
 		numOutputs = _numOutputs;
 		outputExponents = std::vector<uint16_t>(numOutputs);
-		if(!setup_kernels(_setupMethod, _setupTargetInputBatch, _setupTargetIters, _setupTargetGrouping))
+		if(!setup_kernels(_setupMethod, _setupTargetInputBatch, _setupTargetIters, _setupTargetGrouping, coeffIsSeq))
 			return false;
 	}
 	
 	memcpy(outputExponents.data(), outputExp, numOutputs*sizeof(uint16_t));
-	if(coeffAsLog) {
+	if(coeffType == GF16OCL_COEFF_LOG) {
 		cl::Event writeEvent;
 		queue.enqueueWriteBuffer(buffer_outExp, CL_FALSE, 0, numOutputs*sizeof(uint16_t), outputExponents.data(), &queueEvents, &writeEvent);
 		queueEvents.clear();
 		queueEvents.reserve(2);
 		queueEvents.push_back(writeEvent);
+	} else if(coeffType == GF16OCL_COEFF_LOG_SEQ) {
+		kernelMul.setArg<cl_uint>(3, outputExponents[0]);
+		kernelMulAdd.setArg<cl_uint>(3, outputExponents[0]);
+		kernelMulLast.setArg<cl_uint>(4, outputExponents[0]);
+		kernelMulAddLast.setArg<cl_uint>(4, outputExponents[0]);
 	}
 	return true;
 }
@@ -212,12 +231,10 @@ void GF16OCL::set_slice_size(size_t newSliceSize) {
 }
 
 void GF16OCL::run_kernel(unsigned buf, unsigned numInputs) {
-#ifndef SKIP_TRANSFER
 	// transfer coefficient list
 	cl::Event coeffEvent;
-	queue.enqueueWriteBuffer(buffer_coeffs[buf], CL_FALSE, 0, inputBatchSize * (coeffAsLog ? 1 : outputExponents.size()) * sizeof(uint16_t), tmp_coeffs[buf].data(), NULL, &coeffEvent);
+	queue.enqueueWriteBuffer(buffer_coeffs[buf], CL_FALSE, 0, inputBatchSize * (coeffType!=GF16OCL_COEFF_NORMAL ? 1 : outputExponents.size()) * sizeof(uint16_t), tmp_coeffs[buf].data(), NULL, &coeffEvent);
 	queueEvents.push_back(coeffEvent);
-#endif
 	
 	// invoke kernel
 	cl::Kernel* kernel;
@@ -233,7 +250,7 @@ void GF16OCL::run_kernel(unsigned buf, unsigned numInputs) {
 	kernel->setArg(2, buffer_coeffs[buf]);
 	// TODO: try-catch to detect errors (e.g. out of resources)
 	queue.enqueueNDRangeKernel(*kernel, cl::NullRange, processRange, workGroupRange, &queueEvents, proc+buf);
-	queueEvents.clear(); // for coeffAsLog, assume that the outputs are transferred by the time we enqueue the next kernel
+	queueEvents.clear(); // for coeffType!=GF16OCL_COEFF_NORMAL, assume that the outputs are transferred by the time we enqueue the next kernel
 	
 	// management
 	inputCount = 0;
@@ -284,7 +301,7 @@ void GF16OCL::_add_input(const void* data, size_t size) {
 
 void GF16OCL::add_input(const void* data, size_t size, unsigned inputNum) {
 	// compute coeffs
-	if(coeffAsLog) {
+	if(coeffType != GF16OCL_COEFF_NORMAL) {
 		tmp_coeffs[inputBufferIdx][inputCount] = gfmat_input_log(inputNum);
 	} else {
 		uint16_t inputLog = gfmat_input_log(inputNum);
