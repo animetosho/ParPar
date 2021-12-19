@@ -1436,28 +1436,31 @@ bool GF16OCL::setup_kernels(Galois16OCLMethods method, unsigned targetInputBatch
 	}
 	// if we couldn't embed log tables directly into the source, transfer them now
 	if(tblLog) {
-		extra_buffers.push_back(cl::Buffer(context, CL_MEM_READ_ONLY, 65536*2));
-		const cl::Buffer& buf = extra_buffers.back();
-		queue.enqueueWriteBuffer(buf, CL_TRUE, 0, 65536*2, tblLog);
+		const cl::Buffer bufLog(context, CL_MEM_READ_ONLY, 65536*2);
+		extra_buffers.push_back(bufLog);
+		kernelMul.setArg(4, bufLog);
+		kernelMulAdd.setArg(4, bufLog);
+		kernelMulLast.setArg(5, bufLog);
+		kernelMulAddLast.setArg(5, bufLog);
 		
-		kernelMul.setArg(4, buf);
-		kernelMulAdd.setArg(4, buf);
-		kernelMulLast.setArg(5, buf);
-		kernelMulAddLast.setArg(5, buf);
-		
-		delete[] tblLog;
-	}
-	if(tblAntiLog) {
-		extra_buffers.push_back(cl::Buffer(context, CL_MEM_READ_ONLY, tblAntiLogSize*2));
-		const cl::Buffer& buf = extra_buffers.back();
-		queue.enqueueWriteBuffer(buf, CL_TRUE, 0, tblAntiLogSize*2, tblAntiLog);
-		
-		kernelMul.setArg(5, buf);
-		kernelMulAdd.setArg(5, buf);
-		kernelMulLast.setArg(6, buf);
-		kernelMulAddLast.setArg(6, buf);
-		
-		delete[] tblAntiLog;
+		if(tblAntiLog) {
+			extra_buffers.push_back(cl::Buffer(context, CL_MEM_READ_ONLY, tblAntiLogSize*2));
+			const cl::Buffer& bufALog = extra_buffers.back();
+			kernelMul.setArg(5, bufALog);
+			kernelMulAdd.setArg(5, bufALog);
+			kernelMulLast.setArg(6, bufALog);
+			kernelMulAddLast.setArg(6, bufALog);
+			
+			std::vector<cl::Event> enqueueEvents(2);
+			queue.enqueueWriteBuffer(bufLog, CL_FALSE, 0, 65536*2, tblLog, NULL, &enqueueEvents[0]);
+			queue.enqueueWriteBuffer(bufALog, CL_FALSE, 0, tblAntiLogSize*2, tblAntiLog, NULL, &enqueueEvents[1]);
+			cl::Event::waitForEvents(enqueueEvents);
+			delete[] tblLog;
+			delete[] tblAntiLog;
+		} else {
+			queue.enqueueWriteBuffer(bufLog, CL_TRUE, 0, 65536*2, tblLog);
+			delete[] tblLog;
+		}
 	}
 	
 	return true;

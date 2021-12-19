@@ -70,6 +70,7 @@ class GF16OCL {
 	// OpenCL stuff
 	cl::Device device;
 	cl::CommandQueue queue;
+	std::vector<cl::Event> queueEvents;
 	cl::NDRange processRange;
 	cl::NDRange workGroupRange;
 	cl::Kernel kernelMulAdd;

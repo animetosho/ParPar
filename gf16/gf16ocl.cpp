@@ -82,6 +82,8 @@ GF16OCL::GF16OCL(int platformId, int deviceId) {
 	} catch(cl::Error const& err) {
 		std::cerr << "OpenCL Error: " << err.what() << "(" << err.err() << ")" << std::endl;
 	}
+	
+	queueEvents.reserve(2);
 }
 
 GF16OCL::~GF16OCL() {
@@ -138,9 +140,13 @@ bool GF16OCL::set_outputs(unsigned _numOutputs, const uint16_t* outputExp) {
 	}
 	
 	memcpy(outputExponents.data(), outputExp, numOutputs*sizeof(uint16_t));
-	if(coeffAsLog)
-		// as this is async, could there be problems with two consecutive set_outputs? either case, it's probably not a practical problem as it's a weird edge case; TODO: investigate
-		queue.enqueueWriteBuffer(buffer_outExp, CL_FALSE, 0, numOutputs*sizeof(uint16_t), outputExponents.data());
+	if(coeffAsLog) {
+		cl::Event writeEvent;
+		queue.enqueueWriteBuffer(buffer_outExp, CL_FALSE, 0, numOutputs*sizeof(uint16_t), outputExponents.data(), &queueEvents, &writeEvent);
+		queueEvents.clear();
+		queueEvents.reserve(2);
+		queueEvents.push_back(writeEvent);
+	}
 	return true;
 }
 
@@ -208,7 +214,9 @@ void GF16OCL::set_slice_size(size_t newSliceSize) {
 void GF16OCL::run_kernel(unsigned buf, unsigned numInputs) {
 #ifndef SKIP_TRANSFER
 	// transfer coefficient list
-	queue.enqueueWriteBuffer(buffer_coeffs[buf], CL_TRUE, 0, inputBatchSize * (coeffAsLog ? 1 : outputExponents.size()) * sizeof(uint16_t), tmp_coeffs[buf].data());
+	cl::Event coeffEvent;
+	queue.enqueueWriteBuffer(buffer_coeffs[buf], CL_FALSE, 0, inputBatchSize * (coeffAsLog ? 1 : outputExponents.size()) * sizeof(uint16_t), tmp_coeffs[buf].data(), NULL, &coeffEvent);
+	queueEvents.push_back(coeffEvent);
 #endif
 	
 	// invoke kernel
@@ -224,8 +232,8 @@ void GF16OCL::run_kernel(unsigned buf, unsigned numInputs) {
 	kernel->setArg(1, buffer_input[buf]);
 	kernel->setArg(2, buffer_coeffs[buf]);
 	// TODO: try-catch to detect errors (e.g. out of resources)
-	queue.enqueueNDRangeKernel(*kernel, cl::NullRange, processRange, workGroupRange, NULL, proc+buf);
-	
+	queue.enqueueNDRangeKernel(*kernel, cl::NullRange, processRange, workGroupRange, &queueEvents, proc+buf);
+	queueEvents.clear(); // for coeffAsLog, assume that the outputs are transferred by the time we enqueue the next kernel
 	
 	// management
 	inputCount = 0;
@@ -243,20 +251,27 @@ void GF16OCL::_add_input(const void* data, size_t size) {
 		// need to zero rest of buffer
 		size_t zeroStart = inputCount * sliceSizeAligned + size;
 		size_t zeroAmt = sliceSize - size;
+		cl::Event zeroEvent;
 		if(zeroes) { // OpenCL 1.1
+			queueEvents.reserve(queueEvents.capacity() + (zeroAmt+ZERO_MEM_SIZE-1)/ZERO_MEM_SIZE);
 			while(1) {
 				if(zeroAmt > ZERO_MEM_SIZE) {
-					queue.enqueueWriteBuffer(buffer_input[inputBufferIdx], CL_FALSE, zeroStart, ZERO_MEM_SIZE, zeroes);
+					queue.enqueueWriteBuffer(buffer_input[inputBufferIdx], CL_FALSE, zeroStart, ZERO_MEM_SIZE, zeroes, NULL, &zeroEvent);
+					queueEvents.push_back(zeroEvent);
 					zeroAmt -= ZERO_MEM_SIZE;
 					zeroStart += ZERO_MEM_SIZE;
 				} else {
-					if(zeroAmt)
-						queue.enqueueWriteBuffer(buffer_input[inputBufferIdx], CL_FALSE, zeroStart, zeroAmt, zeroes);
+					if(zeroAmt) {
+						queue.enqueueWriteBuffer(buffer_input[inputBufferIdx], CL_FALSE, zeroStart, zeroAmt, zeroes, NULL, &zeroEvent);
+						queueEvents.push_back(zeroEvent);
+					}
 					break;
 				}
 			}
-		} else // OpenCL 1.2
-			queue.enqueueFillBuffer<uint8_t>(buffer_input[inputBufferIdx], 0, zeroStart, zeroAmt);
+		} else { // OpenCL 1.2
+			queue.enqueueFillBuffer<uint8_t>(buffer_input[inputBufferIdx], 0, zeroStart, zeroAmt, NULL, &zeroEvent);
+			queueEvents.push_back(zeroEvent);
+		}
 	}
 #else
 	(void)data; (void)size;
