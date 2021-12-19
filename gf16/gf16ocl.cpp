@@ -107,19 +107,17 @@ size_t GF16OCL::getWGSize(const cl::Context& context, const cl::Device& device) 
 }
 
 // _sliceSize must be divisible by 2
-bool GF16OCL::init(size_t _sliceSize, unsigned allocOutputs, Galois16OCLMethods method, unsigned targetInputBatch, unsigned targetIters, unsigned targetGrouping) {
+bool GF16OCL::init(size_t _sliceSize, Galois16OCLMethods method, unsigned targetInputBatch, unsigned targetIters, unsigned targetGrouping) {
 	if(!_initSuccess) return false;
 	sliceSize = _sliceSize;
-	numOutputs = allocOutputs;
-	outputExponents.resize(numOutputs);
+	numOutputs = 0;
+	outputExponents.clear();
 	
 	if(method == GF16OCL_AUTO) method = default_method();
 	_setupMethod = method;
 	_setupTargetInputBatch = targetInputBatch;
 	_setupTargetIters = targetIters;
 	_setupTargetGrouping = targetGrouping;
-	if(!setup_kernels(method, targetInputBatch, targetIters, targetGrouping))
-		return false;
 	
 	const std::string oclVersion = device.getInfo<CL_DEVICE_VERSION>(); // will return "OpenCL x.y [extra]"
 	if(oclVersion[7] == '1' && oclVersion[8] == '.' && oclVersion[9] < '2') { // OpenCL < 1.2
@@ -141,7 +139,8 @@ bool GF16OCL::set_outputs(unsigned _numOutputs, const uint16_t* outputExp) {
 	
 	memcpy(outputExponents.data(), outputExp, numOutputs*sizeof(uint16_t));
 	if(coeffAsLog)
-		queue.enqueueWriteBuffer(buffer_outExp, CL_TRUE, 0, numOutputs*sizeof(uint16_t), outputExp);
+		// as this is async, could there be problems with two consecutive set_outputs? either case, it's probably not a practical problem as it's a weird edge case; TODO: investigate
+		queue.enqueueWriteBuffer(buffer_outExp, CL_FALSE, 0, numOutputs*sizeof(uint16_t), outputExponents.data());
 	return true;
 }
 

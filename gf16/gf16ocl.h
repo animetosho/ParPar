@@ -125,7 +125,7 @@ public:
 	static std::vector<GF16OCL_DeviceInfo> getDevices(int platformId = -1);
 	explicit GF16OCL(int platformId = -1, int deviceId = -1);
 	~GF16OCL();
-	bool init(size_t _sliceSize, unsigned allocOutputs, Galois16OCLMethods method = GF16OCL_AUTO, unsigned targetInputBatch=0, unsigned targetIters=0, unsigned targetGrouping=0);
+	bool init(size_t _sliceSize, Galois16OCLMethods method = GF16OCL_AUTO, unsigned targetInputBatch=0, unsigned targetIters=0, unsigned targetGrouping=0);
 	void add_input(const void* buffer, size_t size, unsigned inputNum);
 	void add_input(const void* buffer, size_t size, const uint16_t* coeffs);
 	void flush_inputs();
