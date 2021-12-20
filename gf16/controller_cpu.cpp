@@ -188,10 +188,10 @@ void PAR2ProcCPU::freeProcessingMem() {
 	}
 }
 struct close_data {
-	PAR2ProcFinishedCb cb;
+	PAR2ProcPlainCb cb;
 	int refCount;
 };
-void PAR2ProcCPU::deinit(PAR2ProcFinishedCb cb) {
+void PAR2ProcCPU::deinit(PAR2ProcPlainCb cb) {
 	freeGf();
 	if(!loop) return;
 	loop = nullptr;
@@ -238,7 +238,7 @@ struct prepare_data {
 	size_t chunkLen;
 	PAR2ProcCPU* parent;
 	const Galois16Mul* gf;
-	PAR2ProcPrepareCb cb;
+	PAR2ProcPlainCb cb;
 };
 
 // prepare thread process function
@@ -265,11 +265,11 @@ void PAR2ProcCPU::_after_prepare_chunk() {
 	}
 }
 
-bool PAR2ProcCPU::addInput(const void* buffer, size_t size, uint16_t inputNum, bool flush, const PAR2ProcPrepareCb& cb) {
+PAR2ProcBackendAddResult PAR2ProcCPU::addInput(const void* buffer, size_t size, uint16_t inputNum, bool flush, const PAR2ProcPlainCb& cb) {
 	auto& area = staging[currentInputBuf];
 	// if we're waiting for input availability, can't add
 	// NOTE: if add fails due to being full, client resubmitting may be vulnerable to race conditions if it adds an event listener after completion event gets fired
-	if(area.isActive) return false;
+	if(area.isActive) return PROC_ADD_FULL;
 	if(!staging[0].src) reallocMemInput();
 	
 	area.inputNums[currentInputPos] = inputNum;
@@ -287,6 +287,7 @@ bool PAR2ProcCPU::addInput(const void* buffer, size_t size, uint16_t inputNum, b
 	
 	data->submitInBufs = (flush || currentInputPos == inputGrouping || (stagingActiveCount == 0 && staging.size() > 1)) ? currentInputPos : 0;
 	data->inBufId = currentInputBuf;
+	
 	if(data->submitInBufs) {
 		area.isActive = true; // lock this buffer until processing is complete
 		stagingActiveCount++;
@@ -296,7 +297,9 @@ bool PAR2ProcCPU::addInput(const void* buffer, size_t size, uint16_t inputNum, b
 	}
 	
 	prepareThread.send(data);
-	return true;
+	return staging[(currentInputBuf == 0 ? staging.size() : currentInputBuf)-1].isActive
+		? PROC_ADD_OK_BUSY
+		: PROC_ADD_OK;
 }
 
 void PAR2ProcCPU::flush() {
@@ -350,7 +353,7 @@ static void after_finish(uv_work_t *req, int status) {
 	delete req;
 }
 
-void PAR2ProcCPU::getOutput(unsigned index, void* output, const PAR2ProcOutputCb& cb) const {
+void PAR2ProcCPU::getOutput(unsigned index, void* output, const PAR2ProcOutputCb& cb) {
 	uv_work_t* req = new uv_work_t;
 	struct finish_data* data = new struct finish_data;
 	data->src = memProcessing;

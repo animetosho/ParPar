@@ -2,8 +2,9 @@
 #define CL_USE_DEPRECATED_OPENCL_1_2_APIS
 #define CL_USE_DEPRECATED_OPENCL_2_0_APIS
 
+#include "controller.h"
+#include "threadqueue.h" // must be placed before CL/cl.hpp for some reason
 #include <CL/cl.hpp>
-#include <vector>
 
 // defines max number of kernels to queue up; probably little reason to go beyond 2
 #define OCL_BUFFER_COUNT 2
@@ -26,10 +27,10 @@ enum Galois16OCLMethods {
 };
 static const char* Galois16OCLMethodsText[] = {
 	"Auto",
-	"LH Lookup",
-	"LL Lookup",
-	"LH Lookup (NoCache)",
-	"LL Lookup (NoCache)",
+	"Lookup",
+	"Lookup Half",
+	"Lookup (NoCache)",
+	"Lookup Half (NoCache)",
 	"Shuffle",
 	//"Shuffle2",
 	"Log",
@@ -64,7 +65,9 @@ typedef struct {
 	unsigned computeUnits;
 } GF16OCL_DeviceInfo;
 
-class GF16OCL {
+class GF16OCL : public IPAR2ProcBackend {
+	uv_loop_t* loop; // is NULL when closed
+	
 	bool _initSuccess;
 	// method/input parameters
 	unsigned inputBatchSize;
@@ -94,7 +97,7 @@ class GF16OCL {
 	uint8_t* zeroes; // a chunk of zero'd memory for zeroing device memory (prior to OpenCL 1.2)
 	// progress
 	cl::Event proc[OCL_BUFFER_COUNT];
-	bool doAdd;
+	bool procActive[OCL_BUFFER_COUNT];
 	unsigned inputCount;
 	unsigned inputBufferIdx;
 	// to enable slice size adjustments
@@ -107,20 +110,22 @@ class GF16OCL {
 	Galois16OCLMethods _setupMethod;
 	unsigned _setupTargetInputBatch, _setupTargetIters, _setupTargetGrouping;
 	
+	unsigned activeCount;
+	
 	bool setup_kernels(Galois16OCLMethods method, unsigned targetInputBatch, unsigned targetIters, unsigned targetGrouping, bool outputSequential);
 	void run_kernel(unsigned buf, unsigned numInputs);
-	void _add_input(const void* buffer, size_t size);
+	PAR2ProcBackendAddResult _addInput(const void* buffer, size_t size, bool flush, const PAR2ProcPlainCb& cb);
 	
 	
 	cl::Context context;
 	static std::vector<cl::Platform> platforms;
 	
 	static size_t getWGSize(const cl::Context& context, const cl::Device& device);
+	void reset_state();
 	
 	// disable copy constructor
 	GF16OCL(const GF16OCL&);
 	GF16OCL& operator=(const GF16OCL&);
-	
 	
 public:
 	static int load_runtime();
@@ -129,20 +134,30 @@ public:
 	}
 	static std::vector<std::string> getPlatforms();
 	static std::vector<GF16OCL_DeviceInfo> getDevices(int platformId = -1);
-	explicit GF16OCL(int platformId = -1, int deviceId = -1);
+	explicit GF16OCL(uv_loop_t* _loop, int platformId = -1, int deviceId = -1);
 	~GF16OCL();
-	bool init(size_t _sliceSize, Galois16OCLMethods method = GF16OCL_AUTO, unsigned targetInputBatch=0, unsigned targetIters=0, unsigned targetGrouping=0);
-	void add_input(const void* buffer, size_t size, unsigned inputNum);
-	void add_input(const void* buffer, size_t size, const uint16_t* coeffs);
-	void flush_inputs();
-	void finish();
-	void get_output(unsigned index, void* output) const;
-	void reset_state();
+	void setSliceSize(size_t _sliceSize) override;
+	bool init(Galois16OCLMethods method = GF16OCL_AUTO, unsigned targetInputBatch=0, unsigned targetIters=0, unsigned targetGrouping=0);
+	PAR2ProcBackendAddResult addInput(const void* buffer, size_t size, uint16_t inputNum, bool flush, const PAR2ProcPlainCb& cb) override;
+	PAR2ProcBackendAddResult addInput(const void* buffer, size_t size, const uint16_t* coeffs, bool flush, const PAR2ProcPlainCb& cb);
+	void flush() override;
+	void getOutput(unsigned index, void* output, const PAR2ProcOutputCb& cb) override;
 	
-	void set_slice_size(size_t newSliceSize); // can only set to lower than allocated in init()
-	bool set_outputs(unsigned _numOutputs, const uint16_t* outputExp);
-	inline bool set_outputs(std::vector<uint16_t> outputExp) {
-		return set_outputs((unsigned)outputExp.size(), outputExp.data());
+	bool setCurrentSliceSize(size_t newSliceSize) override; // can only set to lower than allocated in init()
+	bool setRecoverySlices(unsigned _numOutputs, const uint16_t* outputExp = NULL) override;
+	inline int getNumRecoverySlices() const override {
+		return numOutputs;
+	}
+	
+	void deinit(PAR2ProcPlainCb cb) override;
+	void deinit() override;
+	void freeProcessingMem() override {}
+	
+	bool isEmpty() const override {
+		return activeCount == 0;
+	}
+	inline const void* getMethodName() const {
+		return methodToText(_setupMethod);
 	}
 	
 	Galois16OCLMethods default_method() const;
@@ -151,4 +166,14 @@ public:
 		return Galois16OCLMethodsText[(int)m];
 	}
 	
+	
+	ThreadMessageQueue<void*> _sentChunks;
+	uv_async_t _sentSignal;
+	ThreadMessageQueue<void*> _recvChunks;
+	uv_async_t _recvSignal;
+	ThreadMessageQueue<void*> _procChunks;
+	uv_async_t _procSignal;
+	void _after_sent();
+	void _after_recv();
+	void _after_proc();
 };

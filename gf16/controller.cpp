@@ -19,17 +19,19 @@ void PAR2Proc::init(size_t sliceSize, const std::vector<IPAR2ProcBackend*>& _bac
 	
 	// TODO: better distribution
 	backends.resize(_backends.size());
-	size_t sizeRemaining = sliceSize;
+	size_t pos = 0;
 	size_t sizePerBackend = (sliceSize + backends.size()-1) / backends.size();
 	if(sizePerBackend & 1) sizePerBackend++;
 	for(unsigned i=0; i<_backends.size(); i++) {
-		size_t size = std::min(sizeRemaining, sizePerBackend);
-		backends[i].currentSliceSize = size;
-		backends[i].be = _backends[i];
-		backends[i].be->setSliceSize(size);
-		sizeRemaining -= size;
+		size_t size = std::min(sliceSize-pos, sizePerBackend);
+		auto& backend = backends[i];
+		backend.currentSliceSize = size;
+		backend.currentOffset = pos;
+		backend.be = _backends[i];
+		backend.be->setSliceSize(size);
+		pos += size;
 		
-		backends[i].be->setProgressCb([this](int numInputs, int firstInput) {
+		backend.be->setProgressCb([this](int numInputs, int firstInput) {
 			this->onBackendProcess(numInputs, firstInput);
 		});
 	}
@@ -39,13 +41,14 @@ bool PAR2Proc::setCurrentSliceSize(size_t newSliceSize) {
 	currentSliceSize = newSliceSize;
 	
 	bool success = true;
-	size_t sizeRemaining = currentSliceSize;
+	size_t pos = 0;
 	size_t sizePerBackend = (currentSliceSize + backends.size()-1) / backends.size();
 	if(sizePerBackend & 1) sizePerBackend++;
 	for(auto& backend : backends) {
-		backend.currentSliceSize = std::min(sizeRemaining, sizePerBackend);
+		backend.currentSliceSize = std::min(currentSliceSize-pos, sizePerBackend);
+		backend.currentOffset = pos;
 		success = success && backend.be->setCurrentSliceSize(backend.currentSliceSize);
-		sizeRemaining -= backend.currentSliceSize;
+		pos += backend.currentSliceSize;
 	}
 	return success;
 }
@@ -60,10 +63,10 @@ bool PAR2Proc::setRecoverySlices(unsigned numSlices, const uint16_t* exponents) 
 	return success;
 }
 
-bool PAR2Proc::addInput(const void* buffer, size_t size, uint16_t inputNum, bool flush, const PAR2ProcPrepareCb& cb) {
+bool PAR2Proc::addInput(const void* buffer, size_t size, uint16_t inputNum, bool flush, const PAR2ProcPlainCb& cb) {
 	assert(!endSignalled);
 	
-	PAR2ProcPrepareCb backendCb = nullptr;
+	PAR2ProcPlainCb backendCb = nullptr;
 	if(cb) {
 		auto* cbRef = new int(backends.size());
 		backendCb = [cbRef, cb]() {
@@ -77,15 +80,13 @@ bool PAR2Proc::addInput(const void* buffer, size_t size, uint16_t inputNum, bool
 	// if the last add was unsuccessful, we assume that failed add is now being resent
 	// TODO: consider some better system - e.g. it may be worthwhile allowing accepting backends to continue to get new buffers? or perhaps use this as an opportunity to size up the size?
 	bool success = true;
-	size_t pos = 0;
 	for(auto& backend : backends) {
-		size_t amount = std::min(size-pos, backend.currentSliceSize);
+		if(backend.currentOffset >= size) continue;
+		size_t amount = std::min(size-backend.currentOffset, backend.currentSliceSize);
 		if(lastAddSuccessful || !backend.addSuccessful) {
-			backend.addSuccessful = backend.be->addInput(static_cast<const char*>(buffer) + pos, amount, inputNum, flush, backendCb);
+			backend.addSuccessful = backend.be->addInput(static_cast<const char*>(buffer) + backend.currentOffset, amount, inputNum, flush, backendCb) != PROC_ADD_FULL;
 			success = success && backend.addSuccessful;
 		}
-		pos += amount;
-		if(pos == size) break;
 	}
 	if(success) hasAdded = true;
 	lastAddSuccessful = success;
@@ -97,7 +98,7 @@ void PAR2Proc::flush() {
 		backend.be->flush();
 }
 
-void PAR2Proc::endInput(const PAR2ProcFinishedCb& _finishCb) {
+void PAR2Proc::endInput(const PAR2ProcPlainCb& _finishCb) {
 	assert(!endSignalled);
 	flush();
 	finishCb = _finishCb;
@@ -119,11 +120,11 @@ void PAR2Proc::getOutput(unsigned index, void* output, const PAR2ProcOutputCb& c
 		return;
 	}
 	
-	size_t pos = 0;
 	auto* cbRef = new int(backends.size());
 	auto* allValid = new bool(true);
 	for(auto& backend : backends) {
-		backend.be->getOutput(index, static_cast<char*>(output) + pos, [cbRef, allValid, cb](bool valid) {
+		// TODO: for overlapping regions, need to do a xor-merge pass
+		backend.be->getOutput(index, static_cast<char*>(output) + backend.currentOffset, [cbRef, allValid, cb](bool valid) {
 			*allValid = *allValid && valid;
 			if(--(*cbRef) == 0) {
 				delete cbRef;
@@ -131,7 +132,6 @@ void PAR2Proc::getOutput(unsigned index, void* output, const PAR2ProcOutputCb& c
 				delete allValid;
 			}
 		});
-		pos += backend.currentSliceSize;
 	}
 }
 
@@ -162,7 +162,7 @@ void PAR2Proc::processing_finished() {
 	finishCb = nullptr;
 }
 
-void PAR2Proc::deinit(PAR2ProcFinishedCb cb) {
+void PAR2Proc::deinit(PAR2ProcPlainCb cb) {
 	auto* cnt = new int(backends.size());
 	for(auto& backend : backends)
 		backend.be->deinit([cnt, cb]() {

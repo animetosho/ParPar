@@ -67,19 +67,19 @@ public:
 	
 	explicit PAR2ProcCPU(uv_loop_t* _loop, int stagingAreas=2);
 	explicit inline PAR2ProcCPU(int stagingAreas=2) : PAR2ProcCPU(uv_default_loop(), stagingAreas) {}
-	void setSliceSize(size_t _sliceSize);
-	void deinit(PAR2ProcFinishedCb cb);
-	void deinit();
+	void setSliceSize(size_t _sliceSize) override;
+	void deinit(PAR2ProcPlainCb cb) override;
+	void deinit() override;
 	~PAR2ProcCPU();
 	
 	bool init(Galois16Methods method = GF16_AUTO, unsigned inputGrouping = 0, size_t chunkLen = 0);
-	bool setCurrentSliceSize(size_t newSliceSize);
+	bool setCurrentSliceSize(size_t newSliceSize) override;
 	
-	bool setRecoverySlices(unsigned numSlices, const uint16_t* exponents = NULL);
-	inline int getNumRecoverySlices() const {
+	bool setRecoverySlices(unsigned numSlices, const uint16_t* exponents = NULL) override;
+	inline int getNumRecoverySlices() const override {
 		return outputExp.size();
 	}
-	void freeProcessingMem();
+	void freeProcessingMem() override;
 	
 	void setNumThreads(int threads);
 	inline int getNumThreads() const {
@@ -89,15 +89,15 @@ public:
 		return gf->info().name;
 	}
 	
-	bool addInput(const void* buffer, size_t size, uint16_t inputNum, bool flush, const PAR2ProcPrepareCb& cb);
-	void flush();
-	void endInput();
-	void getOutput(unsigned index, void* output, const PAR2ProcOutputCb& cb) const;
+	PAR2ProcBackendAddResult addInput(const void* buffer, size_t size, uint16_t inputNum, bool flush, const PAR2ProcPlainCb& cb) override;
+	void flush() override;
+	void endInput() override;
+	void getOutput(unsigned index, void* output, const PAR2ProcOutputCb& cb) override;
 	
-	bool isEmpty() const {
+	bool isEmpty() const override {
 		return stagingActiveCount==0;
 	}
-	void processing_finished();
+	void processing_finished() override;
 	
 	static inline Galois16Methods default_method() {
 		return Galois16Mul::default_method();

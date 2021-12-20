@@ -8,12 +8,16 @@
 
 
 // callback types
-typedef std::function<void()> PAR2ProcPrepareCb;
+typedef std::function<void()> PAR2ProcPlainCb;
 typedef std::function<void(bool)> PAR2ProcOutputCb;
 typedef std::function<void(unsigned, uint16_t)> PAR2ProcCompleteCb;
-typedef std::function<void()> PAR2ProcFinishedCb;
 
 // backend interface
+enum PAR2ProcBackendAddResult {
+	PROC_ADD_OK,
+	PROC_ADD_OK_BUSY,
+	PROC_ADD_FULL
+};
 class IPAR2ProcBackend {
 protected:
 	bool processingAdd;
@@ -27,18 +31,18 @@ public:
 	}
 	virtual bool setCurrentSliceSize(size_t size) = 0;
 	virtual bool setRecoverySlices(unsigned numSlices, const uint16_t* exponents = NULL) = 0;
-	virtual bool addInput(const void* buffer, size_t size, uint16_t inputNum, bool flush, const PAR2ProcPrepareCb& cb) = 0;
+	virtual PAR2ProcBackendAddResult addInput(const void* buffer, size_t size, uint16_t inputNum, bool flush, const PAR2ProcPlainCb& cb) = 0;
 	virtual void flush() = 0;
-	virtual void endInput() = 0;
+	virtual void endInput() {};
 	virtual bool isEmpty() const = 0;
-	virtual void getOutput(unsigned index, void* output, const PAR2ProcOutputCb& cb) const = 0;
+	virtual void getOutput(unsigned index, void* output, const PAR2ProcOutputCb& cb) = 0;
 	inline void discardOutput() {
 		processingAdd = false;
 	}
-	virtual void processing_finished() = 0;
+	virtual void processing_finished() {};
 	
 	virtual void deinit() = 0;
-	virtual void deinit(PAR2ProcFinishedCb cb) = 0;
+	virtual void deinit(PAR2ProcPlainCb cb) = 0;
 	virtual void freeProcessingMem() = 0;
 	
 	virtual ~IPAR2ProcBackend() {}
@@ -46,6 +50,7 @@ public:
 
 struct Backend {
 	IPAR2ProcBackend* be;
+	size_t currentOffset;
 	size_t currentSliceSize;
 	bool addSuccessful;
 };
@@ -60,7 +65,7 @@ private:
 	
 	bool endSignalled;
 	void processing_finished();
-	PAR2ProcFinishedCb finishCb;
+	PAR2ProcPlainCb finishCb;
 	PAR2ProcCompleteCb progressCb;
 	
 	void onBackendProcess(int numInputs, int firstInput);
@@ -87,9 +92,9 @@ public:
 		return backends[0].be->getNumRecoverySlices();
 	}
 	
-	bool addInput(const void* buffer, size_t size, uint16_t inputNum, bool flush, const PAR2ProcPrepareCb& cb);
+	bool addInput(const void* buffer, size_t size, uint16_t inputNum, bool flush, const PAR2ProcPlainCb& cb);
 	void flush();
-	void endInput(const PAR2ProcFinishedCb& _finishCb);
+	void endInput(const PAR2ProcPlainCb& _finishCb);
 	void getOutput(unsigned index, void* output, const PAR2ProcOutputCb& cb) const;
 	inline void discardOutput() {
 		hasAdded = false;
@@ -101,7 +106,7 @@ public:
 		for(auto& backend : backends)
 			backend.be->deinit();
 	}
-	void deinit(PAR2ProcFinishedCb cb);
+	void deinit(PAR2ProcPlainCb cb);
 	inline void freeProcessingMem() {
 		for(auto& backend : backends)
 			backend.be->freeProcessingMem();

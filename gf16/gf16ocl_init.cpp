@@ -3,7 +3,7 @@
 #include <stdint.h>
 #include <string.h> // strstr
 #include <sstream> // std::stringstream
-#include "gf16ocl.h"
+#include "controller_ocl.h"
 #include "gf16_global.h" // GF16_POLYNOMIAL
 
 // for viewing compiled code, uncomment
@@ -1388,10 +1388,12 @@ bool GF16OCL::setup_kernels(Galois16OCLMethods method, unsigned targetInputBatch
 	try {
 		program.build(std::vector<cl::Device>(1, device), params);
 	} catch(cl::Error const& err) {
+#ifndef GF16OCL_NO_OUTPUT
 		if(err.err() == CL_BUILD_PROGRAM_FAILURE || err.err() == CL_COMPILE_PROGRAM_FAILURE || err.err() == CL_LINK_PROGRAM_FAILURE) {
 			std::cerr << "OpenCL Build Failure: " << err.what() << "(" << err.err() << "); build log:" <<std::endl << program.getBuildInfo<CL_PROGRAM_BUILD_LOG>(device) << std::endl;
 		} else
 			std::cerr << "OpenCL Build Error: " << err.what() << "(" << err.err() << ")" << std::endl;
+#endif
 		return false;
 	}
 	
