@@ -18,7 +18,7 @@ static void after_computation(uv_async_t *handle) {
 }
 static void compute_worker(void *_req);
 
-PAR2ProcStaging::~PAR2ProcStaging() {
+PAR2ProcCPUStaging::~PAR2ProcCPUStaging() {
 	if(src) ALIGN_FREE(src);
 }
 
@@ -187,22 +187,18 @@ void PAR2ProcCPU::freeProcessingMem() {
 		memProcessing = NULL;
 	}
 }
-struct close_data {
-	PAR2ProcPlainCb cb;
-	int refCount;
-};
 void PAR2ProcCPU::deinit(PAR2ProcPlainCb cb) {
 	freeGf();
 	if(!loop) return;
 	loop = nullptr;
 	
-	auto* freeData = new struct close_data;
+	auto* freeData = new struct PAR2ProcBackendCloseData;
 	freeData->cb = cb;
 	freeData->refCount = 2;
 	_preparedSignal.data = freeData;
 	_doneSignal.data = freeData;
 	auto closeCb = [](uv_handle_t* handle) {
-		auto* freeData = static_cast<struct close_data*>(handle->data);
+		auto* freeData = static_cast<struct PAR2ProcBackendCloseData*>(handle->data);
 		if(--(freeData->refCount) == 0) {
 			freeData->cb();
 			delete freeData;

@@ -948,7 +948,7 @@ static inline size_t round_down_pow2(size_t v) {
 }
 
 // _sliceSize must be divisible by 2
-bool GF16OCL::setup_kernels(Galois16OCLMethods method, unsigned targetInputBatch, unsigned targetIters, unsigned targetGrouping, bool outputSequential) {
+bool PAR2ProcOCL::setup_kernels(Galois16OCLMethods method, unsigned targetInputBatch, unsigned targetIters, unsigned targetGrouping, bool outputSequential) {
 	// TODO: get device info
 	// CL_DEVICE_HOST_UNIFIED_MEMORY (deprecated?)
 	// CL_DEVICE_ADDRESS_BITS (max referencable memory)
@@ -1407,14 +1407,14 @@ bool GF16OCL::setup_kernels(Galois16OCLMethods method, unsigned targetInputBatch
 	
 	// TODO: check if supports CPU shared memory and use host mem instead?
 	// should probably check for dedicated memory to determine if transferring is needed
-	for(int i=0; i<OCL_BUFFER_COUNT; i++) {
-		buffer_input[i] = cl::Buffer(context, CL_MEM_READ_ONLY | CL_MEM_ALLOC_HOST_PTR, inputBatchSize*sliceSizeAligned);
+	for(auto& area : staging) {
+		area.input = cl::Buffer(context, CL_MEM_READ_ONLY | CL_MEM_ALLOC_HOST_PTR, inputBatchSize*sliceSizeAligned);
 		if(coeffType != GF16OCL_COEFF_NORMAL) {
-			buffer_coeffs[i] = cl::Buffer(context, CL_MEM_READ_ONLY | CL_MEM_ALLOC_HOST_PTR, inputBatchSize*sizeof(uint16_t));
-			tmp_coeffs[i].resize(inputBatchSize);
+			area.coeffs = cl::Buffer(context, CL_MEM_READ_ONLY | CL_MEM_ALLOC_HOST_PTR, inputBatchSize*sizeof(uint16_t));
+			area.tmpCoeffs.resize(inputBatchSize);
 		} else {
-			buffer_coeffs[i] = cl::Buffer(context, CL_MEM_READ_ONLY | CL_MEM_ALLOC_HOST_PTR, inputBatchSize*numOutputs*sizeof(uint16_t));
-			tmp_coeffs[i].resize(inputBatchSize*numOutputs);
+			area.coeffs = cl::Buffer(context, CL_MEM_READ_ONLY | CL_MEM_ALLOC_HOST_PTR, inputBatchSize*numOutputs*sizeof(uint16_t));
+			area.tmpCoeffs.resize(inputBatchSize*numOutputs);
 		}
 	}
 	// TODO: need to consider CL_DEVICE_MAX_MEM_ALLOC_SIZE and perhaps break this into multiple allocations

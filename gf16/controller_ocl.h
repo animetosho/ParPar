@@ -65,7 +65,20 @@ typedef struct {
 	unsigned computeUnits;
 } GF16OCL_DeviceInfo;
 
-class GF16OCL : public IPAR2ProcBackend {
+class PAR2ProcOCLStaging {
+public:
+	cl::Buffer input;
+	cl::Buffer coeffs;
+	std::vector<uint16_t> tmpCoeffs;
+	uint16_t firstInput;
+	cl::Event event;
+	bool isActive;
+	
+	PAR2ProcOCLStaging() : isActive(false) {}
+};
+
+
+class PAR2ProcOCL : public IPAR2ProcBackend {
 	uv_loop_t* loop; // is NULL when closed
 	
 	bool _initSuccess;
@@ -85,19 +98,15 @@ class GF16OCL : public IPAR2ProcBackend {
 	cl::Kernel kernelMulAddLast;
 	cl::Kernel kernelMul;
 	cl::Kernel kernelMulLast;
+	std::vector<PAR2ProcOCLStaging> staging;
 	// buffers
-	cl::Buffer buffer_input[OCL_BUFFER_COUNT];
-	cl::Buffer buffer_coeffs[OCL_BUFFER_COUNT];
 	cl::Buffer buffer_outExp;
 	Galois16OCLCoeffType coeffType;
-	std::vector<uint16_t> tmp_coeffs[OCL_BUFFER_COUNT];
 	cl::Buffer buffer_output;
 	std::vector<cl::Buffer> extra_buffers;
 	// TODO: consider making zeroes static?
 	uint8_t* zeroes; // a chunk of zero'd memory for zeroing device memory (prior to OpenCL 1.2)
 	// progress
-	cl::Event proc[OCL_BUFFER_COUNT];
-	bool procActive[OCL_BUFFER_COUNT];
 	unsigned inputCount;
 	unsigned inputBufferIdx;
 	// to enable slice size adjustments
@@ -124,8 +133,8 @@ class GF16OCL : public IPAR2ProcBackend {
 	void reset_state();
 	
 	// disable copy constructor
-	GF16OCL(const GF16OCL&);
-	GF16OCL& operator=(const GF16OCL&);
+	PAR2ProcOCL(const PAR2ProcOCL&);
+	PAR2ProcOCL& operator=(const PAR2ProcOCL&);
 	
 public:
 	static int load_runtime();
@@ -134,12 +143,11 @@ public:
 	}
 	static std::vector<std::string> getPlatforms();
 	static std::vector<GF16OCL_DeviceInfo> getDevices(int platformId = -1);
-	explicit GF16OCL(uv_loop_t* _loop, int platformId = -1, int deviceId = -1);
-	~GF16OCL();
+	explicit PAR2ProcOCL(uv_loop_t* _loop, int platformId = -1, int deviceId = -1);
+	~PAR2ProcOCL();
 	void setSliceSize(size_t _sliceSize) override;
 	bool init(Galois16OCLMethods method = GF16OCL_AUTO, unsigned targetInputBatch=0, unsigned targetIters=0, unsigned targetGrouping=0);
 	PAR2ProcBackendAddResult addInput(const void* buffer, size_t size, uint16_t inputNum, bool flush, const PAR2ProcPlainCb& cb) override;
-	PAR2ProcBackendAddResult addInput(const void* buffer, size_t size, const uint16_t* coeffs, bool flush, const PAR2ProcPlainCb& cb);
 	void flush() override;
 	void getOutput(unsigned index, void* output, const PAR2ProcOutputCb& cb) override;
 	

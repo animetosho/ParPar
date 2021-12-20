@@ -6,7 +6,7 @@
 #include "gf16mul.h"
 
 
-class PAR2ProcStaging {
+class PAR2ProcCPUStaging {
 public:
 	void* src;
 	std::vector<uint16_t> inputNums;
@@ -14,8 +14,8 @@ public:
 	std::atomic<int> procRefs;
 	bool isActive;
 	
-	PAR2ProcStaging() : src(nullptr), isActive(false) {}
-	~PAR2ProcStaging();
+	PAR2ProcCPUStaging() : src(nullptr), isActive(false) {}
+	~PAR2ProcCPUStaging();
 };
 
 class PAR2ProcCPU : public IPAR2ProcBackend {
@@ -42,7 +42,7 @@ private:
 	void freeGf();
 	
 	// staging area from which processing is performed
-	std::vector<PAR2ProcStaging> staging;
+	std::vector<PAR2ProcCPUStaging> staging;
 	bool reallocMemInput();
 	unsigned currentInputBuf, currentInputPos;
 	void* memProcessing; // TODO: break this into chunks, to avoid massive single allocation

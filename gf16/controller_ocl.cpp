@@ -3,13 +3,13 @@
 #include <stdlib.h> // free / calloc
 #include "controller_ocl.h"
 
-std::vector<cl::Platform> GF16OCL::platforms;
+std::vector<cl::Platform> PAR2ProcOCL::platforms;
 
 // buffer for zeroing GPU memory
 #define ZERO_MEM_SIZE 65536
 #include "gfmat_coeff.h"
 
-int GF16OCL::load_runtime() {
+int PAR2ProcOCL::load_runtime() {
 	if(load_opencl()) {
 		return 1;
 	}
@@ -24,16 +24,16 @@ int GF16OCL::load_runtime() {
 
 
 static void after_sent(uv_async_t *handle) {
-	static_cast<GF16OCL*>(handle->data)->_after_sent();
+	static_cast<PAR2ProcOCL*>(handle->data)->_after_sent();
 }
 static void after_recv(uv_async_t *handle) {
-	static_cast<GF16OCL*>(handle->data)->_after_recv();
+	static_cast<PAR2ProcOCL*>(handle->data)->_after_recv();
 }
 static void after_proc(uv_async_t *handle) {
-	static_cast<GF16OCL*>(handle->data)->_after_proc();
+	static_cast<PAR2ProcOCL*>(handle->data)->_after_proc();
 }
 
-GF16OCL::GF16OCL(uv_loop_t* _loop, int platformId, int deviceId) : loop(nullptr) {
+PAR2ProcOCL::PAR2ProcOCL(uv_loop_t* _loop, int platformId, int deviceId) : loop(nullptr), staging(OCL_BUFFER_COUNT) {
 	_initSuccess = false;
 	zeroes = NULL;
 	
@@ -101,14 +101,14 @@ GF16OCL::GF16OCL(uv_loop_t* _loop, int platformId, int deviceId) : loop(nullptr)
 	_procSignal.data = static_cast<void*>(this);
 }
 
-GF16OCL::~GF16OCL() {
+PAR2ProcOCL::~PAR2ProcOCL() {
 	free(zeroes);
 	deinit();
 }
 
 
 // based off getWGsizes function from clinfo
-size_t GF16OCL::getWGSize(const cl::Context& context, const cl::Device& device) {
+size_t PAR2ProcOCL::getWGSize(const cl::Context& context, const cl::Device& device) {
 	try {
 		cl::Program program(context,
 			"#define GWO(type) global type* restrict\n"
@@ -125,10 +125,10 @@ size_t GF16OCL::getWGSize(const cl::Context& context, const cl::Device& device) 
 }
 
 // _sliceSize must be divisible by 2
-void GF16OCL::setSliceSize(size_t _sliceSize) {
+void PAR2ProcOCL::setSliceSize(size_t _sliceSize) {
 	sliceSize = _sliceSize;
 }
-bool GF16OCL::init(Galois16OCLMethods method, unsigned targetInputBatch, unsigned targetIters, unsigned targetGrouping) {
+bool PAR2ProcOCL::init(Galois16OCLMethods method, unsigned targetInputBatch, unsigned targetIters, unsigned targetGrouping) {
 	if(!_initSuccess) return false;
 	numOutputs = 0;
 	outputExponents.clear();
@@ -149,7 +149,7 @@ bool GF16OCL::init(Galois16OCLMethods method, unsigned targetInputBatch, unsigne
 	return true;
 }
 
-bool GF16OCL::setRecoverySlices(unsigned _numOutputs, const uint16_t* outputExp) {
+bool PAR2ProcOCL::setRecoverySlices(unsigned _numOutputs, const uint16_t* outputExp) {
 	if(_numOutputs == 0) {
 		outputExponents.clear();
 		return true;
@@ -191,34 +191,30 @@ bool GF16OCL::setRecoverySlices(unsigned _numOutputs, const uint16_t* outputExp)
 	return true;
 }
 
-void GF16OCL::reset_state() {
+void PAR2ProcOCL::reset_state() {
 	inputCount = 0;
 	inputBufferIdx = 0;
-	for(int i=0; i<OCL_BUFFER_COUNT; i++) {
-		proc[i] = cl::Event(); // clear any existing event
-		procActive[i] = false;
+	for(auto& area : staging) {
+		area.event = cl::Event(); // clear any existing event
+		area.isActive = false;
 	}
 	processingAdd = false;
 	activeCount = 0;
 }
 
-struct close_data {
-	PAR2ProcPlainCb cb;
-	int refCount;
-};
-void GF16OCL::deinit(PAR2ProcPlainCb cb) {
+void PAR2ProcOCL::deinit(PAR2ProcPlainCb cb) {
 	if(!loop) return;
 	loop = nullptr;
 	queue.finish();
 	
-	auto* freeData = new struct close_data;
+	auto* freeData = new struct PAR2ProcBackendCloseData;
 	freeData->cb = cb;
 	freeData->refCount = 3;
 	_sentSignal.data = freeData;
 	_recvSignal.data = freeData;
 	_procSignal.data = freeData;
 	auto closeCb = [](uv_handle_t* handle) {
-		auto* freeData = static_cast<struct close_data*>(handle->data);
+		auto* freeData = static_cast<struct PAR2ProcBackendCloseData*>(handle->data);
 		if(--(freeData->refCount) == 0) {
 			freeData->cb();
 			delete freeData;
@@ -228,7 +224,7 @@ void GF16OCL::deinit(PAR2ProcPlainCb cb) {
 	uv_close(reinterpret_cast<uv_handle_t*>(&_recvSignal), closeCb);
 	uv_close(reinterpret_cast<uv_handle_t*>(&_procSignal), closeCb);
 }
-void GF16OCL::deinit() {
+void PAR2ProcOCL::deinit() {
 	if(!loop) return;
 	loop = nullptr;
 	queue.finish();
@@ -239,7 +235,7 @@ void GF16OCL::deinit() {
 
 
 
-std::vector<Galois16OCLMethods> GF16OCL::availableMethods(int platformId, int deviceId) {
+std::vector<Galois16OCLMethods> PAR2ProcOCL::availableMethods(int platformId, int deviceId) {
 	std::vector<Galois16OCLMethods> ret;
 	if(platformId == -1 || deviceId == -1) {
 		// we assume all methods are available
@@ -277,14 +273,25 @@ std::vector<Galois16OCLMethods> GF16OCL::availableMethods(int platformId, int de
 	
 	return ret;
 }
-Galois16OCLMethods GF16OCL::default_method() const {
+Galois16OCLMethods PAR2ProcOCL::default_method() const {
 	// TODO: determine best method
 	return GF16OCL_LOG_SMALL;
 }
 
 // reduce slice size
-bool GF16OCL::setCurrentSliceSize(size_t newSliceSize) {
-	if(newSliceSize > allocatedSliceSize) return false; // TODO: re-init if enlarging
+bool PAR2ProcOCL::setCurrentSliceSize(size_t newSliceSize) {
+	if(newSliceSize > allocatedSliceSize) {
+		// need to re-init everything
+		auto outExp = outputExponents;
+		setSliceSize(newSliceSize);
+		if(!init(_setupMethod, _setupTargetInputBatch, _setupTargetIters, _setupTargetGrouping))
+			return false;
+		if(!outExp.empty()) {
+			if(!setRecoverySlices(outExp.size(), outExp.data()))
+				return false;
+		}
+		return true;
+	}
 	size_t sliceGroups = (newSliceSize+bytesPerGroup -1) / bytesPerGroup;
 	processRange = cl::NDRange(sliceGroups * wgSize, processRange[1]);
 	sliceSize = newSliceSize;
@@ -295,11 +302,11 @@ bool GF16OCL::setCurrentSliceSize(size_t newSliceSize) {
 
 
 struct send_data {
-	GF16OCL* parent;
+	PAR2ProcOCL* parent;
 	PAR2ProcPlainCb cb;
 };
 
-void GF16OCL::_after_sent() {
+void PAR2ProcOCL::_after_sent() {
 	struct send_data* req;
 	while(_sentChunks.trypop(reinterpret_cast<void**>(&req))) {
 		if(req->cb) req->cb();
@@ -307,10 +314,11 @@ void GF16OCL::_after_sent() {
 	}
 }
 
-PAR2ProcBackendAddResult GF16OCL::_addInput(const void* data, size_t size, bool flush, const PAR2ProcPlainCb& cb) {
+PAR2ProcBackendAddResult PAR2ProcOCL::_addInput(const void* data, size_t size, bool flush, const PAR2ProcPlainCb& cb) {
 	// TODO: need to add cksum
 	cl::Event writeEvent;
-	queue.enqueueWriteBuffer(buffer_input[inputBufferIdx], CL_FALSE, inputCount * sliceSizeAligned, size, data, NULL, &writeEvent);
+	auto& area = staging[inputBufferIdx];
+	queue.enqueueWriteBuffer(area.input, CL_FALSE, inputCount * sliceSizeAligned, size, data, NULL, &writeEvent);
 	queueEvents.push_back(writeEvent);
 	
 	auto* req = new struct send_data;
@@ -332,68 +340,62 @@ PAR2ProcBackendAddResult GF16OCL::_addInput(const void* data, size_t size, bool 
 			queueEvents.reserve(queueEvents.capacity() + (zeroAmt+ZERO_MEM_SIZE-1)/ZERO_MEM_SIZE);
 			while(1) {
 				if(zeroAmt > ZERO_MEM_SIZE) {
-					queue.enqueueWriteBuffer(buffer_input[inputBufferIdx], CL_FALSE, zeroStart, ZERO_MEM_SIZE, zeroes, NULL, &zeroEvent);
+					queue.enqueueWriteBuffer(area.input, CL_FALSE, zeroStart, ZERO_MEM_SIZE, zeroes, NULL, &zeroEvent);
 					queueEvents.push_back(zeroEvent);
 					zeroAmt -= ZERO_MEM_SIZE;
 					zeroStart += ZERO_MEM_SIZE;
 				} else {
 					if(zeroAmt) {
-						queue.enqueueWriteBuffer(buffer_input[inputBufferIdx], CL_FALSE, zeroStart, zeroAmt, zeroes, NULL, &zeroEvent);
+						queue.enqueueWriteBuffer(area.input, CL_FALSE, zeroStart, zeroAmt, zeroes, NULL, &zeroEvent);
 						queueEvents.push_back(zeroEvent);
 					}
 					break;
 				}
 			}
 		} else { // OpenCL 1.2
-			queue.enqueueFillBuffer<uint8_t>(buffer_input[inputBufferIdx], 0, zeroStart, zeroAmt, NULL, &zeroEvent);
+			queue.enqueueFillBuffer<uint8_t>(area.input, 0, zeroStart, zeroAmt, NULL, &zeroEvent);
 			queueEvents.push_back(zeroEvent);
 		}
 	}
-	if(inputCount == inputBatchSize-1 || flush) // TODO: support early processing?
-		run_kernel(inputBufferIdx, inputBatchSize);
-	else
-		inputCount++;
+	inputCount++;
+	if(inputCount == inputBatchSize || flush || (activeCount == 0 && staging.size() > 1))
+		run_kernel(inputBufferIdx, inputCount);
 	
-	return activeCount < OCL_BUFFER_COUNT-1 ? PROC_ADD_OK : PROC_ADD_OK_BUSY;
+	return activeCount < staging.size()-1 ? PROC_ADD_OK : PROC_ADD_OK_BUSY;
 }
 
-PAR2ProcBackendAddResult GF16OCL::addInput(const void* buffer, size_t size, uint16_t inputNum, bool flush, const PAR2ProcPlainCb& cb) {
+PAR2ProcBackendAddResult PAR2ProcOCL::addInput(const void* buffer, size_t size, uint16_t inputNum, bool flush, const PAR2ProcPlainCb& cb) {
+	auto& area = staging[inputBufferIdx];
+	
 	// detect if busy
-	if(procActive[inputBufferIdx])
+	if(area.isActive)
 		return PROC_ADD_FULL;
 	
 	// compute coeffs
 	if(coeffType != GF16OCL_COEFF_NORMAL) {
-		tmp_coeffs[inputBufferIdx][inputCount] = gfmat_input_log(inputNum);
+		area.tmpCoeffs[inputCount] = gfmat_input_log(inputNum);
 	} else {
 		uint16_t inputLog = gfmat_input_log(inputNum);
 		for(unsigned i=0; i<numOutputs; i++)
-			tmp_coeffs[inputBufferIdx][inputCount + i*inputBatchSize] = gfmat_coeff_from_log(inputLog, outputExponents[i]);
+			area.tmpCoeffs[inputCount + i*inputBatchSize] = gfmat_coeff_from_log(inputLog, outputExponents[i]);
 	}
-	return _addInput(buffer, size, flush, cb);
-}
-PAR2ProcBackendAddResult GF16OCL::addInput(const void* buffer, size_t size, const uint16_t* coeffs, bool flush, const PAR2ProcPlainCb& cb) {
-	// detect if busy
-	if(procActive[inputBufferIdx])
-		return PROC_ADD_FULL;
-	
-	for(unsigned i=0; i<numOutputs; i++)
-		tmp_coeffs[inputBufferIdx][inputCount + i*inputBatchSize] = coeffs[i];
+	if(inputBufferIdx == 0)
+		area.firstInput = inputNum;
 	return _addInput(buffer, size, flush, cb);
 }
 
-void GF16OCL::flush() {
+void PAR2ProcOCL::flush() {
 	if(inputCount)
 		run_kernel(inputBufferIdx, inputCount);
 }
 
 
 struct recv_data {
-	GF16OCL* parent;
+	PAR2ProcOCL* parent;
 	PAR2ProcOutputCb cb;
 };
 
-void GF16OCL::_after_recv() {
+void PAR2ProcOCL::_after_recv() {
 	struct recv_data* req;
 	while(_recvChunks.trypop(reinterpret_cast<void**>(&req))) {
 		// TODO: need to verify cksum
@@ -402,7 +404,7 @@ void GF16OCL::_after_recv() {
 	}
 }
 
-void GF16OCL::getOutput(unsigned index, void* output, const PAR2ProcOutputCb& cb) {
+void PAR2ProcOCL::getOutput(unsigned index, void* output, const PAR2ProcOutputCb& cb) {
 	cl::Event readEvent;
 	queue.enqueueReadBuffer(buffer_output, CL_FALSE, index*sliceSizeAligned, sliceSize, output, NULL, &readEvent);
 	
@@ -422,32 +424,33 @@ void GF16OCL::getOutput(unsigned index, void* output, const PAR2ProcOutputCb& cb
 struct compute_req {
 	uint16_t numInputs;
 	unsigned procIdx;
-	GF16OCL* parent;
+	PAR2ProcOCL* parent;
 };
 
 
-void GF16OCL::_after_proc() {
+void PAR2ProcOCL::_after_proc() {
 	struct compute_req* req;
 	while(_procChunks.trypop(reinterpret_cast<void**>(&req))) {
-		procActive[req->procIdx] = false;
+		staging[req->procIdx].isActive = false;
 		activeCount--;
 		
 		// if add was blocked, allow adds to continue - calling application will need to listen to this event to know to continue
-		if(progressCb) progressCb(req->numInputs, 0); // TODO: remove firstInput
+		if(progressCb) progressCb(req->numInputs, staging[req->procIdx].firstInput);
 		
 		delete req;
 	}
 }
 
 
-void GF16OCL::run_kernel(unsigned buf, unsigned numInputs) {
+void PAR2ProcOCL::run_kernel(unsigned buf, unsigned numInputs) {
+	auto& area = staging[buf];
 	// transfer coefficient list
 	cl::Event coeffEvent;
-	queue.enqueueWriteBuffer(buffer_coeffs[buf], CL_FALSE, 0, inputBatchSize * (coeffType!=GF16OCL_COEFF_NORMAL ? 1 : numOutputs) * sizeof(uint16_t), tmp_coeffs[buf].data(), NULL, &coeffEvent);
+	queue.enqueueWriteBuffer(area.coeffs, CL_FALSE, 0, inputBatchSize * (coeffType!=GF16OCL_COEFF_NORMAL ? 1 : numOutputs) * sizeof(uint16_t), area.tmpCoeffs.data(), NULL, &coeffEvent);
 	queueEvents.push_back(coeffEvent);
 	
 	activeCount++;
-	procActive[buf] = true;
+	area.isActive = true;
 	
 	// invoke kernel
 	cl::Kernel* kernel;
@@ -459,10 +462,10 @@ void GF16OCL::run_kernel(unsigned buf, unsigned numInputs) {
 	}
 	
 	processingAdd = true;
-	kernel->setArg(1, buffer_input[buf]);
-	kernel->setArg(2, buffer_coeffs[buf]);
+	kernel->setArg(1, area.input);
+	kernel->setArg(2, area.coeffs);
 	// TODO: try-catch to detect errors (e.g. out of resources)
-	queue.enqueueNDRangeKernel(*kernel, cl::NullRange, processRange, workGroupRange, &queueEvents, proc+buf);
+	queue.enqueueNDRangeKernel(*kernel, cl::NullRange, processRange, workGroupRange, &queueEvents, &area.event);
 	queueEvents.clear(); // for coeffType!=GF16OCL_COEFF_NORMAL, assume that the outputs are transferred by the time we enqueue the next kernel
 	
 	// when kernel finishes
@@ -470,7 +473,7 @@ void GF16OCL::run_kernel(unsigned buf, unsigned numInputs) {
 	req->numInputs = numInputs;
 	req->procIdx = buf;
 	req->parent = this;
-	proc[buf].setCallback(CL_COMPLETE, [](cl_event, cl_int, void* _req) {
+	area.event.setCallback(CL_COMPLETE, [](cl_event, cl_int, void* _req) {
 		auto req = static_cast<struct compute_req*>(_req);
 		req->parent->_procChunks.push(req);
 		uv_async_send(&(req->parent->_procSignal));
@@ -478,12 +481,13 @@ void GF16OCL::run_kernel(unsigned buf, unsigned numInputs) {
 	
 	// management
 	inputCount = 0;
-	inputBufferIdx = (inputBufferIdx+1) % OCL_BUFFER_COUNT;
+	if(++inputBufferIdx == staging.size())
+		inputBufferIdx = 0;
 }
 
 
 
-std::vector<std::string> GF16OCL::getPlatforms() {
+std::vector<std::string> PAR2ProcOCL::getPlatforms() {
 	std::vector<std::string> ret(platforms.size());
 	for(unsigned i=0; i<platforms.size(); i++) {
 		ret[i] = platforms[i].getInfo<CL_PLATFORM_NAME>();
@@ -491,7 +495,7 @@ std::vector<std::string> GF16OCL::getPlatforms() {
 	return ret;
 }
 
-std::vector<GF16OCL_DeviceInfo> GF16OCL::getDevices(int platformId) {
+std::vector<GF16OCL_DeviceInfo> PAR2ProcOCL::getDevices(int platformId) {
 	cl::Platform platform;
 	if(platformId == -1)
 		platform = cl::Platform::getDefault();

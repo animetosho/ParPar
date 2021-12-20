@@ -18,6 +18,10 @@ enum PAR2ProcBackendAddResult {
 	PROC_ADD_OK_BUSY,
 	PROC_ADD_FULL
 };
+struct PAR2ProcBackendCloseData {
+	PAR2ProcPlainCb cb;
+	int refCount;
+};
 class IPAR2ProcBackend {
 protected:
 	bool processingAdd;
