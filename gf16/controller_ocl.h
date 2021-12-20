@@ -6,9 +6,6 @@
 #include "threadqueue.h" // must be placed before CL/cl.hpp for some reason
 #include <CL/cl.hpp>
 
-// defines max number of kernels to queue up; probably little reason to go beyond 2
-#define OCL_BUFFER_COUNT 2
-
 enum Galois16OCLMethods {
 	GF16OCL_AUTO,
 	GF16OCL_LOOKUP,
@@ -123,7 +120,6 @@ class PAR2ProcOCL : public IPAR2ProcBackend {
 	
 	bool setup_kernels(Galois16OCLMethods method, unsigned targetInputBatch, unsigned targetIters, unsigned targetGrouping, bool outputSequential);
 	void run_kernel(unsigned buf, unsigned numInputs);
-	PAR2ProcBackendAddResult _addInput(const void* buffer, size_t size, bool flush, const PAR2ProcPlainCb& cb);
 	
 	
 	cl::Context context;
@@ -143,7 +139,7 @@ public:
 	}
 	static std::vector<std::string> getPlatforms();
 	static std::vector<GF16OCL_DeviceInfo> getDevices(int platformId = -1);
-	explicit PAR2ProcOCL(uv_loop_t* _loop, int platformId = -1, int deviceId = -1);
+	explicit PAR2ProcOCL(uv_loop_t* _loop, int platformId = -1, int deviceId = -1, int stagingAreas = 2);
 	~PAR2ProcOCL();
 	void setSliceSize(size_t _sliceSize) override;
 	bool init(Galois16OCLMethods method = GF16OCL_AUTO, unsigned targetInputBatch=0, unsigned targetIters=0, unsigned targetGrouping=0);

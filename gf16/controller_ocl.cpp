@@ -33,7 +33,7 @@ static void after_proc(uv_async_t *handle) {
 	static_cast<PAR2ProcOCL*>(handle->data)->_after_proc();
 }
 
-PAR2ProcOCL::PAR2ProcOCL(uv_loop_t* _loop, int platformId, int deviceId) : loop(nullptr), staging(OCL_BUFFER_COUNT) {
+PAR2ProcOCL::PAR2ProcOCL(uv_loop_t* _loop, int platformId, int deviceId, int stagingAreas) : loop(nullptr), staging(stagingAreas) {
 	_initSuccess = false;
 	zeroes = NULL;
 	
@@ -314,11 +314,26 @@ void PAR2ProcOCL::_after_sent() {
 	}
 }
 
-PAR2ProcBackendAddResult PAR2ProcOCL::_addInput(const void* data, size_t size, bool flush, const PAR2ProcPlainCb& cb) {
+PAR2ProcBackendAddResult PAR2ProcOCL::addInput(const void* buffer, size_t size, uint16_t inputNum, bool flush, const PAR2ProcPlainCb& cb) {
+	auto& area = staging[inputBufferIdx];
+	// detect if busy
+	if(area.isActive)
+		return PROC_ADD_FULL;
+	
+	// compute coeffs
+	if(coeffType != GF16OCL_COEFF_NORMAL) {
+		area.tmpCoeffs[inputCount] = gfmat_input_log(inputNum);
+	} else {
+		uint16_t inputLog = gfmat_input_log(inputNum);
+		for(unsigned i=0; i<numOutputs; i++)
+			area.tmpCoeffs[inputCount + i*inputBatchSize] = gfmat_coeff_from_log(inputLog, outputExponents[i]);
+	}
+	if(inputBufferIdx == 0)
+		area.firstInput = inputNum;
+	
 	// TODO: need to add cksum
 	cl::Event writeEvent;
-	auto& area = staging[inputBufferIdx];
-	queue.enqueueWriteBuffer(area.input, CL_FALSE, inputCount * sliceSizeAligned, size, data, NULL, &writeEvent);
+	queue.enqueueWriteBuffer(area.input, CL_FALSE, inputCount * sliceSizeAligned, size, buffer, NULL, &writeEvent);
 	queueEvents.push_back(writeEvent);
 	
 	auto* req = new struct send_data;
@@ -362,26 +377,6 @@ PAR2ProcBackendAddResult PAR2ProcOCL::_addInput(const void* data, size_t size, b
 		run_kernel(inputBufferIdx, inputCount);
 	
 	return activeCount < staging.size()-1 ? PROC_ADD_OK : PROC_ADD_OK_BUSY;
-}
-
-PAR2ProcBackendAddResult PAR2ProcOCL::addInput(const void* buffer, size_t size, uint16_t inputNum, bool flush, const PAR2ProcPlainCb& cb) {
-	auto& area = staging[inputBufferIdx];
-	
-	// detect if busy
-	if(area.isActive)
-		return PROC_ADD_FULL;
-	
-	// compute coeffs
-	if(coeffType != GF16OCL_COEFF_NORMAL) {
-		area.tmpCoeffs[inputCount] = gfmat_input_log(inputNum);
-	} else {
-		uint16_t inputLog = gfmat_input_log(inputNum);
-		for(unsigned i=0; i<numOutputs; i++)
-			area.tmpCoeffs[inputCount + i*inputBatchSize] = gfmat_coeff_from_log(inputLog, outputExponents[i]);
-	}
-	if(inputBufferIdx == 0)
-		area.firstInput = inputNum;
-	return _addInput(buffer, size, flush, cb);
 }
 
 void PAR2ProcOCL::flush() {
