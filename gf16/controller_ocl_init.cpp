@@ -947,6 +947,43 @@ static inline size_t round_down_pow2(size_t v) {
 	*/
 }
 
+GF16OCL_MethodInfo PAR2ProcOCL::info(Galois16OCLMethods method) {
+	GF16OCL_MethodInfo ret{
+		method, Galois16OCLMethodsText[static_cast<int>(method)],
+		8, 1, true
+	};
+	switch(method) {
+	case GF16OCL_BY2:
+		ret.idealInBatch = 16;
+	break;
+	case GF16OCL_SHUFFLE:
+		ret.idealInBatch = 4;
+		ret.usesOutGrouping = false;
+	break;
+	case GF16OCL_LOG:
+	case GF16OCL_LOG_SMALL:
+	case GF16OCL_LOG_TINY:
+	case GF16OCL_LOG_SMALL_LMEM:
+	case GF16OCL_LOG_TINY_LMEM:
+		ret.idealInBatch = 8;
+	break;
+	case GF16OCL_LOOKUP:
+	case GF16OCL_LOOKUP_HALF:
+		ret.usesOutGrouping = false;
+		ret.idealInBatch = 4;
+		ret.idealIters = 4;
+	break;
+	case GF16OCL_LOOKUP_NOCACHE:
+	case GF16OCL_LOOKUP_HALF_NOCACHE:
+		ret.idealInBatch = 4;
+		ret.idealIters = 8; // generally little reason not to do multiple iters
+	break;
+	default: break; // prevent compiler warning
+	}
+	
+	return ret;
+}
+
 // _sliceSize must be divisible by 2
 bool PAR2ProcOCL::setup_kernels(Galois16OCLMethods method, unsigned targetInputBatch, unsigned targetIters, unsigned targetGrouping, bool outputSequential) {
 	// TODO: get device info
@@ -976,8 +1013,9 @@ bool PAR2ProcOCL::setup_kernels(Galois16OCLMethods method, unsigned targetInputB
 	unsigned outputsPerThread = numOutputs; // currently, process all outputs on every kernel invocation
 	std::stringstream sourceStream;
 	
-	unsigned groupIterations = 1;
-	//bool usesOutGrouping = false;
+	auto methInfo = info(method);
+	inputBatchSize = methInfo.idealInBatch;
+	unsigned groupIterations = methInfo.idealIters;
 	unsigned threadWordSize = infoShortVecSize*2;
 	unsigned sizePerWorkGroup = threadWordSize * wgSize;
 	unsigned outputGrouping = 8; // for nolut kernel; have seen some cards prefer '4' (on older cards?)
@@ -989,7 +1027,6 @@ bool PAR2ProcOCL::setup_kernels(Galois16OCLMethods method, unsigned targetInputB
 	coeffType = GF16OCL_COEFF_NORMAL;
 	switch(method) {
 	case GF16OCL_BY2:
-		inputBatchSize = 16;
 		while(1) {
 			if(inputBatchSize*sizePerWorkGroup > deviceLocalSize)
 				inputBatchSize = (unsigned)(deviceLocalSize / sizePerWorkGroup);
@@ -1011,13 +1048,11 @@ bool PAR2ProcOCL::setup_kernels(Galois16OCLMethods method, unsigned targetInputB
 		kernelCode = _ocl_kernel_nolut;
 		kernelFuncs = _ocl_kernel_nolut_funcs;
 		methodCode = _ocl_method_by2;
-		//usesOutGrouping = true;
 	break;
 	case GF16OCL_SHUFFLE:
 	//case GF16OCL_SHUFFLE2:
 		oclVerArg = "-cl-std=CL1.1";
 		infoShortVecSize = 2; // currently only implemented for 32-bit on GPUs
-		inputBatchSize = 4;
 		threadWordSize = infoShortVecSize*4; // process two words, so double per thread word size
 		sizePerWorkGroup = threadWordSize * wgSize;
 		if(targetInputBatch) inputBatchSize = targetInputBatch;
@@ -1058,7 +1093,6 @@ bool PAR2ProcOCL::setup_kernels(Galois16OCLMethods method, unsigned targetInputB
 	case GF16OCL_LOG_SMALL_LMEM:
 	case GF16OCL_LOG_TINY_LMEM:
 		coeffType = outputSequential ? GF16OCL_COEFF_LOG_SEQ : GF16OCL_COEFF_LOG;
-		inputBatchSize = 8;
 		
 		{
 			size_t reqLocalMem = 0;
@@ -1094,7 +1128,6 @@ bool PAR2ProcOCL::setup_kernels(Galois16OCLMethods method, unsigned targetInputB
 		if(method == GF16OCL_LOG_TINY || method == GF16OCL_LOG_TINY_LMEM)
 			sourceStream << "#define OCL_METHOD_LOG_TINY\n";
 		methodCode = _ocl_method_log;
-		//usesOutGrouping = true;
 	break;
 	case GF16OCL_LOOKUP:
 	case GF16OCL_LOOKUP_HALF:
@@ -1114,14 +1147,10 @@ bool PAR2ProcOCL::setup_kernels(Galois16OCLMethods method, unsigned targetInputB
 			outputGrouping = tables / inputBatchSize;
 			if(outputGrouping > 16) outputGrouping = 16;
 			
-			groupIterations = 8; // generally little reason not to do multiple iters
-			
 			if(targetInputBatch) inputBatchSize = targetInputBatch;
 			kernelCode = _ocl_kernel_lut;
 			kernelFuncs = _ocl_kernel_lut_funcs;
-			//usesOutGrouping = true;
 		} else {
-			inputBatchSize = 4;
 			if(targetInputBatch) inputBatchSize = targetInputBatch;
 			// TODO: compute ideal iteration count
 			while(1) {

@@ -62,6 +62,14 @@ typedef struct {
 	unsigned computeUnits;
 } GF16OCL_DeviceInfo;
 
+typedef struct {
+	Galois16OCLMethods id;
+	const char* name;
+	unsigned idealInBatch, idealIters;
+	bool usesOutGrouping;
+} GF16OCL_MethodInfo;
+
+
 class PAR2ProcOCLStaging {
 public:
 	cl::Buffer input;
@@ -103,9 +111,6 @@ class PAR2ProcOCL : public IPAR2ProcBackend {
 	std::vector<cl::Buffer> extra_buffers;
 	// TODO: consider making zeroes static?
 	uint8_t* zeroes; // a chunk of zero'd memory for zeroing device memory (prior to OpenCL 1.2)
-	// progress
-	unsigned inputCount;
-	unsigned inputBufferIdx;
 	// to enable slice size adjustments
 	size_t allocatedSliceSize;
 	size_t bytesPerGroup;
@@ -115,8 +120,6 @@ class PAR2ProcOCL : public IPAR2ProcBackend {
 	// remembered setup params
 	Galois16OCLMethods _setupMethod;
 	unsigned _setupTargetInputBatch, _setupTargetIters, _setupTargetGrouping;
-	
-	unsigned activeCount;
 	
 	bool setup_kernels(Galois16OCLMethods method, unsigned targetInputBatch, unsigned targetIters, unsigned targetGrouping, bool outputSequential);
 	void run_kernel(unsigned buf, unsigned numInputs);
@@ -144,6 +147,7 @@ public:
 	void setSliceSize(size_t _sliceSize) override;
 	bool init(Galois16OCLMethods method = GF16OCL_AUTO, unsigned targetInputBatch=0, unsigned targetIters=0, unsigned targetGrouping=0);
 	PAR2ProcBackendAddResult addInput(const void* buffer, size_t size, uint16_t inputNum, bool flush, const PAR2ProcPlainCb& cb) override;
+	PAR2ProcBackendAddResult dummyInput(uint16_t inputNum, bool flush = false) override;
 	void flush() override;
 	void getOutput(unsigned index, void* output, const PAR2ProcOutputCb& cb) override;
 	
@@ -157,11 +161,13 @@ public:
 	void deinit() override;
 	void freeProcessingMem() override {}
 	
-	bool isEmpty() const override {
-		return activeCount == 0;
-	}
 	inline const void* getMethodName() const {
 		return methodToText(_setupMethod);
+	}
+	
+	static GF16OCL_MethodInfo info(Galois16OCLMethods method);
+	inline GF16OCL_MethodInfo info() const {
+		return info(_setupMethod);
 	}
 	
 	Galois16OCLMethods default_method() const;

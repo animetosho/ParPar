@@ -87,7 +87,9 @@ PAR2ProcOCL::PAR2ProcOCL(uv_loop_t* _loop, int platformId, int deviceId, int sta
 		queue = cl::CommandQueue(context, device, 0);
 		_initSuccess = true;
 	} catch(cl::Error const& err) {
+#ifndef GF16OCL_NO_OUTPUT
 		std::cerr << "OpenCL Error: " << err.what() << "(" << err.err() << ")" << std::endl;
+#endif
 	}
 	
 	queueEvents.reserve(2);
@@ -192,14 +194,14 @@ bool PAR2ProcOCL::setRecoverySlices(unsigned _numOutputs, const uint16_t* output
 }
 
 void PAR2ProcOCL::reset_state() {
-	inputCount = 0;
-	inputBufferIdx = 0;
+	currentStagingInputs = 0;
+	currentStagingArea = 0;
 	for(auto& area : staging) {
 		area.event = cl::Event(); // clear any existing event
 		area.isActive = false;
 	}
 	processingAdd = false;
-	activeCount = 0;
+	stagingActiveCount = 0;
 }
 
 void PAR2ProcOCL::deinit(PAR2ProcPlainCb cb) {
@@ -315,25 +317,25 @@ void PAR2ProcOCL::_after_sent() {
 }
 
 PAR2ProcBackendAddResult PAR2ProcOCL::addInput(const void* buffer, size_t size, uint16_t inputNum, bool flush, const PAR2ProcPlainCb& cb) {
-	auto& area = staging[inputBufferIdx];
+	auto& area = staging[currentStagingArea];
 	// detect if busy
 	if(area.isActive)
 		return PROC_ADD_FULL;
 	
 	// compute coeffs
 	if(coeffType != GF16OCL_COEFF_NORMAL) {
-		area.tmpCoeffs[inputCount] = gfmat_input_log(inputNum);
+		area.tmpCoeffs[currentStagingInputs] = gfmat_input_log(inputNum);
 	} else {
 		uint16_t inputLog = gfmat_input_log(inputNum);
 		for(unsigned i=0; i<numOutputs; i++)
-			area.tmpCoeffs[inputCount + i*inputBatchSize] = gfmat_coeff_from_log(inputLog, outputExponents[i]);
+			area.tmpCoeffs[currentStagingInputs + i*inputBatchSize] = gfmat_coeff_from_log(inputLog, outputExponents[i]);
 	}
-	if(inputBufferIdx == 0)
+	if(currentStagingArea == 0)
 		area.firstInput = inputNum;
 	
 	// TODO: need to add cksum
 	cl::Event writeEvent;
-	queue.enqueueWriteBuffer(area.input, CL_FALSE, inputCount * sliceSizeAligned, size, buffer, NULL, &writeEvent);
+	queue.enqueueWriteBuffer(area.input, CL_FALSE, currentStagingInputs * sliceSizeAligned, size, buffer, NULL, &writeEvent);
 	queueEvents.push_back(writeEvent);
 	
 	auto* req = new struct send_data;
@@ -348,7 +350,7 @@ PAR2ProcBackendAddResult PAR2ProcOCL::addInput(const void* buffer, size_t size, 
 	
 	if(size < sliceSize) {
 		// need to zero rest of buffer
-		size_t zeroStart = inputCount * sliceSizeAligned + size;
+		size_t zeroStart = currentStagingInputs * sliceSizeAligned + size;
 		size_t zeroAmt = sliceSize - size;
 		cl::Event zeroEvent;
 		if(zeroes) { // OpenCL 1.1
@@ -372,16 +374,40 @@ PAR2ProcBackendAddResult PAR2ProcOCL::addInput(const void* buffer, size_t size, 
 			queueEvents.push_back(zeroEvent);
 		}
 	}
-	inputCount++;
-	if(inputCount == inputBatchSize || flush || (activeCount == 0 && staging.size() > 1))
-		run_kernel(inputBufferIdx, inputCount);
+	currentStagingInputs++;
+	if(currentStagingInputs == inputBatchSize || flush || (stagingActiveCount == 0 && staging.size() > 1))
+		run_kernel(currentStagingArea, currentStagingInputs);
 	
-	return activeCount < staging.size()-1 ? PROC_ADD_OK : PROC_ADD_OK_BUSY;
+	return stagingActiveCount < staging.size()-1 ? PROC_ADD_OK : PROC_ADD_OK_BUSY;
+}
+
+PAR2ProcBackendAddResult PAR2ProcOCL::dummyInput(uint16_t inputNum, bool flush) {
+	auto& area = staging[currentStagingArea];
+	// detect if busy
+	if(area.isActive)
+		return PROC_ADD_FULL;
+	
+	// compute coeffs
+	if(coeffType != GF16OCL_COEFF_NORMAL) {
+		area.tmpCoeffs[currentStagingInputs] = gfmat_input_log(inputNum);
+	} else {
+		uint16_t inputLog = gfmat_input_log(inputNum);
+		for(unsigned i=0; i<numOutputs; i++)
+			area.tmpCoeffs[currentStagingInputs + i*inputBatchSize] = gfmat_coeff_from_log(inputLog, outputExponents[i]);
+	}
+	if(currentStagingArea == 0)
+		area.firstInput = inputNum;
+	
+	currentStagingInputs++;
+	if(currentStagingInputs == inputBatchSize || flush || (stagingActiveCount == 0 && staging.size() > 1))
+		run_kernel(currentStagingArea, currentStagingInputs);
+	
+	return stagingActiveCount < staging.size()-1 ? PROC_ADD_OK : PROC_ADD_OK_BUSY;
 }
 
 void PAR2ProcOCL::flush() {
-	if(inputCount)
-		run_kernel(inputBufferIdx, inputCount);
+	if(currentStagingInputs)
+		run_kernel(currentStagingArea, currentStagingInputs);
 }
 
 
@@ -427,7 +453,7 @@ void PAR2ProcOCL::_after_proc() {
 	struct compute_req* req;
 	while(_procChunks.trypop(reinterpret_cast<void**>(&req))) {
 		staging[req->procIdx].isActive = false;
-		activeCount--;
+		stagingActiveCount--;
 		
 		// if add was blocked, allow adds to continue - calling application will need to listen to this event to know to continue
 		if(progressCb) progressCb(req->numInputs, staging[req->procIdx].firstInput);
@@ -444,7 +470,7 @@ void PAR2ProcOCL::run_kernel(unsigned buf, unsigned numInputs) {
 	queue.enqueueWriteBuffer(area.coeffs, CL_FALSE, 0, inputBatchSize * (coeffType!=GF16OCL_COEFF_NORMAL ? 1 : numOutputs) * sizeof(uint16_t), area.tmpCoeffs.data(), NULL, &coeffEvent);
 	queueEvents.push_back(coeffEvent);
 	
-	activeCount++;
+	stagingActiveCount++;
 	area.isActive = true;
 	
 	// invoke kernel
@@ -475,9 +501,9 @@ void PAR2ProcOCL::run_kernel(unsigned buf, unsigned numInputs) {
 	}, req);
 	
 	// management
-	inputCount = 0;
-	if(++inputBufferIdx == staging.size())
-		inputBufferIdx = 0;
+	currentStagingInputs = 0;
+	if(++currentStagingArea == staging.size())
+		currentStagingArea = 0;
 }
 
 

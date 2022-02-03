@@ -93,6 +93,23 @@ bool PAR2Proc::addInput(const void* buffer, size_t size, uint16_t inputNum, bool
 	return success;
 }
 
+bool PAR2Proc::dummyInput(size_t size, uint16_t inputNum, bool flush) {
+	assert(!endSignalled);
+	
+	bool success = true;
+	for(auto& backend : backends) {
+		if(backend.currentOffset >= size) continue;
+		if(lastAddSuccessful || !backend.addSuccessful) {
+			backend.addSuccessful = backend.be->dummyInput(inputNum, flush) != PROC_ADD_FULL;
+			success = success && backend.addSuccessful;
+		}
+	}
+	if(success) hasAdded = true;
+	lastAddSuccessful = success;
+	return success;
+}
+
+
 void PAR2Proc::flush() {
 	for(auto& backend : backends)
 		backend.be->flush();

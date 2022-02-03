@@ -38,19 +38,16 @@ private:
 	unsigned numChunks;
 	unsigned alignment;
 	unsigned stride;
-	unsigned inputGrouping;
 	void freeGf();
 	
 	// staging area from which processing is performed
 	std::vector<PAR2ProcCPUStaging> staging;
 	bool reallocMemInput();
-	unsigned currentInputBuf, currentInputPos;
 	void* memProcessing; // TODO: break this into chunks, to avoid massive single allocation
-	int stagingActiveCount;
 	
 	MessageThread prepareThread;
 	
-	void do_computation(int inBuf, int numInputs);
+	void run_kernel(unsigned inBuf, unsigned numInputs);
 	
 	// disable copy constructor
 	PAR2ProcCPU(const PAR2ProcCPU&);
@@ -90,13 +87,11 @@ public:
 	}
 	
 	PAR2ProcBackendAddResult addInput(const void* buffer, size_t size, uint16_t inputNum, bool flush, const PAR2ProcPlainCb& cb) override;
+	PAR2ProcBackendAddResult dummyInput(uint16_t inputNum, bool flush = false) override;
 	void flush() override;
 	void endInput() override;
 	void getOutput(unsigned index, void* output, const PAR2ProcOutputCb& cb) override;
 	
-	bool isEmpty() const override {
-		return stagingActiveCount==0;
-	}
 	void processing_finished() override;
 	
 	static inline Galois16Methods default_method() {

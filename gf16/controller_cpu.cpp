@@ -91,18 +91,18 @@ bool PAR2ProcCPU::init(Galois16Methods method, unsigned _inputGrouping, size_t _
 	chunkLen = _chunkLen ? _chunkLen : info.idealChunkSize;
 	alignment = info.alignment;
 	stride = info.stride;
-	inputGrouping = _inputGrouping;
-	if(!inputGrouping) {
+	inputBatchSize = _inputGrouping;
+	if(!inputBatchSize) {
 		// round 12 to nearest idealInputMultiple
-		inputGrouping = (12 + info.idealInputMultiple/2);
-		inputGrouping -= inputGrouping % info.idealInputMultiple;
-		if(inputGrouping < info.idealInputMultiple) inputGrouping = info.idealInputMultiple;
+		inputBatchSize = (12 + info.idealInputMultiple/2);
+		inputBatchSize -= inputBatchSize % info.idealInputMultiple;
+		if(inputBatchSize < info.idealInputMultiple) inputBatchSize = info.idealInputMultiple;
 	}
 	
 	alignedSliceSize = gf->alignToStride(sliceSize) + stride; // add extra stride, because checksum requires an extra block
 	for(auto& area : staging) {
 		// allocate memory for sending input numbers
-		area.inputNums.resize(inputGrouping);
+		area.inputNums.resize(inputBatchSize);
 		// setup indicators to know if buffers are being used
 		area.isActive = false;
 	}
@@ -114,7 +114,7 @@ bool PAR2ProcCPU::init(Galois16Methods method, unsigned _inputGrouping, size_t _
 	setNumThreads(numThreads); // init scratch/workers
 	setCurrentSliceSize(sliceSize); // default slice chunk size = declared slice size
 	
-	currentInputBuf = currentInputPos = 0;
+	currentStagingArea = currentStagingInputs = 0;
 	
 	return ret;
 }
@@ -123,7 +123,7 @@ bool PAR2ProcCPU::reallocMemInput() {
 	bool ret = true;
 	for(auto& area : staging) {
 		if(area.src) ALIGN_FREE(area.src);
-		ALIGN_ALLOC(area.src, inputGrouping * alignedSliceSize, alignment);
+		ALIGN_ALLOC(area.src, inputBatchSize * alignedSliceSize, alignment);
 		if(!area.src) ret = false;
 	}
 	return ret;
@@ -168,7 +168,7 @@ bool PAR2ProcCPU::setRecoverySlices(unsigned numSlices, const uint16_t* exponent
 		memcpy(outputExp.data(), exponents, numSlices * sizeof(uint16_t));
 		
 		for(auto& area : staging)
-			area.procCoeffs.resize(numSlices * inputGrouping);
+			area.procCoeffs.resize(numSlices * inputBatchSize);
 	}
 	
 	if(!memProcessing && numSlices) {
@@ -229,8 +229,8 @@ struct prepare_data {
 	size_t size;
 	unsigned numInputs;
 	unsigned index;
-	int submitInBufs;
-	int inBufId;
+	unsigned submitInBufs;
+	unsigned inBufId;
 	size_t chunkLen;
 	PAR2ProcCPU* parent;
 	const Galois16Mul* gf;
@@ -254,7 +254,7 @@ void PAR2ProcCPU::_after_prepare_chunk() {
 	while(_preparedChunks.trypop(reinterpret_cast<void**>(&data))) {
 		if(data->submitInBufs) {
 			// queue async compute
-			do_computation(data->inBufId, data->submitInBufs);
+			run_kernel(data->inBufId, data->submitInBufs);
 		}
 		if(data->cb && data->src) data->cb();
 		delete data;
@@ -262,58 +262,82 @@ void PAR2ProcCPU::_after_prepare_chunk() {
 }
 
 PAR2ProcBackendAddResult PAR2ProcCPU::addInput(const void* buffer, size_t size, uint16_t inputNum, bool flush, const PAR2ProcPlainCb& cb) {
-	auto& area = staging[currentInputBuf];
+	auto& area = staging[currentStagingArea];
 	// if we're waiting for input availability, can't add
 	// NOTE: if add fails due to being full, client resubmitting may be vulnerable to race conditions if it adds an event listener after completion event gets fired
 	if(area.isActive) return PROC_ADD_FULL;
 	if(!staging[0].src) reallocMemInput();
 	
-	area.inputNums[currentInputPos] = inputNum;
+	area.inputNums[currentStagingInputs] = inputNum;
 	struct prepare_data* data = new struct prepare_data;
 	data->src = buffer;
 	data->size = size;
 	data->parent = this;
 	data->dst = area.src;
 	data->dstLen = alignedCurrentSliceSize - stride;
-	data->numInputs = inputGrouping;
-	data->index = currentInputPos++;
+	data->numInputs = inputBatchSize;
+	data->index = currentStagingInputs++;
 	data->chunkLen = chunkLen;
 	data->gf = gf;
 	data->cb = cb;
 	
-	data->submitInBufs = (flush || currentInputPos == inputGrouping || (stagingActiveCount == 0 && staging.size() > 1)) ? currentInputPos : 0;
-	data->inBufId = currentInputBuf;
+	data->submitInBufs = (flush || currentStagingInputs == inputBatchSize || (stagingActiveCount == 0 && staging.size() > 1)) ? currentStagingInputs : 0;
+	data->inBufId = currentStagingArea;
 	
 	if(data->submitInBufs) {
 		area.isActive = true; // lock this buffer until processing is complete
 		stagingActiveCount++;
-		currentInputPos = 0;
-		if(++currentInputBuf == staging.size())
-			currentInputBuf = 0;
+		currentStagingInputs = 0;
+		if(++currentStagingArea == staging.size())
+			currentStagingArea = 0;
 	}
 	
 	prepareThread.send(data);
-	return staging[(currentInputBuf == 0 ? staging.size() : currentInputBuf)-1].isActive
+	return staging[(currentStagingArea == 0 ? staging.size() : currentStagingArea)-1].isActive
+		? PROC_ADD_OK_BUSY
+		: PROC_ADD_OK;
+}
+
+PAR2ProcBackendAddResult PAR2ProcCPU::dummyInput(uint16_t inputNum, bool flush) {
+	auto& area = staging[currentStagingArea];
+	if(area.isActive) return PROC_ADD_FULL;
+	if(!staging[0].src) reallocMemInput();
+	
+	area.inputNums[currentStagingInputs] = inputNum;
+	currentStagingInputs++;
+	
+	if(flush || currentStagingInputs == inputBatchSize || (stagingActiveCount == 0 && staging.size() > 1)) {
+		area.isActive = true; // lock this buffer until processing is complete
+		stagingActiveCount++;
+		
+		run_kernel(currentStagingArea, currentStagingInputs);
+		
+		currentStagingInputs = 0;
+		if(++currentStagingArea == staging.size())
+			currentStagingArea = 0;
+	}
+	
+	return staging[(currentStagingArea == 0 ? staging.size() : currentStagingArea)-1].isActive
 		? PROC_ADD_OK_BUSY
 		: PROC_ADD_OK;
 }
 
 void PAR2ProcCPU::flush() {
-	if(!currentInputPos) return; // no inputs to flush
+	if(!currentStagingInputs) return; // no inputs to flush
 	
 	// send a flush signal by queueing up a prepare, but with a NULL buffer
 	struct prepare_data* data = new struct prepare_data;
 	data->src = NULL;
 	data->parent = this;
-	data->submitInBufs = currentInputPos;
-	data->inBufId = currentInputBuf;
+	data->submitInBufs = currentStagingInputs;
+	data->inBufId = currentStagingArea;
 	data->gf = gf;
 	
-	staging[currentInputBuf].isActive = true; // lock this buffer until processing is complete
+	staging[currentStagingArea].isActive = true; // lock this buffer until processing is complete
 	stagingActiveCount++;
-	currentInputPos = 0;
-	if(++currentInputBuf == staging.size())
-		currentInputBuf = 0;
+	currentStagingInputs = 0;
+	if(++currentStagingArea == staging.size())
+		currentStagingArea = 0;
 	
 	prepareThread.send(data);
 }
@@ -377,7 +401,7 @@ struct compute_req {
 	const void* input;
 	void* output;
 	bool add;
-	int inBufId;
+	unsigned inBufId;
 	
 	void* mutScratch;
 	
@@ -444,12 +468,12 @@ static void compute_worker(void *_req) {
 		delete req;
 }
 
-void PAR2ProcCPU::do_computation(int inBuf, int numInputs) {
+void PAR2ProcCPU::run_kernel(unsigned inBuf, unsigned numInputs) {
 	if(!staging[0].src) reallocMemInput();
 	
 	auto& area = staging[inBuf];
 	// compute matrix slice
-	for(int inp=0; inp<numInputs; inp++) {
+	for(unsigned inp=0; inp<numInputs; inp++) {
 		uint16_t inputLog = gfmat_input_log(area.inputNums[inp]);
 		for(unsigned out=0; out<outputExp.size(); out++) {
 			area.procCoeffs[inp + out*numInputs] = gfmat_coeff_from_log(inputLog, outputExp[out]);
@@ -464,7 +488,7 @@ void PAR2ProcCPU::do_computation(int inBuf, int numInputs) {
 		size_t thisChunkLen = MIN(alignedCurrentSliceSize-sliceOffset, chunkLen);
 		struct compute_req* req = new struct compute_req;
 		req->numInputs = numInputs;
-		req->inputGrouping = inputGrouping;
+		req->inputGrouping = inputBatchSize;
 		req->numOutputs = outputExp.size();
 		req->firstInput = area.inputNums[0];
 		req->oNums = outputExp.data();
@@ -472,7 +496,7 @@ void PAR2ProcCPU::do_computation(int inBuf, int numInputs) {
 		req->len = thisChunkLen; // TODO: consider sending multiple chunks, instead of one at a time? allows for prefetching second chunk; alternatively, allow worker to peek into queue when prefetching?
 		req->chunkSize = thisChunkLen;
 		req->numChunks = 1;
-		req->input = static_cast<const char*>(area.src) + sliceOffset*inputGrouping;
+		req->input = static_cast<const char*>(area.src) + sliceOffset*inputBatchSize;
 		req->output = static_cast<char*>(memProcessing) + sliceOffset*req->numOutputs;
 		req->add = processingAdd;
 		req->mutScratch = gfScratch[nextThread]; // TODO: should this be assigned to the thread instead?
