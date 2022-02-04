@@ -407,6 +407,19 @@ PAR2ProcBackendAddResult PAR2ProcOCL::dummyInput(uint16_t inputNum, bool flush) 
 	return stagingActiveCount < staging.size()-1 ? PROC_ADD_OK : PROC_ADD_OK_BUSY;
 }
 
+bool PAR2ProcOCL::fillInput(const void* buffer) {
+	queue.enqueueWriteBuffer(staging[currentStagingArea].input, CL_TRUE, currentStagingInputs * sliceSizeAligned, sliceSize, buffer, NULL);
+	if(++currentStagingInputs == inputBatchSize) {
+		currentStagingInputs = 0;
+		if(++currentStagingArea == staging.size()) {
+			currentStagingArea = 0;
+			return true; // all filled
+		}
+	}
+	return false;
+}
+
+
 void PAR2ProcOCL::flush() {
 	if(currentStagingInputs)
 		run_kernel(currentStagingArea, currentStagingInputs);

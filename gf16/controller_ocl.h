@@ -150,6 +150,7 @@ public:
 	bool init(Galois16OCLMethods method = GF16OCL_AUTO, unsigned targetInputBatch=0, unsigned targetIters=0, unsigned targetGrouping=0);
 	PAR2ProcBackendAddResult addInput(const void* buffer, size_t size, uint16_t inputNum, bool flush, const PAR2ProcPlainCb& cb) override;
 	PAR2ProcBackendAddResult dummyInput(uint16_t inputNum, bool flush = false) override;
+	bool fillInput(const void* buffer) override;
 	void flush() override;
 	void getOutput(unsigned index, void* output, const PAR2ProcOutputCb& cb) override;
 	

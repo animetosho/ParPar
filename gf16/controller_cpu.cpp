@@ -322,6 +322,21 @@ PAR2ProcBackendAddResult PAR2ProcCPU::dummyInput(uint16_t inputNum, bool flush) 
 		: PROC_ADD_OK;
 }
 
+bool PAR2ProcCPU::fillInput(const void* buffer) {
+	if(!staging[0].src) reallocMemInput();
+	
+	gf->prepare_packed_cksum(staging[currentStagingArea].src, buffer, currentSliceSize, alignedCurrentSliceSize - stride, inputBatchSize, currentStagingInputs, chunkLen);
+	if(++currentStagingInputs == inputBatchSize) {
+		currentStagingInputs = 0;
+		if(++currentStagingArea == staging.size()) {
+			currentStagingArea = 0;
+			return true; // all filled
+		}
+	}
+	return false;
+}
+
+
 void PAR2ProcCPU::flush() {
 	if(!currentStagingInputs) return; // no inputs to flush
 	

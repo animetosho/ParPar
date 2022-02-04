@@ -88,6 +88,7 @@ public:
 	
 	PAR2ProcBackendAddResult addInput(const void* buffer, size_t size, uint16_t inputNum, bool flush, const PAR2ProcPlainCb& cb) override;
 	PAR2ProcBackendAddResult dummyInput(uint16_t inputNum, bool flush = false) override;
+	bool fillInput(const void* buffer) override;
 	void flush() override;
 	void endInput() override;
 	void getOutput(unsigned index, void* output, const PAR2ProcOutputCb& cb) override;

@@ -40,6 +40,7 @@ public:
 	virtual bool setRecoverySlices(unsigned numSlices, const uint16_t* exponents = NULL) = 0;
 	virtual PAR2ProcBackendAddResult addInput(const void* buffer, size_t size, uint16_t inputNum, bool flush, const PAR2ProcPlainCb& cb) = 0;
 	virtual PAR2ProcBackendAddResult dummyInput(uint16_t inputNum, bool flush = false) = 0;
+	virtual bool fillInput(const void* buffer) = 0;
 	virtual void flush() = 0;
 	virtual void endInput() {};
 	virtual bool isEmpty() const {
@@ -103,8 +104,9 @@ public:
 	}
 	
 	bool addInput(const void* buffer, size_t size, uint16_t inputNum, bool flush, const PAR2ProcPlainCb& cb);
-	// dummyInput is only used for benchmarking; pretends to add an input without transferring anything to the backend
+	// dummyInput/fillInput is only used for benchmarking; pretends to add an input without transferring anything to the backend
 	bool dummyInput(size_t size, uint16_t inputNum, bool flush = false);
+	bool fillInput(const void* buffer, size_t size);
 	void flush();
 	void endInput(const PAR2ProcPlainCb& _finishCb);
 	void getOutput(unsigned index, void* output, const PAR2ProcOutputCb& cb) const;
