@@ -332,7 +332,7 @@ PAR2ProcBackendAddResult PAR2ProcOCL::addInput(const void* buffer, size_t size, 
 		for(unsigned i=0; i<numOutputs; i++)
 			area.tmpCoeffs[currentStagingInputs + i*inputBatchSize] = gfmat_coeff_from_log(inputLog, outputExponents[i]);
 	}
-	if(currentStagingArea == 0)
+	if(currentStagingInputs == 0)
 		area.firstInput = inputNum;
 	
 	// TODO: need to add cksum
@@ -397,7 +397,7 @@ PAR2ProcBackendAddResult PAR2ProcOCL::dummyInput(uint16_t inputNum, bool flush) 
 		for(unsigned i=0; i<numOutputs; i++)
 			area.tmpCoeffs[currentStagingInputs + i*inputBatchSize] = gfmat_coeff_from_log(inputLog, outputExponents[i]);
 	}
-	if(currentStagingArea == 0)
+	if(currentStagingInputs == 0)
 		area.firstInput = inputNum;
 	
 	currentStagingInputs++;
