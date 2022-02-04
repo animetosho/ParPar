@@ -440,16 +440,44 @@ const static char _ocl_method_log[] =
 "#define GF_MULTIPLY(a, b) gf16_multiply_log(a, b  EX_TABLE_ARGS)\n"
 "#undef READ_SRC\n"
 "#define READ_SRC(src, idx) gf16_log_src(src[idx]  EX_TABLE_ARGS)\n"
+"#ifdef OCL_METHOD_LOG_SMALL\n"
+" #define LOG_SRC(n) gf16_log_small(n  EX_TABLE_ARGS)\n"
+"#else\n"
+" #define LOG_SRC(n) ((LOG_MEM_TYPE ushort*)gf16_log)[n]\n"
+"#endif\n"
 STRINGIFY(
+	ushort gf16_log_small(ushort val  EX_TABLE_ARGS_DECL) {
+		if(val == 0) return 65535;
+		
+		uint log = 0;
+		uint prep;
+		uchar shift;
+		LOG_MEM_TYPE uint* gf16_log_prep = (gf16_log + 16384/2);
+		
+		prep = gf16_log_prep[val & 0x7ff];
+		shift = prep >> 16;
+		log += shift;
+		val = (val >> shift) ^ (prep & 0xffff);
+		// (repeat above)
+		prep = gf16_log_prep[val & 0x7ff];
+		shift = prep >> 16;
+		log += shift;
+		val = (val >> shift) ^ (prep & 0xffff);
+		
+		log += ((LOG_MEM_TYPE ushort*)gf16_log)[val >> 2];
+		if(log >= 65535) log -= 65535;
+		return log;
+	}
+	
 	val_t gf16_log_src(val_t val  EX_TABLE_ARGS_DECL) {
 		) "\n#if VECT_WIDTH==2\n" STRINGIFY(
-		return upsample(gf16_log[val >> 16], gf16_log[val & 0xffff]);
+		return upsample(LOG_SRC(val >> 16), LOG_SRC(val & 0xffff));
 		) "\n#else\n" STRINGIFY(
-		val_t res = gf16_log[val & 0xffff];
+		val_t res = LOG_SRC(val & 0xffff);
 		) "\n#pragma unroll\n" STRINGIFY(
 		for(int v=1; v<VECT_WIDTH; v++) {
 			int shift = v*16;
-			res |= (val_t)gf16_log[(val>>shift) & 0xffff] << shift;
+			res |= (val_t)LOG_SRC((val>>shift) & 0xffff) << shift;
 		}
 		return res;
 		) "\n#endif\n" STRINGIFY(
@@ -479,12 +507,12 @@ STRINGIFY(
 				va = (va >> 16) + (va & 0xffff);
 				) "\n#endif\n" STRINGIFY(
 				
-				) "\n#ifdef OCL_METHOD_LOG_SMALL\n" STRINGIFY(
+				) "\n#ifdef OCL_METHOD_EXP_SMALL\n" STRINGIFY(
 				uint vatmp = gf16_antilog[va >> 3];
 				vatmp <<= va & 7;
 				vatmp ^= gf16_antilog[8192 + (vatmp >> 16)];
 				va = vatmp & 0xffff;
-				) "\n#elif defined(OCL_METHOD_LOG_TINY)\n" STRINGIFY(
+				) "\n#elif defined(OCL_METHOD_EXP_TINY)\n" STRINGIFY(
 				uint vatmp = gf16_antilog[va >> 4];
 				vatmp <<= va & 15;
 				vatmp ^= gf16_antilog[4096 + (vatmp >> 24)] << 8;
@@ -962,6 +990,7 @@ GF16OCL_MethodInfo PAR2ProcOCL::info(Galois16OCLMethods method) {
 	break;
 	case GF16OCL_LOG:
 	case GF16OCL_LOG_SMALL:
+	case GF16OCL_LOG_SMALL2:
 	case GF16OCL_LOG_TINY:
 	case GF16OCL_LOG_SMALL_LMEM:
 	case GF16OCL_LOG_TINY_LMEM:
@@ -1089,6 +1118,7 @@ bool PAR2ProcOCL::setup_kernels(Galois16OCLMethods method, unsigned targetInputB
 	break;
 	case GF16OCL_LOG:
 	case GF16OCL_LOG_SMALL:
+	case GF16OCL_LOG_SMALL2:
 	case GF16OCL_LOG_TINY:
 	case GF16OCL_LOG_SMALL_LMEM:
 	case GF16OCL_LOG_TINY_LMEM:
@@ -1123,10 +1153,12 @@ bool PAR2ProcOCL::setup_kernels(Galois16OCLMethods method, unsigned targetInputB
 		kernelCode = _ocl_kernel_nolut;
 		kernelFuncs = _ocl_kernel_nolut_funcs;
 		sourceStream << "#define OCL_METHOD_LOG\n";
-		if(method == GF16OCL_LOG_SMALL || method == GF16OCL_LOG_SMALL_LMEM)
-			sourceStream << "#define OCL_METHOD_LOG_SMALL\n";
+		if(method == GF16OCL_LOG_SMALL || method == GF16OCL_LOG_SMALL2 || method == GF16OCL_LOG_SMALL_LMEM)
+			sourceStream << "#define OCL_METHOD_EXP_SMALL\n";
 		if(method == GF16OCL_LOG_TINY || method == GF16OCL_LOG_TINY_LMEM)
-			sourceStream << "#define OCL_METHOD_LOG_TINY\n";
+			sourceStream << "#define OCL_METHOD_EXP_TINY\n";
+		if(method == GF16OCL_LOG_SMALL2)
+			sourceStream << "#define OCL_METHOD_LOG_SMALL\n";
 		methodCode = _ocl_method_log;
 	break;
 	case GF16OCL_LOOKUP:
@@ -1215,11 +1247,15 @@ bool PAR2ProcOCL::setup_kernels(Galois16OCLMethods method, unsigned targetInputB
 	// code generation for log methods
 	uint16_t* tblLog = NULL;
 	uint16_t* tblAntiLog = NULL;
-	unsigned tblAntiLogSize = 0;
+	unsigned tblAntiLogSize = 0, tblLogSize = 0;
 	if(coeffType != GF16OCL_COEFF_NORMAL) {
 		// construct log/exp table and embed into OpenCL source
-		tblLog = new uint16_t[65536];
-		tblLog[0] = 65535; // special value to represent 0
+		if(method == GF16OCL_LOG_SMALL2) {
+			tblLog = new uint16_t[tblLogSize = 16384 + 2048*2];
+		} else {
+			tblLog = new uint16_t[tblLogSize = 65536];
+			tblLog[0] = 65535; // special value to represent 0
+		}
 		int n = 1;
 		if(method == GF16OCL_LOG) {
 			tblAntiLogSize = 65536;
@@ -1232,7 +1268,7 @@ bool PAR2ProcOCL::setup_kernels(Galois16OCLMethods method, unsigned targetInputB
 			tblAntiLog[65535] = tblAntiLog[0]; // saves having to wrap around 65535 to 0
 		}
 		else {
-			int bitsCut = (method == GF16OCL_LOG_SMALL || method == GF16OCL_LOG_SMALL_LMEM ? 3 : 4);
+			int bitsCut = (method == GF16OCL_LOG_SMALL || method == GF16OCL_LOG_SMALL2 || method == GF16OCL_LOG_SMALL_LMEM ? 3 : 4);
 			if(bitsCut == 3)
 				tblAntiLogSize = 8192+128;
 			else
@@ -1241,7 +1277,11 @@ bool PAR2ProcOCL::setup_kernels(Galois16OCLMethods method, unsigned targetInputB
 			for (int exp = 0; exp < 65535; exp++) {
 				if((exp & ((1<<bitsCut)-1)) == 0)
 					tblAntiLog[exp >> bitsCut] = n;
-				tblLog[n] = exp;
+				if(method == GF16OCL_LOG_SMALL2) {
+					if((n & 3) == 3)
+						tblLog[n >> 2] = exp;
+				} else
+					tblLog[n] = exp;
 				n = (n << 1) ^ (-(n>>15) & GF16_POLYNOMIAL);
 			}
 			// add reduction table
@@ -1252,6 +1292,26 @@ bool PAR2ProcOCL::setup_kernels(Galois16OCLMethods method, unsigned targetInputB
 				for (int j = 0; j < (bitsCut+4); j++)
 					n = (n << 1) ^ (-(n>>15) & GF16_POLYNOMIAL);
 				tblALogReduction[i] = n;
+			}
+			// add log prep table
+			if(method == GF16OCL_LOG_SMALL2) {
+				uint16_t* tblLogPrep = tblLog + 16384;
+				for (int i = 0; i < 2048; i++) {
+					int iters = 0, r = 0;
+					n = i;
+					while((n&3) != 3 && iters < 10) {
+						if(n & 1) {
+							n ^= 0x1100b;
+							r ^= 0x1100b;
+						}
+						n >>= 1;
+						r >>= 1;
+						iters++;
+					}
+					// assume little endian here
+					tblLogPrep[i*2] = r;
+					tblLogPrep[i*2+1] = iters;
+				}
 			}
 		}
 		
@@ -1268,14 +1328,17 @@ bool PAR2ProcOCL::setup_kernels(Galois16OCLMethods method, unsigned targetInputB
 			delete[] tblAntiLog;
 			tblAntiLog = NULL;
 		}
-		if(deviceAvailConstSize >= 131072) {
-			sourceStream << "__constant ushort gf16_log[65536] = {" << tblLog[0];
-			for(int i=1; i<65536; i++)
-				sourceStream << ',' << tblLog[i];
+		if(deviceAvailConstSize >= tblLogSize*2) {
+			sourceStream << "#define LOG_MEM_TYPE __constant\n";
+			// gf16_log is defined as uint to ensure it's 4-byte aligned
+			sourceStream << "__constant uint gf16_log[" << (tblLogSize/2) << "] = {" << ((tblLog[1]<<16) | tblLog[0]);
+			for(int i=2; i<tblLogSize; i+=2)
+				sourceStream << ',' << ((tblLog[i+1]<<16) | tblLog[i]);
 			sourceStream << "};\n";
 			delete[] tblLog;
 			tblLog = NULL;
-		}
+		} else
+			sourceStream << "#define LOG_MEM_TYPE __global const\n";
 		
 		const char* outExpType = "__global const ushort* restrict";
 		if(coeffType == GF16OCL_COEFF_LOG_SEQ) {
@@ -1291,12 +1354,12 @@ bool PAR2ProcOCL::setup_kernels(Galois16OCLMethods method, unsigned targetInputB
 				sourceStream << "#define LMEM_SRC_TYPE __constant\n";
 			if(tblLog) {
 				if(tblAntiLog)
-					sourceStream << "#define EX_TABLE_KARGS_DECL , " << outExpType << " outExp, __global const ushort* restrict gf16_log, __global const ushort* restrict gf16_antilog_src\n";
+					sourceStream << "#define EX_TABLE_KARGS_DECL , " << outExpType << " outExp, __global const uint* restrict gf16_log, __global const ushort* restrict gf16_antilog_src\n";
 				else
-					sourceStream << "#define EX_TABLE_KARGS_DECL , " << outExpType << " outExp, __global const ushort* restrict gf16_log\n";
+					sourceStream << "#define EX_TABLE_KARGS_DECL , " << outExpType << " outExp, __global const uint* restrict gf16_log\n";
 				
 				sourceStream <<
-					"#define EX_TABLE_ARGS_DECL , " << outExpType << " outExp, __global const ushort* restrict gf16_log, __local const ushort* restrict gf16_antilog\n"
+					"#define EX_TABLE_ARGS_DECL , " << outExpType << " outExp, __global const uint* restrict gf16_log, __local const ushort* restrict gf16_antilog\n"
 					"#define EX_TABLE_ARGS , outExp, gf16_log, gf16_antilog\n";
 			} else {
 				if(tblAntiLog) // should never be true
@@ -1312,12 +1375,22 @@ bool PAR2ProcOCL::setup_kernels(Galois16OCLMethods method, unsigned targetInputB
 			if(tblLog) {
 				if(tblAntiLog) {
 					sourceStream <<
-						"#define EX_TABLE_ARGS_DECL , " << outExpType << " outExp, __global const ushort* restrict gf16_log, __global const ushort* restrict gf16_antilog\n"
+						"#define EX_TABLE_ARGS_DECL , " << outExpType << " outExp, __global const uint* restrict gf16_log, __global const ushort* restrict gf16_antilog\n"
 						"#define EX_TABLE_ARGS , outExp, gf16_log, gf16_antilog\n";
 				} else {
 					sourceStream <<
-						"#define EX_TABLE_ARGS_DECL , " << outExpType << " outExp, __global const ushort* restrict gf16_log\n"
+						"#define EX_TABLE_ARGS_DECL , " << outExpType << " outExp, __global const uint* restrict gf16_log\n"
 						"#define EX_TABLE_ARGS , outExp, gf16_log\n";
+				}
+			} else {
+				if(tblAntiLog) { // should never be true
+					sourceStream <<
+						"#define EX_TABLE_ARGS_DECL , " << outExpType << " outExp, __global const ushort* restrict gf16_antilog\n"
+						"#define EX_TABLE_ARGS , outExp, gf16_antilog\n";
+				} else {
+					sourceStream <<
+						"#define EX_TABLE_ARGS_DECL , " << outExpType << " outExp\n"
+						"#define EX_TABLE_ARGS , outExp\n";
 				}
 			}
 		}
@@ -1471,7 +1544,7 @@ bool PAR2ProcOCL::setup_kernels(Galois16OCLMethods method, unsigned targetInputB
 	}
 	// if we couldn't embed log tables directly into the source, transfer them now
 	if(tblLog) {
-		const cl::Buffer bufLog(context, CL_MEM_READ_ONLY, 65536*2);
+		const cl::Buffer bufLog(context, CL_MEM_READ_ONLY, tblLogSize*2);
 		extra_buffers.push_back(bufLog);
 		kernelMul.setArg(4, bufLog);
 		kernelMulAdd.setArg(4, bufLog);
@@ -1487,13 +1560,13 @@ bool PAR2ProcOCL::setup_kernels(Galois16OCLMethods method, unsigned targetInputB
 			kernelMulAddLast.setArg(6, bufALog);
 			
 			std::vector<cl::Event> enqueueEvents(2);
-			queue.enqueueWriteBuffer(bufLog, CL_FALSE, 0, 65536*2, tblLog, NULL, &enqueueEvents[0]);
+			queue.enqueueWriteBuffer(bufLog, CL_FALSE, 0, tblLogSize*2, tblLog, NULL, &enqueueEvents[0]);
 			queue.enqueueWriteBuffer(bufALog, CL_FALSE, 0, tblAntiLogSize*2, tblAntiLog, NULL, &enqueueEvents[1]);
 			cl::Event::waitForEvents(enqueueEvents);
 			delete[] tblLog;
 			delete[] tblAntiLog;
 		} else {
-			queue.enqueueWriteBuffer(bufLog, CL_TRUE, 0, 65536*2, tblLog);
+			queue.enqueueWriteBuffer(bufLog, CL_TRUE, 0, tblLogSize*2, tblLog);
 			delete[] tblLog;
 		}
 	}

@@ -247,6 +247,7 @@ std::vector<Galois16OCLMethods> PAR2ProcOCL::availableMethods(int platformId, in
 		ret.push_back(GF16OCL_LOOKUP_HALF_NOCACHE);
 		ret.push_back(GF16OCL_LOG);
 		ret.push_back(GF16OCL_LOG_SMALL);
+		ret.push_back(GF16OCL_LOG_SMALL2);
 		ret.push_back(GF16OCL_LOG_TINY);
 		ret.push_back(GF16OCL_LOG_SMALL_LMEM);
 		ret.push_back(GF16OCL_LOG_TINY_LMEM);
@@ -267,6 +268,7 @@ std::vector<Galois16OCLMethods> PAR2ProcOCL::availableMethods(int platformId, in
 		ret.push_back(GF16OCL_LOOKUP_HALF_NOCACHE);
 		ret.push_back(GF16OCL_LOG);
 		ret.push_back(GF16OCL_LOG_SMALL);
+		ret.push_back(GF16OCL_LOG_SMALL2);
 		ret.push_back(GF16OCL_LOG_TINY);
 		ret.push_back(GF16OCL_LOG_SMALL_LMEM);
 		ret.push_back(GF16OCL_LOG_TINY_LMEM);

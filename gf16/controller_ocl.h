@@ -16,6 +16,7 @@ enum Galois16OCLMethods {
 	//GF16OCL_SHUFFLE2, // not implemented
 	GF16OCL_LOG,
 	GF16OCL_LOG_SMALL,
+	GF16OCL_LOG_SMALL2,
 	GF16OCL_LOG_TINY,
 	GF16OCL_LOG_SMALL_LMEM,
 	GF16OCL_LOG_TINY_LMEM,
@@ -31,10 +32,11 @@ static const char* Galois16OCLMethodsText[] = {
 	"Shuffle",
 	//"Shuffle2",
 	"Log",
+	"Log-SmallExp",
 	"Log-Small",
-	"Log-Tiny",
-	"Log-Small (Local)",
-	"Log-Tiny (Local)",
+	"Log-TinyExp",
+	"Log-SmallExp (Local)",
+	"Log-TinyExp (Local)",
 	"ByTwo"
 };
 
