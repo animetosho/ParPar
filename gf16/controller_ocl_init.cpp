@@ -1436,6 +1436,8 @@ bool PAR2ProcOCL::setup_kernels(Galois16OCLMethods method, unsigned targetInputB
 				std::cerr << "OpenCL Build Failure: " << err.what() << "(" << err.err() << "); build log:" <<std::endl << program.getBuildInfo<CL_PROGRAM_BUILD_LOG>(device) << std::endl;
 			} else
 				std::cerr << "OpenCL Build Error: " << err.what() << "(" << err.err() << ")" << std::endl;
+			if(tblLog) delete[] tblLog;
+			if(tblAntiLog) delete[] tblAntiLog;
 			return false;
 		}
 		
@@ -1496,6 +1498,8 @@ bool PAR2ProcOCL::setup_kernels(Galois16OCLMethods method, unsigned targetInputB
 		} else
 			std::cerr << "OpenCL Build Error: " << err.what() << "(" << err.err() << ")" << std::endl;
 #endif
+		if(tblLog) delete[] tblLog;
+		if(tblAntiLog) delete[] tblAntiLog;
 		return false;
 	}
 	
