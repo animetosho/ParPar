@@ -440,7 +440,7 @@ const static char _ocl_method_log[] =
 "#define GF_MULTIPLY(a, b) gf16_multiply_log(a, b  EX_TABLE_ARGS)\n"
 "#undef READ_SRC\n"
 "#define READ_SRC(src, idx) gf16_log_src(src[idx]  EX_TABLE_ARGS)\n"
-"#ifdef OCL_METHOD_LOG_SMALL\n"
+"#if defined(OCL_METHOD_LOG_TINY) || defined(OCL_METHOD_LOG_SMALL)\n"
 " #define LOG_SRC(n) gf16_log_small(n  EX_TABLE_ARGS)\n"
 "#else\n"
 " #define LOG_SRC(n) ((LOG_MEM_TYPE ushort*)gf16_log)[n]\n"
@@ -449,7 +449,17 @@ STRINGIFY(
 	ushort gf16_log_small(ushort val  EX_TABLE_ARGS_DECL) {
 		if(val == 0) return 65535;
 		
-		uint log = 0;
+		) "\n#ifdef OCL_METHOD_LOG_SMALL\n"
+		" #if __OPENCL_C_VERSION__ >= 200\n"
+		"  nat_uint log = ctz(val);\n"
+		" #else\n"
+		"  nat_uint log = clz((nat_uint)((val-1)^val)) ^ (sizeof(nat_uint)*8-1);\n"
+		" #endif\n" STRINGIFY(
+		val >>= log;
+		log += ((LOG_MEM_TYPE ushort*)gf16_log)[val >> 1];
+		) "\n#else\n" STRINGIFY(
+		
+		nat_uint log = 0;
 		uint prep;
 		uchar shift;
 		LOG_MEM_TYPE uint* gf16_log_prep = (gf16_log + 16384/2);
@@ -464,8 +474,16 @@ STRINGIFY(
 		log += shift;
 		val = (val >> shift) ^ (prep & 0xffff);
 		
-		log += ((LOG_MEM_TYPE ushort*)gf16_log)[val >> 2];
+		ushort log2 = ((LOG_MEM_TYPE ushort*)gf16_log)[val >> 2];
+		) "\n#if VECT_WIDTH == 1\n" STRINGIFY(
+		log += add_sat(log, log2) == (ushort)65535;
+		log += log2;
+		) "\n#else\n" STRINGIFY(
+		log += log2;
 		if(log >= 65535) log -= 65535;
+		) "\n#endif\n"
+		"#endif\n" STRINGIFY(
+		
 		return log;
 	}
 	
@@ -496,35 +514,35 @@ STRINGIFY(
 		) "\n#pragma unroll\n" STRINGIFY(
 		for(int v=0; v<VECT_WIDTH; v++) {
 			nat_uint va = a & 65535;
-			// TODO: try defering this conditional so compiler optimizes stuff inside - this seems to slightly benefit on some platforms, makes others much worse
-			if(va != 65535) { // exp(a) != 0
-				// compute (va+b) % 65535
-				) "\n#if VECT_WIDTH == 1\n" STRINGIFY(
-				va += add_sat(va, b) == (ushort)65535;
-				va += b;
-				) "\n#else\n" STRINGIFY(
-				va += b;
-				va = (va >> 16) + (va & 0xffff);
-				) "\n#endif\n" STRINGIFY(
-				
-				) "\n#ifdef OCL_METHOD_EXP_SMALL\n" STRINGIFY(
-				uint vatmp = gf16_antilog[va >> 3];
-				vatmp <<= va & 7;
-				vatmp ^= gf16_antilog[8192 + (vatmp >> 16)];
-				va = vatmp & 0xffff;
-				) "\n#elif defined(OCL_METHOD_EXP_TINY)\n" STRINGIFY(
-				uint vatmp = gf16_antilog[va >> 4];
-				vatmp <<= va & 15;
-				vatmp ^= gf16_antilog[4096 + (vatmp >> 24)] << 8;
-				vatmp &= 0xffffff;
-				vatmp ^= gf16_antilog[4096 + (vatmp >> 16)];
-				va = vatmp & 0xffff;
-				) "\n#else\n" STRINGIFY(
-				va = gf16_antilog[va];
-				) "\n#endif\n" STRINGIFY(
-				
-				result |= va << (v*16);
-			}
+			bool isZero = (va == 65535); // exp(a) == 0
+			
+			// compute (va+b) % 65535
+			// (note, second variant is not quite the same, e.g. 65534+1 = 0 or 65535)
+			) "\n#if VECT_WIDTH == 1\n" STRINGIFY(
+			va += add_sat(va, b) == (ushort)65535;
+			va += b;
+			) "\n#else\n" STRINGIFY(
+			va += b;
+			va = (va >> 16) + (va & 0xffff);
+			) "\n#endif\n" STRINGIFY(
+			
+			) "\n#ifdef OCL_METHOD_EXP_SMALL\n" STRINGIFY(
+			uint vatmp = gf16_antilog[va >> 3];
+			vatmp <<= va & 7;
+			vatmp ^= gf16_antilog[8192 + (vatmp >> 16)];
+			va = vatmp & 0xffff;
+			) "\n#elif defined(OCL_METHOD_EXP_TINY)\n" STRINGIFY(
+			uint vatmp = gf16_antilog[va >> 4];
+			vatmp <<= va & 15;
+			vatmp ^= gf16_antilog[4096 + (vatmp >> 24)] << 8;
+			vatmp &= 0xffffff;
+			vatmp ^= gf16_antilog[4096 + (vatmp >> 16)];
+			va = vatmp & 0xffff;
+			) "\n#else\n" STRINGIFY(
+			va = gf16_antilog[va];
+			) "\n#endif\n" STRINGIFY(
+			
+			result |= (isZero ? 0 : va) << (v*16);
 			a >>= 16;
 		}
 		return result;
@@ -1158,7 +1176,7 @@ bool PAR2ProcOCL::setup_kernels(Galois16OCLMethods method, unsigned targetInputB
 		if(method == GF16OCL_LOG_TINY || method == GF16OCL_LOG_TINY_LMEM)
 			sourceStream << "#define OCL_METHOD_EXP_TINY\n";
 		if(method == GF16OCL_LOG_SMALL2)
-			sourceStream << "#define OCL_METHOD_LOG_SMALL\n";
+			sourceStream << "#define OCL_METHOD_LOG_TINY\n";
 		methodCode = _ocl_method_log;
 	break;
 	case GF16OCL_LOOKUP:
@@ -1252,6 +1270,8 @@ bool PAR2ProcOCL::setup_kernels(Galois16OCLMethods method, unsigned targetInputB
 		// construct log/exp table and embed into OpenCL source
 		if(method == GF16OCL_LOG_SMALL2) {
 			tblLog = new uint16_t[tblLogSize = 16384 + 2048*2];
+		} else if(0) { // half-log idea
+			tblLog = new uint16_t[tblLogSize = 32768];
 		} else {
 			tblLog = new uint16_t[tblLogSize = 65536];
 			tblLog[0] = 65535; // special value to represent 0
@@ -1280,6 +1300,9 @@ bool PAR2ProcOCL::setup_kernels(Galois16OCLMethods method, unsigned targetInputB
 				if(method == GF16OCL_LOG_SMALL2) {
 					if((n & 3) == 3)
 						tblLog[n >> 2] = exp;
+				} else if(0) { // half-log idea
+					if((n & 1) == 1)
+						tblLog[n >> 1] = exp;
 				} else
 					tblLog[n] = exp;
 				n = (n << 1) ^ (-(n>>15) & GF16_POLYNOMIAL);
@@ -1343,7 +1366,7 @@ bool PAR2ProcOCL::setup_kernels(Galois16OCLMethods method, unsigned targetInputB
 		const char* outExpType = "__global const ushort* restrict";
 		if(coeffType == GF16OCL_COEFF_LOG_SEQ) {
 			sourceStream << "#define GFMAT_COEFF_SEQUENTIAL\n";
-			outExpType = "nat_uint";
+			outExpType = "ushort";
 		}
 		
 		if(method == GF16OCL_LOG_SMALL_LMEM || method == GF16OCL_LOG_TINY_LMEM) {

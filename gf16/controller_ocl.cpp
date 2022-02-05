@@ -185,10 +185,10 @@ bool PAR2ProcOCL::setRecoverySlices(unsigned _numOutputs, const uint16_t* output
 		queueEvents.reserve(2);
 		queueEvents.push_back(writeEvent);
 	} else if(coeffType == GF16OCL_COEFF_LOG_SEQ) {
-		kernelMul.setArg<cl_uint>(3, outputExponents[0]);
-		kernelMulAdd.setArg<cl_uint>(3, outputExponents[0]);
-		kernelMulLast.setArg<cl_uint>(4, outputExponents[0]);
-		kernelMulAddLast.setArg<cl_uint>(4, outputExponents[0]);
+		kernelMul.setArg<cl_ushort>(3, outputExponents[0]);
+		kernelMulAdd.setArg<cl_ushort>(3, outputExponents[0]);
+		kernelMulLast.setArg<cl_ushort>(4, outputExponents[0]);
+		kernelMulAddLast.setArg<cl_ushort>(4, outputExponents[0]);
 	}
 	return true;
 }
