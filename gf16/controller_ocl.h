@@ -119,6 +119,11 @@ class PAR2ProcOCL : public IPAR2ProcBackend {
 	size_t wgSize;
 	
 	
+	int pendingInCallbacks, pendingOutCallbacks;
+	PAR2ProcPlainCb deinitCallback;
+	bool endSignalled;
+	
+	
 	// remembered setup params
 	Galois16OCLMethods _setupMethod;
 	unsigned _setupTargetInputBatch, _setupTargetIters, _setupTargetGrouping;
@@ -163,6 +168,12 @@ public:
 	void deinit(PAR2ProcPlainCb cb) override;
 	void deinit() override;
 	void freeProcessingMem() override {}
+	
+	bool isEmpty() const override {
+		return stagingActiveCount==0 && pendingInCallbacks==0;
+	}
+	void endInput() override;
+	void processing_finished() override;
 	
 	inline const void* getMethodName() const {
 		return methodToText(_setupMethod);

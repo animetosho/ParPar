@@ -33,7 +33,7 @@ static void after_proc(uv_async_t *handle) {
 	static_cast<PAR2ProcOCL*>(handle->data)->_after_proc();
 }
 
-PAR2ProcOCL::PAR2ProcOCL(uv_loop_t* _loop, int platformId, int deviceId, int stagingAreas) : loop(nullptr), staging(stagingAreas) {
+PAR2ProcOCL::PAR2ProcOCL(uv_loop_t* _loop, int platformId, int deviceId, int stagingAreas) : loop(nullptr), staging(stagingAreas), endSignalled(false) {
 	_initSuccess = false;
 	zeroes = NULL;
 	
@@ -135,6 +135,8 @@ bool PAR2ProcOCL::init(Galois16OCLMethods method, unsigned targetInputBatch, uns
 	numOutputs = 0;
 	outputExponents.clear();
 	
+	pendingInCallbacks = pendingOutCallbacks = 0;
+	
 	if(method == GF16OCL_AUTO) method = default_method();
 	_setupMethod = method;
 	_setupTargetInputBatch = targetInputBatch;
@@ -205,9 +207,14 @@ void PAR2ProcOCL::reset_state() {
 }
 
 void PAR2ProcOCL::deinit(PAR2ProcPlainCb cb) {
+	if(pendingOutCallbacks) {
+		deinitCallback = cb;
+		return;
+	}
 	if(!loop) return;
 	loop = nullptr;
 	queue.finish();
+	queueEvents.clear();
 	
 	auto* freeData = new struct PAR2ProcBackendCloseData;
 	freeData->cb = cb;
@@ -230,12 +237,19 @@ void PAR2ProcOCL::deinit() {
 	if(!loop) return;
 	loop = nullptr;
 	queue.finish();
+	queueEvents.clear();
 	uv_close(reinterpret_cast<uv_handle_t*>(&_sentSignal), nullptr);
 	uv_close(reinterpret_cast<uv_handle_t*>(&_recvSignal), nullptr);
 	uv_close(reinterpret_cast<uv_handle_t*>(&_procSignal), nullptr);
 }
 
 
+void PAR2ProcOCL::endInput() {
+	endSignalled = true;
+}
+void PAR2ProcOCL::processing_finished() {
+	endSignalled = false;
+}
 
 std::vector<Galois16OCLMethods> PAR2ProcOCL::availableMethods(int platformId, int deviceId) {
 	std::vector<Galois16OCLMethods> ret;
@@ -313,9 +327,11 @@ struct send_data {
 void PAR2ProcOCL::_after_sent() {
 	struct send_data* req;
 	while(_sentChunks.trypop(reinterpret_cast<void**>(&req))) {
+		pendingInCallbacks--;
 		if(req->cb) req->cb();
 		delete req;
 	}
+	if(endSignalled && isEmpty() && progressCb) progressCb(0, 0); // we got this callback after processing has finished -> need to flag to front-end that we're now done
 }
 
 PAR2ProcBackendAddResult PAR2ProcOCL::addInput(const void* buffer, size_t size, uint16_t inputNum, bool flush, const PAR2ProcPlainCb& cb) {
@@ -343,6 +359,7 @@ PAR2ProcBackendAddResult PAR2ProcOCL::addInput(const void* buffer, size_t size, 
 	auto* req = new struct send_data;
 	req->cb = cb;
 	req->parent = this;
+	pendingInCallbacks++;
 	writeEvent.setCallback(CL_COMPLETE, [](cl_event, cl_int, void* _req) {
 		auto req = static_cast<struct send_data*>(_req);
 		req->parent->_sentChunks.push(req);
@@ -434,10 +451,12 @@ struct recv_data {
 void PAR2ProcOCL::_after_recv() {
 	struct recv_data* req;
 	while(_recvChunks.trypop(reinterpret_cast<void**>(&req))) {
+		pendingOutCallbacks--;
 		// TODO: need to verify cksum
 		req->cb(true);
 		delete req;
 	}
+	if(pendingOutCallbacks < 1 && deinitCallback) deinit(deinitCallback);
 }
 
 void PAR2ProcOCL::getOutput(unsigned index, void* output, const PAR2ProcOutputCb& cb) {
@@ -447,6 +466,7 @@ void PAR2ProcOCL::getOutput(unsigned index, void* output, const PAR2ProcOutputCb
 	auto* req = new struct recv_data;
 	req->cb = cb;
 	req->parent = this;
+	pendingOutCallbacks++;
 	readEvent.setCallback(CL_COMPLETE, [](cl_event, cl_int, void* _req) {
 		auto req = static_cast<struct recv_data*>(_req);
 		req->parent->_recvChunks.push(req);
@@ -469,6 +489,7 @@ void PAR2ProcOCL::_after_proc() {
 	while(_procChunks.trypop(reinterpret_cast<void**>(&req))) {
 		staging[req->procIdx].isActive = false;
 		stagingActiveCount--;
+		pendingInCallbacks--;
 		
 		// if add was blocked, allow adds to continue - calling application will need to listen to this event to know to continue
 		if(progressCb) progressCb(req->numInputs, staging[req->procIdx].firstInput);
@@ -509,6 +530,7 @@ void PAR2ProcOCL::run_kernel(unsigned buf, unsigned numInputs) {
 	req->numInputs = numInputs;
 	req->procIdx = buf;
 	req->parent = this;
+	pendingInCallbacks++;
 	area.event.setCallback(CL_COMPLETE, [](cl_event, cl_int, void* _req) {
 		auto req = static_cast<struct compute_req*>(_req);
 		req->parent->_procChunks.push(req);
@@ -541,7 +563,11 @@ std::vector<GF16OCL_DeviceInfo> PAR2ProcOCL::getDevices(int platformId) {
 	}
 	
 	std::vector<cl::Device> devices;
-	platform.getDevices(CL_DEVICE_TYPE_ALL, &devices);
+	try {
+		platform.getDevices(CL_DEVICE_TYPE_ALL, &devices);
+	} catch(cl::Error const&) {
+		return {};
+	}
 
 	std::vector<GF16OCL_DeviceInfo> ret(devices.size());
 	for(unsigned i=0; i<devices.size(); i++) {
