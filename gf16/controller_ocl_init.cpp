@@ -59,7 +59,7 @@ const static char _ocl_defines[] =
 " #define nat_int int\n"
 " #define NAT_BITS 32\n"
 "#elif VECT_WIDTH == 4 || VECT_WIDTH == 8\n"
-" #define VECT_ONE 0x0001000100010001ull\n"
+" #define VECT_ONE (ulong)0x0001000100010001ull\n" // Nvidia driver on Linux for 8400GS seems to need the explicit ulong cast
 " #define nat_ushort4 ulong\n"
 " #define nat_uint ulong\n"
 " #define nat_int long\n"
@@ -446,14 +446,14 @@ const static char _ocl_method_log[] =
 " #define LOG_SRC(n) ((LOG_MEM_TYPE ushort*)gf16_log)[n]\n"
 "#endif\n"
 STRINGIFY(
-	ushort gf16_log_small(ushort val  EX_TABLE_ARGS_DECL) {
+	ushort gf16_log_small(nat_uint val  EX_TABLE_ARGS_DECL) {
 		if(val == 0) return 65535;
 		
 		) "\n#ifdef OCL_METHOD_LOG_SMALL\n"
 		" #if __OPENCL_C_VERSION__ >= 200\n"
 		"  nat_uint log = ctz(val);\n"
 		" #else\n"
-		"  nat_uint log = clz((nat_uint)((val-1)^val)) ^ (sizeof(nat_uint)*8-1);\n"
+		"  nat_uint log = clz((nat_uint)((val-1)^val)) ^ (NAT_BITS-1);\n"
 		" #endif\n" STRINGIFY(
 		val >>= log;
 		log += ((LOG_MEM_TYPE ushort*)gf16_log)[val >> 1];
@@ -461,7 +461,7 @@ STRINGIFY(
 		
 		nat_uint log = 0;
 		uint prep;
-		uchar shift;
+		nat_uint shift;
 		LOG_MEM_TYPE uint* gf16_log_prep = (gf16_log + 16384/2);
 		
 		prep = gf16_log_prep[val & 0x7ff];
@@ -1355,7 +1355,7 @@ bool PAR2ProcOCL::setup_kernels(Galois16OCLMethods method, unsigned targetInputB
 			sourceStream << "#define LOG_MEM_TYPE __constant\n";
 			// gf16_log is defined as uint to ensure it's 4-byte aligned
 			sourceStream << "__constant uint gf16_log[" << (tblLogSize/2) << "] = {" << ((tblLog[1]<<16) | tblLog[0]);
-			for(int i=2; i<tblLogSize; i+=2)
+			for(unsigned i=2; i<tblLogSize; i+=2)
 				sourceStream << ',' << ((tblLog[i+1]<<16) | tblLog[i]);
 			sourceStream << "};\n";
 			delete[] tblLog;
