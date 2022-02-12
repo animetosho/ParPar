@@ -49,18 +49,16 @@ private:
 	
 	void run_kernel(unsigned inBuf, unsigned numInputs);
 	
+	void _after_computation(void* req);
+	void _after_prepare_chunk(void* req);
+	
 	// disable copy constructor
 	PAR2ProcCPU(const PAR2ProcCPU&);
 	PAR2ProcCPU& operator=(const PAR2ProcCPU&);
 	
 public:
-	ThreadMessageQueue<void*> _preparedChunks;
-	uv_async_t _preparedSignal;
-	ThreadMessageQueue<void*> _processedChunks;
-	uv_async_t _doneSignal;
-	
-	void _after_computation();
-	void _after_prepare_chunk();
+	ThreadNotifyQueue<PAR2ProcCPU> _prepared;
+	ThreadNotifyQueue<PAR2ProcCPU> _processed;
 	
 	explicit PAR2ProcCPU(uv_loop_t* _loop, int stagingAreas=2);
 	explicit inline PAR2ProcCPU(int stagingAreas=2) : PAR2ProcCPU(uv_default_loop(), stagingAreas) {}

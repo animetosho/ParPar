@@ -23,17 +23,11 @@ int PAR2ProcOCL::load_runtime() {
 }
 
 
-static void after_sent(uv_async_t *handle) {
-	static_cast<PAR2ProcOCL*>(handle->data)->_after_sent();
-}
-static void after_recv(uv_async_t *handle) {
-	static_cast<PAR2ProcOCL*>(handle->data)->_after_recv();
-}
-static void after_proc(uv_async_t *handle) {
-	static_cast<PAR2ProcOCL*>(handle->data)->_after_proc();
-}
-
-PAR2ProcOCL::PAR2ProcOCL(uv_loop_t* _loop, int platformId, int deviceId, int stagingAreas) : loop(nullptr), staging(stagingAreas), endSignalled(false) {
+PAR2ProcOCL::PAR2ProcOCL(uv_loop_t* _loop, int platformId, int deviceId, int stagingAreas)
+: loop(nullptr), staging(stagingAreas), endSignalled(false),
+  _sent(_loop, this, &PAR2ProcOCL::_after_sent),
+  _recv(_loop, this, &PAR2ProcOCL::_after_recv),
+  _proc(_loop, this, &PAR2ProcOCL::_after_proc) {
 	_initSuccess = false;
 	zeroes = NULL;
 	
@@ -94,13 +88,6 @@ PAR2ProcOCL::PAR2ProcOCL(uv_loop_t* _loop, int platformId, int deviceId, int sta
 	
 	queueEvents.reserve(2);
 	loop = _loop;
-	
-	uv_async_init(loop, &_sentSignal, after_sent);
-	uv_async_init(loop, &_recvSignal, after_recv);
-	uv_async_init(loop, &_procSignal, after_proc);
-	_sentSignal.data = static_cast<void*>(this);
-	_recvSignal.data = static_cast<void*>(this);
-	_procSignal.data = static_cast<void*>(this);
 }
 
 PAR2ProcOCL::~PAR2ProcOCL() {
@@ -219,9 +206,6 @@ void PAR2ProcOCL::deinit(PAR2ProcPlainCb cb) {
 	auto* freeData = new struct PAR2ProcBackendCloseData;
 	freeData->cb = cb;
 	freeData->refCount = 3;
-	_sentSignal.data = freeData;
-	_recvSignal.data = freeData;
-	_procSignal.data = freeData;
 	auto closeCb = [](uv_handle_t* handle) {
 		auto* freeData = static_cast<struct PAR2ProcBackendCloseData*>(handle->data);
 		if(--(freeData->refCount) == 0) {
@@ -229,18 +213,18 @@ void PAR2ProcOCL::deinit(PAR2ProcPlainCb cb) {
 			delete freeData;
 		}
 	};
-	uv_close(reinterpret_cast<uv_handle_t*>(&_sentSignal), closeCb);
-	uv_close(reinterpret_cast<uv_handle_t*>(&_recvSignal), closeCb);
-	uv_close(reinterpret_cast<uv_handle_t*>(&_procSignal), closeCb);
+	_sent.close(freeData, closeCb);
+	_recv.close(freeData, closeCb);
+	_proc.close(freeData, closeCb);
 }
 void PAR2ProcOCL::deinit() {
 	if(!loop) return;
 	loop = nullptr;
 	queue.finish();
 	queueEvents.clear();
-	uv_close(reinterpret_cast<uv_handle_t*>(&_sentSignal), nullptr);
-	uv_close(reinterpret_cast<uv_handle_t*>(&_recvSignal), nullptr);
-	uv_close(reinterpret_cast<uv_handle_t*>(&_procSignal), nullptr);
+	_sent.close();
+	_recv.close();
+	_proc.close();
 }
 
 
@@ -324,13 +308,12 @@ struct send_data {
 	PAR2ProcPlainCb cb;
 };
 
-void PAR2ProcOCL::_after_sent() {
-	struct send_data* req;
-	while(_sentChunks.trypop(reinterpret_cast<void**>(&req))) {
-		pendingInCallbacks--;
-		if(req->cb) req->cb();
-		delete req;
-	}
+void PAR2ProcOCL::_after_sent(void* _req) {
+	auto req = static_cast<struct send_data*>(_req);
+	pendingInCallbacks--;
+	if(req->cb) req->cb();
+	delete req;
+	
 	if(endSignalled && isEmpty() && progressCb) progressCb(0, 0); // we got this callback after processing has finished -> need to flag to front-end that we're now done
 }
 
@@ -362,8 +345,7 @@ PAR2ProcBackendAddResult PAR2ProcOCL::addInput(const void* buffer, size_t size, 
 	pendingInCallbacks++;
 	writeEvent.setCallback(CL_COMPLETE, [](cl_event, cl_int, void* _req) {
 		auto req = static_cast<struct send_data*>(_req);
-		req->parent->_sentChunks.push(req);
-		uv_async_send(&(req->parent->_sentSignal));
+		req->parent->_sent.notify(req);
 	}, req);
 	
 	
@@ -448,14 +430,13 @@ struct recv_data {
 	PAR2ProcOutputCb cb;
 };
 
-void PAR2ProcOCL::_after_recv() {
-	struct recv_data* req;
-	while(_recvChunks.trypop(reinterpret_cast<void**>(&req))) {
-		pendingOutCallbacks--;
-		// TODO: need to verify cksum
-		req->cb(true);
-		delete req;
-	}
+void PAR2ProcOCL::_after_recv(void* _req) {
+	auto req = static_cast<struct recv_data*>(_req);
+	pendingOutCallbacks--;
+	// TODO: need to verify cksum
+	req->cb(true);
+	delete req;
+	
 	if(pendingOutCallbacks < 1 && deinitCallback) deinit(deinitCallback);
 }
 
@@ -469,8 +450,7 @@ void PAR2ProcOCL::getOutput(unsigned index, void* output, const PAR2ProcOutputCb
 	pendingOutCallbacks++;
 	readEvent.setCallback(CL_COMPLETE, [](cl_event, cl_int, void* _req) {
 		auto req = static_cast<struct recv_data*>(_req);
-		req->parent->_recvChunks.push(req);
-		uv_async_send(&(req->parent->_recvSignal));
+		req->parent->_recv.notify(req);
 	}, req);
 }
 
@@ -484,18 +464,16 @@ struct compute_req {
 };
 
 
-void PAR2ProcOCL::_after_proc() {
-	struct compute_req* req;
-	while(_procChunks.trypop(reinterpret_cast<void**>(&req))) {
-		staging[req->procIdx].isActive = false;
-		stagingActiveCount--;
-		pendingInCallbacks--;
-		
-		// if add was blocked, allow adds to continue - calling application will need to listen to this event to know to continue
-		if(progressCb) progressCb(req->numInputs, staging[req->procIdx].firstInput);
-		
-		delete req;
-	}
+void PAR2ProcOCL::_after_proc(void* _req) {
+	auto req = static_cast<struct compute_req*>(_req);
+	staging[req->procIdx].isActive = false;
+	stagingActiveCount--;
+	pendingInCallbacks--;
+	
+	// if add was blocked, allow adds to continue - calling application will need to listen to this event to know to continue
+	if(progressCb) progressCb(req->numInputs, staging[req->procIdx].firstInput);
+	
+	delete req;
 }
 
 
@@ -533,8 +511,7 @@ void PAR2ProcOCL::run_kernel(unsigned buf, unsigned numInputs) {
 	pendingInCallbacks++;
 	area.event.setCallback(CL_COMPLETE, [](cl_event, cl_int, void* _req) {
 		auto req = static_cast<struct compute_req*>(_req);
-		req->parent->_procChunks.push(req);
-		uv_async_send(&(req->parent->_procSignal));
+		req->parent->_proc.notify(req);
 	}, req);
 	
 	// management

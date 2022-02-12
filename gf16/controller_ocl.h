@@ -138,6 +138,10 @@ class PAR2ProcOCL : public IPAR2ProcBackend {
 	static size_t getWGSize(const cl::Context& context, const cl::Device& device);
 	void reset_state();
 	
+	void _after_sent(void* _req);
+	void _after_recv(void* _req);
+	void _after_proc(void* _req);
+	
 	// disable copy constructor
 	PAR2ProcOCL(const PAR2ProcOCL&);
 	PAR2ProcOCL& operator=(const PAR2ProcOCL&);
@@ -191,13 +195,7 @@ public:
 	}
 	
 	
-	ThreadMessageQueue<void*> _sentChunks;
-	uv_async_t _sentSignal;
-	ThreadMessageQueue<void*> _recvChunks;
-	uv_async_t _recvSignal;
-	ThreadMessageQueue<void*> _procChunks;
-	uv_async_t _procSignal;
-	void _after_sent();
-	void _after_recv();
-	void _after_proc();
+	ThreadNotifyQueue<PAR2ProcOCL> _sent;
+	ThreadNotifyQueue<PAR2ProcOCL> _recv;
+	ThreadNotifyQueue<PAR2ProcOCL> _proc;
 };

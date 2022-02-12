@@ -10,12 +10,6 @@
 
 // callbacks
 static void prepare_chunk(void *req);
-static void after_prepare_chunk(uv_async_t *handle) {
-	static_cast<PAR2ProcCPU*>(handle->data)->_after_prepare_chunk();
-}
-static void after_computation(uv_async_t *handle) {
-	static_cast<PAR2ProcCPU*>(handle->data)->_after_computation();
-}
 static void compute_worker(void *_req);
 
 PAR2ProcCPUStaging::~PAR2ProcCPUStaging() {
@@ -23,11 +17,10 @@ PAR2ProcCPUStaging::~PAR2ProcCPUStaging() {
 }
 
 /** initialization **/
-PAR2ProcCPU::PAR2ProcCPU(uv_loop_t* _loop, int stagingAreas) : loop(_loop), sliceSize(0), numThreads(0), gf(NULL), staging(stagingAreas), memProcessing(NULL), prepareThread(prepare_chunk) {
-	uv_async_init(loop, &_preparedSignal, after_prepare_chunk);
-	uv_async_init(loop, &_doneSignal, after_computation);
-	_preparedSignal.data = static_cast<void*>(this);
-	_doneSignal.data = static_cast<void*>(this);
+PAR2ProcCPU::PAR2ProcCPU(uv_loop_t* _loop, int stagingAreas)
+: loop(_loop), sliceSize(0), numThreads(0), gf(NULL), staging(stagingAreas), memProcessing(NULL), prepareThread(prepare_chunk),
+  _prepared(_loop, this, &PAR2ProcCPU::_after_prepare_chunk),
+  _processed(_loop, this, &PAR2ProcCPU::_after_computation) {
 	
 	// default number of threads = number of CPUs available
 	setNumThreads(-1);
@@ -195,8 +188,6 @@ void PAR2ProcCPU::deinit(PAR2ProcPlainCb cb) {
 	auto* freeData = new struct PAR2ProcBackendCloseData;
 	freeData->cb = cb;
 	freeData->refCount = 2;
-	_preparedSignal.data = freeData;
-	_doneSignal.data = freeData;
 	auto closeCb = [](uv_handle_t* handle) {
 		auto* freeData = static_cast<struct PAR2ProcBackendCloseData*>(handle->data);
 		if(--(freeData->refCount) == 0) {
@@ -204,15 +195,15 @@ void PAR2ProcCPU::deinit(PAR2ProcPlainCb cb) {
 			delete freeData;
 		}
 	};
-	uv_close(reinterpret_cast<uv_handle_t*>(&_preparedSignal), closeCb);
-	uv_close(reinterpret_cast<uv_handle_t*>(&_doneSignal), closeCb);
+	_prepared.close(freeData, closeCb);
+	_processed.close(freeData, closeCb);
 }
 void PAR2ProcCPU::deinit() {
 	freeGf();
 	if(!loop) return;
 	loop = nullptr;
-	uv_close(reinterpret_cast<uv_handle_t*>(&_preparedSignal), nullptr);
-	uv_close(reinterpret_cast<uv_handle_t*>(&_doneSignal), nullptr);
+	_prepared.close();
+	_processed.close();
 }
 
 PAR2ProcCPU::~PAR2ProcCPU() {
@@ -245,20 +236,17 @@ static void prepare_chunk(void* req) {
 		data->gf->prepare_packed_cksum(data->dst, data->src, data->size, data->dstLen, data->numInputs, data->index, data->chunkLen);
 	
 	// signal main thread that prepare has completed
-	data->parent->_preparedChunks.push(data);
-	uv_async_send(&(data->parent->_preparedSignal));
+	data->parent->_prepared.notify(data);
 }
 
-void PAR2ProcCPU::_after_prepare_chunk() {
-	struct prepare_data* data;
-	while(_preparedChunks.trypop(reinterpret_cast<void**>(&data))) {
-		if(data->submitInBufs) {
-			// queue async compute
-			run_kernel(data->inBufId, data->submitInBufs);
-		}
-		if(data->cb && data->src) data->cb();
-		delete data;
+void PAR2ProcCPU::_after_prepare_chunk(void* _req) {
+	auto data = static_cast<struct prepare_data*>(_req);
+	if(data->submitInBufs) {
+		// queue async compute
+		run_kernel(data->inBufId, data->submitInBufs);
 	}
+	if(data->cb && data->src) data->cb();
+	delete data;
 }
 
 PAR2ProcBackendAddResult PAR2ProcCPU::addInput(const void* buffer, size_t size, uint16_t inputNum, bool flush, const PAR2ProcPlainCb& cb) {
@@ -477,8 +465,7 @@ static void compute_worker(void *_req) {
 	// mark that we've done processing this request
 	if(req->procRefs->fetch_sub(1, std::memory_order_relaxed) <= 1) { // relaxed ordering: although we want all prior memory operations to be complete at this point, to send a cross-thread signal requires stricter ordering, so it should be fine by the time the signal is received
 		// signal this input group is done with
-		req->parent->_processedChunks.push(req);
-		uv_async_send(&(req->parent->_doneSignal));
+		req->parent->_processed.notify(req);
 	} else
 		delete req;
 }
@@ -526,17 +513,15 @@ void PAR2ProcCPU::run_kernel(unsigned inBuf, unsigned numInputs) {
 	processingAdd = true;
 }
 
-void PAR2ProcCPU::_after_computation() {
-	struct compute_req* req;
-	while(_processedChunks.trypop(reinterpret_cast<void**>(&req))) {
-		staging[req->inBufId].isActive = false;
-		stagingActiveCount--;
-		
-		// if add was blocked, allow adds to continue - calling application will need to listen to this event to know to continue
-		if(progressCb) progressCb(req->numInputs, req->firstInput);
-		
-		delete req;
-	}
+void PAR2ProcCPU::_after_computation(void* _req) {
+	auto req = static_cast<struct compute_req*>(_req);
+	staging[req->inBufId].isActive = false;
+	stagingActiveCount--;
+	
+	// if add was blocked, allow adds to continue - calling application will need to listen to this event to know to continue
+	if(progressCb) progressCb(req->numInputs, req->firstInput);
+	
+	delete req;
 }
 
 
