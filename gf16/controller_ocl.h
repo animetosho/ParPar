@@ -46,7 +46,8 @@ enum Galois16OCLCoeffType {
 	GF16OCL_COEFF_LOG_SEQ,
 };
 
-typedef struct {
+class GF16OCL_DeviceInfo {
+public:
 	std::string name;
 	unsigned vendorId;
 	cl_device_type type;
@@ -62,7 +63,16 @@ typedef struct {
 	unsigned maxWorkGroup;
 	unsigned workGroupMultiple;
 	unsigned computeUnits;
-} GF16OCL_DeviceInfo;
+	
+	// invalid device
+	GF16OCL_DeviceInfo()
+	: vendorId(0), available(false), supported(false), memory(0), globalCache(0), constantMemory(0), localMemory(0), maxAllocation(0), maxWorkGroup(0), workGroupMultiple(0), computeUnits(0) {}
+	
+	GF16OCL_DeviceInfo(const cl::Device& device);
+	
+private:
+	static size_t getWGSize(const cl::Context& context, const cl::Device& device);
+};
 
 typedef struct {
 	Galois16OCLMethods id;
@@ -134,8 +144,9 @@ class PAR2ProcOCL : public IPAR2ProcBackend {
 	
 	cl::Context context;
 	static std::vector<cl::Platform> platforms;
+	static bool getPlatform(cl::Platform& platform, int platformId = -1);
+	static bool getDevice(cl::Device& device, int platformId = -1, int deviceId = -1);
 	
-	static size_t getWGSize(const cl::Context& context, const cl::Device& device);
 	void reset_state();
 	
 	void _after_sent(void* _req);
@@ -153,6 +164,18 @@ public:
 	}
 	static std::vector<std::string> getPlatforms();
 	static std::vector<GF16OCL_DeviceInfo> getDevices(int platformId = -1);
+	inline static std::string getPlatform(int platformId = -1) {
+		cl::Platform platform;
+		if(getPlatform(platform, platformId))
+			return platform.getInfo<CL_PLATFORM_NAME>();
+		return {};
+	}
+	inline static GF16OCL_DeviceInfo getDevice(int platformId = -1, int deviceId = -1) {
+		cl::Device device;
+		if(getDevice(device, platformId, deviceId))
+			return {device};
+		return {};
+	}
 	explicit PAR2ProcOCL(uv_loop_t* _loop, int platformId = -1, int deviceId = -1, int stagingAreas = 2);
 	~PAR2ProcOCL();
 	void setSliceSize(size_t _sliceSize) override;

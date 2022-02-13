@@ -31,44 +31,7 @@ PAR2ProcOCL::PAR2ProcOCL(uv_loop_t* _loop, int platformId, int deviceId, int sta
 	_initSuccess = false;
 	zeroes = NULL;
 	
-	cl::Platform platform;
-	if(platformId == -1)
-		platform = cl::Platform::getDefault();
-	else {
-		if(platformId >= (int)platforms.size()) return;
-		platform = platforms[platformId];
-	}
-	
-	std::vector<cl::Device> devices;
-	if(deviceId == -1) {
-		// first try GPU
-		try {
-			platform.getDevices(CL_DEVICE_TYPE_GPU, &devices);
-		} catch(cl::Error const&) {}
-		// if no GPU device found, try anything else
-		if(devices.size() < 1) {
-			try {
-				platform.getDevices(CL_DEVICE_TYPE_ALL, &devices);
-			} catch(cl::Error const&) {}
-		}
-		if(devices.size() < 1) return; // no devices!
-		// match first device that's available
-		bool found = false;
-		for(unsigned i=0; i<devices.size(); i++) {
-			device = devices[i];
-			if(device.getInfo<CL_DEVICE_AVAILABLE>() && device.getInfo<CL_DEVICE_COMPILER_AVAILABLE>() && device.getInfo<CL_DEVICE_ENDIAN_LITTLE>()) {
-				found = true;
-				break;
-			}
-		}
-		if(!found) return;
-	}
-	else {
-		platform.getDevices(CL_DEVICE_TYPE_ALL, &devices);
-		if(deviceId >= (int)devices.size()) return;
-		device = devices[deviceId];
-	}
-	
+	if(!getDevice(device, platformId, deviceId)) return;
 	context = cl::Context(device);
 	
 	// we only support little-endian hosts and devices
@@ -95,23 +58,6 @@ PAR2ProcOCL::~PAR2ProcOCL() {
 	deinit();
 }
 
-
-// based off getWGsizes function from clinfo
-size_t PAR2ProcOCL::getWGSize(const cl::Context& context, const cl::Device& device) {
-	try {
-		cl::Program program(context,
-			"#define GWO(type) global type* restrict\n"
-			"#define GRO(type) global const type* restrict\n"
-			"#define BODY int i = get_global_id(0); out[i] = in1[i] + in2[i]\n"
-			"#define _KRN(T, N) kernel void sum##N(GWO(T##N) out, GRO(T##N) in1, GRO(T##N) in2) { BODY; }\n"
-			"#define KRN(N) _KRN(int, N)\n"
-			"KRN()\n/* KRN(2)\nKRN(4)\nKRN(8)\nKRN(16) */\n", true);
-		cl::Kernel kern(program, "sum");
-		return kern.getWorkGroupInfo<CL_KERNEL_PREFERRED_WORK_GROUP_SIZE_MULTIPLE>(device);
-	} catch(cl::Error const&) {
-		return 0;
-	}
-}
 
 // _sliceSize must be divisible by 2
 void PAR2ProcOCL::setSliceSize(size_t _sliceSize) {
@@ -521,6 +467,19 @@ void PAR2ProcOCL::run_kernel(unsigned buf, unsigned numInputs) {
 }
 
 
+bool PAR2ProcOCL::getPlatform(cl::Platform& platform, int platformId) {
+	if(platformId == -1) {
+		try {
+			platform = cl::Platform::getDefault();
+		} catch(cl::Error const&) {
+			return false;
+		}
+	} else {
+		if(platformId >= (int)platforms.size()) return false;
+		platform = platforms[platformId];
+	}
+	return true;
+}
 
 std::vector<std::string> PAR2ProcOCL::getPlatforms() {
 	std::vector<std::string> ret(platforms.size());
@@ -530,14 +489,44 @@ std::vector<std::string> PAR2ProcOCL::getPlatforms() {
 	return ret;
 }
 
+// based off getWGsizes function from clinfo
+size_t GF16OCL_DeviceInfo::getWGSize(const cl::Context& context, const cl::Device& device) {
+	try {
+		cl::Program program(context,
+			"#define GWO(type) global type* restrict\n"
+			"#define GRO(type) global const type* restrict\n"
+			"#define BODY int i = get_global_id(0); out[i] = in1[i] + in2[i]\n"
+			"#define _KRN(T, N) kernel void sum##N(GWO(T##N) out, GRO(T##N) in1, GRO(T##N) in2) { BODY; }\n"
+			"#define KRN(N) _KRN(int, N)\n"
+			"KRN()\n/* KRN(2)\nKRN(4)\nKRN(8)\nKRN(16) */\n", true);
+		cl::Kernel kern(program, "sum");
+		return kern.getWorkGroupInfo<CL_KERNEL_PREFERRED_WORK_GROUP_SIZE_MULTIPLE>(device);
+	} catch(cl::Error const&) {
+		return 0;
+	}
+}
+
+GF16OCL_DeviceInfo::GF16OCL_DeviceInfo(const cl::Device& device) {
+	name = device.getInfo<CL_DEVICE_NAME>();
+	vendorId = device.getInfo<CL_DEVICE_VENDOR_ID>();
+	type = device.getInfo<CL_DEVICE_TYPE>();
+	available = device.getInfo<CL_DEVICE_AVAILABLE>() && device.getInfo<CL_DEVICE_COMPILER_AVAILABLE>();
+	supported = available && device.getInfo<CL_DEVICE_ENDIAN_LITTLE>();
+	memory = device.getInfo<CL_DEVICE_GLOBAL_MEM_SIZE>();
+	maxWorkGroup = (unsigned)device.getInfo<CL_DEVICE_MAX_WORK_GROUP_SIZE>();
+	computeUnits = device.getInfo<CL_DEVICE_MAX_COMPUTE_UNITS>();
+	globalCache = device.getInfo<CL_DEVICE_GLOBAL_MEM_CACHE_SIZE>();
+	constantMemory = device.getInfo<CL_DEVICE_MAX_CONSTANT_BUFFER_SIZE>();
+	localMemory = device.getInfo<CL_DEVICE_LOCAL_MEM_SIZE>();
+	localMemoryIsGlobal = device.getInfo<CL_DEVICE_LOCAL_MEM_TYPE>() == CL_GLOBAL;
+	maxAllocation = device.getInfo<CL_DEVICE_MAX_MEM_ALLOC_SIZE>();
+	unifiedMemory = device.getInfo<CL_DEVICE_HOST_UNIFIED_MEMORY>();
+	workGroupMultiple = (unsigned)getWGSize(device, device);
+}
+
 std::vector<GF16OCL_DeviceInfo> PAR2ProcOCL::getDevices(int platformId) {
 	cl::Platform platform;
-	if(platformId == -1)
-		platform = cl::Platform::getDefault();
-	else {
-		if(platformId >= (int)platforms.size()) return std::vector<GF16OCL_DeviceInfo>();
-		platform = platforms[platformId];
-	}
+	if(!getPlatform(platform, platformId)) return std::vector<GF16OCL_DeviceInfo>();
 	
 	std::vector<cl::Device> devices;
 	try {
@@ -546,26 +535,46 @@ std::vector<GF16OCL_DeviceInfo> PAR2ProcOCL::getDevices(int platformId) {
 		return {};
 	}
 
-	std::vector<GF16OCL_DeviceInfo> ret(devices.size());
+	std::vector<GF16OCL_DeviceInfo> ret;
+	ret.reserve(devices.size());
 	for(unsigned i=0; i<devices.size(); i++) {
-		GF16OCL_DeviceInfo info;
-		const cl::Device& device = devices[i];
-		info.name = device.getInfo<CL_DEVICE_NAME>();
-		info.vendorId = device.getInfo<CL_DEVICE_VENDOR_ID>();
-		info.type = device.getInfo<CL_DEVICE_TYPE>();
-		info.available = device.getInfo<CL_DEVICE_AVAILABLE>() && device.getInfo<CL_DEVICE_COMPILER_AVAILABLE>();
-		info.supported = info.available && device.getInfo<CL_DEVICE_ENDIAN_LITTLE>();
-		info.memory = device.getInfo<CL_DEVICE_GLOBAL_MEM_SIZE>();
-		info.maxWorkGroup = (unsigned)device.getInfo<CL_DEVICE_MAX_WORK_GROUP_SIZE>();
-		info.computeUnits = device.getInfo<CL_DEVICE_MAX_COMPUTE_UNITS>();
-		info.globalCache = device.getInfo<CL_DEVICE_GLOBAL_MEM_CACHE_SIZE>();
-		info.constantMemory = device.getInfo<CL_DEVICE_MAX_CONSTANT_BUFFER_SIZE>();
-		info.localMemory = device.getInfo<CL_DEVICE_LOCAL_MEM_SIZE>();
-		info.localMemoryIsGlobal = device.getInfo<CL_DEVICE_LOCAL_MEM_TYPE>() == CL_GLOBAL;
-		info.maxAllocation = device.getInfo<CL_DEVICE_MAX_MEM_ALLOC_SIZE>();
-		info.unifiedMemory = device.getInfo<CL_DEVICE_HOST_UNIFIED_MEMORY>();
-		info.workGroupMultiple = (unsigned)getWGSize(device, device);
-		ret[i] = info;
+		ret.emplace_back(devices[i]);
 	}
 	return ret;
+}
+
+bool PAR2ProcOCL::getDevice(cl::Device& device, int platformId, int deviceId) {
+	cl::Platform platform;
+	if(!getPlatform(platform, platformId)) return false;
+	
+	std::vector<cl::Device> devices;
+	if(deviceId == -1) {
+		// first try GPU
+		try {
+			platform.getDevices(CL_DEVICE_TYPE_GPU, &devices);
+		} catch(cl::Error const&) {}
+		// if no GPU device found, try anything else
+		if(devices.size() < 1) {
+			try {
+				platform.getDevices(CL_DEVICE_TYPE_ALL, &devices);
+			} catch(cl::Error const&) {}
+		}
+		if(devices.size() < 1) return false; // no devices!
+		// match first device that's available
+		bool found = false;
+		for(unsigned i=0; i<devices.size(); i++) {
+			device = devices[i];
+			if(device.getInfo<CL_DEVICE_AVAILABLE>() && device.getInfo<CL_DEVICE_COMPILER_AVAILABLE>() && device.getInfo<CL_DEVICE_ENDIAN_LITTLE>()) {
+				found = true;
+				break;
+			}
+		}
+		if(!found) return false;
+	}
+	else {
+		platform.getDevices(CL_DEVICE_TYPE_ALL, &devices);
+		if(deviceId >= (int)devices.size()) return false;
+		device = devices[deviceId];
+	}
+	return true;
 }
