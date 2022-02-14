@@ -199,17 +199,18 @@ STRINGIFY(
 			table[0] = 0; // never executed but needed for some reason
 		} else
 		) "\n#endif\n" STRINGIFY(
+		nat_uint localOffset = get_local_id(0)*4;
 		
 		// assume workgroup size is a power of 2
 		) "\n#if COL_GROUP_SIZE*4 > 256\n" STRINGIFY(
 		// process multiple coefficients at a time
 		for(nat_uint coeffBase=0; coeffBase<numCoeff; coeffBase+=(COL_GROUP_SIZE*4/256)) {
-			const nat_uint coeffI = coeffBase + (get_local_id(0)*4)/256;
+			const nat_uint coeffI = coeffBase + localOffset/256;
 			if(coeffI < numCoeff) {
 				const nat_uint coeff = coeffs[coeffI];
 				gf16_multiply_write_lh(
 					(__local nat_uint*)(table + coeffI*512),
-					(get_local_id(0)*4) & 0xff,
+					localOffset & 0xff,
 					coeff,
 					lh_compute_coeff256(coeff)
 				);
@@ -225,7 +226,7 @@ STRINGIFY(
 			__local nat_uint* nat_table = (__local nat_uint*)(table + coeffI*512);
 			) "\n#pragma unroll\n" STRINGIFY(
 			for(nat_uint valI=0; valI<256; valI+=COL_GROUP_SIZE*4) {
-				gf16_multiply_write_lh(nat_table, valI + get_local_id(0)*4, coeff, coeff256);
+				gf16_multiply_write_lh(nat_table, valI + localOffset, coeff, coeff256);
 			}
 		}
 		
@@ -306,17 +307,18 @@ STRINGIFY(
 			table[0] = 0; // never executed but needed for some reason
 		} else
 		) "\n#endif\n" STRINGIFY(
+		nat_uint localOffset = get_local_id(0)*4;
 		
 		// assume workgroup size is a power of 2
 		) "\n#if COL_GROUP_SIZE*4 > 256\n" STRINGIFY(
 		// process multiple coefficients at a time
 		for(nat_uint coeffBase=0; coeffBase<numCoeff; coeffBase+=(COL_GROUP_SIZE*4/256)) {
-			const nat_uint coeffI = coeffBase + (get_local_id(0)*4)/256;
+			const nat_uint coeffI = coeffBase + localOffset/256;
 			if(coeffI < numCoeff) {
 				const nat_uint coeff = coeffs[coeffI];
 				gf16_multiply_write_ll(
 					(__local nat_uint*)(table + coeffI*256),
-					(get_local_id(0)*4) & 0xff,
+					localOffset & 0xff,
 					coeff
 				);
 			}
@@ -330,7 +332,7 @@ STRINGIFY(
 			__local nat_uint* nat_table = (__local nat_uint*)(table + coeffI*256);
 			) "\n#pragma unroll\n" STRINGIFY(
 			for(nat_uint valI=0; valI<256; valI+=COL_GROUP_SIZE*4) {
-				gf16_multiply_write_ll(nat_table, valI + get_local_id(0)*4, coeff);
+				gf16_multiply_write_ll(nat_table, valI + localOffset, coeff);
 			}
 		}
 		
@@ -667,6 +669,8 @@ STRINGIFY(
 "	}                                                                                            \n"\
 "}                                                                                               \n"
 
+#define KERNEL_NOLUT_MULGROUP_INLINE "inline " // have encountered bug on some Linux AMD Radeon platforms, where inlining causes a build failure; workaround this by emptying above string
+
 const static char _ocl_kernel_nolut_funcs[] =
 "#ifdef WRITE_DST_OVERRIDE\n"
 " #ifdef MUL_ONLY\n"
@@ -685,12 +689,12 @@ const static char _ocl_kernel_nolut_funcs[] =
 " #define GET_COEFF(o, i) coeff[COBUF_REF(o, i)]\n"
 "#endif\n"
 "#define DO_CACHE 1\n"
-"inline void KERNFN(mulgroup_cache)" KERNEL_NOLUT_MULGROUP "\n"
+KERNEL_NOLUT_MULGROUP_INLINE "void KERNFN(mulgroup_cache)" KERNEL_NOLUT_MULGROUP "\n"
 "#undef DO_CACHE\n"
 "#define DO_CACHE 0\n"
-"inline void KERNFN(mulgroup_nocache)" KERNEL_NOLUT_MULGROUP "\n"
+KERNEL_NOLUT_MULGROUP_INLINE "void KERNFN(mulgroup_nocache)" KERNEL_NOLUT_MULGROUP "\n"
 "#undef DO_CACHE\n"
-"inline void KERNFN(mulgroup_read)" KERNEL_NOLUT_MULGROUP "\n"
+KERNEL_NOLUT_MULGROUP_INLINE "void KERNFN(mulgroup_read)" KERNEL_NOLUT_MULGROUP "\n"
 "#undef GET_COEFF\n";
 
 const static char _ocl_kernel_nolut[] = STRINGIFY({
@@ -1255,9 +1259,9 @@ bool PAR2ProcOCL::setup_kernels(Galois16OCLMethods method, unsigned targetInputB
 			if(groupIterations < 1) groupIterations = 1;
 		}
 		// if iterations cannot be scaled down, scale down workgroup size next
-		if(groupIterations == 1 && sizePerWorkGroup > sliceSize) {
+		if(groupIterations == 1 && sizePerWorkGroup > sliceSize && wgSize > 16) {
 			wgSize = CEIL_DIV(sliceSize, threadWordSize);
-			if(wgSize < 1) wgSize = 1;
+			if(wgSize < 16) wgSize = 16; // don't let size be too small, because stuff like computing lookup tables use workgroup width (also have seen some OpenCL implementations crash with unrolling too many times)
 			sizePerWorkGroup = threadWordSize * wgSize;
 		}
 	}
@@ -1345,8 +1349,14 @@ bool PAR2ProcOCL::setup_kernels(Galois16OCLMethods method, unsigned targetInputB
 			if(method == GF16OCL_LOG_SMALL_LMEM || method == GF16OCL_LOG_TINY_LMEM)
 				sourceStream << "_src";
 			sourceStream << "[" << tblAntiLogSize << "] __attribute__ ((aligned (VECT_WIDTH*2))) = {" << tblAntiLog[0];
-			for (unsigned i = 1; i < tblAntiLogSize; i++)
-				sourceStream << ',' << tblAntiLog[i];
+			for (unsigned j = 1; j < tblAntiLogSize;) {
+				unsigned amount = tblAntiLogSize - j;
+				if(amount > 8192) amount = 8192;
+				for (unsigned i = 0; i < amount; i++)
+					sourceStream << ',' << tblAntiLog[j+i];
+				sourceStream << '\n'; // have seen some OpenCL compilers barf at really long lines, so break things up
+				j += amount;
+			}
 			sourceStream << "};\n";
 			delete[] tblAntiLog;
 			tblAntiLog = NULL;
@@ -1355,8 +1365,14 @@ bool PAR2ProcOCL::setup_kernels(Galois16OCLMethods method, unsigned targetInputB
 			sourceStream << "#define LOG_MEM_TYPE __constant\n";
 			// gf16_log is defined as uint to ensure it's 4-byte aligned
 			sourceStream << "__constant uint gf16_log[" << (tblLogSize/2) << "] = {" << ((tblLog[1]<<16) | tblLog[0]);
-			for(unsigned i=2; i<tblLogSize; i+=2)
-				sourceStream << ',' << ((tblLog[i+1]<<16) | tblLog[i]);
+			for (unsigned j = 2; j < tblLogSize;) {
+				unsigned amount = tblLogSize - j;
+				if(amount > 8192) amount = 8192;
+				for(unsigned i=0; i<amount; i+=2)
+					sourceStream << ',' << ((tblLog[j+i+1]<<16) | tblLog[j+i]);
+				sourceStream << '\n';
+				j += amount;
+			}
 			sourceStream << "};\n";
 			delete[] tblLog;
 			tblLog = NULL;
