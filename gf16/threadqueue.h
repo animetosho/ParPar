@@ -97,6 +97,41 @@ public:
 };
 
 
+template<class P>
+class ThreadNotifyQueue {
+	ThreadMessageQueue<void*> q;
+	uv_async_t a;
+	P* o;
+	void (P::*cb)(void*);
+	
+	static void notified(uv_async_t *handle) {
+		auto self = static_cast<ThreadNotifyQueue*>(handle->data);
+		void* notification;
+		while(self->q.trypop(&notification))
+			(self->o->*(self->cb))(notification);
+	}
+public:
+	explicit ThreadNotifyQueue(uv_loop_t* loop, P* object, void (P::*callback)(void*)) {
+		uv_async_init(loop, &a, notified);
+		a.data = static_cast<void*>(this);
+		cb = callback;
+		o = object;
+	}
+	
+	void notify(void* item) {
+		q.push(item);
+		uv_async_send(&a);
+	}
+	
+	void close(void* data, void(*closeCb)(uv_handle_t* handle)) {
+		a.data = data;
+		uv_close(reinterpret_cast<uv_handle_t*>(&a), closeCb);
+	}
+	void close() {
+		uv_close(reinterpret_cast<uv_handle_t*>(&a), nullptr);
+	}
+};
+
 #if defined(_WINDOWS) || defined(__WINDOWS__) || defined(_WIN32) || defined(_WIN64)
 # define NOMINMAX
 # define WIN32_LEAN_AND_MEAN
