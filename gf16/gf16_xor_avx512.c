@@ -384,12 +384,9 @@ static inline void* xor_write_jit_avx512(const struct gf16_xor_scratch *HEDLEY_R
 		_mm256_extracti128_si256(depmask, 1)
 	);
 	/* eliminate pointless common_mask entries */
-	common_mask = _mm_andnot_si128(
-		_mm_cmpeq_epi16(
-			_mm_setzero_si128(),
-			/* "(v & (v-1)) == 0" is true if only zero/one bit is set in each word */
-			_mm_and_si128(common_mask, _mm_sub_epi16(common_mask, _mm_set1_epi16(1)))
-		),
+	common_mask = _mm_maskz_mov_epi16(
+		/* "(v & (v-1)) == 0" is true if only zero/one bit is set in each word */
+		_mm_test_epi16_mask(common_mask, _mm_add_epi16(common_mask, _mm_set1_epi16(-1))),
 		common_mask
 	);
 	
@@ -588,12 +585,9 @@ static void* xor_write_jit_avx512_multi(const struct gf16_xor_scratch *HEDLEY_RE
 		_mm256_extracti128_si256(depmask, 1)
 	);
 	/* eliminate pointless common_mask entries */
-	common_mask = _mm_andnot_si128(
-		_mm_cmpeq_epi16(
-			_mm_setzero_si128(),
-			/* "(v & (v-1)) == 0" is true if only zero/one bit is set in each word */
-			_mm_and_si128(common_mask, _mm_sub_epi16(common_mask, _mm_set1_epi16(1)))
-		),
+	common_mask = _mm_maskz_mov_epi16(
+		/* "(v & (v-1)) == 0" is true if only zero/one bit is set in each word */
+		_mm_test_epi16_mask(common_mask, _mm_add_epi16(common_mask, _mm_set1_epi16(-1))),
 		common_mask
 	);
 	

@@ -212,7 +212,7 @@ static inline void* xor_write_jit_avx(const struct gf16_xor_scratch *HEDLEY_REST
 	common_mask = _mm_and_si128(tmp3, tmp4);
 	__m128i lowest = ssse3_tzcnt_epi16(common_mask);
 	_mm_store_si128((__m128i*)common_lowest, lowest);
-	__m128i common_sub1 = _mm_sub_epi16(common_mask, _mm_set1_epi16(1));
+	__m128i common_sub1 = _mm_add_epi16(common_mask, _mm_set1_epi16(-1)); // TODO: could re-use the VPXOR constant with _mm_sign_epi16 (and invert and/not below)
 	__m128i common_elim = _mm_andnot_si128(common_sub1, common_mask);
 	
 	__m128i highest;
@@ -229,10 +229,10 @@ static inline void* xor_write_jit_avx(const struct gf16_xor_scratch *HEDLEY_REST
 	if(!xor) {
 		lowest = ssse3_tzcnt_epi16(tmp3);
 		_mm_store_si128((__m128i*)dep1_lowest, lowest);
-		tmp3 = _mm_and_si128(tmp3, _mm_sub_epi16(tmp3, _mm_set1_epi16(1)));
+		tmp3 = _mm_and_si128(tmp3, _mm_add_epi16(tmp3, _mm_set1_epi16(-1)));
 		lowest = ssse3_tzcnt_epi16(tmp4);
 		_mm_store_si128((__m128i*)dep2_lowest, lowest);
-		tmp4 = _mm_and_si128(tmp4, _mm_sub_epi16(tmp4, _mm_set1_epi16(1)));
+		tmp4 = _mm_and_si128(tmp4, _mm_add_epi16(tmp4, _mm_set1_epi16(-1)));
 	}
 	highest = ssse3_lzcnt_epi16(tmp3);
 	_mm_store_si128((__m128i*)dep1_highest, _mm_sub_epi16(_mm_set1_epi16(15), highest));
