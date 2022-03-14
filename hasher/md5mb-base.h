@@ -12,6 +12,10 @@
 
 #include "md5-base.h"
 
+#if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__ && !defined(BSWAP)
+# define BSWAP(v) ((((v)&0xff) << 24) | (((v)&0xff00) << 8) | (((v)>>8) & 0xff00) | (((v)>>24) & 0xff))
+#endif
+
 
 static HEDLEY_ALWAYS_INLINE void FNB(md5_update_block)(void* state, const void* const* data, size_t offset) {
 	FNB(md5_process_block)((word_t*)state, (const uint8_t* const*)data, offset);
