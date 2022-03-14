@@ -191,13 +191,23 @@ HEDLEY_WARNING("Compiling AVX code on MinGW GCC may cause crashing due to stack 
 # define ALIGN_TO(a, v) v __attribute__((aligned(a)))
 #endif
 
+#include <stdlib.h>
 #if defined(_MSC_VER) || defined(__MINGW32__) || defined(__MINGW64__)
-	#include <stdlib.h> // MSVC ARM64 seems to need this
+	// MSVC doesn't support C11 aligned_alloc: https://stackoverflow.com/a/62963007
 	#define ALIGN_ALLOC(buf, len, align) *(void**)&(buf) = _aligned_malloc((len), align)
 	#define ALIGN_FREE _aligned_free
+#elif defined(_ISOC11_SOURCE)
+	// C11 method
+	// len needs to be a multiple of alignment, although it sometimes works if it isn't...
+	#define ALIGN_ALLOC(buf, len, align) *(void**)&(buf) = aligned_alloc(align, ((len) + (align)-1) & ~((align)-1))
+	#define ALIGN_FREE free
+#elif defined(__cplusplus) && __cplusplus >= 201700
+	// C++17 method
+	#include <cstdlib>
+	#define ALIGN_ALLOC(buf, len, align) *(void**)&(buf) = std::aligned_alloc(align, ((len) + (align)-1) & ~((align)-1))
+	#define ALIGN_FREE free
 #else
-	#include <stdlib.h>
-	#define ALIGN_ALLOC(buf, len, align) if(posix_memalign((void**)&(buf), (align < sizeof(void*) ? sizeof(void*) : align), (len))) (buf) = NULL
+	#define ALIGN_ALLOC(buf, len, align) if(posix_memalign((void**)&(buf), align, (len))) (buf) = NULL
 	#define ALIGN_FREE free
 #endif
 
