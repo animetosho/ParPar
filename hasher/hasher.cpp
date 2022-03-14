@@ -99,7 +99,7 @@ void setup_hasher() {
 #ifdef PLATFORM_ARM
 	// TODO: if SVE2 width = 128b, prefer NEON?
 	if(CpuCap.hasSVE2 && MD5Multi_SVE2::isAvailable) HasherOutput_level = OUTHASH_SVE2;
-	else if(CpuCap.hasNEON && MD5Multi_NEON::isAvailable) HasherOutput_level = OUHASH_NEON;
+	else if(CpuCap.hasNEON && MD5Multi_NEON::isAvailable) HasherOutput_level = OUTHASH_NEON;
 	else
 #endif
 	HasherOutput_level = OUTHASH_SCALAR;
@@ -156,14 +156,14 @@ void set_hasherOutputLevel(MD5MultiLevels level) {
 		
 		// prevent compiler warnings
 		case OUTHASH_SVE2:
-		case OUHASH_NEON:
+		case OUTHASH_NEON:
 #endif
 #ifdef PLATFORM_ARM
 		case OUTHASH_SVE2:
 			SET_LEVEL(MD5Multi_SVE2, OUTHASH_SVE2)
 			break;
-		case OUHASH_NEON:
-			SET_LEVEL(MD5Multi_NEON, OUHASH_NEON)
+		case OUTHASH_NEON:
+			SET_LEVEL(MD5Multi_NEON, OUTHASH_NEON)
 			break;
 		
 		// prevent compiler warnings
@@ -210,7 +210,7 @@ MD5Multi::MD5Multi(int srcCount) {
 #ifdef PLATFORM_ARM
 	// TODO: if SVE2 width = 128b, prefer NEON?
 	if(HasherOutput_level == OUTHASH_SVE2) ADD_CTX2(SVE2)
-	else if(HasherOutput_level == OUHASH_NEON) ADD_CTX2(NEON)
+	else if(HasherOutput_level == OUTHASH_NEON) ADD_CTX2(NEON)
 	else
 #endif
 	ADD_CTX2(Scalar)
