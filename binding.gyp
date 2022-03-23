@@ -244,6 +244,14 @@
             "OTHER_CFLAGS": ["-march=armv8-a+crc"],
             "OTHER_CXXFLAGS": ["-march=armv8-a+crc"]
           }
+        }],
+        ['OS!="win" and target_arch=="arm"', {
+          "cflags": ["-mfpu=fp-armv8"],
+          "cxxflags": ["-mfpu=fp-armv8"],
+          "xcode_settings": {
+            "OTHER_CFLAGS": ["-mfpu=fp-armv8"],
+            "OTHER_CXXFLAGS": ["-mfpu=fp-armv8"]
+          }
         }]
       ]
     },
