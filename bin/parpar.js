@@ -127,7 +127,7 @@ var opts = {
 	},
 	'memory': {
 		alias: 'm',
-		type: 'size',
+		type: 'size0',
 		map: 'memoryLimit'
 	},
 	'threads': {
