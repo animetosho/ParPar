@@ -499,8 +499,12 @@ var inputFiles = argv._;
 				}
 				return (Math.round(s *100)/100) + ' ' + units[i];
 			};
-			process.stderr.write('Generating '+friendlySize(g.opts.recoverySlices*g.opts.sliceSize)+' recovery data ('+g.opts.recoverySlices+' slices) from '+friendlySize(g.totalSize)+' of data\n');
-			
+			var pluralDisp = function(n, unit, suffix) {
+				suffix = suffix || 's';
+				if(n == 1)
+					return '1 ' + unit;
+				return n + ' ' + unit + suffix;
+			};
 			if(g.opts.sliceSize > 1024*1048576) {
 				// par2j has 1GB slice size limit hard-coded; 32-bit version supports 1GB slices
 				// some 32-bit applications seem to have issues with 1GB slices as well (phpar2 v1.4 win32 seems to have trouble with 854M slices, 848M works in the test I did)
@@ -509,6 +513,14 @@ var inputFiles = argv._;
 			else if(g.opts.sliceSize > 100*1000000 && g.totalSize <= 32768*100*1000000) { // we also check whether 100MB slices are viable by checking the input size - essentially there's a max of 32768 slices, so at 100MB, max size would be 3051.76GB
 				process.stderr.write('Warning: selected slice size (' + friendlySize(g.opts.sliceSize) + ') may be too large to be compatible with QuickPar\n');
 			}
+			
+			process.stderr.write('Input data:         ' + friendlySize(g.totalSize) + ' (' + pluralDisp(g.inputSlices, 'slice') + ' from ' + pluralDisp(info.length, 'file') + ')\n');
+			if(g.opts.recoverySlices) {
+				process.stderr.write('Recovery data:      ' + friendlySize(g.opts.recoverySlices*g.opts.sliceSize) + ' (' + pluralDisp(g.opts.recoverySlices, '* ' + friendlySize(g.opts.sliceSize) + ' slice') + ')\n');
+				process.stderr.write('Input pass(es):     ' + g.passes + ', processing ' + pluralDisp(g.slicesPerPass, '* ' + friendlySize(g._chunkSize) + ' chunk') + ' per pass\n');
+				process.stderr.write('Slice memory usage: ' + friendlySize(g._chunkSize * (g.slicesPerPass + g.procBufferOverheadCount)) + ' (' + g.slicesPerPass + ' recovery + ' + g.procBufferOverheadCount + ' processing chunks)\n');
+			}
+			process.stderr.write('Read buffer size:   ' + friendlySize(g.readSize) + ' * ' + pluralDisp(g.opts.readBuffers, 'buffer') + '\n');
 		}
 		if(argv.progress != 'none') {
 			var totalSlices = g.chunks * g.passes * g.inputSlices;
@@ -536,9 +548,10 @@ var inputFiles = argv._;
 		g.run(function(event, arg1) {
 			if(event == 'begin_pass' && !infoShown) {
 				var process_info = g.gf_info();
-				if(process_info) {
-					var thread_str = process_info.threads + ' thread' + (process_info.threads==1 ? '':'s');
-					process.stderr.write('Multiply method used: ' + process_info.method_desc + ', ' + thread_str + '\n');
+				
+				if(process_info && process_info.threads) {
+					process.stderr.write('Multiply method:    ' + process_info.method_desc + ' with ' + friendlySize(process_info.chunk_size) + ' loop tiling, ' + pluralDisp(process_info.threads, 'thread') + '\n');
+					process.stderr.write('Input batching:     ' + pluralDisp(process_info.staging_size, 'chunk') + ', ' + pluralDisp(process_info.staging_count, 'batch', 'es') + '\n');
 				} // else, no recovery being generated
 				infoShown = true;
 			}

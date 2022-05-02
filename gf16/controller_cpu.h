@@ -83,6 +83,18 @@ public:
 	inline const void* getMethodName() const {
 		return gf->info().name;
 	}
+	inline size_t getChunkLen() const {
+		return chunkLen;
+	}
+	inline unsigned getStagingAreas() const {
+		return staging.size();
+	}
+	inline unsigned getAlignment() const {
+		return alignment;
+	}
+	inline unsigned getStride() const {
+		return stride;
+	}
 	
 	PAR2ProcBackendAddResult addInput(const void* buffer, size_t size, uint16_t inputNum, bool flush, const PAR2ProcPlainCb& cb) override;
 	PAR2ProcBackendAddResult dummyInput(uint16_t inputNum, bool flush = false) override;

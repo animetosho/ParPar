@@ -389,7 +389,11 @@ protected:
 		Local<Object> ret = NEW_OBJ(Object);
 		SET_OBJ(ret, "threads", Integer::New(ISOLATE self->par2cpu.getNumThreads()));
 		SET_OBJ(ret, "method_desc", NEW_STRING(self->par2cpu.getMethodName()));
-		// TODO: return stride, maybe info on input grouping + loop tiling size
+		SET_OBJ(ret, "chunk_size", Integer::New(ISOLATE self->par2cpu->getChunkLen()));
+		SET_OBJ(ret, "staging_count", Integer::New(ISOLATE self->par2cpu->getStagingAreas()));
+		SET_OBJ(ret, "staging_size", Integer::New(ISOLATE self->par2cpu->getInputBatchSize()));
+		SET_OBJ(ret, "alignment", Integer::New(ISOLATE self->par2cpu->getAlignment()));
+		SET_OBJ(ret, "stride", Integer::New(ISOLATE self->par2cpu->getStride()));
 		
 		RETURN_VAL(ret);
 	}

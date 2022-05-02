@@ -56,6 +56,10 @@ public:
 	virtual void deinit(PAR2ProcPlainCb cb) = 0;
 	virtual void freeProcessingMem() = 0;
 	
+	inline unsigned getInputBatchSize() const {
+		return inputBatchSize;
+	}
+	
 	virtual ~IPAR2ProcBackend() {}
 };
 
