@@ -39,7 +39,7 @@ typedef uint8x16_t qtbl_t;
 # endif
 
 // for compilers that lack these functions
-# if defined(__clang__) || (defined(__GNUC__) && (defined(__aarch64__) && __GNUC__ >= 9))
+# if defined(__clang__) || (HEDLEY_GCC_VERSION_CHECK(8,5,0) && defined(__aarch64__))
 #  define vld1q_u8_x2_align(p) vld1q_u8_x2((uint8_t*)__builtin_assume_aligned(p, 32))
 #  define vst1q_u8_x2_align(p, data) vst1q_u8_x2((uint8_t*)__builtin_assume_aligned(p, 32), data)
 # else

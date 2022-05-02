@@ -255,7 +255,7 @@ GF16_MULADD_MULTI_FUNCS_STUB(gf16_clmul, _neon)
 
 
 #if defined(__ARM_NEON)
-GF_PREPARE_PACKED_FUNCS(gf16_clmul, _neon, sizeof(uint8x16x2_t), gf16_prepare_block_neon, gf16_prepare_blocku_neon, CLMUL_NUM_REGIONS, (void)0, uint8x16_t checksum = vdupq_n_u8(0), gf16_checksum_block_neon, gf16_checksum_blocku_neon, gf16_checksum_exp_neon, gf16_checksum_prepare_neon)
+GF_PREPARE_PACKED_FUNCS(gf16_clmul, _neon, sizeof(uint8x16x2_t), gf16_prepare_block_neon, gf16_prepare_blocku_neon, CLMUL_NUM_REGIONS, (void)0, uint8x16_t checksum = vdupq_n_u8(0), gf16_checksum_block_neon, gf16_checksum_blocku_neon, gf16_checksum_exp_neon, gf16_checksum_prepare_neon, sizeof(uint8x16_t))
 #else
 GF_PREPARE_PACKED_FUNCS_STUB(gf16_clmul, _neon)
 #endif
