@@ -15,7 +15,31 @@ static HEDLEY_ALWAYS_INLINE void gf_add_x_generic(
 	
 	int lookup3Rearrange = (int)((intptr_t)scratch); // abuse this variable
 	
-	for(intptr_t ptr = -(intptr_t)len; ptr; ptr += sizeof(uintptr_t)) {
+	// probably never happens, but ensure length is a multiple of the native int
+	intptr_t ptr = -(intptr_t)len;
+	while(ptr & (sizeof(uintptr_t)-1)) {
+		uint8_t data = _src1[ptr*srcScale];
+		if(srcCount >= 2)
+			data ^= _src2[ptr*srcScale];
+		if(srcCount >= 3)
+			data ^= _src3[ptr*srcScale];
+		if(srcCount >= 4)
+			data ^= _src4[ptr*srcScale];
+		if(srcCount >= 5)
+			data ^= _src5[ptr*srcScale];
+		if(srcCount >= 6)
+			data ^= _src6[ptr*srcScale];
+		if(srcCount >= 7)
+			data ^= _src7[ptr*srcScale];
+		if(srcCount >= 8)
+			data ^= _src8[ptr*srcScale];
+		assert(!lookup3Rearrange);
+		_dst[ptr] ^= data;
+		
+		ptr++;
+	}
+	
+	for(; ptr; ptr += sizeof(uintptr_t)) {
 		uintptr_t data;
 		
 		data = *(uintptr_t*)(_src1+ptr*srcScale);
