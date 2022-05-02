@@ -270,14 +270,18 @@
       "conditions": [
         ['OS!="win" and target_arch=="arm"', {
           "cflags": ["-mfpu=neon"],
+          "cxxflags": ["-mfpu=neon"],
           "xcode_settings": {
-            "OTHER_CFLAGS": ["-mfpu=neon"]
+            "OTHER_CFLAGS": ["-mfpu=neon"],
+            "OTHER_CXXFLAGS": ["-mfpu=neon"]
           }
         }],
         ['OS!="win" and target_arch=="arm" and enable_native_tuning==0', {
           "cflags": ["-march=armv7-a"],
+          "cxxflags": ["-march=armv7-a"],
           "xcode_settings": {
-            "OTHER_CFLAGS": ["-march=armv7-a"]
+            "OTHER_CFLAGS": ["-march=armv7-a"],
+            "OTHER_CXXFLAGS": ["-march=armv7-a"]
           }
         }]
       ]
@@ -309,8 +313,10 @@
         }],
         ['OS!="win" and target_arch=="arm"', {
           "cflags": ["-mfpu=neon"],
+          "cxxflags": ["-mfpu=neon"],
           "xcode_settings": {
-            "OTHER_CFLAGS": ["-mfpu=neon"]
+            "OTHER_CFLAGS": ["-mfpu=neon"],
+            "OTHER_CXXFLAGS": ["-mfpu=neon"]
           }
         }]
       ]
