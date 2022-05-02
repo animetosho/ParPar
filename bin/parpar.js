@@ -184,6 +184,10 @@ var opts = {
 		type: 'bool',
 		default: 1 /* traverse folders explicitly specified */
 	},
+	'skip-symlinks': {
+		alias: 'L',
+		type: 'bool'
+	},
 	'input-file': {
 		type: 'array',
 		alias: 'i'
@@ -469,7 +473,9 @@ var inputFiles = argv._;
 
 	// TODO: sigint not respected?
 
-	ParPar.fileInfo(inputFiles, argv.recurse, function(err, info) {
+	ParPar.fileInfo(inputFiles, argv.recurse, argv['skip-symlinks'], function(err, info) {
+		if(!err && info.length == 0)
+			err = 'No input files found.';
 		if(err) {
 			process.stderr.write(err + '\n');
 			process.exit(1);

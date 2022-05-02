@@ -296,6 +296,11 @@ Input Files:
                              directories given on the command line without
                              recursion.
                              This option takes no values.
+  -L,  --skip-symlinks       If specified, all symbolic links will be ignored.
+                             Note that this affects file symlinks as well as
+                             directory traversal (if `--recurse` is specified).
+                             By default, all symlinks are followed.
+                             This option takes no values.
   -i,  --input-file          Supply a text file which lists files, separated by
                              newlines, to be included as input. Can be `-` to
                              read from stdin, or a command prefixed with
