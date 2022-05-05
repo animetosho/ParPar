@@ -470,7 +470,7 @@ var allTests = [
 	},
 	{
 		in: [tmpDir + 'test65k.bin'],
-		blockSize: 1048576,
+		blockSize: 1048576*12,
 		blocks: 0,
 		singleFile: true,
 		cacheKey: '21'
