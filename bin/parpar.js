@@ -517,10 +517,10 @@ var inputFiles = argv._;
 			process.stderr.write('Input data:         ' + friendlySize(g.totalSize) + ' (' + pluralDisp(g.inputSlices, 'slice') + ' from ' + pluralDisp(info.length, 'file') + ')\n');
 			if(g.opts.recoverySlices) {
 				process.stderr.write('Recovery data:      ' + friendlySize(g.opts.recoverySlices*g.opts.sliceSize) + ' (' + pluralDisp(g.opts.recoverySlices, '* ' + friendlySize(g.opts.sliceSize) + ' slice') + ')\n');
-				process.stderr.write('Input pass(es):     ' + g.passes + ', processing ' + pluralDisp(g.slicesPerPass, '* ' + friendlySize(g._chunkSize) + ' chunk') + ' per pass\n');
+				process.stderr.write('Input pass(es):     ' + (g.chunks * g.passes) + ', processing ' + pluralDisp(g.slicesPerPass, '* ' + friendlySize(g._chunkSize) + ' chunk') + ' per pass\n');
 				process.stderr.write('Slice memory usage: ' + friendlySize(g._chunkSize * (g.slicesPerPass + g.procBufferOverheadCount)) + ' (' + g.slicesPerPass + ' recovery + ' + g.procBufferOverheadCount + ' processing chunks)\n');
 			}
-			process.stderr.write('Read buffer size:   ' + friendlySize(g.readSize) + ' * ' + pluralDisp(g.opts.readBuffers, 'buffer') + '\n');
+			process.stderr.write('Read buffer size:   ' + friendlySize(g.readSize) + ' * max ' + pluralDisp(g.opts.readBuffers, 'buffer') + '\n');
 		}
 		if(argv.progress != 'none') {
 			var totalSlices = g.chunks * g.passes * g.inputSlices;
