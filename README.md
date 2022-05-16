@@ -182,7 +182,12 @@ var par2creator = require('@animetosho/parpar').run(
             value: 65536
         },
         outputFileMaxSlicesRounding: 'round', // round, floor or ceil
-        criticalRedundancyScheme: 'pow2', // none or pow2
+        criticalRedundancyScheme: { // can also be the string 'none'
+            unit: 'log',
+            value: 2
+        },
+        minCriticalRedundancy: 1,
+        maxCriticalRedundancy: 0, // 0 = no maximum
         outputAltNamingScheme: true,
         displayNameFormat: 'common', // basename, keep, common, outrel or path
         displayNameBase: '.', // base path, only used if displayNameFormat is 'path'
@@ -191,7 +196,7 @@ var par2creator = require('@animetosho/parpar').run(
         readHashQueue: 5,
         numThreads: null, // null => number of processors
         gfMethod: null, // null => '' (auto)
-		loopTileSize: 0, // 0 = auto
+        loopTileSize: 0, // 0 = auto
     },
     function(err) {
         console.log(err || 'Process finished');

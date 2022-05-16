@@ -49,9 +49,16 @@ var opts = {
 		map: 'comments'
 	},
 	'packet-redundancy': {
-		type: 'enum',
-		enum: ['none','pow2'],
-		map: 'criticalRedundancyScheme'
+		type: 'string',
+		map: 'criticalRedundancyScheme' // will be overwritten unless is 'none'/'pow2'
+	},
+	'min-packet-redundancy': {
+		type: 'int',
+		map: 'minCriticalRedundancy'
+	},
+	'max-packet-redundancy': {
+		type: 'int',
+		map: 'maxCriticalRedundancy'
 	},
 	'filepath-format': {
 		alias: 'f',
@@ -369,7 +376,7 @@ var inputFiles = argv._;
 
 	var parseSizeOrNum = function(arg, input, multiple) {
 		var m;
-		var isRec = (arg.substr(-15) == 'recovery-slices' || arg == 'slices-per-file' || arg == 'slices-first-file');
+		var isRec = (arg.substr(-15) == 'recovery-slices' || arg == 'slices-per-file' || arg == 'slices-first-file' || arg == 'packet-redundancy');
 		input = input || argv[arg];
 		if(typeof input == 'number' || /^-?\d+$/.test(input)) {
 			input = input|0;
@@ -428,10 +435,13 @@ var inputFiles = argv._;
 		['max-recovery-slices', 'maxRecoverySlices'],
 		['slices-per-file', 'outputFileMaxSlices'],
 		['slices-first-file', 'outputFirstFileSlices']
-	].forEach(function(k) {
+	].concat(
+		argv['packet-redundancy'] === 'pow2' || argv['packet-redundancy'] === 'none' ? [] : [['packet-redundancy', 'criticalRedundancyScheme']]
+	).forEach(function(k) {
 		if(k[0] in argv) {
 			var val = argv[k[0]].replace(/\s/g, '');
-			if(/^slices-/.test(k[0]) && val[0] == '<' || val[0] == '>') {
+			if(/^slices-/.test(k[0]) && (val[0] == '<' || val[0] == '>')) {
+				// TODO: also do this for packet-redundancy?
 				ppo[k[1]+'Rounding'] = (val[0] == '<' ? 'floor' : 'ceil');
 				val = val.substr(1);
 			}

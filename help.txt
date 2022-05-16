@@ -89,11 +89,25 @@ PAR2 Options:
                              the number exceeds the maximum of 65535.
   -e,  --recovery-offset     Recovery slice start offset. Default 0.
   -c,  --comment             Add PAR2 comment. Can be specified multiple times.
-       --packet-redundancy   How critical packets are repeated, can be either:
-                                 none: only store a single copy of packets
-                                 pow2: repeat packets in a power-of-2 fashion
-                                       amongst recovery packets
+       --packet-redundancy   How many copies of critical packets to use in
+                             recovery files. This option uses the same syntax
+                             as `--recovery-slices` but is computed against the
+                             number of recovery slices in the file, instead of
+                             the input slice count (the 'l' and 's' suffixes
+                             are unavailable).
+                             The following special values can also be used:
+                                 none: only store a single copy of packets,
+                                       without interleaving. Also causes
+                                       `--min-packet-redundancy` and
+                                       `--max-packet-redundancy` to be ignored
+                                 pow2: alias for `2o`
                              Default is `pow2`.
+    --min-packet-redundancy  Minimum number of critical packet copies. Also
+                             conrols the number of copies in the index file.
+                             Default is 1
+    --max-packet-redundancy  Maximum number of critical packet copies in
+                             recovery files. 0 means no limit.
+                             Default is 0
   -f,  --filepath-format     How to format input file paths, can be either:
                                  basename: discard paths
                                  keep: retain full paths as specified
