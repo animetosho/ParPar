@@ -28,9 +28,9 @@ PAR2 Options:
                              upper limit.
        --slice-size-multiple When selecting a slice size, ensure that it is a
                              multiple of this value.
-                             Default is `--input-slices` if size specified and
-                             `--min-input-slices` equals that size, otherwise
-                             is 4B
+                             Default is `--input-slices` if both a size is
+                             specified for that option, and `--min-input-slices`
+                             equals that size, otherwise is 4B
   -S,  --auto-slice-size     Automatically scale up input slice size if the
                              number of input slices would exceed the maximum
                              allowed. This option takes no parameters.
@@ -277,8 +277,9 @@ Performance Options:
                                  avx512f: AVX512F implementation (16-32x lanes)
                                  avx512vl: AVX512VL 128/256-bit implementation
                                            (4-16x lanes)
-                             ARM only choices:
+                             ARMv7/AArch64 only choices:
                                  neon: NEON implementation (4-8x lanes)
+                             AArch64 only choices:
                                  sve2: SVE2 implementation (4+ lanes)
 
 UI Options:
