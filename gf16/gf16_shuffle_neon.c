@@ -326,7 +326,7 @@ GF_PREPARE_PACKED_FUNCS_STUB(gf16_shuffle, _neon)
 #endif
 
 #ifdef __ARM_NEON
-GF_FINISH_PACKED_FUNCS(gf16_shuffle, _neon, sizeof(uint8x16x2_t), gf16_prepare_block_neon, gf16_copy_blocku, 1, (void)0, gf16_checksum_block_neon, gf16_checksum_blocku_neon, gf16_checksum_exp_neon, NULL, sizeof(uint8x16_t))
+GF_FINISH_PACKED_FUNCS(gf16_shuffle, _neon, sizeof(uint8x16x2_t), gf16_finish_block_neon, gf16_copy_blocku, 1, (void)0, gf16_checksum_block_neon, gf16_checksum_blocku_neon, gf16_checksum_exp_neon, NULL, sizeof(uint8x16_t))
 #else
 GF_FINISH_PACKED_FUNCS_STUB(gf16_shuffle, _neon)
 #endif

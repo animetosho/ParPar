@@ -9,18 +9,6 @@ static HEDLEY_ALWAYS_INLINE uint8x16x2_t veorq_u8_x2(uint8x16x2_t a, uint8x16x2_
 	return result;
 }
 
-# if defined(__clang__) || (defined(__GNUC__) && (defined(__aarch64__) && __GNUC__ >= 9))
-#  define _vld1q_u8_x2 vld1q_u8_x2
-# else
-static HEDLEY_ALWAYS_INLINE uint8x16x2_t _vld1q_u8_x2(const uint8_t* p) {
-	uint8x16x2_t r;
-	r.val[0] = vld1q_u8(p);
-	r.val[1] = vld1q_u8(p+16);
-	return r;
-}
-# endif
-
-
 static HEDLEY_ALWAYS_INLINE void gf_add_x_neon(
 	const void *HEDLEY_RESTRICT scratch, uint8_t *HEDLEY_RESTRICT _dst, const unsigned srcScale,
 	GF16_MULADD_MULTI_SRCLIST, size_t len,
