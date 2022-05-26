@@ -596,44 +596,45 @@ static HEDLEY_ALWAYS_INLINE void gf16_lookup_checksum_blocku(const void *HEDLEY_
 	if(sizeof(uintptr_t) >= 8) {
 		uint64_t data = 0;
 		size_t remaining = amount & (sizeof(uint64_t)-1);
-		if(remaining) {
-			memcpy(&data, _src, remaining);
-			_src += remaining;
-			amount ^= remaining;
-		}
+		amount ^= remaining;
 		while(amount) {
 			data ^= *(uint64_t*)_src;
 			_src += sizeof(uint64_t);
 			amount -= sizeof(uint64_t);
+		}
+		if(remaining) {
+			uint64_t dataPart = 0;
+			memcpy(&dataPart, _src, remaining);
+			data ^= dataPart;
 		}
 		uint64_t* _checksum = (uint64_t*)checksum;
 		*_checksum = (uint64_t)gf16_lookup_multi_mul2(*_checksum) ^ SWAP64(data);
 	} else if(sizeof(uintptr_t) >= 4) {
 		uint32_t data = 0;
 		size_t remaining = amount & (sizeof(uint32_t)-1);
-		if(remaining) {
-			memcpy(&data, _src, remaining);
-			_src += remaining;
-			amount ^= remaining;
-		}
+		amount ^= remaining;
 		while(amount) {
 			data ^= *(uint32_t*)_src;
 			_src += sizeof(uint32_t);
 			amount -= sizeof(uint32_t);
 		}
+		if(remaining) {
+			uint32_t dataPart = 0;
+			memcpy(&dataPart, _src, remaining);
+			data ^= dataPart;
+		}
 		uint32_t* _checksum = (uint32_t*)checksum;
 		*_checksum = (uint32_t)gf16_lookup_multi_mul2(*_checksum) ^ SWAP32(data);
 	} else {
 		uint16_t data = 0;
-		if(amount & 1) {
-			data = *_src;
-			_src++;
-			amount ^= 1;
-		}
-		while(amount) {
+		while(amount > 1) {
 			data ^= *(uint16_t*)_src;
 			_src += sizeof(uint16_t);
 			amount -= sizeof(uint16_t);
+		}
+		if(amount) {
+			uint16_t dataPart = *_src;
+			data ^= SWAP16(dataPart);
 		}
 		uint16_t* _checksum = (uint16_t*)checksum;
 		*_checksum = (uint16_t)gf16_lookup_multi_mul2(*_checksum) ^ SWAP16(data);
