@@ -35,7 +35,7 @@ extern void gf16_xor256_jit_multi_stub(intptr_t dst, intptr_t dstEnd, const void
 static HEDLEY_ALWAYS_INLINE void gf16_xor_jit_stub(intptr_t src, intptr_t dEnd, intptr_t dest, intptr_t pf, void* fn) {
 	WRITE_JIT(2048)
 	asm volatile(
-		"callq *%[f]\n"
+		"callq *%q[f]\n"
 		: "+a"(src), "+d"(dest), "+S"(pf) : "c"(dEnd), [f]"r"(fn)
 		: "%xmm0", "%xmm1", "%xmm2", "%xmm3", "%xmm4", "%xmm5", "%xmm6", "%xmm7", "%xmm8", "%xmm9", "%xmm10", "%xmm11", "%xmm12", "%xmm13", "%xmm14", "%xmm15", "memory"
 	);
@@ -44,7 +44,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_xor_jit_stub(intptr_t src, intptr_t dEnd, 
 static HEDLEY_ALWAYS_INLINE void gf16_xor256_jit_stub(intptr_t src, intptr_t dEnd, intptr_t dest, intptr_t pf, void* fn) {
 	WRITE_JIT(2048)
 	asm volatile(
-		"callq *%[f]\n"
+		"callq *%q[f]\n"
 		: "+a"(src), "+d"(dest), "+S"(pf) : "c"(dEnd), [f]"r"(fn)
 		: "memory" // GCC pre 4.9 doesn't accept YMM registers
 #   if HEDLEY_GCC_VERSION_CHECK(4,9,0) || !defined(HEDLEY_GCC_VERSION)
@@ -57,7 +57,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_xor256_jit_stub(intptr_t src, intptr_t dEn
 static HEDLEY_ALWAYS_INLINE void gf16_xor512_jit_stub(intptr_t src, intptr_t dEnd, intptr_t dest, intptr_t pf, void* fn) {
 	WRITE_JIT(2048)
 	asm volatile(
-		"callq *%[f]\n"
+		"callq *%q[f]\n"
 		: "+a"(src), "+d"(dest), "+S"(pf) : "c"(dEnd), [f]"r"(fn)
 		: "%zmm1", "%zmm2", "%zmm3", "%zmm16", "%zmm17", "%zmm18", "%zmm19", "%zmm20", "%zmm21", "%zmm22", "%zmm23", "%zmm24", "%zmm25", "%zmm26", "%zmm27", "%zmm28", "%zmm29", "%zmm30", "%zmm31", "memory"
 	);
@@ -77,7 +77,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_xor512_jit_multi_stub(
 		"movq 64(%%rdx), %%r14\n"
 		"movq 72(%%rdx), %%r15\n"
 		"movq (%%rdx), %%rdx\n"
-		"callq *%[f]\n"
+		"callq *%q[f]\n"
 		: "+a"(dst), "+d"(src)
 		: "c"(dstEnd), [f]"r"(fn)
 		: "%rbx", "%rsi", "%rdi", "%r8", "%r9", "%r10", "%r11", "%r14", "%r15", "%zmm0", "%zmm1", "%zmm2", "%zmm3", "%zmm4", "%zmm5", "%zmm6", "%zmm7", "%zmm8", "%zmm9", "%zmm10", "%zmm11", "%zmm12", "%zmm13", "%zmm14", "%zmm15", "%zmm16", "%zmm17", "%zmm18", "%zmm19", "%zmm20", "%zmm21", "%zmm22", "%zmm23", "%zmm24", "%zmm25", "%zmm26", "%zmm27", "%zmm28", "%zmm29", "%zmm30", "%zmm31", "memory"
