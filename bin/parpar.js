@@ -203,6 +203,10 @@ var opts = {
 		type: 'array',
 		alias: '0'
 	},
+	'input-file-enc': {
+		type: 'string',
+		default: 'utf8'
+	},
 	'help': {
 		alias: '?',
 		type: 'bool'
@@ -302,6 +306,7 @@ var inputFiles = argv._;
 	
 	if(fileLists) {
 		var stdInUsed = false;
+		var inlistEnc = argv['input-file-enc'];
 		require('async').map(fileLists, function(fl, cb) {
 			if(fl[0] == '-' || /^fd:\/\/\d+$/i.test(fl[0])) {
 				var stream;
@@ -315,26 +320,24 @@ var inputFiles = argv._;
 				// read from stream
 				var data = '';
 				stream.on('data', function(chunk) {
-					data += chunk.toString();
+					data += chunk.toString(inlistEnc);
 				});
 				stream.once('end', function() {
 					cb(null, [fl[1], data]);
 				});
 				stream.once('error', cb);
 			} else if(/^proc:\/\//i.test(fl[0])) {
-				require('child_process').exec(fl[0].substr(7), {maxBuffer: 1048576*32}, function(err, stdout, stderr) {
+				require('child_process').exec(fl[0].substr(7), {maxBuffer: 1048576*32, encoding: inlistEnc}, function(err, stdout, stderr) {
 					cb(err, [fl[1], stdout]);
 				});
 			} else {
 				fs.readFile(fl[0], function(err, data) {
-					cb(err, [fl[1], data]);
+					cb(err, [fl[1], data ? data.toString(inlistEnc) : null]);
 				});
 			}
 		}, function(err, dataPairs) {
 			if(err) return error(err);
 			dataPairs.forEach(function(data) {
-				if(Buffer.isBuffer(data[1]))
-					data[1] = data[1].toString();
 				if(data[0])
 					inputFiles = inputFiles.concat(
 						data[1].replace(/\r/g, '').split('\n').filter(function(l) {

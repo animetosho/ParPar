@@ -327,6 +327,10 @@ Input Files:
   -0,  --input-file0         Same as the `--input-file` option, except files
                              are separated by null characters instead of
                              newlines.
+       --input-file-enc      Encoding used on all specified input files. Must
+                             be a NodeJS recognised encoding, which includes
+                             `utf8`, `utf16le` and `latin1`. Default is `utf8`.
+                             Note that BOMs will not be interpreted.
 
 ------------------
 Examples
