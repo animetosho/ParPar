@@ -234,7 +234,7 @@ try {
 }
 
 var version = require('../package.json').version;
-var creator = 'ParPar v' + version + ' [https://animetosho.org/app/parpar]';
+var creator = 'ParPar v' + version + ' ' + process.arch + ' [https://animetosho.org/app/parpar]';
 
 var fs = require('fs');
 if(argv.help) {
