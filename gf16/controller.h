@@ -91,7 +91,7 @@ private:
 	
 public:
 	explicit PAR2Proc();
-	void init(size_t sliceSize, const std::vector<IPAR2ProcBackend*>& _backends, const PAR2ProcCompleteCb& _progressCb = nullptr);
+	bool init(size_t sliceSize, const std::vector<std::pair<IPAR2ProcBackend*, size_t>>& _backends, const PAR2ProcCompleteCb& _progressCb = nullptr);
 	
 	bool setCurrentSliceSize(size_t newSliceSize);
 	inline size_t getCurrentSliceSize() const {

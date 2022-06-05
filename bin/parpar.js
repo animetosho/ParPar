@@ -140,7 +140,7 @@ var opts = {
 	'threads': {
 		alias: 't',
 		type: 'int',
-		default: -1,
+		default: null,
 		map: 'numThreads'
 	},
 	'min-chunk-size': {

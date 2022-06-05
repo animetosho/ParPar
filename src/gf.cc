@@ -14,6 +14,7 @@
 
 #include "../gf16/controller.h"
 #include "../gf16/controller_cpu.h"
+#include "../gf16/controller_ocl.h"
 #include "../gf16/threadqueue.h"
 #include "../hasher/hasher.h"
 
@@ -83,10 +84,12 @@ using namespace v8;
 #if NODE_VERSION_AT_LEAST(12, 0, 0)
 # define SET_OBJ(obj, key, val) (obj)->Set(isolate->GetCurrentContext(), NEW_STRING(key), val).Check()
 # define GET_ARR(obj, idx) (obj)->Get(isolate->GetCurrentContext(), idx).ToLocalChecked()
+# define SET_ARR(obj, idx, val) (obj)->Set(isolate->GetCurrentContext(), idx, val)
 # define SET_OBJ_FUNC(obj, key, f) (obj)->Set(isolate->GetCurrentContext(), NEW_STRING(key), f->GetFunction(isolate->GetCurrentContext()).ToLocalChecked()).Check()
 #else
 # define SET_OBJ(obj, key, val) (obj)->Set(NEW_STRING(key), val)
 # define GET_ARR(obj, idx) (obj)->Get(idx)
+# define SET_ARR(obj, idx, val) (obj)->Set(idx, val)
 # define SET_OBJ_FUNC(obj, key, f) (obj)->Set(NEW_STRING(key), f->GetFunction())
 #endif
 
@@ -198,6 +201,14 @@ struct CallbackWrapper {
 };
 
 
+struct GfOclSpec {
+	int platformId, deviceId;
+	size_t sliceSize;
+	
+	Galois16OCLMethods method;
+	unsigned inputGrouping, targetIters, targetGrouping;
+};
+
 class GfProc : public node::ObjectWrap {
 public:
 	static inline void AttachMethods(Local<FunctionTemplate>& t) {
@@ -228,7 +239,7 @@ public:
 			RETURN_ERROR("Slice size is invalid");
 		
 		// accept method if specified
-		Galois16Methods method = args.Length() >= 2 && !args[1]->IsUndefined() && !args[1]->IsNull() ? (Galois16Methods)ARG_TO_NUM(Int32, args[1]) : GF16_AUTO;
+		int method = args.Length() >= 2 && !args[1]->IsUndefined() && !args[1]->IsNull() ? ARG_TO_NUM(Int32, args[1]) : GF16_AUTO;
 		unsigned inputGrouping = args.Length() >= 3 && !args[2]->IsUndefined() && !args[2]->IsNull() ? ARG_TO_NUM(Uint32, args[2]) : 0;
 		int stagingAreas = args.Length() >= 4 && !args[3]->IsUndefined() && !args[3]->IsNull() ? ARG_TO_NUM(Int32, args[3]) : 2;
 		size_t chunkLen = args.Length() >= 5 && !args[4]->IsUndefined() && !args[4]->IsNull() ? ARG_TO_NUM(Uint32, args[4]) : 0;
@@ -241,11 +252,44 @@ public:
 		if(inputGrouping * stagingAreas > 65536)
 			RETURN_ERROR("Staging area too large");
 		
-		GfProc *self = new GfProc(sliceSize, stagingAreas, getCurrentLoop(ISOLATE 0));
-		if(!self->init(method, inputGrouping, chunkLen)) {
+		bool useCpu = true;
+		std::vector<struct GfOclSpec> useOcl;
+		
+		if(!useOcl.empty()) {
+			static bool oclLoaded = false;
+			if(!oclLoaded) {
+				if(PAR2ProcOCL::load_runtime()) {
+					RETURN_ERROR("Could not load OpenCL runtime");
+				}
+				oclLoaded = true;
+			}
+		} else if(!useCpu) {
+			RETURN_ERROR("At least the CPU or one OpenCL device must be enabled");
+		}
+		
+		GfProc *self = new GfProc(sliceSize, stagingAreas, useCpu, useOcl, getCurrentLoop(ISOLATE 0));
+		size_t usedSliceSize = 0;
+		if(useCpu && !self->init_cpu((Galois16Methods)method, inputGrouping, chunkLen)) {
 			delete self;
 			RETURN_ERROR("Failed to allocate memory");
 		}
+		int oclI = 0;
+		for(const auto& oclSpec : useOcl) {
+			usedSliceSize += oclSpec.sliceSize;
+			if(oclSpec.sliceSize == 0 || (oclSpec.sliceSize & 1)) {
+				delete self;
+				RETURN_ERROR("Invalid slice size allocated to OpenCL device");
+			}
+			if(!self->init_ocl(oclI++, oclSpec.method, oclSpec.inputGrouping, oclSpec.targetIters, oclSpec.targetGrouping)) {
+				delete self;
+				RETURN_ERROR("Failed to initialise OpenCL device"); // TODO: add device info
+			}
+		}
+		if((useCpu && usedSliceSize >= sliceSize) || (!useCpu && usedSliceSize != sliceSize)) {
+			delete self;
+			RETURN_ERROR("Slice portions allocated to OpenCL devices is invalid");
+		}
+		
 		self->Wrap(args.This());
 	}
 	
@@ -256,7 +300,8 @@ private:
 	bool hasOutput;
 	CallbackWrapper progressCb;
 	PAR2Proc par2;
-	PAR2ProcCPU par2cpu;
+	std::unique_ptr<PAR2ProcCPU> par2cpu;
+	std::vector<std::unique_ptr<PAR2ProcOCL>> par2ocl;
 	
 	// disable copy constructor
 	GfProc(const GfProc&);
@@ -356,12 +401,14 @@ protected:
 			RETURN_ERROR("Cannot change params whilst running");
 		if(self->isClosed)
 			RETURN_ERROR("Already closed");
+		if(!self->par2cpu.get())
+			RETURN_ERROR("CPU processing not enabled");
 		
 		if(args.Length() < 1)
 			RETURN_ERROR("Integer required");
-		self->par2cpu.setNumThreads(ARG_TO_NUM(Int32, args[0]));
+		self->par2cpu->setNumThreads(ARG_TO_NUM(Int32, args[0]));
 		
-		RETURN_VAL(Integer::New(ISOLATE self->par2cpu.getNumThreads()));
+		RETURN_VAL(Integer::New(ISOLATE self->par2cpu->getNumThreads()));
 	}
 	
 	FUNC(SetProgressCb) {
@@ -387,13 +434,28 @@ protected:
 			RETURN_ERROR("Already closed");
 		
 		Local<Object> ret = NEW_OBJ(Object);
-		SET_OBJ(ret, "threads", Integer::New(ISOLATE self->par2cpu.getNumThreads()));
-		SET_OBJ(ret, "method_desc", NEW_STRING(self->par2cpu.getMethodName()));
-		SET_OBJ(ret, "chunk_size", Integer::New(ISOLATE self->par2cpu.getChunkLen()));
-		SET_OBJ(ret, "staging_count", Integer::New(ISOLATE self->par2cpu.getStagingAreas()));
-		SET_OBJ(ret, "staging_size", Integer::New(ISOLATE self->par2cpu.getInputBatchSize()));
-		SET_OBJ(ret, "alignment", Integer::New(ISOLATE self->par2cpu.getAlignment()));
-		SET_OBJ(ret, "stride", Integer::New(ISOLATE self->par2cpu.getStride()));
+		if(self->par2cpu.get()) {
+			SET_OBJ(ret, "threads", Integer::New(ISOLATE self->par2cpu->getNumThreads()));
+			SET_OBJ(ret, "method_desc", NEW_STRING(self->par2cpu->getMethodName()));
+			SET_OBJ(ret, "chunk_size", Integer::New(ISOLATE self->par2cpu->getChunkLen()));
+			SET_OBJ(ret, "staging_count", Integer::New(ISOLATE self->par2cpu->getStagingAreas()));
+			SET_OBJ(ret, "staging_size", Integer::New(ISOLATE self->par2cpu->getInputBatchSize()));
+			SET_OBJ(ret, "alignment", Integer::New(ISOLATE self->par2cpu->getAlignment()));
+			SET_OBJ(ret, "stride", Integer::New(ISOLATE self->par2cpu->getStride()));
+		}
+		if(!self->par2ocl.empty()) {
+			Local<Array> oclDevInfo = Array::New(ISOLATE self->par2ocl.size());
+			int i = 0;
+			for(const auto& proc : self->par2ocl) {
+				Local<Object> oclInfo = NEW_OBJ(Object);
+				SET_OBJ(oclInfo, "method_desc", NEW_STRING(proc->getMethodName()));
+				SET_OBJ(ret, "staging_count", Integer::New(ISOLATE proc->getStagingAreas()));
+				SET_OBJ(ret, "staging_size", Integer::New(ISOLATE proc->getInputBatchSize()));
+				// TODO: more info?
+				SET_ARR(oclDevInfo, i++, oclInfo);
+			}
+			SET_OBJ(ret, "opencl_devices", oclDevInfo);
+		}
 		
 		RETURN_VAL(ret);
 	}
@@ -521,9 +583,22 @@ protected:
 		);
 	}
 	
-	explicit GfProc(size_t sliceSize, int stagingAreas, uv_loop_t* loop)
-	: ObjectWrap(), isRunning(false), isClosed(false), pendingDiscardOutput(true), hasOutput(false), par2cpu(loop, stagingAreas) {
-		par2.init(sliceSize, {&par2cpu}, [&](unsigned numInputs, uint16_t firstInput) {
+	explicit GfProc(size_t sliceSize, int stagingAreas, bool useCpu, std::vector<struct GfOclSpec> useOcl, uv_loop_t* loop)
+	: ObjectWrap(), isRunning(false), isClosed(false), pendingDiscardOutput(true), hasOutput(false) {
+		std::vector<std::pair<IPAR2ProcBackend*, size_t>> procs;
+		size_t cpuSize = sliceSize;
+		for(const auto& spec : useOcl) {
+			auto proc = new PAR2ProcOCL(loop, spec.platformId, spec.deviceId, stagingAreas);
+			par2ocl.push_back(std::unique_ptr<PAR2ProcOCL>(proc));
+			procs.push_back({static_cast<IPAR2ProcBackend*>(proc), spec.sliceSize});
+			cpuSize -= spec.sliceSize;
+		}
+		if(useCpu) {
+			par2cpu.reset(new PAR2ProcCPU(loop, stagingAreas));
+			procs.push_back({static_cast<IPAR2ProcBackend*>(par2cpu.get()), cpuSize});
+		}
+		// TODO: handle init returning false (currently, it can't)
+		par2.init(sliceSize, procs, [&](unsigned numInputs, uint16_t firstInput) {
 			if(progressCb.hasCallback) {
 #if NODE_VERSION_AT_LEAST(0, 11, 0)
 				HandleScope scope(progressCb.isolate);
@@ -536,8 +611,11 @@ protected:
 		});
 	}
 	
-	bool init(Galois16Methods method, unsigned inputGrouping, size_t chunkLen) {
-		return par2cpu.init(method, inputGrouping, chunkLen);
+	bool init_cpu(Galois16Methods method, unsigned inputGrouping, size_t chunkLen) {
+		return par2cpu->init(method, inputGrouping, chunkLen);
+	}
+	bool init_ocl(int idx, Galois16OCLMethods method, unsigned inputGrouping, unsigned targetIters, unsigned targetGrouping) {
+		return par2ocl[idx]->init(method, inputGrouping, targetIters, targetGrouping);
 	}
 	
 	~GfProc() {

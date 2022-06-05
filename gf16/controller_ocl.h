@@ -205,6 +205,9 @@ public:
 	inline const void* getMethodName() const {
 		return methodToText(_setupMethod);
 	}
+	inline unsigned getStagingAreas() const {
+		return staging.size();
+	}
 	
 	static GF16OCL_MethodInfo info(Galois16OCLMethods method);
 	inline GF16OCL_MethodInfo info() const {

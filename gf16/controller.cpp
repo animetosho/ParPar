@@ -9,7 +9,7 @@ PAR2Proc::PAR2Proc() : endSignalled(false) {
 }
 
 
-void PAR2Proc::init(size_t sliceSize, const std::vector<IPAR2ProcBackend*>& _backends, const PAR2ProcCompleteCb& _progressCb) {
+bool PAR2Proc::init(size_t sliceSize, const std::vector<std::pair<IPAR2ProcBackend*, size_t>>& _backends, const PAR2ProcCompleteCb& _progressCb) {
 	progressCb = _progressCb;
 	finishCb = nullptr;
 	hasAdded = false;
@@ -20,14 +20,12 @@ void PAR2Proc::init(size_t sliceSize, const std::vector<IPAR2ProcBackend*>& _bac
 	// TODO: better distribution
 	backends.resize(_backends.size());
 	size_t pos = 0;
-	size_t sizePerBackend = (sliceSize + backends.size()-1) / backends.size();
-	if(sizePerBackend & 1) sizePerBackend++;
 	for(unsigned i=0; i<_backends.size(); i++) {
-		size_t size = std::min(sliceSize-pos, sizePerBackend);
+		size_t size = _backends[i].second;
 		auto& backend = backends[i];
 		backend.currentSliceSize = size;
 		backend.currentOffset = pos;
-		backend.be = _backends[i];
+		backend.be = _backends[i].first;
 		backend.be->setSliceSize(size);
 		pos += size;
 		
@@ -35,6 +33,7 @@ void PAR2Proc::init(size_t sliceSize, const std::vector<IPAR2ProcBackend*>& _bac
 			this->onBackendProcess(numInputs, firstInput);
 		});
 	}
+	return pos == sliceSize; // the only failure that can currently happen is if the total allocated size doesn't equal the slice size
 }
 
 bool PAR2Proc::setCurrentSliceSize(size_t newSliceSize) {
