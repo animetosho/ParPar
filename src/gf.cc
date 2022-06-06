@@ -432,6 +432,8 @@ protected:
 		GfProc* self = node::ObjectWrap::Unwrap<GfProc>(args.This());
 		if(self->isClosed)
 			RETURN_ERROR("Already closed");
+		if(!self->par2.getNumRecoverySlices())
+			RETURN_ERROR("setRecoverySlices not yet called");
 		
 		Local<Object> ret = NEW_OBJ(Object);
 		if(self->par2cpu.get()) {
@@ -449,8 +451,8 @@ protected:
 			for(const auto& proc : self->par2ocl) {
 				Local<Object> oclInfo = NEW_OBJ(Object);
 				SET_OBJ(oclInfo, "method_desc", NEW_STRING(proc->getMethodName()));
-				SET_OBJ(ret, "staging_count", Integer::New(ISOLATE proc->getStagingAreas()));
-				SET_OBJ(ret, "staging_size", Integer::New(ISOLATE proc->getInputBatchSize()));
+				SET_OBJ(oclInfo, "staging_count", Integer::New(ISOLATE proc->getStagingAreas()));
+				SET_OBJ(oclInfo, "staging_size", Integer::New(ISOLATE proc->getInputBatchSize()));
 				// TODO: more info?
 				SET_ARR(oclDevInfo, i++, oclInfo);
 			}

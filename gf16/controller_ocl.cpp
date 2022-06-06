@@ -24,7 +24,7 @@ int PAR2ProcOCL::load_runtime() {
 
 
 PAR2ProcOCL::PAR2ProcOCL(uv_loop_t* _loop, int platformId, int deviceId, int stagingAreas)
-: loop(nullptr), staging(stagingAreas), endSignalled(false),
+: loop(nullptr), staging(stagingAreas), allocatedSliceSize(0), endSignalled(false),
   _sent(_loop, this, &PAR2ProcOCL::_after_sent),
   _recv(_loop, this, &PAR2ProcOCL::_after_recv),
   _proc(_loop, this, &PAR2ProcOCL::_after_proc) {

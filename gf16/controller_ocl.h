@@ -100,7 +100,6 @@ class PAR2ProcOCL : public IPAR2ProcBackend {
 	
 	bool _initSuccess;
 	// method/input parameters
-	unsigned inputBatchSize;
 	unsigned numOutputs;
 	std::vector<uint16_t> outputExponents;
 	size_t sliceSize;

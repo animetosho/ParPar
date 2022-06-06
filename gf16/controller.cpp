@@ -13,7 +13,6 @@ bool PAR2Proc::init(size_t sliceSize, const std::vector<std::pair<IPAR2ProcBacke
 	progressCb = _progressCb;
 	finishCb = nullptr;
 	hasAdded = false;
-	lastAddSuccessful = true;
 	
 	currentSliceSize = sliceSize;
 	
@@ -65,15 +64,25 @@ bool PAR2Proc::setRecoverySlices(unsigned numSlices, const uint16_t* exponents) 
 bool PAR2Proc::addInput(const void* buffer, size_t size, uint16_t inputNum, bool flush, const PAR2ProcPlainCb& cb) {
 	assert(!endSignalled);
 	
-	PAR2ProcPlainCb backendCb = nullptr;
-	if(cb) {
-		auto* cbRef = new int(backends.size());
-		backendCb = [cbRef, cb]() {
-			if(--(*cbRef) == 0) {
-				delete cbRef;
-				cb();
+	auto cbRef = addCbRefs.find(inputNum);
+	if(cbRef != addCbRefs.end()) {
+		cbRef->second.cb = cb;
+	} else {
+		cbRef = addCbRefs.emplace(std::make_pair(inputNum, PAR2ProcAddCbRef{
+			(int)backends.size(), cb,
+			[this, inputNum]() {
+				auto& ref = addCbRefs[inputNum];
+				if(--ref.backendsActive == 0) {
+					auto cb = ref.cb;
+					addCbRefs.erase(inputNum);
+					if(cb) cb();
+				}
 			}
-		};
+		})).first;
+		for(auto& backend : backends) {
+			if(backend.currentOffset >= size)
+				cbRef->second.backendsActive--;
+		}
 	}
 	
 	// if the last add was unsuccessful, we assume that failed add is now being resent
@@ -82,13 +91,17 @@ bool PAR2Proc::addInput(const void* buffer, size_t size, uint16_t inputNum, bool
 	for(auto& backend : backends) {
 		if(backend.currentOffset >= size) continue;
 		size_t amount = std::min(size-backend.currentOffset, backend.currentSliceSize);
-		if(lastAddSuccessful || !backend.addSuccessful) {
-			backend.addSuccessful = backend.be->addInput(static_cast<const char*>(buffer) + backend.currentOffset, amount, inputNum, flush, backendCb) != PROC_ADD_FULL;
-			success = success && backend.addSuccessful;
+		if(backend.added.find(inputNum) == backend.added.end()) {
+			bool addSuccessful = backend.be->addInput(static_cast<const char*>(buffer) + backend.currentOffset, amount, inputNum, flush, cbRef->second.backendCb) != PROC_ADD_FULL;
+			success = success && addSuccessful;
+			if(addSuccessful) backend.added.insert(inputNum);
 		}
 	}
-	if(success) hasAdded = true;
-	lastAddSuccessful = success;
+	if(success) {
+		hasAdded = true;
+		for(auto& backend : backends)
+			backend.added.erase(inputNum);
+	}
 	return success;
 }
 
@@ -98,13 +111,17 @@ bool PAR2Proc::dummyInput(size_t size, uint16_t inputNum, bool flush) {
 	bool success = true;
 	for(auto& backend : backends) {
 		if(backend.currentOffset >= size) continue;
-		if(lastAddSuccessful || !backend.addSuccessful) {
-			backend.addSuccessful = backend.be->dummyInput(inputNum, flush) != PROC_ADD_FULL;
-			success = success && backend.addSuccessful;
+		if(backend.added.find(inputNum) == backend.added.end()) {
+			bool addSuccessful = backend.be->dummyInput(inputNum, flush) != PROC_ADD_FULL;
+			success = success && addSuccessful;
+			if(addSuccessful) backend.added.insert(inputNum);
 		}
 	}
-	if(success) hasAdded = true;
-	lastAddSuccessful = success;
+	if(success) {
+		hasAdded = true;
+		for(auto& backend : backends)
+			backend.added.erase(inputNum);
+	}
 	return success;
 }
 
@@ -113,12 +130,12 @@ bool PAR2Proc::fillInput(const void* buffer, size_t size) {
 	bool finished = true;
 	for(auto& backend : backends) {
 		if(backend.currentOffset >= size) continue;
-		if(lastAddSuccessful || !backend.addSuccessful) {
-			backend.addSuccessful = backend.be->fillInput(static_cast<const char*>(buffer) + backend.currentOffset);
-			finished = finished && backend.addSuccessful;
+		if(backend.added.find(-1) == backend.added.end()) {
+			bool fillSuccessful = backend.be->fillInput(static_cast<const char*>(buffer) + backend.currentOffset);
+			finished = finished && fillSuccessful;
+			if(fillSuccessful) backend.added.insert(-1);
 		}
 	}
-	lastAddSuccessful = finished;
 	return finished;
 }
 

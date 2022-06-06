@@ -5,6 +5,8 @@
 #include <vector>
 #include <cstring>
 #include <functional>
+#include <unordered_map>
+#include <unordered_set>
 
 
 // callback types
@@ -67,13 +69,19 @@ struct Backend {
 	IPAR2ProcBackend* be;
 	size_t currentOffset;
 	size_t currentSliceSize;
-	bool addSuccessful;
+	std::unordered_set<int> added;
+};
+
+struct PAR2ProcAddCbRef {
+	int backendsActive;
+	PAR2ProcPlainCb cb;
+	PAR2ProcPlainCb backendCb;
 };
 
 class PAR2Proc {
 private:
 	bool hasAdded;
-	bool lastAddSuccessful;
+	std::unordered_map<int, struct PAR2ProcAddCbRef> addCbRefs;
 	std::vector<struct Backend> backends;
 	
 	size_t currentSliceSize; // current slice chunk size (<=sliceSize)
