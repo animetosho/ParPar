@@ -211,6 +211,9 @@ static HEDLEY_ALWAYS_INLINE void gf16_affine2x_muladd_x_avx2(
 	__m256i matNormE, matSwapE;
 	__m256i matNormF, matSwapF;
 	
+	// prevent MSVC whining
+	matNormB = matSwapB = matNormC = matSwapC = matNormD = matSwapD = matNormE = matSwapE = matNormF = matSwapF = _mm256_undefined_si256();
+	
 	__m256i depmask = gf16_affine_load_matrix(scratch, coefficients[0]);
 	matNormA = _mm256_inserti128_si256(depmask, _mm256_castsi256_si128(depmask), 1);
 	matSwapA = _mm256_permute2x128_si256(depmask, depmask, 0x11);

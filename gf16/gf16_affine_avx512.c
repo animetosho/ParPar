@@ -328,6 +328,10 @@ static HEDLEY_ALWAYS_INLINE void gf16_affine2x_muladd_x_avx512(
 	__m512i matNormK, matSwapK;
 	__m512i matNormL, matSwapL;
 	__m512i matNormM, matSwapM;
+	
+	// prevent MSVC whining
+	matNormB = matSwapB = matNormC = matSwapC = matNormD = matSwapD = matNormE = matSwapE = matNormF = matSwapF = matNormG = matSwapG = matNormH = matSwapH = matNormI = matSwapI = matNormJ = matSwapJ = matNormK = matSwapK = matNormL = matSwapL = matNormM = matSwapM = _mm512_undefined_epi32();
+	
 	if(srcCount == 1) {
 		depmask = _mm512_castsi256_si512(gf16_affine_load_matrix(scratch, coefficients[0]));
 		matNormA = _mm512_shuffle_i64x2(depmask, depmask, _MM_SHUFFLE(0,0,0,0));

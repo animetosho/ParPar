@@ -255,6 +255,10 @@ static HEDLEY_ALWAYS_INLINE void gf16_affine2x_muladd_x_gfni(
 	__m128i matNormD, matSwapD;
 	__m128i matNormE, matSwapE;
 	__m128i matNormF, matSwapF;
+	
+	// prevent MSVC whining
+	matNormB = matSwapB = matNormC = matSwapC = matNormD = matSwapD = matNormE = matSwapE = matNormF = matSwapF = _mm_undefined_si128();
+	
 	gf16_affine_load_matrix(scratch, coefficients[0], &matNormA, &matSwapA);
 	if(srcCount >= 2)
 		gf16_affine_load_matrix(scratch, coefficients[1], &matNormB, &matSwapB);
