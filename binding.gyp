@@ -260,11 +260,11 @@
           }
         }],
         ['OS!="win" and target_arch=="arm"', {
-          "cflags": ["-mfpu=fp-armv8"],
-          "cxxflags": ["-mfpu=fp-armv8"],
+          "cflags": ["-mfpu=fp-armv8","-fno-lto"],
+          "cxxflags": ["-mfpu=fp-armv8","-fno-lto"],
           "xcode_settings": {
-            "OTHER_CFLAGS": ["-mfpu=fp-armv8"],
-            "OTHER_CXXFLAGS": ["-mfpu=fp-armv8"]
+            "OTHER_CFLAGS": ["-mfpu=fp-armv8","-fno-lto"],
+            "OTHER_CXXFLAGS": ["-mfpu=fp-armv8","-fno-lto"]
           }
         }]
       ]
@@ -283,11 +283,11 @@
       "msvs_settings": {"VCCLCompilerTool": {"BufferSecurityCheck": "false"}},
       "conditions": [
         ['OS!="win" and target_arch=="arm"', {
-          "cflags": ["-mfpu=neon"],
-          "cxxflags": ["-mfpu=neon"],
+          "cflags": ["-mfpu=neon","-fno-lto"],
+          "cxxflags": ["-mfpu=neon","-fno-lto"],
           "xcode_settings": {
-            "OTHER_CFLAGS": ["-mfpu=neon"],
-            "OTHER_CXXFLAGS": ["-mfpu=neon"]
+            "OTHER_CFLAGS": ["-mfpu=neon","-fno-lto"],
+            "OTHER_CXXFLAGS": ["-mfpu=neon","-fno-lto"]
           }
         }],
         ['OS!="win" and target_arch=="arm" and enable_native_tuning==0', {
@@ -326,11 +326,11 @@
           }
         }],
         ['OS!="win" and target_arch=="arm"', {
-          "cflags": ["-mfpu=neon"],
-          "cxxflags": ["-mfpu=neon"],
+          "cflags": ["-mfpu=neon","-fno-lto"],
+          "cxxflags": ["-mfpu=neon","-fno-lto"],
           "xcode_settings": {
-            "OTHER_CFLAGS": ["-mfpu=neon"],
-            "OTHER_CXXFLAGS": ["-mfpu=neon"]
+            "OTHER_CFLAGS": ["-mfpu=neon","-fno-lto"],
+            "OTHER_CXXFLAGS": ["-mfpu=neon","-fno-lto"]
           }
         }]
       ]
@@ -712,9 +712,9 @@
       "msvs_settings": {"VCCLCompilerTool": {"BufferSecurityCheck": "false"}},
       "conditions": [
         ['OS!="win" and target_arch=="arm"', {
-          "cflags": ["-mfpu=neon"],
+          "cflags": ["-mfpu=neon","-fno-lto"],
           "xcode_settings": {
-            "OTHER_CFLAGS": ["-mfpu=neon"]
+            "OTHER_CFLAGS": ["-mfpu=neon","-fno-lto"]
           }
         }],
         ['OS!="win" and target_arch=="arm" and enable_native_tuning==0', {
