@@ -84,6 +84,10 @@ This strategy extends naturally to arbitrary sizes for w.
 
 **GF-Complete**: equivalent to *TABLE* for w≤8 or *SPLIT-TABLE(w, 8)* for w≥16
 
+### Further ideas
+
+- For w=16, we could reduce the number of lookups required, at the expense of a larger table. This can be achieved by performing lookups across a pair of words. The 32-bit input pair can be broken up into 11+11+10 bit units, and lookups performed on these. This effectively reduces 4 lookups to 3, but greatly increases the lookup table size.
+
 Vector Split Lookup Table (VTBL/PSHUFB)
 ---------------------------------------
 
@@ -415,13 +419,14 @@ Both ARM and x86 provide [carry-less multiply](https://en.wikipedia.org/wiki/Car
 If, however, memory is not an issue, modular reduction can be deferred until all blocks are computed and accumulated. Alternatively, if multiple regions are to be computed together, the cost of modular reduction can be slightly amortized across them.
 
 On x86, there is the [`PCLMULQDQ`](https://www.felixcloutier.com/x86/pclmulqdq) instruction which performs 64-bit carry-less multiplies. For smaller w, multiple words can be packed in for a single multiply, however efficiency is halved to deal with the widening effect (for example, only two 16-bit words can be fit in a 64-bit multiplier instead of four).  
-On ARM NEON, there are [`VMULL.P8`](https://developer.arm.com/docs/100069/0608/advanced-simd-instructions-32-bit/vmull)/[`PMULL`](http://infocenter.arm.com/help/index.jsp?topic=/com.arm.doc.dui0802b/PMULL_advsimd_vector.html) instructions, however they are only 8-bit wide, so only sufficient for w ≤ 8. ARMv8 does also have a 64-bit wide multiply, which is the same as x86’s `PCLMULQDQ` instruction.
+On ARM NEON, there are [`VMULL.P8`](https://developer.arm.com/docs/100069/0608/advanced-simd-instructions-32-bit/vmull)/[`PMULL`](http://infocenter.arm.com/help/index.jsp?topic=/com.arm.doc.dui0802b/PMULL_advsimd_vector.html) instructions, however they are only 8-bit wide. Long multiplication techniques can be applied for w > 8. Unfortunately, whilst NEON provides a multiply low instruction, it lacks a multiply high, forcing you to use the multiply widen instruction, which imposes a penalty with rearranging data correctly. The penalty can be amortized if multiple regions are computed together. Furthermore, Karatsuba multiplication techniques can be used to lessen the overhead of long multiplication.
+ARMv8 does also have a 64-bit wide multiply, which is the same as x86’s `PCLMULQDQ` instruction.
 
 **Pros:**
 
 -   No need to compute lookup tables and such, fast setup
 -   May be compatible with [sub-cubic matrix multiplication algorithms](https://en.wikipedia.org/wiki/Matrix_multiplication_algorithm#Sub-cubic_algorithms)
--   Might be faster than *Vector Split Lookup* if vector lookup operations are slow but carry-less multiplication is fast
+-   Might be faster than *Vector Split Lookup* if vector lookup operations are slow but carry-less multiplication is fast (e.g. on ARMv7)
 -   May be one of the faster techniques for large values of w, particularly w=64, as other techniques become proportionally slower as w gets larger
 
 **Cons:**
@@ -438,7 +443,7 @@ On ARM NEON, there are [`VMULL.P8`](https://developer.arm.com/docs/100069/0608/a
 CRC
 ---
 
-Both x86 and ARM CPUs may provide dedicated CRC32 instructions. These can be used to perform modular reduction for w=32 for their respective generator polynomial, which can be useful if a *Carry-less Multiplication* technique is being used. I have not looked into this technique as I haven’t investigated w=32.
+Both x86 and ARM CPUs may provide dedicated CRC32 instructions. These can be used to perform modular reduction for w=32 for their respective generator polynomial, which can be useful if a *Carry-less Multiplication* technique is being used. Note that CRC32 is bit-reversed, so you may need to do additional reversal, if bit order is important. I have not looked into this technique as I haven’t investigated w=32.
 
 Dedicated Instruction 
 ---------------------
