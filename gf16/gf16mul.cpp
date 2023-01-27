@@ -623,10 +623,10 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			finish_partial_packsum = &gf16_shuffle_finish_partial_packsum_neon;
 		break;
 		
-		case GF16_CLMUL_NEON:
-			scratch = gf16_clmul_init_arm(GF16_POLYNOMIAL);
+		case GF16_CLMUL_NEON: {
+			int available = gf16_clmul_init_arm(GF16_POLYNOMIAL);
 			
-			METHOD_REQUIRES(gf16_available_neon && scratch)
+			METHOD_REQUIRES(gf16_available_neon && available)
 			_mul_add = &gf16_clmul_muladd_neon;
 			_mul_add_multi = &gf16_clmul_muladd_multi_neon;
 			_mul_add_multi_packed = &gf16_clmul_muladd_multi_packed_neon;
@@ -641,7 +641,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			finish_packed = &gf16_shuffle_finish_packed_neon;
 			finish_packed_cksum = &gf16_shuffle_finish_packed_cksum_neon; // re-use shuffle routine
 			finish_partial_packsum = &gf16_shuffle_finish_partial_packsum_neon;
-		break;
+		} break;
 		
 		case GF16_SHUFFLE_128_SVE:
 			METHOD_REQUIRES(gf16_available_sve)

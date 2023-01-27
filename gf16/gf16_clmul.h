@@ -19,4 +19,4 @@ FUNCS(sve2);
 
 #undef FUNCS
 
-void* gf16_clmul_init_arm(int polynomial);
+int gf16_clmul_init_arm(int polynomial);

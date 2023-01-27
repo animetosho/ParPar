@@ -86,16 +86,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_clmul_neon_round(const void* src, poly16x8
 	*high2 = veorq_p16(*high2, _high2);
 }
 
-// on AArch64, do multiplies using TBL; on some uArchs, PMUL is very slow whilst TBL seems to always be decent
-#ifdef __aarch64__
-# define clmul_red_lo vqtbl1q_u8
-#else
-static HEDLEY_ALWAYS_INLINE uint8x16_t clmul_red_lo(uint8x16_t a, uint8x16_t b) {
-	return vreinterpretq_u8_p8(vmulq_p8(vreinterpretq_p8_u8(a), vreinterpretq_p8_u8(b)));
-}
-#endif
-
-static HEDLEY_ALWAYS_INLINE void gf16_clmul_neon_reduction(poly16x8_t* low1, poly16x8_t low2, poly16x8_t mid1, poly16x8_t mid2, poly16x8_t* high1, poly16x8_t high2, uint8x16_t poly) {
+static HEDLEY_ALWAYS_INLINE void gf16_clmul_neon_reduction(poly16x8_t* low1, poly16x8_t low2, poly16x8_t mid1, poly16x8_t mid2, poly16x8_t* high1, poly16x8_t high2) {
 	// put data in proper form
 	uint8x16x2_t hibytes = vuzpq_u8(vreinterpretq_u8_p16(*high1), vreinterpretq_u8_p16(high2));
 	uint8x16x2_t lobytes = vuzpq_u8(vreinterpretq_u8_p16(*low1), vreinterpretq_u8_p16(low2));
@@ -107,44 +98,40 @@ static HEDLEY_ALWAYS_INLINE void gf16_clmul_neon_reduction(poly16x8_t* low1, pol
 	hibytes.val[0] = veorq_u8(libytes, veorq_u8(hibytes.val[1], midbytes.val[1]));
 	
 	
-	// reduction based on hibytes
-	// for 0x1100b polynomial, we can abuse the 2nd '1' by EORing the top nibble with the next - this saves a 2nd TBL lookup
-	// ^ this fits in nicely with 4-bit lookups; the trick doesn't work with 5-bit lookups
-	uint8x16_t red = vshrq_n_u8(hibytes.val[1], 4);
-	uint8x16_t rem = clmul_red_lo(poly, red);
-	lobytes.val[1] = veorq_u8(lobytes.val[1], vshlq_n_u8(rem, 4));
-	hibytes.val[0] = veorq_u8(hibytes.val[0], vshrq_n_u8(rem, 4));
+	// Barrett reduction
+	// first reduction coefficient is 0x1111a
+	// multiply hibytes by 0x11100
+	uint8x16_t highest_nibble = vshrq_n_u8(hibytes.val[1], 4);
+	uint8x16_t th0 = vsriq_n_u8(vshlq_n_u8(hibytes.val[1], 4), hibytes.val[0], 4);
+	th0 = veorq_u8(th0, veorq_u8(hibytes.val[0], hibytes.val[1]));
+	uint8x16_t th1 = veorq_u8(hibytes.val[1], highest_nibble);
 	
+	// subsequent polynomial multiplication doesn't need the low bits of th0 to be correct, so trim these now for a shorter dep chain
+	uint8x16_t th0_hi3 = vshrq_n_u8(th0, 5);
+	uint8x16_t th0_hi1 = vshrq_n_u8(th0_hi3, 2); // or is `vshrq_n_u8(th0, 7)` better?
+	
+	// mul by 0x1a => we only care about upper byte
 #ifdef __aarch64__
-	red = veorq_u8(red, vandq_u8(hibytes.val[1], vdupq_n_u8(0xf)));
+	th0 = veorq_u8(th0, vqtbl1q_u8(
+		(uint8x16_t){0,1,3,2,6,7,5,4,13,12,14,15,11,10,8,9},
+		highest_nibble
+	));
 #else
-	// this saves a register constant by eliminating the need to vandq with 0xf, but SLI is generally a little slower than AND
-	// we do this on ARMv7 due to there being fewer 128-bit registers available
-	red = veorq_u8(vsliq_n_u8(red, red, 4), hibytes.val[1]);
+	th0 = veorq_u8(th0, vshrq_n_u8(vreinterpretq_u8_p8(vmulq_p8(
+		vreinterpretq_p8_u8(highest_nibble),
+		vdupq_n_p8(0x1a)
+	)), 4));
 #endif
-	rem = clmul_red_lo(poly, red);
-	lobytes.val[1] = veorq_u8(lobytes.val[1], rem);
 	
-	// repeat reduction for next byte
-	uint8x16_t hibyte0_top = vshrq_n_u8(hibytes.val[0], 4);
-	red = veorq_u8(red, hibyte0_top);
-	rem = clmul_red_lo(poly, red);
-	uint8x16_t lobyte1_merge = vshrq_n_u8(rem, 4);
-	lobytes.val[0] = veorq_u8(lobytes.val[0], vshlq_n_u8(rem, 4));
+	// multiply by polynomial: 0x100b
+	poly8x16_t redL = vdupq_n_p8(0x0b);
+	hibytes.val[1] = veorq_u8(th0_hi3, th0_hi1);
+	hibytes.val[1] = vsliq_n_u8(hibytes.val[1], th0, 4);
+	lobytes.val[1] = veorq_u8(lobytes.val[1], vreinterpretq_u8_p8(vmulq_p8(vreinterpretq_p8_u8(th1), redL)));
+	hibytes.val[0] = vreinterpretq_u8_p8(vmulq_p8(vreinterpretq_p8_u8(th0), redL));
 	
-#ifdef __aarch64__
-	red = veorq_u8(red, vandq_u8(hibytes.val[0], vdupq_n_u8(0xf)));
-#else
-	red = veorq_u8(vsliq_n_u8(red, hibyte0_top, 4), hibytes.val[0]);
-#endif
-	rem = clmul_red_lo(poly, red);
-	lobytes.val[0] = veorq_u8(lobytes.val[0], rem);
-	lobytes.val[1] = veorq_u8(lobytes.val[1], vsliq_n_u8(lobyte1_merge, red, 4));
-	
-	
-	// return data
-	*low1 = vreinterpretq_p16_u8(lobytes.val[0]);
-	*high1 = vreinterpretq_p16_u8(lobytes.val[1]);
+	*low1 = vreinterpretq_p16_u8(veorq_u8(lobytes.val[0], hibytes.val[0]));
+	*high1 = vreinterpretq_p16_u8(veorq_u8(lobytes.val[1], hibytes.val[1]));
 }
 
 #ifdef __aarch64__
@@ -160,7 +147,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_clmul_muladd_x_neon(
 	const uint16_t *HEDLEY_RESTRICT coefficients, const int doPrefetch, const char* _pf
 ) {
 	GF16_MULADD_MULTI_SRC_UNUSED(CLMUL_NUM_REGIONS);
-	uint8x16_t poly = vld1q_u8_align(scratch, 16);
+	UNUSED(scratch);
 	
 	coeff_t coeff[CLMUL_COEFF_PER_REGION*CLMUL_NUM_REGIONS];
 	for(int src=0; src<srcCount; src++) {
@@ -198,7 +185,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_clmul_muladd_x_neon(
 		if(srcCount > 7) \
 			gf16_clmul_neon_round(_src8+ptr*srcScale, &low1, &low2, &mid1, &mid2, &high1, &high2, coeff + CLMUL_COEFF_PER_REGION*7); \
 		 \
-		gf16_clmul_neon_reduction(&low1, low2, mid1, mid2, &high1, high2, poly); \
+		gf16_clmul_neon_reduction(&low1, low2, mid1, mid2, &high1, high2); \
 		 \
 		uint8x16x2_t vb = vld2q_u8(_dst+ptr); \
 		vb.val[0] = veorq_u8(vreinterpretq_u8_p16(low1), vb.val[0]); \
@@ -261,28 +248,11 @@ GF_PREPARE_PACKED_FUNCS_STUB(gf16_clmul, _neon)
 #endif
 
 
-void* gf16_clmul_init_arm(int polynomial) {
+int gf16_clmul_init_arm(int polynomial) {
 #if defined(__ARM_NEON)
-	if((polynomial & ~0x1101f) || !(polynomial & 0x1000)) return NULL; // unsupported polynomial, we mostly support 0x1100b
-	
-	uint8_t* ret;
-	ALIGN_ALLOC(ret, sizeof(uint8x16_t), 16);
-#ifdef __aarch64__
-	for(int i=0; i<16; i++) {
-		int p = 0;
-		if(i & 8) p ^= polynomial << 3;
-		if(i & 4) p ^= polynomial << 2;
-		if(i & 2) p ^= polynomial << 1;
-		if(i & 1) p ^= polynomial << 0;
-		
-		ret[i] = p & 0xff;
-	}
-#else
-	memset(ret, polynomial & 0x1f, sizeof(uint8x16_t));
-#endif
-	return ret;
+	return polynomial == 0x1100b; // reduction is hard-coded to use 0x1100b polynomial
 #else
 	UNUSED(polynomial);
-	return NULL;
+	return 0;
 #endif
 }

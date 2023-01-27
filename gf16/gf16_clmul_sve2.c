@@ -56,35 +56,35 @@ static HEDLEY_ALWAYS_INLINE void gf16_clmul_sve2_reduction(svuint8_t* low1, svui
 	lobytesH = sveor3_u8(midbytesL, lobytesL, libytes);
 	hibytesL = sveor3_u8(midbytesH, hibytesH, libytes);
 	
+	// Barrett reduction
+	// first reduction coefficient is 0x1111a
+	svuint8_t highest_nibble = NOMASK(svlsr_n_u8, hibytesH, 4);
 	
-	// reduction based on hibytes
-	svuint8_t red = NOMASK(svlsr_n_u8, hibytesH, 4);
-	svuint8_t rem = svpmul_n_u8(red, GF16_POLYNOMIAL & 0x1f);
-	rem = svxar_n_u8(rem, svdup_n_u8(0), 4); // rotate by 4
-	lobytesH = svbcax_n_u8(lobytesH, rem, 0xf);
-	hibytesL = svbcax_n_u8(hibytesL, rem, 0xf0);
+	svuint8_t th0 = svsri_n_u8(NOMASK(svlsl_n_u8, hibytesH, 4), hibytesL, 4);
+	th0 = sveor3_u8(th0, hibytesH, hibytesL);
+	svuint8_t th0_hi3 = NOMASK(svlsr_n_u8, th0, 5);
+	th0 = NOMASK(sveor_u8, th0, NOMASK(svlsr_n_u8,
+		svpmul_n_u8(highest_nibble, 0x1a), 4
+	));
 	
-	red = svbcax_n_u8(red, hibytesH, 0xf0);
-	rem = svpmul_n_u8(red, GF16_POLYNOMIAL & 0x1f);
-	svuint8_t lobytesH_merge = rem;
+	// alternative strategy to above, using nibble flipped ops; looks like one less op, but 0xf vector needs to be constructed, so still the same; maybe there's a better way to leverage it?
+	// svuint8_t th0 = svxar_n_u8(hibytesH, hibytesL, 4);
+	// th0 = svbcax_n_u8(th0, svpmul_n_u8(highest_nibble, 0x1a), 0xf);
+	// th0 = svxar_n_u8(th0, svbsl_n_u8(hibytesH, hibytesL, 0xf), 4);
+	// svuint8_t th0_hi3 = NOMASK(svlsr_n_u8, th0, 5);
 	
-	// repeat reduction for next byte
-	red = NOMASK(sveor_u8, red, NOMASK(svlsr_n_u8, hibytesL, 4));
-	rem = svpmul_n_u8(red, GF16_POLYNOMIAL & 0x1f);
-	svuint8_t lobytes_merge = rem;
+	svuint8_t th1 = NOMASK(sveor_u8, hibytesH, highest_nibble);
 	
-	red = svbcax_n_u8(red, hibytesL, 0xf0);
-	rem = svpmul_n_u8(red, GF16_POLYNOMIAL & 0x1f);
-	lobytesL = sveor3_u8(lobytesL,
-		rem,
-		NOMASK(svlsl_n_u8, lobytes_merge, 4)
+	
+	// multiply by polynomial: 0x100b
+	lobytesH = sveor3_u8(
+		lobytesH,
+		svpmul_n_u8(th1, 0x0b),
+		NOMASK(svlsr_n_u8, th0_hi3, 2)
 	);
-	lobytesH = sveor3_u8(lobytesH,
-		lobytesH_merge,
-		svsli_n_u8(NOMASK(svlsr_n_u8, lobytes_merge, 4), red, 4)
-	);
+	lobytesH = NOMASK(sveor_u8, lobytesH, svsli_n_u8(th0_hi3, th0, 4));
+	lobytesL = NOMASK(sveor_u8, lobytesL, svpmul_n_u8(th0, 0x0b));
 	
-	// return data
 	*low1 = lobytesL;
 	*high1 = lobytesH;
 }
