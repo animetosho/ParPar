@@ -74,8 +74,6 @@ const static char _ocl_defines[] =
 " #define val_t nat_uint\n"
 "#endif\n"
 
-"#define MAP_VECT_ELEMS(res, val, body) for(nat_uint v=0; v<VECT_WIDTH; v++) { nat_uint e = val>>(v*16); body res |= (val_t)e<<(v*16); }\n"
-
 "#ifndef EX_TABLE_ARGS\n"
 " #define EX_TABLE_ARGS\n"
 " #define EX_TABLE_ARGS_DECL\n"
