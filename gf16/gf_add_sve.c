@@ -14,7 +14,7 @@ static HEDLEY_ALWAYS_INLINE void gf_add_x_sve(
 	const uint16_t *HEDLEY_RESTRICT coefficients,
 	const int doPrefetch, const char* _pf
 ) {
-	assert(len > 0);
+	ASSUME(len > 0);
 	
 	GF16_MULADD_MULTI_SRC_UNUSED(18);
 	UNUSED(scratch); UNUSED(coefficients);

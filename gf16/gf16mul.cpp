@@ -1247,9 +1247,9 @@ std::vector<Galois16Methods> Galois16Mul::availableMethods(bool checkCpuid) {
 }
 
 void Galois16Mul::_prepare_packed_none(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen, size_t sliceLen, unsigned inputPackSize, unsigned inputNum, size_t chunkLen) {
-	assert(inputNum < inputPackSize);
-	assert(srcLen <= sliceLen);
-	assert(chunkLen <= sliceLen);
+	ASSUME(inputNum < inputPackSize);
+	ASSUME(srcLen <= sliceLen);
+	ASSUME(chunkLen <= sliceLen);
 	
 	uint8_t* dstBase = (uint8_t*)dst + inputNum * chunkLen;
 	unsigned fullChunks = (unsigned)(srcLen/chunkLen);

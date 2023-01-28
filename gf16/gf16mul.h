@@ -198,10 +198,10 @@ public:
 	void mutScratch_free(void* mutScratch) const;
 	
 	inline void mul(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch) const {
-		assert(((uintptr_t)dst & (_info.alignment-1)) == 0);
-		assert(((uintptr_t)src & (_info.alignment-1)) == 0);
-		assert(isMultipleOfStride(len));
-		assert(len > 0);
+		ASSUME(((uintptr_t)dst & (_info.alignment-1)) == 0);
+		ASSUME(((uintptr_t)src & (_info.alignment-1)) == 0);
+		ASSUME(isMultipleOfStride(len));
+		ASSUME(len > 0);
 		
 		if(!(coefficient & 0xfffe)) {
 			if(coefficient == 0)
@@ -217,19 +217,19 @@ public:
 		}
 	}
 	inline void mul_add(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch) const {
-		assert(((uintptr_t)dst & (_info.alignment-1)) == 0);
-		assert(((uintptr_t)src & (_info.alignment-1)) == 0);
-		assert(isMultipleOfStride(len));
-		assert(len > 0);
+		ASSUME(((uintptr_t)dst & (_info.alignment-1)) == 0);
+		ASSUME(((uintptr_t)src & (_info.alignment-1)) == 0);
+		ASSUME(isMultipleOfStride(len));
+		ASSUME(len > 0);
 		
 		if(coefficient == 0) return;
 		_mul_add(scratch, dst, src, len, coefficient, mutScratch);
 	}
 	
 	inline void pow(unsigned outputs, size_t offset, void **HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch) const {
-		assert(isMultipleOfStride(len));
-		assert(len > 0);
-		assert(outputs > 0);
+		ASSUME(isMultipleOfStride(len));
+		ASSUME(len > 0);
+		ASSUME(outputs > 0);
 		
 		if(!(coefficient & 0xfffe)) {
 			if(coefficient == 0) {
@@ -266,18 +266,18 @@ public:
 		}
 	}
 	inline void pow_add(unsigned outputs, size_t offset, void **HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch) const {
-		assert(isMultipleOfStride(len));
-		assert(len > 0);
-		assert(outputs > 0);
+		ASSUME(isMultipleOfStride(len));
+		ASSUME(len > 0);
+		ASSUME(outputs > 0);
 		
 		if(coefficient == 0) return;
 		_pow_add(scratch, outputs, offset, dst, src, len, coefficient, mutScratch);
 	}
 	
 	inline void mul_add_multi(unsigned regions, size_t offset, void *HEDLEY_RESTRICT dst, const void* const*HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch) const {
-		assert(isMultipleOfStride(len));
-		assert(len > 0);
-		assert(regions > 0);
+		ASSUME(isMultipleOfStride(len));
+		ASSUME(len > 0);
+		ASSUME(regions > 0);
 		
 		if(_mul_add_multi)
 			_mul_add_multi(scratch, regions, offset, dst, src, len, coefficients, mutScratch);
@@ -289,9 +289,9 @@ public:
 	}
 	
 	inline void mul_add_multi_packed(unsigned packedRegions, unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch) const {
-		assert(isMultipleOfStride(len));
-		assert(len > 0);
-		assert(regions > 0);
+		ASSUME(isMultipleOfStride(len));
+		ASSUME(len > 0);
+		ASSUME(regions > 0);
 		
 		if(_mul_add_multi_packed)
 			_mul_add_multi_packed(scratch, packedRegions, regions, dst, src, len, coefficients, mutScratch);
@@ -303,9 +303,9 @@ public:
 	}
 	
 	inline void mul_add_multi_packpf(unsigned packedRegions, unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch, const void* HEDLEY_RESTRICT prefetchIn, const void* HEDLEY_RESTRICT prefetchOut) const {
-		assert(isMultipleOfStride(len));
-		assert(len > 0);
-		assert(regions > 0);
+		ASSUME(isMultipleOfStride(len));
+		ASSUME(len > 0);
+		ASSUME(regions > 0);
 		
 		// TODO: mul by 1?
 		

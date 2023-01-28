@@ -16,6 +16,11 @@
 # pragma warning (disable : 4146)
 #endif
 
+#ifdef _NDEBUG
+# define ASSUME HEDLEY_ASSUME
+#else
+# define ASSUME assert
+#endif
 
 #if defined(__GNUC__) && !defined(__clang__) && !defined(__OPTIMIZE__)
 // GCC, for some reason, doesn't like const pointers when forced to inline without optimizations
@@ -80,14 +85,14 @@ static HEDLEY_ALWAYS_INLINE void gf16_prepare_packed(
 	void *HEDLEY_RESTRICT checksum, gf16_checksum_block checksumBlock, gf16_checksum_blocku checksumBlockU, gf16_checksum_exp checksumExp, gf16_prepare_checksum prepareChecksum
 ) {
 	size_t checksumLen = checksumBlock ? blockLen : 0;
-	assert(inputNum < inputPackSize);
-	assert(srcLen <= sliceLen);
-	assert(chunkLen <= sliceLen+checksumLen);
-	assert(chunkLen % blockLen == 0);
-	assert(sliceLen % blockLen == 0);
-	assert(partOffset % blockLen == 0);
-	assert(partOffset + partLen == srcLen || partLen % blockLen == 0);
-	assert(partOffset + partLen <= srcLen);
+	ASSUME(inputNum < inputPackSize);
+	ASSUME(srcLen <= sliceLen);
+	ASSUME(chunkLen <= sliceLen+checksumLen);
+	ASSUME(chunkLen % blockLen == 0);
+	ASSUME(sliceLen % blockLen == 0);
+	ASSUME(partOffset % blockLen == 0);
+	ASSUME(partOffset + partLen == srcLen || partLen % blockLen == 0);
+	ASSUME(partOffset + partLen <= srcLen);
 	
 	// simple hack for now
 	src = (const char*)src - partOffset;
@@ -155,7 +160,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_prepare_packed(
 		}
 		
 		// zero fill rest of chunk
-		assert(pos <= lastChunkLen);
+		ASSUME(pos <= lastChunkLen);
 		if(checksumBlock)
 			checksumExp(checksum, gf16_exp((((lastChunkLen-pos < partLeft) ? lastChunkLen-pos : partLeft) / blockLen) % 65535));
 		for(; pos<lastChunkLen; pos+=blockLen) {
@@ -221,13 +226,13 @@ static HEDLEY_ALWAYS_INLINE int gf16_finish_packed(
 	size_t checksumLen = checksumBlock ? blockLen : 0;
 	size_t alignedSliceLen = sliceLen + blockLen-1;
 	alignedSliceLen -= alignedSliceLen % blockLen;
-	assert(outputNum < numOutputs);
-	assert(chunkLen <= alignedSliceLen+checksumLen);
-	assert(chunkLen % blockLen == 0);
-	assert(sliceLen % 2 == 0); // PAR2 requires a multiple of 4, but we'll support 2 (actually, the code should also work with any multiple)
-	assert(partOffset % blockLen == 0);
-	assert(partOffset + partLen == sliceLen || partLen % blockLen == 0);
-	assert(partOffset + partLen <= sliceLen);
+	ASSUME(outputNum < numOutputs);
+	ASSUME(chunkLen <= alignedSliceLen+checksumLen);
+	ASSUME(chunkLen % blockLen == 0);
+	ASSUME(sliceLen % 2 == 0); // PAR2 requires a multiple of 4, but we'll support 2 (actually, the code should also work with any multiple)
+	ASSUME(partOffset % blockLen == 0);
+	ASSUME(partOffset + partLen == sliceLen || partLen % blockLen == 0);
+	ASSUME(partOffset + partLen <= sliceLen);
 	
 	// simple hack for now
 	dst = (char*)dst - partOffset;

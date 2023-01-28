@@ -8,9 +8,9 @@ static HEDLEY_ALWAYS_INLINE void _FN(gf_add_x)(
 	const uint16_t *HEDLEY_RESTRICT coefficients,
 	const int doPrefetch, const char* _pf
 ) {
-	assert((len & (sizeof(_mword)-1)) == 0);
-	assert(((uintptr_t)_dst & (sizeof(_mword)-1)) == 0);
-	assert(len > 0);
+	ASSUME((len & (sizeof(_mword)*vecStride-1)) == 0);
+	ASSUME(((uintptr_t)_dst & (sizeof(_mword)-1)) == 0);
+	ASSUME(len > 0);
 	
 	GF16_MULADD_MULTI_SRC_UNUSED(18);
 	UNUSED(coefficients);

@@ -142,13 +142,13 @@ static HEDLEY_ALWAYS_INLINE void gf16_muladd_multi(const void *HEDLEY_RESTRICT s
 
 
 static HEDLEY_ALWAYS_INLINE void gf16_muladd_multi_packed(const void *HEDLEY_RESTRICT scratch, fMuladdPF muladd_pf, const unsigned interleave, unsigned regionsPerCall, unsigned inputPackSize, unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, size_t blockLen, const uint16_t *HEDLEY_RESTRICT coefficients) {
-	assert(regions <= inputPackSize);
+	ASSUME(regions <= inputPackSize);
 	
 	uint8_t* _dst = (uint8_t*)dst + len;
 	const uint8_t* _src = (const uint8_t*)src;
 	const uint8_t* srcEnd;
 	
-	assert(regionsPerCall % interleave == 0);
+	ASSUME(regionsPerCall % interleave == 0);
 	
 	unsigned region = 0;
 	if(regions >= regionsPerCall) do {
@@ -261,7 +261,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_muladd_multi_packed(const void *HEDLEY_RES
 #endif
 
 static HEDLEY_ALWAYS_INLINE void gf16_muladd_multi_packpf(const void *HEDLEY_RESTRICT scratch, fMuladdPF muladd_pf, const unsigned interleave, unsigned regionsPerCall, unsigned inputPackSize, unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, size_t blockLen, const uint16_t *HEDLEY_RESTRICT coefficients, const unsigned pfFactor, const void* HEDLEY_RESTRICT prefetchIn, const void* HEDLEY_RESTRICT prefetchOut) {
-	assert(regions <= inputPackSize);
+	ASSUME(regions <= inputPackSize);
 	
 	uint8_t* _dst = (uint8_t*)dst + len;
 	const uint8_t* _src = (const uint8_t*)src;
