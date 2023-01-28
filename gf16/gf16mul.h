@@ -150,6 +150,9 @@ public:
 	inline bool hasMultiMulAdd() const {
 		return _mul_add_multi != NULL;
 	};
+	inline bool hasMultiMulAddPacked() const {
+		return _mul_add_multi_packed != NULL;
+	};
 	inline bool hasPowAdd() const {
 		return _pow_add != NULL;
 	};
