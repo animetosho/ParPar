@@ -1064,7 +1064,7 @@ Galois16Mul::~Galois16Mul() {
 		ALIGN_FREE(scratch);
 }
 
-#if __cplusplus >= 201100
+#ifdef __cpp_rvalue_references
 void Galois16Mul::move(Galois16Mul& other) {
 	scratch = other.scratch;
 	other.scratch = NULL;
@@ -1117,7 +1117,7 @@ void Galois16Mul::mutScratch_free(void* mutScratch) const {
 	}
 }
 
-Galois16Methods Galois16Mul::default_method(size_t regionSizeHint, unsigned /*outputs*/, unsigned /*threadCountHint*/) {
+Galois16Methods Galois16Mul::default_method(size_t regionSizeHint, unsigned /*outputs*/) {
 	const CpuCap caps(true);
 	
 #ifdef PLATFORM_X86

@@ -125,16 +125,16 @@ private:
 	Galois16Mul(const Galois16Mul&);
 	Galois16Mul& operator=(const Galois16Mul&);
 	
-#if __cplusplus >= 201100
+#ifdef __cpp_rvalue_references
 	void move(Galois16Mul& other);
 #endif
 	
 public:
-	static Galois16Methods default_method(size_t regionSizeHint = 0, unsigned outputs = 0, unsigned threadCountHint = 0);
+	static Galois16Methods default_method(size_t regionSizeHint = 0, unsigned outputs = 0);
 	Galois16Mul(Galois16Methods method = GF16_AUTO);
 	~Galois16Mul();
 	
-#if __cplusplus >= 201100
+#ifdef __cpp_rvalue_references
 	Galois16Mul(Galois16Mul&& other) noexcept {
 		move(other);
 	}
@@ -194,7 +194,7 @@ public:
 	Galois16AddPackedFunc add_multi_packed;
 	Galois16AddPackPfFunc add_multi_packpf;
 	
-	void* mutScratch_alloc() const;
+	HEDLEY_MALLOC void* mutScratch_alloc() const;
 	void mutScratch_free(void* mutScratch) const;
 	
 	inline void mul(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch) const {
