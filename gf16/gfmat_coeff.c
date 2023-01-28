@@ -33,6 +33,13 @@ void gfmat_init() {
 	}
 }
 
+void gfmat_free() {
+	free(input_diff);
+	free(gf_exp);
+	input_diff = NULL;
+	gf_exp = NULL;
+}
+
 HEDLEY_CONST uint16_t gf16_exp(uint_fast16_t v) {
 	uint_fast32_t result = gf_exp[v>>3];
 	result <<= (v&7);

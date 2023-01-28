@@ -9,6 +9,7 @@ extern "C" {
 #endif
 
 void gfmat_init();
+void gfmat_free();
 HEDLEY_CONST uint16_t gfmat_coeff_from_log(uint_fast16_t inputLog, uint_fast16_t recoveryBlock);
 HEDLEY_CONST uint16_t gfmat_coeff(uint_fast16_t inputBlock, uint_fast16_t recoveryBlock);
 HEDLEY_CONST uint16_t gfmat_input_log(uint_fast16_t inputBlock);
