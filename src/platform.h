@@ -145,7 +145,7 @@
 #endif
 
 // x86 vector upcasts, where upper is defined to be 0
-#if (defined(__clang__) && __clang_major__ >= 5 && (!defined(__APPLE__) || __clang_major__ >= 7)) || (defined(__GNUC__) && __GNUC__ >= 10)
+#if (defined(__clang__) && __clang_major__ >= 5 && (!defined(__APPLE__) || __clang_major__ >= 7)) || (defined(__GNUC__) && __GNUC__ >= 10) || (defined(_MSC_VER) && _MSC_VER >= 1910)
 // intrinsic unsupported in GCC 9 and MSVC < 2017
 //# define zext128_256 _mm256_zextsi128_si256
 # define zext256_512 _mm512_zextsi256_si512
@@ -207,7 +207,7 @@ HEDLEY_WARNING("Compiling AVX code on MinGW GCC may cause crashing due to stack 
 	#define ALIGN_ALLOC(buf, len, align) *(void**)&(buf) = std::aligned_alloc(align, ((len) + (align)-1) & ~((align)-1))
 	#define ALIGN_FREE free
 #else
-	#define ALIGN_ALLOC(buf, len, align) if(posix_memalign((void**)&(buf), align, (len))) (buf) = NULL
+	#define ALIGN_ALLOC(buf, len, align) if(posix_memalign((void**)&(buf), align < sizeof(void*) ? sizeof(void*) : align, (len))) (buf) = NULL
 	#define ALIGN_FREE free
 #endif
 
