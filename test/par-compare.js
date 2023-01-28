@@ -546,9 +546,11 @@ async.timesSeries(allTests.length, function(testNum, cb) {
 	delOutput();
 	
 	var testFiles, refFiles;
+	var execArgs = exeParpar ? (Array.isArray(exeParpar) ? exeParpar : [exeParpar]).concat(testArgs) : testArgs;
+	console.log('Executing: ' + exeNode, execArgs.map(function(arg) { return '"' + arg + '"'; }).join(' ')); // arguments not properly escaped, but should be good enough for 99% of cases
 	var timePP, timeP2;
 	timePP = Date.now();
-	proc.execFile(exeNode, exeParpar ? (Array.isArray(exeParpar) ? exeParpar : [exeParpar]).concat(testArgs) : testArgs, function(err, stdout, stderr) {
+	proc.execFile(exeNode, execArgs, function(err, stdout, stderr) {
 		timePP = Date.now() - timePP;
 		if(err) throw err;
 		
