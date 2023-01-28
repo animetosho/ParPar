@@ -70,7 +70,12 @@ static HEDLEY_ALWAYS_INLINE void _vst1q_u8_x2(uint8_t* p, uint8x16x2_t data) {
 
 
 // cacheline prefetching
-# define CACHELINE_SIZE 64
+// CACHELINE_SIZE must be >= 32
+# ifdef __aarch64__
+#  define CACHELINE_SIZE 64  // do all AArch64 processors have cacheline>=64?
+# else
+#  define CACHELINE_SIZE 32  // Cortex A7?
+# endif
 # if defined(_MSC_VER) && !defined(__clang__)
 #  define PREFETCH_MEM(addr, rw) __prefetch(addr)
 // TODO: ARM64 intrin is a little different
