@@ -19,7 +19,7 @@ extern "C" {
 struct CpuCap {
 	bool hasSSE2, hasSSSE3, hasAVX, hasAVX2, hasAVX512VLBW, hasAVX512VBMI, hasGFNI;
 	size_t propPrefShuffleThresh;
-	bool propAVX128EU, propHT;
+	bool propFastJit, propHT;
 	bool canMemWX;
 	int jitOptStrat;
 	CpuCap(bool detect) :
@@ -31,7 +31,7 @@ struct CpuCap {
 	  hasAVX512VBMI(true),
 	  hasGFNI(true),
 	  propPrefShuffleThresh(0),
-	  propAVX128EU(false),
+	  propFastJit(false),
 	  propHT(false),
 	  canMemWX(true),
 	  jitOptStrat(GF16_XOR_JIT_STRAT_NONE)
@@ -96,11 +96,11 @@ struct CpuCap {
 			propPrefShuffleThresh = 4096;
 		}
 		
-		propAVX128EU = ( // CPUs with 128-bit AVX units
+		propFastJit = ( // basically, AMD, prefer 256-bit XorJit over Shuffle
 			   family == 0x6f // AMD Bulldozer family
 			|| family == 0x7f // AMD Jaguar/Puma family
-			|| (family == 0x8f && (model == 0 /*Summit Ridge ES*/ || model == 1 /*Zen*/ || model == 8 /*Zen+*/ || model == 0x11 /*Zen APU*/ || model == 0x18 /*Zen+ APU*/ || model == 0x50 /*Subor Z+*/)) // AMD Zen1 family
-			|| (family == 6 && model == 0xf) // Centaur/Zhaoxin; overlaps with Intel Core 2, but they don't support AVX
+			|| family == 0x8f // AMD Zen1/2 family
+			|| family == 0xaf // AMD Zen3/4 family
 		);
 		
 		hasAVX = false; hasAVX2 = false; hasAVX512VLBW = false; hasAVX512VBMI = false; hasGFNI = false;
@@ -1135,9 +1135,7 @@ Galois16Methods Galois16Mul::default_method(size_t regionSizeHint, unsigned /*ou
 	}
 	if(caps.hasAVX2) {
 # ifdef PLATFORM_AMD64
-		if(gf16_xor_available_avx2 && caps.canMemWX && caps.propAVX128EU) // TODO: check size hint?
-			// 128-bit AMD CPUs seem to prefer Xor-Jit over Shuffle, probably because Xor-Jit > Shuffle @ 128-bit
-			// TODO: Zen2 may prefer this over Shuffle
+		if(gf16_xor_available_avx2 && caps.canMemWX && caps.propFastJit) // TODO: check size hint?
 			return GF16_XOR_JIT_AVX2;
 # endif
 		if(gf16_shuffle_available_avx2)
@@ -1165,10 +1163,12 @@ Galois16Methods Galois16Mul::default_method(size_t regionSizeHint, unsigned /*ou
 	if(caps.hasSVE && gf16_sve_get_size() > 16)
 		return GF16_SHUFFLE_128_SVE;
 	if(gf16_available_neon && caps.hasNEON)
-		// TODO: see if CLMul is ever slower than Shuffle on AArch64; testing so far seems to show it's often faster
 		return GF16_CLMUL_NEON;
 #endif
 	
+	
+	// lookup vs lookup3: latter seems to be slightly faster than former in most cases (SKX, Silvermont, Zen1, Rpi3 (arm64; arm32 faster muladd, slower mul)), sometimes slightly slower (Haswell, IvB?, Piledriver)
+	// but test w/ multi-region lh-lookup & fat table before preferring it
 	return GF16_LOOKUP;
 }
 
