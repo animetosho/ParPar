@@ -203,6 +203,10 @@ Performance Options:
                              This option also limits the amount of recovery
                              that can be processed per slice on each read pass.
                              Default `4M`
+       --chunk-read-threads  Maximum number of concurrent read requests during
+                             chunking. Note that this may be limited by 4 [see
+                             https://docs.libuv.org/en/v1.x/threadpool.html]
+                             Default `2`
        --read-buffers        Maximum number of read buffers to read into and
                              send to processing backend. Default `8`
        --read-hash-queue     Number of read buffers to queue up for hashing

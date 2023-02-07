@@ -151,6 +151,10 @@ var opts = {
 		type: 'size',
 		map: 'seqReadSize'
 	},
+	'chunk-read-threads': {
+		type: 'int',
+		map: 'chunkReadThreads'
+	},
 	'read-buffers': {
 		type: 'int',
 		map: 'readBuffers'
