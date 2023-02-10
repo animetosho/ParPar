@@ -1,7 +1,8 @@
 #include "controller.h"
 #include "../src/platform.h"
 #include "gfmat_coeff.h"
-#include <assert.h>
+#include <cassert>
+#include <algorithm>
 
 
 PAR2Proc::PAR2Proc() : endSignalled(false) {

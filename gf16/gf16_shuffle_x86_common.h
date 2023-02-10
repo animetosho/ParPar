@@ -67,16 +67,17 @@ static HEDLEY_ALWAYS_INLINE void shuf0_vector(uint16_t val, __m128i* prod0, __m1
 
 
 static HEDLEY_ALWAYS_INLINE _mword separate_low_high(_mword data) {
+	// MSVC < 2019 doesn't seem to like #if or defines inside _mm512_set*, so we expand it manually
+#if MWORD_SIZE == 64
+	return _MM(shuffle_epi8)(data, _mm512_set4_epi32(0x0f0d0b09, 0x07050301, 0x0e0c0a08, 0x06040200));
+#else
 	return _MM(shuffle_epi8)(data, _MM(set_epi32)(
-#if MWORD_SIZE >= 64
+# if MWORD_SIZE >= 32
 		0x0f0d0b09, 0x07050301, 0x0e0c0a08, 0x06040200,
-		0x0f0d0b09, 0x07050301, 0x0e0c0a08, 0x06040200,
-#endif
-#if MWORD_SIZE >= 32
-		0x0f0d0b09, 0x07050301, 0x0e0c0a08, 0x06040200,
-#endif
+# endif
 		0x0f0d0b09, 0x07050301, 0x0e0c0a08, 0x06040200
 	));
+#endif
 }
 
 
