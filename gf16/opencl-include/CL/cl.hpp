@@ -211,6 +211,7 @@
 #ifdef __GNUC__
 # define Alloca __builtin_alloca
 #elif defined(_MSC_VER)
+# include <malloc.h>
 # define Alloca _alloca
 #else
 # include <stdlib.h>
