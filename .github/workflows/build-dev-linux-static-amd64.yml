@@ -16,9 +16,6 @@ jobs:
         id: musl
         with:
           target: x86_64-linux-musl
-      - uses: actions/setup-python@v3
-        with:
-          python-version: '2.7'
       - run: npm install --production
       - run: (cd nexe && npm install --production)
       - run: (cd nexe && node build)

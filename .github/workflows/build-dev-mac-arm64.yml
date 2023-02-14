@@ -13,9 +13,6 @@ jobs:
       - uses: mbround18/setup-osxcross@v1
         with:
           osx-version: "12.3"
-      - uses: actions/setup-python@v3
-        with:
-          python-version: '2.7'
       - uses: actions/checkout@v3
       - run: npm install --production
       - run: (cd nexe && npm install --production)

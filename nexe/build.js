@@ -2,11 +2,12 @@ var os = require('os');
 
 // -- change these variables if desired --
 var compileConcurrency = os.cpus().length;
-var python = null;
-// process.env.path = '' + process.env.path; // if need to specify a Python path
+var python = process.env.BUILD_PYTHON || null;
+if(process.env.BUILD_PYTHONPATH)
+	process.env.PATH = process.env.BUILD_PYTHONPATH + (os.platform() == 'win32' ? ';' : ':') + process.env.PATH; // if need to specify a Python path
 var buildArch = process.env.BUILD_ARCH || os.arch(); // x86, x64, arm, arm64
 var buildOs = process.env.BUILD_OS || os.platform();
-var nexeBase = './build';
+var nexeBase = process.env.BUILD_DIR || './build';
 var nodeVer = process.env.BUILD_NODEVER || '12.22.12'; // v12 is the oldest version with native MSVC 2019 support
 var staticness = process.env.BUILD_STATIC || (buildOs == 'linux' ? '--partly-static' : '--fully-static'); // OpenCL support requires libdl on Linux
 var vsSuite = null; // if on Windows, and it's having trouble finding Visual Studio, try set this to, e.g. 'vs2019' or 'vs2017'
