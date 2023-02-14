@@ -113,7 +113,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_clmul_neon_reduction(poly16x8_t* low1, pol
 	// mul by 0x1a => we only care about upper byte
 #ifdef __aarch64__
 	th0 = veorq_u8(th0, vqtbl1q_u8(
-		(uint8x16_t){0,1,3,2,6,7,5,4,13,12,14,15,11,10,8,9},
+		vmakeq_u8(0,1,3,2,6,7,5,4,13,12,14,15,11,10,8,9),
 		highest_nibble
 	));
 #else
