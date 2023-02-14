@@ -1,0 +1,35 @@
+name: Build dev Linux-static amd64 binary
+on:
+  workflow_dispatch:
+
+jobs:
+  build-dev-linux-static:
+    name: Build dev amd64 Linux static binary
+    runs-on: ubuntu-latest
+    env:
+      BUILD_ARCH: x64
+      BUILD_LOGLEVEL: verbose
+      BUILD_STATIC: '--fully-static'
+    steps:
+      - uses: actions/checkout@v3
+      - uses: Lesmiscore/musl-cross-compilers@jockie
+        id: musl
+        with:
+          target: x86_64-linux-musl
+      - uses: actions/setup-python@v3
+        with:
+          python-version: '2.7'
+      - run: npm install --production
+      - run: (cd nexe && npm install --production)
+      - run: (cd nexe && node build)
+        env:
+          CC: ${{ steps.musl.outputs.path }}/x86_64-linux-musl-cc
+          CXX: ${{ steps.musl.outputs.path }}/x86_64-linux-musl-c++
+          CC_host: cc
+          CXX_host: c++
+      - run: xz -9e --x86 --lzma2 nexe/parpar -C > parpar.xz
+      - uses: actions/upload-artifact@v3
+        with:
+          path: ./parpar.xz
+          name: parpar-${{ github.ref_name }}-linux-static-amd64.7z
+          retention-days: 5
