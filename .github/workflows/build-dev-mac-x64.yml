@@ -1,4 +1,4 @@
-name: Build dev MacOS binary
+name: Build dev MacOS x64 binary
 on:
   workflow_dispatch:
 

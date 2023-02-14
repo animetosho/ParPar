@@ -47,7 +47,7 @@ private:
 	
 	MessageThread prepareThread;
 	
-	void run_kernel(unsigned inBuf, unsigned numInputs);
+	void run_kernel(unsigned inBuf, unsigned numInputs) override;
 	
 	void _after_computation(void* req);
 	void _after_prepare_chunk(void* req);

@@ -84,7 +84,7 @@ using namespace v8;
 #if NODE_VERSION_AT_LEAST(12, 0, 0)
 # define SET_OBJ(obj, key, val) (obj)->Set(isolate->GetCurrentContext(), NEW_STRING(key), val).Check()
 # define GET_ARR(obj, idx) (obj)->Get(isolate->GetCurrentContext(), idx).ToLocalChecked()
-# define SET_ARR(obj, idx, val) (obj)->Set(isolate->GetCurrentContext(), idx, val)
+# define SET_ARR(obj, idx, val) (obj)->Set(isolate->GetCurrentContext(), idx, val).Check()
 # define SET_OBJ_FUNC(obj, key, f) (obj)->Set(isolate->GetCurrentContext(), NEW_STRING(key), f->GetFunction(isolate->GetCurrentContext()).ToLocalChecked()).Check()
 #else
 # define SET_OBJ(obj, key, val) (obj)->Set(NEW_STRING(key), val)

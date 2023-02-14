@@ -138,7 +138,7 @@ class PAR2ProcOCL : public IPAR2ProcBackend {
 	unsigned _setupTargetInputBatch, _setupTargetIters, _setupTargetGrouping;
 	
 	bool setup_kernels(Galois16OCLMethods method, unsigned targetInputBatch, unsigned targetIters, unsigned targetGrouping, bool outputSequential);
-	void run_kernel(unsigned buf, unsigned numInputs);
+	void run_kernel(unsigned buf, unsigned numInputs) override;
 	
 	
 	cl::Context context;
