@@ -1,0 +1,26 @@
+name: Build dev Win64 binary
+on:
+  workflow_dispatch:
+
+jobs:
+  build-dev-win64:
+    name: Build dev x64 Windows binary
+    runs-on: windows-2019
+    env:
+      BUILD_ARCH: x64
+      BUILD_LOGLEVEL: verbose
+    steps:
+      - uses: ilammy/setup-nasm@v1
+      - uses: actions/setup-python@v3
+        with:
+          python-version: '2.7'
+      - uses: actions/checkout@v3
+      - run: npm install --production
+      - run: (cd nexe && npm install --production)
+      - run: (cd nexe && node build)
+      - run: move nexe\parpar.exe parpar.exe && 7z a -t7z -mx=9 parpar.7z parpar.exe
+      - uses: actions/upload-artifact@v3
+        with:
+          path: ./parpar.7z
+          name: parpar-${{ github.ref_name }}-win64.7z
+          retention-days: 5

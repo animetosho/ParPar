@@ -1,0 +1,31 @@
+name: Build dev Linux-glibc aarch64 binary
+on:
+  workflow_dispatch:
+
+jobs:
+  build-dev-linux-glibc-aarch64:
+    name: Build dev aarch64 Linux glibc binary
+    runs-on: ubuntu-20.04
+    env:
+      BUILD_ARCH: arm64
+      BUILD_LOGLEVEL: verbose
+      BUILD_STATIC: '--partly-static'
+    steps:
+      - uses: actions/checkout@v3
+      - uses: cyberjunk/gha-ubuntu-cross@v2
+        with:
+          arch: 'arm64'
+      - run: npm install --production
+      - run: (cd nexe && npm install --production)
+      - run: (cd nexe && node build)
+        env:
+          CC: aarch64-linux-gnu-gcc
+          CXX: aarch64-linux-gnu-g++
+          CC_host: cc
+          CXX_host: c++
+      - run: xz -9e --lzma2 nexe/parpar -C > parpar.xz
+      - uses: actions/upload-artifact@v3
+        with:
+          path: ./parpar.xz
+          name: parpar-${{ github.ref_name }}-linux-glibc-aarch64.7z
+          retention-days: 5

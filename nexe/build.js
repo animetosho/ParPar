@@ -12,6 +12,11 @@ var staticness = process.env.BUILD_STATIC || (buildOs == 'linux' ? '--partly-sta
 var vsSuite = null; // if on Windows, and it's having trouble finding Visual Studio, try set this to, e.g. 'vs2019' or 'vs2017'
 // downloads can be disabled by editing the 'sourceUrl' line below; source code needs to be placed in `${nexeBase}/${nodeVer}`
 
+// fix up arch aliases
+const archAliases = {amd64: 'x64', i386: 'x86', ia32: 'x86', armhf: 'arm', aarch64: 'arm64'};
+if(buildArch in archAliases)
+	buildArch = archAliases[buildArch];
+
 var nexe = require('nexe');
 var path = require('path');
 var fs = require('fs');
