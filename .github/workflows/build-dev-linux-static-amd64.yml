@@ -16,6 +16,10 @@ jobs:
         id: musl
         with:
           target: x86_64-linux-musl
+      - uses: actions/setup-python@v4
+        id: py
+        with:
+          python-version: '3.9' # workaround "cannot import name 'Mapping' from 'collections'" error
       - run: npm install --production
       - run: (cd nexe && npm install --production)
       - run: (cd nexe && node build)

@@ -5,7 +5,7 @@ on:
 jobs:
   build-dev-linux-glibc-aarch64:
     name: Build dev aarch64 Linux glibc binary
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     env:
       BUILD_ARCH: arm64
       BUILD_LOGLEVEL: verbose
@@ -15,6 +15,10 @@ jobs:
       - uses: cyberjunk/gha-ubuntu-cross@v2
         with:
           arch: 'arm64'
+      - uses: actions/setup-python@v4
+        id: py
+        with:
+          python-version: '3.9' # workaround "cannot import name 'Mapping' from 'collections'" error
       - run: npm install --production
       - run: (cd nexe && npm install --production)
       - run: (cd nexe && node build)

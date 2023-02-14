@@ -9,10 +9,15 @@ jobs:
     env:
       BUILD_ARCH: arm64
       BUILD_LOGLEVEL: verbose
+      BUILD_NO_LTO: 1  # https://github.com/nodejs/node/issues/38568
     steps:
       - uses: mbround18/setup-osxcross@v1
         with:
           osx-version: "12.3"
+      - uses: actions/setup-python@v4
+        id: py
+        with:
+          python-version: '3.9' # workaround "cannot import name 'Mapping' from 'collections'" error
       - uses: actions/checkout@v3
       - run: npm install --production
       - run: (cd nexe && npm install --production)

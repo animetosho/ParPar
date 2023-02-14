@@ -11,6 +11,7 @@ var nexeBase = process.env.BUILD_DIR || './build';
 var nodeVer = process.env.BUILD_NODEVER || '12.22.12'; // v12 is the oldest version with native MSVC 2019 support
 var staticness = process.env.BUILD_STATIC || (buildOs == 'linux' ? '--partly-static' : '--fully-static'); // OpenCL support requires libdl on Linux
 var vsSuite = null; // if on Windows, and it's having trouble finding Visual Studio, try set this to, e.g. 'vs2019' or 'vs2017'
+var disableLTO = !!process.env.BUILD_NO_LTO;
 // downloads can be disabled by editing the 'sourceUrl' line below; source code needs to be placed in `${nexeBase}/${nodeVer}`
 
 // fix up arch aliases
@@ -60,11 +61,14 @@ if(parseFloat(nodeVer) >= 8) {
 	vcbuildArgs.push('without-intl');
 }
 if(parseFloat(nodeVer) >= 10) {
-	if(buildOs == 'linux')
+	if(buildOs == 'linux' && !disableLTO)
 		configureArgs.push('--enable-lto');
 	if(buildOs == 'win32') {
-		configureArgs.push('--with-ltcg');
-		vcbuildArgs.push('ltcg', 'no-cctest');
+		if(!disableLTO) {
+			configureArgs.push('--with-ltcg');
+			vcbuildArgs.push('ltcg');
+		}
+		vcbuildArgs.push('no-cctest');
 	}
 } else {
 	configureArgs.push('--without-perfctr');
@@ -266,7 +270,7 @@ nexe.compile({
 		// fix for NodeJS 12 on MSVC 2019 x86
 		// note that MSVC 2019 is needed for GFNI support
 		async (compiler, next) => {
-			if(parseFloat(nodeVer) >= 12 && parseFloat(nodeVer) < 13 && buildOs == 'win32' && buildArch == 'x86') {
+			if(parseFloat(nodeVer) >= 12 && parseFloat(nodeVer) < 13 && buildOs == 'win32' && (buildArch == 'x86' || buildArch == 'ia32')) {
 				// for whatever reason, building Node 12 using 2019 build tools results in a horribly broken executable, but works fine in 2017
 				// Node's own Windows builds seem to be using 2017 for Node 12.x
 				var data = await compiler.readFileAsync('vcbuild.bat');
