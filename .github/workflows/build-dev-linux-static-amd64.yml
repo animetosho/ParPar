@@ -24,7 +24,7 @@ jobs:
           CXX: ${{ steps.musl.outputs.path }}/x86_64-linux-musl-c++
           CC_host: cc
           CXX_host: c++
-      - run: xz -9e --x86 --lzma2 nexe/parpar -C > parpar.xz
+      - run: xz -9e --x86 --lzma2 nexe/parpar -c > parpar.xz
       - uses: actions/upload-artifact@v3
         with:
           path: ./parpar.xz

@@ -23,7 +23,7 @@ jobs:
           CXX: aarch64-linux-gnu-g++
           CC_host: cc
           CXX_host: c++
-      - run: xz -9e --lzma2 nexe/parpar -C > parpar.xz
+      - run: xz -9e --lzma2 nexe/parpar -c > parpar.xz
       - uses: actions/upload-artifact@v3
         with:
           path: ./parpar.xz
