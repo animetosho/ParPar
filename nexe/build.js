@@ -4,7 +4,7 @@ var os = require('os');
 var compileConcurrency = os.cpus().length;
 var python = null;
 // process.env.path = '' + process.env.path; // if need to specify a Python path
-var buildArch = process.env.BUILD_ARCH || os.arch(); // x86 or x64
+var buildArch = process.env.BUILD_ARCH || os.arch(); // x86, x64, arm, arm64
 var buildOs = process.env.BUILD_OS || os.platform();
 var nexeBase = './build';
 var nodeVer = process.env.BUILD_NODEVER || '12.22.12'; // v12 is the oldest version with native MSVC 2019 support
@@ -97,7 +97,7 @@ nexe.compile({
 	},
 	//fakeArgv: 'parpar',
 	//sourceUrl: '<disable_download>',
-	loglevel: process.env.BUILD_LOGLEVEL || 'info',
+	loglevel: process.env.BUILD_LOGLEVEL || 'verbose',
 	
 	patches: [
 		// remove nexe's boot-nexe code + fix argv
@@ -244,6 +244,11 @@ nexe.compile({
 			await compiler.setFileContentsAsync('common.gypi', data);
 			return next();
 		},
+		// strip debug symbols
+		async (compiler, next) => {
+			await compiler.replaceInFileAsync('node.gyp', /('target_name': '<\(node_core_target_name\)',)( 'ldflags': \['-s'\],)?/g, "$1 'ldflags': ['-s'],");
+			return next();
+		},
 		
 		
 		// strip icon
@@ -286,7 +291,6 @@ nexe.compile({
 	fs.unlinkSync('../bin/help.json');
 	
 	// paxmark -m parpar
-	// strip parpar
 	// xz -9e -z --x86 --lzma2 -c parpar > parpar-v0.4.0-linux-static-x64.xz
 	
 });
