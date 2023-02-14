@@ -748,16 +748,18 @@ static void* handle = NULL;
 # define WIN32_LEAN_AND_MEAN
 # include <Windows.h>
 # define LOAD_FN(n) if(!(*(void**)&n = GetProcAddress(handle, #n))) goto sym_load_failed;
-#else
+#elif defined(PARPAR_LIBDL_SUPPORT)
 # include <dlfcn.h>
 # define LOAD_FN(n) if(!(*(void**)&n = dlsym(handle, #n))) goto sym_load_failed;
+#else
+# define LOAD_FN(n)
 #endif
 int load_opencl() {
 	if(handle) return 0; // already loaded
 	
 #ifdef _WIN32
 	handle = LoadLibrary(TEXT("OpenCL.dll"));
-#else
+#elif defined(PARPAR_LIBDL_SUPPORT)
 	handle = dlopen("libOpenCL.so", RTLD_NOW);
 	if(!handle)
 		handle = dlopen("libOpenCL.so.1", RTLD_NOW); // another common name seen in a number of Linux/BSD distros (DEB, RPM, APK, Arch etc)
@@ -885,9 +887,11 @@ int unload_opencl() {
 	BOOL ret = FreeLibrary((HMODULE)handle);
 	handle = NULL;
 	return !ret;
-#else
+#elif defined(PARPAR_LIBDL_SUPPORT)
 	int ret = dlclose(handle);
 	handle = NULL;
 	return ret;
+#else
+	return 1;
 #endif
 }

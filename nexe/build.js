@@ -8,7 +8,7 @@ var buildArch = process.env.BUILD_ARCH || os.arch(); // x86 or x64
 var buildOs = process.env.BUILD_OS || os.platform();
 var nexeBase = './build';
 var nodeVer = process.env.BUILD_NODEVER || '12.22.12'; // v12 is the oldest version with native MSVC 2019 support
-var staticness = process.env.BUILD_STATIC || '--fully-static'; // set to '--partly-static' if building with glibc, or OpenCL support
+var staticness = process.env.BUILD_STATIC || (buildOs == 'linux' ? '--partly-static' : '--fully-static'); // OpenCL support requires libdl on Linux
 var vsSuite = null; // if on Windows, and it's having trouble finding Visual Studio, try set this to, e.g. 'vs2019' or 'vs2017'
 // downloads can be disabled by editing the 'sourceUrl' line below; source code needs to be placed in `${nexeBase}/${nodeVer}`
 
@@ -180,10 +180,10 @@ nexe.compile({
 			}
 			
 			// patch parpar_gf
-			var data = await compiler.readFileAsync('deps/parpar/src/gf.cc');
+			let data = await compiler.readFileAsync('deps/parpar/src/gf.cc');
 			data = data.contents.toString();
-			//data = data.replace(/(\n#include <node_internals\.h>\nNODE_MODULE_CONTEXT_AWARE_INTERNAL\(parpar_gf, parpar_gf_init\))?$/, '\n#include <node_internals.h>\nNODE_MODULE_CONTEXT_AWARE_INTERNAL(parpar_gf, parpar_gf_init)');
-			data = data.replace(/NODE_MODULE\(/, '#define NODE_WANT_INTERNALS 1\n#include <node_internals.h>\nNODE_BUILTIN_MODULE_CONTEXT_AWARE(');
+			const internalModuleRegister = (parseFloat(nodeVer) >= 12) ? 'NODE_MODULE_CONTEXT_AWARE_INTERNAL' : 'NODE_BUILTIN_MODULE_CONTEXT_AWARE';
+			data = data.replace(/NODE_MODULE\(/, '#define NODE_WANT_INTERNALS 1\n#include <node_internals.h>\n' + internalModuleRegister + '(');
 			await compiler.setFileContentsAsync('deps/parpar/src/gf.cc', data);
 			
 			data = await compiler.readFileAsync('deps/parpar/binding.gyp');
@@ -194,6 +194,8 @@ nexe.compile({
 				includeList += ', "../cares/include"';
 			data = data.replace(/"include_dirs": \[("\.\.\/\.\.\/src"[^\]]+)?"gf16"/, '"include_dirs": [' + includeList + ', "gf16"');
 			data = data.replace(/"enable_native_tuning%": 1,/, '"enable_native_tuning%": 0,');
+			if(staticness == '--fully-static')
+				data = data.replace('"PARPAR_LIBDL_SUPPORT"', '');
 			await compiler.setFileContentsAsync('deps/parpar/binding.gyp', data);
 			
 			return next();
