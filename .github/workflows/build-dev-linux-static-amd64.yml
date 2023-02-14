@@ -12,7 +12,7 @@ jobs:
       BUILD_STATIC: '--fully-static'
     steps:
       - uses: actions/checkout@v3
-      - uses: Lesmiscore/musl-cross-compilers@jockie
+      - uses: Lesmiscore/musl-cross-compilers@heracles
         id: musl
         with:
           target: x86_64-linux-musl

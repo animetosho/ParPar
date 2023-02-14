@@ -8,6 +8,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       BUILD_ARCH: arm64
+      BUILD_OS: darwin
       BUILD_LOGLEVEL: verbose
       BUILD_NO_LTO: 1  # https://github.com/nodejs/node/issues/38568
     steps:

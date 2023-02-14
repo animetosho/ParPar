@@ -18,6 +18,7 @@ var disableLTO = !!process.env.BUILD_NO_LTO;
 const archAliases = {amd64: 'x64', i386: 'x86', ia32: 'x86', armhf: 'arm', aarch64: 'arm64'};
 if(buildArch in archAliases)
 	buildArch = archAliases[buildArch];
+const osAliases = {darwin: 'mac', macos: 'mac', mac: 'mac', win32: 'win', win: 'win', linux: 'linux'};
 
 var nexe = require('nexe');
 var path = require('path');
@@ -54,6 +55,8 @@ let b = browserify(['../bin/parpar.js'], {
 
 // invoke nexe
 var configureArgs = [staticness, '--without-dtrace', '--without-etw', '--without-npm', '--with-intl=none', '--without-report', '--without-node-options', '--without-inspector', '--without-siphash', '--dest-cpu=' + buildArch];
+if(buildOs in osAliases)
+	configureArgs.push('--dest-os=' + osAliases[buildOs]);
 var vcbuildArgs = ["nosign", buildArch, "noetw", "intl-none", "release", "static"];
 // --v8-lite-mode ?
 if(parseFloat(nodeVer) >= 8) {
