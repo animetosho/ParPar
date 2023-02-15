@@ -22,9 +22,9 @@ jobs:
           arch: 'armhf'
       - name: Install i386 dev  # '-m32' switch doesn't work without this
         run: |
-          dpkg --add-architecture i386
-          apt update
-          apt install -y libstdc++-$(c++ -dumpversion)-dev:i386 libc6-dev:i386
+          sudo dpkg --add-architecture i386
+          sudo apt update
+          sudo apt install -y libstdc++-$(c++ -dumpversion)-dev:i386 libc6-dev:i386
       - run: npm install --production
       - run: (cd nexe && npm install --production)
       - run: (cd nexe && node build)

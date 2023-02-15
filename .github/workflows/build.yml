@@ -78,9 +78,9 @@ jobs:
           python-version: '3.9' # workaround "cannot import name 'Mapping' from 'collections'" error
       - name: Install i386 dev  # '-m32' switch doesn't work without this
         run: |
-          dpkg --add-architecture i386
-          apt update
-          apt install -y libstdc++-$(c++ -dumpversion)-dev:i386 libc6-dev:i386
+          sudo dpkg --add-architecture i386
+          sudo apt update
+          sudo apt install -y libstdc++-$(c++ -dumpversion)-dev:i386 libc6-dev:i386
         if: ${{ matrix.arch }} == 'arm'
       - name: Get release
         id: get_release
@@ -144,9 +144,9 @@ jobs:
         if: ${{ matrix.arch }} != 'x64'
       - name: Install i386 dev  # '-m32' switch doesn't work without this
         run: |
-          dpkg --add-architecture i386
-          apt update
-          apt install -y libstdc++-$(c++ -dumpversion)-dev:i386 libc6-dev:i386
+          sudo dpkg --add-architecture i386
+          sudo apt update
+          sudo apt install -y libstdc++-$(c++ -dumpversion)-dev:i386 libc6-dev:i386
         if: ${{ matrix.arch }} == 'armhf'
       - name: Get release
         id: get_release
@@ -195,44 +195,4 @@ jobs:
           upload_url: ${{ steps.get_release.outputs.upload_url }} 
           asset_path: ./parpar.xz
           asset_name: parpar-${{ steps.get_release.outputs.tag_name }}-macos-x64.xz
-          asset_content_type: application/octet-stream
-
-  build-mac-arm64:
-    name: Build arm64 MacOS binary
-    runs-on: ubuntu-latest
-    env:
-      BUILD_ARCH: arm64
-      BUILD_OS: darwin
-      BUILD_LOGLEVEL: verbose
-      BUILD_NO_LTO: 1  # https://github.com/nodejs/node/issues/38568
-    steps:
-      - uses: mbround18/setup-osxcross@v1
-        with:
-          osx-version: "12.3"
-      - uses: actions/setup-python@v4
-        id: py
-        with:
-          python-version: '3.9' # workaround "cannot import name 'Mapping' from 'collections'" error
-      - uses: actions/checkout@v3
-      - name: Get release
-        id: get_release
-        uses: bruceadams/get-release@v1.2.3
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-      - run: npm install --production
-      - run: (cd nexe && npm install --production)
-      - run: (cd nexe && node build)
-        env:
-          CC: oa64e-clang
-          CXX: oa64e-clang++
-          CC_host: cc
-          CXX_host: c++
-      - run: xz -9e --lzma2 nexe/parpar -c > parpar.xz
-      - uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        with:
-          upload_url: ${{ steps.get_release.outputs.upload_url }} 
-          asset_path: ./parpar.xz
-          asset_name: parpar-${{ steps.get_release.outputs.tag_name }}-macos-arm64e.xz
           asset_content_type: application/octet-stream
