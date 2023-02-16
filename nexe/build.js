@@ -12,6 +12,7 @@ var nodeVer = process.env.BUILD_NODEVER || '12.22.12'; // v12 is the oldest vers
 var staticness = process.env.BUILD_STATIC || (buildOs == 'linux' ? '--partly-static' : '--fully-static'); // OpenCL support requires libdl on Linux
 var vsSuite = null; // if on Windows, and it's having trouble finding Visual Studio, try set this to, e.g. 'vs2019' or 'vs2017'
 var disableLTO = !!process.env.BUILD_NO_LTO;
+var stripM32 = !!process.env.BUILD_STRIP_M32;
 // downloads can be disabled by editing the 'sourceUrl' line below; source code needs to be placed in `${nexeBase}/${nodeVer}`
 
 // fix up arch aliases
@@ -282,6 +283,13 @@ nexe.compile({
 				data = data.replace('PLATFORM_TOOLSET=v142', 'PLATFORM_TOOLSET=v141');
 				await compiler.setFileContentsAsync('vcbuild.bat', data);
 			}
+			return next();
+		},
+		
+		// bad '-m32' inclusion for 32-bit ARM cross compile
+		async (compiler, next) => {
+			if(stripM32)
+				await compiler.replaceInFileAsync(parseFloat(nodeVer) >= 12 ? 'tools/v8_gypfiles/toolchain.gypi' : 'deps/v8/gypfiles/toolchain.gypi', /'-m32'/, '');
 			return next();
 		},
 		

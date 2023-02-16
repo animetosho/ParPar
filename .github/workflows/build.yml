@@ -137,6 +137,7 @@ jobs:
       BUILD_CONFIGURE: '--with-arm-float-abi=hard --with-arm-fpu=vfpv3-d16'
       BUILD_STATIC: '--partly-static'
       BUILD_NO_LTO: ${{ matrix.no_lto }}
+      BUILD_STRIP_M32: 1  # remove bad -m32 switch for armv7
     steps:
       - uses: actions/checkout@v3
       - uses: actions/setup-python@v4

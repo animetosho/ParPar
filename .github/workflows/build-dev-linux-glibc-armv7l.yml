@@ -11,6 +11,7 @@ jobs:
       BUILD_LOGLEVEL: verbose
       BUILD_STATIC: '--partly-static'
       BUILD_NO_LTO: 1  # AArch32 compilers don't like mixing FPU modes with LTO [https://github.com/sabnzbd/sabctools/issues/56#issuecomment-1151994494]
+      BUILD_STRIP_M32: 1  # remove bad -m32 switch
     steps:
       - uses: actions/setup-python@v4
         id: py
@@ -20,10 +21,6 @@ jobs:
       - uses: cyberjunk/gha-ubuntu-cross@v2
         with:
           arch: 'armhf'
-      - uses: ryankurte/action-apt@v0.3.0
-        with:
-          arch: i386  # '-m32' switch doesn't work without this
-          packages: "libstdc++-$(c++ -dumpversion)-dev:i386 libc6-dev:i386"
       - run: npm install --production
       - run: (cd nexe && npm install --production)
       - run: (cd nexe && node build)
