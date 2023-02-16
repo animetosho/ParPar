@@ -87,7 +87,7 @@ if(process.env.BUILD_VCBUILD)
 var v8gyp = parseFloat(nodeVer) >= 12 ? 'tools/v8_gypfiles/v8.gyp' : (parseFloat(nodeVer) >= 10 ? 'deps/v8/gypfiles/v8.gyp' : 'deps/v8/src/v8.gyp');
 
 nexe.compile({
-	input: null, // we'll overwrite _third_party_main instead
+	input: 'blank.js', // we'll overwrite _third_party_main instead
 	name: 'parpar',
 	target: buildOs+'-'+buildArch+'-'+nodeVer,
 	build: true,
