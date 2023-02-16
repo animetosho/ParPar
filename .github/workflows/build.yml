@@ -76,11 +76,10 @@ jobs:
         id: py
         with:
           python-version: '3.9' # workaround "cannot import name 'Mapping' from 'collections'" error
-      - name: Install i386 dev  # '-m32' switch doesn't work without this
-        run: |
-          sudo dpkg --add-architecture i386
-          sudo apt update
-          sudo apt install -y libstdc++-$(c++ -dumpversion)-dev:i386 libc6-dev:i386
+      - uses: ryankurte/action-apt@v0.3.0
+        with:
+          arch: i386  # '-m32' switch doesn't work without this
+          packages: "libstdc++-$(c++ -dumpversion)-dev:i386 libc6-dev:i386"
         if: ${{ matrix.arch }} == 'arm'
       - name: Get release
         id: get_release
@@ -142,11 +141,10 @@ jobs:
         with:
           arch: ${{ matrix.arch }}
         if: ${{ matrix.arch }} != 'x64'
-      - name: Install i386 dev  # '-m32' switch doesn't work without this
-        run: |
-          sudo dpkg --add-architecture i386
-          sudo apt update
-          sudo apt install -y libstdc++-$(c++ -dumpversion)-dev:i386 libc6-dev:i386
+      - uses: ryankurte/action-apt@v0.3.0
+        with:
+          arch: i386  # '-m32' switch doesn't work without this
+          packages: "libstdc++-$(c++ -dumpversion)-dev:i386 libc6-dev:i386"
         if: ${{ matrix.arch }} == 'armhf'
       - name: Get release
         id: get_release
