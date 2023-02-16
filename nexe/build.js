@@ -286,7 +286,7 @@ nexe.compile({
 			return next();
 		},
 		
-		// bad '-m32' inclusion for 32-bit ARM cross compile
+		// if '-m32' flag should be stripped
 		async (compiler, next) => {
 			if(stripM32)
 				await compiler.replaceInFileAsync(parseFloat(nodeVer) >= 12 ? 'tools/v8_gypfiles/toolchain.gypi' : 'deps/v8/gypfiles/toolchain.gypi', /'-m32'/, '');

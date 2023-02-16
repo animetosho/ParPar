@@ -137,7 +137,6 @@ jobs:
       BUILD_CONFIGURE: '--with-arm-float-abi=hard --with-arm-fpu=vfpv3-d16'
       BUILD_STATIC: '--partly-static'
       BUILD_NO_LTO: ${{ matrix.no_lto }}
-      BUILD_STRIP_M32: 1  # remove bad -m32 switch for armv7
     steps:
       - uses: actions/checkout@v3
       - uses: actions/setup-python@v4
@@ -148,7 +147,7 @@ jobs:
         with:
           arch: ${{ matrix.arch }}
         if: ${{ matrix.arch }} != 'x64'
-      - uses: ryankurte/action-apt@v0.3.0
+      - uses: ryankurte/action-apt@master
         with:
           arch: i386  # '-m32' switch doesn't work without this
           packages: "libstdc++-$(c++ -dumpversion)-dev:i386 libc6-dev:i386"
