@@ -5,7 +5,7 @@ on:
 jobs:
   build-dev-linux-glibc-amd64:
     name: Build dev amd64 Linux glibc binary
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-20.04
     env:
       BUILD_ARCH: x64
       BUILD_LOGLEVEL: verbose

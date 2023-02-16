@@ -5,7 +5,7 @@ on:
 jobs:
   build-dev-linux-glibc-armv7l:
     name: Build dev armv7l Linux glibc binary
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-20.04
     env:
       BUILD_ARCH: armhf
       BUILD_LOGLEVEL: verbose
