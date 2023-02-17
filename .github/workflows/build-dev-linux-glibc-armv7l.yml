@@ -20,7 +20,7 @@ jobs:
       - uses: cyberjunk/gha-ubuntu-cross@v2
         with:
           arch: 'armhf'
-      - uses: ryankurte/action-apt@master
+      - uses: ryankurte/action-apt@v0.3.0
         with:
           arch: i386  # '-m32' switch doesn't work without this
           packages: "libstdc++-$(c++ -dumpversion)-dev:i386 libc6-dev:i386"

@@ -122,13 +122,13 @@ jobs:
           no_lto: 
           ubuntu: '22.04'  # gcc-11 needed for SVE support
           glibc: '2.35'
-        - xcc: arm-linux-gnueabihf-
-          arch: armhf
-          xz_bcj: --arm
-          name: armv7l
-          no_lto: 1  # AArch32 compilers don't like mixing FPU modes with LTO [https://github.com/sabnzbd/sabctools/issues/56#issuecomment-1151994494]
-          ubuntu: '20.04'
-          glibc: '2.31'
+        #- xcc: arm-linux-gnueabihf-
+        #  arch: armhf
+        #  xz_bcj: --arm
+        #  name: armv7l
+        #  no_lto: 1  # AArch32 compilers don't like mixing FPU modes with LTO [https://github.com/sabnzbd/#sabctools/issues/56#issuecomment-1151994494]
+        #  ubuntu: '20.04'
+        #  glibc: '2.31'
     name: Build ${{ matrix.name }} Linux glibc binary
     runs-on: ubuntu-${{ matrix.ubuntu }}
     env:
@@ -147,7 +147,7 @@ jobs:
         with:
           arch: ${{ matrix.arch }}
         if: ${{ matrix.arch }} != 'x64'
-      - uses: ryankurte/action-apt@master
+      - uses: ryankurte/action-apt@v0.3.0
         with:
           arch: i386  # '-m32' switch doesn't work without this
           packages: "libstdc++-$(c++ -dumpversion)-dev:i386 libc6-dev:i386"
