@@ -10,7 +10,7 @@ PAR2Proc::PAR2Proc() : endSignalled(false) {
 }
 
 
-bool PAR2Proc::init(size_t sliceSize, const std::vector<std::pair<IPAR2ProcBackend*, size_t>>& _backends, const PAR2ProcCompleteCb& _progressCb) {
+bool PAR2Proc::init(size_t sliceSize, const std::vector<struct PAR2ProcBackendAlloc>& _backends, const PAR2ProcCompleteCb& _progressCb) {
 	progressCb = _progressCb;
 	finishCb = nullptr;
 	hasAdded = false;
@@ -19,32 +19,74 @@ bool PAR2Proc::init(size_t sliceSize, const std::vector<std::pair<IPAR2ProcBacke
 	
 	// TODO: better distribution
 	backends.resize(_backends.size());
-	size_t pos = 0;
 	for(unsigned i=0; i<_backends.size(); i++) {
-		size_t size = _backends[i].second;
+		size_t size = _backends[i].size;
 		auto& backend = backends[i];
 		backend.currentSliceSize = size;
-		backend.currentOffset = pos;
-		backend.be = _backends[i].first;
+		backend.currentOffset = _backends[i].offset;
+		backend.be = _backends[i].be;
 		backend.be->setSliceSize(size);
-		pos += size;
 		
 		backend.be->setProgressCb([this](int numInputs, int firstInput) {
 			this->onBackendProcess(numInputs, firstInput);
 		});
 	}
-	return pos == sliceSize; // the only failure that can currently happen is if the total allocated size doesn't equal the slice size
+	return checkBackendAllocation();
 }
 
+bool PAR2Proc::checkBackendAllocation() {
+	// check ranges of backends (could maybe make this more optimal with a heap, but I expect few devices, so good enough for now)
+	// determine if we're covering the full slice, and whether there are overlaps (overlap = dynamic scheduling)
+	size_t start = backends[0].currentOffset, end = backends[0].currentOffset+backends[0].currentSliceSize;
+	bool hasOverlap = false;
+	std::vector<bool> beChecked(backends.size());
+	int beUnchecked = backends.size()-1;
+	beChecked[0] = true;
+	while(beUnchecked) {
+		bool beFound = false;
+		for(unsigned i=1; i<backends.size(); i++) {
+			if(beChecked[i]) continue;
+			const auto& backend = backends[i];
+			size_t currentEnd = backend.currentOffset + backend.currentSliceSize;
+			if(backend.currentOffset <= start && currentEnd >= start) {
+				if(currentEnd > start) hasOverlap = true;
+				start = backend.currentOffset;
+				if(currentEnd > end) end = currentEnd;
+			}
+			else if(currentEnd >= end && backend.currentOffset <= end) {
+				if(backend.currentOffset < end) hasOverlap = true;
+				end = currentEnd;
+				if(backend.currentOffset < start) start = backend.currentOffset; // this shouldn't be possible I think
+			}
+			else if(backend.currentOffset > start && currentEnd < end) {
+				hasOverlap = true;
+			}
+			else continue;
+			
+			// found a connecting backend
+			beChecked[i] = true;
+			beUnchecked--;
+			beFound = true;
+			
+			// ensure alignment to 16-bit words
+			if(backend.currentOffset & 1) return false;
+			if((backend.currentSliceSize & 1) && backend.currentOffset+backend.currentSliceSize != currentSliceSize) return false;
+		}
+		if(!beFound) return false;
+	}
+	if(hasOverlap) return false; // TODO: eventually support overlapping
+	return (start == 0 && end == currentSliceSize); // fail if backends don't cover the entire slice
+}
+
+// this just reduces the size without resizing backends; TODO: this should be removed
 bool PAR2Proc::setCurrentSliceSize(size_t newSliceSize) {
+	if(newSliceSize > currentSliceSize) return false;
 	currentSliceSize = newSliceSize;
 	
 	bool success = true;
 	size_t pos = 0;
-	size_t sizePerBackend = (currentSliceSize + backends.size()-1) / backends.size();
-	if(sizePerBackend & 1) sizePerBackend++;
 	for(auto& backend : backends) {
-		backend.currentSliceSize = std::min(currentSliceSize-pos, sizePerBackend);
+		backend.currentSliceSize = std::min(currentSliceSize-pos, backend.currentSliceSize);
 		backend.currentOffset = pos;
 		success = success && backend.be->setCurrentSliceSize(backend.currentSliceSize);
 		pos += backend.currentSliceSize;
@@ -52,10 +94,26 @@ bool PAR2Proc::setCurrentSliceSize(size_t newSliceSize) {
 	return success;
 }
 
+bool PAR2Proc::setCurrentSliceSize(size_t newSliceSize, const std::vector<std::pair<size_t, size_t>>& sizeAlloc) {
+	if(backends.size() != sizeAlloc.size()) return false;
+	currentSliceSize = newSliceSize;
+	
+	bool success = true;
+	const auto* alloc = sizeAlloc.data();
+	for(auto& backend : backends) {
+		backend.currentSliceSize = alloc->second;
+		backend.currentOffset = alloc->first;
+		success = success && backend.be->setCurrentSliceSize(backend.currentSliceSize);
+		alloc++;
+	}
+	return checkBackendAllocation();
+}
+
 bool PAR2Proc::setRecoverySlices(unsigned numSlices, const uint16_t* exponents) {
 	// TODO: consider throwing if numSlices > previously set, or some mechanism to resize buffer
 	
-	// may eventually consider splitting by recovery, but for now, just pass through
+	// TODO: may eventually consider splitting by recovery, but for now, just pass through
+	// - though we may still need a way to allocate different recovery to different backends (don't want to split slices to finely)
 	bool success = true;
 	for(auto& backend : backends)
 		success = success && backend.be->setRecoverySlices(numSlices, exponents);
@@ -81,7 +139,8 @@ bool PAR2Proc::addInput(const void* buffer, size_t size, uint16_t inputNum, bool
 			}
 		})).first;
 		for(auto& backend : backends) {
-			if(backend.currentOffset >= size)
+			size_t amount = std::min(size-backend.currentOffset, backend.currentSliceSize);
+			if(backend.currentOffset >= size || amount == 0)
 				cbRef->second.backendsActive--;
 		}
 	}
@@ -92,6 +151,7 @@ bool PAR2Proc::addInput(const void* buffer, size_t size, uint16_t inputNum, bool
 	for(auto& backend : backends) {
 		if(backend.currentOffset >= size) continue;
 		size_t amount = std::min(size-backend.currentOffset, backend.currentSliceSize);
+		if(amount == 0) continue;
 		if(backend.added.find(inputNum) == backend.added.end()) {
 			bool addSuccessful = backend.be->addInput(static_cast<const char*>(buffer) + backend.currentOffset, amount, inputNum, flush, cbRef->second.backendCb) != PROC_ADD_FULL;
 			success = success && addSuccessful;
@@ -111,7 +171,7 @@ bool PAR2Proc::dummyInput(size_t size, uint16_t inputNum, bool flush) {
 	
 	bool success = true;
 	for(auto& backend : backends) {
-		if(backend.currentOffset >= size) continue;
+		if(backend.currentOffset >= size || backend.currentSliceSize == 0) continue;
 		if(backend.added.find(inputNum) == backend.added.end()) {
 			bool addSuccessful = backend.be->dummyInput(inputNum, flush) != PROC_ADD_FULL;
 			success = success && addSuccessful;
@@ -130,7 +190,7 @@ bool PAR2Proc::fillInput(const void* buffer, size_t size) {
 	assert(!endSignalled);
 	bool finished = true;
 	for(auto& backend : backends) {
-		if(backend.currentOffset >= size) continue;
+		if(backend.currentOffset >= size || backend.currentSliceSize == 0) continue;
 		if(backend.added.find(-1) == backend.added.end()) {
 			bool fillSuccessful = backend.be->fillInput(static_cast<const char*>(buffer) + backend.currentOffset);
 			finished = finished && fillSuccessful;
@@ -144,7 +204,8 @@ bool PAR2Proc::fillInput(const void* buffer, size_t size) {
 
 void PAR2Proc::flush() {
 	for(auto& backend : backends)
-		backend.be->flush();
+		if(backend.currentSliceSize > 0)
+			backend.be->flush();
 }
 
 void PAR2Proc::endInput(const PAR2ProcPlainCb& _finishCb) {
@@ -153,6 +214,7 @@ void PAR2Proc::endInput(const PAR2ProcPlainCb& _finishCb) {
 	finishCb = _finishCb;
 	bool allIsEmpty = true;
 	for(auto& backend : backends) {
+		if(backend.currentSliceSize == 0) continue;
 		backend.be->endInput();
 		allIsEmpty = allIsEmpty && backend.be->isEmpty();
 	}
@@ -170,8 +232,13 @@ void PAR2Proc::getOutput(unsigned index, void* output, const PAR2ProcOutputCb& c
 	}
 	
 	auto* cbRef = new int(backends.size());
+	for(const auto& backend : backends) {
+		if(backend.currentSliceSize == 0)
+			(*cbRef)--;
+	}
 	auto* allValid = new bool(true);
 	for(auto& backend : backends) {
+		if(backend.currentSliceSize == 0) continue;
 		// TODO: for overlapping regions, need to do a xor-merge pass
 		backend.be->getOutput(index, static_cast<char*>(output) + backend.currentOffset, [cbRef, allValid, cb](bool valid) {
 			*allValid = *allValid && valid;
@@ -205,7 +272,8 @@ void PAR2Proc::processing_finished() {
 	endSignalled = false;
 	
 	for(auto& backend : backends)
-		backend.be->processing_finished();
+		if(backend.currentSliceSize > 0)
+			backend.be->processing_finished();
 	
 	if(finishCb) finishCb();
 	finishCb = nullptr;

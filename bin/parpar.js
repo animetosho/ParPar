@@ -10,6 +10,15 @@ var error = function(msg) {
 };
 var arg_parser = require('../lib/arg_parser.js');
 
+var friendlySize = function(s) {
+	var units = ['B', 'KiB', 'MiB', 'GiB', 'TiB', 'PiB', 'EiB'];
+	for(var i=0; i<units.length; i++) {
+		if(s < 10000) break;
+		s /= 1024;
+	}
+	return (Math.round(s *100)/100) + ' ' + units[i];
+};
+
 var opts = {
 	'input-slices': {
 		alias: 's',
@@ -190,6 +199,42 @@ var opts = {
 	'md5-method': {
 		type: 'string'
 	},
+	'opencl': {
+		type: 'array'
+	},
+	'opencl-process': {
+		type: 'string'
+	},
+	'opencl-device': {
+		type: 'string',
+		default: ':'
+	},
+	'opencl-memory': {
+		type: 'string' // converted to size later
+	},
+	'opencl-method': {
+		type: 'string'
+	},
+	'opencl-batch-size': {
+		type: 'int'
+	},
+	'opencl-iter-count': {
+		type: 'int'
+	},
+	'opencl-grouping': {
+		type: 'int'
+	},
+	'opencl-minchunk': {
+		type: 'size0'
+	},
+	'opencl-list': {
+		type: 'string',
+		ifSetDefault: 'gpu'
+	},
+	'cpu-minchunk': {
+		type: 'size0',
+		map: 'cpuMinChunkSize'
+	},
 	'recurse': {
 		alias: 'R',
 		type: 'bool',
@@ -264,6 +309,33 @@ if(argv['client-info']) {
 	};
 	
 	console.log(JSON.stringify(info, null, 2));
+	process.exit(0);
+}
+if(argv['opencl-list']) {
+	var platforms = require('../lib/par2.js').opencl_devices();
+	if(!platforms.length)
+		console.error('No devices found');
+	else {
+		var showAll = (argv['opencl-list'].toLowerCase() == 'all');
+		console.error(platforms.map(function(platform, pfId) {
+			var deviceStr = platform.devices.filter(function(device) {
+				return showAll || (device.type.toLowerCase() == 'gpu' && device.available && device.supported);
+			}).map(function(device, dvId) {
+				var output = [
+					'  - Device #' + dvId + ': ' + device.name,
+					'    Type: ' + device.type,
+					'    Memory: ' + friendlySize(device.memory_global) + (device.memory_unified ? ' (shared)':''),
+				];
+				if(!device.supported)
+					output.splice(1, 0, '    Supported: no');
+				if(!device.available)
+					output.splice(1, 0, '    Available: no');
+				return output.join('\n');
+			});
+			if(!deviceStr) return '';
+			return 'Platform #' + pfId + ': ' + platform.name + '\n' + deviceStr;
+		}).filter(function(v) { return v || showAll; }).join('\n\n') || 'No available devices found; try `--opencl-list=all` to see all platforms/devices');
+	}
 	process.exit(0);
 }
 
@@ -480,6 +552,56 @@ var inputFiles = argv._;
 	if(inputSliceDef.unit == 'bytes' && !('slice-size-multiple' in argv) && (!('min-input-slices' in argv) || ppo.minSliceSize == inputSliceCount)) {
 		ppo.sliceSizeMultiple = inputSliceDef.value;
 	}
+	
+	
+	var openclMap = function(data) {
+		var ret = {};
+		if(data.process) {
+			ret.ratio = parseFloat(data.process);
+			if(data.process.substr(-1) == '%')
+				ret.ratio /= 100;
+		}
+		if(data.device) {
+			if(!/^\d*:\d*$/.test(data.device))
+				error('Invalid device specification');
+			var spec = data.device.split(':');
+			if(spec[0].length) ret.platform = spec[0]|0;
+			if(spec[1].length) ret.device = spec[1]|0;
+		}
+		if(data.memory)
+			ret.memoryLimit = arg_parser.parseSize(data.memory);
+		if(data.method)
+			ret.method = data.method;
+		if(data['batch-size'])
+			ret.input_batchsize = data['batch-size']|0;
+		if(data['iter-count'])
+			ret.target_iters = data['iter-count']|0;
+		if(data['grouping'])
+			ret.target_grouping = data['grouping']|0;
+		if(data.minchunk)
+			ret.minChunkSize = arg_parser.parseSize(data.minchunk);
+		
+		return ret;
+	};
+	var openclOpts = {};
+	for(var k in argv)
+		if(k.substr(0, 7) == 'opencl-')
+			openclOpts[k.substr(7)] = argv[k];
+	openclOpts = openclMap(openclOpts);
+	if(argv.opencl) {
+		ppo.openclDevices = argv.opencl.map(function(spec) {
+			var opts = {};
+			spec.split(',').forEach(function(s) {
+				var m = s.match(/^(.+?)=(.+)$/);
+				if(!m) error('Invalid specification for `--opencl`');
+				opts[m[1].trim()] = m[2].trim();
+			});
+			return require('../lib/par2.js')._extend({}, openclOpts, openclMap(opts));
+		});
+	} else if('process' in openclOpts) {
+		ppo.openclDevices = [openclOpts];
+	}
+	
 
 	var startTime = Date.now();
 	var decimalPoint = (1.1).toLocaleString().substr(1, 1);
@@ -494,7 +616,7 @@ var inputFiles = argv._;
 		if(!err && info.length == 0)
 			err = 'No input files found.';
 		if(err) {
-			process.stderr.write(err + '\n');
+			console.error(err);
 			process.exit(1);
 		}
 		
@@ -508,14 +630,6 @@ var inputFiles = argv._;
 		var currentSlice = 0;
 		var progressInterval;
 		if(!argv.quiet) {
-			var friendlySize = function(s) {
-				var units = ['B', 'KiB', 'MiB', 'GiB', 'TiB', 'PiB', 'EiB'];
-				for(var i=0; i<units.length; i++) {
-					if(s < 10000) break;
-					s /= 1024;
-				}
-				return (Math.round(s *100)/100) + ' ' + units[i];
-			};
 			var pluralDisp = function(n, unit, suffix) {
 				suffix = suffix || 's';
 				if(n == 1)

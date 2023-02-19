@@ -223,7 +223,7 @@ std::vector<Galois16OCLMethods> PAR2ProcOCL::availableMethods(int platformId, in
 }
 Galois16OCLMethods PAR2ProcOCL::default_method() const {
 	// TODO: determine best method
-	return GF16OCL_LOG_SMALL;
+	return GF16OCL_LOOKUP;
 }
 
 // reduce slice size
@@ -489,6 +489,45 @@ std::vector<std::string> PAR2ProcOCL::getPlatforms() {
 	return ret;
 }
 
+int PAR2ProcOCL::defaultPlatformId() {
+	cl::Platform platform;
+	try {
+		platform = cl::Platform::getDefault();
+	} catch(cl::Error const&) {
+		return -1;
+	}
+	const auto vendor = platform.getInfo<CL_PLATFORM_VENDOR>();
+	const auto name = platform.getInfo<CL_PLATFORM_NAME>();
+	int id = 0;
+	for(const auto& plat : platforms) {
+		if(vendor == plat.getInfo<CL_PLATFORM_VENDOR>() && name == plat.getInfo<CL_PLATFORM_NAME>())
+			return id;
+		id++;
+	}
+	return -1;
+}
+int PAR2ProcOCL::defaultDeviceId(int platformId) {
+	cl::Platform platform;
+	if(!getPlatform(platform, platformId)) return -1;
+	
+	std::vector<cl::Device> devices;
+	platform.getDevices(CL_DEVICE_TYPE_ALL, &devices);
+	
+	// match first GPU device that's available
+	int firstAvailable = -1;
+	for(unsigned i=0; i<devices.size(); i++) {
+		auto device = devices[i];
+		if(device.getInfo<CL_DEVICE_AVAILABLE>() && device.getInfo<CL_DEVICE_COMPILER_AVAILABLE>() && device.getInfo<CL_DEVICE_ENDIAN_LITTLE>()) {
+			if(firstAvailable == -1)
+				firstAvailable = i;
+			
+			if(device.getInfo<CL_DEVICE_TYPE>() == CL_DEVICE_TYPE_GPU)
+				return i; // found first GPU
+		}
+	}
+	return firstAvailable;
+}
+
 // based off getWGsizes function from clinfo
 size_t GF16OCL_DeviceInfo::getWGSize(const cl::Context& context, const cl::Device& device) {
 	try {
@@ -506,7 +545,8 @@ size_t GF16OCL_DeviceInfo::getWGSize(const cl::Context& context, const cl::Devic
 	}
 }
 
-GF16OCL_DeviceInfo::GF16OCL_DeviceInfo(const cl::Device& device) {
+GF16OCL_DeviceInfo::GF16OCL_DeviceInfo(int _id, const cl::Device& device) {
+	id = _id;
 	name = device.getInfo<CL_DEVICE_NAME>();
 	vendorId = device.getInfo<CL_DEVICE_VENDOR_ID>();
 	type = device.getInfo<CL_DEVICE_TYPE>();
@@ -538,7 +578,7 @@ std::vector<GF16OCL_DeviceInfo> PAR2ProcOCL::getDevices(int platformId) {
 	std::vector<GF16OCL_DeviceInfo> ret;
 	ret.reserve(devices.size());
 	for(unsigned i=0; i<devices.size(); i++) {
-		ret.emplace_back(devices[i]);
+		ret.emplace_back(i, devices[i]);
 	}
 	return ret;
 }

@@ -78,11 +78,18 @@ struct PAR2ProcAddCbRef {
 	PAR2ProcPlainCb backendCb;
 };
 
+struct PAR2ProcBackendAlloc {
+	IPAR2ProcBackend* be;
+	size_t offset, size;
+};
+
 class PAR2Proc {
 private:
 	bool hasAdded;
 	std::unordered_map<int, struct PAR2ProcAddCbRef> addCbRefs;
 	std::vector<struct Backend> backends;
+	
+	bool checkBackendAllocation();
 	
 	size_t currentSliceSize; // current slice chunk size (<=sliceSize)
 	
@@ -99,9 +106,10 @@ private:
 	
 public:
 	explicit PAR2Proc();
-	bool init(size_t sliceSize, const std::vector<std::pair<IPAR2ProcBackend*, size_t>>& _backends, const PAR2ProcCompleteCb& _progressCb = nullptr);
+	bool init(size_t sliceSize, const std::vector<struct PAR2ProcBackendAlloc>& _backends, const PAR2ProcCompleteCb& _progressCb = nullptr);
 	
 	bool setCurrentSliceSize(size_t newSliceSize);
+	bool setCurrentSliceSize(size_t newSliceSize, const std::vector<std::pair<size_t, size_t>>& sizeAlloc);
 	inline size_t getCurrentSliceSize() const {
 		return currentSliceSize;
 	}

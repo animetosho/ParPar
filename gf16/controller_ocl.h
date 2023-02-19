@@ -48,6 +48,7 @@ enum Galois16OCLCoeffType {
 
 class GF16OCL_DeviceInfo {
 public:
+	int id;
 	std::string name;
 	unsigned vendorId;
 	cl_device_type type;
@@ -66,9 +67,9 @@ public:
 	
 	// invalid device
 	GF16OCL_DeviceInfo()
-	: vendorId(0), available(false), supported(false), memory(0), globalCache(0), constantMemory(0), localMemory(0), maxAllocation(0), maxWorkGroup(0), workGroupMultiple(0), computeUnits(0) {}
+	: id(-1), vendorId(0), available(false), supported(false), memory(0), globalCache(0), constantMemory(0), localMemory(0), maxAllocation(0), maxWorkGroup(0), workGroupMultiple(0), computeUnits(0) {}
 	
-	GF16OCL_DeviceInfo(const cl::Device& device);
+	GF16OCL_DeviceInfo(int _id, const cl::Device& device);
 	
 private:
 	static size_t getWGSize(const cl::Context& context, const cl::Device& device);
@@ -161,6 +162,8 @@ public:
 	static inline int unload_runtime() {
 		return unload_opencl();
 	}
+	static int defaultPlatformId();
+	static int defaultDeviceId(int platformId = -1);
 	static std::vector<std::string> getPlatforms();
 	static std::vector<GF16OCL_DeviceInfo> getDevices(int platformId = -1);
 	inline static std::string getPlatform(int platformId = -1) {
@@ -171,8 +174,10 @@ public:
 	}
 	inline static GF16OCL_DeviceInfo getDevice(int platformId = -1, int deviceId = -1) {
 		cl::Device device;
-		if(getDevice(device, platformId, deviceId))
-			return {device};
+		if(deviceId == -1) deviceId = defaultDeviceId(platformId);
+		if(deviceId >= 0 && getDevice(device, platformId, deviceId)) {
+			return {deviceId, device};
+		}
 		return {};
 	}
 	explicit PAR2ProcOCL(uv_loop_t* _loop, int platformId = -1, int deviceId = -1, int stagingAreas = 2);

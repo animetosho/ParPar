@@ -286,6 +286,66 @@ Performance Options:
                              AArch64 only choices:
                                  sve2: SVE2 implementation (4+ lanes)
 
+OpenCL Options:
+
+  Warning: OpenCL support is currently considered experimental and unstable.
+
+       --opencl-process      Enable processing on OpenCL device. If a value is
+                             specified, allocate this portion of wokload to
+                             this device. Suffix the value with a %, e.g. `50%`
+                             If this portion isn't specified, it is derived
+                             from the device's memory limit.
+       --opencl-device       OpenCL platform/device selection. This should be
+                             formatted as a platform ID followed by a device
+                             ID, separated with a colon. Leave blank to refer
+                             to the default platform/device.
+                             Default is `:` (i.e. default platform and device)
+                             Use `--opencl-list` to obtain IDs.
+       --opencl-memory       Maximum amount of memory to use for computing
+                             recovery. If unspecified, will use a portion of
+                             the device's global memory (currently 80%)
+       --opencl-method       Algorithm for performing GF multiplies. Choices
+                             are:
+                                 lookup: split 2x 8-bit table lookup
+                                 lookup_half: `lookup` but halved table size
+                                 lookup_nc: `lookup` without caching data
+                                 lookup_half_nc: `lookup_half` and `lookup_nc`
+                                 log: full log/exp table (2x 128KB) lookup
+                                 log_small: `log` with 16.25KB exp table
+                                 log_small2: `log_small` with 40KB log table
+                                 log_tiny: `log` with 8.5KB exp table
+                                 log_small_lm: `log_small` but constants copied
+                                               to local memory
+                                 log_tiny_lm: `log_tiny` but constants copied
+                                              to local memory
+                                 by2: table-less bit-shifting technique
+                             Default is `lookup`
+       --opencl-batch-size   Number of slices to submit as a batch for GF
+                             calculation.
+       --opencl-iter-count   Target number of iterations per workgroup.
+       --opencl-grouping     Target number of recovery slices to generate per
+                             workgroup.
+       --opencl-minchunk     Minimum chunk size to send to the device. Default
+                             is 32KB.
+       --opencl              Shorthand for above options without 'opencl-'
+                             prefix, specified in a single comma-separated
+                             list. Options not specified in this list use the
+                             above as defaults. This option can be specified
+                             multiple times to use multiple OpenCL devices.
+                             Example:
+                               --opencl device=0:0,process=33% --opencl
+                               device=0:1,process=40% --opencl-memory 1G
+                             This enables two OpenCL devices, allocating 33% of
+                             the workload to device 0:0 and 40% to 0:1, with
+                             each having a 1GB memory limit. The remaining 27%
+                             is computed on the CPU.
+       --cpu-minchunk        Target minimum chunk size to process on the CPU.
+                             Default is 32KB
+       --opencl-list         Prints a list of available OpenCL platforms and
+                             devices, along with IDs, and exits. If the value
+                             `all` is passed, will list all OpenCL devices,
+                             otherwise will only list GPU devices.
+
 UI Options:
 
   All of the following options, except `--progress`, take no parameters.

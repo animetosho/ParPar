@@ -82,11 +82,15 @@ using namespace v8;
 #endif
 
 #if NODE_VERSION_AT_LEAST(12, 0, 0)
+# define OBJ_HAS(obj, key) (obj)->Has(isolate->GetCurrentContext(), NEW_STRING(key)).ToChecked()
+# define GET_OBJ(obj, key) (obj)->Get(isolate->GetCurrentContext(), NEW_STRING(key)).ToLocalChecked()
 # define SET_OBJ(obj, key, val) (obj)->Set(isolate->GetCurrentContext(), NEW_STRING(key), val).Check()
 # define GET_ARR(obj, idx) (obj)->Get(isolate->GetCurrentContext(), idx).ToLocalChecked()
 # define SET_ARR(obj, idx, val) (obj)->Set(isolate->GetCurrentContext(), idx, val).Check()
 # define SET_OBJ_FUNC(obj, key, f) (obj)->Set(isolate->GetCurrentContext(), NEW_STRING(key), f->GetFunction(isolate->GetCurrentContext()).ToLocalChecked()).Check()
 #else
+# define OBJ_HAS(obj, key) (obj)->Has(NEW_STRING(key))
+# define GET_OBJ(obj, key) (obj)->Get(NEW_STRING(key))
 # define SET_OBJ(obj, key, val) (obj)->Set(NEW_STRING(key), val)
 # define GET_ARR(obj, idx) (obj)->Get(idx)
 # define SET_ARR(obj, idx, val) (obj)->Set(idx, val)
@@ -203,11 +207,21 @@ struct CallbackWrapper {
 
 struct GfOclSpec {
 	int platformId, deviceId;
-	size_t sliceSize;
+	size_t sliceOffset, sliceSize;
 	
 	Galois16OCLMethods method;
 	unsigned inputGrouping, targetIters, targetGrouping;
 };
+static bool load_ocl() {
+	static bool oclLoaded = false;
+	if(!oclLoaded) {
+		if(PAR2ProcOCL::load_runtime()) {
+			return false;
+		}
+		oclLoaded = true;
+	}
+	return true;
+}
 
 class GfProc : public node::ObjectWrap {
 public:
@@ -238,38 +252,87 @@ public:
 		if(sliceSize < 2 || sliceSize & 1)
 			RETURN_ERROR("Slice size is invalid");
 		
-		// accept method if specified
-		int method = args.Length() >= 2 && !args[1]->IsUndefined() && !args[1]->IsNull() ? ARG_TO_NUM(Int32, args[1]) : GF16_AUTO;
-		unsigned inputGrouping = args.Length() >= 3 && !args[2]->IsUndefined() && !args[2]->IsNull() ? ARG_TO_NUM(Uint32, args[2]) : 0;
-		int stagingAreas = args.Length() >= 4 && !args[3]->IsUndefined() && !args[3]->IsNull() ? ARG_TO_NUM(Int32, args[3]) : 2;
-		size_t chunkLen = args.Length() >= 5 && !args[4]->IsUndefined() && !args[4]->IsNull() ? ARG_TO_NUM(Uint32, args[4]) : 0;
-		
-		if(inputGrouping > 32768)
-			RETURN_ERROR("Input grouping is invalid");
-		if(stagingAreas < 1 || stagingAreas > 32768)
-			RETURN_ERROR("Staging area count is invalid");
-		
-		if(inputGrouping * stagingAreas > 65536)
-			RETURN_ERROR("Staging area too large");
 		
 		bool useCpu = true;
+		int stagingAreas = 2;
+		int cpuMethod = GF16_AUTO;
+		unsigned cpuInputGrouping = 0;
+		size_t cpuChunkLen = 0;
+		size_t cpuOffset = 0, cpuSliceSize = sliceSize;
+#define ASSIGN_INT_VAL(prop, key, var, type) \
+	if(OBJ_HAS(prop, key)) { \
+		Local<Value> v = GET_OBJ(prop, key); \
+		if(!v->IsUndefined() && !v->IsNull()) \
+			var = ARG_TO_NUM(type, v); \
+	}
+		if(args.Length() >= 2) { // CPU processing props
+			if(args[1]->IsNull()) {
+				useCpu = false;
+				cpuSliceSize = 0;
+			} else {
+				Local<Object> prop = ARG_TO_OBJ(args[1]);
+				ASSIGN_INT_VAL(prop, "method", cpuMethod, Int32)
+				// TODO: check validity of cpuMethod
+				ASSIGN_INT_VAL(prop, "input_batchsize", cpuInputGrouping, Uint32)
+				if(cpuInputGrouping > 32768)
+					RETURN_ERROR("Input batchsize is invalid");
+				ASSIGN_INT_VAL(prop, "chunk_size", cpuChunkLen, Uint32)
+				ASSIGN_INT_VAL(prop, "slice_offset", cpuOffset, Integer)
+				if(cpuOffset & 1 || cpuOffset > sliceSize)
+					RETURN_ERROR("Invalid CPU slice offset");
+				ASSIGN_INT_VAL(prop, "slice_size", cpuSliceSize, Integer)
+				if(cpuSliceSize < 2 || cpuSliceSize & 1)
+					RETURN_ERROR("CPU slice size must be a multiple of 2");
+				if(cpuOffset+cpuSliceSize > sliceSize)
+					RETURN_ERROR("CPU slice offset+size cannot exceed the slice size");
+			}
+		}
 		std::vector<struct GfOclSpec> useOcl;
+		if(args.Length() >= 3 && args[2]->IsArray()) { // OpenCL processing props
+			Local<Array> props = Local<Array>::Cast(args[2]);
+			for(unsigned i=0; i<props->Length(); i++) {
+				Local<Object> prop = ARG_TO_OBJ(GET_ARR(props, i));
+				struct GfOclSpec spec{-1, -1, 0, 0, GF16OCL_AUTO, 0, 0, 0};
+				// TODO: validate platform/device
+				ASSIGN_INT_VAL(prop, "platform", spec.platformId, Int32)
+				ASSIGN_INT_VAL(prop, "device", spec.deviceId, Int32)
+				ASSIGN_INT_VAL(prop, "slice_size", spec.sliceSize, Integer)
+				ASSIGN_INT_VAL(prop, "slice_offset", spec.sliceOffset, Integer)
+				int method = 0;
+				ASSIGN_INT_VAL(prop, "method", method, Int32)
+				if(method) spec.method = (Galois16OCLMethods)method;
+				// TODO: check validity of method
+				ASSIGN_INT_VAL(prop, "input_batchsize", spec.inputGrouping, Int32)
+				if(spec.inputGrouping > 32768)
+					RETURN_ERROR("OpenCL input batchsize is invalid");
+				ASSIGN_INT_VAL(prop, "target_iters", spec.targetIters, Uint32)
+				ASSIGN_INT_VAL(prop, "target_grouping", spec.targetGrouping, Uint32)
+				if(spec.targetGrouping > 65535)
+					RETURN_ERROR("OpenCL target grouping is invalid");
+				useOcl.push_back(spec);
+			}
+		}
+		if(args.Length() >= 4 && !args[3]->IsUndefined() && !args[3]->IsNull()) {
+			stagingAreas = ARG_TO_NUM(Int32, args[3]);
+			if(stagingAreas < 1 || stagingAreas > 32768)
+				RETURN_ERROR("Staging area count is invalid");
+		}
+#undef ASSIGN_INT_VAL
+		
+		if(cpuInputGrouping * stagingAreas > 65536)
+			RETURN_ERROR("Staging area too large");
 		
 		if(!useOcl.empty()) {
-			static bool oclLoaded = false;
-			if(!oclLoaded) {
-				if(PAR2ProcOCL::load_runtime()) {
-					RETURN_ERROR("Could not load OpenCL runtime");
-				}
-				oclLoaded = true;
+			if(!load_ocl()) {
+				RETURN_ERROR("Could not load OpenCL runtime");
 			}
 		} else if(!useCpu) {
 			RETURN_ERROR("At least the CPU or one OpenCL device must be enabled");
 		}
 		
-		GfProc *self = new GfProc(sliceSize, stagingAreas, useCpu, useOcl, getCurrentLoop(ISOLATE 0));
+		GfProc *self = new GfProc(sliceSize, stagingAreas, cpuOffset, cpuSliceSize, useOcl, getCurrentLoop(ISOLATE 0));
 		size_t usedSliceSize = 0;
-		if(useCpu && !self->init_cpu((Galois16Methods)method, inputGrouping, chunkLen)) {
+		if(useCpu && !self->init_cpu((Galois16Methods)cpuMethod, cpuInputGrouping, cpuChunkLen)) {
 			delete self;
 			RETURN_ERROR("Failed to allocate memory");
 		}
@@ -279,6 +342,14 @@ public:
 			if(oclSpec.sliceSize == 0 || (oclSpec.sliceSize & 1)) {
 				delete self;
 				RETURN_ERROR("Invalid slice size allocated to OpenCL device");
+			}
+			if(oclSpec.sliceOffset & 1 || oclSpec.sliceOffset > sliceSize) {
+				delete self;
+				RETURN_ERROR("Invalid slice offset allocated to OpenCL device");
+			}
+			if(oclSpec.sliceOffset + oclSpec.sliceSize > sliceSize) {
+				delete self;
+				RETURN_ERROR("Invalid slice offset+size allocated to OpenCL device");
 			}
 			if(!self->init_ocl(oclI++, oclSpec.method, oclSpec.inputGrouping, oclSpec.targetIters, oclSpec.targetGrouping)) {
 				delete self;
@@ -357,6 +428,8 @@ protected:
 		size_t sliceSize = (size_t)ARG_TO_NUM(Integer, args[0]);
 		if(sliceSize < 2 || sliceSize & 1)
 			RETURN_ERROR("Slice size is invalid");
+		
+		// TODO: get slice allocation from input
 		
 		self->hasOutput = false;
 		if(!self->par2.setCurrentSliceSize(sliceSize))
@@ -439,7 +512,7 @@ protected:
 		if(self->par2cpu.get()) {
 			SET_OBJ(ret, "threads", Integer::New(ISOLATE self->par2cpu->getNumThreads()));
 			SET_OBJ(ret, "method_desc", NEW_STRING(self->par2cpu->getMethodName()));
-			SET_OBJ(ret, "chunk_size", Integer::New(ISOLATE self->par2cpu->getChunkLen()));
+			SET_OBJ(ret, "chunk_size", Number::New(ISOLATE self->par2cpu->getChunkLen()));
 			SET_OBJ(ret, "staging_count", Integer::New(ISOLATE self->par2cpu->getStagingAreas()));
 			SET_OBJ(ret, "staging_size", Integer::New(ISOLATE self->par2cpu->getInputBatchSize()));
 			SET_OBJ(ret, "alignment", Integer::New(ISOLATE self->par2cpu->getAlignment()));
@@ -585,19 +658,17 @@ protected:
 		);
 	}
 	
-	explicit GfProc(size_t sliceSize, int stagingAreas, bool useCpu, std::vector<struct GfOclSpec> useOcl, uv_loop_t* loop)
+	explicit GfProc(size_t sliceSize, int stagingAreas, size_t cpuOffset, size_t cpuSliceSize, std::vector<struct GfOclSpec> useOcl, uv_loop_t* loop)
 	: ObjectWrap(), isRunning(false), isClosed(false), pendingDiscardOutput(true), hasOutput(false) {
-		std::vector<std::pair<IPAR2ProcBackend*, size_t>> procs;
-		size_t cpuSize = sliceSize;
+		std::vector<struct PAR2ProcBackendAlloc> procs;
 		for(const auto& spec : useOcl) {
 			auto proc = new PAR2ProcOCL(loop, spec.platformId, spec.deviceId, stagingAreas);
 			par2ocl.push_back(std::unique_ptr<PAR2ProcOCL>(proc));
-			procs.push_back({static_cast<IPAR2ProcBackend*>(proc), spec.sliceSize});
-			cpuSize -= spec.sliceSize;
+			procs.push_back({static_cast<IPAR2ProcBackend*>(proc), spec.sliceOffset, spec.sliceSize});
 		}
-		if(useCpu) {
+		if(cpuSliceSize) {
 			par2cpu.reset(new PAR2ProcCPU(loop, stagingAreas));
-			procs.push_back({static_cast<IPAR2ProcBackend*>(par2cpu.get()), cpuSize});
+			procs.push_back({static_cast<IPAR2ProcBackend*>(par2cpu.get()), cpuOffset, cpuSliceSize});
 		}
 		// TODO: handle init returning false (currently, it can't)
 		par2.init(sliceSize, procs, [&](unsigned numInputs, uint16_t firstInput) {
@@ -647,6 +718,92 @@ FUNC(GfInfo) {
 	
 	RETURN_VAL(ret);
 }
+
+static void OclDeviceToJS(
+#if NODE_VERSION_AT_LEAST(0, 11, 0)
+	  Isolate* isolate,
+#endif
+	  Local<Object>& dev, const GF16OCL_DeviceInfo& device) {
+	dev = NEW_OBJ(Object);
+	SET_OBJ(dev, "id", Integer::New(ISOLATE device.id));
+	SET_OBJ(dev, "name", NEW_STRING(device.name.c_str()));
+	SET_OBJ(dev, "vendor_id", Integer::New(ISOLATE device.vendorId));
+	SET_OBJ(dev, "available", Boolean::New(ISOLATE device.available));
+	SET_OBJ(dev, "supported", Boolean::New(ISOLATE device.supported));
+	switch(device.type) {
+		case CL_DEVICE_TYPE_DEFAULT: SET_OBJ(dev, "type", NEW_STRING("Default")); break;
+		case CL_DEVICE_TYPE_CPU: SET_OBJ(dev, "type", NEW_STRING("CPU")); break;
+		case CL_DEVICE_TYPE_GPU: SET_OBJ(dev, "type", NEW_STRING("GPU")); break;
+		case CL_DEVICE_TYPE_ACCELERATOR: SET_OBJ(dev, "type", NEW_STRING("Accelerator")); break;
+		case CL_DEVICE_TYPE_CUSTOM: SET_OBJ(dev, "type", NEW_STRING("Custom")); break;
+		default: SET_OBJ(dev, "type", NEW_STRING("Unknown")); // TODO: support multi-types?
+	}
+	SET_OBJ(dev, "memory_global", Number::New(ISOLATE device.memory));
+	SET_OBJ(dev, "cache_global", Number::New(ISOLATE device.globalCache));
+	SET_OBJ(dev, "memory_unified", Boolean::New(ISOLATE device.unifiedMemory));
+	SET_OBJ(dev, "memory_constant", Number::New(ISOLATE device.constantMemory));
+	if(!device.localMemoryIsGlobal || device.memory != device.localMemory)
+		SET_OBJ(dev, "memory_local", Number::New(ISOLATE device.localMemory));
+	SET_OBJ(dev, "memory_max_alloc", Number::New(ISOLATE device.maxAllocation));
+	SET_OBJ(dev, "workgroup_limit", Integer::New(ISOLATE device.maxWorkGroup));
+	SET_OBJ(dev, "workgroup_multiple", Integer::New(ISOLATE device.workGroupMultiple));
+	SET_OBJ(dev, "compute_units", Integer::New(ISOLATE device.computeUnits));
+}
+
+FUNC(OclDevices) {
+	FUNC_START;
+	
+	if(!load_ocl()) {
+		RETURN_ERROR("Could not load OpenCL runtime");
+	}
+	
+	const auto platforms = PAR2ProcOCL::getPlatforms();
+	Local<Array> ret = Array::New(ISOLATE platforms.size());
+	for(unsigned pf=0; pf<platforms.size(); pf++) {
+		const auto devices = PAR2ProcOCL::getDevices(pf);
+		Local<Array> retDevs = Array::New(ISOLATE devices.size());
+		for(unsigned dv=0; dv<devices.size(); dv++) {
+			Local<Object> dev;
+			OclDeviceToJS(ISOLATE dev, devices[dv]);
+			SET_ARR(retDevs, dv, dev);
+		}
+		
+		Local<Object> retPlat = NEW_OBJ(Object);
+		SET_OBJ(retPlat, "id", Integer::New(ISOLATE pf));
+		SET_OBJ(retPlat, "name", NEW_STRING(platforms[pf].c_str()));
+		SET_OBJ(retPlat, "devices", retDevs);
+		SET_ARR(ret, pf, retPlat);
+	}
+	RETURN_VAL(ret);
+}
+
+FUNC(OclDeviceInfo) {
+	FUNC_START;
+	
+	if(args.Length() < 2)
+		RETURN_ERROR("Requires 2 arguments");
+	
+	int platformId = ARG_TO_NUM(Int32, args[0]);
+	int deviceId = ARG_TO_NUM(Int32, args[1]);
+	
+	if(!load_ocl()) {
+		RETURN_ERROR("Could not load OpenCL runtime");
+	}
+	
+	if(platformId == -1) platformId = PAR2ProcOCL::defaultPlatformId();
+	if(platformId < 0)
+		RETURN_UNDEF;
+	
+	const auto device = PAR2ProcOCL::getDevice(platformId, deviceId);
+	if(!device.vendorId) // invalid device
+		RETURN_UNDEF;
+	
+	Local<Object> dev;
+	OclDeviceToJS(ISOLATE dev, device);
+	SET_OBJ(dev, "platform_id", Integer::New(ISOLATE platformId));
+	RETURN_VAL(dev);
+}
+
 
 
 class HasherInput;
@@ -1050,6 +1207,8 @@ void parpar_gf_init(
 	SET_OBJ_FUNC(target, "GfProc", t);
 	
 	NODE_SET_METHOD(target, "gf_info", GfInfo);
+	NODE_SET_METHOD(target, "opencl_devices", OclDevices);
+	NODE_SET_METHOD(target, "opencl_device_info", OclDeviceInfo);
 	
 	t = FunctionTemplate::New(ISOLATE HasherInput::New);
 	HasherInput::AttachMethods(t);

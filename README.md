@@ -131,6 +131,16 @@ It appears that the default compiler in MacOSX does not include OpenMP support (
 
 Due to security changes in OSX 10.15, libraries may require code signing to work. To deal with this, you’ll either need to [disable this security option](https://developer.apple.com/documentation/bundleresources/entitlements/com_apple_security_cs_disable-library-validation?language=objc) or [codesign the built .node module](https://successfulsoftware.net/2018/11/16/how-to-notarize-your-software-on-macos/). Note that I do not have OSX and can’t provide much support for the platform.
 
+### OpenCL Support
+
+To get OpenCL to work, there’s a few requirements:
+
+* you’ll need an OpenCL compatible device (most GPUs should be compatible)
+* OpenCL 1.1 support is sufficient, though OpenCL 1.0 may work
+* OpenCL supporting drivers need to be installed. For GPUs, the driver package is often sufficient. On \*nix, ensure the appropriate OpenCL-ICD is installed (ParPar will try to link to *libOpenCL.so*, or if not found, will try *libOpenCL.so.1* and *libOpenCL.so.1.0.0*)
+* a fully static Linux build won’t work, due to incompatibility with `dlopen` and statically linked libc. This means you’ll need to use the glibc builds, or compile the application yourself. The OpenCL headers are included with ParPar’s source, so OpenCL development libraries aren’t necessary
+* OpenCL is untested on macOS
+
 API
 ===
 
@@ -166,7 +176,7 @@ var par2creator = require('@animetosho/parpar').run(
         },
         recoveryOffset: 0,
         memoryLimit: null, // 0 to specify no limit
-        minChunkSize: 128*1024, // 0 to disable chunking
+        minChunkSize: 128*1024,
         processBatchSize: 12,
         hashBatchSize: 8,
         recDataSize: null, // null => ceil(hashBatchSize*1.5)
@@ -197,6 +207,8 @@ var par2creator = require('@animetosho/parpar').run(
         numThreads: null, // null => number of processors
         gfMethod: null, // null => '' (auto)
         loopTileSize: 0, // 0 = auto
+		openclDevices: [], // each device (defaults listed): {platform: null, device: null, ratio: null, memoryLimit: null, method: null, input_batchsize: 0, target_iters: 0, target_grouping: 0, minChunkSize: 32768}
+		cpuMinChunkSize: 32768, // must be even
     },
     function(err) {
         console.log(err || 'Process finished');
