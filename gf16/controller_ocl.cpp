@@ -51,6 +51,7 @@ PAR2ProcOCL::PAR2ProcOCL(uv_loop_t* _loop, int platformId, int deviceId, int sta
 	
 	queueEvents.reserve(2);
 	loop = _loop;
+	_deviceId = deviceId;
 }
 
 PAR2ProcOCL::~PAR2ProcOCL() {

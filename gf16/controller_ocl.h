@@ -107,6 +107,7 @@ class PAR2ProcOCL : public IPAR2ProcBackend {
 	size_t sliceSizeAligned;
 	// OpenCL stuff
 	cl::Device device;
+	int _deviceId;
 	cl::CommandQueue queue;
 	std::vector<cl::Event> queueEvents;
 	cl::NDRange processRange;
@@ -127,6 +128,7 @@ class PAR2ProcOCL : public IPAR2ProcBackend {
 	size_t allocatedSliceSize;
 	size_t bytesPerGroup;
 	size_t wgSize;
+	unsigned outputsPerGroup;
 	
 	
 	int pendingInCallbacks, pendingOutCallbacks;
@@ -195,6 +197,15 @@ public:
 	inline int getNumRecoverySlices() const override {
 		return numOutputs;
 	}
+	inline size_t getAllocSliceSize() const {
+		return allocatedSliceSize;
+	}
+	inline size_t getChunkLen() const {
+		return bytesPerGroup;
+	}
+	inline unsigned getOutputGrouping() const {
+		return outputsPerGroup;
+	}
 	
 	void deinit(PAR2ProcPlainCb cb) override;
 	void deinit() override;
@@ -216,6 +227,9 @@ public:
 	static GF16OCL_MethodInfo info(Galois16OCLMethods method);
 	inline GF16OCL_MethodInfo info() const {
 		return info(_setupMethod);
+	}
+	inline GF16OCL_DeviceInfo deviceInfo() {
+		return {_deviceId, device};
 	}
 	
 	Galois16OCLMethods default_method() const;

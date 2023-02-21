@@ -517,16 +517,23 @@ protected:
 			SET_OBJ(ret, "staging_size", Integer::New(ISOLATE self->par2cpu->getInputBatchSize()));
 			SET_OBJ(ret, "alignment", Integer::New(ISOLATE self->par2cpu->getAlignment()));
 			SET_OBJ(ret, "stride", Integer::New(ISOLATE self->par2cpu->getStride()));
+			SET_OBJ(ret, "slice_mem", Number::New(ISOLATE self->par2cpu->getAllocSliceSize()));
+			SET_OBJ(ret, "num_output_slices", Integer::New(ISOLATE self->par2cpu->getNumRecoverySlices()));
 		}
 		if(!self->par2ocl.empty()) {
 			Local<Array> oclDevInfo = Array::New(ISOLATE self->par2ocl.size());
 			int i = 0;
 			for(const auto& proc : self->par2ocl) {
+				const auto devInfo = proc->deviceInfo();
 				Local<Object> oclInfo = NEW_OBJ(Object);
+				SET_OBJ(oclInfo, "device_name", NEW_STRING(devInfo.name.c_str()));
 				SET_OBJ(oclInfo, "method_desc", NEW_STRING(proc->getMethodName()));
 				SET_OBJ(oclInfo, "staging_count", Integer::New(ISOLATE proc->getStagingAreas()));
 				SET_OBJ(oclInfo, "staging_size", Integer::New(ISOLATE proc->getInputBatchSize()));
-				// TODO: more info?
+				SET_OBJ(oclInfo, "chunk_size", Number::New(ISOLATE proc->getChunkLen()));
+				SET_OBJ(oclInfo, "output_chunks", Integer::New(ISOLATE proc->getOutputGrouping()));
+				SET_OBJ(oclInfo, "slice_mem", Number::New(ISOLATE proc->getAllocSliceSize()));
+				SET_OBJ(oclInfo, "num_output_slices", Integer::New(ISOLATE proc->getNumRecoverySlices()));
 				SET_ARR(oclDevInfo, i++, oclInfo);
 			}
 			SET_OBJ(ret, "opencl_devices", oclDevInfo);

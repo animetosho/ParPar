@@ -95,6 +95,9 @@ public:
 	inline unsigned getStride() const {
 		return stride;
 	}
+	inline size_t getAllocSliceSize() const {
+		return alignedSliceSize;
+	}
 	
 	PAR2ProcBackendAddResult addInput(const void* buffer, size_t size, uint16_t inputNum, bool flush, const PAR2ProcPlainCb& cb) override;
 	PAR2ProcBackendAddResult dummyInput(uint16_t inputNum, bool flush = false) override;

@@ -1067,7 +1067,7 @@ bool PAR2ProcOCL::setup_kernels(Galois16OCLMethods method, unsigned targetInputB
 	unsigned groupIterations = methInfo.idealIters;
 	unsigned threadWordSize = infoShortVecSize*2;
 	unsigned sizePerWorkGroup = threadWordSize * wgSize;
-	unsigned outputGrouping = 8; // for nolut kernel; have seen some cards prefer '4' (on older cards?)
+	outputsPerGroup = 8; // for nolut kernel; have seen some cards prefer '4' (on older cards?)
 	const char* kernelCode;
 	const char* kernelFuncs = NULL;
 	const char* methodCode;
@@ -1196,8 +1196,8 @@ bool PAR2ProcOCL::setup_kernels(Galois16OCLMethods method, unsigned targetInputB
 				inputBatchSize = 4;
 			else
 				inputBatchSize = 2;
-			outputGrouping = tables / inputBatchSize;
-			if(outputGrouping > 16) outputGrouping = 16;
+			outputsPerGroup = tables / inputBatchSize;
+			if(outputsPerGroup > 16) outputsPerGroup = 16;
 			
 			if(targetInputBatch) inputBatchSize = targetInputBatch;
 			kernelCode = _ocl_kernel_lut;
@@ -1245,9 +1245,9 @@ bool PAR2ProcOCL::setup_kernels(Galois16OCLMethods method, unsigned targetInputB
 	if(inputBatchSize < 1) return false;
 	
 	if(targetIters) groupIterations = targetIters;
-	if(targetGrouping) outputGrouping = targetGrouping;
+	if(targetGrouping) outputsPerGroup = targetGrouping;
 	
-	if(groupIterations < 1 || outputGrouping < 1) return false;
+	if(groupIterations < 1 || outputsPerGroup < 1) return false;
 	
 	// for very small slices, scale down iterations/wgSize
 	if(sizePerWorkGroup * groupIterations > sliceSize) {
@@ -1445,7 +1445,7 @@ bool PAR2ProcOCL::setup_kernels(Galois16OCLMethods method, unsigned targetInputB
 	
 	
 	char params[300];
-	snprintf(params, sizeof(params), "%s -DMAX_SLICE_SIZE=%zu -DNUM_OUTPUTS=%u -DOUTPUTS_PER_THREAD=%u -DOUTPUT_THREADS=%u -DVECT_WIDTH=%u -DCOL_GROUP_SIZE=%zu -DCOL_GROUP_ITERS=%u -DOUTPUT_GROUPING=%u -DSUBMIT_INPUTS=%u", oclVerArg, sliceSizeAligned, numOutputs, outputsPerThread, CEIL_DIV(numOutputs, outputsPerThread), infoShortVecSize, wgSize, groupIterations, outputGrouping, inputBatchSize);
+	snprintf(params, sizeof(params), "%s -DMAX_SLICE_SIZE=%zu -DNUM_OUTPUTS=%u -DOUTPUTS_PER_THREAD=%u -DOUTPUT_THREADS=%u -DVECT_WIDTH=%u -DCOL_GROUP_SIZE=%zu -DCOL_GROUP_ITERS=%u -DOUTPUT_GROUPING=%u -DSUBMIT_INPUTS=%u", oclVerArg, sliceSizeAligned, numOutputs, outputsPerThread, CEIL_DIV(numOutputs, outputsPerThread), infoShortVecSize, wgSize, groupIterations, outputsPerGroup, inputBatchSize);
 	
 	
 #ifdef DUMP_ASM

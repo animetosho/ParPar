@@ -314,15 +314,17 @@ if(argv['client-info']) {
 if(argv['opencl-list']) {
 	var platforms = require('../lib/par2.js').opencl_devices();
 	if(!platforms.length)
-		console.error('No devices found');
+		console.error('No OpenCL platforms found');
 	else {
+		var defaultDev = require('../lib/par2.js').opencl_device_info();
 		var showAll = (argv['opencl-list'].toLowerCase() == 'all');
 		console.error(platforms.map(function(platform, pfId) {
+			var defaultLabel = (pfId == defaultDev.platform_id ? ' [default]' : '');
 			var deviceStr = platform.devices.filter(function(device) {
 				return showAll || (device.type.toLowerCase() == 'gpu' && device.available && device.supported);
 			}).map(function(device, dvId) {
 				var output = [
-					'  - Device #' + dvId + ': ' + device.name,
+					'  - Device #' + dvId + ': ' + device.name + (dvId == defaultDev.id ? defaultLabel : ''),
 					'    Type: ' + device.type,
 					'    Memory: ' + friendlySize(device.memory_global) + (device.memory_unified ? ' (shared)':''),
 				];
@@ -331,9 +333,9 @@ if(argv['opencl-list']) {
 				if(!device.available)
 					output.splice(1, 0, '    Available: no');
 				return output.join('\n');
-			});
+			}).join('\n');
 			if(!deviceStr) return '';
-			return 'Platform #' + pfId + ': ' + platform.name + '\n' + deviceStr;
+			return 'Platform #' + pfId + ': ' + platform.name + defaultLabel + '\n' + deviceStr;
 		}).filter(function(v) { return v || showAll; }).join('\n\n') || 'No available devices found; try `--opencl-list=all` to see all platforms/devices');
 	}
 	process.exit(0);
@@ -649,7 +651,6 @@ var inputFiles = argv._;
 			if(g.opts.recoverySlices) {
 				process.stderr.write('Recovery data:      ' + friendlySize(g.opts.recoverySlices*g.opts.sliceSize) + ' (' + pluralDisp(g.opts.recoverySlices, '* ' + friendlySize(g.opts.sliceSize) + ' slice') + ')\n');
 				process.stderr.write('Input pass(es):     ' + (g.chunks * g.passes) + ', processing ' + pluralDisp(g.slicesPerPass, '* ' + friendlySize(g._chunkSize) + ' chunk') + ' per pass\n');
-				process.stderr.write('Slice memory usage: ' + friendlySize(g._chunkSize * (g.slicesPerPass + g.procBufferOverheadCount)) + ' (' + g.slicesPerPass + ' recovery + ' + g.procBufferOverheadCount + ' processing chunks)\n');
 			}
 			process.stderr.write('Read buffer size:   ' + friendlySize(g.readSize) + ' * max ' + pluralDisp(g.opts.readBuffers, 'buffer') + '\n');
 		}
@@ -679,11 +680,27 @@ var inputFiles = argv._;
 		g.run(function(event, arg1) {
 			if(event == 'begin_pass' && !infoShown) {
 				var process_info = g.gf_info();
+				if(process_info) {
+					if(process_info.threads) {
+						var cpuName = require('os').cpus()[0].model;
+						if(cpuName == 'unknown') cpuName = 'CPU';
+						process.stderr.write('\n' + cpuName + '\n')
+						process.stderr.write('  Multiply method:  ' + process_info.method_desc + ' with ' + friendlySize(process_info.chunk_size) + ' loop tiling, ' + pluralDisp(process_info.threads, 'thread') + '\n');
+						process.stderr.write('  Input batching:   ' + pluralDisp(process_info.staging_size, 'chunk') + ', ' + pluralDisp(process_info.staging_count, 'batch', 'es') + '\n');
+						var transMem = Math.max(g.opts.recDataSize * g._chunkSize, process_info.slice_mem * g.procInStagingBufferCount);
+						process.stderr.write('  Memory Usage:     ' + friendlySize(process_info.slice_mem * process_info.num_output_slices + transMem) + ' (' + pluralDisp(process_info.num_output_slices, '* ' + friendlySize(process_info.slice_mem) + ' chunk') + ' + ' + friendlySize(transMem) + ' transfer buffer)\n');
+					} else {
+						process.stderr.write('Transfer Buffer:    ' + friendlySize(g.opts.recDataSize * g._chunkSize) + '\n');
+					}
+					
+					if(process_info.opencl_devices) process_info.opencl_devices.forEach(function(oclDev) {
+						process.stderr.write('\n' + oclDev.device_name + '\n')
+						process.stderr.write('  Multiply method:  ' + oclDev.method_desc + ', split into ' + oclDev.output_chunks + ' * ' + friendlySize(oclDev.chunk_size) + ' workgroups\n');
+						process.stderr.write('  Input batching:   ' + pluralDisp(oclDev.staging_size, 'chunk') + ', ' + pluralDisp(oclDev.staging_count, 'batch', 'es') + '\n');
+						process.stderr.write('  Memory Usage:     ' + friendlySize(oclDev.slice_mem * oclDev.num_output_slices) + ' (' + pluralDisp(oclDev.num_output_slices, '* ' + friendlySize(oclDev.slice_mem) + ' chunk') + ')\n');
+					});
+				}
 				
-				if(process_info && process_info.threads) {
-					process.stderr.write('Multiply method:    ' + process_info.method_desc + ' with ' + friendlySize(process_info.chunk_size) + ' loop tiling, ' + pluralDisp(process_info.threads, 'thread') + '\n');
-					process.stderr.write('Input batching:     ' + pluralDisp(process_info.staging_size, 'chunk') + ', ' + pluralDisp(process_info.staging_count, 'batch', 'es') + '\n');
-				} // else, no recovery being generated
 				infoShown = true;
 			}
 			if(event == 'processing_slice') currentSlice++;
