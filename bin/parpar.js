@@ -274,6 +274,9 @@ var opts = {
 	'client-info': {
 		type: 'bool'
 	},
+	'skip-self-check': {
+		type: 'bool'
+	},
 };
 var argv;
 try {
@@ -286,6 +289,20 @@ var version = require('../package.json').version;
 var creator = 'ParPar v' + version + ' ' + process.arch + ' [https://animetosho.org/app/parpar]';
 
 var fs = require('fs');
+/*{{!include_in_executable!
+if(!argv['skip-self-check']) {
+	// if this is a compiled EXE, do a self MD5 check to detect corruption
+	var executable = fs.readFileSync(process.execPath);
+	var md5loc = executable.slice(-1024, -16).indexOf('\0<!parpar#md5~>=');
+	if(md5loc < 0)
+		error('Could not find self-check hash - this executable may be truncated or corrupt. If you are certain this is not a problem, you may use the `--skip-self-check` flag to bypass this check.');
+	var expectedMd5 = executable.slice(-1024 + md5loc + 16, (-1024 + md5loc + 32) || undefined).toString('hex');
+	var actualMd5 = require('crypto').createHash('md5').update(executable.slice(0, -1024 + md5loc)).digest('hex');
+	if(expectedMd5 != actualMd5)
+		error('Self-check failed - this executable may be corrupt. If you are certain this is not a problem, you may use the `--skip-self-check` flag to bypass this check.');
+}
+}}*/
+
 if(argv.help) {
 	var helpText;
 	try {

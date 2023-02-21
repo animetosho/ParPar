@@ -300,6 +300,8 @@ nexe.compile({
 					if(err) return reject(err);
 					// patch require line
 					buf = buf.toString().replace(/require\('[^'"]*\/([0-9a-z_]+)\.node'\)/g, "process.binding('$1')");
+					// for MD5 check
+					buf = buf.replace(/\/\*{{!include_in_executable!([^]*?)}}\*\//g, '$1');
 					await compiler.replaceInFileAsync('lib/_third_party_main.js', /^/, buf);
 					resolve();
 				});
@@ -310,6 +312,12 @@ nexe.compile({
 }).then(() => {
 	console.log('done');
 	fs.unlinkSync('../bin/help.json');
+	
+	// append MD5 hash for self-check
+	let binary = 'parpar';
+	if(buildOs == 'win32') binary += '.exe';
+	const md5 = require('crypto').createHash('md5').update(fs.readFileSync(binary)).digest();
+	fs.appendFileSync(binary, Buffer.concat([Buffer.from('\0<!parpar#md5~>='), md5]));
 	
 	// paxmark -m parpar
 	// xz -9e -z --x86 --lzma2 -c parpar > parpar-v0.4.0-linux-static-x64.xz
