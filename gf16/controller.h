@@ -52,6 +52,9 @@ public:
 	inline void discardOutput() {
 		processingAdd = false;
 	}
+	inline bool _hasAdded() const {
+		return processingAdd;
+	}
 	virtual void processing_finished() {};
 	
 	virtual void deinit() = 0;

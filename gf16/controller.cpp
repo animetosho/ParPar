@@ -239,15 +239,26 @@ void PAR2Proc::getOutput(unsigned index, void* output, const PAR2ProcOutputCb& c
 	auto* allValid = new bool(true);
 	for(auto& backend : backends) {
 		if(backend.currentSliceSize == 0) continue;
-		// TODO: for overlapping regions, need to do a xor-merge pass
-		backend.be->getOutput(index, static_cast<char*>(output) + backend.currentOffset, [cbRef, allValid, cb](bool valid) {
-			*allValid = *allValid && valid;
+		auto outputPtr = static_cast<char*>(output) + backend.currentOffset;
+		if(!backend.be->_hasAdded()) {
+			// no computation done on backend -> zero fill part
+			memset(outputPtr, 0, backend.currentSliceSize);
 			if(--(*cbRef) == 0) {
 				delete cbRef;
 				cb(*allValid);
 				delete allValid;
 			}
-		});
+		} else {
+			// TODO: for overlapping regions, need to do a xor-merge pass
+			backend.be->getOutput(index, outputPtr, [cbRef, allValid, cb](bool valid) {
+				*allValid = *allValid && valid;
+				if(--(*cbRef) == 0) {
+					delete cbRef;
+					cb(*allValid);
+					delete allValid;
+				}
+			});
+		}
 	}
 }
 
