@@ -97,6 +97,11 @@ public:
 };
 
 
+struct tnqCloseWrap {
+	void(*cb)(void*);
+	void* data;
+};
+
 template<class P>
 class ThreadNotifyQueue {
 	ThreadMessageQueue<void*> q;
@@ -123,9 +128,16 @@ public:
 		uv_async_send(&a);
 	}
 	
-	void close(void* data, void(*closeCb)(uv_handle_t* handle)) {
-		a.data = data;
-		uv_close(reinterpret_cast<uv_handle_t*>(&a), closeCb);
+	void close(void* data, void(*closeCb)(void*)) {
+		auto* d = new tnqCloseWrap;
+		d->cb = closeCb;
+		d->data = data;
+		a.data = d;
+		uv_close(reinterpret_cast<uv_handle_t*>(&a), [](uv_handle_t* handle) {
+			auto* d = static_cast<tnqCloseWrap*>(handle->data);
+			d->cb(d->data);
+			delete d;
+		});
 	}
 	void close() {
 		uv_close(reinterpret_cast<uv_handle_t*>(&a), nullptr);
@@ -294,5 +306,17 @@ public:
 		return q.empty();
 	}
 };
+
+static int hardware_concurrency() {
+	int threads;
+#if UV_VERSION_HEX >= 0x12c00  // 1.44.0
+	threads = uv_available_parallelism();
+#else
+	uv_cpu_info_t *info;
+	uv_cpu_info(&info, &threads);
+	uv_free_cpu_info(info, threads);
+#endif
+	return threads;
+}
 
 #endif // defined(__THREADQUEUE_H__)

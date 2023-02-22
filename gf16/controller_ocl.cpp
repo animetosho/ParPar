@@ -153,8 +153,8 @@ void PAR2ProcOCL::deinit(PAR2ProcPlainCb cb) {
 	auto* freeData = new struct PAR2ProcBackendCloseData;
 	freeData->cb = cb;
 	freeData->refCount = 3;
-	auto closeCb = [](uv_handle_t* handle) {
-		auto* freeData = static_cast<struct PAR2ProcBackendCloseData*>(handle->data);
+	auto closeCb = [](void* data) {
+		auto* freeData = static_cast<struct PAR2ProcBackendCloseData*>(data);
 		if(--(freeData->refCount) == 0) {
 			freeData->cb();
 			delete freeData;

@@ -9,7 +9,7 @@
 #define ROUND_DIV(a, b) (((a) + ((b)>>1)) / (b))
 
 // callbacks
-static void prepare_chunk(void *req);
+static void transfer_chunk(void *req);
 static void compute_worker(void *_req);
 
 PAR2ProcCPUStaging::~PAR2ProcCPUStaging() {
@@ -18,9 +18,10 @@ PAR2ProcCPUStaging::~PAR2ProcCPUStaging() {
 
 /** initialization **/
 PAR2ProcCPU::PAR2ProcCPU(uv_loop_t* _loop, int stagingAreas)
-: loop(_loop), sliceSize(0), numThreads(0), gf(NULL), staging(stagingAreas), memProcessing(NULL), prepareThread(prepare_chunk),
+: loop(_loop), sliceSize(0), numThreads(0), gf(NULL), staging(stagingAreas), memProcessing(NULL), transferThread(transfer_chunk),
   _prepared(_loop, this, &PAR2ProcCPU::_after_prepare_chunk),
-  _processed(_loop, this, &PAR2ProcCPU::_after_computation) {
+  _processed(_loop, this, &PAR2ProcCPU::_after_computation),
+  _outputted(_loop, this, &PAR2ProcCPU::_after_finish) {
 	
 	// default number of threads = number of CPUs available
 	setNumThreads(-1);
@@ -52,9 +53,7 @@ void PAR2ProcCPU::freeGf() {
 
 void PAR2ProcCPU::setNumThreads(int threads) {
 	if(threads < 0) {
-		uv_cpu_info_t *info;
-		uv_cpu_info(&info, &threads);
-		uv_free_cpu_info(info, threads);
+		threads = hardware_concurrency();
 	}
 	
 	if(gf) {
@@ -187,9 +186,9 @@ void PAR2ProcCPU::deinit(PAR2ProcPlainCb cb) {
 	
 	auto* freeData = new struct PAR2ProcBackendCloseData;
 	freeData->cb = cb;
-	freeData->refCount = 2;
-	auto closeCb = [](uv_handle_t* handle) {
-		auto* freeData = static_cast<struct PAR2ProcBackendCloseData*>(handle->data);
+	freeData->refCount = 3;
+	auto closeCb = [](void* data) {
+		auto* freeData = static_cast<struct PAR2ProcBackendCloseData*>(data);
 		if(--(freeData->refCount) == 0) {
 			freeData->cb();
 			delete freeData;
@@ -197,6 +196,7 @@ void PAR2ProcCPU::deinit(PAR2ProcPlainCb cb) {
 	};
 	_prepared.close(freeData, closeCb);
 	_processed.close(freeData, closeCb);
+	_outputted.close(freeData, closeCb);
 }
 void PAR2ProcCPU::deinit() {
 	freeGf();
@@ -204,6 +204,7 @@ void PAR2ProcCPU::deinit() {
 	loop = nullptr;
 	_prepared.close();
 	_processed.close();
+	_outputted.close();
 }
 
 PAR2ProcCPU::~PAR2ProcCPU() {
@@ -212,40 +213,52 @@ PAR2ProcCPU::~PAR2ProcCPU() {
 
 /** prepare **/
 // TODO: future idea: multiple prepare threads? Not sure if there's a case where it's particularly beneficial...
-
-struct prepare_data {
+struct transfer_data {
+	bool finish; // false = prepare, true = finish
+	
+	PAR2ProcCPU* parent;
 	void* dst;
-	size_t dstLen;
 	const void* src;
 	size_t size;
-	unsigned numInputs;
 	unsigned index;
+	size_t chunkLen;
+	Galois16Mul* gf;
+	unsigned numBufs;
+	
+	// prepare specific
+	size_t dstLen;
 	unsigned submitInBufs;
 	unsigned inBufId;
-	size_t chunkLen;
-	PAR2ProcCPU* parent;
-	const Galois16Mul* gf;
-	PAR2ProcPlainCb cb;
+	PAR2ProcPlainCb cbPrep;
+	
+	// finish specific
+	PAR2ProcOutputCb cbOut;
+	int cksumSuccess;
 };
 
 // prepare thread process function
-static void prepare_chunk(void* req) {
-	struct prepare_data* data = static_cast<struct prepare_data*>(req);
+static void transfer_chunk(void* req) {
+	struct transfer_data* data = static_cast<struct transfer_data*>(req);
 	
-	if(data->src)
-		data->gf->prepare_packed_cksum(data->dst, data->src, data->size, data->dstLen, data->numInputs, data->index, data->chunkLen);
-	
-	// signal main thread that prepare has completed
-	data->parent->_prepared.notify(data);
+	if(data->finish) {
+		data->cksumSuccess = data->gf->finish_packed_cksum(data->dst, data->src, data->size, data->numBufs, data->index, data->chunkLen);
+		data->parent->_outputted.notify(data);
+	} else {
+		if(data->src)
+			data->gf->prepare_packed_cksum(data->dst, data->src, data->size, data->dstLen, data->numBufs, data->index, data->chunkLen);
+		
+		// signal main thread that prepare has completed
+		data->parent->_prepared.notify(data);
+	}
 }
 
 void PAR2ProcCPU::_after_prepare_chunk(void* _req) {
-	auto data = static_cast<struct prepare_data*>(_req);
+	auto data = static_cast<struct transfer_data*>(_req);
 	if(data->submitInBufs) {
 		// queue async compute
 		run_kernel(data->inBufId, data->submitInBufs);
 	}
-	if(data->cb && data->src) data->cb();
+	if(data->cbPrep && data->src) data->cbPrep();
 	delete data;
 }
 
@@ -257,17 +270,18 @@ PAR2ProcBackendAddResult PAR2ProcCPU::addInput(const void* buffer, size_t size, 
 	if(!staging[0].src) reallocMemInput();
 	
 	area.inputNums[currentStagingInputs] = inputNum;
-	struct prepare_data* data = new struct prepare_data;
+	struct transfer_data* data = new struct transfer_data;
+	data->finish = false;
 	data->src = buffer;
 	data->size = size;
 	data->parent = this;
 	data->dst = area.src;
 	data->dstLen = alignedCurrentSliceSize - stride;
-	data->numInputs = inputBatchSize;
+	data->numBufs = inputBatchSize;
 	data->index = currentStagingInputs++;
 	data->chunkLen = chunkLen;
 	data->gf = gf;
-	data->cb = cb;
+	data->cbPrep = cb;
 	
 	data->submitInBufs = (flush || currentStagingInputs == inputBatchSize || (stagingActiveCount == 0 && staging.size() > 1)) ? currentStagingInputs : 0;
 	data->inBufId = currentStagingArea;
@@ -280,7 +294,7 @@ PAR2ProcBackendAddResult PAR2ProcCPU::addInput(const void* buffer, size_t size, 
 			currentStagingArea = 0;
 	}
 	
-	prepareThread.send(data);
+	transferThread.send(data);
 	return staging[(currentStagingArea == 0 ? staging.size() : currentStagingArea)-1].isActive
 		? PROC_ADD_OK_BUSY
 		: PROC_ADD_OK;
@@ -329,7 +343,8 @@ void PAR2ProcCPU::flush() {
 	if(!currentStagingInputs) return; // no inputs to flush
 	
 	// send a flush signal by queueing up a prepare, but with a NULL buffer
-	struct prepare_data* data = new struct prepare_data;
+	struct transfer_data* data = new struct transfer_data;
+	data->finish = false;
 	data->src = NULL;
 	data->parent = this;
 	data->submitInBufs = currentStagingInputs;
@@ -342,53 +357,30 @@ void PAR2ProcCPU::flush() {
 	if(++currentStagingArea == staging.size())
 		currentStagingArea = 0;
 	
-	prepareThread.send(data);
-}
-
-void PAR2ProcCPU::endInput() {
-	prepareThread.end(); // TODO: should thread be ended here?
+	transferThread.send(data);
 }
 
 /** finish **/
-struct finish_data {
-	void* dst;
-	const void* src;
-	size_t size;
-	unsigned numOutputs;
-	unsigned index;
-	size_t chunkLen;
-	Galois16Mul* gf;
-	PAR2ProcOutputCb cb;
-	int cksumSuccess;
-};
-static void finish_output(uv_work_t *req) {
-	struct finish_data* data = static_cast<struct finish_data*>(req->data);
-	data->cksumSuccess = data->gf->finish_packed_cksum(data->dst, data->src, data->size, data->numOutputs, data->index, data->chunkLen);
-}
-
-static void after_finish(uv_work_t *req, int status) {
-	assert(status == 0);
-	
-	struct finish_data* data = static_cast<struct finish_data*>(req->data);
+void PAR2ProcCPU::_after_finish(void* _req) {
+	auto data = static_cast<struct transfer_data*>(_req);
 	// signal output ready
-	data->cb(data->cksumSuccess);
+	data->cbOut(data->cksumSuccess);
 	delete data;
-	delete req;
 }
 
 void PAR2ProcCPU::getOutput(unsigned index, void* output, const PAR2ProcOutputCb& cb) {
-	uv_work_t* req = new uv_work_t;
-	struct finish_data* data = new struct finish_data;
+	struct transfer_data* data = new struct transfer_data;
+	data->finish = true;
+	data->parent = this;
 	data->src = memProcessing;
 	data->size = currentSliceSize;
 	data->gf = gf;
 	data->dst = output;
-	data->numOutputs = outputExp.size();
+	data->numBufs = outputExp.size();
 	data->index = index;
 	data->chunkLen = chunkLen;
-	data->cb = cb;
-	req->data = data;
-	uv_queue_work(loop, req, finish_output, after_finish);
+	data->cbOut = cb;
+	transferThread.send(data);
 }
 
 

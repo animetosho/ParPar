@@ -1,6 +1,5 @@
 #include "controller.h"
 #include <atomic>
-#include <uv.h>
 #include "threadqueue.h"
 
 #include "gf16mul.h"
@@ -45,12 +44,13 @@ private:
 	bool reallocMemInput();
 	void* memProcessing; // TODO: break this into chunks, to avoid massive single allocation
 	
-	MessageThread prepareThread;
+	MessageThread transferThread;
 	
 	void run_kernel(unsigned inBuf, unsigned numInputs) override;
 	
 	void _after_computation(void* req);
 	void _after_prepare_chunk(void* req);
+	void _after_finish(void* req);
 	
 	// disable copy constructor
 	PAR2ProcCPU(const PAR2ProcCPU&);
@@ -59,6 +59,7 @@ private:
 public:
 	ThreadNotifyQueue<PAR2ProcCPU> _prepared;
 	ThreadNotifyQueue<PAR2ProcCPU> _processed;
+	ThreadNotifyQueue<PAR2ProcCPU> _outputted;
 	
 	explicit PAR2ProcCPU(uv_loop_t* _loop, int stagingAreas=2);
 	explicit inline PAR2ProcCPU(int stagingAreas=2) : PAR2ProcCPU(uv_default_loop(), stagingAreas) {}
@@ -103,7 +104,6 @@ public:
 	PAR2ProcBackendAddResult dummyInput(uint16_t inputNum, bool flush = false) override;
 	bool fillInput(const void* buffer) override;
 	void flush() override;
-	void endInput() override;
 	void getOutput(unsigned index, void* output, const PAR2ProcOutputCb& cb) override;
 	
 	void processing_finished() override;
