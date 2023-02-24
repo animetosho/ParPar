@@ -1,6 +1,7 @@
 #include <iostream>
 #include <stdint.h>
 #include <stdlib.h> // free / calloc
+#include <cassert>
 #include "controller_ocl.h"
 
 std::vector<cl::Platform> PAR2ProcOCL::platforms;
@@ -25,9 +26,9 @@ int PAR2ProcOCL::load_runtime() {
 
 PAR2ProcOCL::PAR2ProcOCL(uv_loop_t* _loop, int platformId, int deviceId, int stagingAreas)
 : loop(nullptr), staging(stagingAreas), allocatedSliceSize(0), endSignalled(false),
-  _sent(_loop, this, &PAR2ProcOCL::_after_sent),
-  _recv(_loop, this, &PAR2ProcOCL::_after_recv),
-  _proc(_loop, this, &PAR2ProcOCL::_after_proc) {
+  _queueSent(_loop, this, &PAR2ProcOCL::_after_sent),
+  _queueProc(_loop, this, &PAR2ProcOCL::_after_proc),
+  _queueRecv(_loop, this, &PAR2ProcOCL::_after_recv) {
 	_initSuccess = false;
 	zeroes = NULL;
 	
@@ -160,18 +161,18 @@ void PAR2ProcOCL::deinit(PAR2ProcPlainCb cb) {
 			delete freeData;
 		}
 	};
-	_sent.close(freeData, closeCb);
-	_recv.close(freeData, closeCb);
-	_proc.close(freeData, closeCb);
+	_queueSent.close(freeData, closeCb);
+	_queueRecv.close(freeData, closeCb);
+	_queueProc.close(freeData, closeCb);
 }
 void PAR2ProcOCL::deinit() {
 	if(!loop) return;
 	loop = nullptr;
 	queue.finish();
 	queueEvents.clear();
-	_sent.close();
-	_recv.close();
-	_proc.close();
+	_queueSent.close();
+	_queueRecv.close();
+	_queueProc.close();
 }
 
 
@@ -264,11 +265,15 @@ void PAR2ProcOCL::_after_sent(void* _req) {
 	if(endSignalled && isEmpty() && progressCb) progressCb(0, 0); // we got this callback after processing has finished -> need to flag to front-end that we're now done
 }
 
-PAR2ProcBackendAddResult PAR2ProcOCL::addInput(const void* buffer, size_t size, uint16_t inputNum, bool flush, const PAR2ProcPlainCb& cb) {
+PAR2ProcBackendAddResult PAR2ProcOCL::hasSpace() const {
+	if(staging[currentStagingArea].isActive) return PROC_ADD_FULL;
+	return stagingActiveCount < staging.size()-1 ? PROC_ADD_OK : PROC_ADD_OK_BUSY;
+}
+
+void PAR2ProcOCL::addInput(const void* buffer, size_t size, uint16_t inputNum, bool flush, const PAR2ProcPlainCb& cb) {
 	auto& area = staging[currentStagingArea];
 	// detect if busy
-	if(area.isActive)
-		return PROC_ADD_FULL;
+	assert(!area.isActive);
 	
 	// compute coeffs
 	if(coeffType != GF16OCL_COEFF_NORMAL) {
@@ -292,7 +297,7 @@ PAR2ProcBackendAddResult PAR2ProcOCL::addInput(const void* buffer, size_t size, 
 	pendingInCallbacks++;
 	writeEvent.setCallback(CL_COMPLETE, [](cl_event, cl_int, void* _req) {
 		auto req = static_cast<struct send_data*>(_req);
-		req->parent->_sent.notify(req);
+		req->parent->_queueSent.notify(req);
 	}, req);
 	
 	
@@ -325,15 +330,12 @@ PAR2ProcBackendAddResult PAR2ProcOCL::addInput(const void* buffer, size_t size, 
 	currentStagingInputs++;
 	if(currentStagingInputs == inputBatchSize || flush || (stagingActiveCount == 0 && staging.size() > 1))
 		run_kernel(currentStagingArea, currentStagingInputs);
-	
-	return stagingActiveCount < staging.size()-1 ? PROC_ADD_OK : PROC_ADD_OK_BUSY;
 }
 
-PAR2ProcBackendAddResult PAR2ProcOCL::dummyInput(uint16_t inputNum, bool flush) {
+void PAR2ProcOCL::dummyInput(uint16_t inputNum, bool flush) {
 	auto& area = staging[currentStagingArea];
 	// detect if busy
-	if(area.isActive)
-		return PROC_ADD_FULL;
+	assert(!area.isActive);
 	
 	// compute coeffs
 	if(coeffType != GF16OCL_COEFF_NORMAL) {
@@ -349,8 +351,6 @@ PAR2ProcBackendAddResult PAR2ProcOCL::dummyInput(uint16_t inputNum, bool flush) 
 	currentStagingInputs++;
 	if(currentStagingInputs == inputBatchSize || flush || (stagingActiveCount == 0 && staging.size() > 1))
 		run_kernel(currentStagingArea, currentStagingInputs);
-	
-	return stagingActiveCount < staging.size()-1 ? PROC_ADD_OK : PROC_ADD_OK_BUSY;
 }
 
 bool PAR2ProcOCL::fillInput(const void* buffer) {
@@ -397,7 +397,7 @@ void PAR2ProcOCL::getOutput(unsigned index, void* output, const PAR2ProcOutputCb
 	pendingOutCallbacks++;
 	readEvent.setCallback(CL_COMPLETE, [](cl_event, cl_int, void* _req) {
 		auto req = static_cast<struct recv_data*>(_req);
-		req->parent->_recv.notify(req);
+		req->parent->_queueRecv.notify(req);
 	}, req);
 }
 
@@ -438,7 +438,7 @@ void PAR2ProcOCL::run_kernel(unsigned buf, unsigned numInputs) {
 	cl::Kernel* kernel;
 	if(numInputs == inputBatchSize) {
 		kernel = processingAdd ? &kernelMulAdd : &kernelMul;
-	} else { // last round
+	} else { // incomplete kernel -> need to pass in number of inputs to read from
 		kernel = processingAdd ? &kernelMulAddLast : &kernelMulLast;
 		kernel->setArg<cl_ushort>(3, numInputs);
 	}
@@ -458,7 +458,7 @@ void PAR2ProcOCL::run_kernel(unsigned buf, unsigned numInputs) {
 	pendingInCallbacks++;
 	area.event.setCallback(CL_COMPLETE, [](cl_event, cl_int, void* _req) {
 		auto req = static_cast<struct compute_req*>(_req);
-		req->parent->_proc.notify(req);
+		req->parent->_queueProc.notify(req);
 	}, req);
 	
 	// management

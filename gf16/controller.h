@@ -7,6 +7,7 @@
 #include <functional>
 #include <unordered_map>
 #include <unordered_set>
+#include "threadqueue.h"
 
 
 // callback types
@@ -40,8 +41,9 @@ public:
 	}
 	virtual bool setCurrentSliceSize(size_t size) = 0;
 	virtual bool setRecoverySlices(unsigned numSlices, const uint16_t* exponents = NULL) = 0;
-	virtual PAR2ProcBackendAddResult addInput(const void* buffer, size_t size, uint16_t inputNum, bool flush, const PAR2ProcPlainCb& cb) = 0;
-	virtual PAR2ProcBackendAddResult dummyInput(uint16_t inputNum, bool flush = false) = 0;
+	virtual PAR2ProcBackendAddResult hasSpace() const = 0;
+	virtual void addInput(const void* buffer, size_t size, uint16_t inputNum, bool flush, const PAR2ProcPlainCb& cb) = 0;
+	virtual void dummyInput(uint16_t inputNum, bool flush = false) = 0;
 	virtual bool fillInput(const void* buffer) = 0;
 	virtual void flush() = 0;
 	virtual void endInput() {};

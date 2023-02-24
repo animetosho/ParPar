@@ -1,6 +1,7 @@
 #include "controller_cpu.h"
 #include "../src/platform.h"
 #include "gfmat_coeff.h"
+#include <cassert>
 
 #ifndef MIN
 # define MIN(a, b) ((a)<(b) ? (a) : (b))
@@ -8,20 +9,16 @@
 #define CEIL_DIV(a, b) (((a) + (b)-1) / (b))
 #define ROUND_DIV(a, b) (((a) + ((b)>>1)) / (b))
 
-// callbacks
-static void transfer_chunk(void *req);
-static void compute_worker(void *_req);
-
 PAR2ProcCPUStaging::~PAR2ProcCPUStaging() {
 	if(src) ALIGN_FREE(src);
 }
 
 /** initialization **/
 PAR2ProcCPU::PAR2ProcCPU(uv_loop_t* _loop, int stagingAreas)
-: loop(_loop), sliceSize(0), numThreads(0), gf(NULL), staging(stagingAreas), memProcessing(NULL), transferThread(transfer_chunk),
-  _prepared(_loop, this, &PAR2ProcCPU::_after_prepare_chunk),
-  _processed(_loop, this, &PAR2ProcCPU::_after_computation),
-  _outputted(_loop, this, &PAR2ProcCPU::_after_finish) {
+: loop(_loop), sliceSize(0), numThreads(0), gf(NULL), staging(stagingAreas), memProcessing(NULL), transferThread(PAR2ProcCPU::transfer_chunk),
+  _queueSent(_loop, this, &PAR2ProcCPU::_after_prepare_chunk),
+  _queueProc(_loop, this, &PAR2ProcCPU::_after_computation),
+  _queueRecv(_loop, this, &PAR2ProcCPU::_after_finish) {
 	
 	// default number of threads = number of CPUs available
 	setNumThreads(-1);
@@ -66,7 +63,7 @@ void PAR2ProcCPU::setNumThreads(int threads) {
 		for(int i=oldThreads; i<threads; i++) {
 			gfScratch[i] = gf->mutScratch_alloc();
 			thWorkers[i].lowPrio = true;
-			thWorkers[i].setCallback(compute_worker);
+			thWorkers[i].setCallback(PAR2ProcCPU::compute_worker);
 		}
 	}
 	
@@ -194,17 +191,17 @@ void PAR2ProcCPU::deinit(PAR2ProcPlainCb cb) {
 			delete freeData;
 		}
 	};
-	_prepared.close(freeData, closeCb);
-	_processed.close(freeData, closeCb);
-	_outputted.close(freeData, closeCb);
+	_queueSent.close(freeData, closeCb);
+	_queueProc.close(freeData, closeCb);
+	_queueRecv.close(freeData, closeCb);
 }
 void PAR2ProcCPU::deinit() {
 	freeGf();
 	if(!loop) return;
 	loop = nullptr;
-	_prepared.close();
-	_processed.close();
-	_outputted.close();
+	_queueSent.close();
+	_queueProc.close();
+	_queueRecv.close();
 }
 
 PAR2ProcCPU::~PAR2ProcCPU() {
@@ -237,18 +234,18 @@ struct transfer_data {
 };
 
 // prepare thread process function
-static void transfer_chunk(void* req) {
+void PAR2ProcCPU::transfer_chunk(void* req) {
 	struct transfer_data* data = static_cast<struct transfer_data*>(req);
 	
 	if(data->finish) {
 		data->cksumSuccess = data->gf->finish_packed_cksum(data->dst, data->src, data->size, data->numBufs, data->index, data->chunkLen);
-		data->parent->_outputted.notify(data);
+		data->parent->_queueRecv.notify(data);
 	} else {
 		if(data->src)
 			data->gf->prepare_packed_cksum(data->dst, data->src, data->size, data->dstLen, data->numBufs, data->index, data->chunkLen);
 		
 		// signal main thread that prepare has completed
-		data->parent->_prepared.notify(data);
+		data->parent->_queueSent.notify(data);
 	}
 }
 
@@ -262,11 +259,17 @@ void PAR2ProcCPU::_after_prepare_chunk(void* _req) {
 	delete data;
 }
 
-PAR2ProcBackendAddResult PAR2ProcCPU::addInput(const void* buffer, size_t size, uint16_t inputNum, bool flush, const PAR2ProcPlainCb& cb) {
-	auto& area = staging[currentStagingArea];
-	// if we're waiting for input availability, can't add
+PAR2ProcBackendAddResult PAR2ProcCPU::hasSpace() const {
 	// NOTE: if add fails due to being full, client resubmitting may be vulnerable to race conditions if it adds an event listener after completion event gets fired
-	if(area.isActive) return PROC_ADD_FULL;
+	if(staging[currentStagingArea].isActive) return PROC_ADD_FULL;
+	return staging[(currentStagingArea == 0 ? staging.size() : currentStagingArea)-1].isActive
+		? PROC_ADD_OK_BUSY
+		: PROC_ADD_OK;
+}
+
+void PAR2ProcCPU::addInput(const void* buffer, size_t size, uint16_t inputNum, bool flush, const PAR2ProcPlainCb& cb) {
+	auto& area = staging[currentStagingArea];
+	assert(!area.isActive);
 	if(!staging[0].src) reallocMemInput();
 	
 	area.inputNums[currentStagingInputs] = inputNum;
@@ -295,14 +298,11 @@ PAR2ProcBackendAddResult PAR2ProcCPU::addInput(const void* buffer, size_t size, 
 	}
 	
 	transferThread.send(data);
-	return staging[(currentStagingArea == 0 ? staging.size() : currentStagingArea)-1].isActive
-		? PROC_ADD_OK_BUSY
-		: PROC_ADD_OK;
 }
 
-PAR2ProcBackendAddResult PAR2ProcCPU::dummyInput(uint16_t inputNum, bool flush) {
+void PAR2ProcCPU::dummyInput(uint16_t inputNum, bool flush) {
 	auto& area = staging[currentStagingArea];
-	if(area.isActive) return PROC_ADD_FULL;
+	assert(!area.isActive);
 	if(!staging[0].src) reallocMemInput();
 	
 	area.inputNums[currentStagingInputs] = inputNum;
@@ -318,10 +318,6 @@ PAR2ProcBackendAddResult PAR2ProcCPU::dummyInput(uint16_t inputNum, bool flush) 
 		if(++currentStagingArea == staging.size())
 			currentStagingArea = 0;
 	}
-	
-	return staging[(currentStagingArea == 0 ? staging.size() : currentStagingArea)-1].isActive
-		? PROC_ADD_OK_BUSY
-		: PROC_ADD_OK;
 }
 
 bool PAR2ProcCPU::fillInput(const void* buffer) {
@@ -405,7 +401,7 @@ struct compute_req {
 	PAR2ProcCPU* parent;
 };
 
-static void compute_worker(void *_req) {
+void PAR2ProcCPU::compute_worker(void *_req) {
 	struct compute_req* req = static_cast<struct compute_req*>(_req);
 	
 	const Galois16MethodInfo& gfInfo = req->gf->info();
@@ -457,7 +453,7 @@ static void compute_worker(void *_req) {
 	// mark that we've done processing this request
 	if(req->procRefs->fetch_sub(1, std::memory_order_relaxed) <= 1) { // relaxed ordering: although we want all prior memory operations to be complete at this point, to send a cross-thread signal requires stricter ordering, so it should be fine by the time the signal is received
 		// signal this input group is done with
-		req->parent->_processed.notify(req);
+		req->parent->_queueProc.notify(req);
 	} else
 		delete req;
 }

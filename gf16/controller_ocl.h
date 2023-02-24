@@ -151,6 +151,9 @@ class PAR2ProcOCL : public IPAR2ProcBackend {
 	
 	void reset_state();
 	
+	ThreadNotifyQueue<PAR2ProcOCL> _queueSent;
+	ThreadNotifyQueue<PAR2ProcOCL> _queueProc;
+	ThreadNotifyQueue<PAR2ProcOCL> _queueRecv;
 	void _after_sent(void* _req);
 	void _after_recv(void* _req);
 	void _after_proc(void* _req);
@@ -186,8 +189,9 @@ public:
 	~PAR2ProcOCL();
 	void setSliceSize(size_t _sliceSize) override;
 	bool init(Galois16OCLMethods method = GF16OCL_AUTO, unsigned targetInputBatch=0, unsigned targetIters=0, unsigned targetGrouping=0);
-	PAR2ProcBackendAddResult addInput(const void* buffer, size_t size, uint16_t inputNum, bool flush, const PAR2ProcPlainCb& cb) override;
-	PAR2ProcBackendAddResult dummyInput(uint16_t inputNum, bool flush = false) override;
+	PAR2ProcBackendAddResult hasSpace() const override;
+	void addInput(const void* buffer, size_t size, uint16_t inputNum, bool flush, const PAR2ProcPlainCb& cb) override;
+	void dummyInput(uint16_t inputNum, bool flush = false) override;
 	bool fillInput(const void* buffer) override;
 	void flush() override;
 	void getOutput(unsigned index, void* output, const PAR2ProcOutputCb& cb) override;
@@ -237,9 +241,4 @@ public:
 	static inline const char* methodToText(Galois16OCLMethods m) {
 		return Galois16OCLMethodsText[(int)m];
 	}
-	
-	
-	ThreadNotifyQueue<PAR2ProcOCL> _sent;
-	ThreadNotifyQueue<PAR2ProcOCL> _recv;
-	ThreadNotifyQueue<PAR2ProcOCL> _proc;
 };

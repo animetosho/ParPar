@@ -48,19 +48,21 @@ private:
 	
 	void run_kernel(unsigned inBuf, unsigned numInputs) override;
 	
+	ThreadNotifyQueue<PAR2ProcCPU> _queueSent;
+	ThreadNotifyQueue<PAR2ProcCPU> _queueProc;
+	ThreadNotifyQueue<PAR2ProcCPU> _queueRecv;
 	void _after_computation(void* req);
 	void _after_prepare_chunk(void* req);
 	void _after_finish(void* req);
+	
+	static void transfer_chunk(void *req);
+	static void compute_worker(void *req);
 	
 	// disable copy constructor
 	PAR2ProcCPU(const PAR2ProcCPU&);
 	PAR2ProcCPU& operator=(const PAR2ProcCPU&);
 	
 public:
-	ThreadNotifyQueue<PAR2ProcCPU> _prepared;
-	ThreadNotifyQueue<PAR2ProcCPU> _processed;
-	ThreadNotifyQueue<PAR2ProcCPU> _outputted;
-	
 	explicit PAR2ProcCPU(uv_loop_t* _loop, int stagingAreas=2);
 	explicit inline PAR2ProcCPU(int stagingAreas=2) : PAR2ProcCPU(uv_default_loop(), stagingAreas) {}
 	void setSliceSize(size_t _sliceSize) override;
@@ -100,8 +102,9 @@ public:
 		return alignedSliceSize;
 	}
 	
-	PAR2ProcBackendAddResult addInput(const void* buffer, size_t size, uint16_t inputNum, bool flush, const PAR2ProcPlainCb& cb) override;
-	PAR2ProcBackendAddResult dummyInput(uint16_t inputNum, bool flush = false) override;
+	PAR2ProcBackendAddResult hasSpace() const override;
+	void addInput(const void* buffer, size_t size, uint16_t inputNum, bool flush, const PAR2ProcPlainCb& cb) override;
+	void dummyInput(uint16_t inputNum, bool flush = false) override;
 	bool fillInput(const void* buffer) override;
 	void flush() override;
 	void getOutput(unsigned index, void* output, const PAR2ProcOutputCb& cb) override;

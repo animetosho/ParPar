@@ -86,7 +86,7 @@ bool PAR2Proc::setCurrentSliceSize(size_t newSliceSize) {
 	bool success = true;
 	size_t pos = 0;
 	for(auto& backend : backends) {
-		backend.currentSliceSize = std::min(currentSliceSize-pos, backend.currentSliceSize);
+		backend.currentSliceSize = (std::min)(currentSliceSize-pos, backend.currentSliceSize);
 		backend.currentOffset = pos;
 		success = success && backend.be->setCurrentSliceSize(backend.currentSliceSize);
 		pos += backend.currentSliceSize;
@@ -139,7 +139,7 @@ bool PAR2Proc::addInput(const void* buffer, size_t size, uint16_t inputNum, bool
 			}
 		})).first;
 		for(auto& backend : backends) {
-			size_t amount = std::min(size-backend.currentOffset, backend.currentSliceSize);
+			size_t amount = (std::min)(size-backend.currentOffset, backend.currentSliceSize);
 			if(backend.currentOffset >= size || amount == 0)
 				cbRef->second.backendsActive--;
 		}
@@ -150,12 +150,14 @@ bool PAR2Proc::addInput(const void* buffer, size_t size, uint16_t inputNum, bool
 	bool success = true;
 	for(auto& backend : backends) {
 		if(backend.currentOffset >= size) continue;
-		size_t amount = std::min(size-backend.currentOffset, backend.currentSliceSize);
+		size_t amount = (std::min)(size-backend.currentOffset, backend.currentSliceSize);
 		if(amount == 0) continue;
 		if(backend.added.find(inputNum) == backend.added.end()) {
-			bool addSuccessful = backend.be->addInput(static_cast<const char*>(buffer) + backend.currentOffset, amount, inputNum, flush, cbRef->second.backendCb) != PROC_ADD_FULL;
-			success = success && addSuccessful;
-			if(addSuccessful) backend.added.insert(inputNum);
+			bool canAdd = backend.be->hasSpace() != PROC_ADD_FULL;
+			if(canAdd)
+				backend.be->addInput(static_cast<const char*>(buffer) + backend.currentOffset, amount, inputNum, flush, cbRef->second.backendCb);
+			success = success && canAdd;
+			if(canAdd) backend.added.insert(inputNum);
 		}
 	}
 	if(success) {
@@ -173,9 +175,11 @@ bool PAR2Proc::dummyInput(size_t size, uint16_t inputNum, bool flush) {
 	for(auto& backend : backends) {
 		if(backend.currentOffset >= size || backend.currentSliceSize == 0) continue;
 		if(backend.added.find(inputNum) == backend.added.end()) {
-			bool addSuccessful = backend.be->dummyInput(inputNum, flush) != PROC_ADD_FULL;
-			success = success && addSuccessful;
-			if(addSuccessful) backend.added.insert(inputNum);
+			bool canAdd = backend.be->hasSpace() != PROC_ADD_FULL;
+			if(canAdd)
+				backend.be->dummyInput(inputNum, flush);
+			success = success && canAdd;
+			if(canAdd) backend.added.insert(inputNum);
 		}
 	}
 	if(success) {
