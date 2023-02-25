@@ -147,12 +147,9 @@ class PAR2ProcOCL : public IPAR2ProcBackend {
 	
 	void reset_state();
 	
-	ThreadNotifyQueue<PAR2ProcOCL> _queueSent;
-	ThreadNotifyQueue<PAR2ProcOCL> _queueProc;
-	ThreadNotifyQueue<PAR2ProcOCL> _queueRecv;
-	void _after_sent(void* _req);
-	void _after_recv(void* _req);
-	void _after_proc(void* _req);
+	void _notifySent(void* _req) override;
+	void _notifyRecv(void* _req) override;
+	void _notifyProc(void* _req) override;
 	
 	// disable copy constructor
 	PAR2ProcOCL(const PAR2ProcOCL&);

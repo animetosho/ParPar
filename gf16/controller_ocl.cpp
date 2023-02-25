@@ -25,21 +25,25 @@ int PAR2ProcOCL::load_runtime() {
 
 
 PAR2ProcOCL::PAR2ProcOCL(uv_loop_t* _loop, int platformId, int deviceId, int stagingAreas)
-: IPAR2ProcBackend(nullptr), staging(stagingAreas), allocatedSliceSize(0), endSignalled(false),
-  _queueSent(_loop, this, &PAR2ProcOCL::_after_sent),
-  _queueProc(_loop, this, &PAR2ProcOCL::_after_proc),
-  _queueRecv(_loop, this, &PAR2ProcOCL::_after_recv) {
+: IPAR2ProcBackend(_loop), staging(stagingAreas), allocatedSliceSize(0), endSignalled(false) {
 	_initSuccess = false;
 	zeroes = NULL;
 	
-	if(!getDevice(device, platformId, deviceId)) return;
+	if(!getDevice(device, platformId, deviceId)) {
+		loop = nullptr;
+		return;
+	}
 	context = cl::Context(device);
 	
 	// we only support little-endian hosts and devices
 #if !defined(_MSC_VER) && __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+	loop = nullptr;
 	return;
 #endif
-	if(device.getInfo<CL_DEVICE_ENDIAN_LITTLE>() != CL_TRUE) return;
+	if(device.getInfo<CL_DEVICE_ENDIAN_LITTLE>() != CL_TRUE) {
+		loop = nullptr;
+		return;
+	}
 	
 	try {
 		queue = cl::CommandQueue(context, device, 0);
@@ -51,7 +55,6 @@ PAR2ProcOCL::PAR2ProcOCL(uv_loop_t* _loop, int platformId, int deviceId, int sta
 	}
 	
 	queueEvents.reserve(2);
-	loop = _loop;
 	_deviceId = deviceId;
 }
 
@@ -254,7 +257,7 @@ struct send_data {
 	PAR2ProcPlainCb cb;
 };
 
-void PAR2ProcOCL::_after_sent(void* _req) {
+void PAR2ProcOCL::_notifySent(void* _req) {
 	auto req = static_cast<struct send_data*>(_req);
 	pendingInCallbacks--;
 	if(req->cb) req->cb();
@@ -375,7 +378,7 @@ struct recv_data {
 	PAR2ProcOutputCb cb;
 };
 
-void PAR2ProcOCL::_after_recv(void* _req) {
+void PAR2ProcOCL::_notifyRecv(void* _req) {
 	auto req = static_cast<struct recv_data*>(_req);
 	pendingOutCallbacks--;
 	// TODO: need to verify cksum
@@ -409,7 +412,7 @@ struct compute_req {
 };
 
 
-void PAR2ProcOCL::_after_proc(void* _req) {
+void PAR2ProcOCL::_notifyProc(void* _req) {
 	auto req = static_cast<struct compute_req*>(_req);
 	staging[req->procIdx].isActive = false;
 	stagingActiveCount--;

@@ -45,12 +45,9 @@ private:
 	
 	void run_kernel(unsigned inBuf, unsigned numInputs) override;
 	
-	ThreadNotifyQueue<PAR2ProcCPU> _queueSent;
-	ThreadNotifyQueue<PAR2ProcCPU> _queueProc;
-	ThreadNotifyQueue<PAR2ProcCPU> _queueRecv;
-	void _after_computation(void* req);
-	void _after_prepare_chunk(void* req);
-	void _after_finish(void* req);
+	void _notifySent(void* _req) override;
+	void _notifyRecv(void* _req) override;
+	void _notifyProc(void* _req) override;
 	
 	static void transfer_chunk(void *req);
 	static void compute_worker(void *req);

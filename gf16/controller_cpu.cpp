@@ -15,10 +15,7 @@ PAR2ProcCPUStaging::~PAR2ProcCPUStaging() {
 
 /** initialization **/
 PAR2ProcCPU::PAR2ProcCPU(uv_loop_t* _loop, int stagingAreas)
-: IPAR2ProcBackend(_loop), sliceSize(0), numThreads(0), gf(NULL), staging(stagingAreas), memProcessing(NULL), transferThread(PAR2ProcCPU::transfer_chunk),
-  _queueSent(_loop, this, &PAR2ProcCPU::_after_prepare_chunk),
-  _queueProc(_loop, this, &PAR2ProcCPU::_after_computation),
-  _queueRecv(_loop, this, &PAR2ProcCPU::_after_finish) {
+: IPAR2ProcBackend(_loop), sliceSize(0), numThreads(0), gf(NULL), staging(stagingAreas), memProcessing(NULL), transferThread(PAR2ProcCPU::transfer_chunk) {
 	
 	// default number of threads = number of CPUs available
 	setNumThreads(-1);
@@ -249,7 +246,7 @@ void PAR2ProcCPU::transfer_chunk(void* req) {
 	}
 }
 
-void PAR2ProcCPU::_after_prepare_chunk(void* _req) {
+void PAR2ProcCPU::_notifySent(void* _req) {
 	auto data = static_cast<struct transfer_data*>(_req);
 	if(data->submitInBufs) {
 		// queue async compute
@@ -357,7 +354,7 @@ void PAR2ProcCPU::flush() {
 }
 
 /** finish **/
-void PAR2ProcCPU::_after_finish(void* _req) {
+void PAR2ProcCPU::_notifyRecv(void* _req) {
 	auto data = static_cast<struct transfer_data*>(_req);
 	// signal output ready
 	data->cbOut(data->cksumSuccess);
@@ -501,7 +498,7 @@ void PAR2ProcCPU::run_kernel(unsigned inBuf, unsigned numInputs) {
 	processingAdd = true;
 }
 
-void PAR2ProcCPU::_after_computation(void* _req) {
+void PAR2ProcCPU::_notifyProc(void* _req) {
 	auto req = static_cast<struct compute_req*>(_req);
 	staging[req->inBufId].isActive = false;
 	stagingActiveCount--;

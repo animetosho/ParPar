@@ -35,8 +35,20 @@ protected:
 	virtual void run_kernel(unsigned stagingArea, unsigned numInputs) = 0;
 	unsigned currentStagingArea, currentStagingInputs;
 	unsigned inputBatchSize, stagingActiveCount;
+	
+	ThreadNotifyQueue<IPAR2ProcBackend> _queueSent;
+	ThreadNotifyQueue<IPAR2ProcBackend> _queueProc;
+	ThreadNotifyQueue<IPAR2ProcBackend> _queueRecv;
+	virtual void _notifySent(void* _req) = 0;
+	virtual void _notifyRecv(void* _req) = 0;
+	virtual void _notifyProc(void* _req) = 0;
+	
 public:
-	IPAR2ProcBackend(uv_loop_t* _loop) : loop(_loop), processingAdd(false), progressCb(nullptr) {}
+	IPAR2ProcBackend(uv_loop_t* _loop)
+	: loop(_loop), processingAdd(false), progressCb(nullptr),
+	  _queueSent(_loop, this, &IPAR2ProcBackend::_notifySent),
+	  _queueProc(_loop, this, &IPAR2ProcBackend::_notifyProc),
+	  _queueRecv(_loop, this, &IPAR2ProcBackend::_notifyRecv) {}
 	int getNumRecoverySlices() const {
 		return outputExponents.size();
 	}
