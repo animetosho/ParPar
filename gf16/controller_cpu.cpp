@@ -15,7 +15,7 @@ PAR2ProcCPUStaging::~PAR2ProcCPUStaging() {
 
 /** initialization **/
 PAR2ProcCPU::PAR2ProcCPU(uv_loop_t* _loop, int stagingAreas)
-: loop(_loop), sliceSize(0), numThreads(0), gf(NULL), staging(stagingAreas), memProcessing(NULL), transferThread(PAR2ProcCPU::transfer_chunk),
+: IPAR2ProcBackend(_loop), sliceSize(0), numThreads(0), gf(NULL), staging(stagingAreas), memProcessing(NULL), transferThread(PAR2ProcCPU::transfer_chunk),
   _queueSent(_loop, this, &PAR2ProcCPU::_after_prepare_chunk),
   _queueProc(_loop, this, &PAR2ProcCPU::_after_computation),
   _queueRecv(_loop, this, &PAR2ProcCPU::_after_finish) {
@@ -130,8 +130,8 @@ bool PAR2ProcCPU::setCurrentSliceSize(size_t newSliceSize) {
 		ret = reallocMemInput();
 		if(memProcessing) {
 			freeProcessingMem();
-			if(outputExp.size()) {
-				ALIGN_ALLOC(memProcessing, outputExp.size() * alignedSliceSize, alignment);
+			if(outputExponents.size()) {
+				ALIGN_ALLOC(memProcessing, outputExponents.size() * alignedSliceSize, alignment);
 				if(!memProcessing) ret = false;
 			}
 		}
@@ -151,10 +151,10 @@ bool PAR2ProcCPU::setCurrentSliceSize(size_t newSliceSize) {
 bool PAR2ProcCPU::setRecoverySlices(unsigned numSlices, const uint16_t* exponents) {
 	// TODO: consider throwing if numSlices > previously set, or some mechanism to resize buffer
 	
-	outputExp.clear();
+	outputExponents.clear();
 	if(numSlices) {
-		outputExp.resize(numSlices);
-		memcpy(outputExp.data(), exponents, numSlices * sizeof(uint16_t));
+		outputExponents.resize(numSlices);
+		memcpy(outputExponents.data(), exponents, numSlices * sizeof(uint16_t));
 		
 		for(auto& area : staging)
 			area.procCoeffs.resize(numSlices * inputBatchSize);
@@ -372,7 +372,7 @@ void PAR2ProcCPU::getOutput(unsigned index, void* output, const PAR2ProcOutputCb
 	data->size = currentSliceSize;
 	data->gf = gf;
 	data->dst = output;
-	data->numBufs = outputExp.size();
+	data->numBufs = outputExponents.size();
 	data->index = index;
 	data->chunkLen = chunkLen;
 	data->cbOut = cb;
@@ -465,8 +465,8 @@ void PAR2ProcCPU::run_kernel(unsigned inBuf, unsigned numInputs) {
 	// compute matrix slice
 	for(unsigned inp=0; inp<numInputs; inp++) {
 		uint16_t inputLog = gfmat_input_log(area.inputNums[inp]);
-		for(unsigned out=0; out<outputExp.size(); out++) {
-			area.procCoeffs[inp + out*numInputs] = gfmat_coeff_from_log(inputLog, outputExp[out]);
+		for(unsigned out=0; out<outputExponents.size(); out++) {
+			area.procCoeffs[inp + out*numInputs] = gfmat_coeff_from_log(inputLog, outputExponents[out]);
 		}
 	}
 	
@@ -479,9 +479,9 @@ void PAR2ProcCPU::run_kernel(unsigned inBuf, unsigned numInputs) {
 		struct compute_req* req = new struct compute_req;
 		req->numInputs = numInputs;
 		req->inputGrouping = inputBatchSize;
-		req->numOutputs = outputExp.size();
+		req->numOutputs = outputExponents.size();
 		req->firstInput = area.inputNums[0];
-		req->oNums = outputExp.data();
+		req->oNums = outputExponents.data();
 		req->coeffs = area.procCoeffs.data();
 		req->len = thisChunkLen; // TODO: consider sending multiple chunks, instead of one at a time? allows for prefetching second chunk; alternatively, allow worker to peek into queue when prefetching?
 		req->chunkSize = thisChunkLen;

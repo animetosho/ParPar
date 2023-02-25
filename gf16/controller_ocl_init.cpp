@@ -1059,6 +1059,7 @@ bool PAR2ProcOCL::setup_kernels(Galois16OCLMethods method, unsigned targetInputB
 	size_t deviceLocalSize = device.getInfo<CL_DEVICE_LOCAL_MEM_SIZE>() - 128; // subtract a little to allow some spare space if the device needs it
 	//size_t deviceGlobalSize = device.getInfo<CL_DEVICE_GLOBAL_MEM_SIZE>(); // TODO: check sliceSize*numOutputs ?
 	
+	unsigned numOutputs = outputExponents.size();
 	unsigned outputsPerThread = numOutputs; // currently, process all outputs on every kernel invocation
 	std::stringstream sourceStream;
 	

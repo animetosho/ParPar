@@ -97,12 +97,8 @@ public:
 
 
 class PAR2ProcOCL : public IPAR2ProcBackend {
-	uv_loop_t* loop; // is NULL when closed
-	
 	bool _initSuccess;
 	// method/input parameters
-	unsigned numOutputs;
-	std::vector<uint16_t> outputExponents;
 	size_t sliceSize;
 	size_t sliceSizeAligned;
 	// OpenCL stuff
@@ -198,9 +194,6 @@ public:
 	
 	bool setCurrentSliceSize(size_t newSliceSize) override; // can only set to lower than allocated in init()
 	bool setRecoverySlices(unsigned _numOutputs, const uint16_t* outputExp = NULL) override;
-	inline int getNumRecoverySlices() const override {
-		return numOutputs;
-	}
 	inline size_t getAllocSliceSize() const {
 		return allocatedSliceSize;
 	}

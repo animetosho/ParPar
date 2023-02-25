@@ -27,14 +27,19 @@ struct PAR2ProcBackendCloseData {
 };
 class IPAR2ProcBackend {
 protected:
+	uv_loop_t* loop; // is NULL when closed
+	std::vector<uint16_t> outputExponents; // recovery exponents
+	
 	bool processingAdd;
 	PAR2ProcCompleteCb progressCb;
 	virtual void run_kernel(unsigned stagingArea, unsigned numInputs) = 0;
 	unsigned currentStagingArea, currentStagingInputs;
 	unsigned inputBatchSize, stagingActiveCount;
 public:
-	IPAR2ProcBackend() : processingAdd(false), progressCb(nullptr) {}
-	virtual int getNumRecoverySlices() const = 0;
+	IPAR2ProcBackend(uv_loop_t* _loop) : loop(_loop), processingAdd(false), progressCb(nullptr) {}
+	int getNumRecoverySlices() const {
+		return outputExponents.size();
+	}
 	virtual void setSliceSize(size_t size) = 0;
 	void setProgressCb(const PAR2ProcCompleteCb& _progressCb) {
 		progressCb = _progressCb;

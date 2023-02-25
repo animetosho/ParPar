@@ -25,7 +25,7 @@ int PAR2ProcOCL::load_runtime() {
 
 
 PAR2ProcOCL::PAR2ProcOCL(uv_loop_t* _loop, int platformId, int deviceId, int stagingAreas)
-: loop(nullptr), staging(stagingAreas), allocatedSliceSize(0), endSignalled(false),
+: IPAR2ProcBackend(nullptr), staging(stagingAreas), allocatedSliceSize(0), endSignalled(false),
   _queueSent(_loop, this, &PAR2ProcOCL::_after_sent),
   _queueProc(_loop, this, &PAR2ProcOCL::_after_proc),
   _queueRecv(_loop, this, &PAR2ProcOCL::_after_recv) {
@@ -67,7 +67,6 @@ void PAR2ProcOCL::setSliceSize(size_t _sliceSize) {
 }
 bool PAR2ProcOCL::init(Galois16OCLMethods method, unsigned targetInputBatch, unsigned targetIters, unsigned targetGrouping) {
 	if(!_initSuccess) return false;
-	numOutputs = 0;
 	outputExponents.clear();
 	
 	pendingInCallbacks = pendingOutCallbacks = 0;
@@ -106,18 +105,17 @@ bool PAR2ProcOCL::setRecoverySlices(unsigned _numOutputs, const uint16_t* output
 		}
 	}
 	
-	if(_numOutputs != numOutputs || (coeffType == GF16OCL_COEFF_LOG_SEQ && !coeffIsSeq)) {
+	if(_numOutputs != outputExponents.size() || (coeffType == GF16OCL_COEFF_LOG_SEQ && !coeffIsSeq)) {
 		// need to re-init as the code assumes a fixed number of outputs
-		numOutputs = _numOutputs;
-		outputExponents = std::vector<uint16_t>(numOutputs);
+		outputExponents = std::vector<uint16_t>(_numOutputs);
 		if(!setup_kernels(_setupMethod, _setupTargetInputBatch, _setupTargetIters, _setupTargetGrouping, coeffIsSeq))
 			return false;
 	}
 	
-	memcpy(outputExponents.data(), outputExp, numOutputs*sizeof(uint16_t));
+	memcpy(outputExponents.data(), outputExp, outputExponents.size()*sizeof(uint16_t));
 	if(coeffType == GF16OCL_COEFF_LOG) {
 		cl::Event writeEvent;
-		queue.enqueueWriteBuffer(buffer_outExp, CL_FALSE, 0, numOutputs*sizeof(uint16_t), outputExponents.data(), &queueEvents, &writeEvent);
+		queue.enqueueWriteBuffer(buffer_outExp, CL_FALSE, 0, outputExponents.size()*sizeof(uint16_t), outputExponents.data(), &queueEvents, &writeEvent);
 		queueEvents.clear();
 		queueEvents.reserve(2);
 		queueEvents.push_back(writeEvent);
@@ -280,7 +278,7 @@ void PAR2ProcOCL::addInput(const void* buffer, size_t size, uint16_t inputNum, b
 		area.tmpCoeffs[currentStagingInputs] = gfmat_input_log(inputNum);
 	} else {
 		uint16_t inputLog = gfmat_input_log(inputNum);
-		for(unsigned i=0; i<numOutputs; i++)
+		for(unsigned i=0; i<outputExponents.size(); i++)
 			area.tmpCoeffs[currentStagingInputs + i*inputBatchSize] = gfmat_coeff_from_log(inputLog, outputExponents[i]);
 	}
 	if(currentStagingInputs == 0)
@@ -342,7 +340,7 @@ void PAR2ProcOCL::dummyInput(uint16_t inputNum, bool flush) {
 		area.tmpCoeffs[currentStagingInputs] = gfmat_input_log(inputNum);
 	} else {
 		uint16_t inputLog = gfmat_input_log(inputNum);
-		for(unsigned i=0; i<numOutputs; i++)
+		for(unsigned i=0; i<outputExponents.size(); i++)
 			area.tmpCoeffs[currentStagingInputs + i*inputBatchSize] = gfmat_coeff_from_log(inputLog, outputExponents[i]);
 	}
 	if(currentStagingInputs == 0)
@@ -428,7 +426,7 @@ void PAR2ProcOCL::run_kernel(unsigned buf, unsigned numInputs) {
 	auto& area = staging[buf];
 	// transfer coefficient list
 	cl::Event coeffEvent;
-	queue.enqueueWriteBuffer(area.coeffs, CL_FALSE, 0, inputBatchSize * (coeffType!=GF16OCL_COEFF_NORMAL ? 1 : numOutputs) * sizeof(uint16_t), area.tmpCoeffs.data(), NULL, &coeffEvent);
+	queue.enqueueWriteBuffer(area.coeffs, CL_FALSE, 0, inputBatchSize * (coeffType!=GF16OCL_COEFF_NORMAL ? 1 : outputExponents.size()) * sizeof(uint16_t), area.tmpCoeffs.data(), NULL, &coeffEvent);
 	queueEvents.push_back(coeffEvent);
 	
 	stagingActiveCount++;

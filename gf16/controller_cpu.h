@@ -19,13 +19,10 @@ public:
 
 class PAR2ProcCPU : public IPAR2ProcBackend {
 private:
-	uv_loop_t* loop; // is NULL when closed
-	
 	size_t sliceSize; // actual whole slice size
 	size_t alignedSliceSize; // allocated memory for slice (>=sliceSize)
 	size_t currentSliceSize; // current slice chunk size (<=sliceSize)
 	size_t alignedCurrentSliceSize; // memory used for current slice chunk (<=alignedSliceSize)
-	std::vector<uint16_t> outputExp; // recovery exponents
 	
 	int numThreads;
 	std::vector<MessageThread> thWorkers; // main processing worker threads
@@ -74,9 +71,6 @@ public:
 	bool setCurrentSliceSize(size_t newSliceSize) override;
 	
 	bool setRecoverySlices(unsigned numSlices, const uint16_t* exponents = NULL) override;
-	inline int getNumRecoverySlices() const override {
-		return outputExp.size();
-	}
 	void freeProcessingMem() override;
 	
 	void setNumThreads(int threads);
