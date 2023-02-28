@@ -64,10 +64,7 @@ private:
 public:
 	explicit PAR2ProcCPU(IF_LIBUV(uv_loop_t* _loop,) int stagingAreas=2);
 	void setSliceSize(size_t _sliceSize) override;
-#ifdef USE_LIBUV
-	void deinit(PAR2ProcPlainCb cb) override;
-#endif
-	void deinit() override;
+	void _deinit() override;
 	~PAR2ProcCPU();
 	
 	bool init(Galois16Methods method = GF16_AUTO, unsigned inputGrouping = 0, size_t chunkLen = 0);

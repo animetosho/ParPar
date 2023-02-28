@@ -130,10 +130,7 @@ class PAR2ProcOCL : public IPAR2ProcBackend {
 	unsigned outputsPerGroup;
 	
 	
-	int pendingInCallbacks, pendingOutCallbacks;
-#ifdef USE_LIBUV
-	PAR2ProcPlainCb deinitCallback;
-#endif
+	int pendingInCallbacks;
 	bool endSignalled;
 	
 	
@@ -208,10 +205,7 @@ public:
 		return outputsPerGroup;
 	}
 	
-#ifdef USE_LIBUV
-	void deinit(PAR2ProcPlainCb cb) override;
-#endif
-	void deinit() override;
+	void _deinit() override;
 	void freeProcessingMem() override {}
 	
 	bool isEmpty() const override {

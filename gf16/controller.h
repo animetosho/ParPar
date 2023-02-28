@@ -41,12 +41,6 @@ enum PAR2ProcBackendAddResult {
 	PROC_ADD_FULL,
 	PROC_ADD_ALL_FULL // controller only
 };
-#ifdef USE_LIBUV
-struct PAR2ProcBackendCloseData {
-	PAR2ProcPlainCb cb;
-	int refCount;
-};
-#endif
 class IPAR2ProcBackend {
 protected:
 #ifdef USE_LIBUV
@@ -60,7 +54,9 @@ protected:
 	unsigned inputBatchSize, stagingActiveCount;
 	
 #ifdef USE_LIBUV
+	unsigned pendingOutCallbacks;
 	PAR2ProcCompleteCb progressCb;
+	PAR2ProcPlainCb deinitCallback;
 	
 	ThreadNotifyQueue<IPAR2ProcBackend> _queueSent;
 	ThreadNotifyQueue<IPAR2ProcBackend> _queueProc;
@@ -70,10 +66,12 @@ protected:
 	virtual void _notifyProc(void* _req) = 0;
 #endif
 	
+	virtual void _deinit() = 0;
+	
 public:
 #ifdef USE_LIBUV
 	IPAR2ProcBackend(uv_loop_t* _loop)
-	: loop(_loop), processingAdd(false), progressCb(nullptr)
+	: loop(_loop), processingAdd(false), pendingOutCallbacks(0), progressCb(nullptr), deinitCallback(nullptr)
 	, _queueSent(_loop, this, &IPAR2ProcBackend::_notifySent)
 	, _queueProc(_loop, this, &IPAR2ProcBackend::_notifyProc)
 	, _queueRecv(_loop, this, &IPAR2ProcBackend::_notifyRecv)
@@ -113,9 +111,11 @@ public:
 	virtual void waitForAdd() = 0;
 #endif
 	
-	virtual void deinit() = 0;
 #ifdef USE_LIBUV
-	virtual void deinit(PAR2ProcPlainCb cb) = 0;
+	void deinit(PAR2ProcPlainCb cb);
+	void deinit();
+#else
+	inline void deinit() { _deinit(); }
 #endif
 	virtual void freeProcessingMem() = 0;
 

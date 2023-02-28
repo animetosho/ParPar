@@ -289,9 +289,7 @@ FUTURE_RETURN_T PAR2Proc::endInput(IF_LIBUV(const PAR2ProcPlainCb& _finishCb)) {
 	if(allIsEmpty)
 		processing_finished();
 	
-#ifndef USE_LIBUV
-	return finishProm.get_future();
-#endif
+	IF_NOT_LIBUV(return finishProm.get_future());
 }
 
 FUTURE_RETURN_BOOL_T PAR2Proc::getOutput(unsigned index, void* output  IF_LIBUV(, const PAR2ProcOutputCb& cb)) const {
@@ -405,4 +403,44 @@ void PAR2Proc::deinit(PAR2ProcPlainCb cb) {
 			}
 		});
 }
+
+struct PAR2ProcBackendCloseData {
+	PAR2ProcPlainCb cb;
+	int refCount;
+};
+void IPAR2ProcBackend::deinit(PAR2ProcPlainCb cb) {
+	if(pendingOutCallbacks) {
+		deinitCallback = cb;
+		return;
+	}
+	
+	if(!loop) return;
+	loop = nullptr;
+	
+	_deinit();
+	
+	auto* freeData = new struct PAR2ProcBackendCloseData;
+	freeData->cb = cb;
+	freeData->refCount = 3;
+	auto closeCb = [](void* data) {
+		auto* freeData = static_cast<struct PAR2ProcBackendCloseData*>(data);
+		if(--(freeData->refCount) == 0) {
+			freeData->cb();
+			delete freeData;
+		}
+	};
+	_queueSent.close(freeData, closeCb);
+	_queueProc.close(freeData, closeCb);
+	_queueRecv.close(freeData, closeCb);
+}
+void IPAR2ProcBackend::deinit() {
+	assert(pendingOutCallbacks == 0);
+	if(!loop) return;
+	loop = nullptr;
+	_deinit();
+	_queueSent.close();
+	_queueRecv.close();
+	_queueProc.close();
+}
 #endif
+

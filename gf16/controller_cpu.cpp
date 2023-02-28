@@ -173,36 +173,8 @@ void PAR2ProcCPU::freeProcessingMem() {
 		memProcessing = NULL;
 	}
 }
-#ifdef USE_LIBUV
-void PAR2ProcCPU::deinit(PAR2ProcPlainCb cb) {
+void PAR2ProcCPU::_deinit() {
 	freeGf();
-	if(!loop) return;
-	loop = nullptr;
-	
-	auto* freeData = new struct PAR2ProcBackendCloseData;
-	freeData->cb = cb;
-	freeData->refCount = 3;
-	auto closeCb = [](void* data) {
-		auto* freeData = static_cast<struct PAR2ProcBackendCloseData*>(data);
-		if(--(freeData->refCount) == 0) {
-			freeData->cb();
-			delete freeData;
-		}
-	};
-	_queueSent.close(freeData, closeCb);
-	_queueProc.close(freeData, closeCb);
-	_queueRecv.close(freeData, closeCb);
-}
-#endif
-void PAR2ProcCPU::deinit() {
-	freeGf();
-#ifdef USE_LIBUV
-	if(!loop) return;
-	loop = nullptr;
-	_queueSent.close();
-	_queueProc.close();
-	_queueRecv.close();
-#endif
 }
 
 PAR2ProcCPU::~PAR2ProcCPU() {
@@ -372,9 +344,12 @@ void PAR2ProcCPU::flush() {
 #ifdef USE_LIBUV
 void PAR2ProcCPU::_notifyRecv(void* _req) {
 	auto data = static_cast<struct transfer_data*>(_req);
+	pendingOutCallbacks--;
 	// signal output ready
 	data->cbOut(data->cksumSuccess);
 	delete data;
+	
+	if(pendingOutCallbacks < 1 && deinitCallback) deinit(deinitCallback);
 }
 #endif
 
@@ -390,6 +365,7 @@ FUTURE_RETURN_BOOL_T PAR2ProcCPU::getOutput(unsigned index, void* output  IF_LIB
 	data->index = index;
 	data->chunkLen = chunkLen;
 	IF_LIBUV(data->cbOut = cb);
+	IF_LIBUV(pendingOutCallbacks++);
 	transferThread.send(data);
 	
 	IF_NOT_LIBUV(return data->promOut.get_future());

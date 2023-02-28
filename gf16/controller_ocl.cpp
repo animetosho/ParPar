@@ -72,7 +72,7 @@ bool PAR2ProcOCL::init(Galois16OCLMethods method, unsigned targetInputBatch, uns
 	if(!_initSuccess) return false;
 	outputExponents.clear();
 	
-	pendingInCallbacks = pendingOutCallbacks = 0;
+	pendingInCallbacks = 0;
 	
 	if(method == GF16OCL_AUTO) method = default_method();
 	_setupMethod = method;
@@ -142,45 +142,9 @@ void PAR2ProcOCL::reset_state() {
 	stagingActiveCount = 0;
 }
 
-#ifdef USE_LIBUV
-void PAR2ProcOCL::deinit(PAR2ProcPlainCb cb) {
-	if(pendingOutCallbacks) {
-		deinitCallback = cb;
-		return;
-	}
-	if(!loop) return;
-	loop = nullptr;
+void PAR2ProcOCL::_deinit() {
 	queue.finish();
 	queueEvents.clear();
-	
-	auto* freeData = new struct PAR2ProcBackendCloseData;
-	freeData->cb = cb;
-	freeData->refCount = 3;
-	auto closeCb = [](void* data) {
-		auto* freeData = static_cast<struct PAR2ProcBackendCloseData*>(data);
-		if(--(freeData->refCount) == 0) {
-			freeData->cb();
-			delete freeData;
-		}
-	};
-	_queueSent.close(freeData, closeCb);
-	_queueRecv.close(freeData, closeCb);
-	_queueProc.close(freeData, closeCb);
-}
-#endif
-void PAR2ProcOCL::deinit() {
-#ifdef USE_LIBUV
-	if(!loop) return;
-	loop = nullptr;
-#endif
-	// TODO: wait for finish? (like deinitCallback)
-	queue.finish();
-	queueEvents.clear();
-#ifdef USE_LIBUV
-	_queueSent.close();
-	_queueRecv.close();
-	_queueProc.close();
-#endif
 }
 
 
@@ -414,8 +378,8 @@ FUTURE_RETURN_BOOL_T PAR2ProcOCL::getOutput(unsigned index, void* output  IF_LIB
 	
 	auto* req = new struct recv_data;
 	IF_LIBUV(req->cb = cb);
+	IF_LIBUV(pendingOutCallbacks++);
 	req->parent = this;
-	pendingOutCallbacks++;
 	readEvent.setCallback(CL_COMPLETE, [](cl_event, cl_int, void* _req) {
 		auto req = static_cast<struct recv_data*>(_req);
 		NOTIFY_DONE(req, _queueRecv, req->prom, true);
