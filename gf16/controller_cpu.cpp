@@ -373,9 +373,9 @@ FUTURE_RETURN_BOOL_T PAR2ProcCPU::getOutput(unsigned index, void* output  IF_LIB
 
 
 /** main processing **/
-struct compute_req {
+typedef struct : PAR2ProcBackendBaseComputeReq<PAR2ProcCPU> {
 	unsigned inputGrouping;
-	uint16_t numInputs, numOutputs;
+	uint16_t numOutputs;
 	uint16_t firstInput;
 	const uint16_t *oNums;
 	const uint16_t* coeffs;
@@ -384,20 +384,15 @@ struct compute_req {
 	const void* input;
 	void* output;
 	bool add;
-	unsigned inBufId;
 	
 	void* mutScratch;
 	
 	const Galois16Mul* gf;
 	std::atomic<int>* procRefs;
-	PAR2ProcCPU* parent;
-#ifndef USE_LIBUV
-	std::promise<void>* prom;
-#endif
-};
+} compute_req;
 
 void PAR2ProcCPU::compute_worker(void *_req) {
-	struct compute_req* req = static_cast<struct compute_req*>(_req);
+	compute_req* req = static_cast<compute_req*>(_req);
 	
 	const Galois16MethodInfo& gfInfo = req->gf->info();
 	// compute how many inputs regions get prefetched in a muladd_multi call
@@ -472,7 +467,7 @@ void PAR2ProcCPU::run_kernel(unsigned inBuf, unsigned numInputs) {
 	for(unsigned chunk=0; chunk<numChunks; chunk++) {
 		size_t sliceOffset = chunk*chunkLen;
 		size_t thisChunkLen = MIN(alignedCurrentSliceSize-sliceOffset, chunkLen);
-		struct compute_req* req = new struct compute_req;
+		compute_req* req = new compute_req;
 		req->numInputs = numInputs;
 		req->inputGrouping = inputBatchSize;
 		req->numOutputs = outputExponents.size();
@@ -489,7 +484,7 @@ void PAR2ProcCPU::run_kernel(unsigned inBuf, unsigned numInputs) {
 		req->gf = gf;
 		req->parent = this;
 		req->procRefs = &(area.procRefs);
-		req->inBufId = inBuf;
+		req->procIdx = inBuf;
 #ifndef USE_LIBUV
 		area.prom = std::promise<void>();
 		req->prom = &(area.prom);
@@ -503,8 +498,8 @@ void PAR2ProcCPU::run_kernel(unsigned inBuf, unsigned numInputs) {
 
 #ifdef USE_LIBUV
 void PAR2ProcCPU::_notifyProc(void* _req) {
-	auto req = static_cast<struct compute_req*>(_req);
-	staging[req->inBufId].isActive = false;
+	auto req = static_cast<compute_req*>(_req);
+	staging[req->procIdx].isActive = false;
 	stagingActiveCount--;
 	
 	// if add was blocked, allow adds to continue - calling application will need to listen to this event to know to continue

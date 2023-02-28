@@ -392,19 +392,12 @@ FUTURE_RETURN_BOOL_T PAR2ProcOCL::getOutput(unsigned index, void* output  IF_LIB
 
 
 
-struct compute_req {
-	uint16_t numInputs;
-	unsigned procIdx;
-	PAR2ProcOCL* parent;
-#ifndef USE_LIBUV
-	std::promise<void>* prom;
-#endif
-};
+typedef struct PAR2ProcBackendBaseComputeReq<PAR2ProcOCL> compute_req;
 
 
 #ifdef USE_LIBUV
 void PAR2ProcOCL::_notifyProc(void* _req) {
-	auto req = static_cast<struct compute_req*>(_req);
+	auto req = static_cast<compute_req*>(_req);
 	staging[req->procIdx].isActive = false;
 	stagingActiveCount--;
 	pendingInCallbacks--;
@@ -443,14 +436,14 @@ void PAR2ProcOCL::run_kernel(unsigned buf, unsigned numInputs) {
 	queueEvents.clear(); // for coeffType!=GF16OCL_COEFF_NORMAL, assume that the outputs are transferred by the time we enqueue the next kernel
 	
 	// when kernel finishes
-	auto* req = new struct compute_req;
+	auto* req = new compute_req;
 	req->numInputs = numInputs;
 	req->procIdx = buf;
 	req->parent = this;
 	IF_NOT_LIBUV(req->prom = &area.prom);
 	pendingInCallbacks++;
 	area.event.setCallback(CL_COMPLETE, [](cl_event, cl_int, void* _req) {
-		auto req = static_cast<struct compute_req*>(_req);
+		auto req = static_cast<compute_req*>(_req);
 		NOTIFY_DONE(req, _queueProc, *(req->prom));
 		IF_NOT_LIBUV(delete req);
 	}, req);

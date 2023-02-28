@@ -126,6 +126,17 @@ public:
 	virtual ~IPAR2ProcBackend() {}
 };
 
+template<class PClass>
+struct PAR2ProcBackendBaseComputeReq {
+	uint16_t numInputs;
+	unsigned procIdx;
+	PClass* parent;
+#ifndef USE_LIBUV
+	std::promise<void>* prom;
+#endif
+};
+
+
 struct Backend {
 	IPAR2ProcBackend* be;
 	size_t currentOffset;
