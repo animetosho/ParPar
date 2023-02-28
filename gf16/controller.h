@@ -41,6 +41,16 @@ enum PAR2ProcBackendAddResult {
 	PROC_ADD_FULL,
 	PROC_ADD_ALL_FULL // controller only
 };
+class IPAR2ProcStaging {
+public:
+	bool isActive;
+#ifndef USE_LIBUV
+	std::promise<void> prom;
+#endif
+	
+	IPAR2ProcStaging() : isActive(false) {}
+};
+
 class IPAR2ProcBackend {
 protected:
 #ifdef USE_LIBUV
@@ -64,6 +74,11 @@ protected:
 	virtual void _notifySent(void* _req) = 0;
 	virtual void _notifyRecv(void* _req) = 0;
 	virtual void _notifyProc(void* _req) = 0;
+#else
+	static inline void _waitForAdd(IPAR2ProcStaging& area) {
+		if(area.isActive)
+			area.prom.get_future().get();
+	}
 #endif
 	
 	virtual void _deinit() = 0;

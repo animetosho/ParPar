@@ -83,19 +83,15 @@ typedef struct {
 } GF16OCL_MethodInfo;
 
 
-class PAR2ProcOCLStaging {
+class PAR2ProcOCLStaging : public IPAR2ProcStaging {
 public:
 	cl::Buffer input;
 	cl::Buffer coeffs;
 	std::vector<uint16_t> tmpCoeffs;
 	uint16_t firstInput;
 	cl::Event event;
-	bool isActive;
-#ifndef USE_LIBUV
-	std::promise<void> prom;
-#endif
 	
-	PAR2ProcOCLStaging() : isActive(false) {}
+	PAR2ProcOCLStaging() : IPAR2ProcStaging() {}
 };
 
 

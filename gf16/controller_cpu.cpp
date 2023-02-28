@@ -244,8 +244,7 @@ PAR2ProcBackendAddResult PAR2ProcCPU::canAdd() const {
 }
 #ifndef USE_LIBUV
 void PAR2ProcCPU::waitForAdd() {
-	if(!staging[currentStagingArea].isActive) return;
-	staging[currentStagingArea].prom.get_future().get();
+	IPAR2ProcBackend::_waitForAdd(staging[currentStagingArea]);
 }
 #endif
 

@@ -5,18 +5,14 @@
 #include "gf16mul.h"
 
 
-class PAR2ProcCPUStaging {
+class PAR2ProcCPUStaging : public IPAR2ProcStaging {
 public:
 	void* src;
 	std::vector<uint16_t> inputNums;
 	std::vector<uint16_t> procCoeffs;
 	std::atomic<int> procRefs;
-	bool isActive;
-#ifndef USE_LIBUV
-	std::promise<void> prom;
-#endif
 	
-	PAR2ProcCPUStaging() : src(nullptr), isActive(false) {}
+	PAR2ProcCPUStaging() : IPAR2ProcStaging(), src(nullptr) {}
 	~PAR2ProcCPUStaging();
 };
 
