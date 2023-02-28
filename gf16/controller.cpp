@@ -10,9 +10,11 @@ PAR2Proc::PAR2Proc() : endSignalled(false) {
 }
 
 
-bool PAR2Proc::init(size_t sliceSize, const std::vector<struct PAR2ProcBackendAlloc>& _backends, const PAR2ProcCompleteCb& _progressCb) {
+bool PAR2Proc::init(size_t sliceSize, const std::vector<struct PAR2ProcBackendAlloc>& _backends  IF_LIBUV(, const PAR2ProcCompleteCb& _progressCb)) {
+#ifdef USE_LIBUV
 	progressCb = _progressCb;
 	finishCb = nullptr;
+#endif
 	hasAdded = false;
 	
 	currentSliceSize = sliceSize;
@@ -27,9 +29,11 @@ bool PAR2Proc::init(size_t sliceSize, const std::vector<struct PAR2ProcBackendAl
 		backend.be = _backends[i].be;
 		backend.be->setSliceSize(size);
 		
+#ifdef USE_LIBUV
 		backend.be->setProgressCb([this](int numInputs, int firstInput) {
 			this->onBackendProcess(numInputs, firstInput);
 		});
+#endif
 	}
 	return checkBackendAllocation();
 }
@@ -120,6 +124,34 @@ bool PAR2Proc::setRecoverySlices(unsigned numSlices, const uint16_t* exponents) 
 	return success;
 }
 
+PAR2ProcBackendAddResult PAR2Proc::canAdd() const {
+	bool hasEmpty = false, hasBusy = false, hasFull = false;
+	for(const auto& backend : backends) {
+		auto state = backend.be->canAdd();
+		if(state == PROC_ADD_OK)
+			hasEmpty = true;
+		if(state == PROC_ADD_OK_BUSY)
+			hasBusy = true;
+		if(state == PROC_ADD_FULL)
+			hasFull = true;
+	}
+	if(!hasEmpty && !hasBusy && hasFull)
+		return PROC_ADD_ALL_FULL;
+	if(hasEmpty && !hasBusy && !hasFull)
+		return PROC_ADD_OK;
+	if(hasFull)
+		return PROC_ADD_FULL;
+	return PROC_ADD_OK_BUSY;
+}
+
+#ifndef USE_LIBUV
+void PAR2Proc::waitForAdd() {
+	for(auto& backend : backends)
+		backend.be->waitForAdd();
+}
+#endif
+
+#ifdef USE_LIBUV
 bool PAR2Proc::addInput(const void* buffer, size_t size, uint16_t inputNum, bool flush, const PAR2ProcPlainCb& cb) {
 	assert(!endSignalled);
 	
@@ -153,7 +185,7 @@ bool PAR2Proc::addInput(const void* buffer, size_t size, uint16_t inputNum, bool
 		size_t amount = (std::min)(size-backend.currentOffset, backend.currentSliceSize);
 		if(amount == 0) continue;
 		if(backend.added.find(inputNum) == backend.added.end()) {
-			bool canAdd = backend.be->hasSpace() != PROC_ADD_FULL;
+			bool canAdd = backend.be->canAdd() != PROC_ADD_FULL;
 			if(canAdd)
 				backend.be->addInput(static_cast<const char*>(buffer) + backend.currentOffset, amount, inputNum, flush, cbRef->second.backendCb);
 			success = success && canAdd;
@@ -167,6 +199,37 @@ bool PAR2Proc::addInput(const void* buffer, size_t size, uint16_t inputNum, bool
 	}
 	return success;
 }
+#else
+static std::future<void> combine_futures(std::vector<std::future<void>>&& futures) {
+	return std::async(std::launch::async, [](std::vector<std::future<void>>&& futures) {
+		for(auto& f : futures)
+			f.get();
+	}, std::move(futures));
+}
+static std::future<bool> combine_futures_and(std::vector<std::future<bool>>&& futures) {
+	return std::async(std::launch::async, [](std::vector<std::future<bool>>&& futures) -> bool {
+		bool result = true;
+		for(auto& f : futures)
+			result = result && f.get();
+		return result;
+	}, std::move(futures));
+}
+
+std::future<void> PAR2Proc::addInput(const void* buffer, size_t size, uint16_t inputNum, bool flush) {
+	assert(!endSignalled);
+	
+	std::vector<std::future<void>> addFutures;
+	addFutures.reserve(backends.size());
+	
+	for(auto& backend : backends) {
+		if(backend.currentOffset >= size) continue;
+		size_t amount = (std::min)(size-backend.currentOffset, backend.currentSliceSize);
+		if(amount == 0) continue;
+		addFutures.push_back(backend.be->addInput(static_cast<const char*>(buffer) + backend.currentOffset, amount, inputNum, flush));
+	}
+	return combine_futures(std::move(addFutures));
+}
+#endif
 
 bool PAR2Proc::dummyInput(size_t size, uint16_t inputNum, bool flush) {
 	assert(!endSignalled);
@@ -175,7 +238,7 @@ bool PAR2Proc::dummyInput(size_t size, uint16_t inputNum, bool flush) {
 	for(auto& backend : backends) {
 		if(backend.currentOffset >= size || backend.currentSliceSize == 0) continue;
 		if(backend.added.find(inputNum) == backend.added.end()) {
-			bool canAdd = backend.be->hasSpace() != PROC_ADD_FULL;
+			bool canAdd = backend.be->canAdd() != PROC_ADD_FULL;
 			if(canAdd)
 				backend.be->dummyInput(inputNum, flush);
 			success = success && canAdd;
@@ -212,10 +275,10 @@ void PAR2Proc::flush() {
 			backend.be->flush();
 }
 
-void PAR2Proc::endInput(const PAR2ProcPlainCb& _finishCb) {
+FUTURE_RETURN_T PAR2Proc::endInput(IF_LIBUV(const PAR2ProcPlainCb& _finishCb)) {
 	assert(!endSignalled);
 	flush();
-	finishCb = _finishCb;
+	IF_LIBUV(finishCb = _finishCb);
 	bool allIsEmpty = true;
 	for(auto& backend : backends) {
 		if(backend.currentSliceSize == 0) continue;
@@ -225,9 +288,14 @@ void PAR2Proc::endInput(const PAR2ProcPlainCb& _finishCb) {
 	endSignalled = true;
 	if(allIsEmpty)
 		processing_finished();
+	
+#ifndef USE_LIBUV
+	return finishProm.get_future();
+#endif
 }
 
-void PAR2Proc::getOutput(unsigned index, void* output, const PAR2ProcOutputCb& cb) const {
+FUTURE_RETURN_BOOL_T PAR2Proc::getOutput(unsigned index, void* output  IF_LIBUV(, const PAR2ProcOutputCb& cb)) const {
+#ifdef USE_LIBUV
 	if(!hasAdded) {
 		// no recovery was computed -> zero fill result
 		memset(output, 0, currentSliceSize);
@@ -264,8 +332,35 @@ void PAR2Proc::getOutput(unsigned index, void* output, const PAR2ProcOutputCb& c
 			});
 		}
 	}
+	
+#else
+	
+	if(!hasAdded) {
+		// no recovery was computed -> zero fill result
+		memset(output, 0, currentSliceSize);
+		std::promise<bool> prom;
+		prom.set_value(true);
+		return prom.get_future();
+	}
+	
+	std::vector<std::future<bool>> outFutures;
+	outFutures.reserve(backends.size());
+	
+	for(auto& backend : backends) {
+		if(backend.currentSliceSize == 0) continue;
+		auto outputPtr = static_cast<char*>(output) + backend.currentOffset;
+		if(!backend.be->_hasAdded()) {
+			// no computation done on backend -> zero fill part
+			memset(outputPtr, 0, backend.currentSliceSize);
+		} else {
+			outFutures.push_back(backend.be->getOutput(index, outputPtr));
+		}
+	}
+	return combine_futures_and(std::move(outFutures));
+#endif
 }
 
+#ifdef USE_LIBUV
 void PAR2Proc::onBackendProcess(int numInputs, int firstInput) {
 	// since we need to invoke the callback for each backend which completes (for adds to continue), this means this isn't exactly 'progress' any more
 	// TODO: consider renaming
@@ -282,6 +377,7 @@ void PAR2Proc::onBackendProcess(int numInputs, int firstInput) {
 			processing_finished();
 	}
 }
+#endif
 
 void PAR2Proc::processing_finished() {
 	endSignalled = false;
@@ -290,10 +386,15 @@ void PAR2Proc::processing_finished() {
 		if(backend.currentSliceSize > 0)
 			backend.be->processing_finished();
 	
+#ifdef USE_LIBUV
 	if(finishCb) finishCb();
 	finishCb = nullptr;
+#else
+	finishProm.set_value();
+#endif
 }
 
+#ifdef USE_LIBUV
 void PAR2Proc::deinit(PAR2ProcPlainCb cb) {
 	auto* cnt = new int(backends.size());
 	for(auto& backend : backends)
@@ -304,3 +405,4 @@ void PAR2Proc::deinit(PAR2ProcPlainCb cb) {
 			}
 		});
 }
+#endif

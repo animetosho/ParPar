@@ -91,6 +91,9 @@ public:
 	uint16_t firstInput;
 	cl::Event event;
 	bool isActive;
+#ifndef USE_LIBUV
+	std::promise<void> prom;
+#endif
 	
 	PAR2ProcOCLStaging() : isActive(false) {}
 };
@@ -128,7 +131,9 @@ class PAR2ProcOCL : public IPAR2ProcBackend {
 	
 	
 	int pendingInCallbacks, pendingOutCallbacks;
+#ifdef USE_LIBUV
 	PAR2ProcPlainCb deinitCallback;
+#endif
 	bool endSignalled;
 	
 	
@@ -147,9 +152,11 @@ class PAR2ProcOCL : public IPAR2ProcBackend {
 	
 	void reset_state();
 	
+#ifdef USE_LIBUV
 	void _notifySent(void* _req) override;
 	void _notifyRecv(void* _req) override;
 	void _notifyProc(void* _req) override;
+#endif
 	
 	// disable copy constructor
 	PAR2ProcOCL(const PAR2ProcOCL&);
@@ -178,16 +185,16 @@ public:
 		}
 		return {};
 	}
-	explicit PAR2ProcOCL(uv_loop_t* _loop, int platformId = -1, int deviceId = -1, int stagingAreas = 2);
+	explicit PAR2ProcOCL(IF_LIBUV(uv_loop_t* _loop,) int platformId = -1, int deviceId = -1, int stagingAreas = 2);
 	~PAR2ProcOCL();
 	void setSliceSize(size_t _sliceSize) override;
 	bool init(Galois16OCLMethods method = GF16OCL_AUTO, unsigned targetInputBatch=0, unsigned targetIters=0, unsigned targetGrouping=0);
-	PAR2ProcBackendAddResult hasSpace() const override;
-	void addInput(const void* buffer, size_t size, uint16_t inputNum, bool flush, const PAR2ProcPlainCb& cb) override;
+	PAR2ProcBackendAddResult canAdd() const override;
+	FUTURE_RETURN_T addInput(const void* buffer, size_t size, uint16_t inputNum, bool flush  IF_LIBUV(, const PAR2ProcPlainCb& cb)) override;
 	void dummyInput(uint16_t inputNum, bool flush = false) override;
 	bool fillInput(const void* buffer) override;
 	void flush() override;
-	void getOutput(unsigned index, void* output, const PAR2ProcOutputCb& cb) override;
+	FUTURE_RETURN_BOOL_T getOutput(unsigned index, void* output  IF_LIBUV(, const PAR2ProcOutputCb& cb)) override;
 	
 	bool setCurrentSliceSize(size_t newSliceSize) override; // can only set to lower than allocated in init()
 	bool setRecoverySlices(unsigned _numOutputs, const uint16_t* outputExp = NULL) override;
@@ -201,7 +208,9 @@ public:
 		return outputsPerGroup;
 	}
 	
+#ifdef USE_LIBUV
 	void deinit(PAR2ProcPlainCb cb) override;
+#endif
 	void deinit() override;
 	void freeProcessingMem() override {}
 	
@@ -210,6 +219,10 @@ public:
 	}
 	void endInput() override;
 	void processing_finished() override;
+	
+#ifndef USE_LIBUV
+	void waitForAdd() override;
+#endif
 	
 	inline const void* getMethodName() const {
 		return methodToText(_setupMethod);

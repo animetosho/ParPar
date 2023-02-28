@@ -1,14 +1,47 @@
 #ifndef __THREADQUEUE_H__
 #define __THREADQUEUE_H__
 
-#include <uv.h>
+#ifdef USE_LIBUV
+# include <uv.h>
+# define thread_t uv_thread_t
+# define thread_create(t, f, a) uv_thread_create(&(t), f, a)
+# define thread_join(t) uv_thread_join(&(t))
+# define thread_cb_t uv_thread_cb
+# define mutex_t uv_mutex_t
+# define mutex_init(m) uv_mutex_init(&(m))
+# define mutex_destroy(m) uv_mutex_destroy(&(m))
+# define mutex_lock(m) uv_mutex_lock(&(m))
+# define mutex_unlock(m) uv_mutex_unlock(&(m))
+# define condvar_t uv_cond_t
+# define condvar_init(c) uv_cond_init(&(c))
+# define condvar_destroy(c) uv_cond_destroy(&(c))
+# define condvar_signal(c) uv_cond_signal(&(c))
+#else
+# include <thread>
+# define thread_t std::thread
+# define thread_create(t, f, a) t = std::thread(f, a)
+# define thread_join(t) t.join()
+# define thread_cb_t std::function<void(void*)>
+# include <mutex>
+# include <memory>
+# define mutex_t std::unique_ptr<std::mutex>
+# define mutex_init(m) m = std::unique_ptr<std::mutex>(new std::mutex())
+# define mutex_destroy(m)
+# define mutex_lock(m) m->lock()
+# define mutex_unlock(m) m->unlock()
+# include <condition_variable>
+# define condvar_t std::unique_ptr<std::condition_variable>
+# define condvar_init(c) c = std::unique_ptr<std::condition_variable>(new std::condition_variable())
+# define condvar_destroy(c)
+# define condvar_signal(c) c->notify_one()
+#endif
 #include <queue>
 
 template<typename T>
 class ThreadMessageQueue {
 	std::queue<T> q;
-	uv_mutex_t mutex;
-	uv_cond_t cond;
+	mutex_t mutex;
+	condvar_t cond;
 	bool skipDestructor;
 	
 	// disable copy constructor
@@ -17,8 +50,13 @@ class ThreadMessageQueue {
 	// ...but allow moves
 	void move(ThreadMessageQueue& other) {
 		q = std::move(other.q);
+#ifdef USE_LIBUV
 		mutex = other.mutex;
 		cond = other.cond;
+#else
+		mutex = std::move(other.mutex);
+		cond = std::move(other.cond);
+#endif
 		skipDestructor = false;
 		
 		other.skipDestructor = true;
@@ -27,14 +65,14 @@ class ThreadMessageQueue {
 	
 public:
 	ThreadMessageQueue() {
-		uv_mutex_init(&mutex);
-		uv_cond_init(&cond);
+		mutex_init(mutex);
+		condvar_init(cond);
 		skipDestructor = false;
 	}
 	~ThreadMessageQueue() {
 		if(skipDestructor) return;
-		uv_mutex_destroy(&mutex);
-		uv_cond_destroy(&cond);
+		mutex_destroy(mutex);
+		condvar_destroy(cond);
 	}
 	
 	ThreadMessageQueue(ThreadMessageQueue&& other) noexcept {
@@ -43,60 +81,68 @@ public:
 	ThreadMessageQueue& operator=(ThreadMessageQueue&& other) noexcept {
 		move(other);
 		return *this;
-	}	
+	}
 	void push(T item) {
-		uv_mutex_lock(&mutex);
+		mutex_lock(mutex);
 		q.push(item);
-		uv_cond_signal(&cond);
-		uv_mutex_unlock(&mutex);
+		condvar_signal(cond);
+		mutex_unlock(mutex);
 	}
 	template<class Iterable>
 	void push_multi(const Iterable& list) {
-		uv_mutex_lock(&mutex);
+		mutex_lock(mutex);
 		for(auto it = list.cbegin(); it != list.cend(); ++it) {
 			q.push(*it);
 		}
-		uv_cond_signal(&cond);
-		uv_mutex_unlock(&mutex);
+		condvar_signal(cond);
+		mutex_unlock(mutex);
 	}
 	T pop() {
-		uv_mutex_lock(&mutex);
+#ifdef USE_LIBUV
+		mutex_lock(mutex);
 		while(q.empty()) {
 			uv_cond_wait(&cond, &mutex);
 		}
 		T item = q.front();
 		q.pop();
-		uv_mutex_unlock(&mutex);
+		mutex_unlock(mutex);
+#else
+		std::unique_lock<std::mutex> lk(*mutex);
+		cond->wait(lk, [this]{ return !q.empty(); });
+		T item = q.front();
+		q.pop();
+#endif
 		return item;
 	}
 	
 	bool trypop(T* item) {
 		bool notEmpty;
-		uv_mutex_lock(&mutex);
+		mutex_lock(mutex);
 		notEmpty = !q.empty();
 		if(notEmpty) {
 			*item = q.front();
 			q.pop();
 		}
-		uv_mutex_unlock(&mutex);
+		mutex_unlock(mutex);
 		return notEmpty;
 	}
 	
 	size_t size() {
-		uv_mutex_lock(&mutex);
+		mutex_lock(mutex);
 		size_t s = q.size();
-		uv_mutex_unlock(&mutex);
+		mutex_unlock(mutex);
 		return s;
 	}
 	bool empty() {
-		uv_mutex_lock(&mutex);
+		mutex_lock(mutex);
 		bool e = q.empty();
-		uv_mutex_unlock(&mutex);
+		mutex_unlock(mutex);
 		return e;
 	}
 };
 
 
+#ifdef USE_LIBUV
 struct tnqCloseWrap {
 	void(*cb)(void*);
 	void* data;
@@ -143,6 +189,7 @@ public:
 		uv_close(reinterpret_cast<uv_handle_t*>(&a), nullptr);
 	}
 };
+#endif
 
 #if defined(_WINDOWS) || defined(__WINDOWS__) || defined(_WIN32) || defined(_WIN64)
 # define NOMINMAX
@@ -156,15 +203,15 @@ public:
 #endif
 class MessageThread {
 	ThreadMessageQueue<void*> q;
-	uv_thread_t thread;
+	thread_t thread;
 	bool threadActive;
 	bool threadCreated;
-	uv_thread_cb cb;
+	thread_cb_t cb;
 	
 	static void thread_func(void* parent) {
 		MessageThread* self = static_cast<MessageThread*>(parent);
 		ThreadMessageQueue<void*>& q = self->q;
-		uv_thread_cb cb = self->cb;
+		auto cb = self->cb;
 		
 		void* item;
 		while((item = q.pop()) != NULL) {
@@ -233,7 +280,11 @@ class MessageThread {
 	// ...but allow moves
 	void move(MessageThread& other) {
 		q = std::move(other.q);
+#ifdef USE_LIBUV
 		thread = other.thread;
+#else
+		thread = std::move(other.thread);
+#endif
 		threadActive = other.threadActive;
 		threadCreated = other.threadCreated;
 		cb = other.cb;
@@ -250,20 +301,20 @@ public:
 		threadCreated = false;
 		lowPrio = false;
 	}
-	MessageThread(uv_thread_cb callback) {
+	MessageThread(thread_cb_t callback) {
 		cb = callback;
 		threadActive = false;
 		threadCreated = false;
 		lowPrio = false;
 	}
-	void setCallback(uv_thread_cb callback) {
+	void setCallback(thread_cb_t callback) {
 		cb = callback;
 	}
 	~MessageThread() {
 		if(threadActive)
 			q.push(NULL);
 		if(threadCreated)
-			uv_thread_join(&thread);
+			thread_join(thread);
 	}
 	
 	MessageThread(MessageThread&& other) noexcept {
@@ -278,9 +329,9 @@ public:
 		if(threadActive) return;
 		threadActive = true;
 		if(threadCreated) // previously created, but end fired, so need to wait for this thread to close before starting another
-			uv_thread_join(&thread);
+			thread_join(thread);
 		threadCreated = true;
-		uv_thread_create(&thread, lowPrio ? thread_func_low_prio : thread_func, this);
+		thread_create(thread, lowPrio ? thread_func_low_prio : thread_func, this);
 	}
 	// item cannot be NULL
 	void send(void* item) {
@@ -307,7 +358,8 @@ public:
 	}
 };
 
-static int hardware_concurrency() {
+static inline int hardware_concurrency() {
+#ifdef USE_LIBUV
 	int threads;
 #if UV_VERSION_HEX >= 0x12c00  // 1.44.0
 	threads = uv_available_parallelism();
@@ -317,6 +369,9 @@ static int hardware_concurrency() {
 	uv_free_cpu_info(info, threads);
 #endif
 	return threads;
+#else
+	return (int)std::thread::hardware_concurrency();
+#endif
 }
 
 #endif // defined(__THREADQUEUE_H__)

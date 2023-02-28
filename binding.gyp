@@ -44,7 +44,7 @@
       "cflags!": ["-fno-exceptions"],
       "cxxflags!": ["-fno-exceptions"],
       "cflags_cc!": ["-fno-exceptions"],
-	  "defines": ["PARPAR_LIBDL_SUPPORT"],
+	  "defines": ["PARPAR_LIBDL_SUPPORT", "USE_LIBUV"],
       "cflags": ["-fexceptions"],
       "cxxflags": ["-fexceptions"],
       "cflags_cc": ["-fexceptions"],

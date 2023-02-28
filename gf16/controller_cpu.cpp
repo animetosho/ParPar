@@ -14,8 +14,8 @@ PAR2ProcCPUStaging::~PAR2ProcCPUStaging() {
 }
 
 /** initialization **/
-PAR2ProcCPU::PAR2ProcCPU(uv_loop_t* _loop, int stagingAreas)
-: IPAR2ProcBackend(_loop), sliceSize(0), numThreads(0), gf(NULL), staging(stagingAreas), memProcessing(NULL), transferThread(PAR2ProcCPU::transfer_chunk) {
+PAR2ProcCPU::PAR2ProcCPU(IF_LIBUV(uv_loop_t* _loop,) int stagingAreas)
+: IPAR2ProcBackend(IF_LIBUV(_loop)), sliceSize(0), numThreads(0), gf(NULL), staging(stagingAreas), memProcessing(NULL), transferThread(PAR2ProcCPU::transfer_chunk) {
 	
 	// default number of threads = number of CPUs available
 	setNumThreads(-1);
@@ -173,6 +173,7 @@ void PAR2ProcCPU::freeProcessingMem() {
 		memProcessing = NULL;
 	}
 }
+#ifdef USE_LIBUV
 void PAR2ProcCPU::deinit(PAR2ProcPlainCb cb) {
 	freeGf();
 	if(!loop) return;
@@ -192,13 +193,16 @@ void PAR2ProcCPU::deinit(PAR2ProcPlainCb cb) {
 	_queueProc.close(freeData, closeCb);
 	_queueRecv.close(freeData, closeCb);
 }
+#endif
 void PAR2ProcCPU::deinit() {
 	freeGf();
+#ifdef USE_LIBUV
 	if(!loop) return;
 	loop = nullptr;
 	_queueSent.close();
 	_queueProc.close();
 	_queueRecv.close();
+#endif
 }
 
 PAR2ProcCPU::~PAR2ProcCPU() {
@@ -223,10 +227,10 @@ struct transfer_data {
 	size_t dstLen;
 	unsigned submitInBufs;
 	unsigned inBufId;
-	PAR2ProcPlainCb cbPrep;
+	NOTIFY_DECL(cbPrep, promPrep);
 	
 	// finish specific
-	PAR2ProcOutputCb cbOut;
+	NOTIFY_BOOL_DECL(cbOut, promOut);
 	int cksumSuccess;
 };
 
@@ -236,16 +240,18 @@ void PAR2ProcCPU::transfer_chunk(void* req) {
 	
 	if(data->finish) {
 		data->cksumSuccess = data->gf->finish_packed_cksum(data->dst, data->src, data->size, data->numBufs, data->index, data->chunkLen);
-		data->parent->_queueRecv.notify(data);
+		NOTIFY_DONE(data, _queueRecv, data->promOut, data->cksumSuccess);
 	} else {
 		if(data->src)
 			data->gf->prepare_packed_cksum(data->dst, data->src, data->size, data->dstLen, data->numBufs, data->index, data->chunkLen);
 		
 		// signal main thread that prepare has completed
-		data->parent->_queueSent.notify(data);
+		NOTIFY_DONE(data, _queueSent, data->promPrep);
 	}
+	IF_NOT_LIBUV(delete data);
 }
 
+#ifdef USE_LIBUV
 void PAR2ProcCPU::_notifySent(void* _req) {
 	auto data = static_cast<struct transfer_data*>(_req);
 	if(data->submitInBufs) {
@@ -255,16 +261,23 @@ void PAR2ProcCPU::_notifySent(void* _req) {
 	if(data->cbPrep && data->src) data->cbPrep();
 	delete data;
 }
+#endif
 
-PAR2ProcBackendAddResult PAR2ProcCPU::hasSpace() const {
+PAR2ProcBackendAddResult PAR2ProcCPU::canAdd() const {
 	// NOTE: if add fails due to being full, client resubmitting may be vulnerable to race conditions if it adds an event listener after completion event gets fired
 	if(staging[currentStagingArea].isActive) return PROC_ADD_FULL;
 	return staging[(currentStagingArea == 0 ? staging.size() : currentStagingArea)-1].isActive
 		? PROC_ADD_OK_BUSY
 		: PROC_ADD_OK;
 }
+#ifndef USE_LIBUV
+void PAR2ProcCPU::waitForAdd() {
+	if(!staging[currentStagingArea].isActive) return;
+	staging[currentStagingArea].prom.get_future().get();
+}
+#endif
 
-void PAR2ProcCPU::addInput(const void* buffer, size_t size, uint16_t inputNum, bool flush, const PAR2ProcPlainCb& cb) {
+FUTURE_RETURN_T PAR2ProcCPU::addInput(const void* buffer, size_t size, uint16_t inputNum, bool flush  IF_LIBUV(, const PAR2ProcPlainCb& cb)) {
 	auto& area = staging[currentStagingArea];
 	assert(!area.isActive);
 	if(!staging[0].src) reallocMemInput();
@@ -281,7 +294,7 @@ void PAR2ProcCPU::addInput(const void* buffer, size_t size, uint16_t inputNum, b
 	data->index = currentStagingInputs++;
 	data->chunkLen = chunkLen;
 	data->gf = gf;
-	data->cbPrep = cb;
+	IF_LIBUV(data->cbPrep = cb);
 	
 	data->submitInBufs = (flush || currentStagingInputs == inputBatchSize || (stagingActiveCount == 0 && staging.size() > 1)) ? currentStagingInputs : 0;
 	data->inBufId = currentStagingArea;
@@ -295,6 +308,8 @@ void PAR2ProcCPU::addInput(const void* buffer, size_t size, uint16_t inputNum, b
 	}
 	
 	transferThread.send(data);
+	
+	IF_NOT_LIBUV(return data->promPrep.get_future());
 }
 
 void PAR2ProcCPU::dummyInput(uint16_t inputNum, bool flush) {
@@ -354,14 +369,16 @@ void PAR2ProcCPU::flush() {
 }
 
 /** finish **/
+#ifdef USE_LIBUV
 void PAR2ProcCPU::_notifyRecv(void* _req) {
 	auto data = static_cast<struct transfer_data*>(_req);
 	// signal output ready
 	data->cbOut(data->cksumSuccess);
 	delete data;
 }
+#endif
 
-void PAR2ProcCPU::getOutput(unsigned index, void* output, const PAR2ProcOutputCb& cb) {
+FUTURE_RETURN_BOOL_T PAR2ProcCPU::getOutput(unsigned index, void* output  IF_LIBUV(, const PAR2ProcOutputCb& cb)) {
 	struct transfer_data* data = new struct transfer_data;
 	data->finish = true;
 	data->parent = this;
@@ -372,8 +389,10 @@ void PAR2ProcCPU::getOutput(unsigned index, void* output, const PAR2ProcOutputCb
 	data->numBufs = outputExponents.size();
 	data->index = index;
 	data->chunkLen = chunkLen;
-	data->cbOut = cb;
+	IF_LIBUV(data->cbOut = cb);
 	transferThread.send(data);
+	
+	IF_NOT_LIBUV(return data->promOut.get_future());
 }
 
 
@@ -396,6 +415,9 @@ struct compute_req {
 	const Galois16Mul* gf;
 	std::atomic<int>* procRefs;
 	PAR2ProcCPU* parent;
+#ifndef USE_LIBUV
+	std::promise<void>* prom;
+#endif
 };
 
 void PAR2ProcCPU::compute_worker(void *_req) {
@@ -450,7 +472,8 @@ void PAR2ProcCPU::compute_worker(void *_req) {
 	// mark that we've done processing this request
 	if(req->procRefs->fetch_sub(1, std::memory_order_relaxed) <= 1) { // relaxed ordering: although we want all prior memory operations to be complete at this point, to send a cross-thread signal requires stricter ordering, so it should be fine by the time the signal is received
 		// signal this input group is done with
-		req->parent->_queueProc.notify(req);
+		NOTIFY_DONE(req, _queueProc, *(req->prom));
+		IF_NOT_LIBUV(delete req);
 	} else
 		delete req;
 }
@@ -491,6 +514,10 @@ void PAR2ProcCPU::run_kernel(unsigned inBuf, unsigned numInputs) {
 		req->parent = this;
 		req->procRefs = &(area.procRefs);
 		req->inBufId = inBuf;
+#ifndef USE_LIBUV
+		area.prom = std::promise<void>();
+		req->prom = &(area.prom);
+#endif
 		
 		thWorkers[nextThread++].send(req);
 		if(nextThread >= numThreads) nextThread = 0;
@@ -498,6 +525,7 @@ void PAR2ProcCPU::run_kernel(unsigned inBuf, unsigned numInputs) {
 	processingAdd = true;
 }
 
+#ifdef USE_LIBUV
 void PAR2ProcCPU::_notifyProc(void* _req) {
 	auto req = static_cast<struct compute_req*>(_req);
 	staging[req->inBufId].isActive = false;
@@ -508,6 +536,7 @@ void PAR2ProcCPU::_notifyProc(void* _req) {
 	
 	delete req;
 }
+#endif
 
 
 void PAR2ProcCPU::processing_finished() {

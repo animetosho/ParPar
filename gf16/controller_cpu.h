@@ -12,6 +12,9 @@ public:
 	std::vector<uint16_t> procCoeffs;
 	std::atomic<int> procRefs;
 	bool isActive;
+#ifndef USE_LIBUV
+	std::promise<void> prom;
+#endif
 	
 	PAR2ProcCPUStaging() : src(nullptr), isActive(false) {}
 	~PAR2ProcCPUStaging();
@@ -45,9 +48,11 @@ private:
 	
 	void run_kernel(unsigned inBuf, unsigned numInputs) override;
 	
+#ifdef USE_LIBUV
 	void _notifySent(void* _req) override;
 	void _notifyRecv(void* _req) override;
 	void _notifyProc(void* _req) override;
+#endif
 	
 	static void transfer_chunk(void *req);
 	static void compute_worker(void *req);
@@ -57,10 +62,11 @@ private:
 	PAR2ProcCPU& operator=(const PAR2ProcCPU&);
 	
 public:
-	explicit PAR2ProcCPU(uv_loop_t* _loop, int stagingAreas=2);
-	explicit inline PAR2ProcCPU(int stagingAreas=2) : PAR2ProcCPU(uv_default_loop(), stagingAreas) {}
+	explicit PAR2ProcCPU(IF_LIBUV(uv_loop_t* _loop,) int stagingAreas=2);
 	void setSliceSize(size_t _sliceSize) override;
+#ifdef USE_LIBUV
 	void deinit(PAR2ProcPlainCb cb) override;
+#endif
 	void deinit() override;
 	~PAR2ProcCPU();
 	
@@ -93,14 +99,17 @@ public:
 		return alignedSliceSize;
 	}
 	
-	PAR2ProcBackendAddResult hasSpace() const override;
-	void addInput(const void* buffer, size_t size, uint16_t inputNum, bool flush, const PAR2ProcPlainCb& cb) override;
+	PAR2ProcBackendAddResult canAdd() const override;
+	FUTURE_RETURN_T addInput(const void* buffer, size_t size, uint16_t inputNum, bool flush  IF_LIBUV(, const PAR2ProcPlainCb& cb)) override;
 	void dummyInput(uint16_t inputNum, bool flush = false) override;
 	bool fillInput(const void* buffer) override;
 	void flush() override;
-	void getOutput(unsigned index, void* output, const PAR2ProcOutputCb& cb) override;
+	FUTURE_RETURN_BOOL_T getOutput(unsigned index, void* output  IF_LIBUV(, const PAR2ProcOutputCb& cb)) override;
 	
 	void processing_finished() override;
+#ifndef USE_LIBUV
+	void waitForAdd() override;
+#endif
 	
 	static inline Galois16Methods default_method() {
 		return Galois16Mul::default_method();
