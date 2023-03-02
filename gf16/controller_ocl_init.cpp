@@ -1555,10 +1555,10 @@ bool PAR2ProcOCL::setup_kernels(Galois16OCLMethods method, unsigned targetInputB
 		area.input = cl::Buffer(context, CL_MEM_READ_ONLY | CL_MEM_ALLOC_HOST_PTR, inputBatchSize*sliceSizeAligned);
 		if(coeffType != GF16OCL_COEFF_NORMAL) {
 			area.coeffs = cl::Buffer(context, CL_MEM_READ_ONLY | CL_MEM_ALLOC_HOST_PTR, inputBatchSize*sizeof(uint16_t));
-			area.tmpCoeffs.resize(inputBatchSize);
+			area.procCoeffs.resize(inputBatchSize);
 		} else {
 			area.coeffs = cl::Buffer(context, CL_MEM_READ_ONLY | CL_MEM_ALLOC_HOST_PTR, inputBatchSize*numOutputs*sizeof(uint16_t));
-			area.tmpCoeffs.resize(inputBatchSize*numOutputs);
+			area.procCoeffs.resize(inputBatchSize*numOutputs);
 		}
 	}
 	// TODO: need to consider CL_DEVICE_MAX_MEM_ALLOC_SIZE and perhaps break this into multiple allocations

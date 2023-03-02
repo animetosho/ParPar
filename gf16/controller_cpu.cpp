@@ -29,7 +29,6 @@ void PAR2ProcCPU::freeGf() {
 	for(auto& area : staging) {
 		if(area.src) ALIGN_FREE(area.src);
 		area.src = nullptr;
-		area.inputNums.clear();
 		area.procCoeffs.clear();
 	}
 	
@@ -87,8 +86,6 @@ bool PAR2ProcCPU::init(Galois16Methods method, unsigned _inputGrouping, size_t _
 	
 	alignedSliceSize = gf->alignToStride(sliceSize) + stride; // add extra stride, because checksum requires an extra block
 	for(auto& area : staging) {
-		// allocate memory for sending input numbers
-		area.inputNums.resize(inputBatchSize);
 		// setup indicators to know if buffers are being used
 		area.setIsActive(false);
 	}
@@ -257,7 +254,7 @@ FUTURE_RETURN_T PAR2ProcCPU::addInput(const void* buffer, size_t size, uint16_t 
 	assert(!area.getIsActive());
 	if(!staging[0].src) reallocMemInput();
 	
-	area.inputNums[currentStagingInputs] = inputNum;
+	set_coeffs(area, currentStagingInputs, inputNum);
 	struct transfer_data* data = new struct transfer_data;
 	data->finish = false;
 	data->src = buffer;
@@ -295,7 +292,7 @@ void PAR2ProcCPU::dummyInput(uint16_t inputNum, bool flush) {
 	assert(!area.getIsActive());
 	if(!staging[0].src) reallocMemInput();
 	
-	area.inputNums[currentStagingInputs] = inputNum;
+	set_coeffs(area, currentStagingInputs, inputNum);
 	currentStagingInputs++;
 	
 	if(flush || currentStagingInputs == inputBatchSize || (stagingActiveCount_get() == 0 && staging.size() > 1)) {
@@ -325,6 +322,13 @@ bool PAR2ProcCPU::fillInput(const void* buffer) {
 	return false;
 }
 
+void PAR2ProcCPU::set_coeffs(PAR2ProcCPUStaging& area, unsigned idx, uint16_t inputNum) {
+	uint16_t inputLog = gfmat_input_log(inputNum);
+	auto& coeffs = area.procCoeffs;
+	for(unsigned out=0; out<outputExponents.size(); out++) {
+		coeffs[idx + out*inputBatchSize] = gfmat_coeff_from_log(inputLog, outputExponents[out]);
+	}
+}
 
 void PAR2ProcCPU::flush() {
 	if(!currentStagingInputs) return; // no inputs to flush
@@ -426,7 +430,7 @@ void PAR2ProcCPU::compute_worker(void *_req) {
 		int procSize = MIN(req->len-round*req->chunkSize, req->chunkSize);
 		const char* srcPtr = static_cast<const char*>(req->input) + round*req->chunkSize*req->inputGrouping;
 		for(unsigned out = 0; out < req->numOutputs; out++) {
-			const uint16_t* vals = req->coeffs + out*req->numInputs;
+			const uint16_t* vals = req->coeffs + out*req->inputGrouping;
 			
 			char* dstPtr = static_cast<char*>(req->output) + out*procSize + round*req->numOutputs*req->chunkSize;
 			if(!req->add) memset(dstPtr, 0, procSize);
@@ -467,13 +471,6 @@ void PAR2ProcCPU::compute_worker(void *_req) {
 
 void PAR2ProcCPU::run_kernel(unsigned inBuf, unsigned numInputs) {
 	auto& area = staging[inBuf];
-	// compute matrix slice
-	for(unsigned inp=0; inp<numInputs; inp++) {
-		uint16_t inputLog = gfmat_input_log(area.inputNums[inp]);
-		for(unsigned out=0; out<outputExponents.size(); out++) {
-			area.procCoeffs[inp + out*numInputs] = gfmat_coeff_from_log(inputLog, outputExponents[out]);
-		}
-	}
 	
 	// TODO: better distribution strategy
 	area.procRefs = numChunks;

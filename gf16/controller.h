@@ -66,6 +66,8 @@ public:
 	}
 #endif
 	
+	std::vector<uint16_t> procCoeffs;
+	
 	IPAR2ProcStaging() {
 		IF_NOT_LIBUV(promFuture = prom.get_future());
 	}

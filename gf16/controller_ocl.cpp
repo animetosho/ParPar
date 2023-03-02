@@ -249,14 +249,7 @@ FUTURE_RETURN_T PAR2ProcOCL::addInput(const void* buffer, size_t size, uint16_t 
 	// detect if busy
 	assert(!area.getIsActive());
 	
-	// compute coeffs
-	if(coeffType != GF16OCL_COEFF_NORMAL) {
-		area.tmpCoeffs[currentStagingInputs] = gfmat_input_log(inputNum);
-	} else {
-		uint16_t inputLog = gfmat_input_log(inputNum);
-		for(unsigned i=0; i<outputExponents.size(); i++)
-			area.tmpCoeffs[currentStagingInputs + i*inputBatchSize] = gfmat_coeff_from_log(inputLog, outputExponents[i]);
-	}
+	set_coeffs(area, currentStagingInputs, inputNum);
 	
 	// TODO: need to add cksum
 	cl::Event writeEvent;
@@ -316,15 +309,7 @@ void PAR2ProcOCL::dummyInput(uint16_t inputNum, bool flush) {
 	// detect if busy
 	assert(!area.getIsActive());
 	
-	// compute coeffs
-	if(coeffType != GF16OCL_COEFF_NORMAL) {
-		area.tmpCoeffs[currentStagingInputs] = gfmat_input_log(inputNum);
-	} else {
-		uint16_t inputLog = gfmat_input_log(inputNum);
-		for(unsigned i=0; i<outputExponents.size(); i++)
-			area.tmpCoeffs[currentStagingInputs + i*inputBatchSize] = gfmat_coeff_from_log(inputLog, outputExponents[i]);
-	}
-	
+	set_coeffs(area, currentStagingInputs, inputNum);
 	currentStagingInputs++;
 	if(currentStagingInputs == inputBatchSize || flush || (stagingActiveCount_get() == 0 && staging.size() > 1))
 		run_kernel(currentStagingArea, currentStagingInputs);
@@ -340,6 +325,17 @@ bool PAR2ProcOCL::fillInput(const void* buffer) {
 		}
 	}
 	return false;
+}
+
+void PAR2ProcOCL::set_coeffs(PAR2ProcOCLStaging& area, unsigned idx, uint16_t inputNum) {
+	uint16_t inputLog = gfmat_input_log(inputNum);
+	auto& coeffs = area.procCoeffs;
+	if(coeffType != GF16OCL_COEFF_NORMAL) {
+		coeffs[idx] = inputLog;
+	} else {
+		for(unsigned i=0; i<outputExponents.size(); i++)
+			coeffs[idx + i*inputBatchSize] = gfmat_coeff_from_log(inputLog, outputExponents[i]);
+	}
 }
 
 
@@ -410,7 +406,7 @@ void PAR2ProcOCL::run_kernel(unsigned buf, unsigned numInputs) {
 	auto& area = staging[buf];
 	// transfer coefficient list
 	cl::Event coeffEvent;
-	queue.enqueueWriteBuffer(area.coeffs, CL_FALSE, 0, inputBatchSize * (coeffType!=GF16OCL_COEFF_NORMAL ? 1 : outputExponents.size()) * sizeof(uint16_t), area.tmpCoeffs.data(), NULL, &coeffEvent);
+	queue.enqueueWriteBuffer(area.coeffs, CL_FALSE, 0, inputBatchSize * (coeffType!=GF16OCL_COEFF_NORMAL ? 1 : outputExponents.size()) * sizeof(uint16_t), area.procCoeffs.data(), NULL, &coeffEvent);
 	queueEvents.push_back(coeffEvent);
 	
 	stagingActiveCount_inc();

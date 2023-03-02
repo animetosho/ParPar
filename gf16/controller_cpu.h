@@ -8,8 +8,6 @@
 class PAR2ProcCPUStaging : public IPAR2ProcStaging {
 public:
 	void* src;
-	std::vector<uint16_t> inputNums;
-	std::vector<uint16_t> procCoeffs;
 	std::atomic<int> procRefs;
 	
 	PAR2ProcCPUStaging() : IPAR2ProcStaging(), src(nullptr) {}
@@ -41,6 +39,7 @@ private:
 	
 	MessageThread transferThread;
 	
+	void set_coeffs(PAR2ProcCPUStaging& area, unsigned idx, uint16_t inputNum);
 	void run_kernel(unsigned inBuf, unsigned numInputs) override;
 	
 #ifdef USE_LIBUV

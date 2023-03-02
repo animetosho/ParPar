@@ -87,8 +87,6 @@ class PAR2ProcOCLStaging : public IPAR2ProcStaging {
 public:
 	cl::Buffer input;
 	cl::Buffer coeffs;
-	std::vector<uint16_t> tmpCoeffs;
-	uint16_t firstInput;
 	cl::Event event;
 	
 	PAR2ProcOCLStaging() : IPAR2ProcStaging() {}
@@ -130,6 +128,8 @@ class PAR2ProcOCL : public IPAR2ProcBackend {
 	// remembered setup params
 	Galois16OCLMethods _setupMethod;
 	unsigned _setupTargetInputBatch, _setupTargetIters, _setupTargetGrouping;
+	
+	void set_coeffs(PAR2ProcOCLStaging& area, unsigned idx, uint16_t inputNum);
 	
 	bool setup_kernels(Galois16OCLMethods method, unsigned targetInputBatch, unsigned targetIters, unsigned targetGrouping, bool outputSequential);
 	void run_kernel(unsigned buf, unsigned numInputs) override;
