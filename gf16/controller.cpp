@@ -5,7 +5,7 @@
 #include <algorithm>
 
 
-PAR2Proc::PAR2Proc() : endSignalled(false) {
+PAR2Proc::PAR2Proc() IF_LIBUV(: endSignalled(false)) {
 	gfmat_init();
 }
 
@@ -153,7 +153,7 @@ void PAR2Proc::waitForAdd() {
 
 #ifdef USE_LIBUV
 bool PAR2Proc::addInput(const void* buffer, size_t size, uint16_t inputNum, bool flush, const PAR2ProcPlainCb& cb) {
-	assert(!endSignalled);
+	IF_LIBUV(assert(!endSignalled));
 	
 	auto cbRef = addCbRefs.find(inputNum);
 	if(cbRef != addCbRefs.end()) {
@@ -216,8 +216,6 @@ static std::future<bool> combine_futures_and(std::vector<std::future<bool>>&& fu
 }
 
 std::future<void> PAR2Proc::addInput(const void* buffer, size_t size, uint16_t inputNum, bool flush) {
-	assert(!endSignalled);
-	
 	std::vector<std::future<void>> addFutures;
 	addFutures.reserve(backends.size());
 	
@@ -227,12 +225,13 @@ std::future<void> PAR2Proc::addInput(const void* buffer, size_t size, uint16_t i
 		if(amount == 0) continue;
 		addFutures.push_back(backend.be->addInput(static_cast<const char*>(buffer) + backend.currentOffset, amount, inputNum, flush));
 	}
+	hasAdded = true;
 	return combine_futures(std::move(addFutures));
 }
 #endif
 
 bool PAR2Proc::dummyInput(size_t size, uint16_t inputNum, bool flush) {
-	assert(!endSignalled);
+	IF_LIBUV(assert(!endSignalled));
 	
 	bool success = true;
 	for(auto& backend : backends) {
@@ -254,7 +253,7 @@ bool PAR2Proc::dummyInput(size_t size, uint16_t inputNum, bool flush) {
 }
 
 bool PAR2Proc::fillInput(const void* buffer, size_t size) {
-	assert(!endSignalled);
+	IF_LIBUV(assert(!endSignalled));
 	bool finished = true;
 	for(auto& backend : backends) {
 		if(backend.currentOffset >= size || backend.currentSliceSize == 0) continue;
@@ -276,9 +275,10 @@ void PAR2Proc::flush() {
 }
 
 FUTURE_RETURN_T PAR2Proc::endInput(IF_LIBUV(const PAR2ProcPlainCb& _finishCb)) {
+#ifdef USE_LIBUV
 	assert(!endSignalled);
 	flush();
-	IF_LIBUV(finishCb = _finishCb);
+	finishCb = _finishCb;
 	bool allIsEmpty = true;
 	for(auto& backend : backends) {
 		if(backend.currentSliceSize == 0) continue;
@@ -288,8 +288,15 @@ FUTURE_RETURN_T PAR2Proc::endInput(IF_LIBUV(const PAR2ProcPlainCb& _finishCb)) {
 	endSignalled = true;
 	if(allIsEmpty)
 		processing_finished();
-	
-	IF_NOT_LIBUV(return finishProm.get_future());
+#else
+	flush();
+	std::vector<std::future<void>> futures;
+	for(auto& backend : backends) {
+		if(backend.currentSliceSize == 0) continue;
+		futures.push_back(backend.be->endInput()); // this will also call processing_finished when appropriate
+	}
+	return combine_futures(std::move(futures));
+#endif
 }
 
 FUTURE_RETURN_BOOL_T PAR2Proc::getOutput(unsigned index, void* output  IF_LIBUV(, const PAR2ProcOutputCb& cb)) const {
@@ -375,8 +382,6 @@ void PAR2Proc::onBackendProcess(int numInputs, int firstInput) {
 			processing_finished();
 	}
 }
-#endif
-
 void PAR2Proc::processing_finished() {
 	endSignalled = false;
 	
@@ -384,15 +389,10 @@ void PAR2Proc::processing_finished() {
 		if(backend.currentSliceSize > 0)
 			backend.be->processing_finished();
 	
-#ifdef USE_LIBUV
 	if(finishCb) finishCb();
 	finishCb = nullptr;
-#else
-	finishProm.set_value();
-#endif
 }
 
-#ifdef USE_LIBUV
 void PAR2Proc::deinit(PAR2ProcPlainCb cb) {
 	auto* cnt = new int(backends.size());
 	for(auto& backend : backends)

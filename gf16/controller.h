@@ -41,14 +41,34 @@ enum PAR2ProcBackendAddResult {
 	PROC_ADD_FULL,
 	PROC_ADD_ALL_FULL // controller only
 };
+
 class IPAR2ProcStaging {
-public:
+#ifdef USE_LIBUV
 	bool isActive;
-#ifndef USE_LIBUV
+#else
 	std::promise<void> prom;
 #endif
+public:
+#ifdef USE_LIBUV
+	inline bool getIsActive() const { return isActive; }
+	inline void setIsActive(bool v) { isActive = v; }
+#else
+	std::shared_future<void> promFuture;
+	inline bool getIsActive() const {
+		return promFuture.wait_for(std::chrono::seconds::zero()) == std::future_status::timeout;
+	}
+	inline void setIsActive(bool v) {
+		if(v) {
+			prom = std::promise<void>();
+			promFuture = prom.get_future();
+		} else if(getIsActive())
+			prom.set_value();
+	}
+#endif
 	
-	IPAR2ProcStaging() : isActive(false) {}
+	IPAR2ProcStaging() {
+		IF_NOT_LIBUV(promFuture = prom.get_future());
+	}
 };
 
 class IPAR2ProcBackend {
@@ -61,10 +81,11 @@ protected:
 	bool processingAdd;
 	virtual void run_kernel(unsigned stagingArea, unsigned numInputs) = 0;
 	unsigned currentStagingArea, currentStagingInputs;
-	unsigned inputBatchSize, stagingActiveCount;
+	unsigned inputBatchSize;
 	
 #ifdef USE_LIBUV
-	unsigned pendingOutCallbacks;
+	unsigned stagingActiveCount, pendingInCallbacks, pendingOutCallbacks;
+	bool endSignalled;
 	PAR2ProcCompleteCb progressCb;
 	PAR2ProcPlainCb deinitCallback;
 	
@@ -74,10 +95,41 @@ protected:
 	virtual void _notifySent(void* _req) = 0;
 	virtual void _notifyRecv(void* _req) = 0;
 	virtual void _notifyProc(void* _req) = 0;
+	inline void stagingActiveCount_inc() {
+		stagingActiveCount++;
+	}
+	inline void stagingActiveCount_dec() {
+		stagingActiveCount--;
+	}
+	inline unsigned stagingActiveCount_get() const {
+		return stagingActiveCount;
+	}
 #else
+	std::atomic<unsigned> stagingActiveCount;
 	static inline void _waitForAdd(IPAR2ProcStaging& area) {
-		if(area.isActive)
-			area.prom.get_future().get();
+		area.promFuture.get();
+	}
+	template<class T>
+	inline std::future<void> _endInput(const std::vector<T>& staging) {
+		std::vector<std::shared_future<void>> futures;
+		futures.reserve(staging.size());
+		for(const auto& area : staging) {
+			futures.push_back(area.promFuture);
+		}
+		return std::async(std::launch::async, [this](std::vector<std::shared_future<void>>&& futures) {
+			for(const auto& f : futures)
+				f.get();
+			processing_finished();
+		}, std::move(futures));
+	}
+	inline void stagingActiveCount_inc() {
+		stagingActiveCount.fetch_add(1, std::memory_order_relaxed);
+	}
+	inline void stagingActiveCount_dec() {
+		stagingActiveCount.fetch_sub(1, std::memory_order_relaxed);
+	}
+	inline unsigned stagingActiveCount_get() const {
+		return stagingActiveCount.load(std::memory_order_relaxed);
 	}
 #endif
 	
@@ -86,12 +138,12 @@ protected:
 public:
 #ifdef USE_LIBUV
 	IPAR2ProcBackend(uv_loop_t* _loop)
-	: loop(_loop), processingAdd(false), pendingOutCallbacks(0), progressCb(nullptr), deinitCallback(nullptr)
+	: loop(_loop), stagingActiveCount(0), pendingInCallbacks(0), pendingOutCallbacks(0), endSignalled(false), progressCb(nullptr), deinitCallback(nullptr)
 	, _queueSent(_loop, this, &IPAR2ProcBackend::_notifySent)
 	, _queueProc(_loop, this, &IPAR2ProcBackend::_notifyProc)
 	, _queueRecv(_loop, this, &IPAR2ProcBackend::_notifyRecv)
 #else
-	IPAR2ProcBackend() : processingAdd(false)
+	IPAR2ProcBackend() : stagingActiveCount(0)
 #endif
 	{}
 	int getNumRecoverySlices() const {
@@ -110,9 +162,15 @@ public:
 	virtual void dummyInput(uint16_t inputNum, bool flush = false) = 0;
 	virtual bool fillInput(const void* buffer) = 0;
 	virtual void flush() = 0;
-	virtual void endInput() {};
-	virtual bool isEmpty() const {
-		return stagingActiveCount==0;
+#ifdef USE_LIBUV
+	FUTURE_RETURN_T endInput() {
+		endSignalled = true;
+	}
+#else
+	virtual FUTURE_RETURN_T endInput() = 0;
+#endif
+	bool isEmpty() const {
+		return stagingActiveCount_get()==0 IF_LIBUV(&& pendingInCallbacks==0);
 	}
 	virtual FUTURE_RETURN_BOOL_T getOutput(unsigned index, void* output  IF_LIBUV(, const PAR2ProcOutputCb& cb)) = 0;
 	inline void discardOutput() {
@@ -146,9 +204,6 @@ struct PAR2ProcBackendBaseComputeReq {
 	uint16_t numInputs;
 	unsigned procIdx;
 	PClass* parent;
-#ifndef USE_LIBUV
-	std::promise<void>* prom;
-#endif
 };
 
 
@@ -184,10 +239,10 @@ private:
 	
 	size_t currentSliceSize; // current slice chunk size (<=sliceSize)
 	
+#ifdef USE_LIBUV
 	bool endSignalled;
 	void processing_finished();
-	NOTIFY_DECL(finishCb, finishProm);
-#ifdef USE_LIBUV
+	PAR2ProcPlainCb finishCb;
 	PAR2ProcCompleteCb progressCb;
 	void onBackendProcess(int numInputs, int firstInput);
 #endif

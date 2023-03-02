@@ -126,9 +126,6 @@ class PAR2ProcOCL : public IPAR2ProcBackend {
 	unsigned outputsPerGroup;
 	
 	
-	int pendingInCallbacks;
-	bool endSignalled;
-	
 	
 	// remembered setup params
 	Galois16OCLMethods _setupMethod;
@@ -204,14 +201,13 @@ public:
 	void _deinit() override;
 	void freeProcessingMem() override {}
 	
-	bool isEmpty() const override {
-		return stagingActiveCount==0 && pendingInCallbacks==0;
-	}
-	void endInput() override;
 	void processing_finished() override;
 	
 #ifndef USE_LIBUV
 	void waitForAdd() override;
+	FUTURE_RETURN_T endInput() override {
+		return IPAR2ProcBackend::_endInput(staging);
+	}
 #endif
 	
 	inline const void* getMethodName() const {

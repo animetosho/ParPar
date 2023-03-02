@@ -26,7 +26,6 @@ private:
 	int numThreads;
 	std::vector<MessageThread> thWorkers; // main processing worker threads
 	std::vector<void*> gfScratch; // scratch memory for each thread
-	int nextThread;
 	
 	Galois16Mul* gf;
 	size_t chunkLen; // loop tiling size
@@ -102,6 +101,9 @@ public:
 	void processing_finished() override;
 #ifndef USE_LIBUV
 	void waitForAdd() override;
+	FUTURE_RETURN_T endInput() override {
+		return IPAR2ProcBackend::_endInput(staging);
+	}
 #endif
 	
 	static inline Galois16Methods default_method() {

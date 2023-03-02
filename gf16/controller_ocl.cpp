@@ -25,7 +25,7 @@ int PAR2ProcOCL::load_runtime() {
 
 
 PAR2ProcOCL::PAR2ProcOCL(IF_LIBUV(uv_loop_t* _loop,) int platformId, int deviceId, int stagingAreas)
-: IPAR2ProcBackend(IF_LIBUV(_loop)), staging(stagingAreas), allocatedSliceSize(0), endSignalled(false) {
+: IPAR2ProcBackend(IF_LIBUV(_loop)), staging(stagingAreas), allocatedSliceSize(0) {
 	_initSuccess = false;
 	zeroes = NULL;
 	
@@ -71,8 +71,6 @@ void PAR2ProcOCL::setSliceSize(size_t _sliceSize) {
 bool PAR2ProcOCL::init(Galois16OCLMethods method, unsigned targetInputBatch, unsigned targetIters, unsigned targetGrouping) {
 	if(!_initSuccess) return false;
 	outputExponents.clear();
-	
-	pendingInCallbacks = 0;
 	
 	if(method == GF16OCL_AUTO) method = default_method();
 	_setupMethod = method;
@@ -136,10 +134,9 @@ void PAR2ProcOCL::reset_state() {
 	currentStagingArea = 0;
 	for(auto& area : staging) {
 		area.event = cl::Event(); // clear any existing event
-		area.isActive = false;
+		area.setIsActive(false);
 	}
 	processingAdd = false;
-	stagingActiveCount = 0;
 }
 
 void PAR2ProcOCL::_deinit() {
@@ -148,11 +145,8 @@ void PAR2ProcOCL::_deinit() {
 }
 
 
-void PAR2ProcOCL::endInput() {
-	endSignalled = true;
-}
 void PAR2ProcOCL::processing_finished() {
-	endSignalled = false;
+	IF_LIBUV(endSignalled = false);
 }
 
 std::vector<Galois16OCLMethods> PAR2ProcOCL::availableMethods(int platformId, int deviceId) {
@@ -235,13 +229,14 @@ void PAR2ProcOCL::_notifySent(void* _req) {
 	if(req->cb) req->cb();
 	delete req;
 	
+	// handle possibility of _notifySent being called after the last _notifyProc
 	if(endSignalled && isEmpty() && progressCb) progressCb(0, 0); // we got this callback after processing has finished -> need to flag to front-end that we're now done
 }
 #endif
 
 PAR2ProcBackendAddResult PAR2ProcOCL::canAdd() const {
-	if(staging[currentStagingArea].isActive) return PROC_ADD_FULL;
-	return stagingActiveCount < staging.size()-1 ? PROC_ADD_OK : PROC_ADD_OK_BUSY;
+	if(staging[currentStagingArea].getIsActive()) return PROC_ADD_FULL;
+	return stagingActiveCount_get() < staging.size()-1 ? PROC_ADD_OK : PROC_ADD_OK_BUSY;
 }
 #ifndef USE_LIBUV
 void PAR2ProcOCL::waitForAdd() {
@@ -252,7 +247,7 @@ void PAR2ProcOCL::waitForAdd() {
 FUTURE_RETURN_T PAR2ProcOCL::addInput(const void* buffer, size_t size, uint16_t inputNum, bool flush  IF_LIBUV(, const PAR2ProcPlainCb& cb)) {
 	auto& area = staging[currentStagingArea];
 	// detect if busy
-	assert(!area.isActive);
+	assert(!area.getIsActive());
 	
 	// compute coeffs
 	if(coeffType != GF16OCL_COEFF_NORMAL) {
@@ -271,9 +266,13 @@ FUTURE_RETURN_T PAR2ProcOCL::addInput(const void* buffer, size_t size, uint16_t 
 	queueEvents.push_back(writeEvent);
 	
 	auto* req = new struct send_data;
-	IF_LIBUV(req->cb = cb);
-	req->parent = this;
+#ifdef USE_LIBUV
+	req->cb = cb;
 	pendingInCallbacks++;
+#else
+	auto future = req->prom.get_future();
+#endif
+	req->parent = this;
 	writeEvent.setCallback(CL_COMPLETE, [](cl_event, cl_int, void* _req) {
 		auto req = static_cast<struct send_data*>(_req);
 		NOTIFY_DONE(req, _queueSent, req->prom);
@@ -308,16 +307,16 @@ FUTURE_RETURN_T PAR2ProcOCL::addInput(const void* buffer, size_t size, uint16_t 
 		}
 	}
 	currentStagingInputs++;
-	if(currentStagingInputs == inputBatchSize || flush || (stagingActiveCount == 0 && staging.size() > 1))
+	if(currentStagingInputs == inputBatchSize || flush || (stagingActiveCount_get() == 0 && staging.size() > 1))
 		run_kernel(currentStagingArea, currentStagingInputs);
 	
-	IF_NOT_LIBUV(return req->prom.get_future());
+	IF_NOT_LIBUV(return future);
 }
 
 void PAR2ProcOCL::dummyInput(uint16_t inputNum, bool flush) {
 	auto& area = staging[currentStagingArea];
 	// detect if busy
-	assert(!area.isActive);
+	assert(!area.getIsActive());
 	
 	// compute coeffs
 	if(coeffType != GF16OCL_COEFF_NORMAL) {
@@ -331,7 +330,7 @@ void PAR2ProcOCL::dummyInput(uint16_t inputNum, bool flush) {
 		area.firstInput = inputNum;
 	
 	currentStagingInputs++;
-	if(currentStagingInputs == inputBatchSize || flush || (stagingActiveCount == 0 && staging.size() > 1))
+	if(currentStagingInputs == inputBatchSize || flush || (stagingActiveCount_get() == 0 && staging.size() > 1))
 		run_kernel(currentStagingArea, currentStagingInputs);
 }
 
@@ -376,8 +375,12 @@ FUTURE_RETURN_BOOL_T PAR2ProcOCL::getOutput(unsigned index, void* output  IF_LIB
 	queue.enqueueReadBuffer(buffer_output, CL_FALSE, index*sliceSizeAligned, sliceSize, output, NULL, &readEvent);
 	
 	auto* req = new struct recv_data;
-	IF_LIBUV(req->cb = cb);
-	IF_LIBUV(pendingOutCallbacks++);
+#ifdef USE_LIBUV
+	req->cb = cb;
+	pendingOutCallbacks++;
+#else
+	auto future = req->prom.get_future();
+#endif
 	req->parent = this;
 	readEvent.setCallback(CL_COMPLETE, [](cl_event, cl_int, void* _req) {
 		auto req = static_cast<struct recv_data*>(_req);
@@ -385,7 +388,7 @@ FUTURE_RETURN_BOOL_T PAR2ProcOCL::getOutput(unsigned index, void* output  IF_LIB
 		IF_NOT_LIBUV(delete req);
 	}, req);
 	
-	IF_NOT_LIBUV(return req->prom.get_future());
+	IF_NOT_LIBUV(return future);
 }
 
 
@@ -397,9 +400,8 @@ typedef struct PAR2ProcBackendBaseComputeReq<PAR2ProcOCL> compute_req;
 #ifdef USE_LIBUV
 void PAR2ProcOCL::_notifyProc(void* _req) {
 	auto req = static_cast<compute_req*>(_req);
-	staging[req->procIdx].isActive = false;
-	stagingActiveCount--;
-	pendingInCallbacks--;
+	stagingActiveCount_dec();
+	staging[req->procIdx].setIsActive(false);
 	
 	// if add was blocked, allow adds to continue - calling application will need to listen to this event to know to continue
 	if(progressCb) progressCb(req->numInputs, staging[req->procIdx].firstInput);
@@ -415,8 +417,8 @@ void PAR2ProcOCL::run_kernel(unsigned buf, unsigned numInputs) {
 	queue.enqueueWriteBuffer(area.coeffs, CL_FALSE, 0, inputBatchSize * (coeffType!=GF16OCL_COEFF_NORMAL ? 1 : outputExponents.size()) * sizeof(uint16_t), area.tmpCoeffs.data(), NULL, &coeffEvent);
 	queueEvents.push_back(coeffEvent);
 	
-	stagingActiveCount++;
-	area.isActive = true;
+	stagingActiveCount_inc();
+	area.setIsActive(true);
 	
 	// invoke kernel
 	cl::Kernel* kernel;
@@ -439,12 +441,15 @@ void PAR2ProcOCL::run_kernel(unsigned buf, unsigned numInputs) {
 	req->numInputs = numInputs;
 	req->procIdx = buf;
 	req->parent = this;
-	IF_NOT_LIBUV(req->prom = &area.prom);
-	pendingInCallbacks++;
 	area.event.setCallback(CL_COMPLETE, [](cl_event, cl_int, void* _req) {
 		auto req = static_cast<compute_req*>(_req);
-		NOTIFY_DONE(req, _queueProc, *(req->prom));
-		IF_NOT_LIBUV(delete req);
+#ifdef USE_LIBUV
+		req->parent->_queueProc.notify(req);
+#else
+		req->parent->stagingActiveCount_dec();
+		req->parent->staging[req->procIdx].setIsActive(false);
+		delete req;
+#endif
 	}, req);
 	
 	// management
