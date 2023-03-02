@@ -230,7 +230,7 @@ void PAR2ProcOCL::_notifySent(void* _req) {
 	delete req;
 	
 	// handle possibility of _notifySent being called after the last _notifyProc
-	if(endSignalled && isEmpty() && progressCb) progressCb(0, 0); // we got this callback after processing has finished -> need to flag to front-end that we're now done
+	if(endSignalled && isEmpty() && progressCb) progressCb(0); // we got this callback after processing has finished -> need to flag to front-end that we're now done
 }
 #endif
 
@@ -257,8 +257,6 @@ FUTURE_RETURN_T PAR2ProcOCL::addInput(const void* buffer, size_t size, uint16_t 
 		for(unsigned i=0; i<outputExponents.size(); i++)
 			area.tmpCoeffs[currentStagingInputs + i*inputBatchSize] = gfmat_coeff_from_log(inputLog, outputExponents[i]);
 	}
-	if(currentStagingInputs == 0)
-		area.firstInput = inputNum;
 	
 	// TODO: need to add cksum
 	cl::Event writeEvent;
@@ -326,8 +324,6 @@ void PAR2ProcOCL::dummyInput(uint16_t inputNum, bool flush) {
 		for(unsigned i=0; i<outputExponents.size(); i++)
 			area.tmpCoeffs[currentStagingInputs + i*inputBatchSize] = gfmat_coeff_from_log(inputLog, outputExponents[i]);
 	}
-	if(currentStagingInputs == 0)
-		area.firstInput = inputNum;
 	
 	currentStagingInputs++;
 	if(currentStagingInputs == inputBatchSize || flush || (stagingActiveCount_get() == 0 && staging.size() > 1))
@@ -404,7 +400,7 @@ void PAR2ProcOCL::_notifyProc(void* _req) {
 	staging[req->procIdx].setIsActive(false);
 	
 	// if add was blocked, allow adds to continue - calling application will need to listen to this event to know to continue
-	if(progressCb) progressCb(req->numInputs, staging[req->procIdx].firstInput);
+	if(progressCb) progressCb(req->numInputs);
 	
 	delete req;
 }

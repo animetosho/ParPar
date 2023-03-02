@@ -678,14 +678,14 @@ protected:
 			procs.push_back({static_cast<IPAR2ProcBackend*>(par2cpu.get()), cpuOffset, cpuSliceSize});
 		}
 		// TODO: handle init returning false (currently, it can't)
-		par2.init(sliceSize, procs, [&](unsigned numInputs, uint16_t firstInput) {
+		par2.init(sliceSize, procs, [&](unsigned numInputs) {
 			if(progressCb.hasCallback) {
 #if NODE_VERSION_AT_LEAST(0, 11, 0)
 				HandleScope scope(progressCb.isolate);
-				progressCb.call({ Integer::New(progressCb.isolate, numInputs), Integer::New(progressCb.isolate, firstInput) });
+				progressCb.call({ Integer::New(progressCb.isolate, numInputs) });
 #else
 				HandleScope scope;
-				progressCb.call({ Integer::New(numInputs), Integer::New(firstInput) });
+				progressCb.call({ Integer::New(numInputs) });
 #endif
 			}
 		});

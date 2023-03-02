@@ -30,8 +30,8 @@ bool PAR2Proc::init(size_t sliceSize, const std::vector<struct PAR2ProcBackendAl
 		backend.be->setSliceSize(size);
 		
 #ifdef USE_LIBUV
-		backend.be->setProgressCb([this](int numInputs, int firstInput) {
-			this->onBackendProcess(numInputs, firstInput);
+		backend.be->setProgressCb([this](int numInputs) {
+			this->onBackendProcess(numInputs);
 		});
 #endif
 	}
@@ -366,10 +366,10 @@ FUTURE_RETURN_BOOL_T PAR2Proc::getOutput(unsigned index, void* output  IF_LIBUV(
 }
 
 #ifdef USE_LIBUV
-void PAR2Proc::onBackendProcess(int numInputs, int firstInput) {
+void PAR2Proc::onBackendProcess(int numInputs) {
 	// since we need to invoke the callback for each backend which completes (for adds to continue), this means this isn't exactly 'progress' any more
 	// TODO: consider renaming
-	if(progressCb) progressCb(numInputs, firstInput);
+	if(progressCb) progressCb(numInputs);
 	
 	if(endSignalled) {
 		bool allIsEmpty = true;

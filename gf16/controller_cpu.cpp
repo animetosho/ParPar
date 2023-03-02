@@ -234,7 +234,7 @@ void PAR2ProcCPU::_notifySent(void* _req) {
 	delete data;
 	
 	// handle possibility of _notifySent being called after the last _notifyProc
-	if(endSignalled && isEmpty() && progressCb) progressCb(0, 0);
+	if(endSignalled && isEmpty() && progressCb) progressCb(0);
 }
 #endif
 
@@ -388,7 +388,6 @@ FUTURE_RETURN_BOOL_T PAR2ProcCPU::getOutput(unsigned index, void* output  IF_LIB
 typedef struct __compute_req : PAR2ProcBackendBaseComputeReq<PAR2ProcCPU> {
 	unsigned inputGrouping;
 	uint16_t numOutputs;
-	uint16_t firstInput;
 	const uint16_t *oNums;
 	const uint16_t* coeffs;
 	size_t len, chunkSize;
@@ -486,7 +485,6 @@ void PAR2ProcCPU::run_kernel(unsigned inBuf, unsigned numInputs) {
 		req->numInputs = numInputs;
 		req->inputGrouping = inputBatchSize;
 		req->numOutputs = outputExponents.size();
-		req->firstInput = area.inputNums[0];
 		req->oNums = outputExponents.data();
 		req->coeffs = area.procCoeffs.data();
 		req->len = thisChunkLen; // TODO: consider sending multiple chunks, instead of one at a time? allows for prefetching second chunk; alternatively, allow worker to peek into queue when prefetching?
@@ -514,7 +512,7 @@ void PAR2ProcCPU::_notifyProc(void* _req) {
 	staging[req->procIdx].setIsActive(false);
 	
 	// if add was blocked, allow adds to continue - calling application will need to listen to this event to know to continue
-	if(progressCb) progressCb(req->numInputs, req->firstInput);
+	if(progressCb) progressCb(req->numInputs);
 	
 	delete req;
 }

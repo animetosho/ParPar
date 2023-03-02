@@ -14,7 +14,7 @@
 // callback types
 typedef std::function<void()> PAR2ProcPlainCb;
 typedef std::function<void(bool)> PAR2ProcOutputCb;
-typedef std::function<void(unsigned, uint16_t)> PAR2ProcCompleteCb;
+typedef std::function<void(unsigned)> PAR2ProcCompleteCb;
 
 #define FUTURE_RETURN_T void
 #define FUTURE_RETURN_BOOL_T void
@@ -244,7 +244,7 @@ private:
 	void processing_finished();
 	PAR2ProcPlainCb finishCb;
 	PAR2ProcCompleteCb progressCb;
-	void onBackendProcess(int numInputs, int firstInput);
+	void onBackendProcess(int numInputs);
 #endif
 	
 	// disable copy constructor
