@@ -152,20 +152,21 @@ void PAR2Proc::waitForAdd() {
 #endif
 
 #ifdef USE_LIBUV
-bool PAR2Proc::addInput(const void* buffer, size_t size, uint16_t inputNum, bool flush, const PAR2ProcPlainCb& cb) {
+template<typename T>
+bool PAR2Proc::_addInput(const void* buffer, size_t size, uint16_t inputRef, T inputNumOrCoeffs, bool flush, const PAR2ProcPlainCb& cb) {
 	IF_LIBUV(assert(!endSignalled));
 	
-	auto cbRef = addCbRefs.find(inputNum);
+	auto cbRef = addCbRefs.find(inputRef);
 	if(cbRef != addCbRefs.end()) {
 		cbRef->second.cb = cb;
 	} else {
-		cbRef = addCbRefs.emplace(std::make_pair(inputNum, PAR2ProcAddCbRef{
+		cbRef = addCbRefs.emplace(std::make_pair(inputRef, PAR2ProcAddCbRef{
 			(int)backends.size(), cb,
-			[this, inputNum]() {
-				auto& ref = addCbRefs[inputNum];
+			[this, inputRef]() {
+				auto& ref = addCbRefs[inputRef];
 				if(--ref.backendsActive == 0) {
 					auto cb = ref.cb;
-					addCbRefs.erase(inputNum);
+					addCbRefs.erase(inputRef);
 					if(cb) cb();
 				}
 			}
@@ -184,20 +185,28 @@ bool PAR2Proc::addInput(const void* buffer, size_t size, uint16_t inputNum, bool
 		if(backend.currentOffset >= size) continue;
 		size_t amount = (std::min)(size-backend.currentOffset, backend.currentSliceSize);
 		if(amount == 0) continue;
-		if(backend.added.find(inputNum) == backend.added.end()) {
+		if(backend.added.find(inputRef) == backend.added.end()) {
 			bool canAdd = backend.be->canAdd() != PROC_ADD_FULL;
 			if(canAdd)
-				backend.be->addInput(static_cast<const char*>(buffer) + backend.currentOffset, amount, inputNum, flush, cbRef->second.backendCb);
+				backend.be->addInput(static_cast<const char*>(buffer) + backend.currentOffset, amount, inputNumOrCoeffs, flush, cbRef->second.backendCb);
 			success = success && canAdd;
-			if(canAdd) backend.added.insert(inputNum);
+			if(canAdd) backend.added.insert(inputRef);
 		}
 	}
 	if(success) {
 		hasAdded = true;
 		for(auto& backend : backends)
-			backend.added.erase(inputNum);
+			backend.added.erase(inputRef);
 	}
 	return success;
+}
+
+bool PAR2Proc::addInput(const void* buffer, size_t size, uint16_t inputNum, bool flush, const PAR2ProcPlainCb& cb) {
+	return _addInput(buffer, size, inputNum, inputNum, flush, cb);
+}
+bool PAR2Proc::addInput(const void* buffer, size_t size, const uint16_t* coeffs, bool flush, const PAR2ProcPlainCb& cb) {
+	// use first coefficient as reference
+	return _addInput(buffer, size, coeffs[0], coeffs, flush, cb);
 }
 #else
 static std::future<void> combine_futures(std::vector<std::future<void>>&& futures) {
@@ -215,7 +224,8 @@ static std::future<bool> combine_futures_and(std::vector<std::future<bool>>&& fu
 	}, std::move(futures));
 }
 
-std::future<void> PAR2Proc::addInput(const void* buffer, size_t size, uint16_t inputNum, bool flush) {
+template<typename T>
+std::future<void> PAR2Proc::_addInput(const void* buffer, size_t size, T inputNumOfCoeffs, bool flush) {
 	std::vector<std::future<void>> addFutures;
 	addFutures.reserve(backends.size());
 	
@@ -223,10 +233,17 @@ std::future<void> PAR2Proc::addInput(const void* buffer, size_t size, uint16_t i
 		if(backend.currentOffset >= size) continue;
 		size_t amount = (std::min)(size-backend.currentOffset, backend.currentSliceSize);
 		if(amount == 0) continue;
-		addFutures.push_back(backend.be->addInput(static_cast<const char*>(buffer) + backend.currentOffset, amount, inputNum, flush));
+		addFutures.push_back(backend.be->addInput(static_cast<const char*>(buffer) + backend.currentOffset, amount, inputNumOfCoeffs, flush));
 	}
 	hasAdded = true;
 	return combine_futures(std::move(addFutures));
+}
+
+FUTURE_RETURN_T PAR2Proc::addInput(const void* buffer, size_t size, uint16_t inputNum, bool flush) {
+	return _addInput(buffer, size, inputNum, flush);
+}
+FUTURE_RETURN_T PAR2Proc::addInput(const void* buffer, size_t size, const uint16_t* coeffs, bool flush) {
+	return _addInput(buffer, size, coeffs, flush);
 }
 #endif
 

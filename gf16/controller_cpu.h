@@ -40,7 +40,10 @@ private:
 	MessageThread transferThread;
 	
 	void set_coeffs(PAR2ProcCPUStaging& area, unsigned idx, uint16_t inputNum);
+	void set_coeffs(PAR2ProcCPUStaging& area, unsigned idx, const uint16_t* inputCoeffs);
 	void run_kernel(unsigned inBuf, unsigned numInputs) override;
+	
+	template<typename T> FUTURE_RETURN_T _addInput(const void* buffer, size_t size, T inputNumOrCoeffs, bool flush  IF_LIBUV(, const PAR2ProcPlainCb& cb));
 	
 #ifdef USE_LIBUV
 	void _notifySent(void* _req) override;
@@ -92,6 +95,7 @@ public:
 	
 	PAR2ProcBackendAddResult canAdd() const override;
 	FUTURE_RETURN_T addInput(const void* buffer, size_t size, uint16_t inputNum, bool flush  IF_LIBUV(, const PAR2ProcPlainCb& cb)) override;
+	FUTURE_RETURN_T addInput(const void* buffer, size_t size, const uint16_t* coeffs, bool flush  IF_LIBUV(, const PAR2ProcPlainCb& cb)) override;
 	void dummyInput(uint16_t inputNum, bool flush = false) override;
 	bool fillInput(const void* buffer) override;
 	void flush() override;

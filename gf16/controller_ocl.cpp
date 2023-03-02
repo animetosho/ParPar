@@ -95,7 +95,7 @@ bool PAR2ProcOCL::setRecoverySlices(unsigned _numOutputs, const uint16_t* output
 	}
 	// check if coeffs are sequential
 	bool coeffIsSeq = false;
-	if(coeffType != GF16OCL_COEFF_LOG) {
+	if(coeffType != GF16OCL_COEFF_LOG && outputExp) {
 		coeffIsSeq = true;
 		uint16_t coeffBase = outputExp[0]; // we don't support _numOutputs < 1
 		for(unsigned i=1; i<_numOutputs; i++) {
@@ -113,7 +113,10 @@ bool PAR2ProcOCL::setRecoverySlices(unsigned _numOutputs, const uint16_t* output
 			return false;
 	}
 	
-	memcpy(outputExponents.data(), outputExp, outputExponents.size()*sizeof(uint16_t));
+	assert(outputExp || coeffType == GF16OCL_COEFF_NORMAL); // TODO: if outputs not specified, and a Log method is specified, need to re-init away from that method
+	
+	if(outputExp)
+		memcpy(outputExponents.data(), outputExp, outputExponents.size()*sizeof(uint16_t));
 	if(coeffType == GF16OCL_COEFF_LOG) {
 		cl::Event writeEvent;
 		queue.enqueueWriteBuffer(buffer_outExp, CL_FALSE, 0, outputExponents.size()*sizeof(uint16_t), outputExponents.data(), &queueEvents, &writeEvent);
@@ -245,11 +248,19 @@ void PAR2ProcOCL::waitForAdd() {
 #endif
 
 FUTURE_RETURN_T PAR2ProcOCL::addInput(const void* buffer, size_t size, uint16_t inputNum, bool flush  IF_LIBUV(, const PAR2ProcPlainCb& cb)) {
+	IF_NOT_LIBUV(return) _addInput(buffer, size, inputNum, flush IF_LIBUV(, cb));
+}
+FUTURE_RETURN_T PAR2ProcOCL::addInput(const void* buffer, size_t size, const uint16_t* coeffs, bool flush  IF_LIBUV(, const PAR2ProcPlainCb& cb)) {
+	IF_NOT_LIBUV(return) _addInput(buffer, size, coeffs, flush IF_LIBUV(, cb));
+}
+
+template<typename T>
+FUTURE_RETURN_T PAR2ProcOCL::_addInput(const void* buffer, size_t size, T inputNumOrCoeffs, bool flush  IF_LIBUV(, const PAR2ProcPlainCb& cb)) {
 	auto& area = staging[currentStagingArea];
 	// detect if busy
 	assert(!area.getIsActive());
 	
-	set_coeffs(area, currentStagingInputs, inputNum);
+	set_coeffs(area, currentStagingInputs, inputNumOrCoeffs);
 	
 	// TODO: need to add cksum
 	cl::Event writeEvent;
@@ -337,7 +348,13 @@ void PAR2ProcOCL::set_coeffs(PAR2ProcOCLStaging& area, unsigned idx, uint16_t in
 			coeffs[idx + i*inputBatchSize] = gfmat_coeff_from_log(inputLog, outputExponents[i]);
 	}
 }
-
+void PAR2ProcOCL::set_coeffs(PAR2ProcOCLStaging& area, unsigned idx, const uint16_t* inputCoeffs) {
+	assert(coeffType == GF16OCL_COEFF_NORMAL);
+	
+	auto& coeffs = area.procCoeffs;
+	for(unsigned i=0; i<outputExponents.size(); i++)
+		coeffs[idx + i*inputBatchSize] = inputCoeffs[i];
+}
 
 void PAR2ProcOCL::flush() {
 	if(currentStagingInputs)

@@ -146,8 +146,9 @@ bool PAR2ProcCPU::setRecoverySlices(unsigned numSlices, const uint16_t* exponent
 	
 	outputExponents.clear();
 	if(numSlices) {
-		outputExponents.resize(numSlices);
-		memcpy(outputExponents.data(), exponents, numSlices * sizeof(uint16_t));
+		outputExponents.resize(numSlices, 0);
+		if(exponents)
+			memcpy(outputExponents.data(), exponents, numSlices * sizeof(uint16_t));
 		
 		for(auto& area : staging)
 			area.procCoeffs.resize(numSlices * inputBatchSize);
@@ -249,12 +250,20 @@ void PAR2ProcCPU::waitForAdd() {
 #endif
 
 FUTURE_RETURN_T PAR2ProcCPU::addInput(const void* buffer, size_t size, uint16_t inputNum, bool flush  IF_LIBUV(, const PAR2ProcPlainCb& cb)) {
+	IF_NOT_LIBUV(return) _addInput(buffer, size, inputNum, flush IF_LIBUV(, cb));
+}
+FUTURE_RETURN_T PAR2ProcCPU::addInput(const void* buffer, size_t size, const uint16_t* coeffs, bool flush  IF_LIBUV(, const PAR2ProcPlainCb& cb)) {
+	IF_NOT_LIBUV(return) _addInput(buffer, size, coeffs, flush IF_LIBUV(, cb));
+}
+
+template<typename T>
+FUTURE_RETURN_T PAR2ProcCPU::_addInput(const void* buffer, size_t size, T inputNumOrCoeffs, bool flush  IF_LIBUV(, const PAR2ProcPlainCb& cb)) {
 	IF_LIBUV(assert(!endSignalled));
 	auto& area = staging[currentStagingArea];
 	assert(!area.getIsActive());
 	if(!staging[0].src) reallocMemInput();
 	
-	set_coeffs(area, currentStagingInputs, inputNum);
+	set_coeffs(area, currentStagingInputs, inputNumOrCoeffs);
 	struct transfer_data* data = new struct transfer_data;
 	data->finish = false;
 	data->src = buffer;
@@ -323,10 +332,17 @@ bool PAR2ProcCPU::fillInput(const void* buffer) {
 }
 
 void PAR2ProcCPU::set_coeffs(PAR2ProcCPUStaging& area, unsigned idx, uint16_t inputNum) {
+	// TODO: check if exponents have been set?
 	uint16_t inputLog = gfmat_input_log(inputNum);
 	auto& coeffs = area.procCoeffs;
 	for(unsigned out=0; out<outputExponents.size(); out++) {
 		coeffs[idx + out*inputBatchSize] = gfmat_coeff_from_log(inputLog, outputExponents[out]);
+	}
+}
+void PAR2ProcCPU::set_coeffs(PAR2ProcCPUStaging& area, unsigned idx, const uint16_t* inputCoeffs) {
+	auto& coeffs = area.procCoeffs;
+	for(unsigned out=0; out<outputExponents.size(); out++) {
+		coeffs[idx + out*inputBatchSize] = inputCoeffs[out];
 	}
 }
 

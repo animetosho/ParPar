@@ -130,6 +130,8 @@ class PAR2ProcOCL : public IPAR2ProcBackend {
 	unsigned _setupTargetInputBatch, _setupTargetIters, _setupTargetGrouping;
 	
 	void set_coeffs(PAR2ProcOCLStaging& area, unsigned idx, uint16_t inputNum);
+	void set_coeffs(PAR2ProcOCLStaging& area, unsigned idx, const uint16_t* inputCoeffs);
+	template<typename T> FUTURE_RETURN_T _addInput(const void* buffer, size_t size, T inputNumOrCoeffs, bool flush  IF_LIBUV(, const PAR2ProcPlainCb& cb));
 	
 	bool setup_kernels(Galois16OCLMethods method, unsigned targetInputBatch, unsigned targetIters, unsigned targetGrouping, bool outputSequential);
 	void run_kernel(unsigned buf, unsigned numInputs) override;
@@ -181,6 +183,7 @@ public:
 	bool init(Galois16OCLMethods method = GF16OCL_AUTO, unsigned targetInputBatch=0, unsigned targetIters=0, unsigned targetGrouping=0);
 	PAR2ProcBackendAddResult canAdd() const override;
 	FUTURE_RETURN_T addInput(const void* buffer, size_t size, uint16_t inputNum, bool flush  IF_LIBUV(, const PAR2ProcPlainCb& cb)) override;
+	FUTURE_RETURN_T addInput(const void* buffer, size_t size, const uint16_t* coeffs, bool flush  IF_LIBUV(, const PAR2ProcPlainCb& cb)) override;
 	void dummyInput(uint16_t inputNum, bool flush = false) override;
 	bool fillInput(const void* buffer) override;
 	void flush() override;
