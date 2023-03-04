@@ -17,14 +17,14 @@ static HEDLEY_ALWAYS_INLINE size_t _jit_pxor_mod(uint8_t* jit, uint8_t xreg, uin
 	*(jit++) = 0x66;
 	size_t p = _jit_rex_pref(&jit, xreg, 0) +1;
 	xreg &= 7;
-	*(int32_t*)jit = 0x40EF0F | (xreg <<19) | (mreg <<16);
+	write32(jit, 0x40EF0F | (xreg <<19) | (mreg <<16));
 	jit[3] = (uint8_t)offs;
 	return p+4;
 }
 static HEDLEY_ALWAYS_INLINE size_t _jit_xorps_mod(uint8_t* jit, uint8_t xreg, uint8_t mreg, int32_t offs) {
 	size_t p = _jit_rex_pref(&jit, xreg, 0);
 	xreg &= 7;
-	*(int32_t*)jit = 0x40570F | (xreg <<19) | (mreg <<16) | (offs <<24);
+	write32(jit, 0x40570F | (xreg <<19) | (mreg <<16) | (offs <<24));
 	return p+4;
 }
 
@@ -364,41 +364,41 @@ static inline void* xor_write_jit_sse(const struct gf16_xor_scratch *HEDLEY_REST
 	//_jit_movaps_load(jit, reg, xreg, offs)
 	// (we just save a conditional by hardcoding this)
 	#define _LD_APS(xreg, mreg, offs) \
-		*(int32_t*)(jitptr) = 0x40280F + ((xreg) <<19) + ((mreg) <<16) + (((offs)&0xFF) <<24); \
+		write32((jitptr), 0x40280F + ((xreg) <<19) + ((mreg) <<16) + (((offs)&0xFF) <<24)); \
 		jitptr += 4
 	#define _ST_APS(mreg, offs, xreg) \
-		*(int32_t*)(jitptr) = 0x40290F + ((xreg) <<19) + ((mreg) <<16) + (((offs)&0xFF) <<24); \
+		write32((jitptr), 0x40290F + ((xreg) <<19) + ((mreg) <<16) + (((offs)&0xFF) <<24)); \
 		jitptr += 4
 	#define _LD_APS64(xreg, mreg, offs) \
-		*(int64_t*)(jitptr) = 0x40280F44 + ((xreg-8) <<27) + ((mreg) <<24) + ((int64_t)((offs)&0xFF) <<32); \
+		write64((jitptr), 0x40280F44 + ((xreg-8) <<27) + ((mreg) <<24) + ((int64_t)((offs)&0xFF) <<32)); \
 		jitptr += 5
 	#define _ST_APS64(mreg, offs, xreg) \
-		*(int64_t*)(jitptr) = 0x40290F44 + ((xreg-8) <<27) + ((mreg) <<24) + ((int64_t)((offs)&0xFF) <<32); \
+		write64((jitptr), 0x40290F44 + ((xreg-8) <<27) + ((mreg) <<24) + ((int64_t)((offs)&0xFF) <<32)); \
 		jitptr += 5
 
 #ifdef PLATFORM_AMD64
 	#define _LD_DQA(xreg, mreg, offs) \
-		*(int64_t*)(jitptr) = 0x406F0F66 + ((xreg) <<27) + ((mreg) <<24) + ((int64_t)((offs)&0xFF) <<32); \
+		write64((jitptr), 0x406F0F66 + ((xreg) <<27) + ((mreg) <<24) + ((int64_t)((offs)&0xFF) <<32)); \
 		jitptr += 5
 #else
 	#define _LD_DQA(xreg, mreg, offs) \
-		*(int32_t*)(jitptr) = 0x406F0F66 + ((xreg) <<27) + ((mreg) <<24); \
+		write32((jitptr), 0x406F0F66 + ((xreg) <<27) + ((mreg) <<24)); \
 		*(jitptr +4) = (uint8_t)((offs)&0xFF); \
 		jitptr += 5
 #endif
 	#define _LD_DQA64(xreg, mreg, offs) \
-		*(int64_t*)(jitptr) = 0x406F0F4466 + ((int64_t)(xreg-8) <<35) + ((int64_t)(mreg) <<32) + ((int64_t)((offs)&0xFF) <<40); \
+		write64((jitptr), 0x406F0F4466 + ((int64_t)(xreg-8) <<35) + ((int64_t)(mreg) <<32) + ((int64_t)((offs)&0xFF) <<40)); \
 		jitptr += 6
 	
 	
 	//_jit_xorps_m(jit, reg, AX, offs<<4);
 	#define _XORPS_M_(reg, offs, tr) \
-		*(int32_t*)(jitptr) = (0x40570F + ((reg) << 19) + (((offs)&0xFF) <<28)) ^ (tr)
+		write32((jitptr), (0x40570F + ((reg) << 19) + (((offs)&0xFF) <<28)) ^ (tr))
 	#define _C_XORPS_M(reg, offs, c) \
 		_XORPS_M_(reg, offs, 0); \
 		jitptr += (c)<<2
 	#define _XORPS_M64_(reg, offs, tr) \
-		*(int64_t*)(jitptr) = (0x40570F44 + (((reg)-8) << 27) + ((int64_t)((offs)&0xFF) <<36)) ^ ((tr)<<8)
+		write64((jitptr), (0x40570F44 + (((reg)-8) << 27) + ((int64_t)((offs)&0xFF) <<36)) ^ ((tr)<<8))
 	#define _C_XORPS_M64(reg, offs, c) \
 		_XORPS_M64_(reg, offs, 0); \
 		jitptr += ((c)<<2)+(c)
@@ -406,10 +406,10 @@ static inline void* xor_write_jit_sse(const struct gf16_xor_scratch *HEDLEY_REST
 	//_jit_pxor_m(jit, 1, AX, offs<<4);
 #ifdef PLATFORM_AMD64
 	#define _PXOR_M_(reg, offs, tr) \
-		*(int64_t*)(jitptr) = (0x40EF0F66 + ((reg) << 27) + ((int64_t)((offs)&0xFF) << 36)) ^ (tr)
+		write64((jitptr), (0x40EF0F66 + ((reg) << 27) + ((int64_t)((offs)&0xFF) << 36)) ^ (tr))
 #else
 	#define _PXOR_M_(reg, offs, tr) \
-		*(int32_t*)(jitptr) = (0x40EF0F66 + ((reg) << 27)) ^ (tr); \
+		write32((jitptr), (0x40EF0F66 + ((reg) << 27)) ^ (tr)); \
 		*(jitptr +4) = (uint8_t)(((offs)&0xFF) << 4)
 #endif
 	#define _PXOR_M(reg, offs) \
@@ -419,14 +419,14 @@ static inline void* xor_write_jit_sse(const struct gf16_xor_scratch *HEDLEY_REST
 		_PXOR_M_(reg, offs, 0); \
 		jitptr += ((c)<<2)+(c)
 	#define _PXOR_M64_(reg, offs, tr) \
-		*(int64_t*)(jitptr) = (0x40EF0F4466 + ((int64_t)((reg)-8) << 35) + ((int64_t)((offs)&0xFF) << 44)) ^ ((tr)<<8)
+		write64((jitptr), (0x40EF0F4466 + ((int64_t)((reg)-8) << 35) + ((int64_t)((offs)&0xFF) << 44)) ^ ((tr)<<8))
 	#define _C_PXOR_M64(reg, offs, c) \
 		_PXOR_M64_(reg, offs, 0); \
 		jitptr += ((c)<<2)+((c)<<1)
 	
 	//_jit_xorps_r(jit, r2, r1)
 	#define _XORPS_R_(r2, r1, tr) \
-		*(int32_t*)(jitptr) = (0xC0570F + ((r2) <<19) + ((r1) <<16)) ^ (tr)
+		write32((jitptr), (0xC0570F + ((r2) <<19) + ((r1) <<16)) ^ (tr))
 	#define _XORPS_R(r2, r1) \
 		_XORPS_R_(r2, r1, 0); \
 		jitptr += 3
@@ -435,14 +435,14 @@ static inline void* xor_write_jit_sse(const struct gf16_xor_scratch *HEDLEY_REST
 		jitptr += ((c)<<1)+(c)
 	// r2 is always < 8, r1 here is >= 8
 	#define _XORPS_R64_(r2, r1, tr) \
-		*(int32_t*)(jitptr) = (0xC0570F41 + ((r2) <<27) + ((r1) <<24)) ^ ((tr)<<8)
+		write32((jitptr), (0xC0570F41 + ((r2) <<27) + ((r1) <<24)) ^ ((tr)<<8))
 	#define _C_XORPS_R64(r2, r1, c) \
 		_XORPS_R64_(r2, r1, 0); \
 		jitptr += (c)<<2
 	
 	//_jit_pxor_r(jit, r2, r1)
 	#define _PXOR_R_(r2, r1, tr) \
-		*(int32_t*)(jitptr) = (0xC0EF0F66 + ((r2) <<27) + ((r1) <<24)) ^ (tr)
+		write32((jitptr), (0xC0EF0F66 + ((r2) <<27) + ((r1) <<24)) ^ (tr))
 	#define _PXOR_R(r2, r1) \
 		_PXOR_R_(r2, r1, 0); \
 		jitptr += 4
@@ -450,7 +450,7 @@ static inline void* xor_write_jit_sse(const struct gf16_xor_scratch *HEDLEY_REST
 		_PXOR_R_(r2, r1, 0); \
 		jitptr += (c)<<2
 	#define _PXOR_R64_(r2, r1, tr) \
-		*(int64_t*)(jitptr) = (0xC0EF0F4166 + ((int64_t)(r2) <<35) + ((int64_t)(r1) <<32)) ^ (((int64_t)tr)<<8)
+		write64((jitptr), (0xC0EF0F4166 + ((int64_t)(r2) <<35) + ((int64_t)(r1) <<32)) ^ (((int64_t)tr)<<8))
 	#define _C_PXOR_R64(r2, r1, c) \
 		_PXOR_R64_(r2, r1, 0); \
 		jitptr += ((c)<<2)+(c)
@@ -554,7 +554,7 @@ static inline void* xor_write_jit_sse(const struct gf16_xor_scratch *HEDLEY_REST
 				
 				jitptr[posC + movC] = 0x6F; // PXOR -> MOVDQA
 #ifdef PLATFORM_AMD64
-				*(int64_t*)(jitptr) = (0xC0570F + (2 <<16)) + ((0xC0EF0F66ULL + (1 <<27) + (2 <<24)) <<24);
+				write64(jitptr, (0xC0570F + (2 <<16)) + ((0xC0EF0F66ULL + (1 <<27) + (2 <<24)) <<24));
 				jitptr += ((movC==0)<<3) - (movC==0);
 #else
 				_C_XORPS_R(0, 2, movC==0);
@@ -659,10 +659,10 @@ static inline void* xor_write_jit_sse(const struct gf16_xor_scratch *HEDLEY_REST
 	
 	/* cmp */
 #ifdef PLATFORM_AMD64
-	*(uint64_t*)(jitptr) = 0x800FC03948 | (DX <<16) | (CX <<19) | ((uint64_t)JL <<32);
+	write64(jitptr, 0x800FC03948 | (DX <<16) | (CX <<19) | ((uint64_t)JL <<32));
 	jitptr += 5;
 #else
-	*(uint32_t*)(jitptr) = 0x800FC039 | (DX <<8) | (CX <<11) | (JL <<24);
+	write32(jitptr, 0x800FC039 | (DX <<8) | (CX <<11) | (JL <<24));
 	jitptr += 4;
 #endif
 	
@@ -1024,13 +1024,13 @@ void gf16_xor_finish_block_sse2(void *HEDLEY_RESTRICT dst) {
 		targVec = _mm_insert_epi16(targVec, mskC, 2 + vecUpper*4); \
 		targVec = _mm_insert_epi16(targVec, mskD, 3 + vecUpper*4); \
 		srcVec = _mm_add_epi8(srcVec, srcVec); \
-		(target)[3] = _mm_movemask_epi8(srcVec); \
+		write16((target)+3, _mm_movemask_epi8(srcVec)); \
 		srcVec = _mm_add_epi8(srcVec, srcVec); \
-		(target)[2] = _mm_movemask_epi8(srcVec); \
+		write16((target)+2, _mm_movemask_epi8(srcVec)); \
 		srcVec = _mm_add_epi8(srcVec, srcVec); \
-		(target)[1] = _mm_movemask_epi8(srcVec); \
+		write16((target)+1, _mm_movemask_epi8(srcVec)); \
 		srcVec = _mm_add_epi8(srcVec, srcVec); \
-		(target)[0] = _mm_movemask_epi8(srcVec); \
+		write16((target)+0, _mm_movemask_epi8(srcVec)); \
 	}
 	EXTRACT_BITS_HALF(_dst +  0, dstA, 0, srcDQb)
 	EXTRACT_BITS_HALF(_dst +  8, dstA, 1, srcDQa)

@@ -139,7 +139,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_xorjit_write_jit(const void *HEDLEY_RESTRI
 			jitptr = jitTemp;
 		
 		jitptr = writeFunc(info, jitptr, coefficient, add, prefetch);
-		*(int32_t*)jitptr = (int32_t)(jitTemp - copyOffset - jitptr -4);
+		write32(jitptr, (int32_t)(jitTemp - copyOffset - jitptr -4));
 		jitptr[4] = 0xC3; /* ret */
 		jitptr += 5;
 		
@@ -186,7 +186,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_xorjit_write_jit(const void *HEDLEY_RESTRI
 				jitptr[i] = 0;
 		}
 		jitptr = writeFunc(info, jitptr, coefficient, add, prefetch);
-		*(int32_t*)jitptr = (int32_t)((uint8_t*)jit->w - jitptr -4);
+		write32(jitptr, (int32_t)((uint8_t*)jit->w - jitptr -4));
 		jitptr[4] = 0xC3; /* ret */
 	}
 	#ifdef GF16_XORJIT_ENABLE_DUAL_MAPPING

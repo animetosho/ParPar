@@ -63,7 +63,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle2x_muladd_x_avx2(const void *HEDLEY
 #endif
 
 		__m256i prod0 = _mm256_shuffle_epi8(
-			_mm256_broadcastd_epi32(_mm_cvtsi32_si128(*(uint32_t*)coefficients)),
+			_mm256_broadcastd_epi32(_mm_cvtsi32_si128(read32(coefficients))),
 			_mm256_set_epi32(
 				0x03020302, 0x03020302, 0x03020302, 0x03020302,
 				0x01000100, 0x01000100, 0x01000100, 0x01000100

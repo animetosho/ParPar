@@ -36,10 +36,10 @@ void md5_final_block(void* state, const void *HEDLEY_RESTRICT data, uint64_t tot
 			
 			totalLength <<= 3; // bytes -> bits
 #if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
-			*(uint32_t*)(block + 64-8) = BSWAP(totalLength & 0xFFFFFFFF);
-			*(uint32_t*)(block + 64-4) = BSWAP(totalLength >> 32);
+			write32(block + 64-8, BSWAP(totalLength & 0xFFFFFFFF));
+			write32(block + 64-4, BSWAP(totalLength >> 32));
 #else
-			*(uint64_t*)(block + 64-8) = totalLength;
+			write64(block + 64-8, totalLength);
 #endif
 		}
 		
@@ -57,10 +57,10 @@ void md5_final_block(void* state, const void *HEDLEY_RESTRICT data, uint64_t tot
 	
 #if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
 	uint32_t* hash = (uint32_t*)state;
-	hash[0] = BSWAP(hash[0]);
-	hash[1] = BSWAP(hash[1]);
-	hash[2] = BSWAP(hash[2]);
-	hash[3] = BSWAP(hash[3]);
+	write32(hash+0, BSWAP(read32(hash+0)));
+	write32(hash+1, BSWAP(read32(hash+1)));
+	write32(hash+2, BSWAP(read32(hash+2)));
+	write32(hash+3, BSWAP(read32(hash+3)));
 #endif
 }
 

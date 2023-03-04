@@ -278,7 +278,7 @@ static inline void* xor_write_jit_avx(const struct gf16_xor_scratch *HEDLEY_REST
 	//_jit_pxor_r(jit, r2, r1)
 	/*
 	#define _PXOR_R_(r2, r1, tr) \
-		*(int32_t*)(jitptr) = (0xC0EF0F66 + ((r2) <<27) + ((r1) <<24)) ^ (tr)
+		write32(jitptr, (0xC0EF0F66 + ((r2) <<27) + ((r1) <<24)) ^ (tr))
 	#define _PXOR_R(r2, r1) \
 		_PXOR_R_(r2, r1, 0); \
 		jitptr += 4
@@ -381,7 +381,7 @@ static inline void* xor_write_jit_avx(const struct gf16_xor_scratch *HEDLEY_REST
 	}
 	
 	/* cmp/jcc */
-	*(uint64_t*)(jitptr) = 0x800FC03948 | (DX <<16) | (CX <<19) | ((uint64_t)JL <<32);
+	write64(jitptr, 0x800FC03948 | (DX <<16) | (CX <<19) | ((uint64_t)JL <<32));
 	return jitptr+5;
 }
 

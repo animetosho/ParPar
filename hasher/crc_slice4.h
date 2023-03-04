@@ -8,7 +8,7 @@
 	return mem;
 } */
 static HEDLEY_ALWAYS_INLINE void crc_init_slice4(void* crc) {
-	*(uint32_t*)crc = 0xffffffff;
+	memset(crc, 0xff, sizeof(uint32_t));
 }
 
 
@@ -167,15 +167,15 @@ static HEDLEY_ALWAYS_INLINE void crc_process_block_slice4(void* HEDLEY_RESTRICT 
 	uint32_t crc = *(uint32_t*)state;
 	const uint32_t* current = (uint32_t*)src;
 	for(int i=0; i<16; i++)
-		crc = crc_process_iter_slice4(crc, current[i]);
+		crc = crc_process_iter_slice4(crc, read32(current+i));
 	*(uint32_t*)state = crc;
 }
 
 static HEDLEY_ALWAYS_INLINE uint32_t crc_finish_slice4(void* HEDLEY_RESTRICT state, const void* HEDLEY_RESTRICT src, size_t len) {
-	uint32_t crc = *(uint32_t*)state;
+	uint32_t crc = read32(state);
 	const uint32_t* current = (uint32_t*)src;
 	for(; len >= 4; len -= 4)
-		crc = crc_process_iter_slice4(crc, *current++);
+		crc = crc_process_iter_slice4(crc, read32(current++));
 	const uint8_t* currentChar = (const uint8_t*)current;
 	while(len--)
 		crc = (crc >> 8) ^ Crc32Lookup[0][(crc & 0xFF) ^ *currentChar++];

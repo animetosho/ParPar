@@ -212,4 +212,41 @@ HEDLEY_WARNING("Compiling AVX code on MinGW GCC may cause crashing due to stack 
 #endif
 
 
+// read/write to pointer
+#include <string.h>
+#include "stdint.h"
+static HEDLEY_ALWAYS_INLINE uint32_t read16(const void* p) {
+	uint16_t v;
+	memcpy(&v, p, 2);
+	return v;
+}
+static HEDLEY_ALWAYS_INLINE uint32_t read32(const void* p) {
+	uint32_t v;
+	memcpy(&v, p, 4);
+	return v;
+}
+static HEDLEY_ALWAYS_INLINE uint64_t read64(const void* p) {
+	uint64_t v;
+	memcpy(&v, p, 8);
+	return v;
+}
+static HEDLEY_ALWAYS_INLINE uintptr_t readPtr(const void* p) {
+	uintptr_t v;
+	memcpy(&v, p, sizeof(uintptr_t));
+	return v;
+}
+static HEDLEY_ALWAYS_INLINE void write16(void* p, uint16_t v) {
+	memcpy(p, &v, 2);
+}
+static HEDLEY_ALWAYS_INLINE void write32(void* p, uint32_t v) {
+	memcpy(p, &v, 4);
+}
+static HEDLEY_ALWAYS_INLINE void write64(void* p, uint64_t v) {
+	memcpy(p, &v, 8);
+}
+static HEDLEY_ALWAYS_INLINE void writePtr(void* p, uintptr_t v) {
+	memcpy(p, &v, sizeof(uintptr_t));
+}
+
+
 #endif /* PP_PLATFORM_H */

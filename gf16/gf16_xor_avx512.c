@@ -467,7 +467,7 @@ static inline void* xor_write_jit_avx512(const struct gf16_xor_scratch *HEDLEY_R
 					// patch final vpternlog to merge from memory
 					// TODO: optimize
 					*(jitptr-6) |= 24<<2; // clear zreg3 bits
-					*(uint32_t*)(jitptr-2) = ((1<<3) | AX | 0x40) | (0x96<<16) | ((destOffs<<(8-6)) & 0xff00);
+					write32(jitptr-2, ((1<<3) | AX | 0x40) | (0x96<<16) | ((destOffs<<(8-6)) & 0xff00));
 					jitptr++;
 				}
 				if(popcntABC[8+bit] == 1) {
@@ -476,7 +476,7 @@ static inline void* xor_write_jit_avx512(const struct gf16_xor_scratch *HEDLEY_R
 					_mm512_storeu_si512((__m512i*)jitptr, xor_avx512_main_part_fromreg((~popcntABC[8+bit] & 1), 2, idxB));
 					jitptr += (popcntABC[8+bit] >> 1) * 7 + 6;
 					*(jitptr-6) |= 24<<2; // clear zreg3 bits
-					*(uint32_t*)(jitptr-2) = ((2<<3) | AX | 0x40) | (0x96<<16) | ((destOffs2<<(8-6)) & 0xff00);
+					write32(jitptr-2, ((2<<3) | AX | 0x40) | (0x96<<16) | ((destOffs2<<(8-6)) & 0xff00));
 					jitptr++;
 				}
 			}
@@ -545,7 +545,7 @@ static inline void* xor_write_jit_avx512(const struct gf16_xor_scratch *HEDLEY_R
 	}
 	
 	/* cmp/jcc */
-	*(uint64_t*)(jitptr) = 0x800FC03948 | (AX <<16) | (CX <<19) | ((uint64_t)JL <<32);
+	write64(jitptr, 0x800FC03948 | (AX <<16) | (CX <<19) | ((uint64_t)JL <<32));
 	return jitptr+5;
 }
 
@@ -698,7 +698,7 @@ static void* xor_write_jit_avx512_multi(const struct gf16_xor_scratch *HEDLEY_RE
 					// TODO: optimize
 					*(uint8_t*)(jitptr-6) |= 24<<2; // clear zreg3 bits
 					//*(jitptr-6) &= ~(8<<4); // set +8 flag for zreg1
-					*(uint32_t*)(jitptr-2) = ((bit<<3) | AX | 0x40) | (0x96<<16) | ((destOffs<<(8-6)) & 0xff00);
+					write32(jitptr-2, ((bit<<3) | AX | 0x40) | (0x96<<16) | ((destOffs<<(8-6)) & 0xff00));
 					jitptr++;
 				}
 				if(popcntABC[8+bit] == 1) {
@@ -710,7 +710,7 @@ static void* xor_write_jit_avx512_multi(const struct gf16_xor_scratch *HEDLEY_RE
 					jitptr += xor_avx512_main_part(jitptr, popcntABC[8+bit], (~popcntABC[8+bit] & 1), bit+8, memreg, idxB);
 					*(uint8_t*)(jitptr-6) |= 24<<2; // clear zreg3 bits
 					//*(jitptr-6) &= ~(8<<4);
-					*(uint32_t*)(jitptr-2) = ((bit<<3) | AX | 0x40) | (0x96<<16) | ((destOffs2<<(8-6)) & 0xff00);
+					write32(jitptr-2, ((bit<<3) | AX | 0x40) | (0x96<<16) | ((destOffs2<<(8-6)) & 0xff00));
 					jitptr++;
 				}
 			} else if(xor) {
@@ -849,9 +849,9 @@ void gf16_xor_jit_muladd_multi_avx512(const void *HEDLEY_RESTRICT scratch, unsig
 		}
 		
 		/* cmp/jcc */
-		*(uint64_t*)(jitptr) = 0x800FC03948 | (AX <<16) | (CX <<19) | ((uint64_t)JL <<32);
+		write64(jitptr, 0x800FC03948 | (AX <<16) | (CX <<19) | ((uint64_t)JL <<32));
 		if(info->jitOptStrat == GF16_XOR_JIT_STRAT_COPYNT || info->jitOptStrat == GF16_XOR_JIT_STRAT_COPY) {
-			*(int32_t*)(jitptr +5) = (int32_t)((jitTemp - (jitdst - (uint8_t*)jit->w)) - jitptr -9);
+			write32(jitptr +5, (int32_t)((jitTemp - (jitdst - (uint8_t*)jit->w)) - jitptr -9));
 			jitptr[9] = 0xC3; /* ret */
 			/* memcpy to destination */
 			if(info->jitOptStrat == GF16_XOR_JIT_STRAT_COPYNT) {

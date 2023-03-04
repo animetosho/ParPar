@@ -319,12 +319,12 @@ static HEDLEY_ALWAYS_INLINE int gf16_finish_packed(
 	
 	if(checksumBlock && partOffset + partLen == sliceLen) {
 		// checksum is valid if it's all zeroes
+		intptr_t zero = 0;
 		intptr_t* checksumTest = (intptr_t*)checksum;
 		for(unsigned i=0; i<blockLen/sizeof(intptr_t); i++) {
-			if(checksumTest[i]) return 0;
+			if(memcmp(checksumTest + i, &zero, sizeof(intptr_t))) return 0;
 		}
 		if(blockLen % sizeof(intptr_t)) {
-			intptr_t zero = 0;
 			return !memcmp(checksumTest + blockLen/sizeof(intptr_t), &zero, blockLen % sizeof(intptr_t));
 		}
 	}

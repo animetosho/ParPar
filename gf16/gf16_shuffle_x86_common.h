@@ -220,7 +220,7 @@ static HEDLEY_ALWAYS_INLINE __m512i gf16_vec512_mul2(__m512i v) {
 }
 static HEDLEY_ALWAYS_INLINE void gf16_initial_mul_vector_x2(const uint16_t* coefficients, __m256i* prod0, __m256i* mul8) {
 	*prod0 = _mm256_shuffle_epi8(
-		_mm256_broadcastd_epi32(_mm_cvtsi32_si128(*(uint32_t*)coefficients)),
+		_mm256_broadcastd_epi32(_mm_cvtsi32_si128(read32(coefficients))),
 		_mm256_set_epi32(
 			0x03020302, 0x03020302, 0x03020302, 0x03020302,
 			0x01000100, 0x01000100, 0x01000100, 0x01000100
@@ -250,7 +250,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_initial_mul_vector_x4(const uint16_t* coef
 	if(do4)
 		coeff = _mm_loadl_epi64((__m128i*)coefficients);
 	else
-		coeff = _mm_insert_epi16(_mm_cvtsi32_si128(*(uint32_t*)coefficients), coefficients[2], 2);
+		coeff = _mm_insert_epi16(_mm_cvtsi32_si128(read32(coefficients)), coefficients[2], 2);
 	
 	*prod0 = _mm512_shuffle_epi8(_mm512_broadcastq_epi64(coeff), _mm512_set_epi32(
 		0x07060706, 0x07060706, 0x07060706, 0x07060706,

@@ -42,21 +42,21 @@ static HEDLEY_ALWAYS_INLINE void gf_add_x_generic(
 	for(; ptr; ptr += sizeof(uintptr_t)) {
 		uintptr_t data;
 		
-		data = *(uintptr_t*)(_src1+ptr*srcScale);
+		data = readPtr(_src1+ptr*srcScale);
 		if(srcCount >= 2)
-			data ^= *(uintptr_t*)(_src2+ptr*srcScale);
+			data ^= readPtr(_src2+ptr*srcScale);
 		if(srcCount >= 3)
-			data ^= *(uintptr_t*)(_src3+ptr*srcScale);
+			data ^= readPtr(_src3+ptr*srcScale);
 		if(srcCount >= 4)
-			data ^= *(uintptr_t*)(_src4+ptr*srcScale);
+			data ^= readPtr(_src4+ptr*srcScale);
 		if(srcCount >= 5)
-			data ^= *(uintptr_t*)(_src5+ptr*srcScale);
+			data ^= readPtr(_src5+ptr*srcScale);
 		if(srcCount >= 6)
-			data ^= *(uintptr_t*)(_src6+ptr*srcScale);
+			data ^= readPtr(_src6+ptr*srcScale);
 		if(srcCount >= 7)
-			data ^= *(uintptr_t*)(_src7+ptr*srcScale);
+			data ^= readPtr(_src7+ptr*srcScale);
 		if(srcCount >= 8)
-			data ^= *(uintptr_t*)(_src8+ptr*srcScale);
+			data ^= readPtr(_src8+ptr*srcScale);
 		
 		if(lookup3Rearrange) {
 			// revert bit rearrangement for LOOKUP3 method
@@ -67,7 +67,7 @@ static HEDLEY_ALWAYS_INLINE void gf_add_x_generic(
 			}
 		}
 		
-		*(uintptr_t*)(_dst+ptr) ^= data;
+		writePtr(_dst+ptr, readPtr(_dst+ptr) ^ data);
 	}
 }
 
