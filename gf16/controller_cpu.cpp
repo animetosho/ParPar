@@ -443,7 +443,7 @@ void PAR2ProcCPU::compute_worker(void *_req) {
 	}
 	
 	for(unsigned round = 0; round < req->numChunks; round++) {
-		int procSize = MIN(req->len-round*req->chunkSize, req->chunkSize);
+		size_t procSize = MIN(req->len-round*req->chunkSize, req->chunkSize);
 		const char* srcPtr = static_cast<const char*>(req->input) + round*req->chunkSize*req->inputGrouping;
 		for(unsigned out = 0; out < req->numOutputs; out++) {
 			const uint16_t* vals = req->coeffs + out*req->inputGrouping;

@@ -15,6 +15,7 @@ static HEDLEY_ALWAYS_INLINE void _FN(gf_add_x)(
 	UNUSED(coefficients);
 	unsigned vecStride = (unsigned)((uintptr_t)scratch); // abuse this otherwise unused variable
 	ASSUME((len & (sizeof(_mword)*vecStride-1)) == 0);
+	// vecStride assumed to be a known compile-time constant
 	
 	for(intptr_t ptr = -(intptr_t)len; ptr; ptr += sizeof(_mword)*vecStride) {
 		for(unsigned v=0; v<vecStride; v++) {

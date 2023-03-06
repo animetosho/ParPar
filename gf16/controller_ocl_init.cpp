@@ -1,6 +1,6 @@
 #include <iostream>
 #include <stdio.h> // snprintf
-#include <stdint.h>
+#include "../src/stdint.h"
 #include <string.h> // strstr
 #include <sstream> // std::stringstream
 #include "controller_ocl.h"
@@ -481,6 +481,8 @@ STRINGIFY(
 		) "\n#else\n" STRINGIFY(
 		log += log2;
 		if(log >= 65535) log -= 65535;
+		//if (log == 12345678 && val == 12345678) return 0; // this is an impossible condition, but for some reason on some AMD cards, it makes the val==1 case work (i.e. without it, log(1) may result in 1 instead of 0)
+		// unable to find the reason for the above issue (though have managed to cause different results with different ways to do the same thing) - I'm filing it as a compiler bug
 		) "\n#endif\n"
 		"#endif\n" STRINGIFY(
 		

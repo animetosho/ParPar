@@ -160,8 +160,8 @@ public:
 	virtual bool setCurrentSliceSize(size_t size) = 0;
 	virtual bool setRecoverySlices(unsigned numSlices, const uint16_t* exponents = nullptr) = 0;
 	virtual PAR2ProcBackendAddResult canAdd() const = 0;
-	virtual FUTURE_RETURN_T addInput(const void* buffer, size_t size, uint16_t inputNum, bool flush  IF_LIBUV(, const PAR2ProcPlainCb& cb)) = 0;
-	virtual FUTURE_RETURN_T addInput(const void* buffer, size_t size, const uint16_t* coeffs, bool flush  IF_LIBUV(, const PAR2ProcPlainCb& cb)) = 0;
+	virtual FUTURE_RETURN_T addInput(const void* buffer, size_t size, uint16_t inputNum, bool flush IF_NOT_LIBUV(= false) IF_LIBUV(, const PAR2ProcPlainCb& cb)) = 0;
+	virtual FUTURE_RETURN_T addInput(const void* buffer, size_t size, const uint16_t* coeffs, bool flush IF_NOT_LIBUV(= false) IF_LIBUV(, const PAR2ProcPlainCb& cb)) = 0;
 	virtual void dummyInput(uint16_t inputNum, bool flush = false) = 0;
 	virtual bool fillInput(const void* buffer) = 0;
 	virtual void flush() = 0;

@@ -1,5 +1,5 @@
 #include <iostream>
-#include <stdint.h>
+#include "../src/stdint.h"
 #include <stdlib.h> // free / calloc
 #include <cassert>
 #include "controller_ocl.h"
