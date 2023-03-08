@@ -1,3 +1,6 @@
+#ifndef __GF16_CONTROLLER_CPU
+#define __GF16_CONTROLLER_CPU
+
 #include "controller.h"
 #include <atomic>
 #include "threadqueue.h"
@@ -116,3 +119,5 @@ public:
 		return Galois16Mul::info(method);
 	}
 };
+
+#endif // defined(__GF16_CONTROLLER_CPU)

@@ -1,4 +1,4 @@
-#include <assert.h>
+#include <cassert>
 #include "../src/stdint.h"
 #include "../src/hedley.h"
 #include <vector>

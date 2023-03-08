@@ -405,7 +405,7 @@ int TOKENPASTE3(fnpre , _finish_packed_cksum , fnsuf)(void *HEDLEY_RESTRICT dst,
 	UNUSED(dst); UNUSED(src); UNUSED(sliceLen); UNUSED(numOutputs); UNUSED(outputNum); UNUSED(chunkLen); \
 	return 0; \
 } \
-int TOKENPASTE3(fnpre , _finish_partial_packsum , fnsuf)(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t sliceLen, unsigned numOutputs, unsigned outputNum, size_t chunkLen, size_t partOffset, size_t partLen) { \
+int TOKENPASTE3(fnpre , _finish_partial_packsum , fnsuf)(void *HEDLEY_RESTRICT dst, void *HEDLEY_RESTRICT src, size_t sliceLen, unsigned numOutputs, unsigned outputNum, size_t chunkLen, size_t partOffset, size_t partLen) { \
 	UNUSED(dst); UNUSED(src); UNUSED(sliceLen); UNUSED(numOutputs); UNUSED(outputNum); UNUSED(chunkLen); UNUSED(partOffset); UNUSED(partLen); \
 	return 0; \
 }

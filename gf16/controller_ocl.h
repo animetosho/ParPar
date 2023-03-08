@@ -1,3 +1,6 @@
+#ifndef __GF16_CONTROLLER_OCL
+#define __GF16_CONTROLLER_OCL
+
 #define __CL_ENABLE_EXCEPTIONS
 #define CL_USE_DEPRECATED_OPENCL_1_2_APIS
 #define CL_USE_DEPRECATED_OPENCL_2_0_APIS
@@ -234,3 +237,5 @@ public:
 		return Galois16OCLMethodsText[(int)m];
 	}
 };
+
+#endif // defined(__GF16_CONTROLLER_OCL)

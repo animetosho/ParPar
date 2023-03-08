@@ -123,7 +123,7 @@ bool PAR2ProcCPU::setCurrentSliceSize(size_t newSliceSize) {
 		ret = reallocMemInput();
 		if(memProcessing) {
 			freeProcessingMem();
-			if(outputExponents.size()) {
+			if(!outputExponents.empty()) {
 				ALIGN_ALLOC(memProcessing, outputExponents.size() * alignedSliceSize, alignment);
 				if(!memProcessing) ret = false;
 			}
@@ -145,16 +145,16 @@ bool PAR2ProcCPU::setRecoverySlices(unsigned numSlices, const uint16_t* exponent
 	// TODO: consider throwing if numSlices > previously set, or some mechanism to resize buffer
 	
 	outputExponents.clear();
-	if(numSlices) {
-		outputExponents.resize(numSlices, 0);
-		if(exponents)
-			memcpy(outputExponents.data(), exponents, numSlices * sizeof(uint16_t));
-		
-		for(auto& area : staging)
-			area.procCoeffs.resize(numSlices * inputBatchSize);
-	}
+	if(!numSlices) return true;
 	
-	if(!memProcessing && numSlices) {
+	outputExponents.resize(numSlices, 1); // default to 1 to bypass output==0 add shortcut (if we're going with custom coeffs)
+	if(exponents)
+		memcpy(outputExponents.data(), exponents, numSlices * sizeof(uint16_t));
+	
+	for(auto& area : staging)
+		area.procCoeffs.resize(numSlices * inputBatchSize);
+	
+	if(!memProcessing) {
 		// allocate processing area
 		// TODO: see if we can get an aligned calloc and set processingAdd = true
 		// (investigate mmap or just use calloc and align ourself)
@@ -408,7 +408,7 @@ FUTURE_RETURN_BOOL_T PAR2ProcCPU::getOutput(unsigned index, void* output  IF_LIB
 typedef struct __compute_req : PAR2ProcBackendBaseComputeReq<PAR2ProcCPU> {
 	unsigned inputGrouping;
 	uint16_t numOutputs;
-	const uint16_t *oNums;
+	const uint16_t *outNonZero;
 	const uint16_t* coeffs;
 	size_t len, chunkSize;
 	unsigned numChunks;
@@ -452,7 +452,7 @@ void PAR2ProcCPU::compute_worker(void *_req) {
 			if(!req->add) memset(dstPtr, 0, procSize);
 			if(round == req->numChunks-1) {
 				if(out+1 < req->numOutputs) {
-					if(req->oNums[out])
+					if(req->outNonZero[out])
 						req->gf->mul_add_multi_packpf(req->inputGrouping, req->numInputs, dstPtr, srcPtr, procSize, vals, req->mutScratch, NULL, dstPtr+procSize);
 					else
 						req->gf->add_multi_packpf(req->inputGrouping, req->numInputs, dstPtr, srcPtr, procSize, NULL, dstPtr+procSize);
@@ -463,7 +463,7 @@ void PAR2ProcCPU::compute_worker(void *_req) {
 				const char* pfInput = out >= inputPrefetchOutOffset ? static_cast<const char*>(req->input) + (round+1)*req->chunkSize*req->numInputs + ((inputsPrefetchedPerInvok*(out-inputPrefetchOutOffset)*procSize)>>MAX_PF_FACTOR) : NULL;
 				// procSize input prefetch may be wrong for final round, but it's the closest we've got
 				
-				if(req->oNums[out])
+				if(req->outNonZero[out])
 					req->gf->mul_add_multi_packpf(req->inputGrouping, req->numInputs, dstPtr, srcPtr, procSize, vals, req->mutScratch, pfInput, dstPtr+procSize);
 				else
 					req->gf->add_multi_packpf(req->inputGrouping, req->numInputs, dstPtr, srcPtr, procSize, pfInput, dstPtr+procSize);
@@ -486,6 +486,8 @@ void PAR2ProcCPU::compute_worker(void *_req) {
 }
 
 void PAR2ProcCPU::run_kernel(unsigned inBuf, unsigned numInputs) {
+	if(outputExponents.empty()) return;
+	
 	auto& area = staging[inBuf];
 	
 	// TODO: better distribution strategy
@@ -498,7 +500,7 @@ void PAR2ProcCPU::run_kernel(unsigned inBuf, unsigned numInputs) {
 		req->numInputs = numInputs;
 		req->inputGrouping = inputBatchSize;
 		req->numOutputs = outputExponents.size();
-		req->oNums = outputExponents.data();
+		req->outNonZero = outputExponents.data();
 		req->coeffs = area.procCoeffs.data();
 		req->len = thisChunkLen; // TODO: consider sending multiple chunks, instead of one at a time? allows for prefetching second chunk; alternatively, allow worker to peek into queue when prefetching?
 		req->chunkSize = thisChunkLen;
