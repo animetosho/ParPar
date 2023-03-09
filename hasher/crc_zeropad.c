@@ -14,8 +14,29 @@ static HEDLEY_ALWAYS_INLINE uint32_t crc_multiply(uint32_t a, uint32_t b) {
 	res ^= NEGATE(b>>31) & a;
 	return res;
 }
+/* clmul version
+static HEDLEY_ALWAYS_INLINE uint32_t crc_multiply(uint32_t a, uint32_t b) {
+	// do the actual multiply
+	__m128i prod = _mm_clmulepi64_si128(_mm_cvtsi32_si128(a), _mm_cvtsi32_si128(b), 0);
+	
+	// prepare product for reduction
+	prod = _mm_add_epi64(prod, prod); // bit alignment fix, due to CRC32 being bit-reversal
+	prod = _mm_slli_si128(prod, 4);   // straddle low/high halves across 64-bit boundary - this provides automatic truncation during reduction
+	
+	// do Barrett reduction back into 32-bit field
+	const __m128i reduction_const = _mm_set_epi32(
+		1, 0xdb710640, // polynomial * 2
+		0, 0xf7011641  // 2**63 / polynomial
+	);
+	__m128i t = _mm_clmulepi64_si128(prod, reduction_const, 0);
+	t = _mm_clmulepi64_si128(t, reduction_const, 0x10);
+	t = _mm_xor_si128(t, prod);
+	
+	return _mm_extract_epi32(t, 2);
+}
+*/
 
-static const uint32_t crc_power[] = { // pre-computed 2^n, with first 3 entries removed (saves a shift)
+static const uint32_t crc_power[] = { // pre-computed 2^(2^n), with first 3 entries removed (saves a shift)
 	0x00800000, 0x00008000, 0xedb88320, 0xb1e6b092, 0xa06a2517, 0xed627dae, 0x88d14467, 0xd7bbfe6a,
 	0xec447f11, 0x8e7ea170, 0x6427800e, 0x4d47bae0, 0x09fe548f, 0x83852d0f, 0x30362f1a, 0x7b5a9cc3,
 	0x31fec169, 0x9fec022a, 0x6c8dedc4, 0x15d6874d, 0x5fde7a4e, 0xbad90e37, 0x2e4e5eef, 0x4eaba214,
