@@ -14,7 +14,7 @@ struct _CpuCap {
 #endif
 };
 
-MD5MultiLevels HasherOutput_level;
+MD5MultiLevels HasherMD5Multi_level;
 
 void setup_hasher() {
 	HasherInput_Create = &HasherInput_Scalar::create;
@@ -89,20 +89,20 @@ void setup_hasher() {
 	
 	// note that this logic assumes that if a compiler can compile for more advanced ISAs, it supports simpler ones as well
 #ifdef PLATFORM_X86
-	if(CpuCap.hasAVX512VLBW && MD5Multi_AVX512_128::isAvailable) HasherOutput_level = OUTHASH_AVX512VL;
-	else if(CpuCap.hasAVX512F && MD5Multi_AVX512::isAvailable) HasherOutput_level = OUTHASH_AVX512F;
-	else if(CpuCap.hasXOP && MD5Multi_XOP::isAvailable) HasherOutput_level = OUTHASH_XOP;  // for the only CPU with AVX2 + XOP (Excavator) I imagine XOP works better than AVX2, due to half rate AVX
-	else if(CpuCap.hasAVX2 && MD5Multi_AVX2::isAvailable) HasherOutput_level = OUTHASH_AVX2;
-	else if(CpuCap.hasSSE2 && MD5Multi_SSE::isAvailable) HasherOutput_level = OUTHASH_SSE;
+	if(CpuCap.hasAVX512VLBW && MD5Multi_AVX512_128::isAvailable) HasherMD5Multi_level = MD5MULT_AVX512VL;
+	else if(CpuCap.hasAVX512F && MD5Multi_AVX512::isAvailable) HasherMD5Multi_level = MD5MULT_AVX512F;
+	else if(CpuCap.hasXOP && MD5Multi_XOP::isAvailable) HasherMD5Multi_level = MD5MULT_XOP;  // for the only CPU with AVX2 + XOP (Excavator) I imagine XOP works better than AVX2, due to half rate AVX
+	else if(CpuCap.hasAVX2 && MD5Multi_AVX2::isAvailable) HasherMD5Multi_level = MD5MULT_AVX2;
+	else if(CpuCap.hasSSE2 && MD5Multi_SSE::isAvailable) HasherMD5Multi_level = MD5MULT_SSE;
 	else
 #endif
 #ifdef PLATFORM_ARM
 	// TODO: if SVE2 width = 128b, prefer NEON?
-	if(CpuCap.hasSVE2 && MD5Multi_SVE2::isAvailable) HasherOutput_level = OUTHASH_SVE2;
-	else if(CpuCap.hasNEON && MD5Multi_NEON::isAvailable) HasherOutput_level = OUTHASH_NEON;
+	if(CpuCap.hasSVE2 && MD5Multi_SVE2::isAvailable) HasherMD5Multi_level = MD5MULT_SVE2;
+	else if(CpuCap.hasNEON && MD5Multi_NEON::isAvailable) HasherMD5Multi_level = MD5MULT_NEON;
 	else
 #endif
-	HasherOutput_level = OUTHASH_SCALAR;
+	HasherMD5Multi_level = MD5MULT_SCALAR;
 }
 
 bool set_hasherInput(HasherInputMethods method) {
@@ -128,55 +128,55 @@ bool set_hasherInput(HasherInputMethods method) {
 	return false;
 }
 
-void set_hasherOutputLevel(MD5MultiLevels level) {
+void set_hasherMD5MultiLevel(MD5MultiLevels level) {
 #define SET_LEVEL(h, l) \
 		if(h::isAvailable) { \
-			HasherOutput_level = l; \
+			HasherMD5Multi_level = l; \
 			break; \
 		}
 	switch(level) {
 #ifdef PLATFORM_X86
-		case OUTHASH_AVX512VL:
-			SET_LEVEL(MD5Multi_AVX512_128, OUTHASH_AVX512VL)
+		case MD5MULT_AVX512VL:
+			SET_LEVEL(MD5Multi_AVX512_128, MD5MULT_AVX512VL)
 			// fallthrough
-		case OUTHASH_AVX512F:
-			SET_LEVEL(MD5Multi_AVX512, OUTHASH_AVX512F)
+		case MD5MULT_AVX512F:
+			SET_LEVEL(MD5Multi_AVX512, MD5MULT_AVX512F)
 			// fallthrough
-		case OUTHASH_XOP:
-			SET_LEVEL(MD5Multi_XOP, OUTHASH_XOP)
+		case MD5MULT_XOP:
+			SET_LEVEL(MD5Multi_XOP, MD5MULT_XOP)
 			// fallthrough
-		case OUTHASH_AVX2:
-			if(level != OUTHASH_XOP) {
-				SET_LEVEL(MD5Multi_AVX2, OUTHASH_AVX2)
+		case MD5MULT_AVX2:
+			if(level != MD5MULT_XOP) {
+				SET_LEVEL(MD5Multi_AVX2, MD5MULT_AVX2)
 			}
 			// fallthrough
-		case OUTHASH_SSE:
-			SET_LEVEL(MD5Multi_SSE, OUTHASH_SSE)
+		case MD5MULT_SSE:
+			SET_LEVEL(MD5Multi_SSE, MD5MULT_SSE)
 			break;
 		
 		// prevent compiler warnings
-		case OUTHASH_SVE2:
-		case OUTHASH_NEON:
+		case MD5MULT_SVE2:
+		case MD5MULT_NEON:
 #endif
 #ifdef PLATFORM_ARM
-		case OUTHASH_SVE2:
-			SET_LEVEL(MD5Multi_SVE2, OUTHASH_SVE2)
+		case MD5MULT_SVE2:
+			SET_LEVEL(MD5Multi_SVE2, MD5MULT_SVE2)
 			break;
-		case OUTHASH_NEON:
-			SET_LEVEL(MD5Multi_NEON, OUTHASH_NEON)
+		case MD5MULT_NEON:
+			SET_LEVEL(MD5Multi_NEON, MD5MULT_NEON)
 			break;
 		
 		// prevent compiler warnings
-		case OUTHASH_AVX512VL:
-		case OUTHASH_AVX512F:
-		case OUTHASH_XOP:
-		case OUTHASH_AVX2:
-		case OUTHASH_SSE:
+		case MD5MULT_AVX512VL:
+		case MD5MULT_AVX512F:
+		case MD5MULT_XOP:
+		case MD5MULT_AVX2:
+		case MD5MULT_SSE:
 #endif
-		case OUTHASH_SCALAR: break;
+		case MD5MULT_SCALAR: break;
 	}
 #undef SET_LEVEL
-	HasherOutput_level = OUTHASH_SCALAR;
+	HasherMD5Multi_level = MD5MULT_SCALAR;
 }
 
 
@@ -200,17 +200,17 @@ MD5Multi::MD5Multi(int srcCount) {
 # else
 #  define ADD_CTX ADD_CTX1
 # endif
-	if(HasherOutput_level >= OUTHASH_AVX512F) ADD_CTX(AVX512)
-	else if(HasherOutput_level == OUTHASH_XOP) ADD_CTX(XOP)
-	else if(HasherOutput_level == OUTHASH_AVX2) ADD_CTX(AVX2)
-	else if(HasherOutput_level == OUTHASH_SSE) ADD_CTX(SSE)
+	if(HasherMD5Multi_level >= MD5MULT_AVX512F) ADD_CTX(AVX512)
+	else if(HasherMD5Multi_level == MD5MULT_XOP) ADD_CTX(XOP)
+	else if(HasherMD5Multi_level == MD5MULT_AVX2) ADD_CTX(AVX2)
+	else if(HasherMD5Multi_level == MD5MULT_SSE) ADD_CTX(SSE)
 	else
 # undef ADD_CTX
 #endif
 #ifdef PLATFORM_ARM
 	// TODO: if SVE2 width = 128b, prefer NEON?
-	if(HasherOutput_level == OUTHASH_SVE2) ADD_CTX2(SVE2)
-	else if(HasherOutput_level == OUTHASH_NEON) ADD_CTX2(NEON)
+	if(HasherMD5Multi_level == MD5MULT_SVE2) ADD_CTX2(SVE2)
+	else if(HasherMD5Multi_level == MD5MULT_NEON) ADD_CTX2(NEON)
 	else
 #endif
 	ADD_CTX2(Scalar)
@@ -229,24 +229,24 @@ MD5Multi::MD5Multi(int srcCount) {
 		ADD_LAST_CTX(1, MD5Multi_Scalar)
 		else ADD_LAST_CTX(1, MD5Multi2_Scalar)
 #ifdef PLATFORM_X86
-		else ADD_LAST_CTX(HasherOutput_level == OUTHASH_AVX512VL, MD5Multi_AVX512_128)
-		else ADD_LAST_CTX(HasherOutput_level == OUTHASH_XOP, MD5Multi_XOP)
-		else ADD_LAST_CTX(HasherOutput_level >= OUTHASH_SSE, MD5Multi_SSE)
-		else ADD_LAST_CTX(HasherOutput_level == OUTHASH_AVX512VL, MD5Multi_AVX512_256)
-		else ADD_LAST_CTX(HasherOutput_level >= OUTHASH_AVX2 && HasherOutput_level != OUTHASH_XOP, MD5Multi_AVX2)
-		else ADD_LAST_CTX(HasherOutput_level >= OUTHASH_AVX512F, MD5Multi_AVX512)
+		else ADD_LAST_CTX(HasherMD5Multi_level == MD5MULT_AVX512VL, MD5Multi_AVX512_128)
+		else ADD_LAST_CTX(HasherMD5Multi_level == MD5MULT_XOP, MD5Multi_XOP)
+		else ADD_LAST_CTX(HasherMD5Multi_level >= MD5MULT_SSE, MD5Multi_SSE)
+		else ADD_LAST_CTX(HasherMD5Multi_level == MD5MULT_AVX512VL, MD5Multi_AVX512_256)
+		else ADD_LAST_CTX(HasherMD5Multi_level >= MD5MULT_AVX2 && HasherMD5Multi_level != MD5MULT_XOP, MD5Multi_AVX2)
+		else ADD_LAST_CTX(HasherMD5Multi_level >= MD5MULT_AVX512F, MD5Multi_AVX512)
 # ifdef PLATFORM_AMD64
-		else ADD_LAST_CTX(HasherOutput_level == OUTHASH_XOP, MD5Multi2_XOP)
-		else ADD_LAST_CTX(HasherOutput_level >= OUTHASH_SSE, MD5Multi2_SSE)
-		else ADD_LAST_CTX(HasherOutput_level >= OUTHASH_AVX2 && HasherOutput_level != OUTHASH_XOP, MD5Multi2_AVX2)
-		else ADD_LAST_CTX(HasherOutput_level >= OUTHASH_AVX512F, MD5Multi2_AVX512)
+		else ADD_LAST_CTX(HasherMD5Multi_level == MD5MULT_XOP, MD5Multi2_XOP)
+		else ADD_LAST_CTX(HasherMD5Multi_level >= MD5MULT_SSE, MD5Multi2_SSE)
+		else ADD_LAST_CTX(HasherMD5Multi_level >= MD5MULT_AVX2 && HasherMD5Multi_level != MD5MULT_XOP, MD5Multi2_AVX2)
+		else ADD_LAST_CTX(HasherMD5Multi_level >= MD5MULT_AVX512F, MD5Multi2_AVX512)
 # endif
 #endif
 #ifdef PLATFORM_ARM
-		else ADD_LAST_CTX(HasherOutput_level == OUTHASH_NEON, MD5Multi_NEON)
-		else ADD_LAST_CTX(HasherOutput_level == OUTHASH_SVE2, MD5Multi_SVE2)
-		else ADD_LAST_CTX(HasherOutput_level == OUTHASH_NEON, MD5Multi2_NEON)
-		else ADD_LAST_CTX(HasherOutput_level == OUTHASH_SVE2, MD5Multi2_SVE2)
+		else ADD_LAST_CTX(HasherMD5Multi_level == MD5MULT_NEON, MD5Multi_NEON)
+		else ADD_LAST_CTX(HasherMD5Multi_level == MD5MULT_SVE2, MD5Multi_SVE2)
+		else ADD_LAST_CTX(HasherMD5Multi_level == MD5MULT_NEON, MD5Multi2_NEON)
+		else ADD_LAST_CTX(HasherMD5Multi_level == MD5MULT_SVE2, MD5Multi2_SVE2)
 #endif
 		#undef ADD_LAST_CTX
 	} else {

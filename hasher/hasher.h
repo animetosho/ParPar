@@ -9,21 +9,21 @@ enum HasherInputMethods {
 	INHASH_AVX512
 };
 enum MD5MultiLevels {
-	OUTHASH_SCALAR,
+	MD5MULT_SCALAR,
 	
-	OUTHASH_SSE,
-	OUTHASH_AVX2,
-	OUTHASH_XOP,
-	OUTHASH_AVX512F,
-	OUTHASH_AVX512VL,
+	MD5MULT_SSE,
+	MD5MULT_AVX2,
+	MD5MULT_XOP,
+	MD5MULT_AVX512F,
+	MD5MULT_AVX512VL,
 	
-	OUTHASH_NEON,
-	OUTHASH_SVE2
+	MD5MULT_NEON,
+	MD5MULT_SVE2
 };
 
 void setup_hasher();
 bool set_hasherInput(HasherInputMethods method);
-void set_hasherOutputLevel(MD5MultiLevels level);
+void set_hasherMD5MultiLevel(MD5MultiLevels level);
 extern IHasherInput*(*HasherInput_Create)();
 
 class MD5Multi {

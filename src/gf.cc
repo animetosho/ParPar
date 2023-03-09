@@ -1191,7 +1191,7 @@ FUNC(SetHasherOutput) {
 		RETURN_ERROR("Method required");
 
 	MD5MultiLevels level = (MD5MultiLevels)ARG_TO_NUM(Int32, args[0]);
-	set_hasherOutputLevel(level);
+	set_hasherMD5MultiLevel(level);
 }
 
 
