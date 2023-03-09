@@ -159,7 +159,11 @@ static uint32_t crc_finish_clmul(void* HEDLEY_RESTRICT state, const void* HEDLEY
 		__m128i xmm_shl = _mm_load_si128((__m128i *)pshufb_shf_table + (len - 1));
 		__m128i xmm_shr = _mm_xor_si128(xmm_shl, _mm_set1_epi8(-128));
 		
-		xmm_t0 = _mm_loadu_si128((__m128i *)_src);
+#ifdef _CRC_USE_AVX512_
+		xmm_t0 = _mm_maskz_loadu_epi8(_bzhi_u32(-1, len), _src);
+#else
+		memcpy(&xmm_t0, _src, len);
+#endif
 		xmm_t1 = _mm_shuffle_epi8(crc[0], xmm_shl);
 		
 		crc[0] = _mm_or_si128(

@@ -1,11 +1,12 @@
 #include "../src/platform.h"
+// despite the name, this does also require AVX512BW
 
 #define _CRC_USE_AVX512_ 1
 #define HasherInput HasherInput_AVX512
 #define _FNMD5x2(f) f##_avx512
 #define _FNCRC(f) f##_clmul
 
-#ifdef __AVX512VL__
+#if defined(__AVX512VL__) && defined(__AVX512BW__)
 # include "crc_clmul.h"
 # include "md5x2-sse.h"
 # include "hasher_base.h"
@@ -23,7 +24,7 @@
 #define md5mb_alignment md5mb_alignment_avx512_128
 #define CLEAR_VEC (void)0
 
-#ifdef __AVX512VL__
+#if defined(__AVX512VL__) && defined(__AVX512BW__)
 # include "md5mb-sse.h"
 # include "hasher_base.h"
 #else
@@ -44,7 +45,7 @@
 #define md5mb_alignment md5mb_alignment_avx512_256
 #define CLEAR_VEC _mm256_zeroupper()
 
-#ifdef __AVX512VL__
+#if defined(__AVX512VL__) && defined(__AVX512BW__)
 # include "hasher_base.h"
 #else
 # include "hasher_stub.h"
