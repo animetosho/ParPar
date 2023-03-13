@@ -61,7 +61,7 @@
       "target_name": "hasher",
       "type": "static_library",
       "defines": ["NDEBUG"],
-      "sources": ["hasher/hasher.cpp", "hasher/crc_zeropad.c", "hasher/md5x2-base.c", "hasher/hasher_scalar.cpp"],
+      "sources": ["hasher/hasher.cpp", "hasher/crc_zeropad.c", "hasher/md5-final.c", "hasher/hasher_scalar.cpp"],
       "cflags!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"],
       "cxxflags!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"],
       "xcode_settings": {

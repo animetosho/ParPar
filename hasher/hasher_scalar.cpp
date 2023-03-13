@@ -1,10 +1,15 @@
 #include "../src/platform.h"
+#include "md5-scalar.h"
 #include "md5x2-scalar.h"
 #include "md5mb-scalar.h"
 #include "crc_slice4.h"
 
 
 #define HasherInput HasherInput_Scalar
+#define MD5Single(f) MD5Single_##f##_Scalar
+#define MD5Double MD5Double_Scalar
+#define CRC32Impl(n) n##_Slice4
+#define _FNMD5(f) f##_scalar
 #define _FNMD5x2(f) f##_scalar
 #define _FNCRC(f) f##_slice4
 #define MD5Multi MD5Multi_Scalar
@@ -18,6 +23,9 @@
 
 
 #undef HasherInput
+#undef MD5Single
+#undef MD5Double
+#undef CRC32Impl
 #undef MD5Multi
 #undef _FNMD5mb2
 #define MD5Multi MD5Multi2_Scalar

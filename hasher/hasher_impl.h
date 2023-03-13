@@ -1,9 +1,49 @@
-#ifndef __HASHER_H
-#define __HASHER_H
+#ifndef __HASHER_IMPL_H
+#define __HASHER_IMPL_H
 
 #include "../src/stdint.h"
 #include "../src/platform.h"
 #include <new>
+
+class IMD5Double {
+protected:
+	uint8_t tmp[128];
+	ALIGN_TO(16, char md5State[64]); // large enough to handle all implementations of MD5 state (4x16B)
+	uint_fast8_t tmpLen;
+	uint_fast8_t posOffset;
+	uint64_t dataLen[2];
+public:
+	virtual void update(const void* data, size_t len) = 0;
+	virtual void getBlock(void* md5, uint64_t zeroPad) = 0;
+	virtual void end(void* md5) = 0;
+	virtual void reset() = 0;
+	virtual ~IMD5Double() {}
+	inline void destroy() { ALIGN_FREE(this); }
+};
+
+#define __DECL_MD5DOUBLE(name) \
+class MD5Double_##name : public IMD5Double { \
+	MD5Double_##name(); \
+	MD5Double_##name(const MD5Double_##name&); \
+	MD5Double_##name& operator=(const MD5Double_##name&); \
+public: \
+	static const bool isAvailable; \
+	static inline HEDLEY_MALLOC IMD5Double* create() { \
+		MD5Double_##name* ptr; \
+		ALIGN_ALLOC(ptr, sizeof(MD5Double_##name), 16); \
+		return new(ptr) MD5Double_##name(); \
+	} \
+	void update(const void* data, size_t len); \
+	void getBlock(void* md5, uint64_t zeroPad); \
+	void end(void* md5); \
+	void reset(); \
+}
+__DECL_MD5DOUBLE(Scalar);
+__DECL_MD5DOUBLE(SSE);
+__DECL_MD5DOUBLE(AVX512);
+__DECL_MD5DOUBLE(NEON);
+#undef __DECL_MD5DOUBLE
+
 
 class IHasherInput {
 protected:
@@ -108,4 +148,24 @@ __DECL_MD5MULTI(_SVE2);
 __DECL_MD5MULTI(2_SVE2);
 #undef __DECL_MD5MULTI
 
-#endif /* __HASHER_H */
+
+#define __DECL_MD5SINGLE(name) \
+void MD5Single_update_##name(uint32_t*, const void*, size_t); \
+void MD5Single_updateZero_##name(uint32_t*, size_t); \
+extern const bool MD5Single_isAvailable_##name
+__DECL_MD5SINGLE(Scalar);
+//__DECL_MD5SINGLE(NoLEA);
+__DECL_MD5SINGLE(AVX512);
+#undef __DECL_MD5SINGLE
+
+
+#define __DECL_CRC32(name) \
+uint32_t CRC32_Calc_##name(const void*, size_t); \
+extern const bool CRC32_isAvailable_##name
+__DECL_CRC32(Slice4);
+__DECL_CRC32(ClMul);
+//__DECL_CRC32(VClMul);
+__DECL_CRC32(ARMCRC);
+#undef __DECL_CRC32
+
+#endif /* __HASHER_IMPL_H */

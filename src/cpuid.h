@@ -65,6 +65,7 @@ static unsigned long getauxval(unsigned long cap) {
 # endif
 
 # define CPU_HAS_NEON false
+# define CPU_HAS_ARMCRC false
 # define CPU_HAS_SVE false
 # define CPU_HAS_SVE2 false
 
@@ -83,23 +84,37 @@ static unsigned long getauxval(unsigned long cap) {
 #  else
 #   define CPU_HAS_NEON (getauxval(AT_HWCAP) & HWCAP_NEON)
 #  endif
+#  if defined(AT_HWCAP2) && defined(HWCAP2_CRC32)
+#   undef CPU_HAS_ARMCRC
+#   define CPU_HAS_ARMCRC (getauxval(AT_HWCAP2) & HWCAP2_CRC32)
+#  elif defined(HWCAP_CRC32)
+#   undef CPU_HAS_ARMCRC
+#   define CPU_HAS_ARMCRC (getauxval(AT_HWCAP) & HWCAP_CRC32)
+#  endif
 # elif defined(ANDROID_CPU_FAMILY_ARM)
 #  undef CPU_HAS_NEON
+#  undef CPU_HAS_ARMCRC
 #  ifdef __aarch64__
 #   define CPU_HAS_NEON (android_getCpuFeatures() & ANDROID_CPU_ARM64_FEATURE_ASIMD)
+#   define CPU_HAS_ARMCRC (android_getCpuFeatures() & ANDROID_CPU_ARM64_FEATURE_CRC32)
 #  else
 #   define CPU_HAS_NEON (android_getCpuFeatures() & ANDROID_CPU_ARM_FEATURE_NEON)
+#   define CPU_HAS_ARMCRC (android_getCpuFeatures() & ANDROID_CPU_ARM_FEATURE_CRC32)
 #  endif
 # elif defined(_WIN32)
 #  undef CPU_HAS_NEON
+#  undef CPU_HAS_ARMCRC
 #  define CPU_HAS_NEON (IsProcessorFeaturePresent(PF_ARM_NEON_INSTRUCTIONS_AVAILABLE))
+#  define CPU_HAS_ARMCRC (IsProcessorFeaturePresent(PF_ARM_V8_CRC32_INSTRUCTIONS_AVAILABLE))
 # elif defined(__APPLE__)
 #  undef CPU_HAS_NEON
-#  define CPU_HAS_NEON (cpuHasNeon())
-	static inline bool cpuHasNeon() {
+#  undef CPU_HAS_ARMCRC
+#  define CPU_HAS_NEON (cpuHasFeature("hw.optional.neon"))
+#  define CPU_HAS_ARMCRC (cpuHasFeature("hw.optional.armv8_crc32"))
+	static inline bool cpuHasFeature(const char* feature) {
 		int supported = 0;
 		size_t len = sizeof(supported);
-		if(sysctlbyname("hw.optional.neon", &supported, &len, NULL, 0) == 0)
+		if(sysctlbyname(feature, &supported, &len, NULL, 0) == 0)
 			return (bool)supported;
 		return false;
 	}

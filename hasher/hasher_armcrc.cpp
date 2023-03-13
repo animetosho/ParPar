@@ -19,6 +19,7 @@ HEDLEY_WARNING("CRC32 acceleration has been disabled due to broken arm_acle.h sh
 
 
 #define HasherInput HasherInput_ARMCRC
+#define CRC32Impl(n) n##_ARMCRC
 #define _FNMD5x2(f) f##_scalar
 #define _FNCRC(f) f##_arm
 

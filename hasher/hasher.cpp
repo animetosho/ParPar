@@ -3,6 +3,8 @@
 #include <string.h>
 
 IHasherInput*(*HasherInput_Create)() = NULL;
+IMD5Double*(*MD5Double_Create)() = NULL;
+uint32_t(*CRC32_Calc)(const void*, size_t) = NULL;
 struct _CpuCap {
 #ifdef PLATFORM_X86
 	bool hasSSE2, hasXOP, hasAVX2, hasAVX512F, hasAVX512VLBW;
@@ -17,7 +19,11 @@ struct _CpuCap {
 MD5MultiLevels HasherMD5Multi_level;
 
 void setup_hasher() {
+	if(HasherInput_Create) return;
+	
 	HasherInput_Create = &HasherInput_Scalar::create;
+	MD5Double_Create = &MD5Double_Scalar::create;
+	CRC32_Calc = &CRC32_Calc_Slice4;
 	
 	struct _CpuCap CpuCap;
 	
@@ -69,21 +75,40 @@ void setup_hasher() {
 		HasherInput_Create = &HasherInput_ClMulSSE::create;
 	else if(CpuCap.hasSSE2 && isSmallCore && HasherInput_SSE::isAvailable) // TODO: CPU w/o ClMul might all be small enough
 		HasherInput_Create = &HasherInput_SSE::create;
+	
+	if(CpuCap.hasAVX512VLBW && MD5Single_isAvailable_AVX512) {
+		MD5Single::_update = &MD5Single_update_AVX512;
+		MD5Single::_updateZero = &MD5Single_updateZero_AVX512;
+	}
+	
+	if(CpuCap.hasAVX512VLBW && MD5Double_AVX512::isAvailable)
+		MD5Double_Create = &MD5Double_AVX512::create;
+	else if(CpuCap.hasSSE2 && isSmallCore && MD5Double_SSE::isAvailable)
+		MD5Double_Create = &MD5Double_SSE::create;
+	
+	if(hasClMul && CRC32_isAvailable_ClMul)
+		CRC32_Calc = &CRC32_Calc_ClMul;
+	
 #endif
 #ifdef PLATFORM_ARM
-	bool hasCRC = false;
+	bool hasCRC = CPU_HAS_ARMCRC;
 	
 	CpuCap.hasNEON = CPU_HAS_NEON;
 	CpuCap.hasSVE2 = CPU_HAS_SVE2;
 	
-	if(hasCRC) // TODO: fast core only
+	if(hasCRC && HasherInput_ARMCRC::isAvailable) // TODO: fast core only
 		HasherInput_Create = &HasherInput_ARMCRC::create;
 	else if(CpuCap.hasNEON) { // TODO: slow core only
-		if(hasCRC)
+		if(hasCRC && HasherInput_NEONCRC::isAvailable)
 			HasherInput_Create = &HasherInput_NEONCRC::create;
-		else
+		else if(HasherInput_NEON::isAvailable)
 			HasherInput_Create = &HasherInput_NEON::create;
 	}
+	
+	if(CpuCap.hasNEON && MD5Double_NEON::isAvailable) // TODO: slow core only
+		MD5Double_Create = &MD5Double_NEON::create;
+	if(hasCRC && CRC32_isAvailable_ARMCRC)
+		CRC32_Calc = &CRC32_Calc_ARMCRC;
 #endif
 	
 	
@@ -310,4 +335,56 @@ void MD5Multi::get(void* md5s) {
 	} else {
 		ctx[ctxI]->get(md5_);
 	}
+}
+
+
+void(*MD5Single::_update)(uint32_t*, const void*, size_t) = &MD5Single_update_Scalar;
+void(*MD5Single::_updateZero)(uint32_t*, size_t) = &MD5Single_updateZero_Scalar;
+const size_t MD5_BLOCKSIZE = 64;
+void MD5Single::update(const void* data, size_t len) {
+	uint_fast8_t buffered = dataLen & (MD5_BLOCKSIZE-1);
+	dataLen += len;
+	const uint8_t* data_ = (const uint8_t*)data;
+	
+	// if there's data in tmp, process one block from there
+	if(buffered) {
+		uint_fast8_t wanted = MD5_BLOCKSIZE - buffered;
+		if(len < wanted) {
+			memcpy(tmp + buffered, data_, len);
+			return;
+		}
+		memcpy(tmp + buffered, data_, wanted);
+		_update(md5State, tmp, 1);
+		len -= wanted;
+		data_ += wanted;
+	}
+	
+	_update(md5State, data_, len / MD5_BLOCKSIZE);
+	data_ += len & ~(MD5_BLOCKSIZE-1);
+	memcpy(tmp, data_, len & (MD5_BLOCKSIZE-1));
+}
+void MD5Single::updateZero(size_t len) {
+	uint_fast8_t buffered = dataLen & (MD5_BLOCKSIZE-1);
+	dataLen += len;
+	
+	// if there's data in tmp, process one block from there
+	if(buffered) {
+		uint_fast8_t wanted = MD5_BLOCKSIZE - buffered;
+		if(len < wanted) {
+			memset(tmp + buffered, 0, len);
+			return;
+		}
+		memset(tmp + buffered, 0, wanted);
+		_update(md5State, tmp, 1);
+		len -= wanted;
+	}
+	
+	_updateZero(md5State, len / MD5_BLOCKSIZE);
+	memset(tmp, 0, len & (MD5_BLOCKSIZE-1));
+}
+
+#include "md5-final.h"
+void MD5Single::end(void* md5) {
+	md5_final_block(md5State, tmp, dataLen, 0);
+	memcpy(md5, md5State, 16);
 }

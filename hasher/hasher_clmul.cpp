@@ -16,6 +16,7 @@
 #undef HasherInput
 #undef _FNMD5x2
 #define HasherInput HasherInput_ClMulScalar
+#define CRC32Impl(n) n##_ClMul
 #define _FNMD5x2(f) f##_scalar
 
 #if defined(__PCLMUL__) && defined(__SSSE3__) && defined(__SSE4_1__)

@@ -202,6 +202,7 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_x2_scalar(uint32_t* state, co
 #undef ROUND_G
 #undef ROUND_H
 #undef ROUND_I
+#undef ROUND_I_LAST
 #undef RF4
 #undef RG4
 #undef RH4

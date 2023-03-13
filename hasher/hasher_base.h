@@ -12,7 +12,137 @@
 # define MD5_BLOCKSIZE 64
 #endif
 
+
+#ifdef MD5Single
+const bool MD5Single(isAvailable) = true;
+void MD5Single(update)(uint32_t* md5State, const void* data, size_t blocks) {
+	const uint8_t* blockPtr[] = {(const uint8_t*)data};
+	uint32_t state[4];
+	state[0] = md5State[0];
+	state[1] = md5State[1];
+	state[2] = md5State[2];
+	state[3] = md5State[3];
+	while(blocks--) {
+		_FNMD5(md5_process_block)(state, blockPtr, 0);
+		blockPtr[0] += MD5_BLOCKSIZE;
+	}
+	md5State[0] = state[0];
+	md5State[1] = state[1];
+	md5State[2] = state[2];
+	md5State[3] = state[3];
+}
+void MD5Single(updateZero)(uint32_t* md5State, size_t blocks) {
+	uint8_t data[64] = { 0 };
+	const uint8_t* blockPtr[] = {data};
+	uint32_t state[4];
+	state[0] = md5State[0];
+	state[1] = md5State[1];
+	state[2] = md5State[2];
+	state[3] = md5State[3];
+	while(blocks--) {
+		_FNMD5(md5_process_block)(state, blockPtr, 0);
+	}
+	md5State[0] = state[0];
+	md5State[1] = state[1];
+	md5State[2] = state[2];
+	md5State[3] = state[3];
+}
+#endif
+
+
+#ifdef MD5Double
+#include "md5-final.h"
+const bool MD5Double::isAvailable = true;
+MD5Double::MD5Double() {
+	reset();
+}
+void MD5Double::reset() {
+	_FNMD5x2(md5_init_x2)(md5State);
+	tmpLen = 0;
+	posOffset = 0;
+	
+	dataLen[HASH2X_BLOCK] = 0;
+	dataLen[HASH2X_FILE] = 0;
+}
+
+void MD5Double::update(const void* data, size_t len) {
+	dataLen[HASH2X_BLOCK] += len;
+	dataLen[HASH2X_FILE] += len;
+	const char* data_ = (const char*)data;
+	
+	// if there's data in tmp, process one block from there
+	if(tmpLen) {
+		while(1) { // this loop iterates 1-2 times only
+			assert(tmpLen >= posOffset);
+			
+			uint_fast8_t wanted = MD5_BLOCKSIZE+posOffset - tmpLen;
+			
+			if(len < wanted) {
+				memcpy(tmp + tmpLen, data_, len);
+				tmpLen += len;
+				return;
+			} else {
+				// process one block
+				const void* blockData = tmp + posOffset;
+				if(tmpLen <= posOffset) { // the block's hash will come from source data instead of tmp
+					wanted = MD5_BLOCKSIZE - tmpLen;
+					blockData = data_;
+				}
+				
+				memcpy(tmp + tmpLen, data_, wanted);
+				_FNMD5x2(md5_update_block_x2)(md5State, blockData, tmp);
+				len -= wanted;
+				data_ += wanted;
+
+				if(tmpLen > posOffset) { // if both hashes came from tmp, shift file hash across as this won't occur on the next iteration
+					memcpy(tmp, tmp+MD5_BLOCKSIZE, posOffset);
+					tmpLen = posOffset;
+					continue;
+				}
+			}
+			break;
+		}
+	}
+	
+	while(len >= (unsigned)MD5_BLOCKSIZE+posOffset) {
+		_FNMD5x2(md5_update_block_x2)(md5State, data_ + posOffset, data_);
+		data_ += MD5_BLOCKSIZE;
+		len -= MD5_BLOCKSIZE;
+	}
+	
+	memcpy(tmp, data_, len);
+	tmpLen = len;
+}
+
+void MD5Double::getBlock(void* md5, uint64_t zeroPad) {
+	_FNMD5x2(md5_extract_x2)(md5, md5State, HASH2X_BLOCK);
+	md5_final_block(md5, tmp + posOffset, dataLen[HASH2X_BLOCK], zeroPad);
+	
+	if(tmpLen >= MD5_BLOCKSIZE) {
+		// push through one block on file hash
+		_FNMD5x2(md5_update_block_x2)(md5State, (const char*)tmp, (const char*)tmp);
+		tmpLen -= MD5_BLOCKSIZE;
+		memcpy(tmp, tmp+MD5_BLOCKSIZE, tmpLen);
+	}
+	_FNMD5x2(md5_init_lane_x2)(md5State, HASH2X_BLOCK);
+	posOffset = tmpLen;
+	dataLen[HASH2X_BLOCK] = 0;
+}
+
+void MD5Double::end(void* md5) {
+	if(tmpLen >= MD5_BLOCKSIZE) {
+		// this generally shouldn't happen, as getBlock should handle this case, but we'll deal with it in case the caller doesn't want to use getBlock
+		_FNMD5x2(md5_update_block_x2)(md5State, (const char*)tmp, (const char*)tmp);
+	}
+	
+	_FNMD5x2(md5_extract_x2)(md5, md5State, HASH2X_FILE);
+	md5_final_block(md5, tmp, dataLen[HASH2X_FILE], 0);
+}
+#endif
+
+
 #ifdef HasherInput
+#include "md5-final.h"
 const bool HasherInput::isAvailable = true;
 HasherInput::HasherInput() {
 	reset();
@@ -204,4 +334,26 @@ void MD5Multi::reset() {
 	dataLen = 0;
 }
 #undef md5mb_regions
+#endif
+
+#ifdef CRC32Impl
+const bool CRC32Impl(CRC32_isAvailable) = true;
+uint32_t CRC32Impl(CRC32_Calc)(const void* data, size_t len) {
+#ifdef PLATFORM_X86
+	char crcState[64]; // ClMul uses 4x16B state, others use 4B
+#else
+	char crcState[4];
+#endif
+	
+	_FNCRC(crc_init)(crcState);
+	const char* data_ = (const char*)data;
+	
+	while(len >= (unsigned)MD5_BLOCKSIZE) {
+		_FNCRC(crc_process_block)(crcState, data_);
+		data_ += MD5_BLOCKSIZE;
+		len -= MD5_BLOCKSIZE;
+	}
+	
+	return _FNCRC(crc_finish)(crcState, data_, len);
+}
 #endif

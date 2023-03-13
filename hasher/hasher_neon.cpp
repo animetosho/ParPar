@@ -3,6 +3,7 @@
 
 
 #define HasherInput HasherInput_NEON
+#define MD5Double MD5Double_NEON
 #define _FNMD5x2(f) f##_neon
 #define _FNCRC(f) f##_slice4
 #define MD5Multi MD5Multi_NEON
@@ -21,6 +22,7 @@
 #endif
 
 #undef HasherInput
+#undef MD5Double
 #undef MD5Multi
 #undef _FNMD5mb2
 #define MD5Multi MD5Multi2_NEON

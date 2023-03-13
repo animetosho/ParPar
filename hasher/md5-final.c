@@ -1,11 +1,5 @@
-#include "../src/platform.h"
-#include <string.h>
-
 // single scalar implementation for finishing block
-#include "md5-scalar-base.h"
-#define FNB(f) f
-#include "md5-base.h"
-#undef FNB
+#include "md5-scalar.h"
 
 void md5_final_block(void* state, const void *HEDLEY_RESTRICT data, uint64_t totalLength, uint64_t zeroPad) {
 	ALIGN_TO(8, uint8_t block[64]);
@@ -43,7 +37,7 @@ void md5_final_block(void* state, const void *HEDLEY_RESTRICT data, uint64_t tot
 #endif
 		}
 		
-		md5_process_block((uint32_t*)state, blockPtr, 0);
+		md5_process_block_scalar((uint32_t*)state, blockPtr, 0);
 		
 		if(loopState == 4) break;
 		else if(loopState == 3) loopState = 4;

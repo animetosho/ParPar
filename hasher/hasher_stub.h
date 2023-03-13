@@ -2,6 +2,21 @@
 
 // stubs for when compiler doesn't support the ISA
 
+#ifdef MD5Single
+const bool MD5Single(isAvailable) = false;
+void MD5Single(update)(uint32_t*, const void*, size_t) {}
+void MD5Single(updateZero)(uint32_t*, size_t) {}
+#endif
+
+#ifdef MD5Double
+const bool MD5Double::isAvailable = false;
+MD5Double::MD5Double() {}
+void MD5Double::reset() {}
+void MD5Double::update(const void*, size_t) {}
+void MD5Double::getBlock(void*, uint64_t) {}
+void MD5Double::end(void*) {}
+#endif
+
 #ifdef HasherInput
 const bool HasherInput::isAvailable = false;
 HasherInput::HasherInput() {}
@@ -23,4 +38,9 @@ void MD5Multi::end() {}
 void MD5Multi::get1(unsigned, void*) {}
 void MD5Multi::get(void*) {}
 void MD5Multi::reset() {}
+#endif
+
+#ifdef CRC32Impl
+const bool CRC32Impl(CRC32_isAvailable) = false;
+uint32_t CRC32Impl(CRC32_Calc)(const void*, size_t) { return 0; }
 #endif
