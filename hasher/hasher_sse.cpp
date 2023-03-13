@@ -3,7 +3,6 @@
 
 
 #define HasherInput HasherInput_SSE
-#define MD5Double MD5Double_SSE
 #define _FNMD5x2(f) f##_sse
 #define _FNCRC(f) f##_slice4
 #define MD5Multi MD5Multi_SSE
@@ -22,7 +21,6 @@
 #endif
 
 #undef HasherInput
-#undef MD5Double
 #undef MD5Multi
 #undef _FNMD5mb2
 #define MD5Multi MD5Multi2_SSE

@@ -3,17 +3,23 @@
 
 #define _CRC_USE_AVX512_ 1
 #define HasherInput HasherInput_AVX512
+#define MD5Single(f) MD5Single_##f##_AVX512
+#define MD5CRC(f) MD5CRC_##f##_AVX512
+#define _FNMD5(f) f##_avx512
 #define _FNMD5x2(f) f##_avx512
 #define _FNCRC(f) f##_clmul
 
 #if defined(__AVX512VL__) && defined(__AVX512BW__)
 # include "crc_clmul.h"
 # include "md5x2-sse.h"
+# include "md5-avx512.h"
 # include "hasher_base.h"
 #else
 # include "hasher_stub.h"
 #endif
 
+#undef MD5Single
+#undef MD5CRC
 #undef HasherInput
 
 

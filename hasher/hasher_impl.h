@@ -5,45 +5,6 @@
 #include "../src/platform.h"
 #include <new>
 
-class IMD5Double {
-protected:
-	uint8_t tmp[128];
-	ALIGN_TO(16, char md5State[64]); // large enough to handle all implementations of MD5 state (4x16B)
-	uint_fast8_t tmpLen;
-	uint_fast8_t posOffset;
-	uint64_t dataLen[2];
-public:
-	virtual void update(const void* data, size_t len) = 0;
-	virtual void getBlock(void* md5, uint64_t zeroPad) = 0;
-	virtual void end(void* md5) = 0;
-	virtual void reset() = 0;
-	virtual ~IMD5Double() {}
-	inline void destroy() { ALIGN_FREE(this); }
-};
-
-#define __DECL_MD5DOUBLE(name) \
-class MD5Double_##name : public IMD5Double { \
-	MD5Double_##name(); \
-	MD5Double_##name(const MD5Double_##name&); \
-	MD5Double_##name& operator=(const MD5Double_##name&); \
-public: \
-	static const bool isAvailable; \
-	static inline HEDLEY_MALLOC IMD5Double* create() { \
-		MD5Double_##name* ptr; \
-		ALIGN_ALLOC(ptr, sizeof(MD5Double_##name), 16); \
-		return new(ptr) MD5Double_##name(); \
-	} \
-	void update(const void* data, size_t len); \
-	void getBlock(void* md5, uint64_t zeroPad); \
-	void end(void* md5); \
-	void reset(); \
-}
-__DECL_MD5DOUBLE(Scalar);
-__DECL_MD5DOUBLE(SSE);
-__DECL_MD5DOUBLE(AVX512);
-__DECL_MD5DOUBLE(NEON);
-#undef __DECL_MD5DOUBLE
-
 
 class IHasherInput {
 protected:
@@ -158,6 +119,15 @@ __DECL_MD5SINGLE(Scalar);
 __DECL_MD5SINGLE(AVX512);
 #undef __DECL_MD5SINGLE
 
+#define __DECL_MD5CRC(name) \
+uint32_t MD5CRC_Calc_##name(const void*, size_t, size_t, void*); \
+extern const bool MD5CRC_isAvailable_##name
+__DECL_MD5CRC(Scalar);
+//__DECL_MD5SINGLE(NoLEA);
+__DECL_MD5CRC(ClMul);
+__DECL_MD5CRC(AVX512);
+__DECL_MD5CRC(ARMCRC);
+#undef __DECL_MD5CRC
 
 #define __DECL_CRC32(name) \
 uint32_t CRC32_Calc_##name(const void*, size_t); \

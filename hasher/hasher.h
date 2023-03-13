@@ -57,7 +57,7 @@ public:
 
 // single hash instances
 extern uint32_t(*CRC32_Calc)(const void*, size_t);
-extern IMD5Double*(*MD5Double_Create)();
+extern uint32_t(*MD5CRC_Calc)(const void*, size_t, size_t, void*);
 
 class MD5Single {
 protected:

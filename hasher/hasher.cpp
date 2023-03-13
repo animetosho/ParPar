@@ -3,7 +3,7 @@
 #include <string.h>
 
 IHasherInput*(*HasherInput_Create)() = NULL;
-IMD5Double*(*MD5Double_Create)() = NULL;
+uint32_t(*MD5CRC_Calc)(const void*, size_t, size_t, void*) = NULL;
 uint32_t(*CRC32_Calc)(const void*, size_t) = NULL;
 struct _CpuCap {
 #ifdef PLATFORM_X86
@@ -22,7 +22,7 @@ void setup_hasher() {
 	if(HasherInput_Create) return;
 	
 	HasherInput_Create = &HasherInput_Scalar::create;
-	MD5Double_Create = &MD5Double_Scalar::create;
+	MD5CRC_Calc = &MD5CRC_Calc_Scalar;
 	CRC32_Calc = &CRC32_Calc_Slice4;
 	
 	struct _CpuCap CpuCap;
@@ -81,10 +81,10 @@ void setup_hasher() {
 		MD5Single::_updateZero = &MD5Single_updateZero_AVX512;
 	}
 	
-	if(CpuCap.hasAVX512VLBW && MD5Double_AVX512::isAvailable)
-		MD5Double_Create = &MD5Double_AVX512::create;
-	else if(CpuCap.hasSSE2 && isSmallCore && MD5Double_SSE::isAvailable)
-		MD5Double_Create = &MD5Double_SSE::create;
+	if(CpuCap.hasAVX512VLBW && MD5CRC_isAvailable_AVX512)
+		MD5CRC_Calc = &MD5CRC_Calc_AVX512;
+	else if(hasClMul && MD5CRC_isAvailable_ClMul)
+		MD5CRC_Calc = &MD5CRC_Calc_ClMul;
 	
 	if(hasClMul && CRC32_isAvailable_ClMul)
 		CRC32_Calc = &CRC32_Calc_ClMul;
@@ -105,8 +105,8 @@ void setup_hasher() {
 			HasherInput_Create = &HasherInput_NEON::create;
 	}
 	
-	if(CpuCap.hasNEON && MD5Double_NEON::isAvailable) // TODO: slow core only
-		MD5Double_Create = &MD5Double_NEON::create;
+	if(hasCRC && MD5CRC_isAvailable_ARMCRC)
+		MD5CRC_Calc = &MD5CRC_Calc_ARMCRC;
 	if(hasCRC && CRC32_isAvailable_ARMCRC)
 		CRC32_Calc = &CRC32_Calc_ARMCRC;
 #endif

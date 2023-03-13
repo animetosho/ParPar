@@ -8,13 +8,9 @@ void MD5Single(update)(uint32_t*, const void*, size_t) {}
 void MD5Single(updateZero)(uint32_t*, size_t) {}
 #endif
 
-#ifdef MD5Double
-const bool MD5Double::isAvailable = false;
-MD5Double::MD5Double() {}
-void MD5Double::reset() {}
-void MD5Double::update(const void*, size_t) {}
-void MD5Double::getBlock(void*, uint64_t) {}
-void MD5Double::end(void*) {}
+#ifdef MD5CRC
+const bool MD5CRC(isAvailable) = false;
+uint32_t MD5CRC(Calc)(const void*, size_t, size_t, void*) { return 0; }
 #endif
 
 #ifdef HasherInput
