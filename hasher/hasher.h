@@ -59,26 +59,4 @@ public:
 extern uint32_t(*CRC32_Calc)(const void*, size_t);
 extern uint32_t(*MD5CRC_Calc)(const void*, size_t, size_t, void*);
 
-class MD5Single {
-protected:
-	uint8_t tmp[64];
-	uint32_t md5State[4];
-	uint64_t dataLen;
-public:
-	static void(*_update)(uint32_t*, const void*, size_t);
-	static void(*_updateZero)(uint32_t*, size_t);
-	void reset() {
-		md5State[0] = 0x67452301;
-		md5State[1] = 0xefcdab89;
-		md5State[2] = 0x98badcfe;
-		md5State[3] = 0x10325476;
-		dataLen = 0;
-	}
-	inline MD5Single() { reset(); }
-	void update(const void* data, size_t len);
-	void updateZero(size_t len);
-	void end(void* md5);
-};
-
-
 #endif /* __HASHER_H */

@@ -6,7 +6,7 @@
 
 
 #define HasherInput HasherInput_Scalar
-#define MD5Single(f) MD5Single_##f##_Scalar
+#define MD5SingleVer(f) MD5Single_##f##_Scalar
 #define MD5CRC(f) MD5CRC_##f##_Scalar
 #define CRC32Impl(n) n##_Slice4
 #define _FNMD5(f) f##_scalar
@@ -23,7 +23,7 @@
 
 
 #undef HasherInput
-#undef MD5Single
+#undef MD5SingleVer
 #undef MD5CRC
 #undef CRC32Impl
 #undef MD5Multi

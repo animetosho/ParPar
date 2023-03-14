@@ -2,10 +2,10 @@
 
 // stubs for when compiler doesn't support the ISA
 
-#ifdef MD5Single
-const bool MD5Single(isAvailable) = false;
-void MD5Single(update)(uint32_t*, const void*, size_t) {}
-void MD5Single(updateZero)(uint32_t*, size_t) {}
+#ifdef MD5SingleVer
+const bool MD5SingleVer(isAvailable) = false;
+void MD5SingleVer(update)(uint32_t*, const void*, size_t) {}
+void MD5SingleVer(updateZero)(uint32_t*, size_t) {}
 #endif
 
 #ifdef MD5CRC
@@ -20,6 +20,7 @@ void HasherInput::reset() {}
 void HasherInput::update(const void*, size_t) {}
 void HasherInput::getBlock(void*, uint64_t) {}
 void HasherInput::end(void*) {}
+void HasherInput::extractFileMD5(MD5Single&) {}
 #endif
 
 

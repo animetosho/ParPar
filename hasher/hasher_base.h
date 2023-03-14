@@ -13,9 +13,9 @@
 #endif
 
 
-#ifdef MD5Single
-const bool MD5Single(isAvailable) = true;
-void MD5Single(update)(uint32_t* md5State, const void* data, size_t blocks) {
+#ifdef MD5SingleVer
+const bool MD5SingleVer(isAvailable) = true;
+void MD5SingleVer(update)(uint32_t* md5State, const void* data, size_t blocks) {
 	const uint8_t* blockPtr[] = {(const uint8_t*)data};
 	uint32_t state[4];
 	state[0] = md5State[0];
@@ -31,7 +31,7 @@ void MD5Single(update)(uint32_t* md5State, const void* data, size_t blocks) {
 	md5State[2] = state[2];
 	md5State[3] = state[3];
 }
-void MD5Single(updateZero)(uint32_t* md5State, size_t blocks) {
+void MD5SingleVer(updateZero)(uint32_t* md5State, size_t blocks) {
 	uint8_t data[64] = { 0 };
 	const uint8_t* blockPtr[] = {data};
 	uint32_t state[4];
@@ -180,6 +180,17 @@ void HasherInput::end(void* md5) {
 	
 	_FNMD5x2(md5_extract_x2)(md5, md5State, HASH2X_FILE);
 	md5_final_block(md5, tmp, dataLen[HASH2X_FILE], 0);
+}
+
+void HasherInput::extractFileMD5(MD5Single& outMD5) {
+	_FNMD5x2(md5_extract_x2)(outMD5.md5State, md5State, HASH2X_FILE);
+	outMD5.dataLen = dataLen[HASH2X_FILE];
+	if(tmpLen >= MD5_BLOCKSIZE) {
+		MD5Single::_update(outMD5.md5State, tmp, 1);
+		memcpy(outMD5.tmp, tmp + MD5_BLOCKSIZE, tmpLen & (MD5_BLOCKSIZE-1));
+	} else {
+		memcpy(outMD5.tmp, tmp, tmpLen);
+	}
 }
 #endif
 
