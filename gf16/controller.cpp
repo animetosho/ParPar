@@ -25,6 +25,7 @@ bool PAR2Proc::init(size_t sliceSize, const std::vector<struct PAR2ProcBackendAl
 		size_t size = _backends[i].size;
 		auto& backend = backends[i];
 		backend.currentSliceSize = size;
+		backend.allocSliceSize = size;
 		backend.currentOffset = _backends[i].offset;
 		backend.be = _backends[i].be;
 		backend.be->setSliceSize(size);
@@ -84,13 +85,28 @@ bool PAR2Proc::checkBackendAllocation() {
 
 // this just reduces the size without resizing backends; TODO: this should be removed
 bool PAR2Proc::setCurrentSliceSize(size_t newSliceSize) {
-	if(newSliceSize > currentSliceSize) return false;
+	if(backends.size() == 1) {
+		// one backend only - don't need to worry about distributing the slice
+		currentSliceSize = newSliceSize;
+		backends[0].currentSliceSize = currentSliceSize;
+		backends[0].allocSliceSize = (std::max)(currentSliceSize, backends[0].allocSliceSize);
+		assert(backends[0].currentOffset == 0);
+		return backends[0].be->setCurrentSliceSize(currentSliceSize);
+	}
+	
+	if(newSliceSize > currentSliceSize) {
+		// check if requested amount exceeds initial allocation
+		size_t totalAlloc = 0;
+		for(const auto& backend : backends)
+			totalAlloc += backend.allocSliceSize;
+		if(newSliceSize > totalAlloc) return false; // backends support upsizing, but we don't know how to reallocate the split, so don't allow it for now
+	}
 	currentSliceSize = newSliceSize;
 	
 	bool success = true;
 	size_t pos = 0;
 	for(auto& backend : backends) {
-		backend.currentSliceSize = (std::min)(currentSliceSize-pos, backend.currentSliceSize);
+		backend.currentSliceSize = (std::min)(currentSliceSize-pos, backend.allocSliceSize);
 		backend.currentOffset = pos;
 		success = success && backend.be->setCurrentSliceSize(backend.currentSliceSize);
 		pos += backend.currentSliceSize;

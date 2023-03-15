@@ -214,6 +214,7 @@ struct Backend {
 	IPAR2ProcBackend* be;
 	size_t currentOffset;
 	size_t currentSliceSize;
+	size_t allocSliceSize;
 	std::unordered_set<int> added;
 };
 
