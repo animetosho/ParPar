@@ -52,7 +52,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle2x128_sve2_calc_tables(const unsign
 	svuint8_t* tbl_Eln, svuint8_t* tbl_Els, svuint8_t* tbl_Ehn, svuint8_t* tbl_Ehs,
 	svuint8_t* tbl_Fln, svuint8_t* tbl_Fls, svuint8_t* tbl_Fhn, svuint8_t* tbl_Fhs
 ) {
-	svint16_t val1 = svld1_s16(svwhilelt_b16(0u, srcCount), (int16_t*)coefficients);
+	svint16_t val1 = svld1_s16(svwhilelt_b16((uint32_t)0, (uint32_t)srcCount), (int16_t*)coefficients);
 	svint16_t val2 = gf16_vec_mul2_sve(val1);
 	svint16_t val4 = gf16_vec_mul2_sve(val2);
 	svint16_t val8 = gf16_vec_mul2_sve(val4);

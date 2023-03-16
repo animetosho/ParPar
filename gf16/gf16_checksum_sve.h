@@ -21,7 +21,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_checksum_blocku_sve(const void *HEDLEY_RES
 	int8_t* _src = (int8_t*)src;
 	
 	if(amount) while(1) {
-		svbool_t active = svwhilelt_b8((size_t)0, amount);
+		svbool_t active = svwhilelt_b8((uint64_t)0, (uint64_t)amount);
 		v = NOMASK(sveor_s16, v, svreinterpret_s16_s8(svld1_s8(active, _src)));
 		if(amount <= svcntb()) break;
 		amount -= svcntb();
