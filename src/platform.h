@@ -188,6 +188,16 @@ HEDLEY_WARNING("Compiling AVX code on MinGW GCC may cause crashing due to stack 
 # undef __AVX512F__
 #endif
 
+#if defined(_MSC_VER) && defined(__clang__)
+// ClangCL doesn't support SVE as of 15.0.1 (maybe due to not being defined on Windows-ARM?)
+# ifdef __ARM_FEATURE_SVE
+#  undef __ARM_FEATURE_SVE
+# endif
+# ifdef __ARM_FEATURE_SVE2
+#  undef __ARM_FEATURE_SVE2
+# endif
+#endif
+
 // alignment
 
 #ifdef _MSC_VER
