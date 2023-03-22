@@ -97,7 +97,10 @@ void HasherInput::reset() {
 	dataLen[HASH2X_FILE] = 0;
 }
 
-void HasherInput::update(const void* data, size_t len) {
+#ifndef _MD5x2_UPDATEFN_ATTRIB
+# define _MD5x2_UPDATEFN_ATTRIB
+#endif
+_MD5x2_UPDATEFN_ATTRIB void HasherInput::update(const void* data, size_t len) {
 	dataLen[HASH2X_BLOCK] += len;
 	dataLen[HASH2X_FILE] += len;
 	const char* data_ = (const char*)data;
@@ -148,7 +151,7 @@ void HasherInput::update(const void* data, size_t len) {
 	tmpLen = len;
 }
 
-void HasherInput::getBlock(void* md5crc, uint64_t zeroPad) {
+_MD5x2_UPDATEFN_ATTRIB void HasherInput::getBlock(void* md5crc, uint64_t zeroPad) {
 	_FNMD5x2(md5_extract_x2)(md5crc, md5State, HASH2X_BLOCK);
 	md5_final_block(md5crc, tmp + posOffset, dataLen[HASH2X_BLOCK], zeroPad);
 	
@@ -172,7 +175,7 @@ void HasherInput::getBlock(void* md5crc, uint64_t zeroPad) {
 	dataLen[HASH2X_BLOCK] = 0;
 }
 
-void HasherInput::end(void* md5) {
+_MD5x2_UPDATEFN_ATTRIB void HasherInput::end(void* md5) {
 	if(tmpLen >= MD5_BLOCKSIZE) {
 		// this generally shouldn't happen, as getBlock should handle this case, but we'll deal with it in case the caller doesn't want to use getBlock
 		_FNMD5x2(md5_update_block_x2)(md5State, (const char*)tmp, (const char*)tmp);

@@ -10,7 +10,11 @@
 # define UNUSED(...) (void)(__VA_ARGS__)
 #endif
 
-
+// parent function which inlines this, may need to be marked as targeting ARM
+#if !defined(__aarch64__) && (!defined(__clang__) || (defined(__ARM_ARCH_ISA_THUMB) && __ARM_ARCH_ISA_THUMB < 2))
+// GCC refuses to allow >9 registers in Thumb mode; Clang has no qualms, as long as it's Thumb2
+# define _MD5x2_UPDATEFN_ATTRIB  __attribute__((target("arm")))
+#endif
 static HEDLEY_ALWAYS_INLINE void md5_process_block_x2_scalar(uint32_t* state, const uint8_t* const* HEDLEY_RESTRICT data, size_t offset) {
 	UNUSED(offset);
 	uint32_t A1 = state[0];
