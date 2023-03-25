@@ -267,6 +267,7 @@ Performance Options:
                                       ARMv8-CRC
                                  simd-crc: combined 'simd' and 'crc'
                              x86 only choices:
+                                 bmi: use BMI1 and PCLMULQDQ
                                  avx512: use AVX512VL and PCLMULQDQ
        --md5-method          Highest level algorithm for hashing recovery data.
                              This option may be limited by `--md5-batch-size`.

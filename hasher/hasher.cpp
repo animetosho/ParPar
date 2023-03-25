@@ -7,8 +7,8 @@ uint32_t(*MD5CRC_Calc)(const void*, size_t, size_t, void*) = NULL;
 uint32_t(*CRC32_Calc)(const void*, size_t) = NULL;
 struct _CpuCap {
 #ifdef PLATFORM_X86
-	bool hasSSE2, hasXOP, hasAVX2, hasAVX512F, hasAVX512VLBW;
-	_CpuCap() : hasSSE2(false), hasXOP(false), hasAVX2(false), hasAVX512F(false), hasAVX512VLBW(false) {}
+	bool hasSSE2, hasXOP, hasBMI1, hasAVX2, hasAVX512F, hasAVX512VLBW;
+	_CpuCap() : hasSSE2(false), hasXOP(false), hasBMI1(false), hasAVX2(false), hasAVX512F(false), hasAVX512VLBW(false) {}
 #endif
 #ifdef PLATFORM_ARM
 	bool hasNEON, hasSVE2;
@@ -55,6 +55,7 @@ void setup_hasher() {
 		int xcr = _GET_XCR() & 0xff;
 		if((xcr & 6) == 6) { // AVX enabled
 			hasAVX = cpuInfo[2] & 0x800000;
+			CpuCap.hasBMI1 = hasAVX && (cpuInfoX[1] & 0x08);
 			CpuCap.hasAVX2 = cpuInfoX[1] & 0x20;
 			if((xcr & 0xE0) == 0xE0) {
 				CpuCap.hasAVX512F = ((cpuInfoX[1] & 0x10000) == 0x10000);
@@ -69,9 +70,12 @@ void setup_hasher() {
 	
 	if(CpuCap.hasAVX512VLBW && hasClMul && HasherInput_AVX512::isAvailable)
 		HasherInput_Create = &HasherInput_AVX512::create;
-	else if(hasClMul && !isSmallCore && HasherInput_ClMulScalar::isAvailable)
-		HasherInput_Create = &HasherInput_ClMulScalar::create;
-	else if(hasClMul && isSmallCore && HasherInput_ClMulSSE::isAvailable)
+	else if(hasClMul && !isSmallCore && HasherInput_ClMulScalar::isAvailable) {
+		if(CpuCap.hasBMI1 && HasherInput_BMI1::isAvailable)
+			HasherInput_Create = &HasherInput_BMI1::create;
+		else
+			HasherInput_Create = &HasherInput_ClMulScalar::create;
+	} else if(hasClMul && isSmallCore && HasherInput_ClMulSSE::isAvailable)
 		HasherInput_Create = &HasherInput_ClMulSSE::create;
 	else if(CpuCap.hasSSE2 && isSmallCore && HasherInput_SSE::isAvailable) // TODO: CPU w/o ClMul might all be small enough
 		HasherInput_Create = &HasherInput_SSE::create;
@@ -80,9 +84,15 @@ void setup_hasher() {
 		MD5Single::_update = &MD5Single_update_AVX512;
 		MD5Single::_updateZero = &MD5Single_updateZero_AVX512;
 	}
+	else if(CpuCap.hasBMI1 && MD5Single_isAvailable_BMI1) {
+		MD5Single::_update = &MD5Single_update_BMI1;
+		MD5Single::_updateZero = &MD5Single_updateZero_BMI1;
+	}
 	
 	if(CpuCap.hasAVX512VLBW && MD5CRC_isAvailable_AVX512)
 		MD5CRC_Calc = &MD5CRC_Calc_AVX512;
+	else if(CpuCap.hasBMI1 && hasClMul && MD5CRC_isAvailable_BMI1)
+		MD5CRC_Calc = &MD5CRC_Calc_BMI1;
 	else if(hasClMul && MD5CRC_isAvailable_ClMul)
 		MD5CRC_Calc = &MD5CRC_Calc_ClMul;
 	
@@ -142,6 +152,7 @@ bool set_hasherInput(HasherInputMethods method) {
 	if(method == INHASH_SIMD) SET_HASHER(HasherInput_SSE)
 	if(method == INHASH_CRC) SET_HASHER(HasherInput_ClMulScalar)
 	if(method == INHASH_SIMD_CRC) SET_HASHER(HasherInput_ClMulSSE)
+	if(method == INHASH_BMI1) SET_HASHER(HasherInput_BMI1)
 	if(method == INHASH_AVX512) SET_HASHER(HasherInput_AVX512)
 #endif
 #ifdef PLATFORM_ARM

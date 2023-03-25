@@ -37,7 +37,7 @@
       "target_name": "parpar_gf",
       "dependencies": [
         "gf16", "gf16_generic", "gf16_sse2", "gf16_ssse3", "gf16_avx", "gf16_avx2", "gf16_avx512", "gf16_vbmi", "gf16_gfni", "gf16_gfni_avx2", "gf16_gfni_avx512", "gf16_neon", "gf16_sve", "gf16_sve2",
-        "hasher", "hasher_sse2", "hasher_clmul", "hasher_xop", "hasher_avx2", "hasher_avx512", "hasher_avx512vl", "hasher_armcrc", "hasher_neon", "hasher_neoncrc", "hasher_sve2"
+        "hasher", "hasher_sse2", "hasher_clmul", "hasher_xop", "hasher_bmi1", "hasher_avx2", "hasher_avx512", "hasher_avx512vl", "hasher_armcrc", "hasher_neon", "hasher_neoncrc", "hasher_sve2"
       ],
       "sources": ["src/gf.cc", "gf16/controller.cpp", "gf16/controller_cpu.cpp", "gf16/controller_ocl.cpp", "gf16/controller_ocl_init.cpp", "gf16/opencl-include/cl.c", "gf16/gfmat_coeff.c"],
       "include_dirs": ["gf16", "gf16/opencl-include"],
@@ -136,6 +136,30 @@
           "xcode_settings": {
             "OTHER_CFLAGS": ["-mxop", "-mavx"],
             "OTHER_CXXFLAGS": ["-mxop", "-mavx"],
+          }
+        }]
+      ]
+    },
+    {
+      "target_name": "hasher_bmi1",
+      "type": "static_library",
+      "defines": ["NDEBUG"],
+      "sources": ["hasher/hasher_bmi1.cpp"],
+      "cflags!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"],
+      "cxxflags!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"],
+      "xcode_settings": {
+        "OTHER_CFLAGS!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"],
+        "OTHER_CXXFLAGS!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"]
+      },
+      "msvs_settings": {"VCCLCompilerTool": {"BufferSecurityCheck": "false"}},
+      "conditions": [
+        ['target_arch in "ia32 x64"', {
+          "msvs_settings": {"VCCLCompilerTool": {"EnableEnhancedInstructionSet": "3"}},
+          "cflags": ["-mpclmul", "-mavx", "-mbmi"],
+          "cxxflags": ["-mpclmul", "-mavx", "-mbmi"],
+          "xcode_settings": {
+            "OTHER_CFLAGS": ["-mpclmul", "-mavx", "-mbmi"],
+            "OTHER_CXXFLAGS": ["-mpclmul", "-mavx", "-mbmi"],
           }
         }]
       ]

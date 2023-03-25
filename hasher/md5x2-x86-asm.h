@@ -97,6 +97,27 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_x2_scalar(uint32_t* state, co
 	"addl %k[" STR(B1) "], %k[" STR(A1) "]\n" \
 	"addl %k[" STR(B2) "], %k[" STR(A2) "]\n"
 
+#ifdef _MD5_USE_BMI1_
+#define ROUND_G(A1, B1, C1, D1, A2, B2, C2, D2, NEXT_IN1, NEXT_IN2, K, R) \
+	"addl $" STR(K) ", %k[" STR(A1) "]\n" \
+	"addl $" STR(K) ", %k[" STR(A2) "]\n" \
+	"andnl %k[" STR(C1) "], %k[" STR(D1) "], %k[TMP1]\n" \
+	"andnl %k[" STR(C2) "], %k[" STR(D2) "], %k[TMP2]\n" \
+	"addl %k[TMP1], %k[" STR(A1) "]\n" \
+	"addl %k[TMP2], %k[" STR(A2) "]\n" \
+	"movl %k[" STR(D1) "], %k[TMP1]\n" \
+	"movl %k[" STR(D2) "], %k[TMP2]\n" \
+	"addl " NEXT_IN1 ", %k[" STR(D1) "]\n" \
+	"addl " NEXT_IN2 ", %k[" STR(D2) "]\n" \
+	"andl %k[" STR(B1) "], %k[TMP1]\n" \
+	"andl %k[" STR(B2) "], %k[TMP2]\n" \
+	"addl %k[TMP1], %k[" STR(A1) "]\n" \
+	"addl %k[TMP2], %k[" STR(A2) "]\n" \
+	"roll $" STR(R) ", %k[" STR(A1) "]\n" \
+	"roll $" STR(R) ", %k[" STR(A2) "]\n" \
+	"addl %k[" STR(B1) "], %k[" STR(A1) "]\n" \
+	"addl %k[" STR(B2) "], %k[" STR(A2) "]\n"
+#else
 #define ROUND_G(A1, B1, C1, D1, A2, B2, C2, D2, NEXT_IN1, NEXT_IN2, K, R) \
 	"movl %k[" STR(D1) "], %k[TMP1]\n" \
 	"movl %k[" STR(D2) "], %k[TMP2]\n" \
@@ -120,6 +141,7 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_x2_scalar(uint32_t* state, co
 	"roll $" STR(R) ", %k[" STR(A2) "]\n" \
 	"addl %k[" STR(B1) "], %k[" STR(A1) "]\n" \
 	"addl %k[" STR(B2) "], %k[" STR(A2) "]\n"
+#endif
 
 #define ASM_PARAMS(i0, i1) \
 	[A1]"+&r"(A1), [B1]"+&r"(B1), [C1]"+&r"(C1), [D1]"+&r"(D1), \

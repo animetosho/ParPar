@@ -9,6 +9,7 @@ enum HasherInputMethods {
 	INHASH_SIMD,
 	INHASH_CRC,
 	INHASH_SIMD_CRC,
+	INHASH_BMI1,
 	INHASH_AVX512
 };
 enum MD5MultiLevels {
