@@ -617,7 +617,7 @@ var inputFiles = argv._;
 			});
 			return require('../lib/par2.js')._extend({}, openclOpts, openclMap(opts));
 		});
-	} else if('process' in openclOpts) {
+	} else if('ratio' in openclOpts) {
 		ppo.openclDevices = [openclOpts];
 	}
 	
