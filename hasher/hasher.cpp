@@ -91,7 +91,8 @@ void setup_hasher() {
 		MD5Single::_update = &MD5Single_update_NoLEA;
 		MD5Single::_updateZero = &MD5Single_updateZero_NoLEA;
 	}
-	else if(CpuCap.hasBMI1 && MD5Single_isAvailable_BMI1) {
+	// for some reason, single MD5 BMI1 seems to be slower on most cores, except Jaguar... unsure why
+	else if(CpuCap.hasBMI1 && isSmallCore && MD5Single_isAvailable_BMI1) {
 		MD5Single::_update = &MD5Single_update_BMI1;
 		MD5Single::_updateZero = &MD5Single_updateZero_BMI1;
 	}
@@ -100,7 +101,7 @@ void setup_hasher() {
 		MD5CRC_Calc = &MD5CRC_Calc_AVX512;
 	else if(isLEASlow && hasClMul && MD5CRC_isAvailable_NoLEA)
 		MD5CRC_Calc = &MD5CRC_Calc_NoLEA;
-	else if(CpuCap.hasBMI1 && hasClMul && MD5CRC_isAvailable_BMI1)
+	else if(CpuCap.hasBMI1 && hasClMul && isSmallCore && MD5CRC_isAvailable_BMI1)
 		MD5CRC_Calc = &MD5CRC_Calc_BMI1;
 	else if(hasClMul && MD5CRC_isAvailable_ClMul)
 		MD5CRC_Calc = &MD5CRC_Calc_ClMul;
