@@ -20,7 +20,7 @@ static HEDLEY_ALWAYS_INLINE poly8x8_t veor_p8(poly8x8_t a, poly8x8_t b) {
 
 #ifdef __aarch64__
 typedef poly8x16_t coeff_t;
-# ifdef __GNUC__
+# if defined(__GNUC__) || defined(__clang__)
 // because GCC/CLang doesn't seem to handle these cases well, explicitly tell them what to do
 static HEDLEY_ALWAYS_INLINE poly16x8_t pmull_low(poly8x16_t a, poly8x16_t b) {
 	poly16x8_t result;

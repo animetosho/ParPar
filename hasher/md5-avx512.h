@@ -1,5 +1,5 @@
 
-#if defined(__GNUC__) && defined(__AVX512VL__) && defined(PLATFORM_AMD64)
+#if (defined(__GNUC__) || defined(__clang__)) && defined(__AVX512VL__) && defined(PLATFORM_AMD64)
 # define MD5_USE_ASM
 # include "md5-avx512-asm.h"
 #endif

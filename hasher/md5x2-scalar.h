@@ -2,11 +2,11 @@
 #include "../src/platform.h"
 #include "../src/stdint.h"
 
-#if defined(__GNUC__) && defined(PLATFORM_AMD64)
+#if (defined(__GNUC__) || defined(__clang__)) && defined(PLATFORM_AMD64)
 # define MD5_USE_ASM
 # include "md5x2-x86-asm.h"
 #endif
-#if defined(__GNUC__) && defined(PLATFORM_ARM)
+#if (defined(__GNUC__) || defined(__clang__)) && defined(PLATFORM_ARM)
 # define MD5_USE_ASM
 # include "md5x2-arm-asm.h"
 #endif

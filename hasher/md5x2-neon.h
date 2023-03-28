@@ -1,7 +1,7 @@
 
 #include <arm_neon.h>
 
-#ifdef __GNUC__
+#if defined(__GNUC__) || defined(__clang__)
 # define MD5_USE_ASM
 # include "md5x2-neon-asm.h"
 #endif
