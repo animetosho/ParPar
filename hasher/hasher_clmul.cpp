@@ -28,3 +28,20 @@
 #else
 # include "hasher_stub.h"
 #endif
+
+#undef HasherInput
+#undef _FNMD5x2
+#undef MD5CRC
+#undef _FNMD5
+#undef CRC32Impl
+
+
+#define MD5SingleVer(f) MD5Single_##f##_NoLEA
+#define MD5CRC(f) MD5CRC_##f##_NoLEA
+#define _FNMD5(f) f##_nolea
+
+#if defined(__PCLMUL__) && defined(__SSSE3__) && defined(__SSE4_1__) && defined(MD5_HAS_NOLEA)
+# include "hasher_base.h"
+#else
+# include "hasher_stub.h"
+#endif

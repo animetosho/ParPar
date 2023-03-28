@@ -30,7 +30,7 @@ void setup_hasher() {
 	// CPU detection
 #ifdef PLATFORM_X86
 	bool hasClMul = false, hasAVX = false;
-	bool isSmallCore = false;
+	bool isSmallCore = false, isLEASlow = false;
 	
 	int cpuInfo[4];
 	int cpuInfoX[4];
@@ -45,6 +45,8 @@ void setup_hasher() {
 	// TODO: check perf on small cores
 	if(family == 6) {
 		isSmallCore = CPU_MODEL_IS_BNL_SLM(model);
+		// Intel Sandy Bridge to Skylake has slow 3-component LEA
+		isLEASlow = (model == 0x2A || model == 0x2D || model == 0x3A || model == 0x3C || model == 0x3D || model == 0x3E || model == 0x3F || model == 0x45 || model == 0x46 || model == 0x47 || model == 0x4E || model == 0x4F || model == 0x55 || model == 0x56 || model == 0x5E || model == 0x66 || model == 0x67 || model == 0x8E || model == 0x9E || model == 0xA5 || model == 0xA6);
 	} else {
 		isSmallCore = CPU_FAMMDL_IS_AMDCAT(family, model);
 	}
@@ -70,6 +72,7 @@ void setup_hasher() {
 	
 	if(CpuCap.hasAVX512VLBW && hasClMul && HasherInput_AVX512::isAvailable)
 		HasherInput_Create = &HasherInput_AVX512::create;
+	// SSE seems to be faster than scalar on Zen1/2, not Zen3; BMI > SSE on Zen1, unknown on Zen2
 	else if(hasClMul && !isSmallCore && HasherInput_ClMulScalar::isAvailable) {
 		if(CpuCap.hasBMI1 && HasherInput_BMI1::isAvailable)
 			HasherInput_Create = &HasherInput_BMI1::create;
@@ -84,6 +87,10 @@ void setup_hasher() {
 		MD5Single::_update = &MD5Single_update_AVX512;
 		MD5Single::_updateZero = &MD5Single_updateZero_AVX512;
 	}
+	else if(isLEASlow && hasClMul && MD5Single_isAvailable_NoLEA) {
+		MD5Single::_update = &MD5Single_update_NoLEA;
+		MD5Single::_updateZero = &MD5Single_updateZero_NoLEA;
+	}
 	else if(CpuCap.hasBMI1 && MD5Single_isAvailable_BMI1) {
 		MD5Single::_update = &MD5Single_update_BMI1;
 		MD5Single::_updateZero = &MD5Single_updateZero_BMI1;
@@ -91,6 +98,8 @@ void setup_hasher() {
 	
 	if(CpuCap.hasAVX512VLBW && MD5CRC_isAvailable_AVX512)
 		MD5CRC_Calc = &MD5CRC_Calc_AVX512;
+	else if(isLEASlow && hasClMul && MD5CRC_isAvailable_NoLEA)
+		MD5CRC_Calc = &MD5CRC_Calc_NoLEA;
 	else if(CpuCap.hasBMI1 && hasClMul && MD5CRC_isAvailable_BMI1)
 		MD5CRC_Calc = &MD5CRC_Calc_BMI1;
 	else if(hasClMul && MD5CRC_isAvailable_ClMul)

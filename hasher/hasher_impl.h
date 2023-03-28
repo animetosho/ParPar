@@ -36,7 +36,7 @@ void MD5Single_update_##name(uint32_t*, const void*, size_t); \
 void MD5Single_updateZero_##name(uint32_t*, size_t); \
 extern const bool MD5Single_isAvailable_##name
 __DECL_MD5SINGLE(Scalar);
-//__DECL_MD5SINGLE(NoLEA);
+__DECL_MD5SINGLE(NoLEA);
 __DECL_MD5SINGLE(BMI1);
 __DECL_MD5SINGLE(AVX512);
 #undef __DECL_MD5SINGLE
@@ -153,7 +153,7 @@ __DECL_MD5MULTI(2_SVE2);
 uint32_t MD5CRC_Calc_##name(const void*, size_t, size_t, void*); \
 extern const bool MD5CRC_isAvailable_##name
 __DECL_MD5CRC(Scalar);
-//__DECL_MD5CRC(NoLEA);
+__DECL_MD5CRC(NoLEA);
 __DECL_MD5CRC(ClMul);
 __DECL_MD5CRC(BMI1);
 __DECL_MD5CRC(AVX512);
