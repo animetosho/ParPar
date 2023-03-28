@@ -20,7 +20,7 @@ struct CpuCap {
 	bool hasSSE2, hasSSSE3, hasAVX, hasAVX2, hasAVX512VLBW, hasAVX512VBMI, hasGFNI;
 	size_t propPrefShuffleThresh;
 	bool propFastJit, propHT;
-	bool canMemWX;
+	bool canMemWX, isEmulated;
 	int jitOptStrat;
 	CpuCap(bool detect) :
 	  hasSSE2(true),
@@ -34,6 +34,7 @@ struct CpuCap {
 	  propFastJit(false),
 	  propHT(false),
 	  canMemWX(true),
+	  isEmulated(false),
 	  jitOptStrat(GF16_XOR_JIT_STRAT_NONE)
 	{
 		if(!detect) return;
@@ -101,6 +102,14 @@ struct CpuCap {
 			|| family == 0x7f // AMD Jaguar/Puma family
 			|| family == 0x8f // AMD Zen1/2 family
 			|| family == 0xaf // AMD Zen3/4 family
+		);
+		
+		_cpuid(cpuInfo, 0);
+		isEmulated = (
+			// "Virtual CPU " (Windows on ARM)
+			   (cpuInfo[1] == 0x74726956 && cpuInfo[3] == 0x206c6175 && cpuInfo[2] == 0x20555043)
+			// "VirtualApple" (new Rosetta2)
+			|| (cpuInfo[1] == 0x74726956 && cpuInfo[3] == 0x416c6175 && cpuInfo[2] == 0x656c7070)
 		);
 		
 		hasAVX = false; hasAVX2 = false; hasAVX512VLBW = false; hasAVX512VBMI = false; hasGFNI = false;
@@ -1135,7 +1144,7 @@ Galois16Methods Galois16Mul::default_method(size_t regionSizeHint, unsigned /*ou
 	}
 	if(caps.hasAVX2) {
 # ifdef PLATFORM_AMD64
-		if(gf16_xor_available_avx2 && caps.canMemWX && caps.propFastJit) // TODO: check size hint?
+		if(gf16_xor_available_avx2 && caps.canMemWX && caps.propFastJit && !caps.isEmulated) // TODO: check size hint?
 			return GF16_XOR_JIT_AVX2;
 # endif
 		if(gf16_shuffle_available_avx2)
@@ -1143,7 +1152,7 @@ Galois16Methods Galois16Mul::default_method(size_t regionSizeHint, unsigned /*ou
 	}
 	if(gf16_affine_available_gfni && caps.hasGFNI && gf16_shuffle_available_ssse3 && caps.hasSSSE3)
 		return GF16_AFFINE2X_GFNI; // this should beat XOR-JIT; even seems to generally beat Shuffle2x AVX2
-	if(!regionSizeHint || regionSizeHint > caps.propPrefShuffleThresh) {
+	if(!caps.isEmulated && (!regionSizeHint || regionSizeHint > caps.propPrefShuffleThresh)) {
 		// TODO: if only a few recovery slices being made (e.g. 3), prefer shuffle
 		//if(gf16_xor_available_avx && caps.hasAVX && caps.canMemWX)
 		//	return GF16_XOR_JIT_AVX;
