@@ -15,6 +15,10 @@ extern "C" {
 #include "../src/platform.h"
 #ifdef PLATFORM_X86
 # include "../src/cpuid.h"
+# ifdef __APPLE__
+#  include <sys/types.h>
+#  include <sys/sysctl.h>
+# endif
 # include "x86_jit.h"
 struct CpuCap {
 	bool hasSSE2, hasSSSE3, hasAVX, hasAVX2, hasAVX512VLBW, hasAVX512VBMI, hasGFNI;
@@ -108,9 +112,20 @@ struct CpuCap {
 		isEmulated = (
 			// "Virtual CPU " (Windows on ARM)
 			   (cpuInfo[1] == 0x74726956 && cpuInfo[3] == 0x206c6175 && cpuInfo[2] == 0x20555043)
+			// "MicrosoftXTA"
+			|| (cpuInfo[1] == 0x7263694d && cpuInfo[3] == 0x666f736f && cpuInfo[2] == 0x41545874)
 			// "VirtualApple" (new Rosetta2)
 			|| (cpuInfo[1] == 0x74726956 && cpuInfo[3] == 0x416c6175 && cpuInfo[2] == 0x656c7070)
 		);
+#ifdef __APPLE__
+		if(!isEmulated) {
+			// also check Rosetta: https://developer.apple.com/documentation/apple-silicon/about-the-rosetta-translation-environment#Determine-Whether-Your-App-Is-Running-as-a-Translated-Binary
+			int proc_translated = 0;
+			size_t int_size = sizeof(proc_translated);
+			if(sysctlbyname("sysctl.proc_translated", &proc_translated, &int_size, NULL, 0) == 0) 
+				isEmulated = (bool)proc_translated;
+		}
+#endif
 		
 		hasAVX = false; hasAVX2 = false; hasAVX512VLBW = false; hasAVX512VBMI = false; hasGFNI = false;
 #if !defined(_MSC_VER) || _MSC_VER >= 1600
