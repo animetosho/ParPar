@@ -1,6 +1,8 @@
 #ifndef __GF16_CHECKSUM_H
 #define __GF16_CHECKSUM_H
 
+#include "gf16_global.h"
+
 static HEDLEY_ALWAYS_INLINE _mword _FN(gf16_vec_mul2)(_mword v) {
 #if MWORD_SIZE==64
 	return _mm512_ternarylogic_epi32(
@@ -145,14 +147,6 @@ static HEDLEY_ALWAYS_INLINE void _FN(gf16_checksum_exp)(void *HEDLEY_RESTRICT ch
 #endif
 	}
 	*(_mword*)checksum = res;
-}
-
-static HEDLEY_ALWAYS_INLINE int _FN(gf16_checksum_vec_isequal)(_mword a, _mword b) {
-#if MWORD_SIZE==64
-	return _mm512_cmpneq_epi64_mask(a, b) == 0;
-#else
-	return (int)_MM(movemask_epi8)(_MM(cmpeq_epi32)(a, b)) == (int)((1ULL<<MWORD_SIZE)-1);
-#endif
 }
 
 static HEDLEY_ALWAYS_INLINE void _FN(gf16_checksum_prepare)(void *HEDLEY_RESTRICT dst, void *HEDLEY_RESTRICT checksum, const size_t blockLen, gf16_transform_block prepareBlock) {

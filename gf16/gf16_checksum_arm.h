@@ -1,6 +1,8 @@
 #ifndef __GF16_CHECKSUM_H
 #define __GF16_CHECKSUM_H
 
+#include "gf16_neon_common.h"
+
 static HEDLEY_ALWAYS_INLINE uint8x16_t gf16_vec_mul2_neon(uint8x16_t v) {
 	int16x8_t _v = vreinterpretq_s16_u8(v);
 	return vreinterpretq_u8_s16(veorq_s16(
@@ -90,4 +92,5 @@ static HEDLEY_ALWAYS_INLINE void gf16_checksum_prepare_neon(void *HEDLEY_RESTRIC
 	}
 #undef _X
 }
+
 #endif

@@ -1,6 +1,8 @@
 #ifndef __GF16_CHECKSUM_H
 #define __GF16_CHECKSUM_H
 
+#include "gf16_sve_common.h"
+
 #ifdef __ARM_FEATURE_SVE
 static HEDLEY_ALWAYS_INLINE void gf16_checksum_block_sve(const void *HEDLEY_RESTRICT src, void *HEDLEY_RESTRICT checksum, const size_t blockLen, const int aligned) {
 	UNUSED(aligned);

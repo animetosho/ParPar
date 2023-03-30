@@ -1,3 +1,5 @@
+#ifndef __GF16_NEON_COMMON_H
+#define __GF16_NEON_COMMON_H
 
 #include "gf16_global.h"
 #include "../src/platform.h"
@@ -119,4 +121,6 @@ static HEDLEY_ALWAYS_INLINE void gf16_finish_block_neon(void *HEDLEY_RESTRICT ds
 	_vst1q_u8_x2(dst, vld1q_u8_x2_align(src));
 #endif
 }
+#endif
+
 #endif

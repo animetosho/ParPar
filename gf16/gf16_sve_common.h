@@ -1,3 +1,5 @@
+#ifndef __GF16_SVE_COMMON_H
+#define __GF16_SVE_COMMON_H
 
 #include "gf16_global.h"
 #include "../src/platform.h"
@@ -50,4 +52,6 @@ static HEDLEY_ALWAYS_INLINE void gf16_checksum_prepare_sve(void *HEDLEY_RESTRICT
 	
 	prepareBlock(dst, tmp);
 }
+#endif
+
 #endif
