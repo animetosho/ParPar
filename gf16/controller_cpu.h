@@ -40,6 +40,8 @@ private:
 	bool reallocMemInput();
 	void* memProcessing; // TODO: break this into chunks, to avoid massive single allocation
 	
+	void calcChunkSize();
+	
 	MessageThread transferThread;
 	
 	void set_coeffs(PAR2ProcCPUStaging& area, unsigned idx, uint16_t inputNum);
