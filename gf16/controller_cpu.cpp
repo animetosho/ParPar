@@ -54,9 +54,11 @@ void PAR2ProcCPU::setNumThreads(int threads) {
 	int oldThreads = gfScratch.size();
 	if(threads == oldThreads) return;
 	
-	for(int i=oldThreads-1; i>=threads; i--)
+	for(int i=oldThreads-1; i>=threads; i--) {
 		if(gfScratch[i])
 			gf->mutScratch_free(gfScratch[i]);
+		thWorkers[i].end();
+	}
 	gfScratch.resize(threads);
 	thWorkers.resize(threads);
 	for(int i=oldThreads; i<threads; i++) {
@@ -188,6 +190,10 @@ void PAR2ProcCPU::freeProcessingMem() {
 	}
 }
 void PAR2ProcCPU::_deinit() {
+	for(auto& worker : thWorkers)
+		worker.end();
+	// TODO: join threads?
+	
 	freeGf();
 }
 
@@ -620,9 +626,5 @@ void PAR2ProcCPU::processing_finished() {
 		if(area.src) ALIGN_FREE(area.src);
 		area.src = nullptr;
 	}
-	
-	// close off worker threads; TODO: is this a good idea? perhaps do it during deinit instead?
-	for(auto& worker : thWorkers)
-		worker.end();
 }
 
