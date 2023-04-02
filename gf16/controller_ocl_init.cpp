@@ -1246,6 +1246,7 @@ bool PAR2ProcOCL::setup_kernels(Galois16OCLMethods method, unsigned targetInputB
 	}
 	
 	if(inputBatchSize < 1) return false;
+	minInBatchSize = inputBatchSize >> 1;
 	
 	if(targetIters) groupIterations = targetIters;
 	if(targetGrouping) outputsPerGroup = targetGrouping;

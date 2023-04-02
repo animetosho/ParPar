@@ -83,7 +83,7 @@ protected:
 	bool processingAdd;
 	virtual void run_kernel(unsigned stagingArea, unsigned numInputs) = 0;
 	unsigned currentStagingArea, currentStagingInputs;
-	unsigned inputBatchSize;
+	unsigned inputBatchSize, minInBatchSize;
 	
 #ifdef USE_LIBUV
 	unsigned stagingActiveCount, pendingInCallbacks, pendingOutCallbacks;

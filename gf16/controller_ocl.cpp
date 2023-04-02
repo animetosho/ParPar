@@ -309,7 +309,7 @@ FUTURE_RETURN_T PAR2ProcOCL::_addInput(const void* buffer, size_t size, T inputN
 		}
 	}
 	currentStagingInputs++;
-	if(currentStagingInputs == inputBatchSize || flush || (stagingActiveCount_get() == 0 && staging.size() > 1))
+	if(currentStagingInputs == inputBatchSize || flush || (stagingActiveCount_get() == 0 && staging.size() > 1 && currentStagingInputs >= minInBatchSize))
 		run_kernel(currentStagingArea, currentStagingInputs);
 	
 	IF_NOT_LIBUV(return future);
@@ -322,7 +322,7 @@ void PAR2ProcOCL::dummyInput(uint16_t inputNum, bool flush) {
 	
 	set_coeffs(area, currentStagingInputs, inputNum);
 	currentStagingInputs++;
-	if(currentStagingInputs == inputBatchSize || flush || (stagingActiveCount_get() == 0 && staging.size() > 1))
+	if(currentStagingInputs == inputBatchSize || flush || (stagingActiveCount_get() == 0 && staging.size() > 1 && currentStagingInputs >= minInBatchSize))
 		run_kernel(currentStagingArea, currentStagingInputs);
 }
 

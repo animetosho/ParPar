@@ -85,6 +85,7 @@ bool PAR2ProcCPU::init(Galois16Methods method, unsigned _inputGrouping, size_t _
 		inputBatchSize -= inputBatchSize % info.idealInputMultiple;
 		if(inputBatchSize < info.idealInputMultiple) inputBatchSize = info.idealInputMultiple;
 	}
+	minInBatchSize = inputBatchSize >> 1;
 	
 	alignedSliceSize = gf->alignToStride(sliceSize) + stride; // add extra stride, because checksum requires an extra block
 	alignedCurrentSliceSize = 0;
@@ -293,7 +294,7 @@ FUTURE_RETURN_T PAR2ProcCPU::_addInput(const void* buffer, size_t size, T inputN
 	data->gf = gf;
 	IF_LIBUV(data->cbPrep = cb);
 	
-	data->submitInBufs = (flush || currentStagingInputs == inputBatchSize || (stagingActiveCount_get() == 0 && staging.size() > 1)) ? currentStagingInputs : 0;
+	data->submitInBufs = (flush || currentStagingInputs == inputBatchSize || (stagingActiveCount_get() == 0 && staging.size() > 1 && currentStagingInputs >= minInBatchSize)) ? currentStagingInputs : 0;
 	data->inBufId = currentStagingArea;
 	
 	if(data->submitInBufs) {
@@ -320,7 +321,7 @@ void PAR2ProcCPU::dummyInput(uint16_t inputNum, bool flush) {
 	set_coeffs(area, currentStagingInputs, inputNum);
 	currentStagingInputs++;
 	
-	if(flush || currentStagingInputs == inputBatchSize || (stagingActiveCount_get() == 0 && staging.size() > 1)) {
+	if(flush || currentStagingInputs == inputBatchSize || (stagingActiveCount_get() == 0 && staging.size() > 1 && currentStagingInputs >= minInBatchSize)) {
 		stagingActiveCount_inc();
 		area.setIsActive(true); // lock this buffer until processing is complete
 		
@@ -446,8 +447,8 @@ void PAR2ProcCPU::compute_worker(void *_req) {
 	// TODO: should this be done across all threads?
 	unsigned inputsPrefetchedPerInvok = (req->numInputs / gfInfo.idealInputMultiple);
 	unsigned inputPrefetchOutOffset = req->numOutputs-1;
+	const unsigned MAX_PF_FACTOR = 3;
 	{
-		const unsigned MAX_PF_FACTOR = 3;
 		const unsigned pfFactor = gfInfo.prefetchDownscale;
 		if(inputsPrefetchedPerInvok > (1U<<pfFactor)) { // will inputs ever be prefetched? if all prefetch rounds are spent on outputs, inputs will never prefetch
 			inputsPrefetchedPerInvok -= (1U<<pfFactor); // exclude output fetching rounds
