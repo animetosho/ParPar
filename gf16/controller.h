@@ -199,6 +199,10 @@ public:
 		return inputBatchSize;
 	}
 	
+	inline void setMinInputBatchSize(unsigned size) {
+		minInBatchSize = size ? size : inputBatchSize;
+	}
+	
 	virtual ~IPAR2ProcBackend() {}
 };
 

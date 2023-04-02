@@ -210,7 +210,7 @@ struct GfOclSpec {
 	size_t sliceOffset, sliceSize;
 	
 	Galois16OCLMethods method;
-	unsigned inputGrouping, targetIters, targetGrouping;
+	unsigned inputGrouping, inputMinGrouping, targetIters, targetGrouping;
 };
 static bool load_ocl() {
 	static bool oclLoaded = false;
@@ -256,7 +256,7 @@ public:
 		bool useCpu = true;
 		int stagingAreas = 2;
 		int cpuMethod = GF16_AUTO;
-		unsigned cpuInputGrouping = 0;
+		unsigned cpuInputGrouping = 0, cpuInputMinGrouping = 0;
 		size_t cpuChunkLen = 0;
 		size_t cpuOffset = 0, cpuSliceSize = sliceSize;
 #define ASSIGN_INT_VAL(prop, key, var, type) \
@@ -276,6 +276,7 @@ public:
 				ASSIGN_INT_VAL(prop, "input_batchsize", cpuInputGrouping, Uint32)
 				if(cpuInputGrouping > 32768)
 					RETURN_ERROR("Input batchsize is invalid");
+				ASSIGN_INT_VAL(prop, "input_minbatchsize", cpuInputMinGrouping, Uint32)
 				ASSIGN_INT_VAL(prop, "chunk_size", cpuChunkLen, Uint32)
 				ASSIGN_INT_VAL(prop, "slice_offset", cpuOffset, Integer)
 				if(cpuOffset & 1 || cpuOffset > sliceSize)
@@ -292,7 +293,7 @@ public:
 			Local<Array> props = Local<Array>::Cast(args[2]);
 			for(unsigned i=0; i<props->Length(); i++) {
 				Local<Object> prop = ARG_TO_OBJ(GET_ARR(props, i));
-				struct GfOclSpec spec{-1, -1, 0, 0, GF16OCL_AUTO, 0, 0, 0};
+				struct GfOclSpec spec{-1, -1, 0, 0, GF16OCL_AUTO, 0, 0, 0, 0};
 				// TODO: validate platform/device
 				ASSIGN_INT_VAL(prop, "platform", spec.platformId, Int32)
 				ASSIGN_INT_VAL(prop, "device", spec.deviceId, Int32)
@@ -305,6 +306,7 @@ public:
 				ASSIGN_INT_VAL(prop, "input_batchsize", spec.inputGrouping, Int32)
 				if(spec.inputGrouping > 32768)
 					RETURN_ERROR("OpenCL input batchsize is invalid");
+				ASSIGN_INT_VAL(prop, "input_minbatchsize", spec.inputMinGrouping, Int32)
 				ASSIGN_INT_VAL(prop, "target_iters", spec.targetIters, Uint32)
 				ASSIGN_INT_VAL(prop, "target_grouping", spec.targetGrouping, Uint32)
 				if(spec.targetGrouping > 65535)
@@ -336,6 +338,7 @@ public:
 			delete self;
 			RETURN_ERROR("Failed to allocate memory");
 		}
+		if(useCpu) self->par2cpu->setMinInputBatchSize(cpuInputMinGrouping);
 		int oclI = 0;
 		for(const auto& oclSpec : useOcl) {
 			usedSliceSize += oclSpec.sliceSize;
@@ -351,10 +354,12 @@ public:
 				delete self;
 				RETURN_ERROR("Invalid slice offset+size allocated to OpenCL device");
 			}
-			if(!self->init_ocl(oclI++, oclSpec.method, oclSpec.inputGrouping, oclSpec.targetIters, oclSpec.targetGrouping)) {
+			if(!self->init_ocl(oclI, oclSpec.method, oclSpec.inputGrouping, oclSpec.targetIters, oclSpec.targetGrouping)) {
 				delete self;
 				RETURN_ERROR("Failed to initialise OpenCL device"); // TODO: add device info
 			}
+			self->par2ocl[oclI]->setMinInputBatchSize(oclSpec.inputMinGrouping);
+			oclI++;
 		}
 		if((useCpu && usedSliceSize >= sliceSize) || (!useCpu && usedSliceSize != sliceSize)) {
 			delete self;
