@@ -200,6 +200,7 @@ public:
 #endif
 #if defined(__linux) || defined(__linux__)
 # include <unistd.h>
+# include <sys/prctl.h>
 #endif
 class MessageThread {
 	ThreadMessageQueue<void*> q;
@@ -210,6 +211,82 @@ class MessageThread {
 	
 	static void thread_func(void* parent) {
 		MessageThread* self = static_cast<MessageThread*>(parent);
+		
+		if(self->lowPrio) {
+			#if defined(_WINDOWS) || defined(__WINDOWS__) || defined(_WIN32) || defined(_WIN64)
+			HANDLE hThread = GetCurrentThread();
+			switch(GetThreadPriority(hThread)) {
+				case THREAD_PRIORITY_TIME_CRITICAL:
+					SetThreadPriority(hThread, THREAD_PRIORITY_HIGHEST);
+					break;
+				case THREAD_PRIORITY_HIGHEST:
+					SetThreadPriority(hThread, THREAD_PRIORITY_ABOVE_NORMAL);
+					break;
+				case THREAD_PRIORITY_ABOVE_NORMAL:
+					SetThreadPriority(hThread, THREAD_PRIORITY_NORMAL);
+					break;
+				case THREAD_PRIORITY_NORMAL:
+					SetThreadPriority(hThread, THREAD_PRIORITY_BELOW_NORMAL);
+					break;
+				case THREAD_PRIORITY_BELOW_NORMAL:
+					SetThreadPriority(hThread, THREAD_PRIORITY_LOWEST);
+					break;
+				case THREAD_PRIORITY_LOWEST:
+					SetThreadPriority(hThread, THREAD_PRIORITY_IDLE);
+					break;
+				case THREAD_PRIORITY_IDLE: // can't go lower
+				default: // do nothing
+					break;
+			}
+			#else
+			// it seems that threads cannot have lower priority on POSIX, unless it's scheduled realtime, however we can declare it to be CPU intensive
+			int policy;
+			struct sched_param param;
+			pthread_t self = pthread_self();
+			if(!pthread_getschedparam(self, &policy, &param)) {
+				if(policy == SCHED_OTHER) {
+					#ifdef __MACH__
+					// MacOS doesn't support SCHED_BATCH, but does seem to permit priorities on SCHED_OTHER
+					int min = sched_get_priority_min(policy);
+					if(min < param.sched_priority) {
+						param.sched_priority -= 1;
+						if(param.sched_priority < min) param.sched_priority = min;
+						pthread_setschedparam(self, policy, &param);
+					}
+					#else
+					pthread_setschedparam(self, SCHED_BATCH, &param);
+					#endif
+				}
+			}
+			
+			# if defined(__linux) || defined(__linux__)
+			// ...but Linux allows per-thread priority
+			nice(1);
+			# endif
+			#endif
+		}
+		
+		if(self->name) {
+			#if defined(_WINDOWS) || defined(__WINDOWS__) || defined(_WIN32) || defined(_WIN64)
+			HMODULE h = GetModuleHandleA("kernelbase.dll");
+			if(h) {
+				HRESULT(*fnSetTD)(HANDLE, PCWSTR) = (HRESULT(*)(HANDLE, PCWSTR))GetProcAddress(h, "SetThreadDescription");
+				if(fnSetTD) {
+					wchar_t nameUCS2[17];
+					//assert(strlen(self->name) <= 16); // always hard-coded string, plus Linux limits it to 16 chars, so shouldn't ever overflow
+					MultiByteToWideChar(CP_ACP, MB_PRECOMPOSED, self->name, -1, nameUCS2, 50);
+					fnSetTD(GetCurrentThread(), nameUCS2);
+				}
+			}
+			#elif defined(__linux) || defined(__linux__)
+			prctl(PR_SET_NAME, self->name, 0, 0, 0);
+			#elif defined(__MACH__)
+			pthread_setname_np(self->name);
+			//#else  // not portable?
+			//pthread_setname_np(pthread_self(), self->name);
+			#endif
+		}
+		
 		ThreadMessageQueue<void*>& q = self->q;
 		auto cb = self->cb;
 		
@@ -217,61 +294,6 @@ class MessageThread {
 		while((item = q.pop()) != NULL) {
 			cb(item);
 		}
-	}
-	
-	static void thread_func_low_prio(void* parent) {
-		#if defined(_WINDOWS) || defined(__WINDOWS__) || defined(_WIN32) || defined(_WIN64)
-		HANDLE hThread = GetCurrentThread();
-		switch(GetThreadPriority(hThread)) {
-			case THREAD_PRIORITY_TIME_CRITICAL:
-				SetThreadPriority(hThread, THREAD_PRIORITY_HIGHEST);
-				break;
-			case THREAD_PRIORITY_HIGHEST:
-				SetThreadPriority(hThread, THREAD_PRIORITY_ABOVE_NORMAL);
-				break;
-			case THREAD_PRIORITY_ABOVE_NORMAL:
-				SetThreadPriority(hThread, THREAD_PRIORITY_NORMAL);
-				break;
-			case THREAD_PRIORITY_NORMAL:
-				SetThreadPriority(hThread, THREAD_PRIORITY_BELOW_NORMAL);
-				break;
-			case THREAD_PRIORITY_BELOW_NORMAL:
-				SetThreadPriority(hThread, THREAD_PRIORITY_LOWEST);
-				break;
-			case THREAD_PRIORITY_LOWEST:
-				SetThreadPriority(hThread, THREAD_PRIORITY_IDLE);
-				break;
-			case THREAD_PRIORITY_IDLE: // can't go lower
-			default: // do nothing
-				break;
-		}
-		#else
-		// it seems that threads cannot have lower priority on POSIX, unless it's scheduled realtime, however we can declare it to be CPU intensive
-		int policy;
-		struct sched_param param;
-		pthread_t self = pthread_self();
-		if(!pthread_getschedparam(self, &policy, &param)) {
-			if(policy == SCHED_OTHER) {
-				#ifdef __MACH__
-				// MacOS doesn't support SCHED_BATCH, but does seem to permit priorities on SCHED_OTHER
-				int min = sched_get_priority_min(policy);
-				if(min < param.sched_priority) {
-					param.sched_priority -= 1;
-					if(param.sched_priority < min) param.sched_priority = min;
-					pthread_setschedparam(self, policy, &param);
-				}
-				#else
-				pthread_setschedparam(self, SCHED_BATCH, &param);
-				#endif
-			}
-		}
-		
-		# if defined(__linux) || defined(__linux__)
-		// ...but Linux allows per-thread priority
-		nice(1);
-		# endif
-		#endif
-		thread_func(parent);
 	}
 	
 	// disable copy constructor
@@ -295,17 +317,20 @@ class MessageThread {
 	
 public:
 	bool lowPrio;
+	const char* name;
 	MessageThread() {
 		cb = NULL;
 		threadActive = false;
 		threadCreated = false;
 		lowPrio = false;
+		name = NULL;
 	}
 	MessageThread(thread_cb_t callback) {
 		cb = callback;
 		threadActive = false;
 		threadCreated = false;
 		lowPrio = false;
+		name = NULL;
 	}
 	void setCallback(thread_cb_t callback) {
 		cb = callback;
@@ -331,7 +356,7 @@ public:
 		if(threadCreated) // previously created, but end fired, so need to wait for this thread to close before starting another
 			thread_join(thread);
 		threadCreated = true;
-		thread_create(thread, lowPrio ? thread_func_low_prio : thread_func, this);
+		thread_create(thread, thread_func, this);
 	}
 	// item cannot be NULL
 	void send(void* item) {

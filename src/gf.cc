@@ -938,9 +938,10 @@ protected:
 	
 	inline void thread_send(struct input_work_data* data) {
 		if(thread == nullptr) {
-			if(HasherInputThreadPool.empty())
+			if(HasherInputThreadPool.empty()) {
 				thread.reset(new MessageThread(thread_func));
-			else {
+				thread->name = "par2_hash_input";
+			} else {
 				thread.reset(HasherInputThreadPool.back());
 				HasherInputThreadPool.pop_back();
 			}

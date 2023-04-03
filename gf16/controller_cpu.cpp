@@ -19,6 +19,7 @@ PAR2ProcCPU::PAR2ProcCPU(IF_LIBUV(uv_loop_t* _loop,) int stagingAreas)
 	
 	// default number of threads = number of CPUs available
 	setNumThreads(-1);
+	transferThread.name = "gf_transfer";
 }
 
 void PAR2ProcCPU::setSliceSize(size_t _sliceSize) {
@@ -64,6 +65,7 @@ void PAR2ProcCPU::setNumThreads(int threads) {
 	for(int i=oldThreads; i<threads; i++) {
 		gfScratch[i] = gf->mutScratch_alloc();
 		thWorkers[i].lowPrio = true;
+		thWorkers[i].name = "gf_worker";
 		thWorkers[i].setCallback(PAR2ProcCPU::compute_worker);
 	}
 	
