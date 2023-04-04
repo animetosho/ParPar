@@ -30,7 +30,7 @@ void setup_hasher() {
 	// CPU detection
 #ifdef PLATFORM_X86
 	bool hasClMul = false, hasAVX = false;
-	bool isSmallCore = false, isLEASlow = false;
+	bool isSmallCore = false, isLEASlow = false, isVecRotSlow = false;
 	
 	int cpuInfo[4];
 	int cpuInfoX[4];
@@ -51,6 +51,8 @@ void setup_hasher() {
 		isSmallCore = CPU_FAMMDL_IS_AMDCAT(family, model);
 	}
 	
+	isVecRotSlow = (family == 0xaf); // vector rotate has 2 cycle latency on Zen4
+	
 #if !defined(_MSC_VER) || _MSC_VER >= 1600
 	_cpuidX(cpuInfoX, 7, 0);
 	if(cpuInfo[2] & 0x8000000) { // has OSXSAVE
@@ -70,7 +72,7 @@ void setup_hasher() {
 	_cpuid(cpuInfo, 0x80000001);
 	CpuCap.hasXOP = hasAVX && (cpuInfo[2] & 0x800);
 	
-	if(CpuCap.hasAVX512VLBW && hasClMul && HasherInput_AVX512::isAvailable)
+	if(CpuCap.hasAVX512VLBW && hasClMul && !isVecRotSlow && HasherInput_AVX512::isAvailable)
 		HasherInput_Create = &HasherInput_AVX512::create;
 	// SSE seems to be faster than scalar on Zen1/2, not Zen3; BMI > SSE on Zen1, unknown on Zen2
 	else if(hasClMul && !isSmallCore && HasherInput_ClMulScalar::isAvailable) {
@@ -83,7 +85,7 @@ void setup_hasher() {
 	else if(CpuCap.hasSSE2 && isSmallCore && HasherInput_SSE::isAvailable) // TODO: CPU w/o ClMul might all be small enough
 		HasherInput_Create = &HasherInput_SSE::create;
 	
-	if(CpuCap.hasAVX512VLBW && MD5Single_isAvailable_AVX512) {
+	if(CpuCap.hasAVX512VLBW && !isVecRotSlow && MD5Single_isAvailable_AVX512) {
 		MD5Single::_update = &MD5Single_update_AVX512;
 		MD5Single::_updateZero = &MD5Single_updateZero_AVX512;
 	}
@@ -97,7 +99,7 @@ void setup_hasher() {
 		MD5Single::_updateZero = &MD5Single_updateZero_BMI1;
 	}
 	
-	if(CpuCap.hasAVX512VLBW && MD5CRC_isAvailable_AVX512)
+	if(CpuCap.hasAVX512VLBW && hasClMul && !isVecRotSlow && MD5CRC_isAvailable_AVX512)
 		MD5CRC_Calc = &MD5CRC_Calc_AVX512;
 	else if(isLEASlow && hasClMul && MD5CRC_isAvailable_NoLEA)
 		MD5CRC_Calc = &MD5CRC_Calc_NoLEA;
