@@ -278,7 +278,7 @@ GF_PREPARE_PACKED_FUNCS_STUB(gf16_shuffle2x, _sve)
 
 
 #ifdef __ARM_FEATURE_SVE2
-GF_FINISH_PACKED_FUNCS(gf16_shuffle2x, _sve, svcntb(), gf16_prepare_half_block_sve, gf16_prepare_half_blocku_sve, 1, (void)0, gf16_checksum_block_sve, gf16_checksum_blocku_sve, gf16_checksum_exp_sve, NULL, 16)
+GF_FINISH_PACKED_FUNCS(gf16_shuffle2x, _sve, svcntb(), gf16_prepare_half_block_sve, gf16_finish_half_blocku_sve, 1, (void)0, gf16_checksum_block_sve, gf16_checksum_blocku_sve, gf16_checksum_exp_sve, NULL, 16)
 #else
 GF_FINISH_PACKED_FUNCS_STUB(gf16_shuffle2x, _sve)
 #endif
