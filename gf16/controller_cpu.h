@@ -59,6 +59,11 @@ private:
 	static void transfer_chunk(ThreadMessageQueue<void*>& q);
 	static void compute_worker(ThreadMessageQueue<void*>& q);
 	
+#ifdef DEBUG_STAT_THREAD_EMPTY
+	std::atomic<bool> endSignalled;
+	std::atomic<unsigned> statWorkerIdleEvents;
+#endif
+	
 	// disable copy constructor
 	PAR2ProcCPU(const PAR2ProcCPU&);
 	PAR2ProcCPU& operator=(const PAR2ProcCPU&);
@@ -110,6 +115,9 @@ public:
 #ifndef USE_LIBUV
 	void waitForAdd() override;
 	FUTURE_RETURN_T endInput() override {
+# ifdef DEBUG_STAT_THREAD_EMPTY
+		endSignalled = true;
+# endif
 		return IPAR2ProcBackend::_endInput(staging);
 	}
 #endif
@@ -120,6 +128,12 @@ public:
 	static inline Galois16MethodInfo info(Galois16Methods method) {
 		return Galois16Mul::info(method);
 	}
+	
+#ifdef DEBUG_STAT_THREAD_EMPTY
+	inline unsigned getWorkerIdleCount() const {
+		return statWorkerIdleEvents.load(std::memory_order_relaxed);
+	}
+#endif
 };
 
 #endif // defined(__GF16_CONTROLLER_CPU)

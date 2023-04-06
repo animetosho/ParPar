@@ -84,6 +84,7 @@ protected:
 	virtual void run_kernel(unsigned stagingArea, unsigned numInputs) = 0;
 	unsigned currentStagingArea, currentStagingInputs;
 	unsigned inputBatchSize, minInBatchSize;
+	unsigned statBatchesStarted;
 	
 #ifdef USE_LIBUV
 	unsigned stagingActiveCount, pendingInCallbacks, pendingOutCallbacks;
@@ -197,6 +198,9 @@ public:
 
 	inline unsigned getInputBatchSize() const {
 		return inputBatchSize;
+	}
+	inline unsigned getBatchesStarted() const {
+		return statBatchesStarted;
 	}
 	
 	inline void setMinInputBatchSize(unsigned size) {

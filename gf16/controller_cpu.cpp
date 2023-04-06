@@ -20,6 +20,10 @@ PAR2ProcCPU::PAR2ProcCPU(IF_LIBUV(uv_loop_t* _loop,) int stagingAreas)
 	// default number of threads = number of CPUs available
 	setNumThreads(-1);
 	transferThread.name = "gf_transfer";
+#ifdef DEBUG_STAT_THREAD_EMPTY
+	endSignalled = false;
+	statWorkerIdleEvents = 0;
+#endif
 }
 
 void PAR2ProcCPU::setSliceSize(size_t _sliceSize) {
@@ -105,6 +109,7 @@ bool PAR2ProcCPU::init(Galois16Methods method, unsigned _inputGrouping, size_t _
 	setCurrentSliceSize(sliceSize); // default slice chunk size = declared slice size
 	
 	currentStagingArea = currentStagingInputs = 0;
+	statBatchesStarted = 0;
 	
 	return ret;
 }
@@ -312,6 +317,7 @@ FUTURE_RETURN_T PAR2ProcCPU::_addInput(const void* buffer, size_t size, T inputN
 	if(data->submitInBufs) {
 		stagingActiveCount_inc();
 		area.setIsActive(true); // lock this buffer until processing is complete
+		statBatchesStarted++;
 		currentStagingInputs = 0;
 		if(++currentStagingArea == staging.size())
 			currentStagingArea = 0;
@@ -338,6 +344,7 @@ void PAR2ProcCPU::dummyInput(uint16_t inputNum, bool flush) {
 	)) {
 		stagingActiveCount_inc();
 		area.setIsActive(true); // lock this buffer until processing is complete
+		statBatchesStarted++;
 		
 		run_kernel(currentStagingArea, currentStagingInputs);
 		
@@ -391,6 +398,7 @@ void PAR2ProcCPU::flush() {
 	
 	stagingActiveCount_inc();
 	staging[currentStagingArea].setIsActive(true); // lock this buffer until processing is complete
+	statBatchesStarted++;
 	currentStagingInputs = 0;
 	if(++currentStagingArea == staging.size())
 		currentStagingArea = 0;
@@ -509,6 +517,11 @@ void PAR2ProcCPU::compute_worker(ThreadMessageQueue<void*>& q) {
 		
 		// TODO: allow worker to peek into next queue entry for prefetching?
 		
+#ifdef DEBUG_STAT_THREAD_EMPTY
+		if(q.empty() && !(req->parent->endSignalled IF_NOT_LIBUV(.load(std::memory_order_relaxed))))
+			req->parent->statWorkerIdleEvents.fetch_add(1, std::memory_order_relaxed);
+#endif
+		
 		// mark that we've done processing this request
 		if(req->procRefs->fetch_sub(1, std::memory_order_relaxed) <= 1) { // relaxed ordering: although we want all prior memory operations to be complete at this point, to send a cross-thread signal requires stricter ordering, so it should be fine by the time the signal is received
 			// signal this input group is done with
@@ -625,7 +638,9 @@ void PAR2ProcCPU::_notifyProc(void* _req) {
 
 
 void PAR2ProcCPU::processing_finished() {
-	IF_LIBUV(endSignalled = false);
+#if defined(USE_LIBUV) || defined(DEBUG_STAT_THREAD_EMPTY)
+	endSignalled = false;
+#endif
 	// free memInput so that output fetching can use some of it
 	for(auto& area : staging) {
 		if(area.src) ALIGN_FREE(area.src);

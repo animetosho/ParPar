@@ -85,6 +85,7 @@ bool PAR2ProcOCL::init(Galois16OCLMethods method, unsigned targetInputBatch, uns
 	}
 	reset_state();
 	coeffType = GF16OCL_COEFF_NORMAL;
+	statBatchesStarted = 0;
 	return true;
 }
 
@@ -428,6 +429,7 @@ void PAR2ProcOCL::run_kernel(unsigned buf, unsigned numInputs) {
 	
 	stagingActiveCount_inc();
 	area.setIsActive(true);
+	statBatchesStarted++;
 	
 	// invoke kernel
 	cl::Kernel* kernel;
