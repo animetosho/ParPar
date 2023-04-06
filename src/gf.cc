@@ -897,34 +897,34 @@ protected:
 		self->hasher->reset();
 	}
 	
-	static void thread_func(void* req) {
-		struct input_work_data* data = static_cast<struct input_work_data*>(req);
-		
-		
-		char* src_ = (char*)data->buffer;
-		size_t len = data->len;
-		// feed initial part
-		uint64_t blockLeft = data->bh->size - data->bh->pos;
-		while(len >= blockLeft) {
-			data->hasher->update(src_, blockLeft);
-			src_ += blockLeft;
-			len -= blockLeft;
-			blockLeft = data->bh->size;
-			data->bh->pos = 0;
+	static void thread_func(ThreadMessageQueue<void*>& q) {
+		struct input_work_data* data;
+		while((data = static_cast<struct input_work_data*>(q.pop())) != NULL) {
+			char* src_ = (char*)data->buffer;
+			size_t len = data->len;
+			// feed initial part
+			uint64_t blockLeft = data->bh->size - data->bh->pos;
+			while(len >= blockLeft) {
+				data->hasher->update(src_, blockLeft);
+				src_ += blockLeft;
+				len -= blockLeft;
+				blockLeft = data->bh->size;
+				data->bh->pos = 0;
+				
+				if(data->bh->count) {
+					data->hasher->getBlock(data->bh->ptr, 0);
+					data->bh->ptr += 20;
+					data->bh->count--;
+				} // else there's an overflow
+			}
+			if(len) data->hasher->update(src_, len);
+			data->bh->pos += len;
 			
-			if(data->bh->count) {
-				data->hasher->getBlock(data->bh->ptr, 0);
-				data->bh->ptr += 20;
-				data->bh->count--;
-			} // else there's an overflow
+			
+			// signal main thread that hashing has completed
+			data->self->hashesDone.push(data);
+			uv_async_send(&(data->self->threadSignal));
 		}
-		if(len) data->hasher->update(src_, len);
-		data->bh->pos += len;
-		
-		
-		// signal main thread that hashing has completed
-		data->self->hashesDone.push(data);
-		uv_async_send(&(data->self->threadSignal));
 	}
 	void after_process() {
 		struct input_work_data* data;

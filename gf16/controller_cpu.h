@@ -56,8 +56,8 @@ private:
 	void _notifyProc(void* _req) override;
 #endif
 	
-	static void transfer_chunk(void *req);
-	static void compute_worker(void *req);
+	static void transfer_chunk(ThreadMessageQueue<void*>& q);
+	static void compute_worker(ThreadMessageQueue<void*>& q);
 	
 	// disable copy constructor
 	PAR2ProcCPU(const PAR2ProcCPU&);

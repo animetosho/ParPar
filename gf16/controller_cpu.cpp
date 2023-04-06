@@ -229,24 +229,25 @@ struct transfer_data {
 };
 
 // prepare thread process function
-void PAR2ProcCPU::transfer_chunk(void* req) {
-	struct transfer_data* data = static_cast<struct transfer_data*>(req);
-	
-	if(data->finish) {
-		data->cksumSuccess = data->gf->finish_packed_cksum(data->dst, data->src, data->size, data->numBufs, data->index, data->chunkLen);
-		NOTIFY_DONE(data, _queueRecv, data->promOut, data->cksumSuccess);
-	} else {
-		if(data->src)
-			data->gf->prepare_packed_cksum(data->dst, data->src, data->size, data->dstLen, data->numBufs, data->index, data->chunkLen);
-		if(data->submitInBufs) {
-			// queue async compute
-			data->parent->run_kernel(data->inBufId, data->submitInBufs);
+void PAR2ProcCPU::transfer_chunk(ThreadMessageQueue<void*>& q) {
+	struct transfer_data* data;
+	while((data = static_cast<struct transfer_data*>(q.pop())) != NULL) {
+		if(data->finish) {
+			data->cksumSuccess = data->gf->finish_packed_cksum(data->dst, data->src, data->size, data->numBufs, data->index, data->chunkLen);
+			NOTIFY_DONE(data, _queueRecv, data->promOut, data->cksumSuccess);
+		} else {
+			if(data->src)
+				data->gf->prepare_packed_cksum(data->dst, data->src, data->size, data->dstLen, data->numBufs, data->index, data->chunkLen);
+			if(data->submitInBufs) {
+				// queue async compute
+				data->parent->run_kernel(data->inBufId, data->submitInBufs);
+			}
+			
+			// signal main thread that prepare has completed
+			NOTIFY_DONE(data, _queueSent, data->promPrep);
 		}
-		
-		// signal main thread that prepare has completed
-		NOTIFY_DONE(data, _queueSent, data->promPrep);
+		IF_NOT_LIBUV(delete data);
 	}
-	IF_NOT_LIBUV(delete data);
 }
 
 #ifdef USE_LIBUV
@@ -452,73 +453,75 @@ typedef struct __compute_req : PAR2ProcBackendBaseComputeReq<PAR2ProcCPU> {
 	std::atomic<int>* procRefs;
 } compute_req;
 
-void PAR2ProcCPU::compute_worker(void *_req) {
-	compute_req* req = static_cast<compute_req*>(_req);
-	
-	const Galois16MethodInfo& gfInfo = req->gf->info();
-	// compute how many inputs regions get prefetched in a muladd_multi call
-	// TODO: should this be done across all threads?
-	unsigned inputsPrefetchedPerInvok = (req->numInputs / gfInfo.idealInputMultiple);
-	unsigned inputPrefetchOutOffset = req->numOutputs-1;
-	const unsigned MAX_PF_FACTOR = 3;
-	{
-		const unsigned pfFactor = gfInfo.prefetchDownscale;
-		if(inputsPrefetchedPerInvok > (1U<<pfFactor)) { // will inputs ever be prefetched? if all prefetch rounds are spent on outputs, inputs will never prefetch
-			inputsPrefetchedPerInvok -= (1U<<pfFactor); // exclude output fetching rounds
-			inputsPrefetchedPerInvok <<= MAX_PF_FACTOR - pfFactor; // scale appropriately
-			// compute number of input prefetch passes needed
-			inputPrefetchOutOffset = CEIL_DIV(req->numInputs << MAX_PF_FACTOR, inputsPrefetchedPerInvok);
-			assert(inputPrefetchOutOffset > 0); // at least one pass needed
-			if(req->numOutputs >= inputPrefetchOutOffset)
-				inputPrefetchOutOffset = req->numOutputs - inputPrefetchOutOffset;
-			else
-				inputPrefetchOutOffset = 0;
-		}
-	}
-	
-	for(unsigned round = 0; round < req->numChunks; round++) {
-		size_t procSize = MIN(req->len-round*req->chunkSize, req->chunkSize);
-		const char* srcPtr = static_cast<const char*>(req->input) + round*req->chunkSize*req->inputGrouping;
-		for(unsigned out = 0; out < req->numOutputs; out++) {
-			const uint16_t* vals = req->coeffs + out*req->inputGrouping;
-			
-			char* dstPtr = static_cast<char*>(req->output) + out*procSize + round*req->numOutputs*req->chunkSize;
-			if(!req->add) memset(dstPtr, 0, procSize);
-			if(round == req->numChunks-1) {
-				if(out+1 < req->numOutputs) {
-					if(req->outNonZero[out])
-						req->gf->mul_add_multi_packpf(req->inputGrouping, req->numInputs, dstPtr, srcPtr, procSize, vals, req->mutScratch, NULL, dstPtr+procSize);
-					else
-						req->gf->add_multi_packpf(req->inputGrouping, req->numInputs, dstPtr, srcPtr, procSize, NULL, dstPtr+procSize);
-				} else
-					// TODO: this could also be a 0 output, so consider add_multi optimisation?
-					req->gf->mul_add_multi_packed(req->inputGrouping, req->numInputs, dstPtr, srcPtr, procSize, vals, req->mutScratch);
-			} else {
-				const char* pfInput = out >= inputPrefetchOutOffset ? static_cast<const char*>(req->input) + (round+1)*req->chunkSize*req->inputGrouping + ((inputsPrefetchedPerInvok*(out-inputPrefetchOutOffset)*procSize)>>MAX_PF_FACTOR) : NULL;
-				// procSize input prefetch may be wrong for final round, but it's the closest we've got; TODO: perhaps consider skipping out of prefetching, if the final round has a different region size
-				
-				if(req->outNonZero[out])
-					req->gf->mul_add_multi_packpf(req->inputGrouping, req->numInputs, dstPtr, srcPtr, procSize, vals, req->mutScratch, pfInput, dstPtr+procSize);
+void PAR2ProcCPU::compute_worker(ThreadMessageQueue<void*>& q) {
+	compute_req* req;
+	while((req = static_cast<compute_req*>(q.pop())) != NULL) {
+		
+		const Galois16MethodInfo& gfInfo = req->gf->info();
+		// compute how many inputs regions get prefetched in a muladd_multi call
+		// TODO: should this be done across all threads?
+		unsigned inputsPrefetchedPerInvok = (req->numInputs / gfInfo.idealInputMultiple);
+		unsigned inputPrefetchOutOffset = req->numOutputs-1;
+		const unsigned MAX_PF_FACTOR = 3;
+		{
+			const unsigned pfFactor = gfInfo.prefetchDownscale;
+			if(inputsPrefetchedPerInvok > (1U<<pfFactor)) { // will inputs ever be prefetched? if all prefetch rounds are spent on outputs, inputs will never prefetch
+				inputsPrefetchedPerInvok -= (1U<<pfFactor); // exclude output fetching rounds
+				inputsPrefetchedPerInvok <<= MAX_PF_FACTOR - pfFactor; // scale appropriately
+				// compute number of input prefetch passes needed
+				inputPrefetchOutOffset = CEIL_DIV(req->numInputs << MAX_PF_FACTOR, inputsPrefetchedPerInvok);
+				assert(inputPrefetchOutOffset > 0); // at least one pass needed
+				if(req->numOutputs >= inputPrefetchOutOffset)
+					inputPrefetchOutOffset = req->numOutputs - inputPrefetchOutOffset;
 				else
-					req->gf->add_multi_packpf(req->inputGrouping, req->numInputs, dstPtr, srcPtr, procSize, pfInput, dstPtr+procSize);
+					inputPrefetchOutOffset = 0;
 			}
 		}
-	}
-	
-	// TODO: allow worker to peek into next queue entry for prefetching?
-	
-	// mark that we've done processing this request
-	if(req->procRefs->fetch_sub(1, std::memory_order_relaxed) <= 1) { // relaxed ordering: although we want all prior memory operations to be complete at this point, to send a cross-thread signal requires stricter ordering, so it should be fine by the time the signal is received
-		// signal this input group is done with
+		
+		for(unsigned round = 0; round < req->numChunks; round++) {
+			size_t procSize = MIN(req->len-round*req->chunkSize, req->chunkSize);
+			const char* srcPtr = static_cast<const char*>(req->input) + round*req->chunkSize*req->inputGrouping;
+			for(unsigned out = 0; out < req->numOutputs; out++) {
+				const uint16_t* vals = req->coeffs + out*req->inputGrouping;
+				
+				char* dstPtr = static_cast<char*>(req->output) + out*procSize + round*req->numOutputs*req->chunkSize;
+				if(!req->add) memset(dstPtr, 0, procSize);
+				if(round == req->numChunks-1) {
+					if(out+1 < req->numOutputs) {
+						if(req->outNonZero[out])
+							req->gf->mul_add_multi_packpf(req->inputGrouping, req->numInputs, dstPtr, srcPtr, procSize, vals, req->mutScratch, NULL, dstPtr+procSize);
+						else
+							req->gf->add_multi_packpf(req->inputGrouping, req->numInputs, dstPtr, srcPtr, procSize, NULL, dstPtr+procSize);
+					} else
+						// TODO: this could also be a 0 output, so consider add_multi optimisation?
+						req->gf->mul_add_multi_packed(req->inputGrouping, req->numInputs, dstPtr, srcPtr, procSize, vals, req->mutScratch);
+				} else {
+					const char* pfInput = out >= inputPrefetchOutOffset ? static_cast<const char*>(req->input) + (round+1)*req->chunkSize*req->inputGrouping + ((inputsPrefetchedPerInvok*(out-inputPrefetchOutOffset)*procSize)>>MAX_PF_FACTOR) : NULL;
+					// procSize input prefetch may be wrong for final round, but it's the closest we've got; TODO: perhaps consider skipping out of prefetching, if the final round has a different region size
+					
+					if(req->outNonZero[out])
+						req->gf->mul_add_multi_packpf(req->inputGrouping, req->numInputs, dstPtr, srcPtr, procSize, vals, req->mutScratch, pfInput, dstPtr+procSize);
+					else
+						req->gf->add_multi_packpf(req->inputGrouping, req->numInputs, dstPtr, srcPtr, procSize, pfInput, dstPtr+procSize);
+				}
+			}
+		}
+		
+		// TODO: allow worker to peek into next queue entry for prefetching?
+		
+		// mark that we've done processing this request
+		if(req->procRefs->fetch_sub(1, std::memory_order_relaxed) <= 1) { // relaxed ordering: although we want all prior memory operations to be complete at this point, to send a cross-thread signal requires stricter ordering, so it should be fine by the time the signal is received
+			// signal this input group is done with
 #ifdef USE_LIBUV
-		req->parent->_queueProc.notify(req);
+			req->parent->_queueProc.notify(req);
 #else
-		req->parent->stagingActiveCount_dec();
-		req->parent->staging[req->procIdx].setIsActive(false);
-		delete req;
+			req->parent->stagingActiveCount_dec();
+			req->parent->staging[req->procIdx].setIsActive(false);
+			delete req;
 #endif
-	} else
-		delete req;
+		} else
+			delete req;
+	}
 }
 
 void PAR2ProcCPU::run_kernel(unsigned inBuf, unsigned numInputs) {

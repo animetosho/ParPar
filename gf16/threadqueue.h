@@ -6,7 +6,6 @@
 # define thread_t uv_thread_t
 # define thread_create(t, f, a) uv_thread_create(&(t), f, a)
 # define thread_join(t) uv_thread_join(&(t))
-# define thread_cb_t uv_thread_cb
 # define mutex_t uv_mutex_t
 # define mutex_init(m) uv_mutex_init(&(m))
 # define mutex_destroy(m) uv_mutex_destroy(&(m))
@@ -21,7 +20,6 @@
 # define thread_t std::thread
 # define thread_create(t, f, a) t = std::thread(f, a)
 # define thread_join(t) t.join()
-# define thread_cb_t std::function<void(void*)>
 # include <mutex>
 # include <memory>
 # define mutex_t std::unique_ptr<std::mutex>
@@ -40,7 +38,7 @@
 template<typename T>
 class ThreadMessageQueue {
 	std::queue<T> q;
-	mutex_t mutex;
+	mutable mutex_t mutex;
 	condvar_t cond;
 	bool skipDestructor;
 	
@@ -127,13 +125,13 @@ public:
 		return notEmpty;
 	}
 	
-	size_t size() {
+	size_t size() const {
 		mutex_lock(mutex);
 		size_t s = q.size();
 		mutex_unlock(mutex);
 		return s;
 	}
-	bool empty() {
+	bool empty() const {
 		mutex_lock(mutex);
 		bool e = q.empty();
 		mutex_unlock(mutex);
@@ -190,6 +188,13 @@ public:
 	}
 };
 #endif
+
+#ifdef USE_LIBUV
+typedef void(*thread_cb_t)(ThreadMessageQueue<void*>&);
+#else
+typedef std::function<void(ThreadMessageQueue<void*>&)> thread_cb_t;
+#endif
+
 
 #if defined(_WINDOWS) || defined(__WINDOWS__) || defined(_WIN32) || defined(_WIN64)
 # define NOMINMAX
@@ -287,13 +292,7 @@ class MessageThread {
 			#endif
 		}
 		
-		ThreadMessageQueue<void*>& q = self->q;
-		auto cb = self->cb;
-		
-		void* item;
-		while((item = q.pop()) != NULL) {
-			cb(item);
-		}
+		self->cb(self->q);
 	}
 	
 	// disable copy constructor
