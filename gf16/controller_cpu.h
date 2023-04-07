@@ -56,7 +56,7 @@ private:
 	void _notifyProc(void* _req) override;
 #endif
 	
-	static void transfer_chunk(ThreadMessageQueue<void*>& q);
+	static void transfer_slice(ThreadMessageQueue<void*>& q);
 	static void compute_worker(ThreadMessageQueue<void*>& q);
 	
 #ifdef DEBUG_STAT_THREAD_EMPTY

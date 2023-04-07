@@ -1059,7 +1059,7 @@ bool PAR2ProcOCL::setup_kernels(Galois16OCLMethods method, unsigned targetInputB
 	
 	size_t deviceAvailConstSize = device.getInfo<CL_DEVICE_MAX_CONSTANT_BUFFER_SIZE>();
 	size_t deviceLocalSize = device.getInfo<CL_DEVICE_LOCAL_MEM_SIZE>() - 128; // subtract a little to allow some spare space if the device needs it
-	//size_t deviceGlobalSize = device.getInfo<CL_DEVICE_GLOBAL_MEM_SIZE>(); // TODO: check sliceSize*numOutputs ?
+	//size_t deviceGlobalSize = device.getInfo<CL_DEVICE_GLOBAL_MEM_SIZE>(); // TODO: check sliceSizeCksum*numOutputs ?
 	
 	unsigned numOutputs = outputExponents.size();
 	unsigned outputsPerThread = numOutputs; // currently, process all outputs on every kernel invocation
@@ -1254,15 +1254,15 @@ bool PAR2ProcOCL::setup_kernels(Galois16OCLMethods method, unsigned targetInputB
 	if(groupIterations < 1 || outputsPerGroup < 1) return false;
 	
 	// for very small slices, scale down iterations/wgSize
-	if(sizePerWorkGroup * groupIterations > sliceSize) {
+	if(sizePerWorkGroup * groupIterations > sliceSizeCksum) {
 		// scale down iterations first
 		if(groupIterations > 1) {
-			groupIterations = (unsigned)CEIL_DIV(sliceSize, sizePerWorkGroup);
+			groupIterations = (unsigned)CEIL_DIV(sliceSizeCksum, sizePerWorkGroup);
 			if(groupIterations < 1) groupIterations = 1;
 		}
 		// if iterations cannot be scaled down, scale down workgroup size next
-		if(groupIterations == 1 && sizePerWorkGroup > sliceSize && wgSize > 16) {
-			wgSize = CEIL_DIV(sliceSize, threadWordSize);
+		if(groupIterations == 1 && sizePerWorkGroup > sliceSizeCksum && wgSize > 16) {
+			wgSize = CEIL_DIV(sliceSizeCksum, threadWordSize);
 			if(wgSize < 16) wgSize = 16; // don't let size be too small, because stuff like computing lookup tables use workgroup width (also have seen some OpenCL implementations crash with unrolling too many times)
 			sizePerWorkGroup = threadWordSize * wgSize;
 		}
@@ -1442,7 +1442,7 @@ bool PAR2ProcOCL::setup_kernels(Galois16OCLMethods method, unsigned targetInputB
 	
 	// avoid uneven workgroups by aligning to workgroup size
 	bytesPerGroup = sizePerWorkGroup * groupIterations;
-	size_t sliceGroups = CEIL_DIV(sliceSize, bytesPerGroup);
+	size_t sliceGroups = CEIL_DIV(sliceSizeCksum, bytesPerGroup);
 	processRange = cl::NDRange(sliceGroups * wgSize, CEIL_DIV(numOutputs, outputsPerThread));
 	sliceSizeAligned = sliceGroups*bytesPerGroup;
 	allocatedSliceSize = sliceSizeAligned;

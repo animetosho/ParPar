@@ -25,9 +25,9 @@ int PAR2ProcOCL::load_runtime() {
 
 
 PAR2ProcOCL::PAR2ProcOCL(IF_LIBUV(uv_loop_t* _loop,) int platformId, int deviceId, int stagingAreas)
-: IPAR2ProcBackend(IF_LIBUV(_loop)), staging(stagingAreas), allocatedSliceSize(0) {
+: IPAR2ProcBackend(IF_LIBUV(_loop)), staging(stagingAreas), allocatedSliceSize(0), transferThread(PAR2ProcOCL::transfer_slice) {
 	_initSuccess = false;
-	zeroes = NULL;
+	transferThread.name = "ocl_transfer";
 	
 #ifdef USE_LIBUV
 	#define ERROR_EXIT { loop = nullptr; return; }
@@ -59,7 +59,6 @@ PAR2ProcOCL::PAR2ProcOCL(IF_LIBUV(uv_loop_t* _loop,) int platformId, int deviceI
 }
 
 PAR2ProcOCL::~PAR2ProcOCL() {
-	free(zeroes);
 	deinit();
 }
 
@@ -67,6 +66,8 @@ PAR2ProcOCL::~PAR2ProcOCL() {
 // _sliceSize must be divisible by 2
 void PAR2ProcOCL::setSliceSize(size_t _sliceSize) {
 	sliceSize = _sliceSize;
+	if(gf)
+		sliceSizeCksum = _sliceSize + gf->info().cksumSize;
 }
 bool PAR2ProcOCL::init(Galois16OCLMethods method, unsigned targetInputBatch, unsigned targetIters, unsigned targetGrouping) {
 	if(!_initSuccess) return false;
@@ -78,14 +79,16 @@ bool PAR2ProcOCL::init(Galois16OCLMethods method, unsigned targetInputBatch, uns
 	_setupTargetIters = targetIters;
 	_setupTargetGrouping = targetGrouping;
 	
-	const std::string oclVersion = device.getInfo<CL_DEVICE_VERSION>(); // will return "OpenCL x.y [extra]"
-	if(oclVersion[7] == '1' && oclVersion[8] == '.' && oclVersion[9] < '2') { // OpenCL < 1.2
-		free(zeroes);
-		zeroes = (uint8_t*)calloc(ZERO_MEM_SIZE, 1);
-	}
 	reset_state();
 	coeffType = GF16OCL_COEFF_NORMAL;
 	statBatchesStarted = 0;
+	
+	// TODO: allow method customisation
+	if(!gf)
+		gf.reset(new Galois16Mul());
+	
+	sliceSizeCksum = sliceSize + gf->info().cksumSize;
+	
 	return true;
 }
 
@@ -200,10 +203,10 @@ Galois16OCLMethods PAR2ProcOCL::default_method() const {
 
 // reduce slice size
 bool PAR2ProcOCL::setCurrentSliceSize(size_t newSliceSize) {
-	if(newSliceSize > allocatedSliceSize) {
+	setSliceSize(newSliceSize);
+	if(sliceSizeCksum > allocatedSliceSize) {
 		// need to re-init everything
 		auto outExp = outputExponents;
-		setSliceSize(newSliceSize);
 		if(!init(_setupMethod, _setupTargetInputBatch, _setupTargetIters, _setupTargetGrouping))
 			return false;
 		if(!outExp.empty()) {
@@ -212,25 +215,40 @@ bool PAR2ProcOCL::setCurrentSliceSize(size_t newSliceSize) {
 		}
 		return true;
 	}
-	size_t sliceGroups = (newSliceSize+bytesPerGroup -1) / bytesPerGroup;
+	size_t sliceGroups = (sliceSizeCksum+bytesPerGroup -1) / bytesPerGroup;
 	processRange = cl::NDRange(sliceGroups * wgSize, processRange[1]);
-	sliceSize = newSliceSize;
 	sliceSizeAligned = sliceGroups*bytesPerGroup;
 	return true;
 }
 
 
-
-struct send_data {
+struct transfer_data_ocl {
+	bool finish; // false = prepare, true = finish
+	
 	PAR2ProcOCL* parent;
-	NOTIFY_DECL(cb, prom);
+	void* local;
+	cl::Buffer* remote;
+	size_t remoteOffset;
+	size_t sliceLen, totalLen;
+	Galois16Mul* gf;
+	
+	// prepare specific
+	size_t srcLen;
+	unsigned submitInBufs;
+	unsigned inBufId;
+	NOTIFY_DECL(cbPrep, promPrep);
+	
+	// finish specific
+	NOTIFY_BOOL_DECL(cbOut, promOut);
+	int cksumSuccess;
 };
+
 
 #ifdef USE_LIBUV
 void PAR2ProcOCL::_notifySent(void* _req) {
-	auto req = static_cast<struct send_data*>(_req);
+	auto req = static_cast<struct transfer_data_ocl*>(_req);
 	pendingInCallbacks--;
-	if(req->cb) req->cb();
+	if(req->cbPrep && req->local) req->cbPrep();
 	delete req;
 	
 	// handle possibility of _notifySent being called after the last _notifyProc
@@ -248,6 +266,34 @@ void PAR2ProcOCL::waitForAdd() {
 }
 #endif
 
+void PAR2ProcOCL::transfer_slice(ThreadMessageQueue<void*>& q) {
+	struct transfer_data_ocl* data;
+	while((data = static_cast<struct transfer_data_ocl*>(q.pop())) != NULL) {
+		// TODO: consider doing a single mapping for the entire slice (if not, consider async mapping)
+		if(data->finish) {
+			void* remote = data->parent->queue.enqueueMapBuffer(*(data->remote), CL_TRUE, CL_MAP_READ, data->remoteOffset, data->totalLen);
+			data->cksumSuccess = data->gf->copy_cksum_check(data->local, remote, data->sliceLen);
+			data->parent->queue.enqueueUnmapMemObject(*(data->remote), remote);
+			NOTIFY_DONE(data, _queueRecv, data->promOut, data->cksumSuccess);
+		} else {
+			if(data->local) {
+				void* remote = data->parent->queue.enqueueMapBuffer(*(data->remote), CL_TRUE, CL_MAP_WRITE_INVALIDATE_REGION, data->remoteOffset, data->totalLen);
+				data->gf->copy_cksum(remote, data->local, data->srcLen, data->sliceLen);
+				data->parent->queue.enqueueUnmapMemObject(*(data->remote), remote);
+			}
+			if(data->submitInBufs) {
+				// queue async compute
+				data->parent->run_kernel(data->inBufId, data->submitInBufs);
+			}
+			
+			// signal main thread that prepare has completed
+			NOTIFY_DONE(data, _queueSent, data->promPrep);
+		}
+		IF_NOT_LIBUV(delete data);
+	}
+}
+
+
 FUTURE_RETURN_T PAR2ProcOCL::addInput(const void* buffer, size_t size, uint16_t inputNum, bool flush  IF_LIBUV(, const PAR2ProcPlainCb& cb)) {
 	IF_NOT_LIBUV(return) _addInput(buffer, size, inputNum, flush IF_LIBUV(, cb));
 }
@@ -262,56 +308,37 @@ FUTURE_RETURN_T PAR2ProcOCL::_addInput(const void* buffer, size_t size, T inputN
 	assert(!area.getIsActive());
 	
 	set_coeffs(area, currentStagingInputs, inputNumOrCoeffs);
+	struct transfer_data_ocl* data = new struct transfer_data_ocl;
+	data->finish = false;
+	data->local = (void*)buffer;
+	data->srcLen = size;
+	data->parent = this;
+	data->remote = &area.input;
+	data->remoteOffset = currentStagingInputs * sliceSizeAligned;
+	data->sliceLen = sliceSize;
+	data->totalLen = sliceSizeCksum;
+	data->gf = gf.get();
+	IF_LIBUV(data->cbPrep = cb);
 	
-	// TODO: need to add cksum
-	cl::Event writeEvent;
-	queue.enqueueWriteBuffer(area.input, CL_FALSE, currentStagingInputs * sliceSizeAligned, size, buffer, NULL, &writeEvent);
-	queueEvents.push_back(writeEvent);
-	
-	auto* req = new struct send_data;
-#ifdef USE_LIBUV
-	req->cb = cb;
-	pendingInCallbacks++;
-#else
-	auto future = req->prom.get_future();
-#endif
-	req->parent = this;
-	writeEvent.setCallback(CL_COMPLETE, [](cl_event, cl_int, void* _req) {
-		auto req = static_cast<struct send_data*>(_req);
-		NOTIFY_DONE(req, _queueSent, req->prom);
-		IF_NOT_LIBUV(delete req);
-	}, req);
-	
-	
-	if(size < sliceSize) {
-		// need to zero rest of buffer
-		size_t zeroStart = currentStagingInputs * sliceSizeAligned + size;
-		size_t zeroAmt = sliceSize - size;
-		cl::Event zeroEvent;
-		if(zeroes) { // OpenCL 1.1
-			queueEvents.reserve(queueEvents.capacity() + (zeroAmt+ZERO_MEM_SIZE-1)/ZERO_MEM_SIZE);
-			while(1) {
-				if(zeroAmt > ZERO_MEM_SIZE) {
-					queue.enqueueWriteBuffer(area.input, CL_FALSE, zeroStart, ZERO_MEM_SIZE, zeroes, NULL, &zeroEvent);
-					queueEvents.push_back(zeroEvent);
-					zeroAmt -= ZERO_MEM_SIZE;
-					zeroStart += ZERO_MEM_SIZE;
-				} else {
-					if(zeroAmt) {
-						queue.enqueueWriteBuffer(area.input, CL_FALSE, zeroStart, zeroAmt, zeroes, NULL, &zeroEvent);
-						queueEvents.push_back(zeroEvent);
-					}
-					break;
-				}
-			}
-		} else { // OpenCL 1.2
-			queue.enqueueFillBuffer<uint8_t>(area.input, 0, zeroStart, zeroAmt, NULL, &zeroEvent);
-			queueEvents.push_back(zeroEvent);
-		}
-	}
 	currentStagingInputs++;
-	if(currentStagingInputs == inputBatchSize || flush || (stagingActiveCount_get() == 0 && staging.size() > 1 && currentStagingInputs >= minInBatchSize))
-		run_kernel(currentStagingArea, currentStagingInputs);
+	data->submitInBufs = (flush || currentStagingInputs == inputBatchSize || (
+		// allow submitting early if there's no active processing
+		stagingActiveCount_get() == 0 && staging.size() > 1 && currentStagingInputs >= minInBatchSize
+	)) ? currentStagingInputs : 0;
+	data->inBufId = currentStagingArea;
+	
+	if(data->submitInBufs) {
+		stagingActiveCount_inc();
+		area.setIsActive(true); // lock this buffer until processing is complete
+		statBatchesStarted++;
+		currentStagingInputs = 0;
+		if(++currentStagingArea == staging.size())
+			currentStagingArea = 0;
+	}
+	
+	IF_LIBUV(pendingInCallbacks++);
+	IF_NOT_LIBUV(auto future = data->promPrep.get_future());
+	transferThread.send(data);
 	
 	IF_NOT_LIBUV(return future);
 }
@@ -323,12 +350,24 @@ void PAR2ProcOCL::dummyInput(uint16_t inputNum, bool flush) {
 	
 	set_coeffs(area, currentStagingInputs, inputNum);
 	currentStagingInputs++;
-	if(currentStagingInputs == inputBatchSize || flush || (stagingActiveCount_get() == 0 && staging.size() > 1 && currentStagingInputs >= minInBatchSize))
+	if(currentStagingInputs == inputBatchSize || flush || (stagingActiveCount_get() == 0 && staging.size() > 1 && currentStagingInputs >= minInBatchSize)) {
+		stagingActiveCount_inc();
+		area.setIsActive(true); // lock this buffer until processing is complete
+		statBatchesStarted++;
+		
 		run_kernel(currentStagingArea, currentStagingInputs);
+		
+		currentStagingInputs = 0;
+		if(++currentStagingArea == staging.size())
+			currentStagingArea = 0;
+	}
 }
 
 bool PAR2ProcOCL::fillInput(const void* buffer) {
-	queue.enqueueWriteBuffer(staging[currentStagingArea].input, CL_TRUE, currentStagingInputs * sliceSizeAligned, sliceSize, buffer, NULL);
+	void* remote = queue.enqueueMapBuffer(staging[currentStagingArea].input, CL_TRUE, CL_MAP_WRITE_INVALIDATE_REGION, currentStagingInputs * sliceSizeAligned, sliceSizeAligned);
+	gf->copy_cksum(remote, buffer, sliceSize, sliceSize);
+	queue.enqueueUnmapMemObject(staging[currentStagingArea].input, remote);
+	
 	if(++currentStagingInputs == inputBatchSize) {
 		currentStagingInputs = 0;
 		if(++currentStagingArea == staging.size()) {
@@ -358,8 +397,26 @@ void PAR2ProcOCL::set_coeffs(PAR2ProcOCLStaging& area, unsigned idx, const uint1
 }
 
 void PAR2ProcOCL::flush() {
-	if(currentStagingInputs)
-		run_kernel(currentStagingArea, currentStagingInputs);
+	if(!currentStagingInputs) return; // no inputs to flush
+	
+	// send a flush signal by queueing up a prepare, but with a NULL buffer
+	struct transfer_data_ocl* data = new struct transfer_data_ocl;
+	data->finish = false;
+	data->local = NULL;
+	data->parent = this;
+	data->submitInBufs = currentStagingInputs;
+	data->inBufId = currentStagingArea;
+	data->gf = gf.get();
+	
+	stagingActiveCount_inc();
+	staging[currentStagingArea].setIsActive(true); // lock this buffer until processing is complete
+	statBatchesStarted++;
+	currentStagingInputs = 0;
+	if(++currentStagingArea == staging.size())
+		currentStagingArea = 0;
+	
+	IF_LIBUV(pendingInCallbacks++);
+	transferThread.send(data);
 }
 
 
@@ -370,10 +427,9 @@ struct recv_data {
 
 #ifdef USE_LIBUV
 void PAR2ProcOCL::_notifyRecv(void* _req) {
-	auto req = static_cast<struct recv_data*>(_req);
+	auto req = static_cast<struct transfer_data*>(_req);
 	pendingOutCallbacks--;
-	// TODO: need to verify cksum
-	req->cb(true);
+	req->cb(req->cksumSuccess);
 	delete req;
 	
 	if(pendingOutCallbacks < 1 && deinitCallback) deinit(deinitCallback);
@@ -381,22 +437,22 @@ void PAR2ProcOCL::_notifyRecv(void* _req) {
 #endif
 
 FUTURE_RETURN_BOOL_T PAR2ProcOCL::getOutput(unsigned index, void* output  IF_LIBUV(, const PAR2ProcOutputCb& cb)) {
-	cl::Event readEvent;
-	queue.enqueueReadBuffer(buffer_output, CL_FALSE, index*sliceSizeAligned, sliceSize, output, NULL, &readEvent);
-	
-	auto* req = new struct recv_data;
+	struct transfer_data_ocl* data = new struct transfer_data_ocl;
+	data->finish = true;
+	data->parent = this;
+	data->remote = &buffer_output;
+	data->remoteOffset = index*sliceSizeAligned;
+	data->sliceLen = sliceSize;
+	data->totalLen = sliceSizeAligned;
+	data->gf = gf.get();
+	data->local = output;
 #ifdef USE_LIBUV
-	req->cb = cb;
+	data->cbOut = cb;
 	pendingOutCallbacks++;
 #else
-	auto future = req->prom.get_future();
+	auto future = data->promOut.get_future();
 #endif
-	req->parent = this;
-	readEvent.setCallback(CL_COMPLETE, [](cl_event, cl_int, void* _req) {
-		auto req = static_cast<struct recv_data*>(_req);
-		NOTIFY_DONE(req, _queueRecv, req->prom, true);
-		IF_NOT_LIBUV(delete req);
-	}, req);
+	transferThread.send(data);
 	
 	IF_NOT_LIBUV(return future);
 }
@@ -426,10 +482,6 @@ void PAR2ProcOCL::run_kernel(unsigned buf, unsigned numInputs) {
 	cl::Event coeffEvent;
 	queue.enqueueWriteBuffer(area.coeffs, CL_FALSE, 0, inputBatchSize * (coeffType!=GF16OCL_COEFF_NORMAL ? 1 : outputExponents.size()) * sizeof(uint16_t), area.procCoeffs.data(), NULL, &coeffEvent);
 	queueEvents.push_back(coeffEvent);
-	
-	stagingActiveCount_inc();
-	area.setIsActive(true);
-	statBatchesStarted++;
 	
 	// invoke kernel
 	cl::Kernel* kernel;
@@ -462,11 +514,6 @@ void PAR2ProcOCL::run_kernel(unsigned buf, unsigned numInputs) {
 		delete req;
 #endif
 	}, req);
-	
-	// management
-	currentStagingInputs = 0;
-	if(++currentStagingArea == staging.size())
-		currentStagingArea = 0;
 }
 
 

@@ -8,6 +8,9 @@
 #include "controller.h"
 #include "threadqueue.h" // must be placed before CL/cl.hpp for some reason
 #include <CL/cl.hpp>
+#include "gf16mul.h"
+#include <memory>
+
 
 enum Galois16OCLMethods {
 	GF16OCL_AUTO,
@@ -99,7 +102,7 @@ public:
 class PAR2ProcOCL : public IPAR2ProcBackend {
 	bool _initSuccess;
 	// method/input parameters
-	size_t sliceSize;
+	size_t sliceSize, sliceSizeCksum;
 	size_t sliceSizeAligned;
 	// OpenCL stuff
 	cl::Device device;
@@ -118,14 +121,15 @@ class PAR2ProcOCL : public IPAR2ProcBackend {
 	Galois16OCLCoeffType coeffType;
 	cl::Buffer buffer_output;
 	std::vector<cl::Buffer> extra_buffers;
-	// TODO: consider making zeroes static?
-	uint8_t* zeroes; // a chunk of zero'd memory for zeroing device memory (prior to OpenCL 1.2)
 	// to enable slice size adjustments
 	size_t allocatedSliceSize;
 	size_t bytesPerGroup;
 	size_t wgSize;
 	unsigned outputsPerGroup;
 	
+	std::unique_ptr<Galois16Mul> gf;
+	MessageThread transferThread;
+	static void transfer_slice(ThreadMessageQueue<void*>& q);
 	
 	
 	// remembered setup params

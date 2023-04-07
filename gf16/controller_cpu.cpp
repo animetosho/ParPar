@@ -15,7 +15,7 @@ PAR2ProcCPUStaging::~PAR2ProcCPUStaging() {
 
 /** initialization **/
 PAR2ProcCPU::PAR2ProcCPU(IF_LIBUV(uv_loop_t* _loop,) int stagingAreas)
-: IPAR2ProcBackend(IF_LIBUV(_loop)), sliceSize(0), numThreads(0), gf(NULL), staging(stagingAreas), memProcessing(NULL), transferThread(PAR2ProcCPU::transfer_chunk) {
+: IPAR2ProcBackend(IF_LIBUV(_loop)), sliceSize(0), numThreads(0), gf(NULL), staging(stagingAreas), memProcessing(NULL), transferThread(PAR2ProcCPU::transfer_slice) {
 	
 	// default number of threads = number of CPUs available
 	setNumThreads(-1);
@@ -234,7 +234,7 @@ struct transfer_data {
 };
 
 // prepare thread process function
-void PAR2ProcCPU::transfer_chunk(ThreadMessageQueue<void*>& q) {
+void PAR2ProcCPU::transfer_slice(ThreadMessageQueue<void*>& q) {
 	struct transfer_data* data;
 	while((data = static_cast<struct transfer_data*>(q.pop())) != NULL) {
 		if(data->finish) {
