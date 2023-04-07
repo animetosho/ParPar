@@ -128,6 +128,7 @@ class PAR2ProcOCL : public IPAR2ProcBackend {
 	unsigned outputsPerGroup;
 	
 	std::unique_ptr<Galois16Mul> gf;
+	Galois16Methods gfMethod;
 	MessageThread transferThread;
 	static void transfer_slice(ThreadMessageQueue<void*>& q);
 	
@@ -187,7 +188,7 @@ public:
 	explicit PAR2ProcOCL(IF_LIBUV(uv_loop_t* _loop,) int platformId = -1, int deviceId = -1, int stagingAreas = 2);
 	~PAR2ProcOCL();
 	void setSliceSize(size_t _sliceSize) override;
-	bool init(Galois16OCLMethods method = GF16OCL_AUTO, unsigned targetInputBatch=0, unsigned targetIters=0, unsigned targetGrouping=0);
+	bool init(Galois16OCLMethods method = GF16OCL_AUTO, unsigned targetInputBatch=0, unsigned targetIters=0, unsigned targetGrouping=0, Galois16Methods cksumMethod = GF16_AUTO);
 	PAR2ProcBackendAddResult canAdd() const override;
 	FUTURE_RETURN_T addInput(const void* buffer, size_t size, uint16_t inputNum, bool flush  IF_LIBUV(, const PAR2ProcPlainCb& cb)) override;
 	FUTURE_RETURN_T addInput(const void* buffer, size_t size, const uint16_t* coeffs, bool flush  IF_LIBUV(, const PAR2ProcPlainCb& cb)) override;

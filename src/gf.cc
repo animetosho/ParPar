@@ -210,6 +210,7 @@ struct GfOclSpec {
 	size_t sliceOffset, sliceSize;
 	
 	Galois16OCLMethods method;
+	Galois16Methods cksumMethod;
 	unsigned inputGrouping, inputMinGrouping, targetIters, targetGrouping;
 };
 static bool load_ocl() {
@@ -293,7 +294,7 @@ public:
 			Local<Array> props = Local<Array>::Cast(args[2]);
 			for(unsigned i=0; i<props->Length(); i++) {
 				Local<Object> prop = ARG_TO_OBJ(GET_ARR(props, i));
-				struct GfOclSpec spec{-1, -1, 0, 0, GF16OCL_AUTO, 0, 0, 0, 0};
+				struct GfOclSpec spec{-1, -1, 0, 0, GF16OCL_AUTO, GF16_AUTO, 0, 0, 0, 0};
 				// TODO: validate platform/device
 				ASSIGN_INT_VAL(prop, "platform", spec.platformId, Int32)
 				ASSIGN_INT_VAL(prop, "device", spec.deviceId, Int32)
@@ -303,6 +304,10 @@ public:
 				ASSIGN_INT_VAL(prop, "method", method, Int32)
 				if(method) spec.method = (Galois16OCLMethods)method;
 				// TODO: check validity of method
+				spec.cksumMethod = (Galois16Methods)cpuMethod;
+				method = 0;
+				ASSIGN_INT_VAL(prop, "cksum_method", method, Int32)
+				if(method) spec.cksumMethod = (Galois16Methods)method;
 				ASSIGN_INT_VAL(prop, "input_batchsize", spec.inputGrouping, Int32)
 				if(spec.inputGrouping > 32768)
 					RETURN_ERROR("OpenCL input batchsize is invalid");
@@ -354,7 +359,7 @@ public:
 				delete self;
 				RETURN_ERROR("Invalid slice offset+size allocated to OpenCL device");
 			}
-			if(!self->init_ocl(oclI, oclSpec.method, oclSpec.inputGrouping, oclSpec.targetIters, oclSpec.targetGrouping)) {
+			if(!self->init_ocl(oclI, oclSpec.method, oclSpec.inputGrouping, oclSpec.targetIters, oclSpec.targetGrouping, oclSpec.cksumMethod)) {
 				delete self;
 				RETURN_ERROR("Failed to initialise OpenCL device"); // TODO: add device info
 			}
@@ -699,8 +704,8 @@ protected:
 	bool init_cpu(Galois16Methods method, unsigned inputGrouping, size_t chunkLen) {
 		return par2cpu->init(method, inputGrouping, chunkLen);
 	}
-	bool init_ocl(int idx, Galois16OCLMethods method, unsigned inputGrouping, unsigned targetIters, unsigned targetGrouping) {
-		return par2ocl[idx]->init(method, inputGrouping, targetIters, targetGrouping);
+	bool init_ocl(int idx, Galois16OCLMethods method, unsigned inputGrouping, unsigned targetIters, unsigned targetGrouping, Galois16Methods cksumMethod) {
+		return par2ocl[idx]->init(method, inputGrouping, targetIters, targetGrouping, cksumMethod);
 	}
 	
 	~GfProc() {

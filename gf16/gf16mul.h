@@ -1,3 +1,6 @@
+#ifndef __GF16MUL_H
+#define __GF16MUL_H
+
 #include <cassert>
 #include "../src/stdint.h"
 #include "../src/hedley.h"
@@ -351,3 +354,5 @@ public:
 	}
 	
 };
+
+#endif

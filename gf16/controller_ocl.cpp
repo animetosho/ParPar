@@ -69,7 +69,7 @@ void PAR2ProcOCL::setSliceSize(size_t _sliceSize) {
 	if(gf)
 		sliceSizeCksum = _sliceSize + gf->info().cksumSize;
 }
-bool PAR2ProcOCL::init(Galois16OCLMethods method, unsigned targetInputBatch, unsigned targetIters, unsigned targetGrouping) {
+bool PAR2ProcOCL::init(Galois16OCLMethods method, unsigned targetInputBatch, unsigned targetIters, unsigned targetGrouping, Galois16Methods cksumMethod) {
 	if(!_initSuccess) return false;
 	outputExponents.clear();
 	
@@ -83,9 +83,9 @@ bool PAR2ProcOCL::init(Galois16OCLMethods method, unsigned targetInputBatch, uns
 	coeffType = GF16OCL_COEFF_NORMAL;
 	statBatchesStarted = 0;
 	
-	// TODO: allow method customisation
-	if(!gf)
-		gf.reset(new Galois16Mul());
+	if(!gf || gfMethod != cksumMethod)
+		gf.reset(new Galois16Mul(cksumMethod));
+	gfMethod = cksumMethod;
 	
 	sliceSizeCksum = sliceSize + gf->info().cksumSize;
 	
@@ -427,9 +427,9 @@ struct recv_data {
 
 #ifdef USE_LIBUV
 void PAR2ProcOCL::_notifyRecv(void* _req) {
-	auto req = static_cast<struct transfer_data*>(_req);
+	auto req = static_cast<struct transfer_data_ocl*>(_req);
 	pendingOutCallbacks--;
-	req->cb(req->cksumSuccess);
+	req->cbOut(req->cksumSuccess);
 	delete req;
 	
 	if(pendingOutCallbacks < 1 && deinitCallback) deinit(deinitCallback);
