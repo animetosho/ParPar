@@ -514,6 +514,8 @@ void PAR2ProcOCL::run_kernel(unsigned buf, unsigned numInputs) {
 		delete req;
 #endif
 	}, req);
+	
+	queue.flush(); // ensure the kernel is executed
 }
 
 
