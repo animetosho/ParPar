@@ -167,9 +167,8 @@
 # endif
 #endif
 
-
 // AVX on mingw-gcc is just broken - don't do it...
-#if defined(HEDLEY_GCC_VERSION) && (defined(__MINGW32__) || defined(__MINGW64__)) && defined(__AVX2__)
+#if defined(HEDLEY_GCC_VERSION) && (defined(__MINGW32__) || defined(__MINGW64__)) && defined(__AVX2__) && defined(PP_PLATFORM_SHOW_WARNINGS)
 HEDLEY_WARNING("Compiling AVX code on MinGW GCC may cause crashing due to stack alignment bugs [https://gcc.gnu.org/bugzilla/show_bug.cgi?id=54412]");
 // as of writing, GCC 10.1 still has this problem, and it doesn't look like it'll be fixed any time soon
 // ...so if you're reading this, try Clang instead
@@ -181,6 +180,9 @@ HEDLEY_WARNING("Compiling AVX code on MinGW GCC may cause crashing due to stack 
 // we hack around it by pretending GCC < 10 doesn't support GFNI
 #if !HEDLEY_GCC_VERSION_CHECK(10,0,0) && defined(HEDLEY_GCC_VERSION) && defined(__OPTIMIZE__) && defined(__GFNI__)
 # undef __GFNI__
+# ifdef PP_PLATFORM_SHOW_WARNINGS
+HEDLEY_WARNING("GFNI disabled on GCC < 10 due to incorrect GF2P8AFFINEQB operand placement");
+# endif
 #endif
 
 #if !HEDLEY_GCC_VERSION_CHECK(5,0,0) && defined(HEDLEY_GCC_VERSION) && defined(__AVX512F__)

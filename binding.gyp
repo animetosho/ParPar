@@ -660,7 +660,8 @@
       "type": "static_library",
       "defines": ["NDEBUG"],
       "sources": [
-        "gf16/gf16_affine_avx2.c"
+        "gf16/gf16_affine_avx2.c",
+        "src/platform_warnings.c"
       ],
       "cflags": ["-Wno-unused-function", "-std=gnu99"],
       "xcode_settings": {
@@ -671,14 +672,25 @@
       "msvs_settings": {"VCCLCompilerTool": {"BufferSecurityCheck": "false"}},
       "conditions": [
         ['target_arch in "ia32 x64" and OS!="win"', {
-          "variables": {"supports_gfni_avx2%": "<!(<!(echo ${CC_target:-${CC:-cc}}) -MM -E gf16/gf16_affine_avx2.c -mgfni -mavx2 2>/dev/null || true)"},
+          "variables": {
+            "supports_gfni%": "<!(<!(echo ${CC_target:-${CC:-cc}}) -MM -E gf16/gf16_affine_avx2.c -mgfni 2>/dev/null || true)",
+            "supports_avx2%": "<!(<!(echo ${CC_target:-${CC:-cc}}) -MM -E gf16/gf16_affine_avx2.c -mavx2 2>/dev/null || true)"
+          },
           "conditions": [
-            ['supports_gfni_avx2!=""', {
-              "cflags": ["-mgfni", "-mavx2"],
-              "cxxflags": ["-mgfni", "-mavx2"],
+            ['supports_avx2!=""', {
+              "cflags": ["-mavx2"],
+              "cxxflags": ["-mavx2"],
               "xcode_settings": {
-                "OTHER_CFLAGS": ["-mgfni", "-mavx2"],
-                "OTHER_CXXFLAGS": ["-mgfni", "-mavx2"],
+                "OTHER_CFLAGS": ["-mavx2"],
+                "OTHER_CXXFLAGS": ["-mavx2"],
+              }
+            }],
+            ['supports_gfni!=""', {
+              "cflags": ["-mgfni"],
+              "cxxflags": ["-mgfni"],
+              "xcode_settings": {
+                "OTHER_CFLAGS": ["-mgfni"],
+                "OTHER_CXXFLAGS": ["-mgfni"],
               }
             }]
           ]
