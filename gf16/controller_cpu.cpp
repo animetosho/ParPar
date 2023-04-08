@@ -573,7 +573,7 @@ void PAR2ProcCPU::run_kernel(unsigned inBuf, unsigned numInputs) {
 		assert(outputsPerThread >= 1);
 		// number of threads that we'll send remaining chunks to
 		unsigned usedThreads = threadsPerChunk * leftoverChunks;
-		assert(usedThreads <= numThreads);
+		assert((int)usedThreads <= numThreads);
 		area.procRefs = (fullChunksPerThread ? numThreads : 0) + usedThreads;
 		
 		unsigned thread = 0;
@@ -605,7 +605,7 @@ void PAR2ProcCPU::run_kernel(unsigned inBuf, unsigned numInputs) {
 	
 	// distribute chunks evenly across threads
 	if(fullChunksPerThread) {
-		for(unsigned thread=0; thread<numThreads; thread++) {
+		for(int thread=0; thread<numThreads; thread++) {
 			size_t sliceOffset = chunk*chunkLen;
 			auto req = makeReq(thread, sliceOffset);
 			req->numOutputs = outputExponents.size();
@@ -631,6 +631,15 @@ void PAR2ProcCPU::_notifyProc(void* _req) {
 	
 	// if add was blocked, allow adds to continue - calling application will need to listen to this event to know to continue
 	if(progressCb) progressCb(req->numInputs);
+	
+	/*
+	// TODO: implement for non-libuv if we go ahead with this
+	// this is currently pointless while minInBatchSize == inputBatchSize
+	if(currentStagingInputs && stagingActiveCount_get() == 0 && staging.size() > 1 && currentStagingInputs >= minInBatchSize) {
+		// TODO: consider firing off next batch of inputs
+	}
+	*/
+	// TODO: also consider idea of dynamically scaling areas - this removes the notion of a 'full' state, and allows caller to manage maximum outstanding regions
 	
 	delete req;
 }

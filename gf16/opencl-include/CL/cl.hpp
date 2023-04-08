@@ -1902,6 +1902,13 @@ struct ImageFormat : public cl_image_format
         image_channel_data_type = type;
     }
 
+    //! \brief Copy constructor.
+    ImageFormat(const ImageFormat& other)
+    {
+        image_channel_order = other.image_channel_order;
+        image_channel_data_type = other.image_channel_data_type;
+    }
+
     //! \brief Assignment operator.
     ImageFormat& operator = (const ImageFormat& rhs)
     {
@@ -4355,6 +4362,11 @@ public:
      *   CL_INVALID_BINARY if an invalid program binary was encountered for any device. binaryStatus will return specific status for each device.
      *   CL_OUT_OF_HOST_MEMORY if there is a failure to allocate resources required by the OpenCL implementation on the host.
      */
+#ifdef __GNUC__
+// suppress warning with attributes in template type for `VECTOR_CLASS<cl_int>`
+# pragma GCC diagnostic push
+# pragma GCC diagnostic ignored "-Wignored-attributes"
+#endif
     Program(
         const Context& context,
         const VECTOR_CLASS<Device>& devices,
@@ -4405,6 +4417,9 @@ public:
             *err = error;
         }
     }
+#ifdef __GNUC__
+# pragma GCC diagnostic pop
+#endif
 
     
 #if defined(CL_VERSION_1_2)
