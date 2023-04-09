@@ -210,6 +210,8 @@ function par2_args(o) {
 	if(o.percentage) a.push('-r'+o.percentage);
 	if(o.offset) a.push('-f'+o.offset);
 	if(o.blockLimit) a.push('-l'+o.blockLimit);
+	
+	//if(o.memory) a.push('-m'+Math.round(o.memory / 1048576));
 	return a.concat([o.out], o.in);
 }
 function parpar_args(o) {
@@ -287,7 +289,7 @@ var delOutput = function() {
 
 
 
-console.log('Creating random input file...');
+console.log('Creating random input files...');
 // use RC4 as a fast (and consistent) random number generator (pseudoRandomBytes is sloooowwww)
 function writeRndFile(name, size) {
 	if(skipFileCreate && fs.existsSync(tmpDir + name)) return;
@@ -354,7 +356,7 @@ var allTests = [
 	// 2x memory limited tests
 	{
 		in: [tmpDir + 'test64m.bin'],
-		memory: '24m', // 2*4*1M (procBatch) + 16M (recovery)
+		memory: 24*1048576, // 2*4*1M (procBatch) + 16M (recovery)
 		procBatch: 4,
 		recBufs: 4,
 		blockSize: 1024*1024,
@@ -363,7 +365,7 @@ var allTests = [
 	},
 	{
 		in: [tmpDir + 'test1b.bin', tmpDir + 'test8b.bin', tmpDir + 'test64m.bin'],
-		memory: '11m', // 2*3*512K (procBatch) + 8M (recovery)
+		memory: 11*1048576, // 2*3*512K (procBatch) + 8M (recovery)
 		blockSize: 1024*1024,
 		chunk: 512*1024,
 		procBatch: 3,
@@ -377,7 +379,7 @@ var allTests = [
 		in: [tmpDir + 'test1b.bin', tmpDir + 'test65k.bin', tmpDir + 'test13m.bin'],
 		memory: 1048573, // prime less than 1MB
 		blockSize: 524309*4, // roughly 2MB
-		chunk: 65521,
+		chunk: 65522,
 		blocks: 7,
 		procBatch: 8,
 		recBufs: 8,
@@ -386,7 +388,7 @@ var allTests = [
 	},
 	{
 		in: [tmpDir + 'test64m.bin'],
-		memory: '1m',
+		memory: 1048576,
 		blockSize: 4*1048576,
 		blocks: 24,
 		procBatch: 1,
@@ -396,7 +398,7 @@ var allTests = [
 	},
 	{
 		in: [tmpDir + 'test1b.bin', tmpDir + 'test8b.bin', tmpDir + 'test64m.bin'],
-		memory: '13m', // 5+8M
+		memory: 13*1048576, // 5+8M
 		blockSize: 1024*1024,
 		chunk: 512*1024,
 		blocks: 40,
@@ -481,7 +483,7 @@ var allTests = [
 		in: [tmpDir + 'test64m.bin'],
 		blockSize: 2048*1048576 - 1024-68,
 		blocks: 1,
-		memory: process.arch == 'x64' ? '2.5g' : '1.5g',
+		memory: process.arch == 'x64' ? 2560*1048576 : 1536*1048576,
 		singleFile: true,
 		cacheKey: '13'
 	},
@@ -489,7 +491,7 @@ var allTests = [
 		in: [tmpDir + 'test64m.bin'],
 		blockSize: 4294967296, // 4GB, should exceed node's limit
 		blocks: 2,
-		memory: '511m',
+		memory: 511*1048576,
 		singleFile: true,
 		cacheKey: '14'
 	},
