@@ -1,41 +1,32 @@
 ParPar
 ======
 
-ParPar is a high performance, multi-threaded [PAR2](https://en.wikipedia.org/wiki/Parchive) creation tool and library for node.js. ParPar does not verify or repair files, only creates redundancy. ParPar is a completely new, from ground-up, implementation, which does not use components from existing PAR2 implementations.
+ParPar is a high performance, multi-threaded [PAR2](https://en.wikipedia.org/wiki/Parchive) creation-only tool, which can be operated as a command-line application or via a node.js API. ParPar does not verify or repair files, only creates redundancy. ParPar is a completely new, from ground-up, implementation, which does not use components from existing PAR2 implementations.
 
-ParPar provides three main things:
+Related:
 
--   Command line tool for creating PAR2 files, like what par2cmdline does
--   High level JS API, with a similar interface to the command line tool
--   Low level JS API, providing a high degree of control over the creation process
-
-**ParPar is currently still very much a work in progress, is not fully implemented and various issues still need to be solved. Please take this into consideration before using this tool for any non-experimental purposes.**
+* **[ParParGUI](https://github.com/animetosho/ParParGUI)**: GUI frontend for ParPar
+* **[par2cmdline-turbo](https://github.com/animetosho/par2cmdline-turbo)**: ParPar’s processing backend ported to [par2cmdline](https://github.com/Parchive/par2cmdline)
 
 Features
 --------
 
 -   all main packets from the [PAR2 specification](http://parchive.sourceforge.net/docs/specifications/parity-volume-spec/article-spec.html)
 -   unicode filename/comment support
--   asychronous calculations and I/O
--   multi-threading via OpenMP
--   multiple fast calculation implementations leveraging x86 (SSE2, SSSE3, AVX2, AVX512BW, GFNI) and ARM (NEON, SVE, SVE2) SIMD capabilities, automatically selecting the best routine for the CPU (see [benchmark comparisons](benchmarks/info.md))
--   multi-buffer (SIMD) MD5 implementation and accelerated CRC32 computation
--   single read pass on source files if memory constraints allow (no separate hashing pass required)
+-   various features for high performance (see [benchmark comparisons](benchmarks/info.md))
+    -   asychronous calculations and I/O
+    -   multi-threading support
+    -   multiple fast calculation implementations leveraging x86 (SSE2, SSSE3, AVX2, AVX512BW, GFNI) and ARM (NEON, SVE, SVE2) SIMD capabilities, automatically selecting the best routine for the CPU
+    -   multi-buffer (SIMD) MD5 implementation and accelerated CRC32 computation
+    -   single read pass on source files if memory constraints allow (no separate hashing pass required)
+    -   minimum chunk size restrictions to avoid heavy I/O seeking when memory is limited, plus support for concurrent chunk read requests
+    -   ability to compute MD5 on multiple files concurrently, whilst optimising for sequential I/O
+    -   lots of tuning knobs for those who like to experiment
 -   chunking support for memory constrained situations or for generating large amounts of recovery data
--   minimum chunk size restrictions to avoid heavy I/O seeking when memory is limited
+-   support for large (multi-gigabyte) sized slices
+-   internal checksumming of GF data to detect hardware/RAM failures (or bugs in code)
 -   cross-platform support
 -   completely different implementation to all the par2cmdline forks, using fresh new ideas and approaches :)
-
-Possible Future Features
-------------------------
-
-As mentioned above, ParPar is still under development. Some features currently not implemented include:
-
--   improve CLI handling, i.e. better interface
--   improve library interface, plus documentation
--   better handling of input buffering and processing chunks based on CPU cache size
--   improve handling of extremely large (e.g. gigabyte sized) slice sizes
--   various other tweaks
 
 Unsupported Features
 --------------------
@@ -43,15 +34,8 @@ Unsupported Features
 Here’s a list of features currently *not* in ParPar, and may never be supported:
 
 -   Support for external recovery data or packed slices (I don’t think any PAR2 client supports this)
--   Verify/repair PAR2
+-   Verify/repair PAR2 (consider [par2cmdline-turbo](https://github.com/animetosho/par2cmdline-turbo) if you need this)
 -   Some optimisations in weird edge cases, such as using slice sizes significantly larger than all input data
-
-Motivation
-----------
-
-I needed a flexible library for creating PAR2 files, in particular, one which isn’t tied to the notion of on-disk files. ParPar *library* allows generating PAR2 from “immaterial files”, and the output doesn’t have to be written to disk.
-
-Also, all the fast PAR2 implementations seem to be Windows only; ParPar provides a solution for high performance PAR2 creation on Linux (and probably other) systems (without Wine) and it also works on Windows, as well as non-x86 platforms (i.e. ARM).
 
 Installation / Building
 =======================
@@ -59,7 +43,7 @@ Installation / Building
 Pre-Built Binaries
 ------------------
 
-Pre-packaged Windows builds with Node 8.x may be found on [the releases page](https://github.com/animetosho/ParPar/releases) if I can be bothered to provide them.
+See [the releases page](https://github.com/animetosho/ParPar/releases).
 
 Install Via NPM
 ---------------
@@ -91,6 +75,8 @@ Note that installing from NPM essentially compiles from source, so see issues li
 Install From Source
 -------------------
 
+*Be careful with using unstable (non-release tagged) code. Untagged commits in the Git repository have not been as thoroughly tested.*
+
 For building you’ll need node.js (0.10.x or later), node-gyp (can be obtained via `npm install -g node-gyp` command if NPM is available; may be in package managers otherwise) and relevant build tools (i.e. MS Visual C++ for Windows, GCC/Clang family otherwise). After you have the dependencies, the following commands can be used to build:
 
 ```bash
@@ -100,9 +86,7 @@ npm install
 
 This sets up ParPar to be run from the *bin/parpar.js* file (i.e. via `node bin/parpar.js` command). If you want it to be globally accessible via the `parpar` command, the process is OS dependent. On Linux, you can usually create a symlink named *parpar* in a location specified in the `PATH` environment variable, to *bin/parpar.js* (e.g. `ln -s bin/parpar.js /usr/bin/parpar`). On Windows, either add the *bin* folder to your `PATH` environment, or copy *bin/parpar.cmd* to a `PATH` specified directory and edit the paths appropriately in this copy of *parpar.cmd*.
 
-Note, Windows builds are always compiled with SSE2 support. If you can’t have this, delete all instances of `"msvs_settings": {"VCCLCompilerTool": {"EnableEnhancedInstructionSet": "2"}},` in *binding.gyp* before compiling.
-
-Relatively recent compilers (any supported compiler released in the last \~4 years should work) are needed if AVX support is desired. AVX512 support requires even newer compilers (GCC 5+, MSVC 2017 or later etc).
+Note that some features may require relatively recent compilers to support them, for example, AVX512, GFNI and SVE2 instruction support.
 
 ### Building without NPM
 
@@ -115,21 +99,9 @@ apt-get install nodejs node-gyp node-async
 node-gyp rebuild
 ```
 
-Note that you'll also need node-yencode; [follow the instructions here](https://animetosho.org/app/node-yencode) on how to build it. After building it, create a folder named *node_modules* and place the folder *yencode* in there.
-
 ### Native binary targeting
 
-By default, the `-march=native` flag is used during builds, which optimises the build for the CPU it’s being built on, at the expense of not being portable. If you want the build to be portable, change the value of the `enable_native_tuning%` variable in *binding.gyp* to `0`. Also check that you disable the same thing with the *yencode* module.
-
-### Multi-Threading Support
-
-ParPar’s multi-threading support requires OpenMP. If ParPar is compiled without OpenMP, it will only ever run on 1 thread. OpenMP is usually available in most compilers that you’d likely use. On some systems, you may need to ensure that the `libomp-dev` package is installed.
-
-It appears that the default compiler in MacOSX does not include OpenMP support (at time of writing). If this is the case, you may need to fetch another build of the C++ compiler which has OpenMP support (e.g. clang/gcc from places like homebrew/macports) and override the `CXX` environment variable when installing.
-
-### “no suitable image found” error on MacOS 10.15
-
-Due to security changes in OSX 10.15, libraries may require code signing to work. To deal with this, you’ll either need to [disable this security option](https://developer.apple.com/documentation/bundleresources/entitlements/com_apple_security_cs_disable-library-validation?language=objc) or [codesign the built .node module](https://successfulsoftware.net/2018/11/16/how-to-notarize-your-software-on-macos/). Note that I do not have OSX and can’t provide much support for the platform.
+By default, the `-march=native` flag is used for non-Windows builds, which optimises the build for the CPU it’s being built on, at the expense of not being portable. If you want the build to be portable, change the value of the `enable_native_tuning%` variable in *binding.gyp* to `0`.
 
 ### OpenCL Support
 
@@ -140,6 +112,12 @@ To get OpenCL to work, there’s a few requirements:
 * OpenCL supporting drivers need to be installed. For GPUs, the driver package is often sufficient. On \*nix, ensure the appropriate OpenCL-ICD is installed (ParPar will try to link to *libOpenCL.so*, or if not found, will try *libOpenCL.so.1* and *libOpenCL.so.1.0.0*)
 * a fully static Linux build won’t work, due to incompatibility with `dlopen` and statically linked libc. This means you’ll need to use the glibc builds, or compile the application yourself. The OpenCL headers are included with ParPar’s source, so OpenCL development libraries aren’t necessary
 * OpenCL is untested on macOS
+
+# GPU Processing
+
+ParPar supports offloading processing to one or more GPU devices via the OpenCL interface. Note that **OpenCL support is considered unstable**, and is disabled by default (opt in using `--opencl-process`). The implementation is currently very basic and only supports statically partitioning the input between CPU/GPU (i.e. you need to specify the amount of data to offload).
+
+From testing, it seems a number of OpenCL drivers/implementations can be somewhat buggy, so use of this feature is at your own risk.
 
 API
 ===
@@ -243,40 +221,30 @@ Running Tests
 
 Currently only some very basic test scripts are included, which can be found in the aptly named *test* folder.
 
-*md5.js* tests the internal MD5 implementation against the reference OpenSSL implementation in Node.
-
 *par-compare.js* tests PAR2 generation by comparing output from ParPar against that of par2cmdline. As such, par2cmdline needs to be installed for tests to be run. Note that tests will cover extreme cases, including those using large amounts of memory, generating large amounts of recovery data and so on. As such, you will likely need a machine with large amounts of RAM available (preferrably at least 8GB) and reasonable amount of free disk space available (20GB or more recommended) to successfully run all tests.  
 The test will write several files to a temporary location (sourced from `TEMP` or `TMP` environment variables, or the current working directory if none set) and will likely take a while to complete.
 
 Building Binary
 ---------------
 
-Compiling ParPar into a single binary can be done via [nexe](https://github.com/nexe/nexe) 1.x. There is a little complication with bundling the *yencode* 1.0.x module, but a rather fragile script has been supplied in *nexe/build.js* to help with the process. The following general steps need to be taken:
+A basic script to compile the ParPar binary is provided in the *nexe* folder. The script has been tested with NodeJS 12.20.0 and may work on other 12.x.x versions.
 
-1.  Ensure that *nexe* is installed (doesn’t need to be globally installed) and [its requirements](https://github.com/nexe/nexe#building-requirements) met
-    
-2.  Download a Node.js source package. The script has mostly been tested with Node 4.x.x and 8.x.x, it may work with other versions
-    
-3.  The required ParPar libraries need to be installed into the *node_modules* folder
-    
-4.  Inside the *nexe* folder (the one containing *build.js*), create the following two folders: *node* and *yencode-src*
-    
-5.  Inside the *node* folder, create a folder with the version number of the package you downloaded in step 2, for example “4.9.1”. Inside *this* folder, create one named “\_” and place the downloaded sources in this folder. After doing this, the file *nexe/node/x.x.x/\_/node.gyp* should exist, where *x.x.x* is the node version number
-    
-6.  Inside the *yencode-src* folder, copy the source code for the *yencode* module
-    
-7.  Edit *nexe/build.js*; options that are likely to be edited are at the top of the file. You’ll likely need to change *nodeVer* to be the version of node you’re using
-    
-8.  In the *nexe* folder, run *build.js*. This script patches node to embed the yencode module, and customises a few compiler options, then calls nexe to build the final executable. If it worked, you should get a binary named *parpar* or *parpar.exe* in the nexe folder
+1. If you haven’t done so already, do an `npm install` in ParPar’s folder to ensure its dependencies are available
+2. Enter the *nexe* folder and do an `npm install` to pull down required build packages (note, nexe requires NodeJS 10 or greater)
+3. If desired, edit the variables at the top of *nexe/build.js*
+4. Run `node build`. If everything worked, there’ll eventually be a *parpar* or *parpar.exe* binary built.
+   If it fails during compilation, enter the *nexe/build/12.20.0* (or whatever version of NodeJS you’re using) and get more info by:
+   - Linux: build using the `make` command
+   - Windows: build using `vcbuild.bat` followed by build options, e.g. `vcbuild nosign x86 noetw intl-none release static no-cctest without-intl ltcg`
 
-Note that this will be built with the `-flto` option on non-Windows platforms. If this causes build failures, your system’s `ar` utility may not support LTO objects, which can be worked around if you have `gcc-ar` installed by issuing a command like `export AR=gcc-ar`
+On Linux, this will generate a partially static build (dependent on libc) for OpenCL support. Set the `BUILD_STATIC` environment variable to `--fully-static` if you want a fully static build.
 
-Alternatives
-============
+### Alternatives
 
 For a list of command-line PAR2 tools, [see here](benchmarks/info.md#applications-tested-and-commands-given).
+ParPar’s standout feature compared to par2cmdline would be its performance, and against MultiPar, cross-platform support.
 
-For a nodejs module, there’s [node-par2](https://github.com/andykant/par2) which is not an implementation of PAR2, rather a wrapper around par2cmdline.
+For a node.js module, there’s [node-par2](https://github.com/andykant/par2) which is not an implementation of PAR2, rather a wrapper around par2cmdline.
 
 For a C++ library implementation, there’s [libpar2](https://launchpad.net/libpar2), which I believe is based off par2cmdline.
 
@@ -284,5 +252,3 @@ License
 =======
 
 This code is Public Domain or [CC0](https://creativecommons.org/publicdomain/zero/1.0/legalcode) (or equivalent) if PD isn’t recognised.
-
-Multi-buffer MD5 implementation is based off implementation from [OpenSSL](https://www.openssl.org/).

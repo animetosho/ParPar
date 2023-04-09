@@ -182,7 +182,62 @@ Output Options:
        --noindex             Don't output an index file (file with no recovery
                              blocks). This option takes no value.
 
-Performance Options:
+I/O Tuning Options:
+
+       --min-chunk-size      Minimum chunking size. Allowing smaller chunks
+                             generally improves efficiency, but increases
+                             per-chunk overhead. Set to 0 to disable chunking.
+                             Default `128K`.
+       --seq-read-size       Maximum read buffer size for sequential reading.
+                             This option also limits the amount of recovery
+                             that can be processed per slice on each read pass.
+                             Default `4M`
+       --chunk-read-threads  Maximum number of concurrent read requests during
+                             chunking. Note that this may be limited by 4 [see
+                             https://nodejs.org/api/cli.html#uv_threadpool_sizesize]
+                             Default `2`
+       --read-buffers        Maximum number of read buffers to read into and
+                             send to processing backend. Default `8`
+       --read-hash-queue     Number of read buffers to queue up for hashing
+                             before reading from a different file. Lower
+                             values may be more optimal on disks with faster
+                             random access. Default `5`
+       --md5-batch-size      Number of recovery slices to submit as a batch for
+                             hashing. Default `8`
+       --recovery-buffers    Number of recovery slices to buffer from backend.
+                             Default is `ceil(--hash-batch-size * 1.5)`
+       --hash-method         Algorithm for hashing input data. Process can
+                             crash if CPU does not support selected method.
+                             Choices are (all platforms):
+                                 scalar: generic 2x MD5 + slice-by-4 CRC
+                             x86/ARM only choices:
+                                 simd: compute 2x MD5 using SSE2 (x86) or
+                                       NEON (ARM)
+                                 crc: compute CRC using PCLMULQDQ (x86) or
+                                      ARMv8-CRC
+                                 simd-crc: combined 'simd' and 'crc'
+                             x86 only choices:
+                                 bmi: use BMI1 and PCLMULQDQ
+                                 avx512: use AVX512VL and PCLMULQDQ
+       --md5-method          Highest level algorithm for hashing recovery data.
+                             This option may be limited by `--md5-batch-size`.
+                             Process can crash if CPU does not support selected
+                             method.
+                             Choices are (all platforms):
+                                 scalar: generic implementation (1-2x lanes)
+                             x86 only choices:
+                                 sse: SSE2 implementation (4-8x lanes)
+                                 avx2: AVX2 implementation (8-16x lanes)
+                                 xop: XOP implementation (4-8x lanes)
+                                 avx512f: AVX512F implementation (16-32x lanes)
+                                 avx512vl: AVX512VL 128/256-bit implementation
+                                           (4-16x lanes)
+                             ARMv7/AArch64 only choices:
+                                 neon: NEON implementation (4-8x lanes)
+                             AArch64 only choices:
+                                 sve2: SVE2 implementation (4+ lanes)
+
+CPU Tuning Options:
 
   -m,  --memory              Maximum amount of memory to use for computing
                              recovery. ParPar will run multiple passes on input
@@ -195,31 +250,9 @@ Performance Options:
                              Set to 0 to disable memory limit.
   -t,  --threads             Limit number of threads to use. Default equals
                              number of CPU cores/threads.
-       --min-chunk-size      Minimum chunking size. Allowing smaller chunks
-                             generally improves efficiency, but increases
-                             per-chunk overhead. Set to 0 to disable chunking.
-                             Default `128K`.
-       --seq-read-size       Maximum read buffer size for sequential reading.
-                             This option also limits the amount of recovery
-                             that can be processed per slice on each read pass.
-                             Default `4M`
-       --chunk-read-threads  Maximum number of concurrent read requests during
-                             chunking. Note that this may be limited by 4 [see
-                             https://docs.libuv.org/en/v1.x/threadpool.html]
-                             Default `2`
-       --read-buffers        Maximum number of read buffers to read into and
-                             send to processing backend. Default `8`
-       --read-hash-queue     Number of read buffers to queue up for hashing
-                             before reading from a different file. Lower
-                             values may be more optimal on disks with faster
-                             random access. Default `5`
        --proc-batch-size     Number of slices to submit as a batch for GF
                              calculation. Default is roughly 12 (dependent on
                              GF method)
-       --md5-batch-size      Number of recovery slices to submit as a batch for
-                             hashing. Default `8`
-       --recovery-buffers    Number of recovery slices to buffer from backend.
-                             Default is `ceil(--hash-batch-size * 1.5)`
        --method              Algorithm for performing GF multiplies. Process
                              can crash if CPU does not support selected method.
                              Choices are (all platforms):
@@ -256,36 +289,6 @@ Performance Options:
                              Default is auto-detected.
        --loop-tile-size      Target size used for loop tiling optimisation.
                              Default is 0 (auto-detected)
-       --hash-method         Algorithm for hashing input data. Process can
-                             crash if CPU does not support selected method.
-                             Choices are (all platforms):
-                                 scalar: generic 2x MD5 + slice-by-4 CRC
-                             x86/ARM only choices:
-                                 simd: compute 2x MD5 using SSE2 (x86) or
-                                       NEON (ARM)
-                                 crc: compute CRC using PCLMULQDQ (x86) or
-                                      ARMv8-CRC
-                                 simd-crc: combined 'simd' and 'crc'
-                             x86 only choices:
-                                 bmi: use BMI1 and PCLMULQDQ
-                                 avx512: use AVX512VL and PCLMULQDQ
-       --md5-method          Highest level algorithm for hashing recovery data.
-                             This option may be limited by `--md5-batch-size`.
-                             Process can crash if CPU does not support selected
-                             method.
-                             Choices are (all platforms):
-                                 scalar: generic implementation (1-2x lanes)
-                             x86 only choices:
-                                 sse: SSE2 implementation (4-8x lanes)
-                                 avx2: AVX2 implementation (8-16x lanes)
-                                 xop: XOP implementation (4-8x lanes)
-                                 avx512f: AVX512F implementation (16-32x lanes)
-                                 avx512vl: AVX512VL 128/256-bit implementation
-                                           (4-16x lanes)
-                             ARMv7/AArch64 only choices:
-                                 neon: NEON implementation (4-8x lanes)
-                             AArch64 only choices:
-                                 sve2: SVE2 implementation (4+ lanes)
 
 OpenCL Options:
 
