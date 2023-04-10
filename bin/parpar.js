@@ -8,6 +8,12 @@ var error = function(msg) {
 	console.error('Enter `parpar --help` for usage information');
 	process.exit(1);
 };
+var print_json = function(type, obj) {
+	var o = {type: type};
+	for(var k in obj)
+		o[k] = obj[k];
+	console.log(JSON.stringify(o, null, 2));
+};
 var arg_parser = require('../lib/arg_parser.js');
 
 var friendlySize = function(s) {
@@ -271,7 +277,7 @@ var opts = {
 	'version': {
 		type: 'bool'
 	},
-	'client-info': {
+	'json': {
 		type: 'bool'
 	},
 	'skip-self-check': {
@@ -315,22 +321,23 @@ if(argv.help) {
 	process.exit(0);
 }
 if(argv.version) {
-	console.error(version);
-	process.exit(0);
-}
-if(argv['client-info']) {
-	var info = {
-		version: version,
-		creator: creator,
-		// available kernels?, default params
-	};
-	
-	console.log(JSON.stringify(info, null, 2));
+	if(argv.json) {
+		var info = {
+			version: version,
+			creator: creator,
+			// available kernels?, default params
+		};
+		
+		print_json('client_info', info);
+	} else
+		console.error(version);
 	process.exit(0);
 }
 if(argv['opencl-list']) {
 	var platforms = require('../lib/par2.js').opencl_devices();
-	if(!platforms.length)
+	if(argv.json)
+		print_json('opencl_list', {platforms: platforms});
+	else if(!platforms.length)
 		console.error('No OpenCL platforms found');
 	else {
 		var defaultDev = require('../lib/par2.js').opencl_device_info();
@@ -370,11 +377,25 @@ if(argv['auto-slice-size'] && !('max-input-slices' in argv))
 if(!argv.progress)
 	argv.progress = argv.quiet ? 'none' : 'stderr';
 var writeProgress = function() {};
-if(argv.progress == 'stdout' || argv.progress == 'stderr')
-	writeProgress = function(text) {
-		process[argv.progress].write(text + '\x1b[0G');
+if(argv.json)
+	writeProgress = function(data) {
+		print_json('progress', data);
 	};
-
+else if(argv.progress == 'stdout' || argv.progress == 'stderr') {
+	var decimalPoint = (1.1).toLocaleString().substr(1, 1);
+	// TODO: display slices processed, pass# if verbose progress requested
+	writeProgress = function(data) {
+		// add formatting for aesthetics
+		var parts = data.progress_percent.toLocaleString().match(/^([0-9]+)([.,][0-9]+)?$/);
+		while(parts[1].length < 3)
+			parts[1] = ' ' + parts[1];
+		if(parts[2]) while(parts[2].length < 3)
+			parts[2] += '0';
+		else
+			parts[2] = decimalPoint + '00';
+		process[argv.progress].write('Calculating: ' + (parts[1] + parts[2]) + '%\x1b[0G');
+	};
+}
 
 if(argv['hash-method']) {
 	require('../lib/par2.js').set_inhash_method(argv['hash-method']);
@@ -623,7 +644,6 @@ var inputFiles = argv._;
 	
 
 	var startTime = Date.now();
-	var decimalPoint = (1.1).toLocaleString().substr(1, 1);
 
 	if(argv['ascii-charset']) {
 		ParPar.setAsciiCharset(argv['ascii-charset']);
@@ -647,6 +667,7 @@ var inputFiles = argv._;
 		}
 		
 		var currentSlice = 0;
+		var prgLastFile = null, prgLastFileSlice = 0;
 		var progressInterval;
 		if(!argv.quiet) {
 			var pluralDisp = function(n, unit, suffix) {
@@ -655,21 +676,38 @@ var inputFiles = argv._;
 					return '1 ' + unit;
 				return n + ' ' + unit + suffix;
 			};
-			if(g.opts.sliceSize > 1024*1048576) {
-				// par2j has 1GB slice size limit hard-coded; 32-bit version supports 1GB slices
-				// some 32-bit applications seem to have issues with 1GB slices as well (phpar2 v1.4 win32 seems to have trouble with 854M slices, 848M works in the test I did)
-				process.stderr.write('Warning: selected slice size (' + friendlySize(g.opts.sliceSize) + ') is larger than 1GB, which is beyond what a number of PAR2 clients support. Consider increasing the number of slices or reducing the slice size so that it is under 1GB\n');
+			if(argv.json) {
+				print_json('processing_info', {
+					input_size: g.totalSize,
+					input_slices: g.inputSlices,
+					input_files: info.length,
+					recovery_slices: g.opts.recoverySlices,
+					slice_size: g.opts.sliceSize,
+					passes: g.passes,
+					subpasses: g.chunks,
+					pass_slices: g.slicesPerPass,
+					subpass_chunk_size: g._chunkSize,
+					read_buffer_size: g.readSize,
+					read_buffers: g.opts.readBuffers,
+					recovery_buffers: g.opts.recDataSize,
+				});
+			} else {
+				if(g.opts.sliceSize > 1024*1048576) {
+					// par2j has 1GB slice size limit hard-coded; 32-bit version supports 1GB slices
+					// some 32-bit applications seem to have issues with 1GB slices as well (phpar2 v1.4 win32 seems to have trouble with 854M slices, 848M works in the test I did)
+					process.stderr.write('Warning: selected slice size (' + friendlySize(g.opts.sliceSize) + ') is larger than 1GB, which is beyond what a number of PAR2 clients support. Consider increasing the number of slices or reducing the slice size so that it is under 1GB\n');
+				}
+				else if(g.opts.sliceSize > 100*1000000 && g.totalSize <= 32768*100*1000000) { // we also check whether 100MB slices are viable by checking the input size - essentially there's a max of 32768 slices, so at 100MB, max size would be 3051.76GB
+					process.stderr.write('Warning: selected slice size (' + friendlySize(g.opts.sliceSize) + ') may be too large to be compatible with QuickPar\n');
+				}
+				
+				process.stderr.write('Input data:         ' + friendlySize(g.totalSize) + ' (' + pluralDisp(g.inputSlices, 'slice') + ' from ' + pluralDisp(info.length, 'file') + ')\n');
+				if(g.opts.recoverySlices) {
+					process.stderr.write('Recovery data:      ' + friendlySize(g.opts.recoverySlices*g.opts.sliceSize) + ' (' + pluralDisp(g.opts.recoverySlices, '* ' + friendlySize(g.opts.sliceSize) + ' slice') + ')\n');
+					process.stderr.write('Input pass(es):     ' + (g.chunks * g.passes) + ', processing ' + pluralDisp(g.slicesPerPass, '* ' + friendlySize(g._chunkSize) + ' chunk') + ' per pass\n');
+				}
+				process.stderr.write('Read buffer size:   ' + friendlySize(g.readSize) + ' * max ' + pluralDisp(g.opts.readBuffers, 'buffer') + '\n');
 			}
-			else if(g.opts.sliceSize > 100*1000000 && g.totalSize <= 32768*100*1000000) { // we also check whether 100MB slices are viable by checking the input size - essentially there's a max of 32768 slices, so at 100MB, max size would be 3051.76GB
-				process.stderr.write('Warning: selected slice size (' + friendlySize(g.opts.sliceSize) + ') may be too large to be compatible with QuickPar\n');
-			}
-			
-			process.stderr.write('Input data:         ' + friendlySize(g.totalSize) + ' (' + pluralDisp(g.inputSlices, 'slice') + ' from ' + pluralDisp(info.length, 'file') + ')\n');
-			if(g.opts.recoverySlices) {
-				process.stderr.write('Recovery data:      ' + friendlySize(g.opts.recoverySlices*g.opts.sliceSize) + ' (' + pluralDisp(g.opts.recoverySlices, '* ' + friendlySize(g.opts.sliceSize) + ' slice') + ')\n');
-				process.stderr.write('Input pass(es):     ' + (g.chunks * g.passes) + ', processing ' + pluralDisp(g.slicesPerPass, '* ' + friendlySize(g._chunkSize) + ' chunk') + ' per pass\n');
-			}
-			process.stderr.write('Read buffer size:   ' + friendlySize(g.readSize) + ' * max ' + pluralDisp(g.opts.readBuffers, 'buffer') + '\n');
 		}
 		if(argv.progress != 'none') {
 			var totalSlices = g.chunks * g.passes * g.inputSlices;
@@ -679,59 +717,104 @@ var inputFiles = argv._;
 			if(totalSlices) {
 				progressInterval = setInterval(function() {
 					var perc = Math.floor(currentSlice / totalSlices *10000)/100;
-					perc = Math.min(perc, 99.99);
-					// add formatting for aesthetics
-					var parts = perc.toLocaleString().match(/^([0-9]+)([.,][0-9]+)?$/);
-					while(parts[1].length < 3)
-						parts[1] = ' ' + parts[1];
-					if(parts[2]) while(parts[2].length < 3)
-						parts[2] += '0';
-					else
-						parts[2] = decimalPoint + '00';
-					writeProgress('Calculating: ' + (parts[1] + parts[2]) + '%');
+					var curPassSlice = currentSlice - ((g.passNum * g.chunks + g.passChunkNum) * g.inputSlices);
+					writeProgress({
+						progress_percent : Math.min(perc, 99.99),
+						pass: g.passNum,
+						subpass: g.passChunkNum,
+						slice: curPassSlice,
+						last_file_name: prgLastFile,
+						last_file_slice: prgLastFileSlice
+					});
 				}, 200);
 			}
 		}
 		
 		var infoShown = argv.quiet;
-		g.run(function(event, arg1) {
+		g.run(function(event, arg1, arg2) {
 			if(event == 'begin_pass' && !infoShown) {
 				var process_info = g.gf_info();
 				if(process_info) {
-					if(process_info.threads) {
-						var cpuName = require('os').cpus()[0].model;
-						if(cpuName == 'unknown') cpuName = 'CPU';
-						process.stderr.write('\n' + cpuName + '\n')
-						process.stderr.write('  Multiply method:  ' + process_info.method_desc + ' with ' + friendlySize(process_info.chunk_size) + ' loop tiling, ' + pluralDisp(process_info.threads, 'thread') + '\n');
-						process.stderr.write('  Input batching:   ' + pluralDisp(process_info.staging_size, 'chunk') + ', ' + pluralDisp(process_info.staging_count, 'batch', 'es') + '\n');
-						var transMem = Math.max(g.opts.recDataSize * g._chunkSize, process_info.slice_mem * g.procInStagingBufferCount);
-						process.stderr.write('  Memory Usage:     ' + friendlySize(process_info.slice_mem * process_info.num_output_slices + transMem) + ' (' + pluralDisp(process_info.num_output_slices, '* ' + friendlySize(process_info.slice_mem) + ' chunk') + ' + ' + friendlySize(transMem) + ' transfer buffer)\n');
+					if(argv.json) {
+						var info = {
+							cpu: {
+								device_name: require('os').cpus()[0].model.trim(),
+								threads: process_info.threads,
+								method: process_info.method_desc,
+								tile_size: process_info.chunk_size,
+								batch_slices: process_info.staging_size,
+								batches: process_info.staging_count,
+								slice_size: process_info.slice_mem,
+								recovery_slices: process_info.num_output_slices,
+								// TODO: transfer memory?
+							},
+							opencl: []
+						};
+						if(process_info.opencl_devices) process_info.opencl_devices.forEach(function(oclDev) {
+							info.opencl.push({
+								device_name: oclDev.device_name.trim(),
+								method: oclDev.method_desc,
+								output_grouping: oclDev.output_chunks,
+								tile_size: oclDev.chunk_size,
+								batch_slices: oclDev.staging_size,
+								batches: oclDev.staging_count,
+								slice_size: oclDev.slice_mem,
+								recovery_slices: oclDev.num_output_slices,
+							});
+						});
+						print_json('compute_info', info);
 					} else {
-						process.stderr.write('Transfer Buffer:    ' + friendlySize(g.opts.recDataSize * g._chunkSize) + '\n');
+						if(process_info.threads) {
+							var cpuName = require('os').cpus()[0].model.trim();
+							if(cpuName == 'unknown') cpuName = 'CPU';
+							process.stderr.write('\n' + cpuName + '\n')
+							process.stderr.write('  Multiply method:  ' + process_info.method_desc + ' with ' + friendlySize(process_info.chunk_size) + ' loop tiling, ' + pluralDisp(process_info.threads, 'thread') + '\n');
+							process.stderr.write('  Input batching:   ' + pluralDisp(process_info.staging_size, 'chunk') + ', ' + pluralDisp(process_info.staging_count, 'batch', 'es') + '\n');
+							var transMem = Math.max(g.opts.recDataSize * g._chunkSize, process_info.slice_mem * g.procInStagingBufferCount);
+							process.stderr.write('  Memory Usage:     ' + friendlySize(process_info.slice_mem * process_info.num_output_slices + transMem) + ' (' + pluralDisp(process_info.num_output_slices, '* ' + friendlySize(process_info.slice_mem) + ' chunk') + ' + ' + friendlySize(transMem) + ' transfer buffer)\n');
+						} else {
+							process.stderr.write('Transfer Buffer:    ' + friendlySize(g.opts.recDataSize * g._chunkSize) + '\n');
+						}
+						
+						if(process_info.opencl_devices) process_info.opencl_devices.forEach(function(oclDev) {
+							process.stderr.write('\n' + oclDev.device_name.trim() + '\n')
+							process.stderr.write('  Multiply method:  ' + oclDev.method_desc + ', split into ' + oclDev.output_chunks + ' * ' + friendlySize(oclDev.chunk_size) + ' workgroups\n');
+							process.stderr.write('  Input batching:   ' + pluralDisp(oclDev.staging_size, 'chunk') + ', ' + pluralDisp(oclDev.staging_count, 'batch', 'es') + '\n');
+							process.stderr.write('  Memory Usage:     ' + friendlySize(oclDev.slice_mem * oclDev.num_output_slices) + ' (' + pluralDisp(oclDev.num_output_slices, '* ' + friendlySize(oclDev.slice_mem) + ' chunk') + ')\n');
+						});
 					}
-					
-					if(process_info.opencl_devices) process_info.opencl_devices.forEach(function(oclDev) {
-						process.stderr.write('\n' + oclDev.device_name + '\n')
-						process.stderr.write('  Multiply method:  ' + oclDev.method_desc + ', split into ' + oclDev.output_chunks + ' * ' + friendlySize(oclDev.chunk_size) + ' workgroups\n');
-						process.stderr.write('  Input batching:   ' + pluralDisp(oclDev.staging_size, 'chunk') + ', ' + pluralDisp(oclDev.staging_count, 'batch', 'es') + '\n');
-						process.stderr.write('  Memory Usage:     ' + friendlySize(oclDev.slice_mem * oclDev.num_output_slices) + ' (' + pluralDisp(oclDev.num_output_slices, '* ' + friendlySize(oclDev.slice_mem) + ' chunk') + ')\n');
-					});
 				}
 				
 				infoShown = true;
 			}
-			if(event == 'processing_slice') currentSlice++;
-			// if(event == 'processing_file') process.stderr.write('Processing file ' + arg1.name + '\n');
+			if(event == 'processing_slice') {
+				currentSlice++;
+				prgLastFile = arg1.name;
+				prgLastFileSlice = arg2;
+			}
+			if(argv.json) {
+				if(event == 'begin_pass')
+					print_json('begin_pass', {pass: arg1, subpass: arg2});
+				if(event == 'pass_complete')
+					print_json('end_pass', {pass: arg1, subpass: arg2});
+				if(event == 'files_written')
+					print_json('pass_data_written', {pass: arg1, subpass: arg2});
+			}
 		}, function(err) {
 			if(err) throw err;
 			
 			if(argv.progress != 'none') {
 				if(progressInterval) clearInterval(progressInterval);
-				writeProgress('Calculating: 100.00%');
+				if(!argv.json) // don't need to send 100% message to applications, since they'll get a process_complete
+					writeProgress({progress_percent: 100});
 			}
 			if(!argv.quiet) {
 				var endTime = Date.now();
-				process.stderr.write('\nPAR2 created. Time taken: ' + ((endTime - startTime)/1000) + ' second(s)\n');
+				var timeTaken = ((endTime - startTime)/1000);
+				if(argv.json)
+					print_json('process_complete', {duration_seconds: timeTaken});
+				else
+					process.stderr.write('\nPAR2 created. Time taken: ' + timeTaken + ' second(s)\n');
 			}
 		});
 		

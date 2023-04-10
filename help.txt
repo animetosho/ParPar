@@ -365,8 +365,9 @@ UI Options:
                              otherwise). Errors will still be displayed
   -?,  --help                Displays this list of options
        --version             Print application version number and exit
-       --client-info         Print JSON-encoded information useful to a front-
-                             end application
+       --json                Format output as JSON and print to stdout instead
+                             of stderr. Note that errors still go to stderr and
+                             won't be JSON.
 
 Input Files:
 
