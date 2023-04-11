@@ -250,12 +250,11 @@ class MessageThread {
 			pthread_t self = pthread_self();
 			if(!pthread_getschedparam(self, &policy, &param)) {
 				if(policy == SCHED_OTHER) {
-					#ifdef __MACH__
+					#ifndef SCHED_BATCH
 					// MacOS doesn't support SCHED_BATCH, but does seem to permit priorities on SCHED_OTHER
 					int min = sched_get_priority_min(policy);
 					if(min < param.sched_priority) {
 						param.sched_priority -= 1;
-						if(param.sched_priority < min) param.sched_priority = min;
 						pthread_setschedparam(self, policy, &param);
 					}
 					#else
@@ -287,8 +286,12 @@ class MessageThread {
 			prctl(PR_SET_NAME, self->name, 0, 0, 0);
 			#elif defined(__MACH__)
 			pthread_setname_np(self->name);
-			//#else  // not portable?
-			//pthread_setname_np(pthread_self(), self->name);
+			#elif defined(__FreeBSD__) || defined(__DragonFly__)
+			pthread_setname_np(pthread_self(), self->name);
+			#elif defined(__NetBSD__)
+			pthread_setname_np(pthread_self(), self->name, NULL);
+			#elif defined(__OpenBSD__)
+			pthread_set_name_np(pthread_self(), self->name);
 			#endif
 		}
 		
