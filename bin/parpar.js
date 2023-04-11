@@ -666,8 +666,9 @@ var inputFiles = argv._;
 			error(x.message);
 		}
 		
-		var currentSlice = 0;
-		var prgLastFile = null, prgLastFileSlice = 0;
+		var currentSlice = 0, currentSliceFrac = 0;
+		var recSlicesWritten = 0, prgLastRecFileSlices = 0;
+		var progressWriteFactor = g.opts.recoverySlices ? (Math.pow(g.opts.recoverySlices, -0.3)) : 0; // scale down how much slice writing contributes, based on the number of recovery being generated
 		var progressInterval;
 		if(!argv.quiet) {
 			var pluralDisp = function(n, unit, suffix) {
@@ -690,6 +691,14 @@ var inputFiles = argv._;
 					read_buffer_size: g.readSize,
 					read_buffers: g.opts.readBuffers,
 					recovery_buffers: g.opts.recDataSize,
+					recovery_files: g.recoveryFiles.map(function(rf) {
+						return {
+							name: rf.name,
+							recovery_slices: rf.recoverySlices,
+							recovery_offset: rf.recoveryOffset,
+							size: rf.totalSize
+						};
+					})
 				});
 			} else {
 				if(g.opts.sliceSize > 1024*1048576) {
@@ -710,21 +719,27 @@ var inputFiles = argv._;
 			}
 		}
 		if(argv.progress != 'none') {
-			var totalSlices = g.chunks * g.passes * g.inputSlices;
-			if(argv['seq-first-pass']) {
-				totalSlices = g.chunks * (g.passes-1) * g.inputSlices + g.inputSlices;
-			}
-			if(totalSlices) {
+			// progress is based off:
+			// - the number of input slices and how many passes we need to go over them
+			// - the number of output slices and how many times they need to be written to; as this is expected to be faster than main processing, scale it down
+			// - the overhead of hashing the first pass; also scale this down
+			var totalProgress = g.chunks * g.passes * (g.inputSlices + g.opts.recoverySlices*progressWriteFactor);
+			var hashFactor = g.chunks * progressWriteFactor;
+			totalProgress += hashFactor * g.inputSlices; // add hashing overhead
+			if(totalProgress) {
 				progressInterval = setInterval(function() {
-					var perc = Math.floor(currentSlice / totalSlices *10000)/100;
+					var currentProgress = currentSlice+currentSliceFrac + recSlicesWritten*progressWriteFactor;
+					if(g.passNum == 0 && g.passChunkNum == 0)
+						currentProgress += hashFactor * (currentSlice+currentSliceFrac);
+					else
+						currentProgress += hashFactor * g.inputSlices;
+					var perc = Math.floor(currentProgress / totalProgress *10000)/100;
 					var curPassSlice = currentSlice - ((g.passNum * g.chunks + g.passChunkNum) * g.inputSlices);
 					writeProgress({
 						progress_percent : Math.min(perc, 99.99),
 						pass: g.passNum,
 						subpass: g.passChunkNum,
-						slice: curPassSlice,
-						last_file_name: prgLastFile,
-						last_file_slice: prgLastFileSlice
+						slice: curPassSlice
 					});
 				}, 200);
 			}
@@ -789,8 +804,18 @@ var inputFiles = argv._;
 			}
 			if(event == 'processing_slice') {
 				currentSlice++;
-				prgLastFile = arg1.name;
-				prgLastFileSlice = arg2;
+				currentSliceFrac = 0;
+			}
+			if(event == 'processing_slice_part') {
+				currentSliceFrac = arg1;
+			}
+			if(event == 'writing_file') {
+				recSlicesWritten += prgLastRecFileSlices;
+				prgLastRecFileSlices = arg1.recoverySlices;
+			}
+			if(event == 'files_written') {
+				recSlicesWritten += prgLastRecFileSlices;
+				prgLastRecFileSlices = 0;
 			}
 			if(argv.json) {
 				if(event == 'begin_pass')
@@ -799,6 +824,8 @@ var inputFiles = argv._;
 					print_json('end_pass', {pass: arg1, subpass: arg2});
 				if(event == 'files_written')
 					print_json('pass_data_written', {pass: arg1, subpass: arg2});
+				if(event == 'writing_file')
+					print_json('writing_data', {file_name: arg1.name});
 			}
 		}, function(err) {
 			if(err) throw err;
