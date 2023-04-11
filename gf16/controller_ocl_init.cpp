@@ -235,9 +235,10 @@ STRINGIFY(
 	
 	inline nat_uint lhtable_multiply(__local const ushort* table, nat_uint val) {
 		) "\n#if VECT_WIDTH==2\n" STRINGIFY(
+		nat_uint val_h = (val>>8) | 0x1000100;
 		return upsample(
-			(ushort)(table[(val>>16) & 0xff] ^ table[((val>>24) & 0xff) + 256]),
-			(ushort)(table[val & 0xff] ^ table[((val>>8) & 0xff) + 256])
+			(ushort)(table[(val>>16) & 0xff] ^ table[(val_h>>16) & 0x1ff]),
+			(ushort)(table[val & 0xff] ^ table[val_h & 0x1ff])
 		);
 		) "\n#else\n" STRINGIFY(
 		nat_uint result = table[val & 0xff] ^ table[((val>>8) & 0xff) + 256];
@@ -1261,12 +1262,19 @@ bool PAR2ProcOCL::setup_kernels(Galois16OCLMethods method, unsigned targetInputB
 			if(groupIterations < 1) groupIterations = 1;
 		}
 		// if iterations cannot be scaled down, scale down workgroup size next
-		if(groupIterations == 1 && sizePerWorkGroup > sliceSizeCksum && wgSize > 16) {
+		int minWgSize = 1;
+		if(kernelCode == _ocl_kernel_lut || kernelCode == _ocl_kernel_cachelut)
+			minWgSize = 128; // if computing lookup tables, don't scale down the workgroup below this amount
+		if(groupIterations == 1 && sizePerWorkGroup > sliceSizeCksum && wgSize > minWgSize) {
 			wgSize = CEIL_DIV(sliceSizeCksum, threadWordSize);
-			if(wgSize < 16) wgSize = 16; // don't let size be too small, because stuff like computing lookup tables use workgroup width (also have seen some OpenCL implementations crash with unrolling too many times)
-			sizePerWorkGroup = threadWordSize * wgSize;
+			if(wgSize < minWgSize) wgSize = minWgSize;
 		}
 	}
+	if(method == GF16OCL_LOOKUP || method == GF16OCL_LOOKUP_HALF || method == GF16OCL_LOOKUP_NOCACHE || method == GF16OCL_LOOKUP_HALF_NOCACHE) {
+		// lookup method assumes workgroup is a power of two
+		wgSize = round_down_pow2(wgSize);
+	}
+	sizePerWorkGroup = threadWordSize * wgSize;
 	
 	// code generation for log methods
 	uint16_t* tblLog = NULL;
@@ -1314,7 +1322,7 @@ bool PAR2ProcOCL::setup_kernels(Galois16OCLMethods method, unsigned targetInputB
 				n = (n << 1) ^ (-(n>>15) & GF16_POLYNOMIAL);
 			}
 			// add reduction table
-			uint16_t* tblALogReduction = tblAntiLog + (1u << (16-bitsCut));
+			uint16_t* tblALogReduction = tblAntiLog + (uint32_t)(1u << (uint32_t)(16-bitsCut));
 			tblALogReduction[0] = 0;
 			for (int i = 1; i < (1<<(bitsCut+4)); i++) {
 				n = i << (12-bitsCut);
