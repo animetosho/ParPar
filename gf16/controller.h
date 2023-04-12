@@ -59,6 +59,7 @@ public:
 	}
 	inline void setIsActive(bool v) {
 		if(v) {
+			promFuture.get(); // ensure isActive is false to avoid race with discarding old promise
 			prom = std::promise<void>();
 			promFuture = prom.get_future();
 		} else if(getIsActive())
@@ -173,6 +174,7 @@ public:
 #else
 	virtual FUTURE_RETURN_T endInput() = 0;
 #endif
+	// NOTE: for !defined(USE_LIBUV), this may return empty before completion, as the isActive variable is used for synchronisation (not stagingActiveCount)
 	bool isEmpty() const {
 		return stagingActiveCount_get()==0 IF_LIBUV(&& pendingInCallbacks==0);
 	}

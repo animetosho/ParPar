@@ -523,7 +523,7 @@ void PAR2ProcCPU::compute_worker(ThreadMessageQueue<void*>& q) {
 #endif
 		
 		// mark that we've done processing this request
-		if(req->procRefs->fetch_sub(1, std::memory_order_relaxed) <= 1) { // relaxed ordering: although we want all prior memory operations to be complete at this point, to send a cross-thread signal requires stricter ordering, so it should be fine by the time the signal is received
+		if(req->procRefs->fetch_sub(1, std::memory_order_acq_rel) <= 1) { // ensure all prior memory operations to be complete at this point; even though a cross-thread signal requires stricter ordering, it's only guaranteed on the sending thread
 			// signal this input group is done with
 #ifdef USE_LIBUV
 			req->parent->_queueProc.notify(req);
@@ -543,6 +543,8 @@ void PAR2ProcCPU::run_kernel(unsigned inBuf, unsigned numInputs) {
 	auto& area = staging[inBuf];
 	
 	// currently do static distribution; TODO: consider dynamic scheduling?
+	bool oldProcessingAdd = processingAdd;
+	processingAdd = true;
 	
 	auto makeReq = [&, this](unsigned thread, size_t sliceOffset) -> compute_req* {
 		compute_req* req = new compute_req;
@@ -550,7 +552,7 @@ void PAR2ProcCPU::run_kernel(unsigned inBuf, unsigned numInputs) {
 		req->inputGrouping = inputBatchSize;
 		req->chunkSize = chunkLen;
 		req->input = static_cast<const char*>(area.src) + sliceOffset*inputBatchSize;
-		req->add = processingAdd;
+		req->add = oldProcessingAdd;
 		req->mutScratch = gfScratch[thread]; // TODO: should this be assigned to the thread instead?
 		req->gf = gf;
 		req->parent = this;
@@ -574,7 +576,7 @@ void PAR2ProcCPU::run_kernel(unsigned inBuf, unsigned numInputs) {
 		// number of threads that we'll send remaining chunks to
 		unsigned usedThreads = threadsPerChunk * leftoverChunks;
 		assert((int)usedThreads <= numThreads);
-		area.procRefs = (fullChunksPerThread ? numThreads : 0) + usedThreads;
+		area.procRefs.store((fullChunksPerThread ? numThreads : 0) + usedThreads, std::memory_order_relaxed);
 		
 		unsigned thread = 0;
 		for(; chunk < leftoverChunks; chunk++) {
@@ -601,7 +603,7 @@ void PAR2ProcCPU::run_kernel(unsigned inBuf, unsigned numInputs) {
 			}
 		}
 	} else
-		area.procRefs = numThreads;
+		area.procRefs.store(numThreads, std::memory_order_relaxed);
 	
 	// distribute chunks evenly across threads
 	if(fullChunksPerThread) {
@@ -620,7 +622,6 @@ void PAR2ProcCPU::run_kernel(unsigned inBuf, unsigned numInputs) {
 		}
 	}
 	assert(chunk == numChunks);
-	processingAdd = true;
 }
 
 #ifdef USE_LIBUV
