@@ -312,6 +312,8 @@ class MessageThread {
 		threadActive = other.threadActive;
 		threadCreated = other.threadCreated;
 		cb = other.cb;
+		name = other.name;
+		lowPrio = other.lowPrio;
 		
 		other.threadActive = false;
 		other.threadCreated = false;
