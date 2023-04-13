@@ -667,7 +667,7 @@ var inputFiles = argv._;
 		}
 		
 		var currentSlice = 0, currentSliceFrac = 0;
-		var recSlicesWritten = 0, prgLastRecFileSlices = 0;
+		var recSlicesWritten = 0, prgLastRecFileSlices = 0, recSlicesWrittenFrac = 0;
 		var progressWriteFactor = g.opts.recoverySlices ? (Math.pow(g.opts.recoverySlices, -0.3)) : 0; // scale down how much slice writing contributes, based on the number of recovery being generated
 		var progressInterval;
 		if(!argv.quiet) {
@@ -728,7 +728,7 @@ var inputFiles = argv._;
 			totalProgress += hashFactor * g.inputSlices; // add hashing overhead
 			if(totalProgress) {
 				progressInterval = setInterval(function() {
-					var currentProgress = currentSlice+currentSliceFrac + recSlicesWritten*progressWriteFactor;
+					var currentProgress = currentSlice+currentSliceFrac + (recSlicesWritten+recSlicesWrittenFrac)*progressWriteFactor;
 					if(g.passNum == 0 && g.passChunkNum == 0)
 						currentProgress += hashFactor * (currentSlice+currentSliceFrac);
 					else
@@ -812,20 +812,29 @@ var inputFiles = argv._;
 			if(event == 'writing_file') {
 				recSlicesWritten += prgLastRecFileSlices;
 				prgLastRecFileSlices = arg1.recoverySlices;
+				recSlicesWrittenFrac = 0;
 			}
-			if(event == 'files_written') {
+			if(event == 'writing_file_pos') {
+				recSlicesWrittenFrac = arg1.totalSize ? (arg2 / arg1.totalSize) * arg1.recoverySlices : 0;
+			}
+			if(event == 'chunk_pass_complete') {
 				recSlicesWritten += prgLastRecFileSlices;
 				prgLastRecFileSlices = 0;
+				recSlicesWrittenFrac = 0;
 			}
 			if(argv.json) {
-				if(event == 'begin_pass')
-					print_json('begin_pass', {pass: arg1, subpass: arg2});
-				if(event == 'pass_complete')
-					print_json('end_pass', {pass: arg1, subpass: arg2});
-				if(event == 'files_written')
-					print_json('pass_data_written', {pass: arg1, subpass: arg2});
+				if(event == 'begin_chunk_pass')
+					print_json('begin_subpass', {pass: arg1, subpass: arg2});
+				if(event == 'chunk_pass_complete')
+					print_json('end_subpass', {pass: arg1, subpass: arg2});
+				if(event == 'chunk_pass_write')
+					print_json('subpass_write', {pass: arg1, subpass: arg2});
+				if(event == 'pass_write')
+					print_json('pass_write', {pass: arg1});
 				if(event == 'writing_file')
 					print_json('writing_data', {file_name: arg1.name});
+				if(event == 'closing_files')
+					print_json('closing_files', {});
 			}
 		}, function(err) {
 			if(err) throw err;

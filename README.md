@@ -195,17 +195,17 @@ var par2creator = require('@animetosho/parpar').run(
 par2creator.on('info', function(par) {
     console.log('Creating PAR2 archive with ' + par.opts.recoverySlices*par.opts.sliceSize + ' byte(s) of recovery data from ' + par.totalSize + ' input bytes');
 });
-par2creator.on('begin_pass', function(par, passNum, passChunkNum) {
+par2creator.on('begin_chunk_pass', function(par, passNum, passChunkNum) {
     console.log('Begin read pass ' + passNum + ' of ' + par.passes + ' pass(es)');
 });
 par2creator.on('processing_slice', function(par, file, sliceNum) {
     console.log('Processing slice #' + sliceNum + ' of ' + par.inputSlices + ' from ' + file.name);
 });
-par2creator.on('pass_complete', function(par, passNum, passChunkNum) {
-    console.log('Completed read pass ' + passNum + ' of ' + par.passes + ' pass(es)');
+par2creator.on('chunk_pass_write', function(par, passNum, passChunkNum) {
+    console.log('Writing data for read pass ' + passNum);
 });
-par2creator.on('files_written', function(par, passNum, passChunkNum) {
-    console.log('Written data for read pass ' + passNum);
+par2creator.on('chunk_pass_complete', function(par, passNum, passChunkNum) {
+    console.log('Completed read pass ' + passNum + ' of ' + par.passes + ' pass(es)');
 });
 ```
 
