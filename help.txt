@@ -299,12 +299,12 @@ OpenCL Options:
                              this device. Suffix the value with a %, e.g. `50%`
                              If this portion isn't specified, it is derived
                              from the device's memory limit.
-       --opencl-device       OpenCL platform/device selection. This should be
-                             formatted as a platform ID followed by a device
-                             ID, separated with a colon. Leave blank to refer
-                             to the default platform/device.
+       --opencl-device       OpenCL platform/device selection. This can be a
+                             device name, or a platform ID followed by a device
+                             ID, separated with a colon. For the latter form, a
+                             blank ID refers to the default platform/device.
                              Default is `:` (i.e. default platform and device)
-                             Use `--opencl-list` to obtain IDs.
+                             Use `--opencl-list` to obtain IDs and names.
        --opencl-memory       Maximum amount of memory to use for computing
                              recovery. If unspecified, will use a portion of
                              the device's global memory (currently 80%)

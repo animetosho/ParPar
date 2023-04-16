@@ -594,6 +594,8 @@ var inputFiles = argv._;
 	}
 	
 	
+	var openclPlatforms = null;
+	var openclDevicesSelected = {}; // used to try distinguish multiple devices of the same name
 	var openclMap = function(data) {
 		var ret = {};
 		if(data.process) {
@@ -602,11 +604,33 @@ var inputFiles = argv._;
 				ret.ratio /= 100;
 		}
 		if(data.device) {
-			if(!/^\d*:\d*$/.test(data.device))
-				error('Invalid device specification');
-			var spec = data.device.split(':');
-			if(spec[0].length) ret.platform = spec[0]|0;
-			if(spec[1].length) ret.device = spec[1]|0;
+			if(/^\d*:\d*$/.test(data.device)) {
+				var spec = data.device.split(':');
+				if(spec[0].length) ret.platform = spec[0]|0;
+				if(spec[1].length) ret.device = spec[1]|0;
+				openclDevicesSelected[data.device] = 1;
+			} else {
+				if(!openclPlatforms)
+					openclPlatforms = require('../lib/par2.js').opencl_devices();
+				ret.platform = null;
+				ret.device = null;
+				var targetDevice = data.device.toLowerCase();
+				for(var pk in openclPlatforms) {
+					var plat = openclPlatforms[pk];
+					for(var dk in plat.devices) {
+						var selectKey = plat.id + ':' + plat.devices[dk].id;
+						if(plat.devices[dk].name.toLowerCase() == targetDevice && !(selectKey in openclDevicesSelected)) {
+							ret.platform = plat.id;
+							ret.device = plat.devices[dk].id;
+							openclDevicesSelected[selectKey] = 1;
+							break;
+						}
+					}
+					if(ret.platform) break;
+				}
+				if(ret.platform === null || ret.device === null)
+					error('Couldn\'t find OpenCL device "' + data.device + '"');
+			}
 		}
 		if(data.memory)
 			ret.memoryLimit = arg_parser.parseSize(data.memory);
@@ -747,7 +771,7 @@ var inputFiles = argv._;
 		
 		var infoShown = argv.quiet;
 		g.run(function(event, arg1, arg2) {
-			if(event == 'begin_pass' && !infoShown) {
+			if(event == 'begin_chunk_pass' && !infoShown) {
 				var process_info = g.gf_info();
 				if(process_info) {
 					if(argv.json) {
