@@ -161,6 +161,7 @@ var par2creator = require('@animetosho/parpar').run(
         comments: [], // array of strings
         unicode: null, // null => auto, false => never, true => always generate unicode packets
         outputOverwrite: false,
+        outputSync: false,
         outputIndex: true,
         outputSizeScheme: 'pow2', // equal, uniform or pow2
         outputFirstFileSlices: null, // null => default, otherwise pass in same format as outputFileMaxSlices

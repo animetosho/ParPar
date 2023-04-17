@@ -112,6 +112,10 @@ var opts = {
 		type: 'bool',
 		map: 'outputOverwrite'
 	},
+	'write-sync' : {
+		type: 'bool',
+		map: 'outputSync'
+	},
 	'std-naming': { // inverted option
 		alias: 'n',
 		type: 'bool',

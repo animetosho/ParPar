@@ -140,6 +140,8 @@ Output Options:
                              Note that this will not delete existing PAR2
                              recovery files that match the base PAR2 name, but
                              wouldn't be written to.
+       --write-sync          Sync written files before exit (e.g. via fsync).
+                             This option doesn't take any parameters.
   -n,  --std-naming          Use standard naming scheme for recovery files,
                              instead of that popularized by par2cmdline. Output
                              names will look like xxx.vol12-22.par2 instead of
