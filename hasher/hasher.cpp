@@ -76,6 +76,7 @@ void setup_hasher() {
 		HasherInput_Create = &HasherInput_AVX512::create;
 	// SSE seems to be faster than scalar on Zen1/2, not Zen3; BMI > SSE on Zen1, unknown on Zen2
 	else if(hasClMul && !isSmallCore && HasherInput_ClMulScalar::isAvailable) {
+		// Gracemont: SSE > scalar, but SSE ~= BMI
 		if(CpuCap.hasBMI1 && HasherInput_BMI1::isAvailable)
 			HasherInput_Create = &HasherInput_BMI1::create;
 		else
@@ -277,6 +278,7 @@ MD5Multi::MD5Multi(int srcCount) {
 		ADD_LAST_CTX(1, MD5Multi_Scalar)
 		else ADD_LAST_CTX(1, MD5Multi2_Scalar)
 #ifdef PLATFORM_X86
+		// AVX512 hasher would be faster than scalar on Intel, but slower on AMD, so we won't bother trying to do that optimisation
 		else ADD_LAST_CTX(HasherMD5Multi_level == MD5MULT_AVX512VL, MD5Multi_AVX512_128)
 		else ADD_LAST_CTX(HasherMD5Multi_level == MD5MULT_XOP, MD5Multi_XOP)
 		else ADD_LAST_CTX(HasherMD5Multi_level >= MD5MULT_SSE, MD5Multi_SSE)
