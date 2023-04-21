@@ -627,12 +627,12 @@ var inputFiles = argv._;
 					openclPlatforms = require('../lib/par2.js').opencl_devices();
 				ret.platform = null;
 				ret.device = null;
-				var targetDevice = data.device.toLowerCase();
+				var targetDevice = data.device.replace(/,/g, '').toLowerCase(); // strip commas so that the --opencl flag works
 				for(var pk in openclPlatforms) {
 					var plat = openclPlatforms[pk];
 					for(var dk in plat.devices) {
 						var selectKey = plat.id + ':' + plat.devices[dk].id;
-						if(plat.devices[dk].name.toLowerCase() == targetDevice && !(selectKey in openclDevicesSelected)) {
+						if(plat.devices[dk].name.replace(/,/g, '').toLowerCase() == targetDevice && !(selectKey in openclDevicesSelected)) {
 							ret.platform = plat.id;
 							ret.device = plat.devices[dk].id;
 							openclDevicesSelected[selectKey] = 1;
