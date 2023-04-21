@@ -84,7 +84,7 @@ public:
 	inline int getNumThreads() const {
 		return numThreads;
 	}
-	inline const void* getMethodName() const {
+	inline const char* getMethodName() const {
 		return gf->info().name;
 	}
 	inline size_t getChunkLen() const {
@@ -127,6 +127,10 @@ public:
 	}
 	static inline Galois16MethodInfo info(Galois16Methods method) {
 		return Galois16Mul::info(method);
+	}
+	
+	static inline std::vector<Galois16Methods> availableMethods() {
+		return Galois16Mul::availableMethods(true);
 	}
 	
 #ifdef DEBUG_STAT_THREAD_EMPTY

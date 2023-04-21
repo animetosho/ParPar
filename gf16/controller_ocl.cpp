@@ -139,6 +139,7 @@ bool PAR2ProcOCL::setRecoverySlices(unsigned _numOutputs, const uint16_t* output
 void PAR2ProcOCL::reset_state() {
 	currentStagingInputs = 0;
 	currentStagingArea = 0;
+	stagingActiveCount = 0;
 	for(auto& area : staging) {
 		area.event = cl::Event(); // clear any existing event
 		area.setIsActive(false);
