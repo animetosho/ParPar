@@ -20,41 +20,25 @@
 #include "../src/platform.h"
 #include "../src/stdint.h"
 
+static HEDLEY_ALWAYS_INLINE __m128i double_xor(__m128i a, __m128i b, __m128i c) {
 #ifdef _CRC_USE_AVX512_
+	return _mm_ternarylogic_epi32(a, b, c, 0x96);
+#else
+	a = _mm_xor_si128(a, b);
+	return _mm_xor_si128(a, c);
+#endif
+}
 static HEDLEY_ALWAYS_INLINE __m128i do_one_fold_merge(__m128i src, __m128i data) {
 	const __m128i xmm_fold4 = _mm_set_epi32(
 		0x00000001, 0x54442bd4,
 		0x00000001, 0xc6e41596
 	);
-	return _mm_ternarylogic_epi32(
+	return double_xor(
 		_mm_clmulepi64_si128(src, xmm_fold4, 0x01),
-		_mm_clmulepi64_si128(src, xmm_fold4, 0x10),
 		data,
-		0x96
-	);
-}
-static HEDLEY_ALWAYS_INLINE __m128i double_xor(__m128i a, __m128i b, __m128i c) {
-	return _mm_ternarylogic_epi32(a, b, c, 0x96);
-}
-#else
-static HEDLEY_ALWAYS_INLINE __m128i do_one_fold(__m128i src) {
-	const __m128i xmm_fold4 = _mm_set_epi32(
-		0x00000001, 0x54442bd4,
-		0x00000001, 0xc6e41596
-	);
-	return _mm_xor_si128(
-		_mm_clmulepi64_si128(src, xmm_fold4, 0x01),
 		_mm_clmulepi64_si128(src, xmm_fold4, 0x10)
 	);
 }
-static HEDLEY_ALWAYS_INLINE __m128i do_one_fold_merge(__m128i src, __m128i data) {
-	return _mm_xor_si128(do_one_fold(src), data);
-}
-static HEDLEY_ALWAYS_INLINE __m128i double_xor(__m128i a, __m128i b, __m128i c) {
-	a = _mm_xor_si128(a, b);
-	return _mm_xor_si128(a, c);
-}
-#endif
 
 
 static HEDLEY_ALWAYS_INLINE void crc_init_clmul(void* state) {
@@ -80,22 +64,10 @@ static HEDLEY_ALWAYS_INLINE void crc_process_block_clmul(void* HEDLEY_RESTRICT s
 	
 	__m128i* crc = (__m128i*)state;
 	
-#ifdef _CRC_USE_AVX512_
 	crc[0] = do_one_fold_merge(crc[0], xmm_t0);
 	crc[1] = do_one_fold_merge(crc[1], xmm_t1);
 	crc[2] = do_one_fold_merge(crc[2], xmm_t2);
 	crc[3] = do_one_fold_merge(crc[3], xmm_t3);
-#else
-	// nesting do_one_fold() in _mm_xor_si128() seems to cause MSVC to generate horrible code, so separate it out
-	crc[0] = do_one_fold(crc[0]);
-	crc[1] = do_one_fold(crc[1]);
-	crc[2] = do_one_fold(crc[2]);
-	crc[3] = do_one_fold(crc[3]);
-	crc[0] = _mm_xor_si128(crc[0], xmm_t0);
-	crc[1] = _mm_xor_si128(crc[1], xmm_t1);
-	crc[2] = _mm_xor_si128(crc[2], xmm_t2);
-	crc[3] = _mm_xor_si128(crc[3], xmm_t3);
-#endif
 }
 
 
