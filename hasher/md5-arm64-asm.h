@@ -50,10 +50,6 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_scalar(uint32_t* HEDLEY_RESTR
 	
 #define ASM_PARAMS(x) [A]x(A), [B]x(B), [C]x(C), [D]x(D), \
 	  [TMP1]x(tmp1), [TMP2]x(tmp2), [k0]x(k0), [k1]x(k1)
-	
-#define ROR_ADD(A, B, R) \
-	"ror %w[" STR(A) "], %w[" STR(A) "], #" STR(R) "\n" \
-	"add %w[" STR(A) "], %w[" STR(A) "], %w[" STR(B) "]\n"
 
 #define ROUND_F(IA, A, B, C, D, I, K, KEXTRA, R, LEXTRA) \
 	REV(I) \
@@ -65,33 +61,37 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_scalar(uint32_t* HEDLEY_RESTR
 	"eor %w[TMP2], %w[TMP2], %w[" STR(D) "]\n" \
 	"add %w[" STR(A) "], %w[" STR(A) "], %w[TMP2]\n" \
 	LEXTRA "\n" \
-	ROR_ADD(A, B, R)
+	"ror %w[" STR(A) "], %w[" STR(A) "], #" STR(R) "\n" \
+	"add %w[" STR(A) "], %w[" STR(A) "], %w[" STR(B) "]\n"
 #define ROUND_H(A, B, C, D, I, K, KEXTRA, R) \
-	"add %w[" STR(A) "], %w[" STR(A) "], " I "\n" \
 	"eor %w[TMP2], %w[" STR(C) "], %w[" STR(D) "]\n" \
 	"add %w[" STR(A) "], %w[" STR(A) "], %w[" K "]\n" \
 	"eor %w[TMP2], %w[TMP2], %w[" STR(B) "]\n" \
 	KEXTRA "\n" \
 	"add %w[" STR(A) "], %w[" STR(A) "], %w[TMP2]\n" \
-	ROR_ADD(A, B, R)
+	"ror %w[" STR(A) "], %w[" STR(A) "], #" STR(R) "\n" \
+	"add %w[" STR(D) "], %w[" STR(D) "], " I "\n" \
+	"add %w[" STR(A) "], %w[" STR(A) "], %w[" STR(B) "]\n"
 #define ROUND_I(A, B, C, D, I, K, KEXTRA, R) \
-	"add %w[" STR(A) "], %w[" STR(A) "], " I "\n" \
 	"orn %w[TMP2], %w[" STR(B) "], %w[" STR(D) "]\n" \
 	"add %w[" STR(A) "], %w[" STR(A) "], %w[" K "]\n" \
 	"eor %w[TMP2], %w[TMP2], %w[" STR(C) "]\n" \
 	KEXTRA "\n" \
 	"add %w[" STR(A) "], %w[" STR(A) "], %w[TMP2]\n" \
-	ROR_ADD(A, B, R)
+	"ror %w[" STR(A) "], %w[" STR(A) "], #" STR(R) "\n" \
+	"add %w[" STR(D) "], %w[" STR(D) "], " I "\n" \
+	"add %w[" STR(A) "], %w[" STR(A) "], %w[" STR(B) "]\n"
 
 #define ROUND_G(A, B, C, D, I, K, KEXTRA, R) \
-	"add %w[" STR(A) "], %w[" STR(A) "], " I "\n" \
 	"bic %w[TMP2], %w[" STR(C) "], %w[" STR(D) "]\n" \
 	"add %w[" STR(A) "], %w[" STR(A) "], %w[" K "]\n" \
 	"and %w[TMP1], %w[" STR(B) "], %w[" STR(D) "]\n" \
 	"add %w[" STR(A) "], %w[" STR(A) "], %w[TMP2]\n" \
 	KEXTRA "\n" \
 	"add %w[" STR(A) "], %w[" STR(A) "], %w[TMP1]\n" \
-	ROR_ADD(A, B, R)
+	"ror %w[" STR(A) "], %w[" STR(A) "], #" STR(R) "\n" \
+	"add %w[" STR(D) "], %w[" STR(D) "], " I "\n" \
+	"add %w[" STR(A) "], %w[" STR(A) "], %w[" STR(B) "]\n"
 
 #define RF4(i0, i1, i2, i3, i4, i5, kr) \
 	asm( \
@@ -155,31 +155,40 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_scalar(uint32_t* HEDLEY_RESTR
 		ROUND_F(D, D, A, B, C, "%w[cache1]", "k0", "", 20, "")
 		ROUND_F(C, C, D, A, B, "%w[cache2]", "k1", "lsr %[k1], %[k1], #32", 15, "")
 		ROUND_F(B, B, C, D, A, "%w[cache3]", "k1", "ldp %[k0], %[k1], [%[kM], #64]", 10, "")
+		
+		"add %w[A], %w[A], %w[cacheN]\n"
 	: ASM_PARAMS("+&r"), [cache2]"=&r"(cache[14]), [cache3]"=&r"(cache[15])
 	: [i14]"m"(_in[14]), [kM]"r"(md5_constants_aarch64),
-	  [cache0]"r"(cache[12]), [cache1]"r"(cache[13])
+	  [cache0]"r"(cache[12]), [cache1]"r"(cache[13]), [cacheN]"r"(cache[1])
 	:);
 	
-	RG4( 1,  6, 11,  0,    80)
-	RG4( 5, 10, 15,  4,    96)
-	RG4( 9, 14,  3,  8,   112)
-	RG4(13,  2,  7, 12,   128)
+	RG4(  6, 11,  0, 5,    80)
+	RG4( 10, 15,  4, 9,    96)
+	RG4( 14,  3,  8,13,   112)
+	RG4(  2,  7, 12, 5,   128)
 	
-	RH4( 5,  8, 11, 14,   144)
-	RH4( 1,  4,  7, 10,   160)
-	RH4(13,  0,  3,  6,   176)
-	RH4( 9, 12, 15,  2,   192)
+	RH4(  8, 11, 14, 1,   144)
+	RH4(  4,  7, 10,13,   160)
+	RH4(  0,  3,  6, 9,   176)
+	RH4( 12, 15,  2, 0,   192)
 	
-	RI4( 0,  7, 14,  5,   208)
-	RI4(12,  3, 10,  1,   224)
-	RI4( 8, 15,  6, 13,   240)
+	RI4(  7, 14,  5,12,   208)
+	RI4(  3, 10,  1, 8,   224)
+	RI4( 15,  6, 13, 4,   240)
 	asm(
 		ROUND_I(A, B, C, D, "%w[cache0]", "k0", "lsr %[k0], %[k0], #32", 26)
 		ROUND_I(D, A, B, C, "%w[cache1]", "k0", "", 22)
 		ROUND_I(C, D, A, B, "%w[cache2]", "k1", "lsr %[k1], %[k1], #32", 17)
-		ROUND_I(B, C, D, A, "%w[cache3]", "k1", "", 11)
+		
+		// ROUND_I last
+		"orn %w[TMP2], %w[C], %w[A]\n"
+		"add %w[B], %w[B], %w[k1]\n"
+		"eor %w[TMP2], %w[TMP2], %w[D]\n"
+		"add %w[B], %w[B], %w[TMP2]\n"
+		"ror %w[B], %w[B], #11\n"
+		"add %w[B], %w[B], %w[C]\n"
 	: ASM_PARAMS("+&r")
-	: [kM]"r"(md5_constants_aarch64), [cache0]"r"(cache[4]), [cache1]"r"(cache[11]), [cache2]"r"(cache[2]), [cache3]"r"(cache[9])
+	: [kM]"r"(md5_constants_aarch64), [cache0]"r"(cache[11]), [cache1]"r"(cache[2]), [cache2]"r"(cache[9])
 	:);
 	
 	state[0] += A;
@@ -195,7 +204,6 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_scalar(uint32_t* HEDLEY_RESTR
 #undef RH4
 #undef RI4
 
-#undef ROR_ADD
 #undef REV
 }
 
