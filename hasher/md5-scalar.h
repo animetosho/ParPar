@@ -12,7 +12,11 @@
 #endif
 #if (defined(__GNUC__) || defined(__clang__)) && defined(PLATFORM_ARM)
 # define MD5_USE_ASM
-# include "md5-arm-asm.h"
+# ifdef __aarch64__
+#  include "md5-arm64-asm.h"
+# else
+#  include "md5-arm-asm.h"
+# endif
 #endif
 
 
