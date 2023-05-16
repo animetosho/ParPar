@@ -16,7 +16,7 @@ jobs:
         with:
           python-version: '2.7'
       - uses: actions/checkout@v3
-      - run: npm install --production
+      - run: npm install --production --ignore-scripts
       - run: (cd nexe && npm install --production)
       - run: (cd nexe && node build)
       - run: move nexe\parpar.exe parpar.exe && 7z a -t7z -mx=9 parpar.7z parpar.exe

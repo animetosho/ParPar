@@ -25,7 +25,7 @@ jobs:
         uses: bruceadams/get-release@v1.2.3
         env:
           GITHUB_TOKEN: ${{ github.token }}
-      - run: npm install --production
+      - run: npm install --production --ignore-scripts
       - run: (cd nexe && npm install --production)
       - run: (cd nexe && node build)
       - run: move nexe\parpar.exe parpar.exe && 7z a -t7z -mx=9 parpar.7z parpar.exe
@@ -40,6 +40,7 @@ jobs:
   
   build-linux-static:
     strategy:
+      fail-fast: false
       matrix:
         include:
         - target: x86_64-linux-musl
@@ -86,7 +87,7 @@ jobs:
         uses: bruceadams/get-release@v1.2.3
         env:
           GITHUB_TOKEN: ${{ github.token }}
-      - run: npm install --production
+      - run: npm install --production --ignore-scripts
       - run: (cd nexe && npm install --production)
       - run: (cd nexe && node build)
         env:
@@ -106,6 +107,7 @@ jobs:
 
   build-linux-glibc:
     strategy:
+      fail-fast: false
       matrix:
         include:
         - xcc: 
@@ -157,7 +159,7 @@ jobs:
         uses: bruceadams/get-release@v1.2.3
         env:
           GITHUB_TOKEN: ${{ github.token }}
-      - run: npm install --production
+      - run: npm install --production --ignore-scripts
       - run: (cd nexe && npm install --production)
       - run: (cd nexe && node build)
         env:
@@ -188,7 +190,7 @@ jobs:
         uses: bruceadams/get-release@v1.2.3
         env:
           GITHUB_TOKEN: ${{ github.token }}
-      - run: npm install --production
+      - run: npm install --production --ignore-scripts
       - run: (cd nexe && npm install --production)
       - run: (cd nexe && node build)
       - run: xz -9e --x86 --lzma2 nexe/parpar -c > parpar.xz

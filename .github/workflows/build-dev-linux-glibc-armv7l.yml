@@ -24,7 +24,7 @@ jobs:
         with:
           arch: i386  # '-m32' switch doesn't work without this
           packages: "libstdc++-$(c++ -dumpversion)-dev:i386 libc6-dev:i386"
-      - run: npm install --production
+      - run: npm install --production --ignore-scripts
       - run: (cd nexe && npm install --production)
       - run: (cd nexe && node build)
         env:

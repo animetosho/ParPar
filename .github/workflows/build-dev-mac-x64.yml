@@ -11,7 +11,7 @@ jobs:
       BUILD_LOGLEVEL: verbose
     steps:
       - uses: actions/checkout@v3
-      - run: npm install --production
+      - run: npm install --production --ignore-scripts
       - run: (cd nexe && npm install --production)
       - run: (cd nexe && node build)
       - run: xz -9e --x86 --lzma2 nexe/parpar -c > parpar.xz
