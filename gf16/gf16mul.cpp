@@ -439,8 +439,7 @@ Galois16MethodInfo Galois16Mul::info(Galois16Methods _method) {
 		break;
 		case GF16_AFFINE_AVX512:
 		case GF16_AFFINE2X_AVX512:
-			// try to target L1 size (affine also has very fast init)
-			_info.idealChunkSize = 1*1024;
+			_info.idealChunkSize = 4*1024;
 		break;
 		case GF16_CLMUL_NEON: // faster init than Shuffle, and usually faster
 		case GF16_CLMUL_SVE2: // may want smaller chunk size for wider vectors

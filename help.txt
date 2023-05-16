@@ -346,7 +346,7 @@ OpenCL Options:
                              each having a 1GB memory limit. The remaining 27%
                              is computed on the CPU.
        --cpu-minchunk        Target minimum chunk size to process on the CPU.
-                             Default is 32KB
+                             Default is 64KB
        --opencl-list         Prints a list of available OpenCL platforms and
                              devices, along with IDs, and exits. If the value
                              `all` is passed, will list all OpenCL devices,

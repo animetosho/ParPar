@@ -190,7 +190,7 @@ var par2creator = require('@animetosho/parpar').run(
         gfMethod: null, // null => '' (auto)
         loopTileSize: 0, // 0 = auto
 		openclDevices: [], // each device (defaults listed): {platform: null, device: null, ratio: null, memoryLimit: null, method: null, input_batchsize: 0, target_iters: 0, target_grouping: 0, minChunkSize: 32768}
-		cpuMinChunkSize: 32768, // must be even
+		cpuMinChunkSize: 65536, // must be even
     },
     function(err) {
         console.log(err || 'Process finished');
