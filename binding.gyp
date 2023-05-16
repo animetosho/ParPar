@@ -36,16 +36,16 @@
     {
       "target_name": "parpar_gf",
       "dependencies": [
-        "gf16", "gf16_generic", "gf16_sse2", "gf16_ssse3", "gf16_avx", "gf16_avx2", "gf16_avx512", "gf16_vbmi", "gf16_gfni", "gf16_gfni_avx2", "gf16_gfni_avx512", "gf16_neon", "gf16_sve", "gf16_sve2",
+        "parpar_gf_c", "gf16", "gf16_generic", "gf16_sse2", "gf16_ssse3", "gf16_avx", "gf16_avx2", "gf16_avx512", "gf16_vbmi", "gf16_gfni", "gf16_gfni_avx2", "gf16_gfni_avx512", "gf16_neon", "gf16_sve", "gf16_sve2",
         "hasher", "hasher_sse2", "hasher_clmul", "hasher_xop", "hasher_bmi1", "hasher_avx2", "hasher_avx512", "hasher_avx512vl", "hasher_armcrc", "hasher_neon", "hasher_neoncrc", "hasher_sve2"
       ],
-      "sources": ["src/gf.cc", "gf16/controller.cpp", "gf16/controller_cpu.cpp", "gf16/controller_ocl.cpp", "gf16/controller_ocl_init.cpp", "gf16/opencl-include/cl.c", "gf16/gfmat_coeff.c"],
+      "sources": ["src/gf.cc", "gf16/controller.cpp", "gf16/controller_cpu.cpp", "gf16/controller_ocl.cpp", "gf16/controller_ocl_init.cpp"],
       "include_dirs": ["gf16", "gf16/opencl-include"],
       "cflags!": ["-fno-exceptions"],
       "cxxflags!": ["-fno-exceptions"],
       "cflags_cc!": ["-fno-exceptions"],
-      "defines": ["PARPAR_LIBDL_SUPPORT", "USE_LIBUV"],
-      "cflags": ["-fexceptions"],
+      "defines": ["USE_LIBUV"],
+      "cflags": ["-fexceptions", "-std=c++11"],
       "cxxflags": ["-fexceptions"],
       "cflags_cc": ["-fexceptions"],
       "xcode_settings": {
@@ -58,15 +58,41 @@
       "msvs_settings": {"VCCLCompilerTool": {"ExceptionHandling": "1"}}
     },
     {
+      "target_name": "parpar_gf_c",
+      "type": "static_library",
+      "defines": ["NDEBUG", "PARPAR_LIBDL_SUPPORT"],
+      "sources": ["gf16/opencl-include/cl.c", "gf16/gfmat_coeff.c"],
+      "include_dirs": ["gf16/opencl-include"],
+      "cflags": ["-Wno-unused-function", "-std=gnu99"],
+      "cflags!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"],
+      "xcode_settings": {
+        "OTHER_CFLAGS": ["-Wno-unused-function"],
+        "OTHER_CFLAGS!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"]
+      }
+    },
+    {
       "target_name": "hasher",
       "type": "static_library",
       "defines": ["NDEBUG"],
-      "sources": ["hasher/hasher.cpp", "hasher/crc_zeropad.c", "hasher/md5-final.c", "hasher/hasher_scalar.cpp"],
+      "sources": ["hasher/hasher.cpp", "hasher/hasher_scalar.cpp"],
+      "dependencies": ["hasher_c"],
       "cflags!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"],
       "cxxflags!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"],
       "xcode_settings": {
         "OTHER_CFLAGS!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"],
         "OTHER_CXXFLAGS!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"]
+      },
+      "msvs_settings": {"VCCLCompilerTool": {"BufferSecurityCheck": "false"}}
+    },
+    {
+      "target_name": "hasher_c",
+      "type": "static_library",
+      "defines": ["NDEBUG"],
+      "sources": ["hasher/crc_zeropad.c", "hasher/md5-final.c"],
+      "cflags": ["-Wno-unused-function", "-std=gnu99"],
+      "cflags!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"],
+      "xcode_settings": {
+        "OTHER_CFLAGS!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"],
       },
       "msvs_settings": {"VCCLCompilerTool": {"BufferSecurityCheck": "false"}}
     },

@@ -221,7 +221,7 @@ public:
 	}
 #endif
 	
-	inline const void* getMethodName() const {
+	inline const char* getMethodName() const {
 		return methodToText(_setupMethod);
 	}
 	inline unsigned getStagingAreas() const {

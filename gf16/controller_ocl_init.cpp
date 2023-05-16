@@ -1262,7 +1262,7 @@ bool PAR2ProcOCL::setup_kernels(Galois16OCLMethods method, unsigned targetInputB
 			if(groupIterations < 1) groupIterations = 1;
 		}
 		// if iterations cannot be scaled down, scale down workgroup size next
-		int minWgSize = 1;
+		unsigned minWgSize = 1;
 		if(kernelCode == _ocl_kernel_lut || kernelCode == _ocl_kernel_cachelut)
 			minWgSize = 128; // if computing lookup tables, don't scale down the workgroup below this amount
 		if(groupIterations == 1 && sizePerWorkGroup > sliceSizeCksum && wgSize > minWgSize) {

@@ -124,7 +124,7 @@ static inline uv_loop_t* getCurrentLoop(Isolate* isolate, int) {
 	return uv_default_loop();
 }
 #else
-static inline uv_loop_t getCurrentLoop(int) {
+static inline uv_loop_t* getCurrentLoop(int) {
 	return uv_default_loop();
 }
 #endif
@@ -381,6 +381,7 @@ public:
 		}
 		
 		self->Wrap(args.This());
+		RETURN_UNDEF;
 	}
 	
 private:
@@ -419,6 +420,7 @@ protected:
 			self->par2.deinit();
 		}
 		self->isClosed = true;
+		RETURN_UNDEF;
 	}
 	
 	FUNC(FreeMem) {
@@ -431,6 +433,7 @@ protected:
 		
 		self->par2.freeProcessingMem();
 		self->hasOutput = false;
+		RETURN_UNDEF;
 	}
 	
 	FUNC(SetCurrentSliceSize) {
@@ -453,6 +456,7 @@ protected:
 		self->hasOutput = false;
 		if(!self->par2.setCurrentSliceSize(sliceSize))
 			RETURN_ERROR("Failed to allocate memory");
+		RETURN_UNDEF;
 	}
 	FUNC(SetRecoverySlices) {
 		FUNC_START;
@@ -484,6 +488,7 @@ protected:
 		self->hasOutput = false; // probably can be retained, but we'll pretend not for consistency's sake
 		if(!self->par2.setRecoverySlices(outputs))
 			RETURN_ERROR("Failed to allocate memory");
+		RETURN_UNDEF;
 	}
 	
 	FUNC(SetNumThreads) {
@@ -516,6 +521,7 @@ protected:
 		} else {
 			self->progressCb.detachCallback();
 		}
+		RETURN_UNDEF;
 	}
 	
 	FUNC(GetInfo) {
@@ -638,6 +644,7 @@ protected:
 			cb->call();
 			delete cb;
 		});
+		RETURN_UNDEF;
 	}
 	
 	FUNC(GetOutputSlice) {
@@ -677,11 +684,14 @@ protected:
 				cb->call({ Integer::New(cb->isolate, idx), Boolean::New(cb->isolate, cksumValid), buffer });
 #else
 				Local<Value> buffer = Local<Value>::New(cb->value);
-				cb->call({ Integer::New(idx), Boolean::New(cksumValid), buffer });
+				Local<Value> _idx = Local<Value>::New(Integer::New(idx));
+				Local<Value> _cksumValid = Local<Value>::New(Boolean::New(cksumValid));
+				cb->call({ _idx, _cksumValid, buffer });
 #endif
 				delete cb;
 			}
 		);
+		RETURN_UNDEF;
 	}
 	
 	explicit GfProc(size_t sliceSize, int stagingAreas, size_t cpuOffset, size_t cpuSliceSize, std::vector<struct GfOclSpec> useOcl, uv_loop_t* loop)
@@ -883,6 +893,7 @@ public:
 		PERSIST_VALUE(self->ifscData, args[1]);
 		
 		self->Wrap(args.This());
+		RETURN_UNDEF;
 	}
 	
 private:
@@ -909,6 +920,7 @@ protected:
 			RETURN_ERROR("Cannot reset whilst running");
 		
 		self->hasher->reset();
+		RETURN_UNDEF;
 	}
 	
 	static void thread_func(ThreadMessageQueue<void*>& q) {
@@ -986,6 +998,7 @@ protected:
 		data->self = self;
 		data->bh = &self->bh;
 		self->thread_send(data);
+		RETURN_UNDEF;
 	}
 	
 	void deinit() {
@@ -1022,11 +1035,16 @@ protected:
 		
 		// clean up everything
 		self->deinit();
+		RETURN_UNDEF;
 	}
 	
 	explicit HasherInput(uv_loop_t* _loop) : ObjectWrap(), loop(_loop), queueCount(0), thread(nullptr) {
 		hasher = HasherInput_Create();
-		uv_async_init(loop, &threadSignal, [](uv_async_t *handle) {
+		uv_async_init(loop, &threadSignal, [](uv_async_t *handle
+#if UV_VERSION_MAJOR < 1
+			, int
+#endif
+		) {
 			static_cast<HasherInput*>(handle->data)->after_process();
 		});
 		threadSignal.data = static_cast<void*>(this);
@@ -1043,6 +1061,7 @@ FUNC(HasherInputClear) {
 	for(auto thread : HasherInputThreadPool)
 		delete thread;
 	HasherInputThreadPool.clear();
+	RETURN_UNDEF;
 }
 
 class HasherOutput;
@@ -1076,6 +1095,7 @@ public:
 		
 		HasherOutput *self = new HasherOutput(regions, getCurrentLoop(ISOLATE 0));
 		self->Wrap(args.This());
+		RETURN_UNDEF;
 	}
 	
 private:
@@ -1097,6 +1117,7 @@ protected:
 			RETURN_ERROR("Cannot reset whilst running");
 		
 		self->hasher.reset();
+		RETURN_UNDEF;
 	}
 	
 	static void do_update(uv_work_t *req) {
@@ -1167,6 +1188,7 @@ protected:
 		} else {
 			self->hasher.update(self->buffers.data(), bufLen);
 		}
+		RETURN_UNDEF;
 	}
 	
 	FUNC(Get) {
@@ -1184,6 +1206,7 @@ protected:
 		char* result = (char*)node::Buffer::Data(args[0]);
 		self->hasher.end();
 		self->hasher.get(result);
+		RETURN_UNDEF;
 	}
 	
 	explicit HasherOutput(unsigned regions, uv_loop_t* _loop) : ObjectWrap(), hasher(regions), loop(_loop), numRegions(regions), isRunning(false), buffers(regions) {
@@ -1212,6 +1235,7 @@ FUNC(SetHasherOutput) {
 
 	MD5MultiLevels level = (MD5MultiLevels)ARG_TO_NUM(Int32, args[0]);
 	set_hasherMD5MultiLevel(level);
+	RETURN_UNDEF;
 }
 
 

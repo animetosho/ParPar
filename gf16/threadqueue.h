@@ -153,7 +153,11 @@ class ThreadNotifyQueue {
 	P* o;
 	void (P::*cb)(void*);
 	
-	static void notified(uv_async_t *handle) {
+	static void notified(uv_async_t *handle
+#if UV_VERSION_MAJOR < 1
+		, int
+#endif
+	) {
 		auto self = static_cast<ThreadNotifyQueue*>(handle->data);
 		void* notification;
 		while(self->q.trypop(&notification))
