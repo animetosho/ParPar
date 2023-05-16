@@ -3,10 +3,10 @@ ParPar
 
 ParPar is a high performance, multi-threaded [PAR2](https://en.wikipedia.org/wiki/Parchive) creation-only tool, which can be operated as a command-line application or via a node.js API. ParPar does not verify or repair files, only creates redundancy. ParPar is a completely new, from ground-up, implementation, which does not use components from existing PAR2 implementations.
 
-Related:
+Related projects:
 
 * **[ParParGUI](https://github.com/animetosho/ParParGUI)**: GUI frontend for ParPar
-* **[par2cmdline-turbo](https://github.com/animetosho/par2cmdline-turbo)**: ParPar’s processing backend ported to [par2cmdline](https://github.com/Parchive/par2cmdline)
+* **[par2cmdline-turbo](https://github.com/animetosho/par2cmdline-turbo)**: ParPar’s processing backend ported to [par2cmdline](https://github.com/Parchive/par2cmdline); supports PAR2 verify/repair unlike ParPar
 
 Features
 --------
@@ -107,17 +107,20 @@ By default, the `-march=native` flag is used for non-Windows builds, which optim
 
 To get OpenCL to work, there’s a few requirements:
 
-* you’ll need an OpenCL compatible device (most GPUs should be compatible)
+* you’ll need an OpenCL compatible device (many GPUs should be compatible)
 * OpenCL 1.1 support is sufficient, though OpenCL 1.0 may work
 * OpenCL supporting drivers need to be installed. For GPUs, the driver package is often sufficient. On \*nix, ensure the appropriate OpenCL-ICD is installed (ParPar will try to link to *libOpenCL.so*, or if not found, will try *libOpenCL.so.1* and *libOpenCL.so.1.0.0*)
 * a fully static Linux build won’t work, due to incompatibility with `dlopen` and statically linked libc. This means you’ll need to use the glibc builds, or compile the application yourself. The OpenCL headers are included with ParPar’s source, so OpenCL development libraries aren’t necessary
 * OpenCL is untested on macOS
 
-# GPU Processing
+GPU Processing
+==============
 
-ParPar supports offloading processing to one or more GPU devices via the OpenCL interface. Note that **OpenCL support is considered unstable**, and is disabled by default (opt in using `--opencl-process`). The implementation is currently very basic and only supports statically partitioning the input between CPU/GPU (i.e. you need to specify the amount of data to offload).
+ParPar supports offloading processing to one or more GPU devices via the OpenCL interface. Note that **OpenCL support is considered unstable**, and is disabled by default (opt in using `--opencl-process`). The implementation is currently very basic and only supports statically partitioning the input between CPU/GPU (i.e. you need to specify the percentage of data to offload to the GPU).
 
 From testing, it seems a number of OpenCL drivers/implementations can be somewhat buggy, so use of this feature is at your own risk.
+
+Note that OpenCL will not work with static Linux builds.
 
 API
 ===
@@ -210,7 +213,8 @@ par2creator.on('chunk_pass_complete', function(par, passNum, passChunkNum) {
 });
 ```
 
-## Low Level API
+Low Level API
+-------------
 
 ParPar can be operated at a lower level API, which gives more control over the creation process, but requires a deeper understanding of how the application operates and has a number of constraints. This API is undocumented, but examples can be found in [the examples folder](examples/).
 
@@ -240,7 +244,10 @@ A basic script to compile the ParPar binary is provided in the *nexe* folder. Th
 
 On Linux, this will generate a partially static build (dependent on libc) for OpenCL support. Set the `BUILD_STATIC` environment variable to `--fully-static` if you want a fully static build.
 
-### Alternatives
+See also the Github Actions [build workflows](.github/workflows).
+
+Alternatives
+============
 
 For a list of command-line PAR2 tools, [see here](benchmarks/info.md#applications-tested-and-commands-given).
 ParPar’s standout feature compared to par2cmdline would be its performance, and against MultiPar, cross-platform support.
