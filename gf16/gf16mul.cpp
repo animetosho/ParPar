@@ -1205,6 +1205,7 @@ void Galois16Mul::mutScratch_free(void* mutScratch) const {
 
 Galois16Methods Galois16Mul::default_method(size_t regionSizeHint, unsigned /*outputs*/) {
 	const CpuCap caps(true);
+	(void)regionSizeHint;
 	
 #ifdef PLATFORM_X86
 	if(caps.hasGFNI) {

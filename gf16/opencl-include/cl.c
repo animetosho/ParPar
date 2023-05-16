@@ -877,7 +877,9 @@ int load_opencl() {
 	
 	return 0;
 	
+#if defined(_WIN32) || defined(PARPAR_LIBDL_SUPPORT)
 sym_load_failed:
+#endif
 	unload_opencl();
 	return 2;
 }
