@@ -11,6 +11,11 @@
 # define REV(R) "rev " REG(R) ", " REG(R) "\n"
 #endif
 
+#if !defined(__aarch64__) && (!defined(__clang__) || (defined(__ARM_ARCH_ISA_THUMB) && __ARM_ARCH_ISA_THUMB < 2))
+// GCC refuses to allow >9 registers in Thumb mode; Clang has no qualms, as long as it's Thumb2
+# define ARM_THUMB_LIMIT_REGS 1
+#endif
+
 
 static HEDLEY_ALWAYS_INLINE void md5_process_block_scalar(uint32_t* HEDLEY_RESTRICT state, const uint8_t* const* HEDLEY_RESTRICT data, size_t offset) {
 	(void)offset;
@@ -107,33 +112,44 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_scalar(uint32_t* HEDLEY_RESTR
 	ROR_ADD(A, B, R)
 
 #define RF4(I, i0, i1, i2, i3, k0l, k0h, k1l, k1h, k2l, k2h, k3l, k3h) \
-	ROUND_F(I##A, A, I##B, I##C, I##D, "%[i" STR(i0) "]", k0l, k0h, 25) \
-	ROUND_F(I##D, D, A, I##B, I##C, "%[i" STR(i1) "]", k1l, k1h, 20) \
-	ROUND_F(I##C, C, D, A, I##B, "%[i" STR(i2) "]", k2l, k2h, 15) \
-	ROUND_F(I##B, B, C, D, A, "%[i" STR(i3) "]", k3l, k3h, 10)
+	ROUND_F(I##A, A, I##B, I##C, I##D, "[%[in], #4*" STR(i0) "]", k0l, k0h, 25) \
+	ROUND_F(I##D, D, A, I##B, I##C, "[%[in], #4*" STR(i1) "]", k1l, k1h, 20) \
+	ROUND_F(I##C, C, D, A, I##B, "[%[in], #4*" STR(i2) "]", k2l, k2h, 15) \
+	ROUND_F(I##B, B, C, D, A, "[%[in], #4*" STR(i3) "]", k3l, k3h, 10)
 	
 #define RG4(i0, i1, i2, i3, k0l, k0h, k1l, k1h, k2l, k2h, k3l, k3h) \
-	ROUND_G(A, B, C, D, "%[i" STR(i0) "]", k0l, k0h, 27) \
-	ROUND_G(D, A, B, C, "%[i" STR(i1) "]", k1l, k1h, 23) \
-	ROUND_G(C, D, A, B, "%[i" STR(i2) "]", k2l, k2h, 18) \
-	ROUND_G(B, C, D, A, "%[i" STR(i3) "]", k3l, k3h, 12)
+	ROUND_G(A, B, C, D, "[%[in], #4*" STR(i0) "]", k0l, k0h, 27) \
+	ROUND_G(D, A, B, C, "[%[in], #4*" STR(i1) "]", k1l, k1h, 23) \
+	ROUND_G(C, D, A, B, "[%[in], #4*" STR(i2) "]", k2l, k2h, 18) \
+	ROUND_G(B, C, D, A, "[%[in], #4*" STR(i3) "]", k3l, k3h, 12)
 	
 #define RH4(i0, i1, i2, i3, k0l, k0h, k1l, k1h, k2l, k2h, k3l, k3h) \
-	ROUND_H(A, B, C, D, "%[i" STR(i0) "]", k0l, k0h, 28) \
-	ROUND_H(D, A, B, C, "%[i" STR(i1) "]", k1l, k1h, 21) \
-	ROUND_H(C, D, A, B, "%[i" STR(i2) "]", k2l, k2h, 16) \
-	ROUND_H(B, C, D, A, "%[i" STR(i3) "]", k3l, k3h, 9)
+	ROUND_H(A, B, C, D, "[%[in], #4*" STR(i0) "]", k0l, k0h, 28) \
+	ROUND_H(D, A, B, C, "[%[in], #4*" STR(i1) "]", k1l, k1h, 21) \
+	ROUND_H(C, D, A, B, "[%[in], #4*" STR(i2) "]", k2l, k2h, 16) \
+	ROUND_H(B, C, D, A, "[%[in], #4*" STR(i3) "]", k3l, k3h, 9)
 	
 #define RI4(i0, i1, i2, i3, k0l, k0h, k1l, k1h, k2l, k2h, k3l, k3h) \
-	ROUND_I(A, B, C, D, "%[i" STR(i0) "]", k0l, k0h, 26) \
-	ROUND_I(D, A, B, C, "%[i" STR(i1) "]", k1l, k1h, 22) \
-	ROUND_I(C, D, A, B, "%[i" STR(i2) "]", k2l, k2h, 17) \
-	ROUND_I(B, C, D, A, "%[i" STR(i3) "]", k3l, k3h, 11)
+	ROUND_I(A, B, C, D, "[%[in], #4*" STR(i0) "]", k0l, k0h, 26) \
+	ROUND_I(D, A, B, C, "[%[in], #4*" STR(i1) "]", k1l, k1h, 22) \
+	ROUND_I(C, D, A, B, "[%[in], #4*" STR(i2) "]", k2l, k2h, 17) \
+	ROUND_I(B, C, D, A, "[%[in], #4*" STR(i3) "]", k3l, k3h, 11)
+	
+#ifdef ARM_THUMB_LIMIT_REGS
+	A = state[0];
+	B = state[1];
+	C = state[2];
+	D = state[3];
+#endif
 	
 	asm(
-		"ldr " REG(TMP2) ", %[i0]\n"
+		"ldr " REG(TMP2) ", [%[in]]\n"
 		REV(TMP2)
+#ifdef ARM_THUMB_LIMIT_REGS
+		RF4(, 1,  2,  3,  4,  0xa478, 0xd76a, 0xb756, 0xe8c7, 0x70db, 0x2420, 0xceee, 0xc1bd)
+#else
 		RF4(I, 1,  2,  3,  4,  0xa478, 0xd76a, 0xb756, 0xe8c7, 0x70db, 0x2420, 0xceee, 0xc1bd)
+#endif
 		RF4(, 5,  6,  7,  8,  0x0faf, 0xf57c, 0xc62a, 0x4787, 0x4613, 0xa830, 0x9501, 0xfd46)
 		RF4(, 9, 10, 11, 12,  0x98d8, 0x6980, 0xf7af, 0x8b44, 0x5bb1, 0xffff, 0xd7be, 0x895c)
 		RF4(,13, 14, 15,  1,  0x1122, 0x6b90, 0x7193, 0xfd98, 0x438e, 0xa679, 0x0821, 0x49b4)
@@ -152,15 +168,23 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_scalar(uint32_t* HEDLEY_RESTR
 		RI4( 3, 10,  1,  8,  0x59c3, 0x655b, 0xcc92, 0x8f0c, 0xf47d, 0xffef, 0x5dd1, 0x8584)
 		RI4(15,  6, 13,  4,  0x7e4f, 0x6fa8, 0xe6e0, 0xfe2c, 0x4314, 0xa301, 0x11a1, 0x4e08)
 		
-		ROUND_I(A, B, C, D, "%[i11]", 0x7e82, 0xf753, 26)
-		ROUND_I(D, A, B, C, "%[i2]",  0xf235, 0xbd3a, 22)
-		ROUND_I(C, D, A, B, "%[i9]",  0xd2bb, 0x2ad7, 17)
+		ROUND_I(A, B, C, D, "[%[in], #4*11]", 0x7e82, 0xf753, 26)
+		ROUND_I(D, A, B, C, "[%[in], #4*2]",  0xf235, 0xbd3a, 22)
+		ROUND_I(C, D, A, B, "[%[in], #4*9]",  0xd2bb, 0x2ad7, 17)
 		ROUND_I_LAST(B, C, D, A, 0xd391, 0xeb86, 11)
-	: [A]"=&r"(A), [B]"=&r"(B), [C]"=&r"(C), [D]"=&r"(D),
+	:
+#ifdef ARM_THUMB_LIMIT_REGS
+	[A]"+&r"(A), [B]"+&r"(B), [C]"+&r"(C), [D]"+&r"(D),
+#else
+	[A]"=&r"(A), [B]"=&r"(B), [C]"=&r"(C), [D]"=&r"(D),
+#endif
 	  [TMP1]"=&r"(tmp1), [TMP2]"=&r"(tmp2), [TMP3]"=&r"(tmp3)
 	:
-		[i0]"m"(_in[0]), [i1]"m"(_in[1]), [i2]"m"(_in[2]), [i3]"m"(_in[3]), [i4]"m"(_in[4]), [i5]"m"(_in[5]), [i6]"m"(_in[6]), [i7]"m"(_in[7]), [i8]"m"(_in[8]), [i9]"m"(_in[9]), [i10]"m"(_in[10]), [i11]"m"(_in[11]), [i12]"m"(_in[12]), [i13]"m"(_in[13]), [i14]"m"(_in[14]), [i15]"m"(_in[15]),
-		[IA]"r"(state[0]), [IB]"r"(state[1]), [IC]"r"(state[2]), [ID]"r"(state[3])
+		[in]"r"(_in) // Clang doesn't seem to like "m" references (over allocates registers? causes "assembly requires more registers than available" errors)
+		, "m"(*(const uint32_t (*)[16])_in) // ensure the memory is written before we try to run this
+#ifndef ARM_THUMB_LIMIT_REGS
+		, [IA]"r"(state[0]), [IB]"r"(state[1]), [IC]"r"(state[2]), [ID]"r"(state[3])
+#endif
 	:);
 	state[0] += A;
 	state[1] += B;

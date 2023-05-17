@@ -48,6 +48,17 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_scalar(uint32_t* HEDLEY_RESTR
 	uint64_t k0, k1;
 	uint32_t cache[16];
 	
+#ifdef __clang__
+// "Ump" constraint not supported in Clang 16 [https://github.com/llvm/llvm-project/issues/62769] - so this is a workaround
+# define LDP_SRC(i) "[%[in], #(" STR(i) "*4)]"
+# define LDP_REF(offs, ...) [in]"r"(_in + offs), "m"(*(const uint32_t (*)[16])_in)
+// TODO: investigate if the 'Q' constraint can be used above
+#else
+# define LDP_SRC(i) "%[in" STR(i) "]"
+# define LDP_REF(offs, ...) __VA_ARGS__
+#endif
+
+	
 #define ASM_PARAMS(x) [A]x(A), [B]x(B), [C]x(C), [D]x(D), \
 	  [TMP1]x(tmp1), [TMP2]x(tmp2), [k0]x(k0), [k1]x(k1)
 
@@ -93,14 +104,15 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_scalar(uint32_t* HEDLEY_RESTR
 	"add %w[" STR(D) "], %w[" STR(D) "], " I "\n" \
 	"add %w[" STR(A) "], %w[" STR(A) "], %w[" STR(B) "]\n"
 
+
 #define RF4(i0, i1, i2, i3, i4, i5, kr) \
 	asm( \
-		ROUND_F(A, A, B, C, D, "%w[cache0]", "k0", "lsr %[k0], %[k0], #32", 25, "ldp %w[cache2], %w[cache3], %[in2]") \
+		ROUND_F(A, A, B, C, D, "%w[cache0]", "k0", "lsr %[k0], %[k0], #32", 25, "ldp %w[cache2], %w[cache3], " LDP_SRC(2)) \
 		ROUND_F(D, D, A, B, C, "%w[cache1]", "k0", "", 20, "") \
-		ROUND_F(C, C, D, A, B, "%w[cache2]", "k1", "lsr %[k1], %[k1], #32", 15, "ldp %w[cache4], %w[cache5], %[in4]") \
+		ROUND_F(C, C, D, A, B, "%w[cache2]", "k1", "lsr %[k1], %[k1], #32", 15, "ldp %w[cache4], %w[cache5], " LDP_SRC(4)) \
 		ROUND_F(B, B, C, D, A, "%w[cache3]", "k1", "ldp %[k0], %[k1], [%[kM], #" STR(kr) "]", 10, "") \
 	: ASM_PARAMS("+&r"), [cache2]"=&r"(cache[i2]), [cache3]"=&r"(cache[i3]), [cache4]"=&r"(cache[i4]), [cache5]"=&r"(cache[i5]) \
-	: [in2]"Ump"(_in[i2]), [in4]"Ump"(_in[i4]), [kM]"r"(md5_constants_aarch64), \
+	: LDP_REF(i2-2, [in2]"Ump"(_in[i2]), [in4]"Ump"(_in[i4])), [kM]"r"(md5_constants_aarch64), \
 	  [cache0]"r"(cache[i0]), [cache1]"r"(cache[i1]) \
 	:);
 	
@@ -135,14 +147,14 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_scalar(uint32_t* HEDLEY_RESTR
 	:);
 	
 	asm(
-		"ldp %w[cache0], %w[cache1], %[i0]\n"
+		"ldp %w[cache0], %w[cache1], " LDP_SRC(0) "\n"
 		"ldp %[k0], %[k1], [%[kM]]\n"
-		ROUND_F(IA, A, IB, IC, ID, "%w[cache0]", "k0", "lsr %[k0], %[k0], #32", 25, "ldp %w[cache2], %w[cache3], %[i2]")
+		ROUND_F(IA, A, IB, IC, ID, "%w[cache0]", "k0", "lsr %[k0], %[k0], #32", 25, "ldp %w[cache2], %w[cache3], " LDP_SRC(2))
 		ROUND_F(ID, D, A, IB, IC, "%w[cache1]", "k0", "", 20, "")
-		ROUND_F(IC, C, D, A, IB, "%w[cache2]", "k1", "lsr %[k1], %[k1], #32", 15, "ldp %w[cache4], %w[cache5], %[i4]")
+		ROUND_F(IC, C, D, A, IB, "%w[cache2]", "k1", "lsr %[k1], %[k1], #32", 15, "ldp %w[cache4], %w[cache5], " LDP_SRC(4))
 		ROUND_F(IB, B, C, D, A, "%w[cache3]", "k1", "ldp %[k0], %[k1], [%[kM], #16]", 10, "")
 	: ASM_PARAMS("=&r"), [cache0]"=&r"(cache[0]), [cache1]"=&r"(cache[1]), [cache2]"=&r"(cache[2]), [cache3]"=&r"(cache[3]), [cache4]"=&r"(cache[4]), [cache5]"=&r"(cache[5])
-	: [i0]"Ump"(_in[0]), [i2]"Ump"(_in[2]), [i4]"Ump"(_in[4]),
+	: LDP_REF(0, [in0]"Ump"(_in[0]), [in2]"Ump"(_in[2]), [in4]"Ump"(_in[4])),
 		[kM]"r"(md5_constants_aarch64),
 		[IA]"r"(state[0]), [IB]"r"(state[1]), [IC]"r"(state[2]), [ID]"r"(state[3])
 	:);
@@ -151,14 +163,14 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_scalar(uint32_t* HEDLEY_RESTR
 	RF4( 8,  9, 10, 11, 12, 13,   48)
 	
 	asm(
-		ROUND_F(A, A, B, C, D, "%w[cache0]", "k0", "lsr %[k0], %[k0], #32", 25, "ldp %w[cache2], %w[cache3], %[i14]")
+		ROUND_F(A, A, B, C, D, "%w[cache0]", "k0", "lsr %[k0], %[k0], #32", 25, "ldp %w[cache2], %w[cache3], " LDP_SRC(14))
 		ROUND_F(D, D, A, B, C, "%w[cache1]", "k0", "", 20, "")
 		ROUND_F(C, C, D, A, B, "%w[cache2]", "k1", "lsr %[k1], %[k1], #32", 15, "")
 		ROUND_F(B, B, C, D, A, "%w[cache3]", "k1", "ldp %[k0], %[k1], [%[kM], #64]", 10, "")
 		
 		"add %w[A], %w[A], %w[cacheN]\n"
 	: ASM_PARAMS("+&r"), [cache2]"=&r"(cache[14]), [cache3]"=&r"(cache[15])
-	: [i14]"Ump"(_in[14]), [kM]"r"(md5_constants_aarch64),
+	: LDP_REF(0, [in14]"Ump"(_in[14])), [kM]"r"(md5_constants_aarch64),
 	  [cache0]"r"(cache[12]), [cache1]"r"(cache[13]), [cacheN]"r"(cache[1])
 	:);
 	

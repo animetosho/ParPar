@@ -3,7 +3,8 @@
 #include "../src/platform.h"
 #include "../src/stdint.h"
 
-#if (defined(__GNUC__) || defined(__clang__)) && defined(PLATFORM_X86)
+#if (defined(__GNUC__) || defined(__clang__)) && defined(PLATFORM_X86) && !(defined(__clang__) && !defined(PLATFORM_AMD64))
+// Clang x86 doesn't seem to like this code (maybe forces register allocation with "m" constraint?); TODO: investigate workaround
 # define MD5_USE_ASM
 # define MD5_HAS_NOLEA 1
 # include "md5-x86-asm.h"
