@@ -151,14 +151,15 @@ static HEDLEY_ALWAYS_INLINE __m256i gf16_vec256_mul2(__m256i v) {
 #endif
 static HEDLEY_ALWAYS_INLINE void mul16_vec128(__m128i mulLo, __m128i mulHi, __m128i srcLo, __m128i srcHi, __m128i* dstLo, __m128i *dstHi) {
 	__m128i ti = _MM128_SRLI4_EPI8(srcHi);
+	__m128i sh = srcHi; // MSVC x86 seems to have an odd bug where the parent's variable (e.g. high0/1/2/3) can be modified if srcHi is modified; we work around this by explicitly assigning it to something else
 #ifdef GF16_POLYNOMIAL_SIMPLE
-	srcHi = _mm_xor_si128(srcHi, ti);
+	sh = _mm_xor_si128(sh, ti);
 #endif
 #if MWORD_SIZE == 64
 	__m128i th = _mm_ternarylogic_epi32(
 		_mm_srli_epi16(srcLo, 4),
 		_mm_set1_epi8(0xf),
-		_mm_slli_epi16(srcHi, 4),
+		_mm_slli_epi16(sh, 4),
 		0xE2
 	);
 	*dstLo = _mm_ternarylogic_epi32(
@@ -169,7 +170,7 @@ static HEDLEY_ALWAYS_INLINE void mul16_vec128(__m128i mulLo, __m128i mulHi, __m1
 	);
 #else
 	__m128i tl = _MM128_SLLI4_EPI8(srcLo);
-	__m128i th = _MM128_SLLI4_EPI8(srcHi);
+	__m128i th = _MM128_SLLI4_EPI8(sh);
 	th = _mm_or_si128(th, _MM128_SRLI4_EPI8(srcLo));
 	*dstLo = _mm_xor_si128(tl, _mm_shuffle_epi8(mulLo, ti));
 #endif
