@@ -10,13 +10,27 @@
 #define ASM_INPUTS [input0]"m"(_in[0]), [input1]"m"(_in[1]), [input2]"m"(_in[2]), [input3]"m"(_in[3]), [input4]"m"(_in[4]), [input5]"m"(_in[5]), [input6]"m"(_in[6]), [input7]"m"(_in[7]), [input8]"m"(_in[8]), [input9]"m"(_in[9]), [input10]"m"(_in[10]), [input11]"m"(_in[11]), [input12]"m"(_in[12]), [input13]"m"(_in[13]), [input14]"m"(_in[14]), [input15]"m"(_in[15])
 
 
+// usually the x86 code would use 6 registers (+1 for addressing input), but some compilers don't seem to like it (ClangCL, MSYS GCC) so we'll restrict usage to 5 registers by load-op the input
+#ifdef PLATFORM_AMD64
+# define ADD_CONST(K, A, I) "leal " STR(K) "(%k[" STR(I) STR(A) "], %k[TMP2]), %k[" STR(A) "]\n"
+# define PRELOAD_INPUT(NEXT_IN) "movl " NEXT_IN ", %k[TMP2]\n"
+# define ADD_INPUT(NEXT_IN, D)
+#else
+# define ADD_CONST(K, A, I) "add $" STR(K) ", %k[" STR(A) "]\n"
+# define PRELOAD_INPUT(NEXT_IN)
+// don't need to worry about D/ID distinction here, because it's not enabled on x86
+# define ADD_INPUT(NEXT_IN, D) "add " NEXT_IN ", %k[" STR(D) "]\n"
+#endif
+
+
 #define ROUND_F(I, A, B, C, D, NEXT_IN, K, R) \
 	"xorl %k[" STR(C) "], %k[TMP1]\n" \
-	"leal " STR(K) "(%k[" STR(I) STR(A) "], %k[TMP2]), %k[" STR(A) "]\n" \
+	ADD_CONST(K, A, I) \
 	"andl %k[" STR(B) "], %k[TMP1]\n" \
-	"movl " NEXT_IN ", %k[TMP2]\n" \
+	PRELOAD_INPUT(NEXT_IN) \
 	"xorl %k[" STR(D) "], %k[TMP1]\n" \
 	"addl %k[TMP1], %k[" STR(A) "]\n" \
+	ADD_INPUT(NEXT_IN, D) \
 	"roll $" STR(R) ", %k[" STR(A) "]\n" \
 	"movl %k[" STR(C) "], %k[TMP1]\n" \
 	"addl %k[" STR(B) "], %k[" STR(A) "]\n"
@@ -24,53 +38,58 @@
 #ifdef _MD5_USE_BMI1_
 # define ROUND_F_LAST(A, B, C, D, NEXT_IN, K, R) \
 	"xorl %k[" STR(C) "], %k[TMP1]\n" \
-	"leal " STR(K) "(%k[" STR(A) "], %k[TMP2]), %k[" STR(A) "]\n" \
+	ADD_CONST(K, A, ) \
 	"andl %k[" STR(B) "], %k[TMP1]\n" \
-	"movl " NEXT_IN ", %k[TMP2]\n" \
+	PRELOAD_INPUT(NEXT_IN) \
 	"xorl %k[" STR(D) "], %k[TMP1]\n" \
 	"addl %k[TMP1], %k[" STR(A) "]\n" \
+	ADD_INPUT(NEXT_IN, D) \
 	"roll $" STR(R) ", %k[" STR(A) "]\n" \
 	"andnl %k[" STR(B) "], %k[" STR(C) "], %k[TMP1]\n" \
 	"addl %k[" STR(B) "], %k[" STR(A) "]\n"
 # ifdef PLATFORM_AMD64
 #  define ROUND_G(A, B, C, D, NEXT_IN, K, R) \
-	"leal " STR(K) "(%k[" STR(A) "], %k[TMP2]), %k[" STR(A) "]\n" \
-	"movl " NEXT_IN ", %k[TMP2]\n" \
+	ADD_CONST(K, A, ) \
+	PRELOAD_INPUT(NEXT_IN) \
 	"movl %k[" STR(D) "], %k[TMP3]\n" \
 	"addl %k[TMP1], %k[" STR(A) "]\n" \
 	"andl %k[" STR(B) "], %k[TMP3]\n" \
 	"addl %k[TMP3], %k[" STR(A) "]\n" \
+	ADD_INPUT(NEXT_IN, D) \
 	"roll $" STR(R) ", %k[" STR(A) "]\n" \
 	"andnl %k[" STR(B) "], %k[" STR(C) "], %k[TMP1]\n" \
 	"addl %k[" STR(B) "], %k[" STR(A) "]\n"
 #  define ROUND_G_LAST(A, B, C, D, NEXT_IN, K, R) \
-	"leal " STR(K) "(%k[" STR(A) "], %k[TMP2]), %k[" STR(A) "]\n" \
-	"movl " NEXT_IN ", %k[TMP2]\n" \
+	ADD_CONST(K, A, ) \
+	PRELOAD_INPUT(NEXT_IN) \
 	"movl %k[" STR(D) "], %k[TMP3]\n" \
 	"addl %k[TMP1], %k[" STR(A) "]\n" \
 	"andl %k[" STR(B) "], %k[TMP3]\n" \
 	"addl %k[TMP3], %k[" STR(A) "]\n" \
+	ADD_INPUT(NEXT_IN, D) \
 	"roll $" STR(R) ", %k[" STR(A) "]\n" \
 	"movl %k[" STR(C) "], %k[TMP1]\n" \
 	"addl %k[" STR(B) "], %k[" STR(A) "]\n"
 # else
 #  define ROUND_G(A, B, C, D, NEXT_IN, K, R) \
-	"leal " STR(K) "(%k[" STR(A) "], %k[TMP2]), %k[" STR(A) "]\n" \
+	ADD_CONST(K, A, ) \
 	"addl %k[TMP1], %k[" STR(A) "]\n" \
-	"movl " NEXT_IN ", %k[TMP2]\n" \
+	PRELOAD_INPUT(NEXT_IN) \
 	"movl %k[" STR(D) "], %k[TMP1]\n" \
 	"andl %k[" STR(B) "], %k[TMP1]\n" \
 	"addl %k[TMP1], %k[" STR(A) "]\n" \
+	ADD_INPUT(NEXT_IN, D) \
 	"roll $" STR(R) ", %k[" STR(A) "]\n" \
 	"andnl %k[" STR(B) "], %k[" STR(C) "], %k[TMP1]\n" \
 	"addl %k[" STR(B) "], %k[" STR(A) "]\n"
 #  define ROUND_G_LAST(A, B, C, D, NEXT_IN, K, R) \
-	"leal " STR(K) "(%k[" STR(A) "], %k[TMP2]), %k[" STR(A) "]\n" \
+	ADD_CONST(K, A, ) \
 	"addl %k[TMP1], %k[" STR(A) "]\n" \
-	"movl " NEXT_IN ", %k[TMP2]\n" \
+	PRELOAD_INPUT(NEXT_IN) \
 	"movl %k[" STR(D) "], %k[TMP1]\n" \
 	"andl %k[" STR(B) "], %k[TMP1]\n" \
 	"addl %k[TMP1], %k[" STR(A) "]\n" \
+	ADD_INPUT(NEXT_IN, D) \
 	"roll $" STR(R) ", %k[" STR(A) "]\n" \
 	"movl %k[" STR(C) "], %k[TMP1]\n" \
 	"addl %k[" STR(B) "], %k[" STR(A) "]\n"
@@ -81,52 +100,56 @@
 # ifdef PLATFORM_AMD64
 #  define ROUND_G(A, B, C, D, NEXT_IN, K, R) \
 	"notl %k[TMP1]\n" \
-	"leal " STR(K) "(%k[" STR(A) "], %k[TMP2]), %k[" STR(A) "]\n" \
+	ADD_CONST(K, A, ) \
 	"andl %k[" STR(C) "], %k[TMP1]\n" \
-	"movl " NEXT_IN ", %k[TMP2]\n" \
+	PRELOAD_INPUT(NEXT_IN) \
 	"movl %k[" STR(D) "], %k[TMP3]\n" \
 	"addl %k[TMP1], %k[" STR(A) "]\n" \
 	"andl %k[" STR(B) "], %k[TMP3]\n" \
 	"addl %k[TMP3], %k[" STR(A) "]\n" \
+	ADD_INPUT(NEXT_IN, D) \
 	"roll $" STR(R) ", %k[" STR(A) "]\n" \
 	"movl %k[" STR(C) "], %k[TMP1]\n" \
 	"addl %k[" STR(B) "], %k[" STR(A) "]\n"
 # else
 #  define ROUND_G(A, B, C, D, NEXT_IN, K, R) \
 	"notl %k[TMP1]\n" \
-	"leal " STR(K) "(%k[" STR(A) "], %k[TMP2]), %k[" STR(A) "]\n" \
+	ADD_CONST(K, A, ) \
 	"andl %k[" STR(C) "], %k[TMP1]\n" \
-	"movl " NEXT_IN ", %k[TMP2]\n" \
+	PRELOAD_INPUT(NEXT_IN) \
 	"addl %k[TMP1], %k[" STR(A) "]\n" \
 	"movl %k[" STR(D) "], %k[TMP1]\n" \
 	"andl %k[" STR(B) "], %k[TMP1]\n" \
 	"addl %k[TMP1], %k[" STR(A) "]\n" \
+	ADD_INPUT(NEXT_IN, D) \
 	"roll $" STR(R) ", %k[" STR(A) "]\n" \
 	"movl %k[" STR(C) "], %k[TMP1]\n" \
 	"addl %k[" STR(B) "], %k[" STR(A) "]\n"
 # endif
 #endif
 #define ROUND_H(A, B, C, D, NEXT_IN, K, R) \
-	"xorl %k[" STR(A) "], %k[TMP1]\n" \
-	"leal " STR(K) "(%k[" STR(A) "], %k[TMP2]), %k[" STR(A) "]\n" \
+	ADD_CONST(K, A, ) \
 	"xorl %k[" STR(B) "], %k[TMP1]\n" \
-	"movl " NEXT_IN ", %k[TMP2]\n" \
+	PRELOAD_INPUT(NEXT_IN) \
 	"addl %k[TMP1], %k[" STR(A) "]\n" \
+	"xorl %k[" STR(D) "], %k[TMP1]\n" \
 	"roll $" STR(R) ", %k[" STR(A) "]\n" \
+	ADD_INPUT(NEXT_IN, D) \
 	"addl %k[" STR(B) "], %k[" STR(A) "]\n"
 
 #if defined(_MD5_USE_BMI1_) && defined(PLATFORM_AMD64)
 #define ROUND_I(A, B, C, D, NEXT_IN, K, R) \
-	"leal " STR(K) "(%k[" STR(A) "], %k[TMP2]), %k[" STR(A) "]\n" \
+	ADD_CONST(K, A, ) \
 	"orl %k[" STR(B) "], %k[TMP1]\n" \
-	"movl " NEXT_IN ", %k[TMP2]\n" \
+	PRELOAD_INPUT(NEXT_IN) \
 	"xorl %k[" STR(C) "], %k[TMP1]\n" \
 	"addl %k[TMP1], %k[" STR(A) "]\n" \
+	ADD_INPUT(NEXT_IN, D) \
 	"roll $" STR(R) ", %k[" STR(A) "]\n" \
 	"andnl %k[TMP3], %k[" STR(C) "], %k[TMP1]\n" \
 	"addl %k[" STR(B) "], %k[" STR(A) "]\n"
 #define ROUND_I_LAST(A, B, C, D, K, R) \
-	"leal " STR(K) "(%k[" STR(A) "], %k[TMP2]), %k[" STR(A) "]\n" \
+	ADD_CONST(K, A, ) \
 	"orl %k[" STR(B) "], %k[TMP1]\n" \
 	"xorl %k[" STR(C) "], %k[TMP1]\n" \
 	"addl %k[TMP1], %k[" STR(A) "]\n" \
@@ -135,17 +158,18 @@
 #else
 #define ROUND_I(A, B, C, D, NEXT_IN, K, R) \
 	"notl %k[TMP1]\n" \
-	"leal " STR(K) "(%k[" STR(A) "], %k[TMP2]), %k[" STR(A) "]\n" \
+	ADD_CONST(K, A, ) \
 	"orl %k[" STR(B) "], %k[TMP1]\n" \
-	"movl " NEXT_IN ", %k[TMP2]\n" \
+	PRELOAD_INPUT(NEXT_IN) \
 	"xorl %k[" STR(C) "], %k[TMP1]\n" \
 	"addl %k[TMP1], %k[" STR(A) "]\n" \
+	ADD_INPUT(NEXT_IN, D) \
 	"roll $" STR(R) ", %k[" STR(A) "]\n" \
 	"movl %k[" STR(C) "], %k[TMP1]\n" \
 	"addl %k[" STR(B) "], %k[" STR(A) "]\n"
 #define ROUND_I_LAST(A, B, C, D, K, R) \
 	"notl %k[TMP1]\n" \
-	"leal " STR(K) "(%k[" STR(A) "], %k[TMP2]), %k[" STR(A) "]\n" \
+	ADD_CONST(K, A, ) \
 	"orl %k[" STR(B) "], %k[TMP1]\n" \
 	"xorl %k[" STR(C) "], %k[TMP1]\n" \
 	"addl %k[TMP1], %k[" STR(A) "]\n" \
@@ -185,7 +209,7 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_scalar(uint32_t* HEDLEY_RESTR
 	uint32_t C;
 	uint32_t D;
 	const uint32_t* _in = (const uint32_t*)(data[0]);
-	void *tmp1, *tmp2;
+	void *tmp1;
 	
 #ifndef PLATFORM_AMD64
 	A = state[0];
@@ -193,16 +217,17 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_scalar(uint32_t* HEDLEY_RESTR
 	C = state[2];
 	D = state[3];
 #else
-	void* tmp3;
+	void *tmp2, *tmp3;
 #endif
 	
 	
 	asm(
-		"movl %[input0], %k[TMP2]\n"
 #ifdef PLATFORM_AMD64
+		"movl %[input0], %k[TMP2]\n"
 		"movl %k[ID], %k[TMP1]\n"
 		RF4(I, 1,  2,  3,  4,  -0x28955b88, -0x173848aa, 0x242070db, -0x3e423112)
 #else
+		"addl %[input0], %k[A]\n"
 		"movl %k[D], %k[TMP1]\n"
 		RF4(, 1,  2,  3,  4,  -0x28955b88, -0x173848aa, 0x242070db, -0x3e423112)
 #endif
@@ -212,9 +237,10 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_scalar(uint32_t* HEDLEY_RESTR
 		ROUND_F(, D, A, B, C, "%[input14]", -0x02678e6d, 12)
 		ROUND_F(, C, D, A, B, "%[input15]", -0x5986bc72, 17)
 		ROUND_F_LAST(B, C, D, A, "%[input1]", 0x49b40821, 22)
-	: [TMP1]"=&R"(tmp1), [TMP2]"=&r"(tmp2),
+	: [TMP1]"=&R"(tmp1),
 #ifdef PLATFORM_AMD64
-	  [A]"=&R"(A), [B]"=&R"(B), [C]"=&R"(C), [D]"=&R"(D)
+	  [A]"=&R"(A), [B]"=&R"(B), [C]"=&R"(C), [D]"=&R"(D),
+      [TMP2]"=&r"(tmp2)
 	: [IA]"r"(state[0]), [IB]"r"(state[1]), [IC]"r"(state[2]), [ID]"r"(state[3]),
 #else
 	  [A]"+&R"(A), [B]"+&R"(B), [C]"+&R"(C), [D]"+&R"(D)
@@ -233,11 +259,13 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_scalar(uint32_t* HEDLEY_RESTR
 		ROUND_G_LAST(B, C, D, A, "%[input5]", -0x72d5b376, 20)
 		
 		"xorl %k[C], %k[TMP1]\n"
-		"leal -0x0005c6be(%k[A], %k[TMP2]), %k[A]\n"
+		ADD_CONST(-0x0005c6be, A, )
 		"xorl %k[B], %k[TMP1]\n"
-		"movl %[input8], %k[TMP2]\n"
+		PRELOAD_INPUT("%[input8]")
 		"addl %k[TMP1], %k[A]\n"
+		"xorl %k[D], %k[TMP1]\n"
 		"roll $4, %k[A]\n"
+		ADD_INPUT("%[input8]", D)
 		"addl %k[B], %k[A]\n"
 		ROUND_H(D, A, B, C, "%[input11]", -0x788e097f, 11)
 		ROUND_H(C, D, A, B, "%[input14]", 0x6d9d6122, 16)
@@ -248,6 +276,7 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_scalar(uint32_t* HEDLEY_RESTR
 		"movl $-1, %k[TMP3]\n"
 #endif
 		RH4(12, 15,  2,  0,  -0x262b2fc7, -0x1924661b, 0x1fa27cf8, -0x3b53a99b)
+		// above contains a redundant XOR - TODO: consider eliminating
 		
 #if defined(_MD5_USE_BMI1_) && defined(PLATFORM_AMD64)
 		"andnl %k[TMP3], %k[D], %k[TMP1]\n"
@@ -262,10 +291,10 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_scalar(uint32_t* HEDLEY_RESTR
 		ROUND_I(D, A, B, C, "%[input2]" , -0x42c50dcb, 10)
 		ROUND_I(C, D, A, B, "%[input9]" , 0x2ad7d2bb, 15)
 		ROUND_I_LAST(B, C, D, A, -0x14792c6f, 21)
-	: [TMP1]"+&R"(tmp1), [TMP2]"+&r"(tmp2),
+	: [TMP1]"+&R"(tmp1),
 #ifdef PLATFORM_AMD64
 	  [A]"+&R"(A), [B]"+&R"(B), [C]"+&R"(C), [D]"+&R"(D)
-	, [TMP3]"=&r"(tmp3)
+	, [TMP2]"+&r"(tmp2), [TMP3]"=&r"(tmp3)
 #else
 	  [A]"+&R"(A), [B]"+&R"(B), [C]"+&R"(C), [D]"+&R"(D)
 #endif
@@ -292,6 +321,7 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_scalar(uint32_t* HEDLEY_RESTR
 #undef RI4
 
 
+#ifdef PLATFORM_AMD64
 
 #define ROUND_F(A, B, C, D, NEXT_IN, K, R) \
 	"xorl %k[" STR(C) "], %k[TMP1]\n" \
@@ -303,6 +333,7 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_scalar(uint32_t* HEDLEY_RESTR
 	"roll $" STR(R) ", %k[" STR(A) "]\n" \
 	"movl %k[" STR(C) "], %k[TMP1]\n" \
 	"addl %k[" STR(B) "], %k[" STR(A) "]\n"
+#ifdef PLATFORM_AMD64
 #define ROUND_G(A, B, C, D, NEXT_IN, K, R) \
 	"notl %k[TMP1]\n" \
 	"addl $" STR(K) ", %k[" STR(A) "]\n" \
@@ -315,6 +346,20 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_scalar(uint32_t* HEDLEY_RESTR
 	"roll $" STR(R) ", %k[" STR(A) "]\n" \
 	"movl %k[" STR(C) "], %k[TMP1]\n" \
 	"addl %k[" STR(B) "], %k[" STR(A) "]\n"
+#else
+#define ROUND_G(A, B, C, D, NEXT_IN, K, R) \
+	"notl %k[TMP1]\n" \
+	"addl $" STR(K) ", %k[" STR(A) "]\n" \
+	"andl %k[" STR(C) "], %k[TMP1]\n" \
+	"addl %k[TMP1], %k[" STR(A) "]\n" \
+	"movl %k[" STR(D) "], %k[TMP1]\n" \
+	"addl " NEXT_IN ", %k[" STR(D) "]\n" \
+	"andl %k[" STR(B) "], %k[TMP1]\n" \
+	"addl %k[TMP1], %k[" STR(A) "]\n" \
+	"roll $" STR(R) ", %k[" STR(A) "]\n" \
+	"movl %k[" STR(C) "], %k[TMP1]\n" \
+	"addl %k[" STR(B) "], %k[" STR(A) "]\n"
+#endif
 #define ROUND_H(A, B, C, D, NEXT_IN, K, R) \
 	"addl $" STR(K) ", %k[" STR(A) "]\n" \
 	"xorl %k[" STR(B) "], %k[TMP1]\n" \
@@ -373,7 +418,10 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_nolea(uint32_t* HEDLEY_RESTRI
 	uint32_t C;
 	uint32_t D;
 	const uint32_t* _in = (const uint32_t*)(data[0]);
-	void *tmp1, *tmp2;
+	void *tmp1;
+#ifdef PLATFORM_AMD64
+	void *tmp2;
+#endif
 	
 	A = state[0];
 	B = state[1];
@@ -388,7 +436,10 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_nolea(uint32_t* HEDLEY_RESTRI
 		RF4(,  5,  6,  7,  8,  -0x0a83f051, 0x4787c62a, -0x57cfb9ed, -0x02b96aff)
 		RF4(,  9, 10, 11, 12,  0x698098d8, -0x74bb0851, -0x0000a44f, -0x76a32842)
 		RF4(, 13, 14, 15,  1,  0x6b901122, -0x02678e6d, -0x5986bc72, 0x49b40821)
-	: [TMP1]"=&R"(tmp1), [TMP2]"=&r"(tmp2),
+	: [TMP1]"=&R"(tmp1),
+#ifdef PLATFORM_AMD64
+	  [TMP2]"=&r"(tmp2),
+#endif
 	  [A]"+&R"(A), [B]"+&R"(B), [C]"+&R"(C), [D]"+&R"(D)
 	: ASM_INPUTS
 	:);
@@ -424,7 +475,10 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_nolea(uint32_t* HEDLEY_RESTRI
 		ROUND_I(D, A, B, C, "%[input2]" , -0x42c50dcb, 10)
 		ROUND_I(C, D, A, B, "%[input9]" , 0x2ad7d2bb, 15)
 		ROUND_I_LAST(B, C, D, A, -0x14792c6f, 21)
-	: [TMP1]"+&R"(tmp1), [TMP2]"+&r"(tmp2),
+	: [TMP1]"+&R"(tmp1),
+#ifdef PLATFORM_AMD64
+	  [TMP2]"=&r"(tmp2),
+#endif
 	  [A]"+&R"(A), [B]"+&R"(B), [C]"+&R"(C), [D]"+&R"(D)
 	: ASM_INPUTS
 	:);
@@ -445,5 +499,7 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_nolea(uint32_t* HEDLEY_RESTRI
 #undef RG4
 #undef RH4
 #undef RI4
+
+#endif
 
 #endif // PLATFORM_X86
