@@ -477,6 +477,17 @@ void PAR2ProcOCL::_notifyProc(void* _req) {
 }
 #endif
 
+static CL_CALLBACK void kernel_event_callback(cl_event, cl_int, void* _req) {
+	auto req = static_cast<compute_req*>(_req);
+#ifdef USE_LIBUV
+	req->parent->_queueProc.notify(req);
+#else
+	req->parent->stagingActiveCount_dec();
+	req->parent->_setAreaActive(req->procIdx, false);
+	delete req;
+#endif
+}
+
 void PAR2ProcOCL::run_kernel(unsigned buf, unsigned numInputs) {
 	auto& area = staging[buf];
 	// transfer coefficient list
@@ -505,16 +516,7 @@ void PAR2ProcOCL::run_kernel(unsigned buf, unsigned numInputs) {
 	req->numInputs = numInputs;
 	req->procIdx = buf;
 	req->parent = this;
-	area.event.setCallback(CL_COMPLETE, [](cl_event, cl_int, void* _req) {
-		auto req = static_cast<compute_req*>(_req);
-#ifdef USE_LIBUV
-		req->parent->_queueProc.notify(req);
-#else
-		req->parent->stagingActiveCount_dec();
-		req->parent->staging[req->procIdx].setIsActive(false);
-		delete req;
-#endif
-	}, req);
+	area.event.setCallback(CL_COMPLETE, kernel_event_callback, req);
 	
 	queue.flush(); // ensure the kernel is executed
 }

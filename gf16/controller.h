@@ -102,9 +102,11 @@ protected:
 	inline void stagingActiveCount_inc() {
 		stagingActiveCount++;
 	}
+public:
 	inline void stagingActiveCount_dec() {
 		stagingActiveCount--;
 	}
+protected:
 	inline unsigned stagingActiveCount_get() const {
 		return stagingActiveCount;
 	}
@@ -129,9 +131,11 @@ protected:
 	inline void stagingActiveCount_inc() {
 		stagingActiveCount.fetch_add(1, std::memory_order_relaxed);
 	}
+public:
 	inline void stagingActiveCount_dec() {
 		stagingActiveCount.fetch_sub(1, std::memory_order_relaxed);
 	}
+protected:
 	inline unsigned stagingActiveCount_get() const {
 		return stagingActiveCount.load(std::memory_order_relaxed);
 	}

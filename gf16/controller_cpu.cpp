@@ -529,7 +529,7 @@ void PAR2ProcCPU::compute_worker(ThreadMessageQueue<void*>& q) {
 			req->parent->_queueProc.notify(req);
 #else
 			req->parent->stagingActiveCount_dec();
-			req->parent->staging[req->procIdx].setIsActive(false);
+			req->parent->_setAreaActive(req->procIdx, false);
 			delete req;
 #endif
 		} else

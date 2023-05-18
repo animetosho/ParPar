@@ -214,6 +214,10 @@ public:
 	
 	void processing_finished() override;
 	
+	inline void _setAreaActive(int area, bool active) {
+		staging[area].setIsActive(active);
+	}
+	
 #ifndef USE_LIBUV
 	void waitForAdd() override;
 	FUTURE_RETURN_T endInput() override {

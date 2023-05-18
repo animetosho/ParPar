@@ -80,6 +80,10 @@ public:
 	bool setRecoverySlices(unsigned numSlices, const uint16_t* exponents = NULL) override;
 	void freeProcessingMem() override;
 	
+	inline void _setAreaActive(int area, bool active) {
+		staging[area].setIsActive(active);
+	}
+	
 	void setNumThreads(int threads);
 	inline int getNumThreads() const {
 		return numThreads;
