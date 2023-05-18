@@ -94,7 +94,6 @@ protected:
 	PAR2ProcPlainCb deinitCallback;
 	
 	ThreadNotifyQueue<IPAR2ProcBackend> _queueSent;
-	ThreadNotifyQueue<IPAR2ProcBackend> _queueProc;
 	ThreadNotifyQueue<IPAR2ProcBackend> _queueRecv;
 	virtual void _notifySent(void* _req) = 0;
 	virtual void _notifyRecv(void* _req) = 0;
@@ -103,6 +102,7 @@ protected:
 		stagingActiveCount++;
 	}
 public:
+	ThreadNotifyQueue<IPAR2ProcBackend> _queueProc;
 	inline void stagingActiveCount_dec() {
 		stagingActiveCount--;
 	}
