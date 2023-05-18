@@ -237,12 +237,12 @@ MD5Multi::MD5Multi(int srcCount) {
 			srcCount -= MD5Multi2_##feat::getNumRegions(); \
 		} \
 	}
-	#define ADD_CTX1(feat) if(MD5Multi_##feat::isAvailable) { \
+	#define ADD_CTX1(feat) { if(MD5Multi_##feat::isAvailable) { \
 		while(srcCount >= MD5Multi_##feat::getNumRegions()) { \
 			ctx.push_back(new MD5Multi_##feat()); \
 			srcCount -= MD5Multi_##feat::getNumRegions(); \
 		} \
-	}
+	} }
 #ifdef PLATFORM_X86
 # ifdef PLATFORM_AMD64
 #  define ADD_CTX ADD_CTX2
