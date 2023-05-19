@@ -290,7 +290,7 @@ static inline size_t _jit_movapd_store(uint8_t* jit, uint_fast8_t mreg, int32_t 
 /** AVX (256-bit) VEX coded instructions **/
 static inline size_t _jit_vpxor_m(uint8_t* jit, uint_fast8_t yregD, uint_fast8_t yreg1, uint_fast8_t mreg, int32_t offs) {
 	size_t p;
-	int offsFlag = (offs != 0 || mreg == 13) << (int)(((offs+128) & ~0xFF) != 0);
+	unsigned offsFlag = (offs != 0 || mreg == 13) << (int)(((offs+128) & ~0xFF) != 0);
 	if(mreg > 7) {
 		write32(jit, 0xEF7DE1C4 ^ ((yregD >> 3) << 15) ^ ((mreg >> 3) << 13) ^ (yreg1 <<19));
 		jit[4] = (offsFlag<<6) | ((yregD & 7) <<3) | ((mreg & 7) <<0);
@@ -335,7 +335,7 @@ static inline size_t _jit_vmovdqa(uint8_t* jit, uint_fast8_t yreg, uint_fast8_t 
 }
 static inline size_t _jit_vmovdqa_load(uint8_t* jit, uint_fast8_t yreg, uint_fast8_t mreg, int32_t offs) {
 	size_t p;
-	int offsFlag = (offs != 0 || mreg == 13) << (int)(((offs+128) & ~0xFF) != 0);
+	unsigned offsFlag = (offs != 0 || mreg == 13) << (int)(((offs+128) & ~0xFF) != 0);
 	if(mreg > 7) {
 		write32(jit, 0x6F7DE1C4 ^ ((yreg >> 3) << 15) ^ ((mreg >> 3) << 13));
 		jit[4] = (offsFlag<<6) | ((yreg & 7) <<3) | ((mreg & 7) <<0);
@@ -360,7 +360,7 @@ static inline size_t _jit_vmovdqa_load(uint8_t* jit, uint_fast8_t yreg, uint_fas
 
 static inline size_t _jit_vmovdqa_store(uint8_t* jit, uint_fast8_t mreg, int32_t offs, uint_fast8_t yreg) {
 	size_t p;
-	int offsFlag = (offs != 0 || mreg == 13) << (int)(((offs+128) & ~0xFF) != 0);
+	unsigned offsFlag = (offs != 0 || mreg == 13) << (int)(((offs+128) & ~0xFF) != 0);
 	if(mreg > 7) {
 		write32(jit, 0x7F7DE1C4 ^ ((yreg >> 3) << 15) ^ ((mreg >> 3) << 13));
 		jit[4] = (offsFlag<<6) | ((yreg & 7) <<3) | ((mreg & 7) <<0);
@@ -385,7 +385,7 @@ static inline size_t _jit_vmovdqa_store(uint8_t* jit, uint_fast8_t mreg, int32_t
 
 /** AVX3 (512-bit) EVEX coded instructions **/
 static inline size_t _jit_vpxord_m(uint8_t* jit, uint_fast8_t zregD, uint_fast8_t zreg1, uint_fast8_t mreg, int32_t offs) {
-	int offsFlag = (offs != 0 || mreg == 13) << (int)(((offs+128*64) & ~0x3FC0) != 0);
+	unsigned offsFlag = (offs != 0 || mreg == 13) << (int)(((offs+128*64) & ~0x3FC0) != 0);
 	write32(jit, 0x487DF162 ^ ((zregD & 8) <<12) ^ ((zregD & 16) << 8) ^ ((zreg1 & 15) <<19) ^ ((zreg1 & 16) <<23) ^ ((mreg & 8) <<10));
 	write32(jit+4, 0x2400EF | ((zregD & 7) <<11) | ((mreg & 7) << 8) | (offsFlag << 14));
 	int isM12 = (mreg == 12);
@@ -405,7 +405,7 @@ static inline size_t _jit_vpxord_r(uint8_t* jit, uint_fast8_t zregD, uint_fast8_
 	return 6;
 }
 static inline size_t _jit_vpternlogd_m(uint8_t* jit, uint_fast8_t zreg1, uint_fast8_t zreg2, uint_fast8_t mreg, int32_t offs, uint8_t op) {
-	int offsFlag = (offs != 0 || mreg == 13) << (int)(((offs+128*64) & ~0x3FC0) != 0);
+	unsigned offsFlag = (offs != 0 || mreg == 13) << (int)(((offs+128*64) & ~0x3FC0) != 0);
 	write32(jit, 0x487DF362 ^ ((zreg1 & 8) <<12) ^ ((zreg1 & 16) << 8) ^ ((zreg2 & 15) <<19) ^ ((zreg2 & 16) <<23) ^ ((mreg & 8) <<10));
 	write32(jit+4, 0x240025 | ((zreg1 & 7) <<11) | ((mreg & 7) << 8) | (offsFlag << 14));
 	int isM12 = (mreg == 12);
@@ -433,7 +433,7 @@ static inline size_t _jit_vmovdqa32(uint8_t* jit, uint_fast8_t zregD, uint_fast8
 	return 6;
 }
 static inline size_t _jit_vmovdqa32_load(uint8_t* jit, uint_fast8_t zreg, uint_fast8_t mreg, int32_t offs) {
-	int offsFlag = (offs != 0 || mreg == 13) << (int)(((offs+128*64) & ~0x3FC0) != 0);
+	unsigned offsFlag = (offs != 0 || mreg == 13) << (int)(((offs+128*64) & ~0x3FC0) != 0);
 	write32(jit, 0x487DF162 ^ ((zreg & 8) <<12) ^ ((zreg & 16) << 8) ^ ((mreg & 8) <<10));
 	write32(jit+4, 0x24006F | ((zreg & 7) <<11) | ((mreg & 7) << 8) | (offsFlag << 14));
 	int isM12 = (mreg == 12);
@@ -448,7 +448,7 @@ static inline size_t _jit_vmovdqa32_load(uint8_t* jit, uint_fast8_t zreg, uint_f
 	return 6+isM12;
 }
 static inline size_t _jit_vmovdqa32_store(uint8_t* jit, uint_fast8_t mreg, int32_t offs, uint_fast8_t zreg) {
-	int offsFlag = (offs != 0 || mreg == 13) << (int)(((offs+128*64) & ~0x3FC0) != 0);
+	unsigned offsFlag = (offs != 0 || mreg == 13) << (int)(((offs+128*64) & ~0x3FC0) != 0);
 	write32(jit, 0x487DF162 ^ ((zreg & 8) <<12) ^ ((zreg & 16) << 8) ^ ((mreg & 8) <<10));
 	write32(jit+4, 0x24007F | ((zreg & 7) <<11) | ((mreg & 7) << 8) | (offsFlag << 14));
 	int isM12 = (mreg == 12);

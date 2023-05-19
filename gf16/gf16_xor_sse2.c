@@ -83,10 +83,10 @@ static void gf16_xor_create_jit_lut_sse2(void) {
 		uint8_t* pC[6] = {
 			(uint8_t*)(xor_jit_clut_code1 + i),
 			(uint8_t*)(xor_jit_clut_code2 + i),
-			(uint8_t*)(xor_jit_clut_code3 + i),
-			(uint8_t*)(xor_jit_clut_code4 + i),
+			i < (int)(sizeof(xor_jit_clut_code3)/sizeof(*xor_jit_clut_code3)) ? (uint8_t*)(xor_jit_clut_code3 + i) : NULL,
+			i < (int)(sizeof(xor_jit_clut_code4)/sizeof(*xor_jit_clut_code4)) ? (uint8_t*)(xor_jit_clut_code4 + i) : NULL,
 			(uint8_t*)(xor_jit_clut_code5 + i),
-			(uint8_t*)(xor_jit_clut_code6 + i)
+			i < (int)(sizeof(xor_jit_clut_code6)/sizeof(*xor_jit_clut_code6)) ? (uint8_t*)(xor_jit_clut_code6 + i) : NULL
 		};
 		
 		for(j=0; j<3; j++) {
@@ -364,10 +364,10 @@ static inline void* xor_write_jit_sse(const struct gf16_xor_scratch *HEDLEY_REST
 	//_jit_movaps_load(jit, reg, xreg, offs)
 	// (we just save a conditional by hardcoding this)
 	#define _LD_APS(xreg, mreg, offs) \
-		write32((jitptr), 0x40280F + ((xreg) <<19) + ((mreg) <<16) + (((offs)&0xFF) <<24)); \
+		write32((jitptr), 0x40280F + ((xreg) <<19) + ((mreg) <<16) + ((uint32_t)((offs)&0xFF) <<24)); \
 		jitptr += 4
 	#define _ST_APS(mreg, offs, xreg) \
-		write32((jitptr), 0x40290F + ((xreg) <<19) + ((mreg) <<16) + (((offs)&0xFF) <<24)); \
+		write32((jitptr), 0x40290F + ((xreg) <<19) + ((mreg) <<16) + ((uint32_t)((offs)&0xFF) <<24)); \
 		jitptr += 4
 	#define _LD_APS64(xreg, mreg, offs) \
 		write64((jitptr), 0x40280F44 + ((xreg-8) <<27) + ((mreg) <<24) + ((int64_t)((offs)&0xFF) <<32)); \

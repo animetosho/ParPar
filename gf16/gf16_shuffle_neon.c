@@ -31,7 +31,7 @@ uint16_t val, qtbl_t* tbl_l, qtbl_t* tbl_h) {
 	
 	int val2 = GF16_MULTBY_TWO(val);
 	int val4 = GF16_MULTBY_TWO(val2);
-	uint16x4_t tmp = vreinterpret_u16_u32(vdup_n_u32(val << 16));
+	uint16x4_t tmp = vreinterpret_u16_u32(vdup_n_u32((uint32_t)val << 16));
 	uint16x4_t tmp2 = veor_u16(tmp, vdup_n_u16(val2));
 	tmp = vext_u16(tmp, tmp2, 2);
 	
