@@ -148,8 +148,8 @@ public:
 	IPAR2ProcBackend(uv_loop_t* _loop)
 	: loop(_loop), stagingActiveCount(0), pendingInCallbacks(0), pendingOutCallbacks(0), endSignalled(false), progressCb(nullptr), deinitCallback(nullptr)
 	, _queueSent(_loop, this, &IPAR2ProcBackend::_notifySent)
-	, _queueProc(_loop, this, &IPAR2ProcBackend::_notifyProc)
 	, _queueRecv(_loop, this, &IPAR2ProcBackend::_notifyRecv)
+	, _queueProc(_loop, this, &IPAR2ProcBackend::_notifyProc)
 #else
 	IPAR2ProcBackend() : stagingActiveCount(0)
 #endif

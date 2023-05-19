@@ -407,4 +407,18 @@ static inline int hardware_concurrency() {
 #endif
 }
 
+
+#undef thread_t
+#undef thread_create
+#undef thread_join
+#undef mutex_t
+#undef mutex_init
+#undef mutex_destroy
+#undef mutex_lock
+#undef mutex_unlock
+#undef condvar_t
+#undef condvar_init
+#undef condvar_destroy
+#undef condvar_signal
+
 #endif // defined(__THREADQUEUE_H__)
