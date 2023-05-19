@@ -477,7 +477,7 @@ void PAR2ProcOCL::_notifyProc(void* _req) {
 }
 #endif
 
-static CL_CALLBACK void kernel_event_callback(cl_event, cl_int, void* _req) {
+static void CL_CALLBACK kernel_event_callback(cl_event, cl_int, void* _req) {
 	auto req = static_cast<compute_req*>(_req);
 #ifdef USE_LIBUV
 	req->parent->_queueProc.notify(req);
