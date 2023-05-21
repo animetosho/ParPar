@@ -42,7 +42,7 @@ static void gf16_xor_create_jit_lut_avx2(void) {
 				int reg = msk-1;
 				
 				/* if we ever support 32-bit, need to ensure that vpxor/load is fixed length */
-				pC += _jit_vpxor_m(pC, reg, reg, AX, (j-4) <<5);
+				pC += _jit_vpxor_m(pC, reg, reg, AX, lshift32(j-4, 5));
 				/* advance pointers */
 				posM += 5;
 			}
@@ -671,7 +671,7 @@ static size_t xor_write_init_jit(uint8_t *jitCode) {
 	
 	/* only 64-bit supported*/
 	for(int i=3; i<16; i++) {
-		jitCode += _jit_vmovdqa_load(jitCode, i, AX, (i-4)<<5);
+		jitCode += _jit_vmovdqa_load(jitCode, i, AX, lshift32(i-4, 5));
 	}
 	return jitCode-jitCodeStart;
 }

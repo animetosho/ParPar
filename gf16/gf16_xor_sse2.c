@@ -24,7 +24,7 @@ static HEDLEY_ALWAYS_INLINE size_t _jit_pxor_mod(uint8_t* jit, uint8_t xreg, uin
 static HEDLEY_ALWAYS_INLINE size_t _jit_xorps_mod(uint8_t* jit, uint8_t xreg, uint8_t mreg, int32_t offs) {
 	size_t p = _jit_rex_pref(&jit, xreg, 0);
 	xreg &= 7;
-	write32(jit, 0x40570F | (xreg <<19) | (mreg <<16) | (offs <<24));
+	write32(jit, 0x40570F | (xreg <<19) | (mreg <<16) | lshift32(offs, 24));
 	return p+4;
 }
 
@@ -95,7 +95,7 @@ static void gf16_xor_create_jit_lut_sse2(void) {
 			if(msk == 1) {
 				// (XORPS)
 				for(k=0; k<MEM_XT; k++)
-					pC[k] += _jit_xorps_mod(pC[k], 0, AX, (j-8 + k*3) <<4);
+					pC[k] += _jit_xorps_mod(pC[k], 0, AX, lshift32(j-8 + k*3, 4));
 #ifdef PLATFORM_AMD64
 				pC[1] += _jit_xorps_r(pC[1], 0, j+3);
 				pC[3] += _jit_xorps_r(pC[3], 0, j+8);
@@ -120,7 +120,7 @@ static void gf16_xor_create_jit_lut_sse2(void) {
 				
 				// (PXOR)
 				for(k=0; k<MEM_XT; k++)
-					pC[k] += _jit_pxor_mod(pC[k], reg, AX, (j-8 + k*3) <<4);
+					pC[k] += _jit_pxor_mod(pC[k], reg, AX, lshift32(j-8 + k*3, 4));
 #ifdef PLATFORM_AMD64
 				pC[1] += _jit_pxor_r(pC[1], reg, j+3);
 				pC[3] += _jit_pxor_r(pC[3], reg, j+8);
@@ -177,10 +177,10 @@ static void gf16_xor_create_jit_lut_sse2(void) {
 			if(m & 1) {
 				// (XORPS)
 				for(k=0; k<MEM_XP; k++) {
-					pC[k] += _jit_xorps_m(pC[k], 0, AX, (j-8+k*2) <<4);
+					pC[k] += _jit_xorps_m(pC[k], 0, AX, lshift32(j-8+k*2, 4));
 				}
 				if(j==0) {
-					pC[MEM_XP] += _jit_xorps_m(pC[MEM_XP], 0, AX, (-8+MEM_XP*2) <<4);
+					pC[MEM_XP] += _jit_xorps_m(pC[MEM_XP], 0, AX, lshift32(-8+MEM_XP*2, 4));
 				} else {
 					pC[MEM_XP] += _jit_xorps_r(pC[MEM_XP], 0, 3);
 				}
@@ -205,10 +205,10 @@ static void gf16_xor_create_jit_lut_sse2(void) {
 			if(m & 2) {
 				// (PXOR)
 				for(k=0; k<MEM_XP; k++) {
-					pC[k] += _jit_pxor_m(pC[k], 1, AX, (j-8+k*2) <<4);
+					pC[k] += _jit_pxor_m(pC[k], 1, AX, lshift32(j-8+k*2, 4));
 				}
 				if(j==0) {
-					pC[MEM_XP] += _jit_pxor_m(pC[MEM_XP], 1, AX, (-8+MEM_XP*2) <<4);
+					pC[MEM_XP] += _jit_pxor_m(pC[MEM_XP], 1, AX, lshift32(-8+MEM_XP*2, 4));
 				} else {
 					pC[MEM_XP] += _jit_pxor_r(pC[MEM_XP], 1, 3);
 				}
@@ -391,7 +391,7 @@ static inline void* xor_write_jit_sse(const struct gf16_xor_scratch *HEDLEY_REST
 		jitptr += 6
 	
 	
-	//_jit_xorps_m(jit, reg, AX, offs<<4);
+	//_jit_xorps_m(jit, reg, AX, lshift32(offs, 4));
 	#define _XORPS_M_(reg, offs, tr) \
 		write32((jitptr), (0x40570F + ((reg) << 19) + (((offs)&0xFF) <<28)) ^ (tr))
 	#define _C_XORPS_M(reg, offs, c) \
@@ -403,7 +403,7 @@ static inline void* xor_write_jit_sse(const struct gf16_xor_scratch *HEDLEY_REST
 		_XORPS_M64_(reg, offs, 0); \
 		jitptr += ((c)<<2)+(c)
 	
-	//_jit_pxor_m(jit, 1, AX, offs<<4);
+	//_jit_pxor_m(jit, 1, AX, lshift32(offs, 4));
 #ifdef PLATFORM_AMD64
 	#define _PXOR_M_(reg, offs, tr) \
 		write64((jitptr), (0x40EF0F66 + ((reg) << 27) + ((int64_t)((offs)&0xFF) << 36)) ^ (tr))
@@ -1172,7 +1172,7 @@ static size_t xor_write_init_jit(uint8_t *jitCode) {
 # ifdef PLATFORM_AMD64
 	/* preload upper 13 inputs into registers */
 	for(int i=3; i<16; i++) {
-		jitCode += _jit_movaps_load(jitCode, i, AX, (i-8)<<4);
+		jitCode += _jit_movaps_load(jitCode, i, AX, lshift32(i-8, 4));
 	}
 # else
 	/* can only fit 5 in 32-bit mode :( */
