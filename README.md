@@ -108,9 +108,9 @@ By default, the `-march=native` flag is used for non-Windows builds, which optim
 To get OpenCL to work, there’s a few requirements:
 
 * you’ll need an OpenCL compatible device (many GPUs should be compatible)
-* OpenCL 1.1 support is sufficient, though OpenCL 1.0 may work
+* OpenCL 1.1; OpenCL 1.0 is unsupported
 * OpenCL supporting drivers need to be installed. For GPUs, the driver package is often sufficient. On \*nix, ensure the appropriate OpenCL-ICD is installed (ParPar will try to link to *libOpenCL.so*, or if not found, will try *libOpenCL.so.1* and *libOpenCL.so.1.0.0*)
-* a fully static Linux build won’t work, due to incompatibility with `dlopen` and statically linked libc. This means you’ll need to use the glibc builds, or compile the application yourself. The OpenCL headers are included with ParPar’s source, so OpenCL development libraries aren’t necessary
+* on Linux, a fully static build won’t work, due to incompatibility with `dlopen` and statically linked libc. This means you’ll need to use the glibc builds, or compile the application yourself. The OpenCL headers are included with ParPar’s source, so OpenCL development libraries aren’t necessary
 * OpenCL is untested on macOS
 
 GPU Processing
