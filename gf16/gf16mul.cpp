@@ -109,6 +109,24 @@ struct CpuCap {
 			|| family == 0xaf // AMD Zen3/4 family
 		);
 		
+		hasAVX = false; hasAVX2 = false; hasAVX512VLBW = false; hasAVX512VBMI = false; hasGFNI = false;
+#if !defined(_MSC_VER) || _MSC_VER >= 1600
+		_cpuidX(cpuInfoX, 7, 0);
+		if((cpuInfo[2] & 0x1C000000) == 0x1C000000) { // has AVX + OSXSAVE + XSAVE
+			int xcr = _GET_XCR() & 0xff;
+			if((xcr & 6) == 6) { // AVX enabled
+				hasAVX = true;
+				hasAVX2 = cpuInfoX[1] & 0x20;
+				if((xcr & 0xE0) == 0xE0) {
+					// checks AVX512BW + AVX512VL + AVX512F
+					hasAVX512VLBW = ((cpuInfoX[1] & 0xC0010000) == 0xC0010000);
+					hasAVX512VBMI = ((cpuInfoX[2] & 2) == 2 && hasAVX512VLBW);
+				}
+			}
+		}
+		hasGFNI = (cpuInfoX[2] & 0x100) == 0x100;
+#endif
+		
 		_cpuid(cpuInfo, 0);
 		isEmulated = (
 			// "Virtual CPU " (Windows on ARM)
@@ -127,23 +145,20 @@ struct CpuCap {
 				isEmulated = (bool)proc_translated;
 		}
 #endif
-		
-		hasAVX = false; hasAVX2 = false; hasAVX512VLBW = false; hasAVX512VBMI = false; hasGFNI = false;
-#if !defined(_MSC_VER) || _MSC_VER >= 1600
-		_cpuidX(cpuInfoX, 7, 0);
-		if((cpuInfo[2] & 0x1C000000) == 0x1C000000) { // has AVX + OSXSAVE + XSAVE
-			int xcr = _GET_XCR() & 0xff;
-			if((xcr & 6) == 6) { // AVX enabled
-				hasAVX = true;
-				hasAVX2 = cpuInfoX[1] & 0x20;
-				if((xcr & 0xE0) == 0xE0) {
-					// checks AVX512BW + AVX512VL + AVX512F
-					hasAVX512VLBW = ((cpuInfoX[1] & 0xC0010000) == 0xC0010000);
-					hasAVX512VBMI = ((cpuInfoX[2] & 2) == 2 && hasAVX512VLBW);
-				}
-			}
+#if defined(PLATFORM_AMD64) && (defined(_WINDOWS) || defined(__WINDOWS__) || defined(_WIN32) || defined(_WIN64))
+		if(!isEmulated) {
+			// Windows 11's x64 emulation on ARM64 may pretend to be an Athlon64 [https://github.com/animetosho/par2cmdline-turbo/issues/3#issuecomment-1555965971]
+			// try to detect by checking the brand name instead
+			union {
+				int i[12];
+				char s[49];
+			} brand;
+			_cpuid(brand.i+0, 0x80000002);
+			_cpuid(brand.i+4, 0x80000003);
+			_cpuid(brand.i+8, 0x80000004);
+			brand.s[48] = 0;
+			isEmulated = !!strstr(brand.s, "Virtual CPU");
 		}
-		hasGFNI = (cpuInfoX[2] & 0x100) == 0x100;
 #endif
 		
 		/* try to detect hyper-threading */
