@@ -14,9 +14,6 @@ static HEDLEY_ALWAYS_INLINE poly8x16_t veorq_p8(poly8x16_t a, poly8x16_t b) {
 static HEDLEY_ALWAYS_INLINE poly16x8_t veorq_p16(poly16x8_t a, poly16x8_t b) {
 	return vreinterpretq_p16_u16(veorq_u16(vreinterpretq_u16_p16(a), vreinterpretq_u16_p16(b)));
 }
-static HEDLEY_ALWAYS_INLINE poly8x8_t veor_p8(poly8x8_t a, poly8x8_t b) {
-	return vreinterpret_p8_u8(veor_u8(vreinterpret_u8_p8(a), vreinterpret_u8_p8(b)));
-}
 
 #ifdef __aarch64__
 typedef poly8x16_t coeff_t;
@@ -43,6 +40,9 @@ static HEDLEY_ALWAYS_INLINE poly16x8_t pmull_high(poly8x16_t a, poly8x16_t b) {
 #  define pmull_high vmull_high_p8
 # endif
 #else
+static HEDLEY_ALWAYS_INLINE poly8x8_t veor_p8(poly8x8_t a, poly8x8_t b) {
+	return vreinterpret_p8_u8(veor_u8(vreinterpret_u8_p8(a), vreinterpret_u8_p8(b)));
+}
 typedef poly8x8_t coeff_t;
 # define pmull_low(x, y) vmull_p8(vget_low_p8(x), y)
 # define pmull_high(x, y) vmull_p8(vget_high_p8(x), y)
