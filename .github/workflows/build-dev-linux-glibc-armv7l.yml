@@ -36,5 +36,5 @@ jobs:
       - uses: actions/upload-artifact@v3
         with:
           path: ./parpar.xz
-          name: parpar-${{ github.ref_name }}-linux-glibc-armv7l.7z
+          name: parpar-${{ github.ref_name }}-linux-glibc-armv7l.xz
           retention-days: 5
