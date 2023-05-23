@@ -165,12 +165,15 @@ std::vector<Galois16OCLMethods> PAR2ProcOCL::availableMethods(int platformId, in
 		ret.push_back(GF16OCL_LOOKUP_HALF);
 		ret.push_back(GF16OCL_LOOKUP_NOCACHE);
 		ret.push_back(GF16OCL_LOOKUP_HALF_NOCACHE);
+		/* log methods are known to fail on some platforms, so disable for now
+		TODO: debug these and enable
 		ret.push_back(GF16OCL_LOG);
 		ret.push_back(GF16OCL_LOG_SMALL);
 		ret.push_back(GF16OCL_LOG_SMALL2);
 		ret.push_back(GF16OCL_LOG_TINY);
 		ret.push_back(GF16OCL_LOG_SMALL_LMEM);
 		ret.push_back(GF16OCL_LOG_TINY_LMEM);
+		*/
 		//ret.push_back(GF16OCL_SHUFFLE);
 		ret.push_back(GF16OCL_BY2);
 	} else {
@@ -186,12 +189,14 @@ std::vector<Galois16OCLMethods> PAR2ProcOCL::availableMethods(int platformId, in
 		ret.push_back(GF16OCL_LOOKUP_HALF);
 		ret.push_back(GF16OCL_LOOKUP_NOCACHE);
 		ret.push_back(GF16OCL_LOOKUP_HALF_NOCACHE);
+		/* log methods are known to fail on some platforms, so disable for now
 		ret.push_back(GF16OCL_LOG);
 		ret.push_back(GF16OCL_LOG_SMALL);
 		ret.push_back(GF16OCL_LOG_SMALL2);
 		ret.push_back(GF16OCL_LOG_TINY);
 		ret.push_back(GF16OCL_LOG_SMALL_LMEM);
 		ret.push_back(GF16OCL_LOG_TINY_LMEM);
+		*/
 		ret.push_back(GF16OCL_BY2);
 	}
 	

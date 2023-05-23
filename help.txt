@@ -326,6 +326,8 @@ OpenCL Options:
                                               to local memory
                                  by2: table-less bit-shifting technique
                              Default is `lookup`
+                             Note: some of these methods are known to fail on
+                             some platforms.
        --opencl-batch-size   Number of slices to submit as a batch for GF
                              calculation.
        --opencl-iter-count   Target number of iterations per workgroup.
