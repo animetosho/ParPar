@@ -269,7 +269,7 @@ class MessageThread {
 			
 			# if defined(__linux) || defined(__linux__)
 			// ...but Linux allows per-thread priority
-			nice(1);
+			(void)!nice(1); // we don't care if this fails
 			# endif
 			#endif
 		}
