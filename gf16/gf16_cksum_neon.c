@@ -1,4 +1,5 @@
 #include "../src/hedley.h"
+#include "../src/platform.h"
 #ifdef __ARM_NEON
 # define _AVAILABLE 1
 # include "gf16_checksum_arm.h"
