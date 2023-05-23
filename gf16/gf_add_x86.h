@@ -51,7 +51,8 @@ static HEDLEY_ALWAYS_INLINE void _FN(gf_add_x)(
 		
 		if(vecStride == 16) {
 			// for xor kernels, need to do 4x prefetch
-			const char* pfBase = _pf+(ptr>>1);
+			const char* pfBase;
+			if(doPrefetch) pfBase = _pf+(ptr>>1);
 			if(doPrefetch == 1) {
 				_mm_prefetch(pfBase, MM_HINT_WT1);
 				_mm_prefetch(pfBase+64, MM_HINT_WT1);
