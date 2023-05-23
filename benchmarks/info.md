@@ -12,7 +12,7 @@ The following scenarios were tested:
 Sample Benchmark Results
 ========================
 
-![](result-3570.png)
+![](result-4570s.png)
 
 Benchmark Details
 =================
@@ -20,7 +20,7 @@ Benchmark Details
 Applications Tested (and commands given)
 ----------------------------------------
 
--   [ParPar 0.4.0](https://animetosho.org/app/parpar) [2023-05-17]
+-   [ParPar 0.4.0](https://animetosho.org/app/parpar) [2023-05-24]
     -   `parpar -s [blocksize]b -r [rblocks] -m 2000M -d equal -o [output] [input]`
 -   [par2j from MultiPar 1.3.2.7](https://github.com/Yutaka-Sawada/MultiPar/) [2023-02-23]
     -   `par2j c -ss [blocksize] -rn [rblocks] -rf1 -in -m7 {-lc32|-lc64} [output] [input]`
@@ -32,14 +32,13 @@ Applications Tested (and commands given)
     -   `par2_tbb c -s [blocksize] -c [rblocks] -n1 -m 2000 [output] [input]`
     -   At time of writing, ChuChuSoft’s website was down. Windows binaries can be found in the [SABnzbd 0.8.0 package](https://sourceforge.net/projects/sabnzbdplus/files/), and source code [can be found here](https://github.com/jcfp/par2tbb-chuchusoft-sources/releases/)
     -   [TBB won't work on non-x86 CPUs, or older versions of Windows](https://www.threadingbuildingblocks.org/system-requirements)
--   [par2cmdline-turbo 1.0.0](https://github.com/animetosho/par2cmdline-turbo) [2023-12-12]
+-   [par2cmdline-turbo 1.0.0](https://github.com/animetosho/par2cmdline-turbo) [2023-05-24]
     -   `par2_turbo c -s [blocksize] -c [rblocks] -n1 -m 2000 [output] [input]`
     -   par2cmdline ~0.8.2 using the ParPar 0.4.0 backend
 -   [gopar](https://github.com/akalin/gopar) [2021-05-24]
     -   `gopar -g [threads] c -s [blocksize] -c [rblocks] [output].par2 [input]`
     -   Compiled using Go v1.20.4
     -   gopar seems to be a relatively simple implementation at the moment, so comparing against fully fledged clients is perhaps unfair, but is still be an interesting point of reference
-    -   32-bit builds seem to be problematic as it runs out of memory in this benchmark (it seems like gopar reads everything into memory at this stage), and doesn’t have assembly optimisations implemented, so only x64 builds have been tested
 
 ### Notes
 
