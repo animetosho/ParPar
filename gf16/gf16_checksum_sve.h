@@ -1,6 +1,8 @@
 #ifndef __GF16_CHECKSUM_H
 #define __GF16_CHECKSUM_H
 
+#include "gf16_sve_common.h"
+
 #ifdef __ARM_FEATURE_SVE
 static HEDLEY_ALWAYS_INLINE void gf16_checksum_block_sve(const void *HEDLEY_RESTRICT src, void *HEDLEY_RESTRICT checksum, const size_t blockLen, const int aligned) {
 	UNUSED(aligned);
@@ -21,7 +23,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_checksum_blocku_sve(const void *HEDLEY_RES
 	int8_t* _src = (int8_t*)src;
 	
 	if(amount) while(1) {
-		svbool_t active = svwhilelt_b8((size_t)0, amount);
+		svbool_t active = svwhilelt_b8((uint64_t)0, (uint64_t)amount);
 		v = NOMASK(sveor_s16, v, svreinterpret_s16_s8(svld1_s8(active, _src)));
 		if(amount <= svcntb()) break;
 		amount -= svcntb();
@@ -31,9 +33,8 @@ static HEDLEY_ALWAYS_INLINE void gf16_checksum_blocku_sve(const void *HEDLEY_RES
 	*(svint16_t*)checksum = v;
 }
 
-#include "gfmat_coeff.h"
-static HEDLEY_ALWAYS_INLINE void gf16_checksum_zeroes_sve(void *HEDLEY_RESTRICT checksum, size_t blocks) {
-	svint16_t coeff = svdup_n_s16(gf16_exp(blocks % 65535));
+static HEDLEY_ALWAYS_INLINE void gf16_checksum_exp_sve(void *HEDLEY_RESTRICT checksum, uint16_t exp) {
+	svint16_t coeff = svdup_n_s16(exp);
 	svint16_t _checksum = *(svint16_t*)checksum;
 	svint16_t res = NOMASK(svand_s16, NOMASK(svasr_n_s16, coeff, 15), _checksum);
 	for(int i=0; i<15; i++) {

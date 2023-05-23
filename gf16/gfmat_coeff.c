@@ -1,9 +1,11 @@
 #include "gfmat_coeff.h"
 #include <stdlib.h>
 
-static int8_t* input_diff; // difference between predicted input coefficient and actual (number range is -4...5, so could be compressed to 4 bits, but I don't feel it's worth the savings)
-static uint16_t* gf_exp; // pre-calculated exponents in GF(2^16), missing bottom 3 bits, followed by 128-entry polynomial shift table
+static int8_t* input_diff = NULL; // difference between predicted input coefficient and actual (number range is -4...5, so could be compressed to 4 bits, but I don't feel it's worth the savings)
+static uint16_t* gf_exp = NULL; // pre-calculated exponents in GF(2^16), missing bottom 3 bits, followed by 128-entry polynomial shift table
 void gfmat_init() {
+	if(input_diff) return;
+	
 	input_diff = (int8_t*)malloc(32768);
 	gf_exp = (uint16_t*)malloc((8192+128)*2);
 	
@@ -31,6 +33,13 @@ void gfmat_init() {
 	}
 }
 
+void gfmat_free() {
+	free(input_diff);
+	free(gf_exp);
+	input_diff = NULL;
+	gf_exp = NULL;
+}
+
 HEDLEY_CONST uint16_t gf16_exp(uint_fast16_t v) {
 	uint_fast32_t result = gf_exp[v>>3];
 	result <<= (v&7);
@@ -48,12 +57,11 @@ HEDLEY_CONST uint16_t gfmat_input_log(uint_fast16_t inputBlock) {
 	return (inputBlock*2 + input_diff[inputBlock]);
 }
 
-HEDLEY_CONST uint16_t gfmat_coeff_log(uint_fast16_t inputBlock, uint_fast16_t recoveryBlock) {
+HEDLEY_CONST uint16_t gfmat_coeff_log(uint_fast16_t inputLog, uint_fast16_t recoveryBlock) {
 	//assert(recoveryBlock < 65535); // if ==65535, gets an invalid exponent
 	
 	// calculate POW(inputBlockConstant, recoveryBlock) in GF
-	uint_fast32_t result = gfmat_input_log(inputBlock);
-	result *= recoveryBlock;
+	uint_fast32_t result = inputLog * recoveryBlock;
 	// clever bit hack for 'result %= 65535' from MultiPar sources
 	result = (result >> 16) + (result & 65535);
 	result += result >> 16;
@@ -61,6 +69,9 @@ HEDLEY_CONST uint16_t gfmat_coeff_log(uint_fast16_t inputBlock, uint_fast16_t re
 	return result;
 }
 
+HEDLEY_CONST uint16_t gfmat_coeff_from_log(uint_fast16_t inputLog, uint_fast16_t recoveryBlock) {
+	return gf16_exp(gfmat_coeff_log(inputLog, recoveryBlock));
+}
 HEDLEY_CONST uint16_t gfmat_coeff(uint_fast16_t inputBlock, uint_fast16_t recoveryBlock) {
-	return gf16_exp(gfmat_coeff_log(inputBlock, recoveryBlock));
+	return gfmat_coeff_from_log(gfmat_input_log(inputBlock), recoveryBlock);
 }

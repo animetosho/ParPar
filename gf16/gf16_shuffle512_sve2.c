@@ -50,7 +50,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle512_sve2_calc_tables(
 		svld1_u8(svwhilelt_b8(0, 64), (uint8_t*)scratch + 64)
 	);
 	
-	svint16_t val = svld1_s16(svwhilelt_b16(0u, srcCount), (int16_t*)coefficients);
+	svint16_t val = svld1_s16(svwhilelt_b16((uint32_t)0, (uint32_t)srcCount), (int16_t*)coefficients);
 	// dupe 16b elements across 128b vector
 	val = svtbl_s16(val, NOMASK(svlsr_n_u16, svindex_u16(0, 1), 3));
 	// (alternative idea to do a 16->64b extended load, unpack, mul-lane)
@@ -331,7 +331,7 @@ GF16_MULADD_MULTI_FUNCS_STUB(gf16_shuffle, _512_sve2)
 #include "gf16_checksum_sve.h"
 
 #if defined(__ARM_FEATURE_SVE2)
-GF_PREPARE_PACKED_FUNCS(gf16_shuffle, _512_sve2, svcntb()*2, gf16_prepare_block_sve, gf16_prepare_blocku_sve, 4, (void)0, svint16_t checksum = svdup_n_s16(0), gf16_checksum_block_sve, gf16_checksum_blocku_sve, gf16_checksum_zeroes_sve, gf16_checksum_prepare_sve)
+GF_PREPARE_PACKED_FUNCS(gf16_shuffle, _512_sve2, svcntb()*2, gf16_prepare_block_sve, gf16_prepare_blocku_sve, 4, (void)0, svint16_t checksum = svdup_n_s16(0), gf16_checksum_block_sve, gf16_checksum_blocku_sve, gf16_checksum_exp_sve, gf16_checksum_prepare_sve, 64)
 #else
 GF_PREPARE_PACKED_FUNCS_STUB(gf16_shuffle, _512_sve2)
 #endif

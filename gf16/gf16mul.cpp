@@ -9,18 +9,23 @@ extern "C" {
 	#include "gf16_affine.h"
 	#include "gf16_xor.h"
 	#include "gf_add.h"
+	#include "gf16_cksum.h"
 }
 
 // CPUID stuff
 #include "../src/platform.h"
 #ifdef PLATFORM_X86
 # include "../src/cpuid.h"
+# ifdef __APPLE__
+#  include <sys/types.h>
+#  include <sys/sysctl.h>
+# endif
 # include "x86_jit.h"
 struct CpuCap {
 	bool hasSSE2, hasSSSE3, hasAVX, hasAVX2, hasAVX512VLBW, hasAVX512VBMI, hasGFNI;
 	size_t propPrefShuffleThresh;
-	bool propAVX128EU, propHT;
-	bool canMemWX;
+	bool propFastJit, propHT;
+	bool canMemWX, isEmulated;
 	int jitOptStrat;
 	CpuCap(bool detect) :
 	  hasSSE2(true),
@@ -31,9 +36,10 @@ struct CpuCap {
 	  hasAVX512VBMI(true),
 	  hasGFNI(true),
 	  propPrefShuffleThresh(0),
-	  propAVX128EU(false),
+	  propFastJit(false),
 	  propHT(false),
 	  canMemWX(true),
+	  isEmulated(false),
 	  jitOptStrat(GF16_XOR_JIT_STRAT_NONE)
 	{
 		if(!detect) return;
@@ -49,7 +55,7 @@ struct CpuCap {
 		family = ((cpuInfo[0]>>8) & 0xf) + ((cpuInfo[0]>>16) & 0xff0);
 		model = ((cpuInfo[0]>>4) & 0xf) + ((cpuInfo[0]>>12) & 0xf0);
 		
-		propPrefShuffleThresh = 131072; // it seems like XOR JIT is always faster than shuffle at ~128KB sizes
+		propPrefShuffleThresh = 32768; // it seems like XOR JIT is always faster than shuffle at 16-32K sizes
 		
 		bool isAtom = false, isICoreOld = false, isICoreNew = false;
 		if(family == 6) {
@@ -61,7 +67,7 @@ struct CpuCap {
 			}
 			if(model == 0x0F || model == 0x16) {
 				/* Conroe CPU with relatively slow pshufb; pretend SSSE3 doesn't exist, as XOR_DEPENDS is generally faster */
-				propPrefShuffleThresh = 16384;
+				propPrefShuffleThresh = 8192;
 			}
 			
 			if((model == 0x1A || model == 0x1E || model == 0x2E) /*Nehalem*/
@@ -93,23 +99,23 @@ struct CpuCap {
 		}
 		if(CPU_FAMMDL_IS_AMDCAT(family, model)) {
 			/* Jaguar has a slow shuffle instruction and XOR is much faster; presumably the same for Bobcat/Puma */
-			propPrefShuffleThresh = 2048;
+			propPrefShuffleThresh = 4096;
 		}
 		
-		propAVX128EU = ( // CPUs with 128-bit AVX units
+		propFastJit = ( // basically, AMD, prefer 256-bit XorJit over Shuffle
 			   family == 0x6f // AMD Bulldozer family
 			|| family == 0x7f // AMD Jaguar/Puma family
-			|| (family == 0x8f && (model == 0 /*Summit Ridge ES*/ || model == 1 /*Zen*/ || model == 8 /*Zen+*/ || model == 0x11 /*Zen APU*/ || model == 0x18 /*Zen+ APU*/ || model == 0x50 /*Subor Z+*/)) // AMD Zen1 family
-			|| (family == 6 && model == 0xf) // Centaur/Zhaoxin; overlaps with Intel Core 2, but they don't support AVX
+			|| family == 0x8f // AMD Zen1/2 family
+			|| family == 0xaf // AMD Zen3/4 family
 		);
 		
 		hasAVX = false; hasAVX2 = false; hasAVX512VLBW = false; hasAVX512VBMI = false; hasGFNI = false;
 #if !defined(_MSC_VER) || _MSC_VER >= 1600
 		_cpuidX(cpuInfoX, 7, 0);
-		if(cpuInfo[2] & 0x8000000) { // has OSXSAVE
+		if((cpuInfo[2] & 0x1C000000) == 0x1C000000) { // has AVX + OSXSAVE + XSAVE
 			int xcr = _GET_XCR() & 0xff;
 			if((xcr & 6) == 6) { // AVX enabled
-				hasAVX = cpuInfo[2] & 0x800000;
+				hasAVX = true;
 				hasAVX2 = cpuInfoX[1] & 0x20;
 				if((xcr & 0xE0) == 0xE0) {
 					// checks AVX512BW + AVX512VL + AVX512F
@@ -119,6 +125,40 @@ struct CpuCap {
 			}
 		}
 		hasGFNI = (cpuInfoX[2] & 0x100) == 0x100;
+#endif
+		
+		_cpuid(cpuInfo, 0);
+		isEmulated = (
+			// "Virtual CPU " (Windows on ARM)
+			   (cpuInfo[1] == 0x74726956 && cpuInfo[3] == 0x206c6175 && cpuInfo[2] == 0x20555043)
+			// "MicrosoftXTA"
+			|| (cpuInfo[1] == 0x7263694d && cpuInfo[3] == 0x666f736f && cpuInfo[2] == 0x41545874)
+			// "VirtualApple" (new Rosetta2)
+			|| (cpuInfo[1] == 0x74726956 && cpuInfo[3] == 0x416c6175 && cpuInfo[2] == 0x656c7070)
+		);
+#ifdef __APPLE__
+		if(!isEmulated) {
+			// also check Rosetta: https://developer.apple.com/documentation/apple-silicon/about-the-rosetta-translation-environment#Determine-Whether-Your-App-Is-Running-as-a-Translated-Binary
+			int proc_translated = 0;
+			size_t int_size = sizeof(proc_translated);
+			if(sysctlbyname("sysctl.proc_translated", &proc_translated, &int_size, NULL, 0) == 0) 
+				isEmulated = (bool)proc_translated;
+		}
+#endif
+#if defined(PLATFORM_AMD64) && (defined(_WINDOWS) || defined(__WINDOWS__) || defined(_WIN32) || defined(_WIN64))
+		if(!isEmulated) {
+			// Windows 11's x64 emulation on ARM64 may pretend to be an Athlon64 [https://github.com/animetosho/par2cmdline-turbo/issues/3#issuecomment-1555965971]
+			// try to detect by checking the brand name instead
+			union {
+				int i[12];
+				char s[49];
+			} brand;
+			_cpuid(brand.i+0, 0x80000002);
+			_cpuid(brand.i+4, 0x80000003);
+			_cpuid(brand.i+8, 0x80000004);
+			brand.s[48] = 0;
+			isEmulated = !!strstr(brand.s, "Virtual CPU");
+		}
 #endif
 		
 		/* try to detect hyper-threading */
@@ -144,9 +184,10 @@ struct CpuCap {
 		if(isICoreOld)
 			jitOptStrat = GF16_XOR_JIT_STRAT_CLR;
 		else if(isAtom || isICoreNew || family == 0x6f /*AMDfam15*/ || family == 0x1f /*K10*/)
+			// difference on Silvermont appears to be minimal (despite difference in other tests)
 			jitOptStrat = GF16_XOR_JIT_STRAT_COPYNT;
 		else if(family == 0x8f /*AMDfam17*/ || family == 0x9f /*Hygon*/ || family == 0xaf /*AMDfam19*/)
-			// despite tests, clearing seems to work better than copying
+			// despite other tests, clearing seems to work better than copying
 			// GF16_XOR_JIT_STRAT_COPY seems to perform slightly worse than doing nothing, COPYNT is *much* worse, whereas clearing is slightly better
 			jitOptStrat = GF16_XOR_JIT_STRAT_CLR;
 		else // AMDfam16, Core2 or unknown
@@ -171,6 +212,262 @@ struct CpuCap {
 #endif
 
 
+Galois16MethodInfo Galois16Mul::info(Galois16Methods _method) {
+	Galois16Methods method = _method == GF16_AUTO ? default_method() : _method;
+	
+	Galois16MethodInfo _info;
+	_info.id = method;
+	_info.idealInputMultiple = 1;
+	_info.prefetchDownscale = 0;
+	_info.alignment = 2;
+	_info.stride = 2;
+	_info.cksumSize = 0; // set to alignment by default
+	
+	switch(method) {
+		case GF16_SHUFFLE_AVX:
+		case GF16_SHUFFLE_SSSE3:
+			_info.alignment = 16;
+			_info.prefetchDownscale = 1;
+			_info.stride = 32;
+		break;
+		case GF16_SHUFFLE_AVX2:
+			_info.alignment = 32;
+			_info.prefetchDownscale = 1;
+			_info.stride = 64;
+		break;
+		case GF16_SHUFFLE_AVX512:
+			_info.alignment = 64;
+			_info.prefetchDownscale = 1;
+			_info.stride = 128;
+			#ifdef PLATFORM_AMD64
+			// if 32 registers are available, can do multi-region
+			_info.idealInputMultiple = 3;
+			#endif
+		break;
+		case GF16_SHUFFLE_VBMI:
+			#ifdef PLATFORM_AMD64
+			_info.idealInputMultiple = 4;
+			_info.prefetchDownscale = 1;
+			#endif
+			_info.alignment = 64;
+			_info.stride = 128;
+		break;
+		case GF16_SHUFFLE2X_AVX512:
+			#ifdef PLATFORM_AMD64
+			_info.idealInputMultiple = 6;
+			#endif
+			_info.alignment = 64;
+			_info.stride = 64;
+		break;
+		case GF16_SHUFFLE2X_AVX2:
+			#ifdef PLATFORM_AMD64
+			_info.idealInputMultiple = 2;
+			#endif
+			_info.alignment = 32;
+			_info.stride = 32;
+		break;
+		
+		case GF16_SHUFFLE_NEON:
+			_info.alignment = 32; // presumably double-loads work best when aligned to 32 instead of 16?
+			_info.stride = 32;
+			_info.cksumSize = 16;
+			#ifdef __aarch64__
+			_info.idealInputMultiple = 2;
+			#endif
+		break;
+		
+		case GF16_CLMUL_NEON:
+			_info.alignment = 32; // presumably double-loads work best when aligned to 32 instead of 16?
+			_info.stride = 32;
+			_info.cksumSize = 16;
+			#ifdef __aarch64__
+			_info.idealInputMultiple = 8;
+			#else
+			_info.idealInputMultiple = 3;
+			#endif
+		break;
+		
+		case GF16_SHUFFLE_128_SVE:
+		case GF16_SHUFFLE_128_SVE2:
+			_info.alignment = 16; // I guess this is good enough...
+			_info.cksumSize = gf16_sve_get_size();
+			_info.stride = _info.cksumSize*2;
+			_info.idealInputMultiple = 3;
+		break;
+		
+		case GF16_SHUFFLE2X_128_SVE2:
+			_info.alignment = 32;
+			_info.cksumSize = gf16_sve_get_size();
+			_info.stride = _info.cksumSize;
+			_info.idealInputMultiple = 6;
+		break;
+		
+		case GF16_SHUFFLE_512_SVE2:
+			_info.alignment = 64;
+			_info.cksumSize = gf16_sve_get_size();
+			_info.stride = _info.cksumSize*2;
+			_info.idealInputMultiple = 4;
+		break;
+
+		case GF16_CLMUL_SVE2:
+			_info.alignment = 16;
+			_info.cksumSize = gf16_sve_get_size();
+			_info.stride = _info.cksumSize*2;
+			_info.idealInputMultiple = 8;
+		break;
+		
+		case GF16_AFFINE_AVX512:
+			_info.alignment = 64;
+			_info.stride = 128;
+			#ifdef PLATFORM_AMD64
+			_info.idealInputMultiple = 6;
+			_info.prefetchDownscale = 1;
+			#endif
+		break;
+		
+		case GF16_AFFINE_AVX2:
+			_info.alignment = 32;
+			_info.stride = 64;
+			#ifdef PLATFORM_AMD64
+			_info.idealInputMultiple = 3;
+			#endif
+		break;
+		
+		case GF16_AFFINE_GFNI:
+			_info.alignment = 16;
+			_info.stride = 32;
+			#ifdef PLATFORM_AMD64
+			_info.idealInputMultiple = 3;
+			#endif
+		break;
+		
+		case GF16_AFFINE2X_AVX512:
+			_info.alignment = 64;
+			_info.stride = 64;
+			#ifdef PLATFORM_AMD64
+			_info.idealInputMultiple = 12;
+			#else
+			_info.idealInputMultiple = 2;
+			#endif
+		break;
+		
+		case GF16_AFFINE2X_AVX2:
+			_info.alignment = 32;
+			_info.stride = 32;
+			#ifdef PLATFORM_AMD64
+			_info.idealInputMultiple = 6;
+			#else
+			_info.idealInputMultiple = 2;
+			#endif
+		break;
+		
+		case GF16_AFFINE2X_GFNI:
+			_info.alignment = 16;
+			_info.stride = 16;
+			#ifdef PLATFORM_AMD64
+			_info.idealInputMultiple = 6;
+			#else
+			_info.idealInputMultiple = 2;
+			#endif
+		break;
+		
+		case GF16_XOR_JIT_AVX512:
+		case GF16_XOR_JIT_AVX2:
+		//case GF16_XOR_JIT_AVX:
+		case GF16_XOR_JIT_SSE2:
+		case GF16_XOR_SSE2: {
+			_info.alignment = 16;
+			_info.prefetchDownscale = 1;
+			if(method == GF16_XOR_JIT_AVX2)
+				_info.alignment = 32;
+			if(method == GF16_XOR_JIT_AVX512) {
+				_info.idealInputMultiple = 6;
+				_info.alignment = 64;
+			}
+			_info.stride = _info.alignment*16;
+		} break;
+		
+		case GF16_LOOKUP_SSE2:
+			_info.alignment = 16;
+			_info.stride = 16;
+		break;
+		
+		case GF16_LOOKUP3:
+			_info.stride = gf16_lookup3_stride();
+			_info.alignment = _info.stride; // assume platform doesn't like misalignment
+			if(_info.stride)
+				break;
+			// else fallthrough
+		case GF16_LOOKUP:
+		default:
+			_info.id = GF16_LOOKUP;
+			_info.stride = gf16_lookup_stride();
+			_info.alignment = _info.stride; // assume platform doesn't like misalignment
+		break;
+	}
+	_info.name = methodToText(_info.id);
+	if(!_info.cksumSize) _info.cksumSize = _info.alignment;
+	
+	// TODO: improve these?
+	// TODO: this probably needs to be variable depending on the CPU cache size
+	// although these defaults are pretty good across most CPUs
+	switch(method) {
+		case GF16_XOR_JIT_SSE2: // JIT is a little slow, so larger blocks make things faster
+			_info.idealChunkSize = 64*1024;
+			// seems like weaker processors prefer 32K
+		break;
+		case GF16_XOR_JIT_AVX2:
+			// 64-96K generally seems ideal, but this method is most likely used on Zen, which seems to prefer 128-256K
+			_info.idealChunkSize = 128*1024;
+		break;
+		case GF16_XOR_JIT_AVX512:
+			_info.idealChunkSize = 48*1024; // peak on Skylake-X
+		break;
+		case GF16_LOOKUP:
+		case GF16_LOOKUP_SSE2:
+		case GF16_LOOKUP3:
+		case GF16_XOR_SSE2:
+			// these seem to generally perfer larger sizes, particularly XOR
+			// lookup is mostly run on weaker processors, so prefer smaller to avoid overloading cache
+			_info.idealChunkSize = 32*1024;
+		break;
+		case GF16_SHUFFLE_SSSE3:
+		case GF16_SHUFFLE_AVX:
+		case GF16_SHUFFLE_NEON:
+		case GF16_SHUFFLE_128_SVE: // may need smaller chunks for larger vector size
+		case GF16_SHUFFLE_128_SVE2:
+			_info.idealChunkSize = 16*1024;
+		break;
+		case GF16_SHUFFLE_AVX2:
+		case GF16_SHUFFLE_AVX512:
+		case GF16_SHUFFLE_VBMI:
+		case GF16_SHUFFLE2X_AVX2:
+		case GF16_SHUFFLE2X_AVX512:
+		case GF16_SHUFFLE2X_128_SVE2:
+		case GF16_SHUFFLE_512_SVE2:
+			// try to target L2
+			_info.idealChunkSize = 8*1024;
+		break;
+		case GF16_AFFINE_AVX2:
+		case GF16_AFFINE2X_AVX2:
+			_info.idealChunkSize = 4*1024; // completely untested
+		break;
+		case GF16_AFFINE_AVX512:
+		case GF16_AFFINE2X_AVX512:
+			_info.idealChunkSize = 4*1024;
+		break;
+		case GF16_CLMUL_NEON: // faster init than Shuffle, and usually faster
+		case GF16_CLMUL_SVE2: // may want smaller chunk size for wider vectors
+		case GF16_AFFINE_GFNI:
+		case GF16_AFFINE2X_GFNI:
+			_info.idealChunkSize = 8*1024;
+		break;
+		default: // shouldn't reach here as all options are covered above
+			_info.idealChunkSize = 32*1024; // random generic size that's a rough average of everything
+	}
+	return _info;
+}
+
 void Galois16Mul::setupMethod(Galois16Methods _method) {
 	Galois16Methods method = _method == GF16_AUTO ? default_method() : _method;
 	if(scratch) {
@@ -183,16 +480,12 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 		return; \
 	}
 	
-	_info.idealInputMultiple = 1;
-	_info.prefetchDownscale = 0;
 	switch(method) {
 		case GF16_SHUFFLE_AVX512:
 		case GF16_SHUFFLE_AVX2:
 		case GF16_SHUFFLE_AVX:
 		case GF16_SHUFFLE_SSSE3:
-			_info.alignment = 16;
 			scratch = gf16_shuffle_init_x86(GF16_POLYNOMIAL);
-			_info.prefetchDownscale = 1;
 			
 			switch(method) {
 				case GF16_SHUFFLE_SSSE3:
@@ -207,9 +500,13 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 					prepare = &gf16_shuffle_prepare_ssse3;
 					prepare_packed = &gf16_shuffle_prepare_packed_ssse3;
 					prepare_packed_cksum = &gf16_shuffle_prepare_packed_cksum_ssse3;
+					prepare_partial_packsum = &gf16_shuffle_prepare_partial_packsum_ssse3;
 					finish = &gf16_shuffle_finish_ssse3;
 					finish_packed = &gf16_shuffle_finish_packed_ssse3;
 					finish_packed_cksum = &gf16_shuffle_finish_packed_cksum_ssse3;
+					finish_partial_packsum = &gf16_shuffle_finish_partial_packsum_ssse3;
+					copy_cksum = &gf16_cksum_copy_sse2;
+					copy_cksum_check = &gf16_cksum_copy_check_sse2;
 				break;
 				case GF16_SHUFFLE_AVX:
 					METHOD_REQUIRES(gf16_shuffle_available_avx && scratch)
@@ -222,9 +519,13 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 					prepare = &gf16_shuffle_prepare_avx;
 					prepare_packed = &gf16_shuffle_prepare_packed_avx;
 					prepare_packed_cksum = &gf16_shuffle_prepare_packed_cksum_avx;
+					prepare_partial_packsum = &gf16_shuffle_prepare_partial_packsum_avx;
 					finish = &gf16_shuffle_finish_avx;
 					finish_packed = &gf16_shuffle_finish_packed_avx;
 					finish_packed_cksum = &gf16_shuffle_finish_packed_cksum_avx;
+					finish_partial_packsum = &gf16_shuffle_finish_partial_packsum_avx;
+					copy_cksum = &gf16_cksum_copy_sse2;
+					copy_cksum_check = &gf16_cksum_copy_check_sse2;
 				break;
 				case GF16_SHUFFLE_AVX2:
 					METHOD_REQUIRES(gf16_shuffle_available_avx2 && scratch)
@@ -237,10 +538,13 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 					prepare = &gf16_shuffle_prepare_avx2;
 					prepare_packed = &gf16_shuffle_prepare_packed_avx2;
 					prepare_packed_cksum = &gf16_shuffle_prepare_packed_cksum_avx2;
+					prepare_partial_packsum = &gf16_shuffle_prepare_partial_packsum_avx2;
 					finish = &gf16_shuffle_finish_avx2;
 					finish_packed = &gf16_shuffle_finish_packed_avx2;
 					finish_packed_cksum = &gf16_shuffle_finish_packed_cksum_avx2;
-					_info.alignment = 32;
+					finish_partial_packsum = &gf16_shuffle_finish_partial_packsum_avx2;
+					copy_cksum = &gf16_cksum_copy_avx2;
+					copy_cksum_check = &gf16_cksum_copy_check_avx2;
 				break;
 				case GF16_SHUFFLE_AVX512:
 					METHOD_REQUIRES(gf16_shuffle_available_avx512 && scratch)
@@ -253,7 +557,6 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 					_mul_add_multi = &gf16_shuffle_muladd_multi_avx512;
 					_mul_add_multi_packed = &gf16_shuffle_muladd_multi_packed_avx512;
 					_mul_add_multi_packpf = &gf16_shuffle_muladd_multi_packpf_avx512;
-					_info.idealInputMultiple = 3;
 					add_multi_packed = &gf_add_multi_packed_v2i3_avx512;
 					add_multi_packpf = &gf_add_multi_packpf_v2i3_avx512;
 					#else
@@ -263,14 +566,16 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 					prepare = &gf16_shuffle_prepare_avx512;
 					prepare_packed = &gf16_shuffle_prepare_packed_avx512;
 					prepare_packed_cksum = &gf16_shuffle_prepare_packed_cksum_avx512;
+					prepare_partial_packsum = &gf16_shuffle_prepare_partial_packsum_avx512;
 					finish = &gf16_shuffle_finish_avx512;
 					finish_packed = &gf16_shuffle_finish_packed_avx512;
 					finish_packed_cksum = &gf16_shuffle_finish_packed_cksum_avx512;
-					_info.alignment = 64;
+					finish_partial_packsum = &gf16_shuffle_finish_partial_packsum_avx512;
+					copy_cksum = &gf16_cksum_copy_avx512;
+					copy_cksum_check = &gf16_cksum_copy_check_avx512;
 				break;
 				default: break; // for pedantic compilers
 			}
-			_info.stride = _info.alignment*2;
 		break;
 		case GF16_SHUFFLE_VBMI:
 			scratch = gf16_shuffle_init_vbmi(GF16_POLYNOMIAL);
@@ -283,8 +588,6 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			_mul_add_multi = &gf16_shuffle_muladd_multi_vbmi;
 			_mul_add_multi_packed = &gf16_shuffle_muladd_multi_packed_vbmi;
 			_mul_add_multi_packpf = &gf16_shuffle_muladd_multi_packpf_vbmi;
-			_info.idealInputMultiple = 4;
-			_info.prefetchDownscale = 1;
 			add_multi_packed = &gf_add_multi_packed_v2i4_avx512;
 			add_multi_packpf = &gf_add_multi_packpf_v2i4_avx512;
 			#else
@@ -294,11 +597,13 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			prepare = &gf16_shuffle_prepare_avx512;
 			prepare_packed = &gf16_shuffle_prepare_packed_vbmi;
 			prepare_packed_cksum = &gf16_shuffle_prepare_packed_cksum_vbmi;
+			prepare_partial_packsum = &gf16_shuffle_prepare_partial_packsum_vbmi;
 			finish = &gf16_shuffle_finish_avx512;
 			finish_packed = &gf16_shuffle_finish_packed_avx512;
 			finish_packed_cksum = &gf16_shuffle_finish_packed_cksum_avx512;
-			_info.alignment = 64;
-			_info.stride = 128;
+			finish_partial_packsum = &gf16_shuffle_finish_partial_packsum_avx512;
+			copy_cksum = &gf16_cksum_copy_avx512;
+			copy_cksum_check = &gf16_cksum_copy_check_avx512;
 		break;
 		case GF16_SHUFFLE2X_AVX512:
 			scratch = gf16_shuffle_init_x86(GF16_POLYNOMIAL);
@@ -310,7 +615,6 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			_mul_add_multi = &gf16_shuffle2x_muladd_multi_avx512;
 			_mul_add_multi_packed = &gf16_shuffle2x_muladd_multi_packed_avx512;
 			_mul_add_multi_packpf = &gf16_shuffle2x_muladd_multi_packpf_avx512;
-			_info.idealInputMultiple = 6;
 			add_multi_packed = &gf_add_multi_packed_v1i6_avx512;
 			add_multi_packpf = &gf_add_multi_packpf_v1i6_avx512;
 			#else
@@ -320,11 +624,13 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			prepare = &gf16_shuffle2x_prepare_avx512;
 			prepare_packed = &gf16_shuffle2x_prepare_packed_avx512;
 			prepare_packed_cksum = &gf16_shuffle2x_prepare_packed_cksum_avx512;
+			prepare_partial_packsum = &gf16_shuffle2x_prepare_partial_packsum_avx512;
 			finish = &gf16_shuffle2x_finish_avx512;
 			finish_packed = &gf16_shuffle2x_finish_packed_avx512;
 			finish_packed_cksum = &gf16_shuffle2x_finish_packed_cksum_avx512;
-			_info.alignment = 64;
-			_info.stride = 64;
+			finish_partial_packsum = &gf16_shuffle2x_finish_partial_packsum_avx512;
+			copy_cksum = &gf16_cksum_copy_avx512;
+			copy_cksum_check = &gf16_cksum_copy_check_avx512;
 		break;
 		case GF16_SHUFFLE2X_AVX2:
 			scratch = gf16_shuffle_init_x86(GF16_POLYNOMIAL);
@@ -336,7 +642,6 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			_mul_add_multi = &gf16_shuffle2x_muladd_multi_avx2;
 			_mul_add_multi_packed = &gf16_shuffle2x_muladd_multi_packed_avx2;
 			_mul_add_multi_packpf = &gf16_shuffle2x_muladd_multi_packpf_avx2;
-			_info.idealInputMultiple = 2;
 			add_multi_packed = &gf_add_multi_packed_v1i2_avx2;
 			add_multi_packpf = &gf_add_multi_packpf_v1i2_avx2;
 			#else
@@ -346,16 +651,16 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			prepare = &gf16_shuffle2x_prepare_avx2;
 			prepare_packed = &gf16_shuffle2x_prepare_packed_avx2;
 			prepare_packed_cksum = &gf16_shuffle2x_prepare_packed_cksum_avx2;
+			prepare_partial_packsum = &gf16_shuffle2x_prepare_partial_packsum_avx2;
 			finish = &gf16_shuffle2x_finish_avx2;
 			finish_packed = &gf16_shuffle2x_finish_packed_avx2;
 			finish_packed_cksum = &gf16_shuffle2x_finish_packed_cksum_avx2;
-			_info.alignment = 32;
-			_info.stride = 32;
+			finish_partial_packsum = &gf16_shuffle2x_finish_partial_packsum_avx2;
+			copy_cksum = &gf16_cksum_copy_avx2;
+			copy_cksum_check = &gf16_cksum_copy_check_avx2;
 		break;
 		
 		case GF16_SHUFFLE_NEON:
-			_info.alignment = 32; // presumably double-loads work best when aligned to 32 instead of 16?
-			_info.stride = 32;
 			scratch = gf16_shuffle_init_arm(GF16_POLYNOMIAL);
 			
 			METHOD_REQUIRES(gf16_available_neon && scratch)
@@ -369,21 +674,22 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			// TODO: on Cortex A53, prefetching seems to be slower, so disabled for now
 			//_mul_add_multi_packpf = &gf16_shuffle_muladd_multi_packpf_neon;
 			prepare_packed = &gf16_shuffle_prepare_packed_neon;
-			_info.idealInputMultiple = 2;
 			#endif
 			add_multi_packed = &gf_add_multi_packed_shuffle_neon;
 			add_multi_packpf = &gf_add_multi_packpf_shuffle_neon;
 			prepare_packed_cksum = &gf16_shuffle_prepare_packed_cksum_neon;
+			prepare_partial_packsum = &gf16_shuffle_prepare_partial_packsum_neon;
 			finish_packed = &gf16_shuffle_finish_packed_neon;
 			finish_packed_cksum = &gf16_shuffle_finish_packed_cksum_neon;
+			finish_partial_packsum = &gf16_shuffle_finish_partial_packsum_neon;
+			copy_cksum = &gf16_cksum_copy_neon;
+			copy_cksum_check = &gf16_cksum_copy_check_neon;
 		break;
 		
-		case GF16_CLMUL_NEON:
-			_info.alignment = 32; // presumably double-loads work best when aligned to 32 instead of 16?
-			_info.stride = 32;
-			scratch = gf16_clmul_init_arm(GF16_POLYNOMIAL);
+		case GF16_CLMUL_NEON: {
+			int available = gf16_clmul_init_arm(GF16_POLYNOMIAL);
 			
-			METHOD_REQUIRES(gf16_available_neon && scratch)
+			METHOD_REQUIRES(gf16_available_neon && available)
 			_mul_add = &gf16_clmul_muladd_neon;
 			_mul_add_multi = &gf16_clmul_muladd_multi_neon;
 			_mul_add_multi_packed = &gf16_clmul_muladd_multi_packed_neon;
@@ -393,21 +699,18 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			// TODO: on Cortex A53, prefetching seems to be slower, so disabled for now
 			//_mul_add_multi_packpf = &gf16_clmul_muladd_multi_packpf_neon;
 			prepare_packed = &gf16_clmul_prepare_packed_neon;
-			#ifdef __aarch64__
-			_info.idealInputMultiple = 8;
-			#else
-			_info.idealInputMultiple = 3;
-			#endif
 			prepare_packed_cksum = &gf16_clmul_prepare_packed_cksum_neon;
+			prepare_partial_packsum = &gf16_clmul_prepare_partial_packsum_neon;
 			finish_packed = &gf16_shuffle_finish_packed_neon;
 			finish_packed_cksum = &gf16_shuffle_finish_packed_cksum_neon; // re-use shuffle routine
-		break;
+			finish_partial_packsum = &gf16_shuffle_finish_partial_packsum_neon;
+			copy_cksum = &gf16_cksum_copy_neon;
+			copy_cksum_check = &gf16_cksum_copy_check_neon;
+		} break;
 		
 		case GF16_SHUFFLE_128_SVE:
 			METHOD_REQUIRES(gf16_available_sve)
 			
-			_info.alignment = 16; // I guess this is good enough...
-			_info.stride = gf16_sve_get_size()*2;
 			scratch = gf16_shuffle_init_128_sve(GF16_POLYNOMIAL);
 			
 			_mul = &gf16_shuffle_mul_128_sve;
@@ -419,17 +722,17 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			add_multi_packed = &gf_add_multi_packed_sve;
 			add_multi_packpf = &gf_add_multi_packpf_sve;
 			prepare_packed = &gf16_shuffle_prepare_packed_sve;
-			_info.idealInputMultiple = 3;
 			prepare_packed_cksum = &gf16_shuffle_prepare_packed_cksum_sve;
+			prepare_partial_packsum = &gf16_shuffle_prepare_partial_packsum_sve;
 			finish_packed = &gf16_shuffle_finish_packed_sve;
 			finish_packed_cksum = &gf16_shuffle_finish_packed_cksum_sve;
+			finish_partial_packsum = &gf16_shuffle_finish_partial_packsum_sve;
+			copy_cksum = &gf16_cksum_copy_sve;
+			copy_cksum_check = &gf16_cksum_copy_check_sve;
 		break;
 		
 		case GF16_SHUFFLE_128_SVE2:
 			METHOD_REQUIRES(gf16_available_sve2)
-			
-			_info.alignment = 16;
-			_info.stride = gf16_sve_get_size()*2;
 			
 			_mul = &gf16_shuffle_mul_128_sve2;
 			_mul_add = &gf16_shuffle_muladd_128_sve2;
@@ -440,17 +743,17 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			add_multi_packed = &gf_add_multi_packed_v2i3_sve2;
 			add_multi_packpf = &gf_add_multi_packpf_v2i3_sve2;
 			prepare_packed = &gf16_shuffle_prepare_packed_sve;
-			_info.idealInputMultiple = 3;
 			prepare_packed_cksum = &gf16_shuffle_prepare_packed_cksum_sve;
+			prepare_partial_packsum = &gf16_shuffle_prepare_partial_packsum_sve;
 			finish_packed = &gf16_shuffle_finish_packed_sve;
 			finish_packed_cksum = &gf16_shuffle_finish_packed_cksum_sve;
+			finish_partial_packsum = &gf16_shuffle_finish_partial_packsum_sve;
+			copy_cksum = &gf16_cksum_copy_sve;
+			copy_cksum_check = &gf16_cksum_copy_check_sve;
 		break;
 		
 		case GF16_SHUFFLE2X_128_SVE2:
 			METHOD_REQUIRES(gf16_available_sve2 && gf16_sve_get_size() >= 32)
-			
-			_info.alignment = 32;
-			_info.stride = gf16_sve_get_size();
 			
 			_mul_add = &gf16_shuffle2x_muladd_128_sve2;
 			_mul_add_multi = &gf16_shuffle2x_muladd_multi_128_sve2;
@@ -460,18 +763,19 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			add_multi_packed = &gf_add_multi_packed_v1i6_sve2;
 			add_multi_packpf = &gf_add_multi_packpf_v1i6_sve2;
 			prepare_packed = &gf16_shuffle2x_prepare_packed_sve;
-			_info.idealInputMultiple = 6;
 			prepare_packed_cksum = &gf16_shuffle2x_prepare_packed_cksum_sve;
+			prepare_partial_packsum = &gf16_shuffle2x_prepare_partial_packsum_sve;
 			finish_packed = &gf16_shuffle2x_finish_packed_sve;
 			finish_packed_cksum = &gf16_shuffle2x_finish_packed_cksum_sve;
+			finish_partial_packsum = &gf16_shuffle2x_finish_partial_packsum_sve;
+			copy_cksum = &gf16_cksum_copy_sve;
+			copy_cksum_check = &gf16_cksum_copy_check_sve;
 		break;
 		
 		case GF16_SHUFFLE_512_SVE2:
 			METHOD_REQUIRES(gf16_available_sve2 && gf16_sve_get_size() >= 64)
 			// TODO: this could be made to work on vect-size>=256b using TBL2
 			
-			_info.alignment = 64;
-			_info.stride = gf16_sve_get_size()*2;
 			scratch = gf16_shuffle_init_512_sve(GF16_POLYNOMIAL);
 			
 			_mul_add = &gf16_shuffle_muladd_512_sve2;
@@ -482,17 +786,17 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			add_multi_packed = &gf_add_multi_packed_v2i4_sve2;
 			add_multi_packpf = &gf_add_multi_packpf_v2i4_sve2;
 			prepare_packed = &gf16_shuffle_prepare_packed_512_sve2;
-			_info.idealInputMultiple = 4;
 			prepare_packed_cksum = &gf16_shuffle_prepare_packed_cksum_512_sve2;
+			prepare_partial_packsum = &gf16_shuffle_prepare_partial_packsum_512_sve2;
 			finish_packed = &gf16_shuffle_finish_packed_sve;
 			finish_packed_cksum = &gf16_shuffle_finish_packed_cksum_sve;
+			finish_partial_packsum = &gf16_shuffle_finish_partial_packsum_sve;
+			copy_cksum = &gf16_cksum_copy_sve;
+			copy_cksum_check = &gf16_cksum_copy_check_sve;
 		break;
 
 		case GF16_CLMUL_SVE2:
 			METHOD_REQUIRES(gf16_available_sve2)
-			
-			_info.alignment = 16;
-			_info.stride = gf16_sve_get_size()*2;
 			
 			_mul_add = &gf16_clmul_muladd_sve2;
 			_mul_add_multi = &gf16_clmul_muladd_multi_sve2;
@@ -502,16 +806,17 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			add_multi_packed = &gf_add_multi_packed_v2i8_sve2;
 			add_multi_packpf = &gf_add_multi_packpf_v2i8_sve2;
 			prepare_packed = &gf16_clmul_prepare_packed_sve2;
-			_info.idealInputMultiple = 8;
 			prepare_packed_cksum = &gf16_clmul_prepare_packed_cksum_sve2;
+			prepare_partial_packsum = &gf16_clmul_prepare_partial_packsum_sve2;
 			finish_packed = &gf16_shuffle_finish_packed_sve;
 			finish_packed_cksum = &gf16_shuffle_finish_packed_cksum_sve; // reuse shuffle
+			finish_partial_packsum = &gf16_shuffle_finish_partial_packsum_sve;
+			copy_cksum = &gf16_cksum_copy_sve;
+			copy_cksum_check = &gf16_cksum_copy_check_sve;
 		break;
 		
 		case GF16_AFFINE_AVX512:
 			scratch = gf16_affine_init_avx512(GF16_POLYNOMIAL);
-			_info.alignment = 64;
-			_info.stride = 128;
 			METHOD_REQUIRES(gf16_affine_available_avx512 && gf16_shuffle_available_avx512)
 			_mul = &gf16_affine_mul_avx512;
 			_mul_add = &gf16_affine_muladd_avx512;
@@ -521,8 +826,6 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			_mul_add_multi = &gf16_affine_muladd_multi_avx512;
 			_mul_add_multi_packed = &gf16_affine_muladd_multi_packed_avx512;
 			_mul_add_multi_packpf = &gf16_affine_muladd_multi_packpf_avx512;
-			_info.idealInputMultiple = 6;
-			_info.prefetchDownscale = 1;
 			add_multi_packed = &gf_add_multi_packed_v2i6_avx512;
 			add_multi_packpf = &gf_add_multi_packpf_v2i6_avx512;
 			#else
@@ -532,15 +835,17 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			prepare = &gf16_shuffle_prepare_avx512;
 			prepare_packed = &gf16_affine_prepare_packed_avx512;
 			prepare_packed_cksum = &gf16_affine_prepare_packed_cksum_avx512;
+			prepare_partial_packsum = &gf16_affine_prepare_partial_packsum_avx512;
 			finish = &gf16_shuffle_finish_avx512;
 			finish_packed = &gf16_shuffle_finish_packed_avx512;
 			finish_packed_cksum = &gf16_shuffle_finish_packed_cksum_avx512;
+			finish_partial_packsum = &gf16_shuffle_finish_partial_packsum_avx512;
+			copy_cksum = &gf16_cksum_copy_avx512;
+			copy_cksum_check = &gf16_cksum_copy_check_avx512;
 		break;
 		
 		case GF16_AFFINE_AVX2:
 			scratch = gf16_affine_init_avx2(GF16_POLYNOMIAL);
-			_info.alignment = 32;
-			_info.stride = 64;
 			METHOD_REQUIRES(gf16_affine_available_avx2 && gf16_shuffle_available_avx2)
 			_mul = &gf16_affine_mul_avx2;
 			_mul_add = &gf16_affine_muladd_avx2;
@@ -550,7 +855,6 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			_mul_add_multi = &gf16_affine_muladd_multi_avx2;
 			_mul_add_multi_packed = &gf16_affine_muladd_multi_packed_avx2;
 			_mul_add_multi_packpf = &gf16_affine_muladd_multi_packpf_avx2;
-			_info.idealInputMultiple = 3;
 			add_multi_packed = &gf_add_multi_packed_v2i3_avx2;
 			add_multi_packpf = &gf_add_multi_packpf_v2i3_avx2;
 			#else
@@ -560,15 +864,17 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			prepare = &gf16_shuffle_prepare_avx2;
 			prepare_packed = &gf16_affine_prepare_packed_avx2;
 			prepare_packed_cksum = &gf16_affine_prepare_packed_cksum_avx2;
+			prepare_partial_packsum = &gf16_affine_prepare_partial_packsum_avx2;
 			finish = &gf16_shuffle_finish_avx2;
 			finish_packed = &gf16_shuffle_finish_packed_avx2;
 			finish_packed_cksum = &gf16_shuffle_finish_packed_cksum_avx2;
+			finish_partial_packsum = &gf16_shuffle_finish_partial_packsum_avx2;
+			copy_cksum = &gf16_cksum_copy_avx2;
+			copy_cksum_check = &gf16_cksum_copy_check_avx2;
 		break;
 		
 		case GF16_AFFINE_GFNI:
 			scratch = gf16_affine_init_gfni(GF16_POLYNOMIAL);
-			_info.alignment = 16;
-			_info.stride = 32;
 			METHOD_REQUIRES(gf16_affine_available_gfni && gf16_shuffle_available_ssse3)
 			_mul = &gf16_affine_mul_gfni;
 			_mul_add = &gf16_affine_muladd_gfni;
@@ -578,7 +884,6 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			_mul_add_multi = &gf16_affine_muladd_multi_gfni;
 			_mul_add_multi_packed = &gf16_affine_muladd_multi_packed_gfni;
 			_mul_add_multi_packpf = &gf16_affine_muladd_multi_packpf_gfni;
-			_info.idealInputMultiple = 3;
 			add_multi_packed = &gf_add_multi_packed_v2i3_sse2;
 			add_multi_packpf = &gf_add_multi_packpf_v2i3_sse2;
 			#else
@@ -588,15 +893,17 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			prepare = &gf16_shuffle_prepare_ssse3;
 			prepare_packed = &gf16_affine_prepare_packed_gfni;
 			prepare_packed_cksum = &gf16_affine_prepare_packed_cksum_gfni;
+			prepare_partial_packsum = &gf16_affine_prepare_partial_packsum_gfni;
 			finish = &gf16_shuffle_finish_ssse3;
 			finish_packed = &gf16_shuffle_finish_packed_ssse3;
 			finish_packed_cksum = &gf16_shuffle_finish_packed_cksum_ssse3;
+			finish_partial_packsum = &gf16_shuffle_finish_partial_packsum_ssse3;
+			copy_cksum = &gf16_cksum_copy_sse2;
+			copy_cksum_check = &gf16_cksum_copy_check_sse2;
 		break;
 		
 		case GF16_AFFINE2X_AVX512:
 			scratch = gf16_affine_init_avx512(GF16_POLYNOMIAL);
-			_info.alignment = 64;
-			_info.stride = 64;
 			METHOD_REQUIRES(gf16_affine_available_avx512 && gf16_shuffle_available_avx512)
 			_mul_add = &gf16_affine2x_muladd_avx512;
 			_mul_add_multi = &gf16_affine2x_muladd_multi_avx512;
@@ -604,26 +911,26 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			_mul_add_multi_packpf = &gf16_affine2x_muladd_multi_packpf_avx512;
 			add_multi = &gf_add_multi_avx512;
 			#ifdef PLATFORM_AMD64
-			_info.idealInputMultiple = 12;
 			add_multi_packed = &gf_add_multi_packed_v1i12_avx512;
 			add_multi_packpf = &gf_add_multi_packpf_v1i12_avx512;
 			#else
-			_info.idealInputMultiple = 2;
 			add_multi_packed = &gf_add_multi_packed_v1i2_avx512;
 			add_multi_packpf = &gf_add_multi_packpf_v1i2_avx512;
 			#endif
 			prepare = &gf16_affine2x_prepare_avx512;
 			prepare_packed = &gf16_affine2x_prepare_packed_avx512;
 			prepare_packed_cksum = &gf16_affine2x_prepare_packed_cksum_avx512;
+			prepare_partial_packsum = &gf16_affine2x_prepare_partial_packsum_avx512;
 			finish = &gf16_affine2x_finish_avx512;
 			finish_packed = &gf16_affine2x_finish_packed_avx512;
 			finish_packed_cksum = &gf16_affine2x_finish_packed_cksum_avx512;
+			finish_partial_packsum = &gf16_affine2x_finish_partial_packsum_avx512;
+			copy_cksum = &gf16_cksum_copy_avx512;
+			copy_cksum_check = &gf16_cksum_copy_check_avx512;
 		break;
 		
 		case GF16_AFFINE2X_AVX2:
 			scratch = gf16_affine_init_avx2(GF16_POLYNOMIAL);
-			_info.alignment = 32;
-			_info.stride = 32;
 			METHOD_REQUIRES(gf16_affine_available_avx2 && gf16_shuffle_available_avx2)
 			_mul_add = &gf16_affine2x_muladd_avx2;
 			_mul_add_multi = &gf16_affine2x_muladd_multi_avx2;
@@ -631,26 +938,26 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			_mul_add_multi_packpf = &gf16_affine2x_muladd_multi_packpf_avx2;
 			add_multi = &gf_add_multi_avx2;
 			#ifdef PLATFORM_AMD64
-			_info.idealInputMultiple = 6;
 			add_multi_packed = &gf_add_multi_packed_v1i6_avx2;
 			add_multi_packpf = &gf_add_multi_packpf_v1i6_avx2;
 			#else
-			_info.idealInputMultiple = 2;
 			add_multi_packed = &gf_add_multi_packed_v1i2_avx2;
 			add_multi_packpf = &gf_add_multi_packpf_v1i2_avx2;
 			#endif
 			prepare = &gf16_affine2x_prepare_avx2;
 			prepare_packed = &gf16_affine2x_prepare_packed_avx2;
 			prepare_packed_cksum = &gf16_affine2x_prepare_packed_cksum_avx2;
+			prepare_partial_packsum = &gf16_affine2x_prepare_partial_packsum_avx2;
 			finish = &gf16_affine2x_finish_avx2;
 			finish_packed = &gf16_affine2x_finish_packed_avx2;
 			finish_packed_cksum = &gf16_affine2x_finish_packed_cksum_avx2;
+			finish_partial_packsum = &gf16_affine2x_finish_partial_packsum_avx2;
+			copy_cksum = &gf16_cksum_copy_avx2;
+			copy_cksum_check = &gf16_cksum_copy_check_avx2;
 		break;
 		
 		case GF16_AFFINE2X_GFNI:
 			scratch = gf16_affine_init_gfni(GF16_POLYNOMIAL);
-			_info.alignment = 16;
-			_info.stride = 16;
 			METHOD_REQUIRES(gf16_affine_available_gfni && gf16_shuffle_available_ssse3)
 			_mul_add = &gf16_affine2x_muladd_gfni;
 			_mul_add_multi = &gf16_affine2x_muladd_multi_gfni;
@@ -658,20 +965,22 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			_mul_add_multi_packpf = &gf16_affine2x_muladd_multi_packpf_gfni;
 			add_multi = &gf_add_multi_sse2;
 			#ifdef PLATFORM_AMD64
-			_info.idealInputMultiple = 6;
 			add_multi_packed = &gf_add_multi_packed_v1i6_sse2;
 			add_multi_packpf = &gf_add_multi_packpf_v1i6_sse2;
 			#else
-			_info.idealInputMultiple = 2;
 			add_multi_packed = &gf_add_multi_packed_v1i2_sse2;
 			add_multi_packpf = &gf_add_multi_packpf_v1i2_sse2;
 			#endif
 			prepare = &gf16_affine2x_prepare_gfni;
 			prepare_packed = &gf16_affine2x_prepare_packed_gfni;
 			prepare_packed_cksum = &gf16_affine2x_prepare_packed_cksum_gfni;
+			prepare_partial_packsum = &gf16_affine2x_prepare_partial_packsum_gfni;
 			finish = &gf16_affine2x_finish_gfni;
 			finish_packed = &gf16_affine2x_finish_packed_gfni;
 			finish_packed_cksum = &gf16_affine2x_finish_packed_cksum_gfni;
+			finish_partial_packsum = &gf16_affine2x_finish_partial_packsum_gfni;
+			copy_cksum = &gf16_cksum_copy_sse2;
+			copy_cksum_check = &gf16_cksum_copy_check_sse2;
 		break;
 		
 		case GF16_XOR_JIT_AVX512:
@@ -680,9 +989,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 		case GF16_XOR_JIT_SSE2:
 		case GF16_XOR_SSE2: {
 #ifdef PLATFORM_X86
-			_info.alignment = 16;
 			int jitOptStrat = CpuCap(true).jitOptStrat;
-			_info.prefetchDownscale = 1;
 			
 			switch(method) {
 				case GF16_XOR_JIT_SSE2:
@@ -704,9 +1011,13 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 					prepare = &gf16_xor_prepare_sse2;
 					prepare_packed = &gf16_xor_prepare_packed_sse2;
 					prepare_packed_cksum = &gf16_xor_prepare_packed_cksum_sse2;
+					prepare_partial_packsum = &gf16_xor_prepare_partial_packsum_sse2;
 					finish = &gf16_xor_finish_sse2;
 					finish_packed = &gf16_xor_finish_packed_sse2;
 					finish_packed_cksum = &gf16_xor_finish_packed_cksum_sse2;
+					finish_partial_packsum = &gf16_xor_finish_partial_packsum_sse2;
+					copy_cksum = &gf16_cksum_copy_sse2;
+					copy_cksum_check = &gf16_cksum_copy_check_sse2;
 				break;
 				/*
 				case GF16_XOR_JIT_AVX:
@@ -721,9 +1032,13 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 					prepare = &gf16_xor_prepare_avx;
 					prepare_packed = &gf16_xor_prepare_packed_avx;
 					prepare_packed_cksum = &gf16_xor_prepare_packed_cksum_avx;
+					prepare_partial_packsum = &gf16_xor_prepare_partial_packsum_avx;
 					finish = &gf16_xor_finish_avx;
 					finish_packed = &gf16_xor_finish_packed_avx;
 					finish_packed_cksum = &gf16_xor_finish_packed_cksum_avx;
+					finish_partial_packsum = &gf16_xor_finish_partial_packsum_avx;
+					copy_cksum = &gf16_cksum_copy_sse2;
+					copy_cksum_check = &gf16_cksum_copy_check_sse2;
 				break;
 				*/
 				case GF16_XOR_JIT_AVX2:
@@ -738,10 +1053,13 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 					prepare = &gf16_xor_prepare_avx2;
 					prepare_packed = &gf16_xor_prepare_packed_avx2;
 					prepare_packed_cksum = &gf16_xor_prepare_packed_cksum_avx2;
+					prepare_partial_packsum = &gf16_xor_prepare_partial_packsum_avx2;
 					finish = &gf16_xor_finish_avx2;
 					finish_packed = &gf16_xor_finish_packed_avx2;
 					finish_packed_cksum = &gf16_xor_finish_packed_cksum_avx2;
-					_info.alignment = 32;
+					finish_partial_packsum = &gf16_xor_finish_partial_packsum_avx2;
+					copy_cksum = &gf16_cksum_copy_avx2;
+					copy_cksum_check = &gf16_cksum_copy_check_avx2;
 				break;
 				case GF16_XOR_JIT_AVX512:
 					METHOD_REQUIRES(gf16_xor_available_avx512)
@@ -754,19 +1072,19 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 					add_multi = &gf_add_multi_avx512;
 					add_multi_packed = &gf_add_multi_packed_v16i6_avx512;
 					add_multi_packpf = &gf_add_multi_packpf_v16i6_avx512;
-					_info.idealInputMultiple = 6;
 					prepare = &gf16_xor_prepare_avx512;
 					prepare_packed = &gf16_xor_prepare_packed_avx512;
 					prepare_packed_cksum = &gf16_xor_prepare_packed_cksum_avx512;
+					prepare_partial_packsum = &gf16_xor_prepare_partial_packsum_avx512;
 					finish = &gf16_xor_finish_avx512;
 					finish_packed = &gf16_xor_finish_packed_avx512;
 					finish_packed_cksum = &gf16_xor_finish_packed_cksum_avx512;
-					_info.alignment = 64;
+					finish_partial_packsum = &gf16_xor_finish_partial_packsum_avx512;
+					copy_cksum = &gf16_cksum_copy_avx512;
+					copy_cksum_check = &gf16_cksum_copy_check_avx512;
 				break;
 				default: break; // for pedantic compilers
 			}
-			
-			_info.stride = _info.alignment*16;
 #else
 			METHOD_REQUIRES(0)
 #endif
@@ -776,10 +1094,12 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			_mul = &gf16_lookup_mul_sse2;
 			_mul_add = &gf16_lookup_muladd_sse2;
 			prepare_packed_cksum = &gf16_lookup_prepare_packed_cksum_sse2;
+			prepare_partial_packsum = &gf16_lookup_prepare_partial_packsum_sse2;
 			finish_packed = &gf16_lookup_finish_packed_sse2;
 			finish_packed_cksum = &gf16_lookup_finish_packed_cksum_sse2;
-			_info.alignment = 16;
-			_info.stride = 16;
+			finish_partial_packsum = &gf16_lookup_finish_partial_packsum_sse2;
+			copy_cksum = &gf16_cksum_copy_sse2;
+			copy_cksum_check = &gf16_cksum_copy_check_sse2;
 		break;
 		
 		case GF16_LOOKUP3:
@@ -790,11 +1110,11 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			add_multi_packpf = &gf_add_multi_packpf_lookup3;
 			prepare_packed = &gf16_lookup3_prepare_packed_generic;
 			prepare_packed_cksum = &gf16_lookup3_prepare_packed_cksum_generic;
+			prepare_partial_packsum = &gf16_lookup3_prepare_partial_packsum_generic;
 			finish_packed = &gf16_lookup_finish_packed_generic;
 			finish_packed_cksum = &gf16_lookup_finish_packed_cksum_generic;
-			_info.stride = gf16_lookup3_stride();
-			_info.alignment = _info.stride; // assume platform doesn't like misalignment
-			if(_info.stride)
+			finish_partial_packsum = &gf16_lookup_finish_partial_packsum_generic;
+			if(gf16_lookup3_stride())
 				break;
 			// else fallthrough
 		case GF16_LOOKUP:
@@ -802,35 +1122,16 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			_mul = &gf16_lookup_mul;
 			_mul_add = &gf16_lookup_muladd;
 			_pow_add = &gf16_lookup_powadd;
-			prepare_packed_cksum = &gf16_lookup_prepare_packed_cksum;
+			prepare_packed_cksum = &gf16_lookup_prepare_packed_cksum_generic;
+			prepare_partial_packsum = &gf16_lookup_prepare_partial_packsum_generic;
 			finish_packed = &gf16_lookup_finish_packed_generic;
 			finish_packed_cksum = &gf16_lookup_finish_packed_cksum_generic;
-			_info.stride = gf16_lookup_stride();
-			_info.alignment = _info.stride; // assume platform doesn't like misalignment
+			finish_partial_packsum = &gf16_lookup_finish_partial_packsum_generic;
 		break;
 	}
-	_info.id = method;
-	_info.name = Galois16MethodsText[(int)method];
 	#undef METHOD_REQUIRES
 	
-	// TODO: improve these?
-	// TODO: this probably needs to be variable depending on the CPU cache size
-	// although these defaults are pretty good across most CPUs
-	switch(method) {
-		case GF16_XOR_JIT_SSE2: // JIT is a little slow, so larger blocks make things faster
-		case GF16_XOR_JIT_AVX2:
-		case GF16_XOR_JIT_AVX512:
-			_info.idealChunkSize = 128*1024; // half L2 cache?
-		break;
-		case GF16_LOOKUP:
-		case GF16_LOOKUP_SSE2:
-		case GF16_LOOKUP3:
-		case GF16_XOR_SSE2:
-			_info.idealChunkSize = 96*1024; // 2* L1 data cache size ?
-		break;
-		default: // Shuffle/Affine
-			_info.idealChunkSize = 48*1024; // ~=L1 * 1-2 data cache size seems to be efficient
-	}
+	_info = info(method);
 }
 
 Galois16Mul::Galois16Mul(Galois16Methods method) {
@@ -839,8 +1140,6 @@ Galois16Mul::Galois16Mul(Galois16Methods method) {
 	prepare_packed = &Galois16Mul::_prepare_packed_none;
 	finish = &Galois16Mul::_finish_none;
 	finish_packed = NULL;
-	_info.alignment = 2;
-	_info.stride = 2;
 	
 	_mul = NULL;
 	_mul_add_pf = NULL;
@@ -850,6 +1149,8 @@ Galois16Mul::Galois16Mul(Galois16Methods method) {
 	_mul_add_multi = NULL;
 	_mul_add_multi_packed = NULL;
 	_mul_add_multi_packpf = NULL;
+	copy_cksum = &gf16_cksum_copy_generic;
+	copy_cksum_check = &gf16_cksum_copy_check_generic;
 	
 	_pow = NULL;
 	_pow_add = NULL;
@@ -862,7 +1163,7 @@ Galois16Mul::~Galois16Mul() {
 		ALIGN_FREE(scratch);
 }
 
-#if __cplusplus >= 201100
+#ifdef __cpp_rvalue_references
 void Galois16Mul::move(Galois16Mul& other) {
 	scratch = other.scratch;
 	other.scratch = NULL;
@@ -870,9 +1171,11 @@ void Galois16Mul::move(Galois16Mul& other) {
 	prepare = other.prepare;
 	prepare_packed = other.prepare_packed;
 	prepare_packed_cksum = other.prepare_packed_cksum;
+	prepare_partial_packsum = other.prepare_partial_packsum;
 	finish = other.finish;
 	finish_packed = other.finish_packed;
 	finish_packed_cksum = other.finish_packed_cksum;
+	finish_partial_packsum = other.finish_partial_packsum;
 	_info = other._info;
 	_mul = other._mul;
 	add_multi = other.add_multi;
@@ -885,6 +1188,8 @@ void Galois16Mul::move(Galois16Mul& other) {
 	_mul_add_multi_packpf = other._mul_add_multi_packpf;
 	_pow = other._pow;
 	_pow_add = other._pow_add;
+	copy_cksum = other.copy_cksum;
+	copy_cksum_check = other.copy_cksum_check;
 }
 #endif
 
@@ -913,15 +1218,16 @@ void Galois16Mul::mutScratch_free(void* mutScratch) const {
 	}
 }
 
-Galois16Methods Galois16Mul::default_method(size_t regionSizeHint, unsigned /*outputs*/, unsigned /*threadCountHint*/) {
+Galois16Methods Galois16Mul::default_method(size_t regionSizeHint, unsigned /*outputs*/) {
 	const CpuCap caps(true);
+	(void)regionSizeHint;
 	
 #ifdef PLATFORM_X86
 	if(caps.hasGFNI) {
 		if(gf16_affine_available_avx512 && caps.hasAVX512VLBW)
-			return GF16_AFFINE2X_AVX512; // better peak at 24x1KB, whereas 1x is better at 18x1KB
+			return GF16_AFFINE_AVX512;
 		if(gf16_affine_available_avx2 && caps.hasAVX2)
-			return GF16_AFFINE2X_AVX2;
+			return GF16_AFFINE_AVX2;
 	}
 	if(caps.hasAVX512VLBW) {
 		if(gf16_shuffle_available_vbmi && caps.hasAVX512VBMI)
@@ -930,22 +1236,16 @@ Galois16Methods Galois16Mul::default_method(size_t regionSizeHint, unsigned /*ou
 			return GF16_SHUFFLE_AVX512;
 	}
 	if(caps.hasAVX2) {
-# ifndef PLATFORM_AMD64
-		if(gf16_shuffle_available_avx2 && !caps.propAVX128EU)
-			return GF16_SHUFFLE2X_AVX2;
-# endif
-		if(gf16_shuffle_available_avx2 && caps.propHT) // Intel AVX2 CPU with HT - it seems that shuffle256 is roughly same as xor256 so prefer former
-			return GF16_SHUFFLE2X_AVX2;
 # ifdef PLATFORM_AMD64
-		if(gf16_xor_available_avx2 && caps.canMemWX) // TODO: check size hint?
+		if(gf16_xor_available_avx2 && caps.canMemWX && caps.propFastJit && !caps.isEmulated) // TODO: check size hint?
 			return GF16_XOR_JIT_AVX2;
-		if(gf16_shuffle_available_avx2)
-			return GF16_SHUFFLE2X_AVX2;
 # endif
+		if(gf16_shuffle_available_avx2)
+			return GF16_SHUFFLE_AVX2;
 	}
 	if(gf16_affine_available_gfni && caps.hasGFNI && gf16_shuffle_available_ssse3 && caps.hasSSSE3)
-		return GF16_AFFINE_GFNI; // presumably this beats XOR-JIT
-	if(!regionSizeHint || regionSizeHint > caps.propPrefShuffleThresh) {
+		return GF16_AFFINE2X_GFNI; // this should beat XOR-JIT; even seems to generally beat Shuffle2x AVX2
+	if(!caps.isEmulated && (!regionSizeHint || regionSizeHint > caps.propPrefShuffleThresh)) {
 		// TODO: if only a few recovery slices being made (e.g. 3), prefer shuffle
 		//if(gf16_xor_available_avx && caps.hasAVX && caps.canMemWX)
 		//	return GF16_XOR_JIT_AVX;
@@ -961,17 +1261,16 @@ Galois16Methods Galois16Mul::default_method(size_t regionSizeHint, unsigned /*ou
 #endif
 #ifdef PLATFORM_ARM
 	if(caps.hasSVE2)
-		return gf16_sve_get_size() >= 64 ? GF16_SHUFFLE_512_SVE2 : GF16_SHUFFLE_128_SVE2;
+		return gf16_sve_get_size() >= 64 ? GF16_SHUFFLE_512_SVE2 : GF16_CLMUL_SVE2;
 	if(caps.hasSVE && gf16_sve_get_size() > 16)
 		return GF16_SHUFFLE_128_SVE;
 	if(gf16_available_neon && caps.hasNEON)
-# ifdef __aarch64__
-		return GF16_SHUFFLE_NEON;
-# else
 		return GF16_CLMUL_NEON;
-# endif
 #endif
 	
+	
+	// lookup vs lookup3: latter seems to be slightly faster than former in most cases (SKX, Silvermont, Zen1, Rpi3 (arm64; arm32 faster muladd, slower mul)), sometimes slightly slower (Haswell, IvB?, Piledriver)
+	// but test w/ multi-region lh-lookup & fat table before preferring it
 	return GF16_LOOKUP;
 }
 
@@ -1038,7 +1337,6 @@ std::vector<Galois16Methods> Galois16Mul::availableMethods(bool checkCpuid) {
 		ret.push_back(GF16_SHUFFLE_128_SVE);
 	if(gf16_available_sve2 && caps.hasSVE2) {
 		ret.push_back(GF16_SHUFFLE_128_SVE2);
-		ret.push_back(GF16_SHUFFLE2X_128_SVE2);
 		ret.push_back(GF16_CLMUL_SVE2);
 		if(gf16_sve_get_size() >= 32)
 			ret.push_back(GF16_SHUFFLE2X_128_SVE2);
@@ -1051,9 +1349,9 @@ std::vector<Galois16Methods> Galois16Mul::availableMethods(bool checkCpuid) {
 }
 
 void Galois16Mul::_prepare_packed_none(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen, size_t sliceLen, unsigned inputPackSize, unsigned inputNum, size_t chunkLen) {
-	assert(inputNum < inputPackSize);
-	assert(srcLen <= sliceLen);
-	assert(chunkLen <= sliceLen);
+	ASSUME(inputNum < inputPackSize);
+	ASSUME(srcLen <= sliceLen);
+	ASSUME(chunkLen <= sliceLen);
 	
 	uint8_t* dstBase = (uint8_t*)dst + inputNum * chunkLen;
 	unsigned fullChunks = (unsigned)(srcLen/chunkLen);

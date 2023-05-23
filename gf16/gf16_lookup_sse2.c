@@ -75,32 +75,32 @@ void gf16_lookup_mul_sse2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_REST
 	uint8_t* _dst = (uint8_t*)dst + len;
 	
 	for(intptr_t ptr = -(intptr_t)len; ptr; ptr+=sizeof(__m128i)) {
-		uintptr_t input = *(uintptr_t*)(_src+ptr);
-		__m128i lo1 = _mm_cvtsi32_si128(*(uint32_t*)(lhtable + (input & 0xff))); // 1/32 chance of crossing cacheline boundary
-		__m128i hi1 = _mm_cvtsi32_si128(*(uint32_t*)(lhtable + (256 + ((input >> 8) & 0xff))));
+		uintptr_t input = readPtr(_src+ptr);
+		__m128i lo1 = _mm_cvtsi32_si128(read32(lhtable + (input & 0xff))); // 1/32 chance of crossing cacheline boundary
+		__m128i hi1 = _mm_cvtsi32_si128(read32(lhtable + (256 + ((input >> 8) & 0xff))));
 		input >>= 16;
 		lo1 = _mm_insert_epi16(lo1, lhtable[input & 0xff], 1);
 		hi1 = _mm_insert_epi16(hi1, lhtable[256 + ((input >> 8) & 0xff)], 1);
 		if(sizeof(uintptr_t) == 8)
 			input >>= 16;
 		else
-			input = *(uintptr_t*)(_src+ptr+4);
+			input = readPtr(_src+ptr+4);
 		lo1 = _mm_insert_epi16(lo1, lhtable[input & 0xff], 2);
 		hi1 = _mm_insert_epi16(hi1, lhtable[256 + ((input >> 8) & 0xff)], 2);
 		input >>= 16;
 		lo1 = _mm_insert_epi16(lo1, lhtable[input & 0xff], 3);
 		hi1 = _mm_insert_epi16(hi1, lhtable[256 + ((input >> 8) & 0xff)], 3);
 		
-		input = *(uintptr_t*)(_src+ptr+8);
-		__m128i lo2 = _mm_cvtsi32_si128(*(uint32_t*)(lhtable + (input & 0xff)));
-		__m128i hi2 = _mm_cvtsi32_si128(*(uint32_t*)(lhtable + (256 + ((input >> 8) & 0xff))));
+		input = readPtr(_src+ptr+8);
+		__m128i lo2 = _mm_cvtsi32_si128(read32(lhtable + (input & 0xff)));
+		__m128i hi2 = _mm_cvtsi32_si128(read32(lhtable + (256 + ((input >> 8) & 0xff))));
 		input >>= 16;
 		lo2 = _mm_insert_epi16(lo2, lhtable[input & 0xff], 1);
 		hi2 = _mm_insert_epi16(hi2, lhtable[256 + ((input >> 8) & 0xff)], 1);
 		if(sizeof(uintptr_t) == 8)
 			input >>= 16;
 		else
-			input = *(uintptr_t*)(_src+ptr+12);
+			input = readPtr(_src+ptr+12);
 		lo2 = _mm_insert_epi16(lo2, lhtable[input & 0xff], 2);
 		hi2 = _mm_insert_epi16(hi2, lhtable[256 + ((input >> 8) & 0xff)], 2);
 		input >>= 16;
@@ -127,32 +127,32 @@ void gf16_lookup_muladd_sse2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_R
 	uint8_t* _dst = (uint8_t*)dst + len;
 	
 	for(intptr_t ptr = -(intptr_t)len; ptr; ptr+=sizeof(__m128i)) {
-		uintptr_t input = *(uintptr_t*)(_src+ptr);
-		__m128i lo1 = _mm_cvtsi32_si128(*(uint32_t*)(lhtable + (input & 0xff)));
-		__m128i hi1 = _mm_cvtsi32_si128(*(uint32_t*)(lhtable + (256 + ((input >> 8) & 0xff))));
+		uintptr_t input = readPtr(_src+ptr);
+		__m128i lo1 = _mm_cvtsi32_si128(read32(lhtable + (input & 0xff)));
+		__m128i hi1 = _mm_cvtsi32_si128(read32(lhtable + (256 + ((input >> 8) & 0xff))));
 		input >>= 16;
 		lo1 = _mm_insert_epi16(lo1, lhtable[input & 0xff], 1);
 		hi1 = _mm_insert_epi16(hi1, lhtable[256 + ((input >> 8) & 0xff)], 1);
 		if(sizeof(uintptr_t) == 8)
 			input >>= 16;
 		else
-			input = *(uintptr_t*)(_src+ptr+4);
+			input = readPtr(_src+ptr+4);
 		lo1 = _mm_insert_epi16(lo1, lhtable[input & 0xff], 2);
 		hi1 = _mm_insert_epi16(hi1, lhtable[256 + ((input >> 8) & 0xff)], 2);
 		input >>= 16;
 		lo1 = _mm_insert_epi16(lo1, lhtable[input & 0xff], 3);
 		hi1 = _mm_insert_epi16(hi1, lhtable[256 + ((input >> 8) & 0xff)], 3);
 		
-		input = *(uintptr_t*)(_src+ptr+8);
-		__m128i lo2 = _mm_cvtsi32_si128(*(uint32_t*)(lhtable + (input & 0xff)));
-		__m128i hi2 = _mm_cvtsi32_si128(*(uint32_t*)(lhtable + (256 + ((input >> 8) & 0xff))));
+		input = readPtr(_src+ptr+8);
+		__m128i lo2 = _mm_cvtsi32_si128(read32(lhtable + (input & 0xff)));
+		__m128i hi2 = _mm_cvtsi32_si128(read32(lhtable + (256 + ((input >> 8) & 0xff))));
 		input >>= 16;
 		lo2 = _mm_insert_epi16(lo2, lhtable[input & 0xff], 1);
 		hi2 = _mm_insert_epi16(hi2, lhtable[256 + ((input >> 8) & 0xff)], 1);
 		if(sizeof(uintptr_t) == 8)
 			input >>= 16;
 		else
-			input = *(uintptr_t*)(_src+ptr+12);
+			input = readPtr(_src+ptr+12);
 		lo2 = _mm_insert_epi16(lo2, lhtable[input & 0xff], 2);
 		hi2 = _mm_insert_epi16(hi2, lhtable[256 + ((input >> 8) & 0xff)], 2);
 		input >>= 16;
@@ -205,17 +205,10 @@ static HEDLEY_ALWAYS_INLINE void gf16_lookup_prepare_blocku(void *HEDLEY_RESTRIC
 #endif
 
 
-void gf16_lookup_prepare_packed_cksum_sse2(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen, size_t sliceLen, unsigned inputPackSize, unsigned inputNum, size_t chunkLen) {
 #ifdef __SSE2__
-	__m128i checksum = _mm_setzero_si128();
-	gf16_prepare_packed(dst, src, srcLen, sliceLen, sizeof(__m128i), &gf16_lookup_prepare_block_sse2, &gf16_lookup_prepare_blocku, inputPackSize, inputNum, chunkLen, 1, &checksum, &gf16_checksum_block_sse2, &gf16_checksum_blocku_sse2, &gf16_checksum_zeroes_sse2, &gf16_checksum_prepare_sse2);
+GF_PREPARE_PACKED_CKSUM_FUNCS(gf16_lookup, _sse2, sizeof(__m128i), gf16_lookup_prepare_block_sse2, gf16_lookup_prepare_blocku, 1, (void)0, __m128i checksum = _mm_setzero_si128(), gf16_checksum_block_sse2, gf16_checksum_blocku_sse2, gf16_checksum_exp_sse2, gf16_checksum_prepare_sse2, sizeof(__m128i))
+GF_FINISH_PACKED_FUNCS(gf16_lookup, _sse2, sizeof(__m128i), gf16_lookup_finish_block_sse2, gf16_copy_blocku, 1, (void)0, gf16_checksum_block_sse2, gf16_checksum_blocku_sse2, gf16_checksum_exp_sse2, NULL, sizeof(__m128i))
 #else
-	UNUSED(dst); UNUSED(src); UNUSED(srcLen); UNUSED(sliceLen); UNUSED(inputPackSize); UNUSED(inputNum); UNUSED(chunkLen);
-#endif
-}
-
-#ifdef __SSE2__
-GF_FINISH_PACKED_FUNCS(gf16_lookup, _sse2, sizeof(__m128i), gf16_lookup_finish_block_sse2, gf16_copy_blocku, 1, (void)0, __m128i checksum = _mm_setzero_si128(), gf16_checksum_block_sse2, gf16_checksum_blocku_sse2, gf16_checksum_finish_sse2)
-#else
+GF_PREPARE_PACKED_CKSUM_FUNCS_STUB(gf16_lookup, _sse2)
 GF_FINISH_PACKED_FUNCS_STUB(gf16_lookup, _sse2)
 #endif

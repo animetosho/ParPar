@@ -52,7 +52,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle2x128_sve2_calc_tables(const unsign
 	svuint8_t* tbl_Eln, svuint8_t* tbl_Els, svuint8_t* tbl_Ehn, svuint8_t* tbl_Ehs,
 	svuint8_t* tbl_Fln, svuint8_t* tbl_Fls, svuint8_t* tbl_Fhn, svuint8_t* tbl_Fhs
 ) {
-	svint16_t val1 = svld1_s16(svwhilelt_b16(0u, srcCount), (int16_t*)coefficients);
+	svint16_t val1 = svld1_s16(svwhilelt_b16((uint32_t)0, (uint32_t)srcCount), (int16_t*)coefficients);
 	svint16_t val2 = gf16_vec_mul2_sve(val1);
 	svint16_t val4 = gf16_vec_mul2_sve(val2);
 	svint16_t val8 = gf16_vec_mul2_sve(val4);
@@ -271,14 +271,14 @@ GF16_MULADD_MULTI_FUNCS_STUB(gf16_shuffle2x, _128_sve2)
 #include "gf16_checksum_sve.h"
 
 #if defined(__ARM_FEATURE_SVE2)
-GF_PREPARE_PACKED_FUNCS(gf16_shuffle2x, _sve, svcntb(), gf16_prepare_half_block_sve, gf16_prepare_half_blocku_sve, 6, (void)0, svint16_t checksum = svdup_n_s16(0), gf16_checksum_block_sve, gf16_checksum_blocku_sve, gf16_checksum_zeroes_sve, gf16_checksum_prepare_sve)
+GF_PREPARE_PACKED_FUNCS(gf16_shuffle2x, _sve, svcntb(), gf16_prepare_half_block_sve, gf16_prepare_half_blocku_sve, 6, (void)0, svint16_t checksum = svdup_n_s16(0), gf16_checksum_block_sve, gf16_checksum_blocku_sve, gf16_checksum_exp_sve, gf16_checksum_prepare_sve, 16)
 #else
 GF_PREPARE_PACKED_FUNCS_STUB(gf16_shuffle2x, _sve)
 #endif
 
 
 #ifdef __ARM_FEATURE_SVE2
-GF_FINISH_PACKED_FUNCS(gf16_shuffle2x, _sve, svcntb(), gf16_prepare_half_block_sve, gf16_prepare_half_blocku_sve, 1, (void)0, svint16_t checksum = svdup_n_s16(0), gf16_checksum_block_sve, gf16_checksum_blocku_sve, gf16_checksum_finish_sve)
+GF_FINISH_PACKED_FUNCS(gf16_shuffle2x, _sve, svcntb(), gf16_prepare_half_block_sve, gf16_finish_half_blocku_sve, 1, (void)0, gf16_checksum_block_sve, gf16_checksum_blocku_sve, gf16_checksum_exp_sve, NULL, 16)
 #else
 GF_FINISH_PACKED_FUNCS_STUB(gf16_shuffle2x, _sve)
 #endif

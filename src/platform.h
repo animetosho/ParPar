@@ -145,7 +145,7 @@
 #endif
 
 // x86 vector upcasts, where upper is defined to be 0
-#if (defined(__clang__) && __clang_major__ >= 5 && (!defined(__APPLE__) || __clang_major__ >= 7)) || (defined(__GNUC__) && __GNUC__ >= 10)
+#if (defined(__clang__) && __clang_major__ >= 5 && (!defined(__APPLE__) || __clang_major__ >= 7)) || (defined(__GNUC__) && __GNUC__ >= 10) || (defined(_MSC_VER) && _MSC_VER >= 1910)
 // intrinsic unsupported in GCC 9 and MSVC < 2017
 //# define zext128_256 _mm256_zextsi128_si256
 # define zext256_512 _mm512_zextsi256_si512
@@ -167,9 +167,8 @@
 # endif
 #endif
 
-
 // AVX on mingw-gcc is just broken - don't do it...
-#if defined(HEDLEY_GCC_VERSION) && (defined(__MINGW32__) || defined(__MINGW64__)) && defined(__AVX2__)
+#if defined(HEDLEY_GCC_VERSION) && (defined(__MINGW32__) || defined(__MINGW64__)) && defined(__AVX2__) && defined(PP_PLATFORM_SHOW_WARNINGS)
 HEDLEY_WARNING("Compiling AVX code on MinGW GCC may cause crashing due to stack alignment bugs [https://gcc.gnu.org/bugzilla/show_bug.cgi?id=54412]");
 // as of writing, GCC 10.1 still has this problem, and it doesn't look like it'll be fixed any time soon
 // ...so if you're reading this, try Clang instead
@@ -179,8 +178,26 @@ HEDLEY_WARNING("Compiling AVX code on MinGW GCC may cause crashing due to stack 
 // for SSE encodings, the bug seems to cause the operands to sometimes be placed in the wrong order (example: https://godbolt.org/z/5Yf135)
 // haven't checked EVEX encoding, but it seems to fail tests there as well
 // we hack around it by pretending GCC < 10 doesn't support GFNI
-#if !HEDLEY_GCC_VERSION_CHECK(10,0,0) && defined(HEDLEY_GCC_VERSION) && defined(__OPTIMIZE__)
+#if !HEDLEY_GCC_VERSION_CHECK(10,0,0) && defined(HEDLEY_GCC_VERSION) && defined(__OPTIMIZE__) && defined(__GFNI__)
 # undef __GFNI__
+# ifdef PP_PLATFORM_SHOW_WARNINGS
+HEDLEY_WARNING("GFNI disabled on GCC < 10 due to incorrect GF2P8AFFINEQB operand placement");
+# endif
+#endif
+
+#if !HEDLEY_GCC_VERSION_CHECK(5,0,0) && defined(HEDLEY_GCC_VERSION) && defined(__AVX512F__)
+// missing _mm512_castsi512_si256 - can't compile
+# undef __AVX512F__
+#endif
+
+#if defined(_MSC_VER) && defined(__clang__)
+// ClangCL doesn't support SVE as of 15.0.1 (maybe due to not being defined on Windows-ARM?)
+# ifdef __ARM_FEATURE_SVE
+#  undef __ARM_FEATURE_SVE
+# endif
+# ifdef __ARM_FEATURE_SVE2
+#  undef __ARM_FEATURE_SVE2
+# endif
 #endif
 
 // alignment
@@ -191,15 +208,62 @@ HEDLEY_WARNING("Compiling AVX code on MinGW GCC may cause crashing due to stack 
 # define ALIGN_TO(a, v) v __attribute__((aligned(a)))
 #endif
 
+#include <stdlib.h>
 #if defined(_MSC_VER) || defined(__MINGW32__) || defined(__MINGW64__)
-	#include <stdlib.h> // MSVC ARM64 seems to need this
+	// MSVC doesn't support C11 aligned_alloc: https://stackoverflow.com/a/62963007
 	#define ALIGN_ALLOC(buf, len, align) *(void**)&(buf) = _aligned_malloc((len), align)
 	#define ALIGN_FREE _aligned_free
+#elif defined(_ISOC11_SOURCE)
+	// C11 method
+	// len needs to be a multiple of alignment, although it sometimes works if it isn't...
+	#define ALIGN_ALLOC(buf, len, align) *(void**)&(buf) = aligned_alloc(align, ((len) + (align)-1) & ~((align)-1))
+	#define ALIGN_FREE free
+#elif defined(__cplusplus) && __cplusplus >= 201700
+	// C++17 method
+	#include <cstdlib>
+	#define ALIGN_ALLOC(buf, len, align) *(void**)&(buf) = std::aligned_alloc(align, ((len) + (align)-1) & ~((align)-1))
+	#define ALIGN_FREE free
 #else
-	#include <stdlib.h>
-	#define ALIGN_ALLOC(buf, len, align) if(posix_memalign((void**)&(buf), (align < sizeof(void*) ? sizeof(void*) : align), (len))) (buf) = NULL
+	#define ALIGN_ALLOC(buf, len, align) if(posix_memalign((void**)&(buf), align < sizeof(void*) ? sizeof(void*) : align, (len))) (buf) = NULL
 	#define ALIGN_FREE free
 #endif
+
+
+// read/write to pointer
+#include <string.h>
+#include "stdint.h"
+static HEDLEY_ALWAYS_INLINE uint32_t read16(const void* p) {
+	uint16_t v;
+	memcpy(&v, p, 2);
+	return v;
+}
+static HEDLEY_ALWAYS_INLINE uint32_t read32(const void* p) {
+	uint32_t v;
+	memcpy(&v, p, 4);
+	return v;
+}
+static HEDLEY_ALWAYS_INLINE uint64_t read64(const void* p) {
+	uint64_t v;
+	memcpy(&v, p, 8);
+	return v;
+}
+static HEDLEY_ALWAYS_INLINE uintptr_t readPtr(const void* p) {
+	uintptr_t v;
+	memcpy(&v, p, sizeof(uintptr_t));
+	return v;
+}
+static HEDLEY_ALWAYS_INLINE void write16(void* p, uint16_t v) {
+	memcpy(p, &v, 2);
+}
+static HEDLEY_ALWAYS_INLINE void write32(void* p, uint32_t v) {
+	memcpy(p, &v, 4);
+}
+static HEDLEY_ALWAYS_INLINE void write64(void* p, uint64_t v) {
+	memcpy(p, &v, 8);
+}
+static HEDLEY_ALWAYS_INLINE void writePtr(void* p, uintptr_t v) {
+	memcpy(p, &v, sizeof(uintptr_t));
+}
 
 
 #endif /* PP_PLATFORM_H */

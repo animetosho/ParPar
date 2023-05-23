@@ -17,14 +17,14 @@ static HEDLEY_ALWAYS_INLINE size_t _jit_pxor_mod(uint8_t* jit, uint8_t xreg, uin
 	*(jit++) = 0x66;
 	size_t p = _jit_rex_pref(&jit, xreg, 0) +1;
 	xreg &= 7;
-	*(int32_t*)jit = 0x40EF0F | (xreg <<19) | (mreg <<16);
+	write32(jit, 0x40EF0F | (xreg <<19) | (mreg <<16));
 	jit[3] = (uint8_t)offs;
 	return p+4;
 }
 static HEDLEY_ALWAYS_INLINE size_t _jit_xorps_mod(uint8_t* jit, uint8_t xreg, uint8_t mreg, int32_t offs) {
 	size_t p = _jit_rex_pref(&jit, xreg, 0);
 	xreg &= 7;
-	*(int32_t*)jit = 0x40570F | (xreg <<19) | (mreg <<16) | (offs <<24);
+	write32(jit, 0x40570F | (xreg <<19) | (mreg <<16) | lshift32(offs, 24));
 	return p+4;
 }
 
@@ -83,10 +83,10 @@ static void gf16_xor_create_jit_lut_sse2(void) {
 		uint8_t* pC[6] = {
 			(uint8_t*)(xor_jit_clut_code1 + i),
 			(uint8_t*)(xor_jit_clut_code2 + i),
-			(uint8_t*)(xor_jit_clut_code3 + i),
-			(uint8_t*)(xor_jit_clut_code4 + i),
+			i < (int)(sizeof(xor_jit_clut_code3)/sizeof(*xor_jit_clut_code3)) ? (uint8_t*)(xor_jit_clut_code3 + i) : NULL,
+			i < (int)(sizeof(xor_jit_clut_code4)/sizeof(*xor_jit_clut_code4)) ? (uint8_t*)(xor_jit_clut_code4 + i) : NULL,
 			(uint8_t*)(xor_jit_clut_code5 + i),
-			(uint8_t*)(xor_jit_clut_code6 + i)
+			i < (int)(sizeof(xor_jit_clut_code6)/sizeof(*xor_jit_clut_code6)) ? (uint8_t*)(xor_jit_clut_code6 + i) : NULL
 		};
 		
 		for(j=0; j<3; j++) {
@@ -95,7 +95,7 @@ static void gf16_xor_create_jit_lut_sse2(void) {
 			if(msk == 1) {
 				// (XORPS)
 				for(k=0; k<MEM_XT; k++)
-					pC[k] += _jit_xorps_mod(pC[k], 0, AX, (j-8 + k*3) <<4);
+					pC[k] += _jit_xorps_mod(pC[k], 0, AX, lshift32(j-8 + k*3, 4));
 #ifdef PLATFORM_AMD64
 				pC[1] += _jit_xorps_r(pC[1], 0, j+3);
 				pC[3] += _jit_xorps_r(pC[3], 0, j+8);
@@ -120,7 +120,7 @@ static void gf16_xor_create_jit_lut_sse2(void) {
 				
 				// (PXOR)
 				for(k=0; k<MEM_XT; k++)
-					pC[k] += _jit_pxor_mod(pC[k], reg, AX, (j-8 + k*3) <<4);
+					pC[k] += _jit_pxor_mod(pC[k], reg, AX, lshift32(j-8 + k*3, 4));
 #ifdef PLATFORM_AMD64
 				pC[1] += _jit_pxor_r(pC[1], reg, j+3);
 				pC[3] += _jit_pxor_r(pC[3], reg, j+8);
@@ -177,10 +177,10 @@ static void gf16_xor_create_jit_lut_sse2(void) {
 			if(m & 1) {
 				// (XORPS)
 				for(k=0; k<MEM_XP; k++) {
-					pC[k] += _jit_xorps_m(pC[k], 0, AX, (j-8+k*2) <<4);
+					pC[k] += _jit_xorps_m(pC[k], 0, AX, lshift32(j-8+k*2, 4));
 				}
 				if(j==0) {
-					pC[MEM_XP] += _jit_xorps_m(pC[MEM_XP], 0, AX, (-8+MEM_XP*2) <<4);
+					pC[MEM_XP] += _jit_xorps_m(pC[MEM_XP], 0, AX, lshift32(-8+MEM_XP*2, 4));
 				} else {
 					pC[MEM_XP] += _jit_xorps_r(pC[MEM_XP], 0, 3);
 				}
@@ -205,10 +205,10 @@ static void gf16_xor_create_jit_lut_sse2(void) {
 			if(m & 2) {
 				// (PXOR)
 				for(k=0; k<MEM_XP; k++) {
-					pC[k] += _jit_pxor_m(pC[k], 1, AX, (j-8+k*2) <<4);
+					pC[k] += _jit_pxor_m(pC[k], 1, AX, lshift32(j-8+k*2, 4));
 				}
 				if(j==0) {
-					pC[MEM_XP] += _jit_pxor_m(pC[MEM_XP], 1, AX, (-8+MEM_XP*2) <<4);
+					pC[MEM_XP] += _jit_pxor_m(pC[MEM_XP], 1, AX, lshift32(-8+MEM_XP*2, 4));
 				} else {
 					pC[MEM_XP] += _jit_pxor_r(pC[MEM_XP], 1, 3);
 				}
@@ -261,7 +261,7 @@ static HEDLEY_ALWAYS_INLINE void STOREU_XMM(void* dest, __m128i xmm) {
 #endif
 
 /* conditional move, because, for whatever reason, no-one thought of making a CMOVcc intrinsic */
-#ifdef __GNUC__
+#if defined(__GNUC__) || defined(__clang__)
 	#define CMOV(cond, dst, src) asm( \
 		"test %[c], %[c]\n" \
 		"cmovnz %[s], %[d]\n" \
@@ -364,52 +364,52 @@ static inline void* xor_write_jit_sse(const struct gf16_xor_scratch *HEDLEY_REST
 	//_jit_movaps_load(jit, reg, xreg, offs)
 	// (we just save a conditional by hardcoding this)
 	#define _LD_APS(xreg, mreg, offs) \
-		*(int32_t*)(jitptr) = 0x40280F + ((xreg) <<19) + ((mreg) <<16) + (((offs)&0xFF) <<24); \
+		write32((jitptr), 0x40280F + ((xreg) <<19) + ((mreg) <<16) + ((uint32_t)((offs)&0xFF) <<24)); \
 		jitptr += 4
 	#define _ST_APS(mreg, offs, xreg) \
-		*(int32_t*)(jitptr) = 0x40290F + ((xreg) <<19) + ((mreg) <<16) + (((offs)&0xFF) <<24); \
+		write32((jitptr), 0x40290F + ((xreg) <<19) + ((mreg) <<16) + ((uint32_t)((offs)&0xFF) <<24)); \
 		jitptr += 4
 	#define _LD_APS64(xreg, mreg, offs) \
-		*(int64_t*)(jitptr) = 0x40280F44 + ((xreg-8) <<27) + ((mreg) <<24) + ((int64_t)((offs)&0xFF) <<32); \
+		write64((jitptr), 0x40280F44 + ((xreg-8) <<27) + ((mreg) <<24) + ((int64_t)((offs)&0xFF) <<32)); \
 		jitptr += 5
 	#define _ST_APS64(mreg, offs, xreg) \
-		*(int64_t*)(jitptr) = 0x40290F44 + ((xreg-8) <<27) + ((mreg) <<24) + ((int64_t)((offs)&0xFF) <<32); \
+		write64((jitptr), 0x40290F44 + ((xreg-8) <<27) + ((mreg) <<24) + ((int64_t)((offs)&0xFF) <<32)); \
 		jitptr += 5
 
 #ifdef PLATFORM_AMD64
 	#define _LD_DQA(xreg, mreg, offs) \
-		*(int64_t*)(jitptr) = 0x406F0F66 + ((xreg) <<27) + ((mreg) <<24) + ((int64_t)((offs)&0xFF) <<32); \
+		write64((jitptr), 0x406F0F66 + ((xreg) <<27) + ((mreg) <<24) + ((int64_t)((offs)&0xFF) <<32)); \
 		jitptr += 5
 #else
 	#define _LD_DQA(xreg, mreg, offs) \
-		*(int32_t*)(jitptr) = 0x406F0F66 + ((xreg) <<27) + ((mreg) <<24); \
+		write32((jitptr), 0x406F0F66 + ((xreg) <<27) + ((mreg) <<24)); \
 		*(jitptr +4) = (uint8_t)((offs)&0xFF); \
 		jitptr += 5
 #endif
 	#define _LD_DQA64(xreg, mreg, offs) \
-		*(int64_t*)(jitptr) = 0x406F0F4466 + ((int64_t)(xreg-8) <<35) + ((int64_t)(mreg) <<32) + ((int64_t)((offs)&0xFF) <<40); \
+		write64((jitptr), 0x406F0F4466 + ((int64_t)(xreg-8) <<35) + ((int64_t)(mreg) <<32) + ((int64_t)((offs)&0xFF) <<40)); \
 		jitptr += 6
 	
 	
-	//_jit_xorps_m(jit, reg, AX, offs<<4);
+	//_jit_xorps_m(jit, reg, AX, lshift32(offs, 4));
 	#define _XORPS_M_(reg, offs, tr) \
-		*(int32_t*)(jitptr) = (0x40570F + ((reg) << 19) + (((offs)&0xFF) <<28)) ^ (tr)
+		write32((jitptr), (0x40570F + ((reg) << 19) + (((offs)&0xFF) <<28)) ^ (tr))
 	#define _C_XORPS_M(reg, offs, c) \
 		_XORPS_M_(reg, offs, 0); \
 		jitptr += (c)<<2
 	#define _XORPS_M64_(reg, offs, tr) \
-		*(int64_t*)(jitptr) = (0x40570F44 + (((reg)-8) << 27) + ((int64_t)((offs)&0xFF) <<36)) ^ ((tr)<<8)
+		write64((jitptr), (0x40570F44 + (((reg)-8) << 27) + ((int64_t)((offs)&0xFF) <<36)) ^ ((tr)<<8))
 	#define _C_XORPS_M64(reg, offs, c) \
 		_XORPS_M64_(reg, offs, 0); \
 		jitptr += ((c)<<2)+(c)
 	
-	//_jit_pxor_m(jit, 1, AX, offs<<4);
+	//_jit_pxor_m(jit, 1, AX, lshift32(offs, 4));
 #ifdef PLATFORM_AMD64
 	#define _PXOR_M_(reg, offs, tr) \
-		*(int64_t*)(jitptr) = (0x40EF0F66 + ((reg) << 27) + ((int64_t)((offs)&0xFF) << 36)) ^ (tr)
+		write64((jitptr), (0x40EF0F66 + ((reg) << 27) + ((int64_t)((offs)&0xFF) << 36)) ^ (tr))
 #else
 	#define _PXOR_M_(reg, offs, tr) \
-		*(int32_t*)(jitptr) = (0x40EF0F66 + ((reg) << 27)) ^ (tr); \
+		write32((jitptr), (0x40EF0F66 + ((reg) << 27)) ^ (tr)); \
 		*(jitptr +4) = (uint8_t)(((offs)&0xFF) << 4)
 #endif
 	#define _PXOR_M(reg, offs) \
@@ -419,14 +419,14 @@ static inline void* xor_write_jit_sse(const struct gf16_xor_scratch *HEDLEY_REST
 		_PXOR_M_(reg, offs, 0); \
 		jitptr += ((c)<<2)+(c)
 	#define _PXOR_M64_(reg, offs, tr) \
-		*(int64_t*)(jitptr) = (0x40EF0F4466 + ((int64_t)((reg)-8) << 35) + ((int64_t)((offs)&0xFF) << 44)) ^ ((tr)<<8)
+		write64((jitptr), (0x40EF0F4466 + ((int64_t)((reg)-8) << 35) + ((int64_t)((offs)&0xFF) << 44)) ^ ((tr)<<8))
 	#define _C_PXOR_M64(reg, offs, c) \
 		_PXOR_M64_(reg, offs, 0); \
 		jitptr += ((c)<<2)+((c)<<1)
 	
 	//_jit_xorps_r(jit, r2, r1)
 	#define _XORPS_R_(r2, r1, tr) \
-		*(int32_t*)(jitptr) = (0xC0570F + ((r2) <<19) + ((r1) <<16)) ^ (tr)
+		write32((jitptr), (0xC0570F + ((r2) <<19) + ((r1) <<16)) ^ (tr))
 	#define _XORPS_R(r2, r1) \
 		_XORPS_R_(r2, r1, 0); \
 		jitptr += 3
@@ -435,14 +435,14 @@ static inline void* xor_write_jit_sse(const struct gf16_xor_scratch *HEDLEY_REST
 		jitptr += ((c)<<1)+(c)
 	// r2 is always < 8, r1 here is >= 8
 	#define _XORPS_R64_(r2, r1, tr) \
-		*(int32_t*)(jitptr) = (0xC0570F41 + ((r2) <<27) + ((r1) <<24)) ^ ((tr)<<8)
+		write32((jitptr), (0xC0570F41 + ((r2) <<27) + ((r1) <<24)) ^ ((tr)<<8))
 	#define _C_XORPS_R64(r2, r1, c) \
 		_XORPS_R64_(r2, r1, 0); \
 		jitptr += (c)<<2
 	
 	//_jit_pxor_r(jit, r2, r1)
 	#define _PXOR_R_(r2, r1, tr) \
-		*(int32_t*)(jitptr) = (0xC0EF0F66 + ((r2) <<27) + ((r1) <<24)) ^ (tr)
+		write32((jitptr), (0xC0EF0F66 + ((r2) <<27) + ((r1) <<24)) ^ (tr))
 	#define _PXOR_R(r2, r1) \
 		_PXOR_R_(r2, r1, 0); \
 		jitptr += 4
@@ -450,7 +450,7 @@ static inline void* xor_write_jit_sse(const struct gf16_xor_scratch *HEDLEY_REST
 		_PXOR_R_(r2, r1, 0); \
 		jitptr += (c)<<2
 	#define _PXOR_R64_(r2, r1, tr) \
-		*(int64_t*)(jitptr) = (0xC0EF0F4166 + ((int64_t)(r2) <<35) + ((int64_t)(r1) <<32)) ^ (((int64_t)tr)<<8)
+		write64((jitptr), (0xC0EF0F4166 + ((int64_t)(r2) <<35) + ((int64_t)(r1) <<32)) ^ (((int64_t)tr)<<8))
 	#define _C_PXOR_R64(r2, r1, c) \
 		_PXOR_R64_(r2, r1, 0); \
 		jitptr += ((c)<<2)+(c)
@@ -554,7 +554,7 @@ static inline void* xor_write_jit_sse(const struct gf16_xor_scratch *HEDLEY_REST
 				
 				jitptr[posC + movC] = 0x6F; // PXOR -> MOVDQA
 #ifdef PLATFORM_AMD64
-				*(int64_t*)(jitptr) = (0xC0570F + (2 <<16)) + ((0xC0EF0F66ULL + (1 <<27) + (2 <<24)) <<24);
+				write64(jitptr, (0xC0570F + (2 <<16)) + ((0xC0EF0F66ULL + (1 <<27) + (2 <<24)) <<24));
 				jitptr += ((movC==0)<<3) - (movC==0);
 #else
 				_C_XORPS_R(0, 2, movC==0);
@@ -659,10 +659,10 @@ static inline void* xor_write_jit_sse(const struct gf16_xor_scratch *HEDLEY_REST
 	
 	/* cmp */
 #ifdef PLATFORM_AMD64
-	*(uint64_t*)(jitptr) = 0x800FC03948 | (DX <<16) | (CX <<19) | ((uint64_t)JL <<32);
+	write64(jitptr, 0x800FC03948 | (DX <<16) | (CX <<19) | ((uint64_t)JL <<32));
 	jitptr += 5;
 #else
-	*(uint32_t*)(jitptr) = 0x800FC039 | (DX <<8) | (CX <<11) | (JL <<24);
+	write32(jitptr, 0x800FC039 | (DX <<8) | (CX <<11) | (JL <<24));
 	jitptr += 4;
 #endif
 	
@@ -738,7 +738,7 @@ int main(void) {
 	0x0ULL,0x0ULL,0x10ULL,0x1000ULL,0x20ULL,0x2000ULL,0x2010ULL,0x201000ULL,0x30ULL,0x3000ULL,0x3010ULL,0x301000ULL,0x3020ULL,0x302000ULL,0x302010ULL,0x30201000ULL,0x40ULL,0x4000ULL,0x4010ULL,0x401000ULL,0x4020ULL,0x402000ULL,0x402010ULL,0x40201000ULL,0x4030ULL,0x403000ULL,0x403010ULL,0x40301000ULL,0x403020ULL,0x40302000ULL,0x40302010ULL,0x4030201000ULL,0x50ULL,0x5000ULL,0x5010ULL,0x501000ULL,0x5020ULL,0x502000ULL,0x502010ULL,0x50201000ULL,0x5030ULL,0x503000ULL,0x503010ULL,0x50301000ULL,0x503020ULL,0x50302000ULL,0x50302010ULL,0x5030201000ULL,0x5040ULL,0x504000ULL,0x504010ULL,0x50401000ULL,0x504020ULL,0x50402000ULL,0x50402010ULL,0x5040201000ULL,0x504030ULL,0x50403000ULL,0x50403010ULL,0x5040301000ULL,0x50403020ULL,0x5040302000ULL,0x5040302010ULL,0x504030201000ULL,0x60ULL,0x6000ULL,0x6010ULL,0x601000ULL,0x6020ULL,0x602000ULL,0x602010ULL,0x60201000ULL,0x6030ULL,0x603000ULL,0x603010ULL,0x60301000ULL,0x603020ULL,0x60302000ULL,0x60302010ULL,0x6030201000ULL,0x6040ULL,0x604000ULL,0x604010ULL,0x60401000ULL,0x604020ULL,0x60402000ULL,0x60402010ULL,0x6040201000ULL,0x604030ULL,0x60403000ULL,0x60403010ULL,0x6040301000ULL,0x60403020ULL,0x6040302000ULL,0x6040302010ULL,0x604030201000ULL,0x6050ULL,0x605000ULL,0x605010ULL,0x60501000ULL,0x605020ULL,0x60502000ULL,0x60502010ULL,0x6050201000ULL,0x605030ULL,0x60503000ULL,0x60503010ULL,0x6050301000ULL,0x60503020ULL,0x6050302000ULL,0x6050302010ULL,0x605030201000ULL,0x605040ULL,0x60504000ULL,0x60504010ULL,0x6050401000ULL,0x60504020ULL,0x6050402000ULL,0x6050402010ULL,0x605040201000ULL,0x60504030ULL,0x6050403000ULL,0x6050403010ULL,0x605040301000ULL,0x6050403020ULL,0x605040302000ULL,0x605040302010ULL,0x60504030201000ULL,0x70ULL,0x7000ULL,0x7010ULL,0x701000ULL,0x7020ULL,0x702000ULL,0x702010ULL,0x70201000ULL,0x7030ULL,0x703000ULL,0x703010ULL,0x70301000ULL,0x703020ULL,0x70302000ULL,0x70302010ULL,0x7030201000ULL,0x7040ULL,0x704000ULL,0x704010ULL,0x70401000ULL,0x704020ULL,0x70402000ULL,0x70402010ULL,0x7040201000ULL,0x704030ULL,0x70403000ULL,0x70403010ULL,0x7040301000ULL,0x70403020ULL,0x7040302000ULL,0x7040302010ULL,0x704030201000ULL,0x7050ULL,0x705000ULL,0x705010ULL,0x70501000ULL,0x705020ULL,0x70502000ULL,0x70502010ULL,0x7050201000ULL,0x705030ULL,0x70503000ULL,0x70503010ULL,0x7050301000ULL,0x70503020ULL,0x7050302000ULL,0x7050302010ULL,0x705030201000ULL,0x705040ULL,0x70504000ULL,0x70504010ULL,0x7050401000ULL,0x70504020ULL,0x7050402000ULL,0x7050402010ULL,0x705040201000ULL,0x70504030ULL,0x7050403000ULL,0x7050403010ULL,0x705040301000ULL,0x7050403020ULL,0x705040302000ULL,0x705040302010ULL,0x70504030201000ULL,0x7060ULL,0x706000ULL,0x706010ULL,0x70601000ULL,0x706020ULL,0x70602000ULL,0x70602010ULL,0x7060201000ULL,0x706030ULL,0x70603000ULL,0x70603010ULL,0x7060301000ULL,0x70603020ULL,0x7060302000ULL,0x7060302010ULL,0x706030201000ULL,0x706040ULL,0x70604000ULL,0x70604010ULL,0x7060401000ULL,0x70604020ULL,0x7060402000ULL,0x7060402010ULL,0x706040201000ULL,0x70604030ULL,0x7060403000ULL,0x7060403010ULL,0x706040301000ULL,0x7060403020ULL,0x706040302000ULL,0x706040302010ULL,0x70604030201000ULL,0x706050ULL,0x70605000ULL,0x70605010ULL,0x7060501000ULL,0x70605020ULL,0x7060502000ULL,0x7060502010ULL,0x706050201000ULL,0x70605030ULL,0x7060503000ULL,0x7060503010ULL,0x706050301000ULL,0x7060503020ULL,0x706050302000ULL,0x706050302010ULL,0x70605030201000ULL,0x70605040ULL,0x7060504000ULL,0x7060504010ULL,0x706050401000ULL,0x7060504020ULL,0x706050402000ULL,0x706050402010ULL,0x70605040201000ULL,0x7060504030ULL,0x706050403000ULL,0x706050403010ULL,0x70605040301000ULL,0x706050403020ULL,0x70605040302000ULL,0x70605040302010ULL,0x7060504030201000ULL
 };
 
-static HEDLEY_ALWAYS_INLINE void gf16_xor_write_deptable(uintptr_t *HEDLEY_RESTRICT deptable, uint_fast32_t *HEDLEY_RESTRICT counts, const uint8_t *HEDLEY_RESTRICT scratch, uint16_t val, uintptr_t dstSrcOffset) {
+static HEDLEY_ALWAYS_INLINE void gf16_xor_write_deptable(intptr_t *HEDLEY_RESTRICT deptable, uint_fast32_t *HEDLEY_RESTRICT counts, const uint8_t *HEDLEY_RESTRICT scratch, uint16_t val, uintptr_t dstSrcOffset) {
 	ALIGN_TO(16, uint16_t tmp_depmask[16]);
 	__m128i depmask1 = _mm_load_si128((__m128i*)(scratch + ((val & 0xf) << 7)));
 	__m128i depmask2 = _mm_load_si128((__m128i*)(scratch + ((val & 0xf) << 7)) +1);
@@ -828,7 +828,7 @@ void gf16_xor_mul_sse2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRIC
 		return;
 	}
 	uint_fast32_t counts[16];
-	ALIGN_TO(16, uintptr_t deptable[256]);
+	ALIGN_TO(16, intptr_t deptable[256]);
 	uint8_t* _dst = (uint8_t*)dst + len;
 	
 	gf16_xor_write_deptable(deptable, counts, (uint8_t*)scratch, val, (uintptr_t)src - (uintptr_t)dst);
@@ -837,7 +837,7 @@ void gf16_xor_mul_sse2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRIC
 		uint8_t* p = _dst + ptr;
 		/* Note that we assume that all counts are at least 1; I don't think it's possible for that to be false */
 		#define STEP(bit, type, typev, typed) { \
-			uintptr_t* deps = deptable + bit*16; \
+			intptr_t* deps = deptable + bit*16; \
 			typev tmp = _mm_load_ ## type((typed*)(p + deps[ 0])); \
 			HEDLEY_ASSUME(counts[bit] <= 15); \
 			switch(counts[bit]) { \
@@ -888,7 +888,7 @@ void gf16_xor_muladd_sse2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_REST
 #ifdef __SSE2__
 	if(val == 0) return;
 	uint_fast32_t counts[16];
-	ALIGN_TO(16, uintptr_t deptable[256]);
+	ALIGN_TO(16, intptr_t deptable[256]);
 	uint8_t* _dst = (uint8_t*)dst + len;
 
 	gf16_xor_write_deptable(deptable, counts, (uint8_t*)scratch, val, (uintptr_t)src - (uintptr_t)dst);
@@ -896,7 +896,7 @@ void gf16_xor_muladd_sse2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_REST
 	for(intptr_t ptr = -(intptr_t)len; ptr; ptr += sizeof(__m128i)*16) {
 		uint8_t* p = _dst + ptr;
 		#define STEP(bit, type, typev, typed) { \
-			uintptr_t* deps = deptable + bit*16; \
+			intptr_t* deps = deptable + bit*16; \
 			typev tmp = _mm_load_ ## type((typed*)((typed*)p + bit)); \
 			HEDLEY_ASSUME(counts[bit] <= 15); \
 			switch(counts[bit]) { \
@@ -1024,13 +1024,13 @@ void gf16_xor_finish_block_sse2(void *HEDLEY_RESTRICT dst) {
 		targVec = _mm_insert_epi16(targVec, mskC, 2 + vecUpper*4); \
 		targVec = _mm_insert_epi16(targVec, mskD, 3 + vecUpper*4); \
 		srcVec = _mm_add_epi8(srcVec, srcVec); \
-		(target)[3] = _mm_movemask_epi8(srcVec); \
+		write16((target)+3, _mm_movemask_epi8(srcVec)); \
 		srcVec = _mm_add_epi8(srcVec, srcVec); \
-		(target)[2] = _mm_movemask_epi8(srcVec); \
+		write16((target)+2, _mm_movemask_epi8(srcVec)); \
 		srcVec = _mm_add_epi8(srcVec, srcVec); \
-		(target)[1] = _mm_movemask_epi8(srcVec); \
+		write16((target)+1, _mm_movemask_epi8(srcVec)); \
 		srcVec = _mm_add_epi8(srcVec, srcVec); \
-		(target)[0] = _mm_movemask_epi8(srcVec); \
+		write16((target)+0, _mm_movemask_epi8(srcVec)); \
 	}
 	EXTRACT_BITS_HALF(_dst +  0, dstA, 0, srcDQb)
 	EXTRACT_BITS_HALF(_dst +  8, dstA, 1, srcDQa)
@@ -1155,7 +1155,7 @@ void gf16_xor_finish_copy_blocku_sse2(void *HEDLEY_RESTRICT dst, const void *HED
 
 
 #ifdef __SSE2__
-GF_FINISH_PACKED_FUNCS(gf16_xor, _sse2, sizeof(__m128i)*16, gf16_xor_finish_copy_block_sse2, gf16_xor_finish_copy_blocku_sse2, 1, (void)0, __m128i checksum = _mm_setzero_si128(), gf16_checksum_block_sse2, gf16_checksum_blocku_sse2, gf16_checksum_finish_sse2)
+GF_FINISH_PACKED_FUNCS(gf16_xor, _sse2, sizeof(__m128i)*16, gf16_xor_finish_copy_block_sse2, gf16_xor_finish_copy_blocku_sse2, 1, (void)0, gf16_checksum_block_sse2, gf16_checksum_blocku_sse2, gf16_checksum_exp_sse2, &gf16_xor_finish_block_sse2, sizeof(__m128i))
 #else
 GF_FINISH_PACKED_FUNCS_STUB(gf16_xor, _sse2)
 #endif
@@ -1172,7 +1172,7 @@ static size_t xor_write_init_jit(uint8_t *jitCode) {
 # ifdef PLATFORM_AMD64
 	/* preload upper 13 inputs into registers */
 	for(int i=3; i<16; i++) {
-		jitCode += _jit_movaps_load(jitCode, i, AX, (i-8)<<4);
+		jitCode += _jit_movaps_load(jitCode, i, AX, lshift32(i-8, 4));
 	}
 # else
 	/* can only fit 5 in 32-bit mode :( */

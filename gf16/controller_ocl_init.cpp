@@ -1,9 +1,9 @@
 #include <iostream>
 #include <stdio.h> // snprintf
-#include <stdint.h>
+#include "../src/stdint.h"
 #include <string.h> // strstr
 #include <sstream> // std::stringstream
-#include "gf16ocl.h"
+#include "controller_ocl.h"
 #include "gf16_global.h" // GF16_POLYNOMIAL
 
 // for viewing compiled code, uncomment
@@ -59,7 +59,7 @@ const static char _ocl_defines[] =
 " #define nat_int int\n"
 " #define NAT_BITS 32\n"
 "#elif VECT_WIDTH == 4 || VECT_WIDTH == 8\n"
-" #define VECT_ONE 0x0001000100010001ull\n"
+" #define VECT_ONE (ulong)0x0001000100010001ull\n" // Nvidia driver on Linux for 8400GS seems to need the explicit ulong cast
 " #define nat_ushort4 ulong\n"
 " #define nat_uint ulong\n"
 " #define nat_int long\n"
@@ -73,8 +73,6 @@ const static char _ocl_defines[] =
 "#else\n"
 " #define val_t nat_uint\n"
 "#endif\n"
-
-"#define MAP_VECT_ELEMS(res, val, body) for(nat_uint v=0; v<VECT_WIDTH; v++) { nat_uint e = val>>(v*16); body res |= (val_t)e<<(v*16); }\n"
 
 "#ifndef EX_TABLE_ARGS\n"
 " #define EX_TABLE_ARGS\n"
@@ -199,17 +197,18 @@ STRINGIFY(
 			table[0] = 0; // never executed but needed for some reason
 		} else
 		) "\n#endif\n" STRINGIFY(
+		nat_uint localOffset = get_local_id(0)*4;
 		
 		// assume workgroup size is a power of 2
 		) "\n#if COL_GROUP_SIZE*4 > 256\n" STRINGIFY(
 		// process multiple coefficients at a time
 		for(nat_uint coeffBase=0; coeffBase<numCoeff; coeffBase+=(COL_GROUP_SIZE*4/256)) {
-			const nat_uint coeffI = coeffBase + (get_local_id(0)*4)/256;
+			const nat_uint coeffI = coeffBase + localOffset/256;
 			if(coeffI < numCoeff) {
 				const nat_uint coeff = coeffs[coeffI];
 				gf16_multiply_write_lh(
 					(__local nat_uint*)(table + coeffI*512),
-					(get_local_id(0)*4) & 0xff,
+					localOffset & 0xff,
 					coeff,
 					lh_compute_coeff256(coeff)
 				);
@@ -225,7 +224,7 @@ STRINGIFY(
 			__local nat_uint* nat_table = (__local nat_uint*)(table + coeffI*512);
 			) "\n#pragma unroll\n" STRINGIFY(
 			for(nat_uint valI=0; valI<256; valI+=COL_GROUP_SIZE*4) {
-				gf16_multiply_write_lh(nat_table, valI + get_local_id(0)*4, coeff, coeff256);
+				gf16_multiply_write_lh(nat_table, valI + localOffset, coeff, coeff256);
 			}
 		}
 		
@@ -236,9 +235,10 @@ STRINGIFY(
 	
 	inline nat_uint lhtable_multiply(__local const ushort* table, nat_uint val) {
 		) "\n#if VECT_WIDTH==2\n" STRINGIFY(
+		nat_uint val_h = (val>>8) | 0x1000100;
 		return upsample(
-			(ushort)(table[(val>>16) & 0xff] ^ table[((val>>24) & 0xff) + 256]),
-			(ushort)(table[val & 0xff] ^ table[((val>>8) & 0xff) + 256])
+			(ushort)(table[(val>>16) & 0xff] ^ table[(val_h>>16) & 0x1ff]),
+			(ushort)(table[val & 0xff] ^ table[val_h & 0x1ff])
 		);
 		) "\n#else\n" STRINGIFY(
 		nat_uint result = table[val & 0xff] ^ table[((val>>8) & 0xff) + 256];
@@ -306,17 +306,18 @@ STRINGIFY(
 			table[0] = 0; // never executed but needed for some reason
 		} else
 		) "\n#endif\n" STRINGIFY(
+		nat_uint localOffset = get_local_id(0)*4;
 		
 		// assume workgroup size is a power of 2
 		) "\n#if COL_GROUP_SIZE*4 > 256\n" STRINGIFY(
 		// process multiple coefficients at a time
 		for(nat_uint coeffBase=0; coeffBase<numCoeff; coeffBase+=(COL_GROUP_SIZE*4/256)) {
-			const nat_uint coeffI = coeffBase + (get_local_id(0)*4)/256;
+			const nat_uint coeffI = coeffBase + localOffset/256;
 			if(coeffI < numCoeff) {
 				const nat_uint coeff = coeffs[coeffI];
 				gf16_multiply_write_ll(
 					(__local nat_uint*)(table + coeffI*256),
-					(get_local_id(0)*4) & 0xff,
+					localOffset & 0xff,
 					coeff
 				);
 			}
@@ -330,7 +331,7 @@ STRINGIFY(
 			__local nat_uint* nat_table = (__local nat_uint*)(table + coeffI*256);
 			) "\n#pragma unroll\n" STRINGIFY(
 			for(nat_uint valI=0; valI<256; valI+=COL_GROUP_SIZE*4) {
-				gf16_multiply_write_ll(nat_table, valI + get_local_id(0)*4, coeff);
+				gf16_multiply_write_ll(nat_table, valI + localOffset, coeff);
 			}
 		}
 		
@@ -440,23 +441,71 @@ const static char _ocl_method_log[] =
 "#define GF_MULTIPLY(a, b) gf16_multiply_log(a, b  EX_TABLE_ARGS)\n"
 "#undef READ_SRC\n"
 "#define READ_SRC(src, idx) gf16_log_src(src[idx]  EX_TABLE_ARGS)\n"
+"#if defined(OCL_METHOD_LOG_TINY) || defined(OCL_METHOD_LOG_SMALL)\n"
+" #define LOG_SRC(n) gf16_log_small(n  EX_TABLE_ARGS)\n"
+"#else\n"
+" #define LOG_SRC(n) ((LOG_MEM_TYPE ushort*)gf16_log)[n]\n"
+"#endif\n"
 STRINGIFY(
+	ushort gf16_log_small(nat_uint val  EX_TABLE_ARGS_DECL) {
+		if(val == 0) return 65535;
+		
+		) "\n#ifdef OCL_METHOD_LOG_SMALL\n"
+		" #if __OPENCL_C_VERSION__ >= 200\n"
+		"  nat_uint log = ctz(val);\n"
+		" #else\n"
+		"  nat_uint log = clz((nat_uint)((val-1)^val)) ^ (NAT_BITS-1);\n"
+		" #endif\n" STRINGIFY(
+		val >>= log;
+		log += ((LOG_MEM_TYPE ushort*)gf16_log)[val >> 1];
+		) "\n#else\n" STRINGIFY(
+		
+		nat_uint log = 0;
+		uint prep;
+		nat_uint shift;
+		LOG_MEM_TYPE uint* gf16_log_prep = (gf16_log + 16384/2);
+		
+		prep = gf16_log_prep[val & 0x7ff];
+		shift = prep >> 16;
+		log += shift;
+		val = (val >> shift) ^ (prep & 0xffff);
+		// (repeat above)
+		prep = gf16_log_prep[val & 0x7ff];
+		shift = prep >> 16;
+		log += shift;
+		val = (val >> shift) ^ (prep & 0xffff);
+		
+		ushort log2 = ((LOG_MEM_TYPE ushort*)gf16_log)[val >> 2];
+		) "\n#if VECT_WIDTH == 1\n" STRINGIFY(
+		log += add_sat(log, log2) == (ushort)65535;
+		log += log2;
+		) "\n#else\n" STRINGIFY(
+		log += log2;
+		if(log >= 65535) log -= 65535;
+		//if (log == 12345678 && val == 12345678) return 0; // this is an impossible condition, but for some reason on some AMD cards, it makes the val==1 case work (i.e. without it, log(1) may result in 1 instead of 0)
+		// unable to find the reason for the above issue (though have managed to cause different results with different ways to do the same thing) - I'm filing it as a compiler bug
+		) "\n#endif\n"
+		"#endif\n" STRINGIFY(
+		
+		return log;
+	}
+	
 	val_t gf16_log_src(val_t val  EX_TABLE_ARGS_DECL) {
 		) "\n#if VECT_WIDTH==2\n" STRINGIFY(
-		return upsample(gf16_log[val >> 16], gf16_log[val & 0xffff]);
+		return upsample(LOG_SRC(val >> 16), LOG_SRC(val & 0xffff));
 		) "\n#else\n" STRINGIFY(
-		val_t res = gf16_log[val & 0xffff];
+		val_t res = LOG_SRC(val & 0xffff);
 		) "\n#pragma unroll\n" STRINGIFY(
 		for(int v=1; v<VECT_WIDTH; v++) {
 			int shift = v*16;
-			res |= (val_t)gf16_log[(val>>shift) & 0xffff] << shift;
+			res |= (val_t)LOG_SRC((val>>shift) & 0xffff) << shift;
 		}
 		return res;
 		) "\n#endif\n" STRINGIFY(
 	}
 	
 	nat_uint gfmat_calc_coeff_log(nat_uint recBlock, ushort inCoeff) {
-		uint result = inCoeff * (ushort)(RECOVERY_EXP(recBlock));
+		uint result = inCoeff * (ushort)recBlock;
 		// calc 'result %= 65535'
 		result = (result >> 16) + (result & 65535);
 		result += result >> 16;
@@ -468,35 +517,35 @@ STRINGIFY(
 		) "\n#pragma unroll\n" STRINGIFY(
 		for(int v=0; v<VECT_WIDTH; v++) {
 			nat_uint va = a & 65535;
-			// TODO: try defering this conditional so compiler optimizes stuff inside - this seems to slightly benefit on some platforms, makes others much worse
-			if(va != 65535) { // exp(a) != 0
-				// compute (va+b) % 65535
-				) "\n#if VECT_WIDTH == 1\n" STRINGIFY(
-				va += add_sat(va, b) == (ushort)65535;
-				va += b;
-				) "\n#else\n" STRINGIFY(
-				va += b;
-				va = (va >> 16) + (va & 0xffff);
-				) "\n#endif\n" STRINGIFY(
-				
-				) "\n#ifdef OCL_METHOD_LOG_SMALL\n" STRINGIFY(
-				uint vatmp = gf16_antilog[va >> 3];
-				vatmp <<= va & 7;
-				vatmp ^= gf16_antilog[8192 + (vatmp >> 16)];
-				va = vatmp & 0xffff;
-				) "\n#elif defined(OCL_METHOD_LOG_TINY)\n" STRINGIFY(
-				uint vatmp = gf16_antilog[va >> 4];
-				vatmp <<= va & 15;
-				vatmp ^= gf16_antilog[4096 + (vatmp >> 24)] << 8;
-				vatmp &= 0xffffff;
-				vatmp ^= gf16_antilog[4096 + (vatmp >> 16)];
-				va = vatmp & 0xffff;
-				) "\n#else\n" STRINGIFY(
-				va = gf16_antilog[va];
-				) "\n#endif\n" STRINGIFY(
-				
-				result |= va << (v*16);
-			}
+			bool isZero = (va == 65535); // exp(a) == 0
+			
+			// compute (va+b) % 65535
+			// (note, second variant is not quite the same, e.g. 65534+1 = 0 or 65535)
+			) "\n#if VECT_WIDTH == 1\n" STRINGIFY(
+			va += add_sat(va, b) == (ushort)65535;
+			va += b;
+			) "\n#else\n" STRINGIFY(
+			va += b;
+			va = (va >> 16) + (va & 0xffff);
+			) "\n#endif\n" STRINGIFY(
+			
+			) "\n#ifdef OCL_METHOD_EXP_SMALL\n" STRINGIFY(
+			uint vatmp = gf16_antilog[va >> 3];
+			vatmp <<= va & 7;
+			vatmp ^= gf16_antilog[8192 + (vatmp >> 16)];
+			va = vatmp & 0xffff;
+			) "\n#elif defined(OCL_METHOD_EXP_TINY)\n" STRINGIFY(
+			uint vatmp = gf16_antilog[va >> 4];
+			vatmp <<= va & 15;
+			vatmp ^= gf16_antilog[4096 + (vatmp >> 24)] << 8;
+			vatmp &= 0xffffff;
+			vatmp ^= gf16_antilog[4096 + (vatmp >> 16)];
+			va = vatmp & 0xffff;
+			) "\n#else\n" STRINGIFY(
+			va = gf16_antilog[va];
+			) "\n#endif\n" STRINGIFY(
+			
+			result |= (isZero ? 0 : va) << (v*16);
 			a >>= 16;
 		}
 		return result;
@@ -556,8 +605,8 @@ STRINGIFY(
 "	}                                                                                            \n"\
 "	                                                                                             \n"\
 "	nat_uint curCoeff;                                                                           \n"\
-"	#ifdef GFMAT_COEFF_SHORTCUT                                                                  \n"\
-"		curCoeff = gfmat_calc_coeff_log(outBlk, coeff[0]);                                       \n"\
+"	#ifdef GFMAT_COEFF_SEQUENTIAL                                                                \n"\
+"		curCoeff = gfmat_calc_coeff_log(outExp+outBlk, coeff[0]);                                \n"\
 "		#pragma unroll                                                                           \n"\
 "		for (nat_uint o = 0; o < numOutputs; o++) {                                              \n"\
 "			#pragma unroll                                                                       \n"\
@@ -589,8 +638,8 @@ STRINGIFY(
 "			#endif                                                                               \n"\
 "		}                                                                                        \n"\
 "		                                                                                         \n"\
-"		#ifdef GFMAT_COEFF_SHORTCUT                                                              \n"\
-"			curCoeff = gfmat_calc_coeff_log(outBlk, coeff[i]);                                   \n"\
+"		#ifdef GFMAT_COEFF_SEQUENTIAL                                                            \n"\
+"			curCoeff = gfmat_calc_coeff_log(outExp+outBlk, coeff[i]);                            \n"\
 "			#pragma unroll                                                                       \n"\
 "			for (nat_uint o = 0; o < numOutputs; o++) {                                          \n"\
 "				#pragma unroll                                                                   \n"\
@@ -621,6 +670,8 @@ STRINGIFY(
 "	}                                                                                            \n"\
 "}                                                                                               \n"
 
+#define KERNEL_NOLUT_MULGROUP_INLINE "inline " // have encountered bug on some Linux AMD Radeon platforms, where inlining causes a build failure; workaround this by emptying above string
+
 const static char _ocl_kernel_nolut_funcs[] =
 "#ifdef WRITE_DST_OVERRIDE\n"
 " #ifdef MUL_ONLY\n"
@@ -634,17 +685,17 @@ const static char _ocl_kernel_nolut_funcs[] =
 " #define WRITE_DST(dst, idx, val) dst[idx] ^= val\n"
 "#endif\n"
 "#ifdef OCL_METHOD_LOG\n"
-" #define GET_COEFF(o, i) gfmat_calc_coeff_log(o, coeff[i])\n"
+" #define GET_COEFF(o, i) gfmat_calc_coeff_log(outExp[o], coeff[i])\n"
 "#else\n"
 " #define GET_COEFF(o, i) coeff[COBUF_REF(o, i)]\n"
 "#endif\n"
 "#define DO_CACHE 1\n"
-"inline void KERNFN(mulgroup_cache)" KERNEL_NOLUT_MULGROUP "\n"
+KERNEL_NOLUT_MULGROUP_INLINE "void KERNFN(mulgroup_cache)" KERNEL_NOLUT_MULGROUP "\n"
 "#undef DO_CACHE\n"
 "#define DO_CACHE 0\n"
-"inline void KERNFN(mulgroup_nocache)" KERNEL_NOLUT_MULGROUP "\n"
+KERNEL_NOLUT_MULGROUP_INLINE "void KERNFN(mulgroup_nocache)" KERNEL_NOLUT_MULGROUP "\n"
 "#undef DO_CACHE\n"
-"inline void KERNFN(mulgroup_read)" KERNEL_NOLUT_MULGROUP "\n"
+KERNEL_NOLUT_MULGROUP_INLINE "void KERNFN(mulgroup_read)" KERNEL_NOLUT_MULGROUP "\n"
 "#undef GET_COEFF\n";
 
 const static char _ocl_kernel_nolut[] = STRINGIFY({
@@ -947,10 +998,46 @@ static inline size_t round_down_pow2(size_t v) {
 	*/
 }
 
-// _sliceSize must be divisible by 2
-bool GF16OCL::setup_kernels(Galois16OCLMethods method, unsigned targetInputBatch, unsigned targetIters, unsigned targetGrouping) {
-	unsigned numOutputs = (unsigned)outputExponents.size();
+GF16OCL_MethodInfo PAR2ProcOCL::info(Galois16OCLMethods method) {
+	GF16OCL_MethodInfo ret{
+		method, Galois16OCLMethodsText[static_cast<int>(method)],
+		8, 1, true
+	};
+	switch(method) {
+	case GF16OCL_BY2:
+		ret.idealInBatch = 16;
+	break;
+	case GF16OCL_SHUFFLE:
+		ret.idealInBatch = 4;
+		ret.usesOutGrouping = false;
+	break;
+	case GF16OCL_LOG:
+	case GF16OCL_LOG_SMALL:
+	case GF16OCL_LOG_SMALL2:
+	case GF16OCL_LOG_TINY:
+	case GF16OCL_LOG_SMALL_LMEM:
+	case GF16OCL_LOG_TINY_LMEM:
+		ret.idealInBatch = 8;
+	break;
+	case GF16OCL_LOOKUP:
+	case GF16OCL_LOOKUP_HALF:
+		ret.usesOutGrouping = false;
+		ret.idealInBatch = 4;
+		ret.idealIters = 4;
+	break;
+	case GF16OCL_LOOKUP_NOCACHE:
+	case GF16OCL_LOOKUP_HALF_NOCACHE:
+		ret.idealInBatch = 4;
+		ret.idealIters = 8; // generally little reason not to do multiple iters
+	break;
+	default: break; // prevent compiler warning
+	}
 	
+	return ret;
+}
+
+// _sliceSize must be divisible by 2
+bool PAR2ProcOCL::setup_kernels(Galois16OCLMethods method, unsigned targetInputBatch, unsigned targetIters, unsigned targetGrouping, bool outputSequential) {
 	// TODO: get device info
 	// CL_DEVICE_HOST_UNIFIED_MEMORY (deprecated?)
 	// CL_DEVICE_ADDRESS_BITS (max referencable memory)
@@ -973,25 +1060,26 @@ bool GF16OCL::setup_kernels(Galois16OCLMethods method, unsigned targetInputBatch
 	
 	size_t deviceAvailConstSize = device.getInfo<CL_DEVICE_MAX_CONSTANT_BUFFER_SIZE>();
 	size_t deviceLocalSize = device.getInfo<CL_DEVICE_LOCAL_MEM_SIZE>() - 128; // subtract a little to allow some spare space if the device needs it
-	//size_t deviceGlobalSize = device.getInfo<CL_DEVICE_GLOBAL_MEM_SIZE>(); // TODO: check sliceSize*numOutputs ?
+	//size_t deviceGlobalSize = device.getInfo<CL_DEVICE_GLOBAL_MEM_SIZE>(); // TODO: check sliceSizeCksum*numOutputs ?
 	
+	unsigned numOutputs = outputExponents.size();
 	unsigned outputsPerThread = numOutputs; // currently, process all outputs on every kernel invocation
 	std::stringstream sourceStream;
 	
-	unsigned groupIterations = 1;
-	bool usesOutGrouping = false;
+	auto methInfo = info(method);
+	inputBatchSize = methInfo.idealInBatch;
+	unsigned groupIterations = methInfo.idealIters;
 	unsigned threadWordSize = infoShortVecSize*2;
 	unsigned sizePerWorkGroup = threadWordSize * wgSize;
-	unsigned outputGrouping = 8; // for nolut kernel; have seen some cards prefer '4' (on older cards?)
+	outputsPerGroup = 8; // for nolut kernel; have seen some cards prefer '4' (on older cards?)
 	const char* kernelCode;
 	const char* kernelFuncs = NULL;
 	const char* methodCode;
 	const char* oclVerArg = "";
 	// method selector
-	coeffAsLog = false;
+	coeffType = GF16OCL_COEFF_NORMAL;
 	switch(method) {
 	case GF16OCL_BY2:
-		inputBatchSize = 16;
 		while(1) {
 			if(inputBatchSize*sizePerWorkGroup > deviceLocalSize)
 				inputBatchSize = (unsigned)(deviceLocalSize / sizePerWorkGroup);
@@ -1013,13 +1101,11 @@ bool GF16OCL::setup_kernels(Galois16OCLMethods method, unsigned targetInputBatch
 		kernelCode = _ocl_kernel_nolut;
 		kernelFuncs = _ocl_kernel_nolut_funcs;
 		methodCode = _ocl_method_by2;
-		usesOutGrouping = true;
 	break;
 	case GF16OCL_SHUFFLE:
 	//case GF16OCL_SHUFFLE2:
 		oclVerArg = "-cl-std=CL1.1";
 		infoShortVecSize = 2; // currently only implemented for 32-bit on GPUs
-		inputBatchSize = 4;
 		threadWordSize = infoShortVecSize*4; // process two words, so double per thread word size
 		sizePerWorkGroup = threadWordSize * wgSize;
 		if(targetInputBatch) inputBatchSize = targetInputBatch;
@@ -1056,11 +1142,11 @@ bool GF16OCL::setup_kernels(Galois16OCLMethods method, unsigned targetInputBatch
 	break;
 	case GF16OCL_LOG:
 	case GF16OCL_LOG_SMALL:
+	case GF16OCL_LOG_SMALL2:
 	case GF16OCL_LOG_TINY:
 	case GF16OCL_LOG_SMALL_LMEM:
 	case GF16OCL_LOG_TINY_LMEM:
-		coeffAsLog = true;
-		inputBatchSize = 8;
+		coeffType = outputSequential ? GF16OCL_COEFF_LOG_SEQ : GF16OCL_COEFF_LOG;
 		
 		{
 			size_t reqLocalMem = 0;
@@ -1091,12 +1177,13 @@ bool GF16OCL::setup_kernels(Galois16OCLMethods method, unsigned targetInputBatch
 		kernelCode = _ocl_kernel_nolut;
 		kernelFuncs = _ocl_kernel_nolut_funcs;
 		sourceStream << "#define OCL_METHOD_LOG\n";
-		if(method == GF16OCL_LOG_SMALL || method == GF16OCL_LOG_SMALL_LMEM)
-			sourceStream << "#define OCL_METHOD_LOG_SMALL\n";
+		if(method == GF16OCL_LOG_SMALL || method == GF16OCL_LOG_SMALL2 || method == GF16OCL_LOG_SMALL_LMEM)
+			sourceStream << "#define OCL_METHOD_EXP_SMALL\n";
 		if(method == GF16OCL_LOG_TINY || method == GF16OCL_LOG_TINY_LMEM)
+			sourceStream << "#define OCL_METHOD_EXP_TINY\n";
+		if(method == GF16OCL_LOG_SMALL2)
 			sourceStream << "#define OCL_METHOD_LOG_TINY\n";
 		methodCode = _ocl_method_log;
-		usesOutGrouping = true;
 	break;
 	case GF16OCL_LOOKUP:
 	case GF16OCL_LOOKUP_HALF:
@@ -1113,17 +1200,13 @@ bool GF16OCL::setup_kernels(Galois16OCLMethods method, unsigned targetInputBatch
 				inputBatchSize = 4;
 			else
 				inputBatchSize = 2;
-			outputGrouping = tables / inputBatchSize;
-			if(outputGrouping > 16) outputGrouping = 16;
-			
-			groupIterations = 8; // generally little reason not to do multiple iters
+			outputsPerGroup = tables / inputBatchSize;
+			if(outputsPerGroup > 16) outputsPerGroup = 16;
 			
 			if(targetInputBatch) inputBatchSize = targetInputBatch;
 			kernelCode = _ocl_kernel_lut;
 			kernelFuncs = _ocl_kernel_lut_funcs;
-			usesOutGrouping = true;
 		} else {
-			inputBatchSize = 4;
 			if(targetInputBatch) inputBatchSize = targetInputBatch;
 			// TODO: compute ideal iteration count
 			while(1) {
@@ -1164,56 +1247,49 @@ bool GF16OCL::setup_kernels(Galois16OCLMethods method, unsigned targetInputBatch
 	}
 	
 	if(inputBatchSize < 1) return false;
+	minInBatchSize = inputBatchSize;
 	
 	if(targetIters) groupIterations = targetIters;
-	if(targetGrouping) outputGrouping = targetGrouping;
+	if(targetGrouping) outputsPerGroup = targetGrouping;
 	
-	if(groupIterations < 1 || outputGrouping < 1) return false;
+	if(groupIterations < 1 || outputsPerGroup < 1) return false;
 	
 	// for very small slices, scale down iterations/wgSize
-	if(sizePerWorkGroup * groupIterations > sliceSize) {
+	if(sizePerWorkGroup * groupIterations > sliceSizeCksum) {
 		// scale down iterations first
 		if(groupIterations > 1) {
-			groupIterations = (unsigned)CEIL_DIV(sliceSize, sizePerWorkGroup);
+			groupIterations = (unsigned)CEIL_DIV(sliceSizeCksum, sizePerWorkGroup);
 			if(groupIterations < 1) groupIterations = 1;
 		}
 		// if iterations cannot be scaled down, scale down workgroup size next
-		if(groupIterations == 1 && sizePerWorkGroup > sliceSize) {
-			wgSize = CEIL_DIV(sliceSize, threadWordSize);
-			if(wgSize < 1) wgSize = 1;
-			sizePerWorkGroup = threadWordSize * wgSize;
+		unsigned minWgSize = 1;
+		if(kernelCode == _ocl_kernel_lut || kernelCode == _ocl_kernel_cachelut)
+			minWgSize = 128; // if computing lookup tables, don't scale down the workgroup below this amount
+		if(groupIterations == 1 && sizePerWorkGroup > sliceSizeCksum && wgSize > minWgSize) {
+			wgSize = CEIL_DIV(sliceSizeCksum, threadWordSize);
+			if(wgSize < minWgSize) wgSize = minWgSize;
 		}
 	}
+	if(method == GF16OCL_LOOKUP || method == GF16OCL_LOOKUP_HALF || method == GF16OCL_LOOKUP_NOCACHE || method == GF16OCL_LOOKUP_HALF_NOCACHE) {
+		// lookup method assumes workgroup is a power of two
+		wgSize = round_down_pow2(wgSize);
+	}
+	sizePerWorkGroup = threadWordSize * wgSize;
 	
 	// code generation for log methods
 	uint16_t* tblLog = NULL;
 	uint16_t* tblAntiLog = NULL;
-	unsigned tblAntiLogSize = 0;
-	if(coeffAsLog) {
-		// write output exponents to remove the need to transfer it later
-		std::stringstream recoveryExpCode;
-		uint16_t recOffset = outputExponents[0];
-		bool recOffsetIsSequential = true;
-		recoveryExpCode << "__constant ushort recoveryIdx[" << numOutputs << "] = {" << outputExponents[0];
-		for(unsigned i=1; i<numOutputs; i++) {
-			recoveryExpCode << ',' << outputExponents[i];
-			if(outputExponents[i] != recOffset+i)
-				recOffsetIsSequential = false;
-		}
-		recoveryExpCode << "};\n";
-		if(recOffsetIsSequential) {
-			// if all recovery slice numbers are sequential (will be true most of the time), save some memory by cutting out the table
-			sourceStream << "#define RECOVERY_EXP(n) (ushort)(n+" << recOffset << ")\n";
-			sourceStream << "#define GFMAT_COEFF_SHORTCUT\n";
-		} else {
-			sourceStream << "#define RECOVERY_EXP(n) recoveryIdx[n]\n" << recoveryExpCode.str();
-			if(deviceAvailConstSize < numOutputs*2) return false; // TODO: may need to have option to pass it as global memory
-			deviceAvailConstSize -= numOutputs*2;
-		}
-		
+	unsigned tblAntiLogSize = 0, tblLogSize = 0;
+	if(coeffType != GF16OCL_COEFF_NORMAL) {
 		// construct log/exp table and embed into OpenCL source
-		tblLog = new uint16_t[65536];
-		tblLog[0] = 65535; // special value to represent 0
+		if(method == GF16OCL_LOG_SMALL2) {
+			tblLog = new uint16_t[tblLogSize = 16384 + 2048*2];
+		} else if(0) { // half-log idea
+			tblLog = new uint16_t[tblLogSize = 32768];
+		} else {
+			tblLog = new uint16_t[tblLogSize = 65536];
+			tblLog[0] = 65535; // special value to represent 0
+		}
 		int n = 1;
 		if(method == GF16OCL_LOG) {
 			tblAntiLogSize = 65536;
@@ -1226,7 +1302,7 @@ bool GF16OCL::setup_kernels(Galois16OCLMethods method, unsigned targetInputBatch
 			tblAntiLog[65535] = tblAntiLog[0]; // saves having to wrap around 65535 to 0
 		}
 		else {
-			int bitsCut = (method == GF16OCL_LOG_SMALL || method == GF16OCL_LOG_SMALL_LMEM ? 3 : 4);
+			int bitsCut = (method == GF16OCL_LOG_SMALL || method == GF16OCL_LOG_SMALL2 || method == GF16OCL_LOG_SMALL_LMEM ? 3 : 4);
 			if(bitsCut == 3)
 				tblAntiLogSize = 8192+128;
 			else
@@ -1235,17 +1311,44 @@ bool GF16OCL::setup_kernels(Galois16OCLMethods method, unsigned targetInputBatch
 			for (int exp = 0; exp < 65535; exp++) {
 				if((exp & ((1<<bitsCut)-1)) == 0)
 					tblAntiLog[exp >> bitsCut] = n;
-				tblLog[n] = exp;
+				if(method == GF16OCL_LOG_SMALL2) {
+					if((n & 3) == 3)
+						tblLog[n >> 2] = exp;
+				} else if(0) { // half-log idea
+					if((n & 1) == 1)
+						tblLog[n >> 1] = exp;
+				} else
+					tblLog[n] = exp;
 				n = (n << 1) ^ (-(n>>15) & GF16_POLYNOMIAL);
 			}
 			// add reduction table
-			uint16_t* tblALogReduction = tblAntiLog + (1u << (16-bitsCut));
+			uint16_t* tblALogReduction = tblAntiLog + (uint32_t)(1u << (uint32_t)(16-bitsCut));
 			tblALogReduction[0] = 0;
 			for (int i = 1; i < (1<<(bitsCut+4)); i++) {
 				n = i << (12-bitsCut);
 				for (int j = 0; j < (bitsCut+4); j++)
 					n = (n << 1) ^ (-(n>>15) & GF16_POLYNOMIAL);
 				tblALogReduction[i] = n;
+			}
+			// add log prep table
+			if(method == GF16OCL_LOG_SMALL2) {
+				uint16_t* tblLogPrep = tblLog + 16384;
+				for (int i = 0; i < 2048; i++) {
+					int iters = 0, r = 0;
+					n = i;
+					while((n&3) != 3 && iters < 10) {
+						if(n & 1) {
+							n ^= 0x1100b;
+							r ^= 0x1100b;
+						}
+						n >>= 1;
+						r >>= 1;
+						iters++;
+					}
+					// assume little endian here
+					tblLogPrep[i*2] = r;
+					tblLogPrep[i*2+1] = iters;
+				}
 			}
 		}
 		
@@ -1256,19 +1359,40 @@ bool GF16OCL::setup_kernels(Galois16OCLMethods method, unsigned targetInputBatch
 			if(method == GF16OCL_LOG_SMALL_LMEM || method == GF16OCL_LOG_TINY_LMEM)
 				sourceStream << "_src";
 			sourceStream << "[" << tblAntiLogSize << "] __attribute__ ((aligned (VECT_WIDTH*2))) = {" << tblAntiLog[0];
-			for (unsigned i = 1; i < tblAntiLogSize; i++)
-				sourceStream << ',' << tblAntiLog[i];
+			for (unsigned j = 1; j < tblAntiLogSize;) {
+				unsigned amount = tblAntiLogSize - j;
+				if(amount > 8192) amount = 8192;
+				for (unsigned i = 0; i < amount; i++)
+					sourceStream << ',' << tblAntiLog[j+i];
+				sourceStream << '\n'; // have seen some OpenCL compilers barf at really long lines, so break things up
+				j += amount;
+			}
 			sourceStream << "};\n";
 			delete[] tblAntiLog;
 			tblAntiLog = NULL;
 		}
-		if(deviceAvailConstSize >= 131072) {
-			sourceStream << "__constant ushort gf16_log[65536] = {" << tblLog[0];
-			for(int i=1; i<65536; i++)
-				sourceStream << ',' << tblLog[i];
+		if(deviceAvailConstSize >= tblLogSize*2) {
+			sourceStream << "#define LOG_MEM_TYPE __constant\n";
+			// gf16_log is defined as uint to ensure it's 4-byte aligned
+			sourceStream << "__constant uint gf16_log[" << (tblLogSize/2) << "] = {" << ((tblLog[1]<<16) | tblLog[0]);
+			for (unsigned j = 2; j < tblLogSize;) {
+				unsigned amount = tblLogSize - j;
+				if(amount > 8192) amount = 8192;
+				for(unsigned i=0; i<amount; i+=2)
+					sourceStream << ',' << ((tblLog[j+i+1]<<16) | tblLog[j+i]);
+				sourceStream << '\n';
+				j += amount;
+			}
 			sourceStream << "};\n";
 			delete[] tblLog;
 			tblLog = NULL;
+		} else
+			sourceStream << "#define LOG_MEM_TYPE __global const\n";
+		
+		const char* outExpType = "__global const ushort* restrict";
+		if(coeffType == GF16OCL_COEFF_LOG_SEQ) {
+			sourceStream << "#define GFMAT_COEFF_SEQUENTIAL\n";
+			outExpType = "ushort";
 		}
 		
 		if(method == GF16OCL_LOG_SMALL_LMEM || method == GF16OCL_LOG_TINY_LMEM) {
@@ -1279,33 +1403,43 @@ bool GF16OCL::setup_kernels(Galois16OCLMethods method, unsigned targetInputBatch
 				sourceStream << "#define LMEM_SRC_TYPE __constant\n";
 			if(tblLog) {
 				if(tblAntiLog)
-					sourceStream << "#define EX_TABLE_KARGS_DECL , __global const ushort* restrict gf16_log, __global const ushort* restrict gf16_antilog_src\n";
+					sourceStream << "#define EX_TABLE_KARGS_DECL , " << outExpType << " outExp, __global const uint* restrict gf16_log, __global const ushort* restrict gf16_antilog_src\n";
 				else
-					sourceStream << "#define EX_TABLE_KARGS_DECL , __global const ushort* restrict gf16_log\n";
+					sourceStream << "#define EX_TABLE_KARGS_DECL , " << outExpType << " outExp, __global const uint* restrict gf16_log\n";
 				
 				sourceStream <<
-					"#define EX_TABLE_ARGS_DECL , __global const ushort* restrict gf16_log, __local const ushort* restrict gf16_antilog\n"
-					"#define EX_TABLE_ARGS , gf16_log, gf16_antilog\n";
+					"#define EX_TABLE_ARGS_DECL , " << outExpType << " outExp, __global const uint* restrict gf16_log, __local const ushort* restrict gf16_antilog\n"
+					"#define EX_TABLE_ARGS , outExp, gf16_log, gf16_antilog\n";
 			} else {
-				if(tblAntiLog)
-					sourceStream << "#define EX_TABLE_KARGS_DECL , __global const ushort* restrict gf16_antilog_src\n";
+				if(tblAntiLog) // should never be true
+					sourceStream << "#define EX_TABLE_KARGS_DECL , " << outExpType << " outExp, __global const ushort* restrict gf16_antilog_src\n";
 				else
-					sourceStream << "#define EX_TABLE_KARGS_DECL\n";
+					sourceStream << "#define EX_TABLE_KARGS_DECL , " << outExpType << " outExp\n";
 				
 				sourceStream <<
-					"#define EX_TABLE_ARGS_DECL , __local const ushort* restrict gf16_antilog\n"
-					"#define EX_TABLE_ARGS , gf16_antilog\n";
+					"#define EX_TABLE_ARGS_DECL , " << outExpType << " outExp, __local const ushort* restrict gf16_antilog\n"
+					"#define EX_TABLE_ARGS , outExp, gf16_antilog\n";
 			}
 		} else {
 			if(tblLog) {
 				if(tblAntiLog) {
 					sourceStream <<
-						"#define EX_TABLE_ARGS_DECL , __global const ushort* restrict gf16_log, __global const ushort* restrict gf16_antilog\n"
-						"#define EX_TABLE_ARGS , gf16_log, gf16_antilog\n";
+						"#define EX_TABLE_ARGS_DECL , " << outExpType << " outExp, __global const uint* restrict gf16_log, __global const ushort* restrict gf16_antilog\n"
+						"#define EX_TABLE_ARGS , outExp, gf16_log, gf16_antilog\n";
 				} else {
 					sourceStream <<
-						"#define EX_TABLE_ARGS_DECL , __global const ushort* restrict gf16_log\n"
-						"#define EX_TABLE_ARGS , gf16_log\n";
+						"#define EX_TABLE_ARGS_DECL , " << outExpType << " outExp, __global const uint* restrict gf16_log\n"
+						"#define EX_TABLE_ARGS , outExp, gf16_log\n";
+				}
+			} else {
+				if(tblAntiLog) { // should never be true
+					sourceStream <<
+						"#define EX_TABLE_ARGS_DECL , " << outExpType << " outExp, __global const ushort* restrict gf16_antilog\n"
+						"#define EX_TABLE_ARGS , outExp, gf16_antilog\n";
+				} else {
+					sourceStream <<
+						"#define EX_TABLE_ARGS_DECL , " << outExpType << " outExp\n"
+						"#define EX_TABLE_ARGS , outExp\n";
 				}
 			}
 		}
@@ -1316,14 +1450,14 @@ bool GF16OCL::setup_kernels(Galois16OCLMethods method, unsigned targetInputBatch
 	
 	// avoid uneven workgroups by aligning to workgroup size
 	bytesPerGroup = sizePerWorkGroup * groupIterations;
-	size_t sliceGroups = CEIL_DIV(sliceSize, bytesPerGroup);
+	size_t sliceGroups = CEIL_DIV(sliceSizeCksum, bytesPerGroup);
 	processRange = cl::NDRange(sliceGroups * wgSize, CEIL_DIV(numOutputs, outputsPerThread));
 	sliceSizeAligned = sliceGroups*bytesPerGroup;
 	allocatedSliceSize = sliceSizeAligned;
 	
 	
 	char params[300];
-	snprintf(params, sizeof(params), "%s -DMAX_SLICE_SIZE=%zu -DNUM_OUTPUTS=%u -DOUTPUTS_PER_THREAD=%u -DOUTPUT_THREADS=%u -DVECT_WIDTH=%u -DCOL_GROUP_SIZE=%zu -DCOL_GROUP_ITERS=%u -DOUTPUT_GROUPING=%u -DSUBMIT_INPUTS=%u", oclVerArg, sliceSizeAligned, numOutputs, outputsPerThread, CEIL_DIV(numOutputs, outputsPerThread), infoShortVecSize, wgSize, groupIterations, outputGrouping, inputBatchSize);
+	snprintf(params, sizeof(params), "%s -DMAX_SLICE_SIZE=%zu -DNUM_OUTPUTS=%u -DOUTPUTS_PER_THREAD=%u -DOUTPUT_THREADS=%u -DVECT_WIDTH=%u -DCOL_GROUP_SIZE=%zu -DCOL_GROUP_ITERS=%u -DOUTPUT_GROUPING=%u -DSUBMIT_INPUTS=%u", oclVerArg, sliceSizeAligned, numOutputs, outputsPerThread, CEIL_DIV(numOutputs, outputsPerThread), infoShortVecSize, wgSize, groupIterations, outputsPerGroup, inputBatchSize);
 	
 	
 #ifdef DUMP_ASM
@@ -1351,6 +1485,8 @@ bool GF16OCL::setup_kernels(Galois16OCLMethods method, unsigned targetInputBatch
 				std::cerr << "OpenCL Build Failure: " << err.what() << "(" << err.err() << "); build log:" <<std::endl << program.getBuildInfo<CL_PROGRAM_BUILD_LOG>(device) << std::endl;
 			} else
 				std::cerr << "OpenCL Build Error: " << err.what() << "(" << err.err() << ")" << std::endl;
+			if(tblLog) delete[] tblLog;
+			if(tblAntiLog) delete[] tblAntiLog;
 			return false;
 		}
 		
@@ -1405,10 +1541,14 @@ bool GF16OCL::setup_kernels(Galois16OCLMethods method, unsigned targetInputBatch
 	try {
 		program.build(std::vector<cl::Device>(1, device), params);
 	} catch(cl::Error const& err) {
+#ifndef GF16OCL_NO_OUTPUT
 		if(err.err() == CL_BUILD_PROGRAM_FAILURE || err.err() == CL_COMPILE_PROGRAM_FAILURE || err.err() == CL_LINK_PROGRAM_FAILURE) {
 			std::cerr << "OpenCL Build Failure: " << err.what() << "(" << err.err() << "); build log:" <<std::endl << program.getBuildInfo<CL_PROGRAM_BUILD_LOG>(device) << std::endl;
 		} else
 			std::cerr << "OpenCL Build Error: " << err.what() << "(" << err.err() << ")" << std::endl;
+#endif
+		if(tblLog) delete[] tblLog;
+		if(tblAntiLog) delete[] tblAntiLog;
 		return false;
 	}
 	
@@ -1422,14 +1562,14 @@ bool GF16OCL::setup_kernels(Galois16OCLMethods method, unsigned targetInputBatch
 	
 	// TODO: check if supports CPU shared memory and use host mem instead?
 	// should probably check for dedicated memory to determine if transferring is needed
-	for(int i=0; i<OCL_BUFFER_COUNT; i++) {
-		buffer_input[i] = cl::Buffer(context, CL_MEM_READ_ONLY | CL_MEM_ALLOC_HOST_PTR, inputBatchSize*sliceSizeAligned);
-		if(coeffAsLog) {
-			buffer_coeffs[i] = cl::Buffer(context, CL_MEM_READ_ONLY | CL_MEM_ALLOC_HOST_PTR, inputBatchSize*sizeof(uint16_t));
-			tmp_coeffs[i].resize(inputBatchSize);
+	for(auto& area : staging) {
+		area.input = cl::Buffer(context, CL_MEM_READ_ONLY | CL_MEM_ALLOC_HOST_PTR, inputBatchSize*sliceSizeAligned);
+		if(coeffType != GF16OCL_COEFF_NORMAL) {
+			area.coeffs = cl::Buffer(context, CL_MEM_READ_ONLY | CL_MEM_ALLOC_HOST_PTR, inputBatchSize*sizeof(uint16_t));
+			area.procCoeffs.resize(inputBatchSize);
 		} else {
-			buffer_coeffs[i] = cl::Buffer(context, CL_MEM_READ_ONLY | CL_MEM_ALLOC_HOST_PTR, inputBatchSize*numOutputs*sizeof(uint16_t));
-			tmp_coeffs[i].resize(inputBatchSize*numOutputs);
+			area.coeffs = cl::Buffer(context, CL_MEM_READ_ONLY | CL_MEM_ALLOC_HOST_PTR, inputBatchSize*numOutputs*sizeof(uint16_t));
+			area.procCoeffs.resize(inputBatchSize*numOutputs);
 		}
 	}
 	// TODO: need to consider CL_DEVICE_MAX_MEM_ALLOC_SIZE and perhaps break this into multiple allocations
@@ -1446,30 +1586,42 @@ bool GF16OCL::setup_kernels(Galois16OCLMethods method, unsigned targetInputBatch
 	
 	extra_buffers.clear();
 	
+	if(coeffType == GF16OCL_COEFF_LOG) {
+		buffer_outExp = cl::Buffer(context, CL_MEM_READ_ONLY | CL_MEM_ALLOC_HOST_PTR, numOutputs*sizeof(uint16_t));
+		kernelMul.setArg(3, buffer_outExp);
+		kernelMulAdd.setArg(3, buffer_outExp);
+		kernelMulLast.setArg(4, buffer_outExp);
+		kernelMulAddLast.setArg(4, buffer_outExp);
+	} else {
+		buffer_outExp = cl::Buffer();
+	}
 	// if we couldn't embed log tables directly into the source, transfer them now
 	if(tblLog) {
-		extra_buffers.push_back(cl::Buffer(context, CL_MEM_READ_ONLY, 65536*2));
-		const cl::Buffer& buf = extra_buffers.back();
-		queue.enqueueWriteBuffer(buf, CL_TRUE, 0, 65536*2, tblLog);
+		const cl::Buffer bufLog(context, CL_MEM_READ_ONLY, tblLogSize*2);
+		extra_buffers.push_back(bufLog);
+		kernelMul.setArg(4, bufLog);
+		kernelMulAdd.setArg(4, bufLog);
+		kernelMulLast.setArg(5, bufLog);
+		kernelMulAddLast.setArg(5, bufLog);
 		
-		kernelMul.setArg(3, buf);
-		kernelMulAdd.setArg(3, buf);
-		kernelMulLast.setArg(4, buf);
-		kernelMulAddLast.setArg(4, buf);
-		
-		delete[] tblLog;
-	}
-	if(tblAntiLog) {
-		extra_buffers.push_back(cl::Buffer(context, CL_MEM_READ_ONLY, tblAntiLogSize*2));
-		const cl::Buffer& buf = extra_buffers.back();
-		queue.enqueueWriteBuffer(buf, CL_TRUE, 0, tblAntiLogSize*2, tblAntiLog);
-		
-		kernelMul.setArg(4, buf);
-		kernelMulAdd.setArg(4, buf);
-		kernelMulLast.setArg(5, buf);
-		kernelMulAddLast.setArg(5, buf);
-		
-		delete[] tblAntiLog;
+		if(tblAntiLog) {
+			extra_buffers.push_back(cl::Buffer(context, CL_MEM_READ_ONLY, tblAntiLogSize*2));
+			const cl::Buffer& bufALog = extra_buffers.back();
+			kernelMul.setArg(5, bufALog);
+			kernelMulAdd.setArg(5, bufALog);
+			kernelMulLast.setArg(6, bufALog);
+			kernelMulAddLast.setArg(6, bufALog);
+			
+			std::vector<cl::Event> enqueueEvents(2);
+			queue.enqueueWriteBuffer(bufLog, CL_FALSE, 0, tblLogSize*2, tblLog, NULL, &enqueueEvents[0]);
+			queue.enqueueWriteBuffer(bufALog, CL_FALSE, 0, tblAntiLogSize*2, tblAntiLog, NULL, &enqueueEvents[1]);
+			cl::Event::waitForEvents(enqueueEvents);
+			delete[] tblLog;
+			delete[] tblAntiLog;
+		} else {
+			queue.enqueueWriteBuffer(bufLog, CL_TRUE, 0, tblLogSize*2, tblLog);
+			delete[] tblLog;
+		}
 	}
 	
 	return true;

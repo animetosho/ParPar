@@ -28,9 +28,9 @@ PAR2 Options:
                              upper limit.
        --slice-size-multiple When selecting a slice size, ensure that it is a
                              multiple of this value.
-                             Default is `--input-slices` if size specified and
-                             `--min-input-slices` equals that size, otherwise
-                             is 4B
+                             Default is `--input-slices` if both a size is
+                             specified for that option, and `--min-input-slices`
+                             equals that size, otherwise is 4B
   -S,  --auto-slice-size     Automatically scale up input slice size if the
                              number of input slices would exceed the maximum
                              allowed. This option takes no parameters.
@@ -44,9 +44,9 @@ PAR2 Options:
                                  `-r2l`: recovery slices equals number of input
                                          slices from 2 largest files
                                  `-r1.5s`: recovery slices equals number of
-                                           input slices from smallest file,
-                                           plus half the number of input slices
-                                           for the second smallest file
+                                           input slices from smallest non-empty
+                                           file, plus half the number of input
+                                           slices for the next smallest file
                                  `-r0.5w`: recovery slices equals the square
                                            root of the total number of input
                                            slices (or input_slices**0.5 where
@@ -54,8 +54,8 @@ PAR2 Options:
                                  `-r1.5o`: recovery slices equals the logarithm
                                            base 1.5 of the total number of input
                                            slices
-                                 `-r1n`: computes r = s/max(1,log2(s)), where
-                                         'r' denotes number of recovery slices,
+                                 `-r1n`: computes c = s/max(1,log2(s)), where
+                                         'c' denotes number of recovery slices,
                                          'log2' denotes logarithm base 2, and
                                          's' denotes the number preceeding the
                                          'n' suffix (1 in this case) multiplied
@@ -89,11 +89,25 @@ PAR2 Options:
                              the number exceeds the maximum of 65535.
   -e,  --recovery-offset     Recovery slice start offset. Default 0.
   -c,  --comment             Add PAR2 comment. Can be specified multiple times.
-       --packet-redundancy   How critical packets are repeated, can be either:
-                                 none: only store a single copy of packets
-                                 pow2: repeat packets in a power-of-2 fashion
-                                       amongst recovery packets
+       --packet-redundancy   How many copies of critical packets to use in
+                             recovery files. This option uses the same syntax
+                             as `--recovery-slices` but is computed against the
+                             number of recovery slices in the file, instead of
+                             the input slice count (the 'l' and 's' suffixes
+                             are unavailable).
+                             The following special values can also be used:
+                                 none: only store a single copy of packets,
+                                       without interleaving. Also causes
+                                       `--min-packet-redundancy` and
+                                       `--max-packet-redundancy` to be ignored
+                                 pow2: alias for `2o`
                              Default is `pow2`.
+    --min-packet-redundancy  Minimum number of critical packet copies. Also
+                             conrols the number of copies in the index file.
+                             Default is 1
+    --max-packet-redundancy  Maximum number of critical packet copies in
+                             recovery files. 0 means no limit.
+                             Default is 0
   -f,  --filepath-format     How to format input file paths, can be either:
                                  basename: discard paths
                                  keep: retain full paths as specified
@@ -126,6 +140,8 @@ Output Options:
                              Note that this will not delete existing PAR2
                              recovery files that match the base PAR2 name, but
                              wouldn't be written to.
+       --write-sync          Sync written files before exit (e.g. via fsync).
+                             This option doesn't take any parameters.
   -n,  --std-naming          Use standard naming scheme for recovery files,
                              instead of that popularized by par2cmdline. Output
                              names will look like xxx.vol12-22.par2 instead of
@@ -168,36 +184,77 @@ Output Options:
        --noindex             Don't output an index file (file with no recovery
                              blocks). This option takes no value.
 
-Performance Options:
+I/O Tuning Options:
 
-  -m,  --memory              Maximum amount of memory to use for recovery
-                             slices. If all recovery slices cannot be held in
-                             memory, ParPar will run multiple passes on input
-                             data to generate recovery, so increasing this
-                             value can improve performance. Default is auto-
-                             detected based on total/free RAM, typically 75% of
-                             free RAM up to 8192MB.
-                             Note that additional memory is used during
-                             processing, particularly if large slice sizes are
-                             being used.
-  -t,  --threads             Limit number of threads to use. Default equals
-                             number of CPU cores.
-       --min-chunk-size      Minimum chunking size. Set to 0 to disable
-                             chunking. This is a tradeoff between sequential
-                             and random I/O. It is preferrable to use larger
-                             values (or 0) on hard disks, where random I/O is
-                             slow, but smaller values on flash based storage,
-                             where random I/O is faster, relative to bandwidth.
+       --min-chunk-size      Minimum chunking size. Allowing smaller chunks
+                             generally improves efficiency, but increases
+                             per-chunk overhead. Set to 0 to disable chunking.
                              Default `128K`.
-       --seq-read-size       Target read buffer size for sequential reading.
-                             Actually buffer size will vary, and may be
-                             significantly larger depending on memory limit
-                             supplied. Default `4M`
-       --proc-batch-size     Number of slices to submit as a job for GF
-                             calculation.
-       --proc-buffer-size    Number of additional slices to buffer. Set to 0
-                             to disable bufferring. Default equals
-                             `--proc-batch-size`
+       --seq-read-size       Maximum read buffer size for sequential reading.
+                             This option also limits the amount of recovery
+                             that can be processed per slice on each read pass.
+                             Default `4M`
+       --chunk-read-threads  Maximum number of concurrent read requests during
+                             chunking. Note that this may be limited by 4 [see
+                             https://nodejs.org/api/cli.html#uv_threadpool_sizesize]
+                             Default `2`
+       --read-buffers        Maximum number of read buffers to read into and
+                             send to processing backend. Default `8`
+       --read-hash-queue     Number of read buffers to queue up for hashing
+                             before reading from a different file. Lower
+                             values may be more optimal on disks with faster
+                             random access. Default `5`
+       --md5-batch-size      Number of recovery slices to submit as a batch for
+                             hashing. Default `8`
+       --recovery-buffers    Number of recovery slices to buffer from backend.
+                             Default is `ceil(--hash-batch-size * 1.5)`
+       --hash-method         Algorithm for hashing input data. Process can
+                             crash if CPU does not support selected method.
+                             Choices are (all platforms):
+                                 scalar: generic 2x MD5 + slice-by-4 CRC
+                             x86/ARM only choices:
+                                 simd: compute 2x MD5 using SSE2 (x86) or
+                                       NEON (ARM)
+                                 crc: compute CRC using PCLMULQDQ (x86) or
+                                      ARMv8-CRC
+                                 simd-crc: combined 'simd' and 'crc'
+                             x86 only choices:
+                                 bmi: use BMI1 and PCLMULQDQ
+                                 avx512: use AVX512VL and PCLMULQDQ
+       --md5-method          Highest level algorithm for hashing recovery data.
+                             This option may be limited by `--md5-batch-size`.
+                             Process can crash if CPU does not support selected
+                             method.
+                             Choices are (all platforms):
+                                 scalar: generic implementation (1-2x lanes)
+                             x86 only choices:
+                                 sse: SSE2 implementation (4-8x lanes)
+                                 avx2: AVX2 implementation (8-16x lanes)
+                                 xop: XOP implementation (4-8x lanes)
+                                 avx512f: AVX512F implementation (16-32x lanes)
+                                 avx512vl: AVX512VL 128/256-bit implementation
+                                           (4-16x lanes)
+                             ARMv7/AArch64 only choices:
+                                 neon: NEON implementation (4-8x lanes)
+                             AArch64 only choices:
+                                 sve2: SVE2 implementation (4+ lanes)
+
+CPU Tuning Options:
+
+  -m,  --memory              Maximum amount of memory to use for computing
+                             recovery. ParPar will run multiple passes on input
+                             data to generate recovery if insufficient memory
+                             is allowed, so increasing this value can improve
+                             performance. Default is auto-detected based on
+                             total/free RAM, typically 75% of free RAM up to
+                             8192MB.
+                             Note that this does not include read buffers.
+                             Set to 0 to disable memory limit.
+  -t,  --threads             Limit number of threads to use. Default equals
+                             number of CPU cores/threads.
+       --proc-batch-size     Number of slices to submit as a batch for GF
+                             calculation. Default is roughly 12 (dependent on
+                             GF method)
        --method              Algorithm for performing GF multiplies. Process
                              can crash if CPU does not support selected method.
                              Choices are (all platforms):
@@ -224,13 +281,78 @@ Performance Options:
                                  affine2x-avx512: half width variant of affine-avx512
                              ARMv7/AArch64 only choices:
                                  shuffle-neon: NEON variant of shuffle-sse
+                                 clmul-neon: split 8-bit polynomial multiplication (NEON)
+                             AArch64 only choices:
                                  shuffle128-sve: SVE variant of shuffle-neon
                                  shuffle128-sve2: SVE2 variant of shuffle-neon
                                  shuffle2x128-sve2: half width variant of shuffle-neon (requires SVE width >= 256 bits)
                                  shuffle512-sve2: SVE2 variant of shuffle-vbmi (requires SVE width >= 512 bits)
-                                 clmul-neon: split 8-bit polynomial multiplication (NEON)
                                  clmul-sve2: SVE2 variant of clmul-neon
                              Default is auto-detected.
+       --loop-tile-size      Target size used for loop tiling optimisation.
+                             Default is 0 (auto-detected)
+
+OpenCL Options:
+
+  Warning: OpenCL support is currently considered experimental and unstable.
+
+       --opencl-process      Enable processing on OpenCL device. If a value is
+                             specified, allocate this portion of wokload to
+                             this device. Suffix the value with a %, e.g. `50%`
+                             If this portion isn't specified, it is derived
+                             from the device's memory limit.
+       --opencl-device       OpenCL platform/device selection. This can be a
+                             device name, or a platform ID followed by a device
+                             ID, separated with a colon. For the latter form, a
+                             blank ID refers to the default platform/device.
+                             Default is `:` (i.e. default platform and device)
+                             Use `--opencl-list` to obtain IDs and names.
+       --opencl-memory       Maximum amount of memory to use for computing
+                             recovery. If unspecified, will use a portion of
+                             the device's global memory (currently 80%)
+       --opencl-method       Algorithm for performing GF multiplies. Choices
+                             are:
+                                 lookup: split 2x 8-bit table lookup
+                                 lookup_half: `lookup` but halved table size
+                                 lookup_nc: `lookup` without caching data
+                                 lookup_half_nc: `lookup_half` and `lookup_nc`
+                                 log: full log/exp table (2x 128KB) lookup
+                                 log_small: `log` with 16.25KB exp table
+                                 log_small2: `log_small` with 40KB log table
+                                 log_tiny: `log` with 8.5KB exp table
+                                 log_small_lm: `log_small` but constants copied
+                                               to local memory
+                                 log_tiny_lm: `log_tiny` but constants copied
+                                              to local memory
+                                 by2: table-less bit-shifting technique
+                             Default is `lookup`
+                             Note: some of these methods are known to fail on
+                             some platforms.
+       --opencl-batch-size   Number of slices to submit as a batch for GF
+                             calculation.
+       --opencl-iter-count   Target number of iterations per workgroup.
+       --opencl-grouping     Target number of recovery slices to generate per
+                             workgroup.
+       --opencl-minchunk     Minimum chunk size to send to the device. Default
+                             is 32KB.
+       --opencl              Shorthand for above options without 'opencl-'
+                             prefix, specified in a single comma-separated
+                             list. Options not specified in this list use the
+                             above as defaults. This option can be specified
+                             multiple times to use multiple OpenCL devices.
+                             Example:
+                               --opencl device=0:0,process=33% --opencl
+                               device=0:1,process=40% --opencl-memory 1G
+                             This enables two OpenCL devices, allocating 33% of
+                             the workload to device 0:0 and 40% to 0:1, with
+                             each having a 1GB memory limit. The remaining 27%
+                             is computed on the CPU.
+       --cpu-minchunk        Target minimum chunk size to process on the CPU.
+                             Default is 64KB
+       --opencl-list         Prints a list of available OpenCL platforms and
+                             devices, along with IDs, and exits. If the value
+                             `all` is passed, will list all OpenCL devices,
+                             otherwise will only list GPU devices.
 
 UI Options:
 
@@ -247,6 +369,9 @@ UI Options:
                              otherwise). Errors will still be displayed
   -?,  --help                Displays this list of options
        --version             Print application version number and exit
+       --json                Format output as JSON and print to stdout instead
+                             of stderr. Note that errors still go to stderr and
+                             won't be JSON.
 
 Input Files:
 
@@ -259,6 +384,11 @@ Input Files:
                              directories given on the command line without
                              recursion.
                              This option takes no values.
+  -L,  --skip-symlinks       If specified, all symbolic links will be ignored.
+                             Note that this affects file symlinks as well as
+                             directory traversal (if `--recurse` is specified).
+                             By default, all symlinks are followed.
+                             This option takes no values.
   -i,  --input-file          Supply a text file which lists files, separated by
                              newlines, to be included as input. Can be `-` to
                              read from stdin, or a command prefixed with
@@ -270,6 +400,10 @@ Input Files:
   -0,  --input-file0         Same as the `--input-file` option, except files
                              are separated by null characters instead of
                              newlines.
+       --input-file-enc      Encoding used on all specified input files. Must
+                             be a NodeJS recognised encoding, which includes
+                             `utf8`, `utf16le` and `latin1`. Default is `utf8`.
+                             Note that BOMs will not be interpreted.
 
 ------------------
 Examples

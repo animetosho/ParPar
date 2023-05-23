@@ -73,4 +73,20 @@ static HEDLEY_ALWAYS_INLINE void md5_extract_mb_neon(void* dst, void* state, int
 	if(idx == 3)
 		vst1q_u8((uint8_t*)dst, vreinterpretq_u8_u32(vcombine_u32(vget_high_u32(tmp1.val[1]), vget_high_u32(tmp2.val[1]))));
 }
+static HEDLEY_ALWAYS_INLINE void md5_extract_all_mb_neon(void* dst, void* state, int group) {
+	uint32x4_t* state_ = (uint32x4_t*)state + group*4;
+	uint32x4x4_t t;
+	t.val[0] = state_[0];
+	t.val[1] = state_[1];
+	t.val[2] = state_[2];
+	t.val[3] = state_[3];
+#if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+	t.val[0] = vreinterpretq_u32_u8(vrev32q_u8(vreinterpretq_u8_u32(t.val[0])));
+	t.val[1] = vreinterpretq_u32_u8(vrev32q_u8(vreinterpretq_u8_u32(t.val[1])));
+	t.val[2] = vreinterpretq_u32_u8(vrev32q_u8(vreinterpretq_u8_u32(t.val[2])));
+	t.val[3] = vreinterpretq_u32_u8(vrev32q_u8(vreinterpretq_u8_u32(t.val[3])));
+#endif
+	vst4q_u32((uint32_t*)dst, t);
+}
+
 #endif

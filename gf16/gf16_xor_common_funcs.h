@@ -103,9 +103,9 @@ void _FN(gf16_xor_prepare)(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRIC
 
 #ifdef _AVAILABLE
 # if MWORD_SIZE == 64
-GF_PREPARE_PACKED_FUNCS(gf16_xor, _FNSUFFIX, sizeof(_mword)*16, _FN(gf16_xor_prepare_block), _FN(gf16_xor_prepare_blocku), XOR512_MULTI_REGIONS, _MM_END, _mword checksum = _MMI(setzero)(), _FN(gf16_checksum_block), _FN(gf16_checksum_blocku), _FN(gf16_checksum_zeroes), _FN(gf16_checksum_prepare))
+GF_PREPARE_PACKED_FUNCS(gf16_xor, _FNSUFFIX, sizeof(_mword)*16, _FN(gf16_xor_prepare_block), _FN(gf16_xor_prepare_blocku), XOR512_MULTI_REGIONS, _MM_END, _mword checksum = _MMI(setzero)(), _FN(gf16_checksum_block), _FN(gf16_checksum_blocku), _FN(gf16_checksum_exp), _FN(gf16_checksum_prepare), sizeof(_mword))
 # else
-GF_PREPARE_PACKED_FUNCS(gf16_xor, _FNSUFFIX, sizeof(_mword)*16, _FN(gf16_xor_prepare_block), _FN(gf16_xor_prepare_blocku), 1, _MM_END, _mword checksum = _MMI(setzero)(), _FN(gf16_checksum_block), _FN(gf16_checksum_blocku), _FN(gf16_checksum_zeroes), _FN(gf16_checksum_prepare))
+GF_PREPARE_PACKED_FUNCS(gf16_xor, _FNSUFFIX, sizeof(_mword)*16, _FN(gf16_xor_prepare_block), _FN(gf16_xor_prepare_blocku), 1, _MM_END, _mword checksum = _MMI(setzero)(), _FN(gf16_checksum_block), _FN(gf16_checksum_blocku), _FN(gf16_checksum_exp), _FN(gf16_checksum_prepare), sizeof(_mword))
 # endif
 #else
 GF_PREPARE_PACKED_FUNCS_STUB(gf16_xor, _FNSUFFIX)

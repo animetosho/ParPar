@@ -1,0 +1,15 @@
+{
+  "name": "parpar-build",
+  "version": "0.4.0",
+  "description": "Helper to build ParPar binary",
+  "license": "CC0-1.0",
+  "author": "Anime Tosho",
+  "main": "build.js",
+  "engines": {
+    "node": ">=10"
+  },
+  "dependencies" : {
+    "nexe" : "4.0.0-beta.15",
+    "browserify" : "^17.0.0"
+  }
+}

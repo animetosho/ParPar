@@ -8,13 +8,14 @@ static HEDLEY_ALWAYS_INLINE void _FN(gf_add_x)(
 	const uint16_t *HEDLEY_RESTRICT coefficients,
 	const int doPrefetch, const char* _pf
 ) {
-	assert((len & (sizeof(_mword)-1)) == 0);
-	assert(((uintptr_t)_dst & (sizeof(_mword)-1)) == 0);
-	assert(len > 0);
+	ASSUME(((uintptr_t)_dst & (sizeof(_mword)-1)) == 0);
+	ASSUME(len > 0);
 	
 	GF16_MULADD_MULTI_SRC_UNUSED(18);
 	UNUSED(coefficients);
 	unsigned vecStride = (unsigned)((uintptr_t)scratch); // abuse this otherwise unused variable
+	ASSUME((len & (sizeof(_mword)*vecStride-1)) == 0);
+	// vecStride assumed to be a known compile-time constant
 	
 	for(intptr_t ptr = -(intptr_t)len; ptr; ptr += sizeof(_mword)*vecStride) {
 		for(unsigned v=0; v<vecStride; v++) {
@@ -50,7 +51,8 @@ static HEDLEY_ALWAYS_INLINE void _FN(gf_add_x)(
 		
 		if(vecStride == 16) {
 			// for xor kernels, need to do 4x prefetch
-			const char* pfBase = _pf+(ptr>>1);
+			const char* pfBase;
+			if(doPrefetch) pfBase = _pf+(ptr>>1);
 			if(doPrefetch == 1) {
 				_mm_prefetch(pfBase, MM_HINT_WT1);
 				_mm_prefetch(pfBase+64, MM_HINT_WT1);

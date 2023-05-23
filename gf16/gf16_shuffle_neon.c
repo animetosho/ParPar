@@ -31,7 +31,7 @@ uint16_t val, qtbl_t* tbl_l, qtbl_t* tbl_h) {
 	
 	int val2 = GF16_MULTBY_TWO(val);
 	int val4 = GF16_MULTBY_TWO(val2);
-	uint16x4_t tmp = vreinterpret_u16_u32(vdup_n_u32(val << 16));
+	uint16x4_t tmp = vreinterpret_u16_u32(vdup_n_u32((uint32_t)val << 16));
 	uint16x4_t tmp2 = veor_u16(tmp, vdup_n_u16(val2));
 	tmp = vext_u16(tmp, tmp2, 2);
 	
@@ -317,16 +317,16 @@ GF16_MULADD_MULTI_FUNCS_STUB(gf16_shuffle, _neon)
 
 #if defined(__ARM_NEON)
 # ifdef __aarch64__
-GF_PREPARE_PACKED_FUNCS(gf16_shuffle, _neon, sizeof(uint8x16x2_t), gf16_prepare_block_neon, gf16_prepare_blocku_neon, 2, (void)0, uint8x16_t checksum = vdupq_n_u8(0), gf16_checksum_block_neon, gf16_checksum_blocku_neon, gf16_checksum_zeroes_neon, gf16_checksum_prepare_neon)
+GF_PREPARE_PACKED_FUNCS(gf16_shuffle, _neon, sizeof(uint8x16x2_t), gf16_prepare_block_neon, gf16_prepare_blocku_neon, 2, (void)0, uint8x16_t checksum = vdupq_n_u8(0), gf16_checksum_block_neon, gf16_checksum_blocku_neon, gf16_checksum_exp_neon, gf16_checksum_prepare_neon, sizeof(uint8x16_t))
 # else
-GF_PREPARE_PACKED_FUNCS(gf16_shuffle, _neon, sizeof(uint8x16x2_t), gf16_prepare_block_neon, gf16_prepare_blocku_neon, 1, (void)0, uint8x16_t checksum = vdupq_n_u8(0), gf16_checksum_block_neon, gf16_checksum_blocku_neon, gf16_checksum_zeroes_neon, gf16_checksum_prepare_neon)
+GF_PREPARE_PACKED_FUNCS(gf16_shuffle, _neon, sizeof(uint8x16x2_t), gf16_prepare_block_neon, gf16_prepare_blocku_neon, 1, (void)0, uint8x16_t checksum = vdupq_n_u8(0), gf16_checksum_block_neon, gf16_checksum_blocku_neon, gf16_checksum_exp_neon, gf16_checksum_prepare_neon, sizeof(uint8x16_t))
 # endif
 #else
 GF_PREPARE_PACKED_FUNCS_STUB(gf16_shuffle, _neon)
 #endif
 
 #ifdef __ARM_NEON
-GF_FINISH_PACKED_FUNCS(gf16_shuffle, _neon, sizeof(uint8x16x2_t), gf16_prepare_block_neon, gf16_copy_blocku, 1, (void)0, uint8x16_t checksum = vdupq_n_u8(0), gf16_checksum_block_neon, gf16_checksum_blocku_neon, gf16_checksum_finish_neon)
+GF_FINISH_PACKED_FUNCS(gf16_shuffle, _neon, sizeof(uint8x16x2_t), gf16_finish_block_neon, gf16_copy_blocku, 1, (void)0, gf16_checksum_block_neon, gf16_checksum_blocku_neon, gf16_checksum_exp_neon, NULL, sizeof(uint8x16_t))
 #else
 GF_FINISH_PACKED_FUNCS_STUB(gf16_shuffle, _neon)
 #endif

@@ -1,27 +1,31 @@
 
+#include "hedley.h"
+
+#ifdef HEDLEY_GCC_VERSION
+# pragma GCC diagnostic push
+# pragma GCC diagnostic ignored "-Wcast-function-type"
+#endif
 #include <node.h>
 #include <node_buffer.h>
 #include <node_version.h>
+#ifdef HEDLEY_GCC_VERSION
+# pragma GCC diagnostic pop
+#endif
 #include <v8.h>
 #include <stdlib.h>
-//#include <inttypes.h>
 #include <string.h>
 #include <uv.h>
+#include <node_object_wrap.h>
 
 #if defined(_MSC_VER)
 #include <malloc.h>
 #endif
 
-#include "../gf16/module.h"
-
-extern "C" {
-#ifdef _OPENMP
-#include <omp.h>
-#endif
-#include "../md5/md5.h"
-}
-
-static int MEM_ALIGN, MEM_STRIDE;
+#include "../gf16/controller.h"
+#include "../gf16/controller_cpu.h"
+#include "../gf16/controller_ocl.h"
+#include "../gf16/threadqueue.h"
+#include "../hasher/hasher.h"
 
 
 using namespace v8;
@@ -31,40 +35,52 @@ using namespace v8;
 #if NODE_VERSION_AT_LEAST(0, 11, 0)
 // for node 0.12.x
 #define FUNC(name) static void name(const FunctionCallbackInfo<Value>& args)
+#define HANDLE_SCOPE HandleScope scope(isolate)
 #define FUNC_START \
 	Isolate* isolate = args.GetIsolate(); \
-	HandleScope scope(isolate)
+	HANDLE_SCOPE
 
 # if NODE_VERSION_AT_LEAST(8, 0, 0)
 #  define NEW_STRING(s) String::NewFromOneByte(isolate, (const uint8_t*)(s), NewStringType::kNormal).ToLocalChecked()
 #  define RETURN_ERROR(e) { isolate->ThrowException(Exception::Error(String::NewFromOneByte(isolate, (const uint8_t*)(e), NewStringType::kNormal).ToLocalChecked())); return; }
-#  define ARG_TO_INT(a) (a).As<Integer>()->Value()
+#  define ARG_TO_NUM(t, a) (a).As<t>()->Value()
 #  define ARG_TO_OBJ(a) (a).As<Object>()
 # else
 #  define NEW_STRING(s) String::NewFromUtf8(isolate, s)
 #  define RETURN_ERROR(e) { isolate->ThrowException(Exception::Error(String::NewFromUtf8(isolate, e))); return; }
-#  define ARG_TO_INT(a) (a)->ToInteger()->Value()
+#  define ARG_TO_NUM(t, a) (a)->To##t()->Value()
 #  define ARG_TO_OBJ(a) (a)->ToObject()
 # endif
 
 #define RETURN_VAL(v) args.GetReturnValue().Set(v)
 #define RETURN_UNDEF return;
+#define RETURN_BUFFER RETURN_VAL
 #define ISOLATE isolate,
+#define NEW_OBJ(o) o::New(isolate)
+#define BUFFER_TYPE Local<Object>
+#define PERSIST_VALUE(p, v) p.Reset(isolate, v)
+#define PERSIST_CLEAR(p) p.Reset()
 
 #else
 // for node 0.10.x
 #define FUNC(name) static Handle<Value> name(const Arguments& args)
-#define FUNC_START HandleScope scope
+#define HANDLE_SCOPE HandleScope scope
+#define FUNC_START HANDLE_SCOPE
 #define NEW_STRING String::New
-#define ARG_TO_INT(a) (a)->ToInteger()->Value()
+#define ARG_TO_NUM(t, a) (a)->To##t()->Value()
 #define ARG_TO_OBJ(a) (a)->ToObject()
 #define RETURN_ERROR(e) \
 	return ThrowException(Exception::Error( \
 		String::New(e)) \
 	)
 #define RETURN_VAL(v) return scope.Close(v)
+#define RETURN_BUFFER(v) RETURN_VAL(v->handle_)
 #define RETURN_UNDEF RETURN_VAL( Undefined() );
 #define ISOLATE
+#define NEW_OBJ(o) o::New()
+#define BUFFER_TYPE node::Buffer*
+#define PERSIST_VALUE(p, v) p = Persistent<Value>::New(v)
+#define PERSIST_CLEAR(p) p.Dispose()
 
 #endif
 
@@ -75,582 +91,1153 @@ using namespace v8;
 #endif
 
 #if NODE_VERSION_AT_LEAST(12, 0, 0)
+# define OBJ_HAS(obj, key) (obj)->Has(isolate->GetCurrentContext(), NEW_STRING(key)).ToChecked()
+# define GET_OBJ(obj, key) (obj)->Get(isolate->GetCurrentContext(), NEW_STRING(key)).ToLocalChecked()
 # define SET_OBJ(obj, key, val) (obj)->Set(isolate->GetCurrentContext(), NEW_STRING(key), val).Check()
 # define GET_ARR(obj, idx) (obj)->Get(isolate->GetCurrentContext(), idx).ToLocalChecked()
+# define SET_ARR(obj, idx, val) (obj)->Set(isolate->GetCurrentContext(), idx, val).Check()
+# define SET_OBJ_FUNC(obj, key, f) (obj)->Set(isolate->GetCurrentContext(), NEW_STRING(key), f->GetFunction(isolate->GetCurrentContext()).ToLocalChecked()).Check()
 #else
+# define OBJ_HAS(obj, key) (obj)->Has(NEW_STRING(key))
+# define GET_OBJ(obj, key) (obj)->Get(NEW_STRING(key))
 # define SET_OBJ(obj, key, val) (obj)->Set(NEW_STRING(key), val)
 # define GET_ARR(obj, idx) (obj)->Get(idx)
+# define SET_ARR(obj, idx, val) (obj)->Set(idx, val)
+# define SET_OBJ_FUNC(obj, key, f) (obj)->Set(NEW_STRING(key), f->GetFunction())
 #endif
 
 
 
-int mmActiveTasks = 0;
-
-#ifdef _OPENMP
-FUNC(SetMaxThreads) {
-	FUNC_START;
-	
-	if (args.Length() < 1)
-		RETURN_ERROR("Argument required");
-	if (mmActiveTasks)
-		RETURN_ERROR("Calculation already in progress");
-	
-	ppgf_set_num_threads(ARG_TO_INT(args[0]));
-	
-	RETURN_UNDEF
-}
-#endif
-
-FUNC(GetNumThreads) {
-	FUNC_START;
-	RETURN_VAL(Integer::New(ISOLATE ppgf_get_num_threads()));
-}
-
-FUNC(PrepInput) {
-	FUNC_START;
-	
-	if (args.Length() < 2 || !node::Buffer::HasInstance(args[0]) || !node::Buffer::HasInstance(args[1]))
-		RETURN_ERROR("Two Buffers required");
-	
-	size_t destLen = node::Buffer::Length(args[1]),
-		inputLen = node::Buffer::Length(args[0]);
-	char* dest = node::Buffer::Data(args[1]);
-	char* src = node::Buffer::Data(args[0]);
-	
-	if((uintptr_t)dest & (MEM_ALIGN-1))
-		RETURN_ERROR("Destination not aligned");
-	if(((inputLen + (MEM_STRIDE-1)) & ~(MEM_STRIDE-1)) > destLen)
-		RETURN_ERROR("Destination not large enough to hold input");
-	
-	ppgf_prep_input(destLen, inputLen, dest, src);
-	
-	RETURN_UNDEF
-}
-
-FUNC(AlignmentOffset) {
-	FUNC_START;
-	
-	if (args.Length() < 1)
-		RETURN_ERROR("Argument required");
-	
-	if (!node::Buffer::HasInstance(args[0]))
-		RETURN_ERROR("Argument must be a Buffer");
-	
-	RETURN_VAL( Integer::New(ISOLATE (intptr_t)node::Buffer::Data(args[0]) & (MEM_ALIGN-1)) );
-}
-
-#define CLEANUP_MM { \
-	delete[] inputs; \
-	delete[] iNums; \
-	delete[] outputs; \
-	delete[] oNums; \
-}
-
-
-// async stuff
-struct MMRequest {
-	~MMRequest() {
 #if NODE_VERSION_AT_LEAST(0, 11, 0)
-		inputBuffers.Reset();
-		outputBuffers.Reset();
-		obj_.Reset();
-#else
-		inputBuffers.Dispose();
-		outputBuffers.Dispose();
-		//if (obj_.IsEmpty()) return;
-		obj_.Dispose();
-		obj_.Clear();
-#endif
-		CLEANUP_MM
-	};
-#if NODE_VERSION_AT_LEAST(0, 11, 0)
-	Isolate* isolate;
-#endif
-	Persistent<Object> obj_;
-	uv_work_t work_req_;
-	
-	const void* const* inputs;
-	uint_fast16_t* iNums;
-	unsigned int numInputs;
-	size_t len;
-	void** outputs;
-	uint_fast16_t* oNums;
-	unsigned int numOutputs;
-	bool add;
-	
-	// persist copies of buffers for the duration of the job
-	Persistent<Array> inputBuffers;
-	Persistent<Array> outputBuffers;
-};
-
-static void MMWork(uv_work_t* work_req) {
-	MMRequest* req = (MMRequest*)work_req->data;
-	ppgf_multiply_mat(
-		req->inputs, req->iNums, req->numInputs, req->len, req->outputs, req->oNums, req->numOutputs, req->add
-	);
-}
-static void MMAfter(uv_work_t* work_req, int status) {
-	assert(status == 0);
-	MMRequest* req = (MMRequest*)work_req->data;
-	
-	mmActiveTasks--;
-#if NODE_VERSION_AT_LEAST(0, 11, 0)
-	HandleScope scope(req->isolate);
-	Local<Object> obj = Local<Object>::New(req->isolate, req->obj_);
-# if NODE_VERSION_AT_LEAST(10, 0, 0)
-	node::async_context ac;
-	memset(&ac, 0, sizeof(ac));
-	node::MakeCallback(req->isolate, obj, "ondone", 0, NULL, ac);
-# else
-	node::MakeCallback(req->isolate, obj, "ondone", 0, NULL);
-# endif
-#else
-	HandleScope scope;
-	node::MakeCallback(req->obj_, "ondone", 0, NULL);
-#endif
-	
-	delete req;
-}
-
-FUNC(MultiplyMulti) {
-	FUNC_START;
-	
-	if (mmActiveTasks)
-		RETURN_ERROR("Calculation already in progress");
-	if (args.Length() < 4)
-		RETURN_ERROR("4 arguments required");
-	
-	if (!args[0]->IsArray() || !args[1]->IsArray())
-		RETURN_ERROR("Inputs and inputBlockNumbers must be arrays");
-	if (!args[2]->IsArray() || !args[3]->IsArray())
-		RETURN_ERROR("Outputs and recoveryBlockNumbers must be arrays");
-	
-	unsigned int numInputs = Local<Array>::Cast(args[0])->Length();
-	unsigned int numOutputs = Local<Array>::Cast(args[2])->Length();
-	
-	if(numInputs != Local<Array>::Cast(args[1])->Length())
-		RETURN_ERROR("Input and inputBlockNumber arrays must have the same length");
-	if(numOutputs != Local<Array>::Cast(args[3])->Length())
-		RETURN_ERROR("Output and recoveryBlockNumber arrays must have the same length");
-	
-	Local<Object> oInputs = ARG_TO_OBJ(args[0]);
-	Local<Object> oIBNums = ARG_TO_OBJ(args[1]);
-	void** inputs = new void*[numInputs];
-	uint_fast16_t* iNums = new uint_fast16_t[numInputs];
-	
-	Local<Object> oOutputs = ARG_TO_OBJ(args[2]);
-	Local<Object> oRBNums = ARG_TO_OBJ(args[3]);
-	void** outputs = new void*[numOutputs];
-	uint_fast16_t* oNums = new uint_fast16_t[numOutputs];
-	
-	#define RTN_ERROR(m) { \
-		CLEANUP_MM \
-		RETURN_ERROR(m); \
-	}
-	
-	size_t len = 0;
-	for(unsigned int i = 0; i < numInputs; i++) {
-		Local<Value> input = GET_ARR(oInputs, i);
-		if (!node::Buffer::HasInstance(input))
-			RTN_ERROR("All inputs must be Buffers");
-		
-		inputs[i] = node::Buffer::Data(input);
-		uintptr_t inputAddr = (uintptr_t)inputs[i];
-		if (inputAddr & (MEM_ALIGN-1))
-			RTN_ERROR("All input buffers must be address aligned");
-		
-		if(i) {
-			if (node::Buffer::Length(input) != len)
-				RTN_ERROR("All inputs' length must be equal");
-		} else {
-			len = node::Buffer::Length(input);
-			if ((len & (MEM_STRIDE-1)) != 0)
-				RTN_ERROR("Length of input must be a multiple of stride");
-		}
-		
-		int ibNum = ARG_TO_INT(GET_ARR(oIBNums, i));
-		if (ibNum < 0 || ibNum > 32767)
-			RTN_ERROR("Invalid input block number specified");
-		iNums[i] = ibNum;
-	}
-	
-	
-	for(unsigned int i = 0; i < numOutputs; i++) {
-		Local<Value> output = GET_ARR(oOutputs, i);
-		if (!node::Buffer::HasInstance(output))
-			RTN_ERROR("All outputs must be Buffers");
-		if (node::Buffer::Length(output) < len)
-			RTN_ERROR("All outputs' length must equal or greater than the input's length");
-		// the length of output buffers should all be equal, but I'm too lazy to check for that :P
-		outputs[i] = node::Buffer::Data(output);
-		if ((uintptr_t)outputs[i] & (MEM_ALIGN-1))
-			RTN_ERROR("All output buffers must be address aligned");
-		int rbNum = ARG_TO_INT(GET_ARR(oRBNums, i));
-		if (rbNum < 0 || rbNum > 65535)
-			RTN_ERROR("Invalid recovery block number specified");
-		oNums[i] = rbNum;
-	}
-	
-	#undef RTN_ERROR
-	
-	bool add = false;
-	if (args.Length() >= 5) {
-#if NODE_VERSION_AT_LEAST(8, 0, 0)
-		add = args[4].As<Boolean>()->Value();
-#else
-		add = args[4]->ToBoolean()->Value();
-#endif
-	}
-	
-	ppgf_maybe_setup_gf();
-	
-	if (args.Length() >= 6 && args[5]->IsFunction()) {
-		MMRequest* req = new MMRequest();
-		req->work_req_.data = req;
-#if NODE_VERSION_AT_LEAST(0, 11, 0)
-		// use BaseObject / AsyncWrap instead? meh
-		req->isolate = isolate;
-#endif
-		
-		req->inputs = inputs;
-		req->iNums = iNums;
-		req->numInputs = numInputs;
-		req->len = len;
-		req->outputs = outputs;
-		req->oNums = oNums;
-		req->numOutputs = numOutputs;
-		req->add = add;
-		
-#if NODE_VERSION_AT_LEAST(0, 11, 0)
-		Local<Object> obj = Object::New(isolate);
-		SET_OBJ(obj, "ondone", args[5]);
-		req->obj_.Reset(ISOLATE obj);
-		//if (env->in_domain())
-		//	req->obj_->Set(env->domain_string(), env->domain_array()->Get(0));
-		
-		// keep a copy of the buffers so that they don't get GC'd whilst being written to
-		req->inputBuffers.Reset(ISOLATE Local<Array>::Cast(args[0]));
-		req->outputBuffers.Reset(ISOLATE Local<Array>::Cast(args[2]));
-#else
-		req->obj_ = Persistent<Object>::New(ISOLATE Object::New());
-		req->obj_->Set(NEW_STRING("ondone"), args[5]);
-		//SetActiveDomain(req->obj_); // never set in node_zlib.cc - perhaps domains aren't that important?
-		
-		// keep a copy of the buffers so that they don't get GC'd whilst being written to
-		req->inputBuffers = Persistent<Array>::New(ISOLATE Local<Array>::Cast(args[0]));
-		req->outputBuffers = Persistent<Array>::New(ISOLATE Local<Array>::Cast(args[2]));
-#endif
-		
-		mmActiveTasks++;
-		uv_queue_work(
-#if NODE_VERSION_AT_LEAST(0, 11, 0)
-			//env->event_loop(),
-			uv_default_loop(),
-#else
-			uv_default_loop(),
-#endif
-			&req->work_req_,
-			MMWork,
-			MMAfter
-		);
-		// does req->obj_ need to be returned?
-	} else {
-		ppgf_multiply_mat(
-			inputs, iNums, numInputs,
-			len, outputs, oNums, numOutputs, add
-		);
-		CLEANUP_MM
-	}
-	RETURN_UNDEF
-}
-
-FUNC(Finish) {
-	FUNC_START;
-	
-	if (args.Length() < 2)
-		RETURN_ERROR("At least two arguments required");
-	
-	if (!args[0]->IsArray())
-		RETURN_ERROR("First argument must be an array");
-	
-	unsigned int numInputs = Local<Array>::Cast(args[0])->Length();
-	unsigned int allocArrSize = numInputs;
-	if(numInputs < 1) RETURN_UNDEF
-	
-	Local<Object> oInputs = ARG_TO_OBJ(args[0]);
-	bool calcMd5 = false;
-	if (args.Length() >= 3 && !args[2]->IsUndefined()) {
-		if (!args[2]->IsArray())
-			RETURN_ERROR("MD5 contexts not an array");
-		if (Local<Array>::Cast(args[2])->Length() != numInputs)
-			RETURN_ERROR("Number of MD5 contexts doesn't equal number of inputs");
-		calcMd5 = true;
-		
-		if(numInputs % MD5_SIMD_NUM)
-			// if calculating MD5, allocate some more space to make parallel processing easier
-			allocArrSize += MD5_SIMD_NUM - (numInputs % MD5_SIMD_NUM);
-	}
-	uint16_t** inputs = new uint16_t*[allocArrSize];
-	
-	#define RTN_ERROR(m) { \
-		delete[] inputs; \
-		RETURN_ERROR(m); \
-	}
-	
-	size_t len = (size_t)ARG_TO_INT(args[1]);
-	if (len % 2)
-		RTN_ERROR("Length must be a multiple of 2");
-	size_t bufLen = 0;
-	for(unsigned int i = 0; i < numInputs; i++) {
-		Local<Value> input = GET_ARR(oInputs, i);
-		if (!node::Buffer::HasInstance(input))
-			RTN_ERROR("All inputs must be Buffers");
-		inputs[i] = (uint16_t*)node::Buffer::Data(input);
-		
-		size_t currentLen = node::Buffer::Length(input);
-		if (currentLen < len)
-			RTN_ERROR("All inputs' length must be at least specified size");
-		if(i) {
-			if (currentLen != bufLen)
-				RTN_ERROR("All inputs' length must be equal");
-		} else {
-			bufLen = currentLen;
-		}
-		if((uintptr_t)(node::Buffer::Data(input)) & (MEM_ALIGN-1))
-			RETURN_ERROR("All inputs' must be aligned");
-	}
-	if ((bufLen & (MEM_STRIDE-1)) != 0)
-		RTN_ERROR("Length of input must be a multiple of stride");
-	#undef RTN_ERROR
-	
-	MD5_CTX** md5 = NULL;
-	MD5_CTX dummyMd5;
-	if(calcMd5) {
-		Local<Object> oMd5 = ARG_TO_OBJ(args[2]);
-		md5 = new MD5_CTX*[allocArrSize];
-		
-		unsigned int i = 0;
-		for(; i < numInputs; i++) {
-			Local<Value> md5Ctx = GET_ARR(oMd5, i);
-			if (!node::Buffer::HasInstance(md5Ctx) || node::Buffer::Length(md5Ctx) != sizeof(MD5_CTX)) {
-				delete[] inputs;
-				delete[] md5;
-				RETURN_ERROR("Invalid MD5 contexts provided");
-			}
-			md5[i] = (MD5_CTX*)node::Buffer::Data(md5Ctx);
-			if(md5[i]->dataLen > MD5_BLOCKSIZE) {
-				delete[] inputs;
-				delete[] md5;
-				RETURN_ERROR("Invalid MD5 contexts provided");
-			}
-		}
-		// for padding, fill with dummy pointers
-		for(; i < allocArrSize; i++) {
-			md5[i] = &dummyMd5;
-			inputs[i] = inputs[0];
-		}
-		dummyMd5.dataLen = md5[0]->dataLen;
-	}
-	
-	// TODO: make this stuff async
-	ppgf_finish_input(numInputs, inputs, bufLen);
-	if(calcMd5) {
-		int i=0;
-		#pragma omp parallel for num_threads(ppgf_get_num_threads())
-		for(i=0; i<(int)numInputs; i+=MD5_SIMD_NUM) {
-			md5_multi_update(md5 + i, (const void**)(inputs + i), len);
-		}
-		delete[] md5;
-	}
-	
-	delete[] inputs;
-	RETURN_UNDEF
-}
-
-FUNC(MD5Start) {
-	FUNC_START;
-	MD5_CTX* ctx;
-#if NODE_VERSION_AT_LEAST(0, 11, 0)
-	Local<Object> buff = BUFFER_NEW(sizeof(MD5_CTX));
-#else
-	node::Buffer* buff = BUFFER_NEW(sizeof(MD5_CTX));
-#endif
-	
-	ctx = (MD5_CTX*)node::Buffer::Data(buff);
-	md5_init(ctx);
-	
-	// in some cases, we want to pre-populate some data
-	if (args.Length() > 0 && !args[0]->IsUndefined()) {
-		if (!node::Buffer::HasInstance(args[0]))
-			RETURN_ERROR("First argument must be a Buffer");
-		
-		size_t len = node::Buffer::Length(args[0]);
-		if (len > MD5_BLOCKSIZE)
-			RETURN_ERROR("Init data too long");
-		
-		memcpy(ctx->data, node::Buffer::Data(args[0]), len);
-		ctx->dataLen = (uint8_t)len;
-		ctx->length = len << 3;
-	}
-	
-#if NODE_VERSION_AT_LEAST(0, 11, 0)
-	RETURN_VAL(buff);
-#else
-	RETURN_VAL(buff->handle_);
-#endif
-}
-
-// finish single MD5
-FUNC(MD5Finish) {
-	FUNC_START;
-	
-	if (args.Length() < 1 || !node::Buffer::HasInstance(args[0]))
-		RETURN_ERROR("First argument must be a Buffer");
-	
-	if(node::Buffer::Length(args[0]) != sizeof(MD5_CTX))
-		RETURN_ERROR("Invalid MD5 context length");
-	
-	/*
-	Local<Object> o = ARG_TO_OBJ(args[0]);
-	// TODO: check object validity
-	
-	// copy to MD5 ctx
-	MD5_CTX ctx;
-	ctx.A = o.Get(NEW_STRING("A"))->ToUint32().Value();
-	ctx.B = o.Get(NEW_STRING("B"))->ToUint32().Value();
-	ctx.C = o.Get(NEW_STRING("C"))->ToUint32().Value();
-	ctx.D = o.Get(NEW_STRING("D"))->ToUint32().Value();
-	ctx.length = ARG_TO_INT(o.Get(NEW_STRING("length")));
-	ctx.dataLen = o.Get
+// copied from node::GetCurrentEventLoop [https://github.com/nodejs/node/pull/17109]
+static inline uv_loop_t* getCurrentLoop(Isolate* isolate, int) {
+	/* -- don't have access to node::Environment :()
+	Local<Context> context = isolate->GetCurrentContext();
+	if(context.IsEmpty())
+		return uv_default_loop();
+	return node::Environment::GetCurrent(context)->event_loop();
 	*/
 	
-	MD5_CTX* ctx = (MD5_CTX*)node::Buffer::Data(args[0]);
-	if(ctx->dataLen > MD5_BLOCKSIZE)
-		RETURN_ERROR("Invalid MD5 context data");
+# if NODE_VERSION_AT_LEAST(9, 3, 0) || (NODE_MAJOR_VERSION == 8 && NODE_MINOR_VERSION >= 10) || (NODE_MAJOR_VERSION == 6 && NODE_MINOR_VERSION >= 14)
+	return node::GetCurrentEventLoop(isolate);
+# endif
+	return uv_default_loop();
+}
+#else
+static inline uv_loop_t* getCurrentLoop(int) {
+	return uv_default_loop();
+}
+#endif
+
+
+struct CallbackWrapper {
+	CallbackWrapper() : hasCallback(false) {}
 	
 #if NODE_VERSION_AT_LEAST(0, 11, 0)
-	Local<Object> md5 = BUFFER_NEW(16);
-	md5_final((unsigned char*)node::Buffer::Data(md5), ctx);
-	RETURN_VAL(md5);
-#else
-	node::Buffer* md5 = BUFFER_NEW(16);
-	md5_final((unsigned char*)node::Buffer::Data(md5), ctx);
-	RETURN_VAL(md5->handle_);
-#endif
-}
-
-// update two MD5 contexts with one input
-FUNC(MD5Update2) {
-	FUNC_START;
-	
-	if (args.Length() < 3)
-		RETURN_ERROR("3 arguments required");
-	if (!node::Buffer::HasInstance(args[0]) || !node::Buffer::HasInstance(args[1]) || !node::Buffer::HasInstance(args[2]))
-		RETURN_ERROR("All arguments must be Buffers");
-	
-	if(node::Buffer::Length(args[0]) != sizeof(MD5_CTX) || node::Buffer::Length(args[1]) != sizeof(MD5_CTX))
-		RETURN_ERROR("Invalid MD5 context length");
-	if(((MD5_CTX*)node::Buffer::Data(args[0]))->dataLen > MD5_BLOCKSIZE
-	|| ((MD5_CTX*)node::Buffer::Data(args[1]))->dataLen > MD5_BLOCKSIZE)
-		RETURN_ERROR("Invalid MD5 context data");
-	
-	
-	// TODO: test 2 buffer update methods
-	
-	MD5_CTX *md5[MD5_SIMD_NUM];
-	char* inputs[MD5_SIMD_NUM];
-	
-#if MD5_SIMD_NUM == 1
-	inputs[0] = node::Buffer::Data(args[2]);
-	size_t len = node::Buffer::Length(args[2]);
-	md5[0] = (MD5_CTX*)node::Buffer::Data(args[0]);
-	md5_multi_update(md5, (const void**)inputs, len);
-	
-	md5[0] = (MD5_CTX*)node::Buffer::Data(args[1]);
-	md5_multi_update(md5, (const void**)inputs, len);
-#else
-	MD5_CTX dummyMd5;
-	for(unsigned int i=0; i<MD5_SIMD_NUM; i++) {
-		md5[i] = &dummyMd5;
-		inputs[i] = node::Buffer::Data(args[2]);
+	Isolate* isolate;
+	// use BaseObject / AsyncWrap instead? meh
+	explicit CallbackWrapper(Isolate* _isolate, const Local<Value>& callback) : isolate(_isolate) {
+		attachCallback(_isolate, callback);
 	}
-	md5[0] = (MD5_CTX*)node::Buffer::Data(args[0]);
-	md5[1] = (MD5_CTX*)node::Buffer::Data(args[1]);
-	dummyMd5.dataLen = md5[0]->dataLen;
-	
-	md5_multi_update(md5, (const void**)inputs, node::Buffer::Length(args[2]));
-#endif
-	
-	RETURN_UNDEF
-}
-
-FUNC(MD5UpdateZeroes) {
-	FUNC_START;
-	
-	if (args.Length() < 2)
-		RETURN_ERROR("2 arguments required");
-	if (!node::Buffer::HasInstance(args[0]))
-		RETURN_ERROR("First argument must be a Buffer");
-	
-	if(node::Buffer::Length(args[0]) != sizeof(MD5_CTX))
-		RETURN_ERROR("Invalid MD5 context length");
-	if(((MD5_CTX*)node::Buffer::Data(args[0]))->dataLen > MD5_BLOCKSIZE)
-		RETURN_ERROR("Invalid MD5 context data");
-	
-	if(sizeof(size_t) < 6) {
-		// 32-bit platform, may need to feed via multiple passes
-#if NODE_VERSION_AT_LEAST(8, 0, 0)
-		double len = args[1].As<Number>()->Value();
 #else
-		double len = args[1]->NumberValue();
+	CallbackWrapper(const Local<Value>& callback) {
+		attachCallback(callback);
+	}
 #endif
-		MD5_CTX* md5 = (MD5_CTX*)node::Buffer::Data(args[0]);
-		#define MD5_MAX_LEN 0x7fffffff
-		while(len > MD5_MAX_LEN) {
-			md5_update_zeroes(md5, MD5_MAX_LEN);
-			len -= MD5_MAX_LEN;
+	~CallbackWrapper() {
+		PERSIST_CLEAR(value);
+		detachCallback();
+	};
+	Persistent<Object> obj_;
+	// persist copy of buffer for the duration of the job
+	Persistent<Value> value;
+	bool hasCallback;
+	
+#if NODE_VERSION_AT_LEAST(0, 11, 0)
+	void attachCallback(Isolate* _isolate, const Local<Value>& callback) {
+		isolate = _isolate;
+		Local<Object> obj = NEW_OBJ(Object);
+		SET_OBJ(obj, "ondone", callback);
+		obj_.Reset(ISOLATE obj);
+		//if (env->in_domain())
+		//	obj_->Set(env->domain_string(), env->domain_array()->Get(0));
+		hasCallback = true;
+	}
+#else
+	void attachCallback(const Local<Value>& callback) {
+		obj_ = Persistent<Object>::New(NEW_OBJ(Object));
+		obj_->Set(NEW_STRING("ondone"), callback);
+		//SetActiveDomain(obj_); // never set in node_zlib.cc - perhaps domains aren't that important?
+		hasCallback = true;
+	}
+#endif
+	void detachCallback() {
+#if NODE_VERSION_AT_LEAST(0, 11, 0)
+		obj_.Reset();
+#else
+		//if (obj_.IsEmpty()) return;
+		obj_.Dispose();
+		obj_.Clear(); // TODO: why this line?
+#endif
+		hasCallback = false;
+	}
+	
+	void attachValue(const Local<Value>& val) {
+		PERSIST_VALUE(value, val);
+	}
+	void call(int argc, Local<Value>* argv) {
+#if NODE_VERSION_AT_LEAST(0, 11, 0)
+		Local<Object> obj = Local<Object>::New(isolate, obj_);
+# if NODE_VERSION_AT_LEAST(10, 0, 0)
+		node::async_context ac;
+		memset(&ac, 0, sizeof(ac));
+		node::MakeCallback(isolate, obj, "ondone", argc, argv, ac);
+# else
+		node::MakeCallback(isolate, obj, "ondone", argc, argv);
+# endif
+#else
+		node::MakeCallback(obj_, "ondone", argc, argv);
+#endif
+	}
+	
+	inline void call() {
+		HANDLE_SCOPE;
+		call(0, nullptr);
+	}
+	inline void call(const HandleScope&) {
+		call(0, nullptr);
+	}
+	inline void call(std::initializer_list<Local<Value>> args) {
+		std::vector<Local<Value>> argList(args);
+		call(argList.size(), argList.data());
+	}
+};
+
+
+struct GfOclSpec {
+	int platformId, deviceId;
+	size_t sliceOffset, sliceSize;
+	
+	Galois16OCLMethods method;
+	Galois16Methods cksumMethod;
+	unsigned inputGrouping, inputMinGrouping, targetIters, targetGrouping;
+};
+static bool load_ocl() {
+	static bool oclLoaded = false;
+	if(!oclLoaded) {
+		if(PAR2ProcOCL::load_runtime()) {
+			return false;
 		}
-		#undef MD5_MAX_LEN
-		md5_update_zeroes(md5, (size_t)len);
-	} else {
-		size_t len = (size_t)ARG_TO_INT(args[1]);
-		md5_update_zeroes((MD5_CTX*)node::Buffer::Data(args[0]), len);
+		oclLoaded = true;
 	}
-	
-	RETURN_UNDEF
+	return true;
 }
 
-FUNC(SetMethod) {
+class GfProc : public node::ObjectWrap {
+public:
+	static inline void AttachMethods(Local<FunctionTemplate>& t) {
+		t->InstanceTemplate()->SetInternalFieldCount(1); // necessary for node::Object::Wrap
+		
+		NODE_SET_PROTOTYPE_METHOD(t, "close", Close);
+		NODE_SET_PROTOTYPE_METHOD(t, "freeMem", FreeMem);
+		NODE_SET_PROTOTYPE_METHOD(t, "setRecoverySlices", SetRecoverySlices);
+		NODE_SET_PROTOTYPE_METHOD(t, "setCurrentSliceSize", SetCurrentSliceSize);
+		NODE_SET_PROTOTYPE_METHOD(t, "setNumThreads", SetNumThreads);
+		NODE_SET_PROTOTYPE_METHOD(t, "setProgressCb", SetProgressCb);
+		NODE_SET_PROTOTYPE_METHOD(t, "info", GetInfo);
+		NODE_SET_PROTOTYPE_METHOD(t, "add", AddSlice);
+		NODE_SET_PROTOTYPE_METHOD(t, "end", EndInput);
+		NODE_SET_PROTOTYPE_METHOD(t, "get", GetOutputSlice);
+	}
+	
+	FUNC(New) {
+		FUNC_START;
+		if(!args.IsConstructCall())
+			RETURN_ERROR("Class must be constructed with 'new'");
+		
+		if(args.Length() < 1)
+			RETURN_ERROR("Slice size required");
+		
+		size_t sliceSize = (size_t)ARG_TO_NUM(Integer, args[0]);
+		if(sliceSize < 2 || sliceSize & 1)
+			RETURN_ERROR("Slice size is invalid");
+		
+		
+		bool useCpu = true;
+		int stagingAreas = 2;
+		int cpuMethod = GF16_AUTO;
+		unsigned cpuInputGrouping = 0, cpuInputMinGrouping = 0;
+		size_t cpuChunkLen = 0;
+		size_t cpuOffset = 0, cpuSliceSize = sliceSize;
+#define ASSIGN_INT_VAL(prop, key, var, type) \
+	if(OBJ_HAS(prop, key)) { \
+		Local<Value> v = GET_OBJ(prop, key); \
+		if(!v->IsUndefined() && !v->IsNull()) \
+			var = ARG_TO_NUM(type, v); \
+	}
+		if(args.Length() >= 2) { // CPU processing props
+			if(args[1]->IsNull()) {
+				useCpu = false;
+				cpuSliceSize = 0;
+			} else {
+				Local<Object> prop = ARG_TO_OBJ(args[1]);
+				ASSIGN_INT_VAL(prop, "method", cpuMethod, Int32)
+				// TODO: check validity of cpuMethod
+				ASSIGN_INT_VAL(prop, "input_batchsize", cpuInputGrouping, Uint32)
+				if(cpuInputGrouping > 32768)
+					RETURN_ERROR("Input batchsize is invalid");
+				ASSIGN_INT_VAL(prop, "input_minbatchsize", cpuInputMinGrouping, Uint32)
+				ASSIGN_INT_VAL(prop, "chunk_size", cpuChunkLen, Uint32)
+				ASSIGN_INT_VAL(prop, "slice_offset", cpuOffset, Integer)
+				if(cpuOffset & 1 || cpuOffset > sliceSize)
+					RETURN_ERROR("Invalid CPU slice offset");
+				ASSIGN_INT_VAL(prop, "slice_size", cpuSliceSize, Integer)
+				if(cpuSliceSize < 2 || cpuSliceSize & 1)
+					RETURN_ERROR("CPU slice size must be a multiple of 2");
+				if(cpuOffset+cpuSliceSize > sliceSize)
+					RETURN_ERROR("CPU slice offset+size cannot exceed the slice size");
+			}
+		}
+		std::vector<struct GfOclSpec> useOcl;
+		if(args.Length() >= 3 && args[2]->IsArray()) { // OpenCL processing props
+			Local<Array> props = Local<Array>::Cast(args[2]);
+			for(unsigned i=0; i<props->Length(); i++) {
+				Local<Object> prop = ARG_TO_OBJ(GET_ARR(props, i));
+				struct GfOclSpec spec{-1, -1, 0, 0, GF16OCL_AUTO, GF16_AUTO, 0, 0, 0, 0};
+				// TODO: validate platform/device
+				ASSIGN_INT_VAL(prop, "platform", spec.platformId, Int32)
+				ASSIGN_INT_VAL(prop, "device", spec.deviceId, Int32)
+				ASSIGN_INT_VAL(prop, "slice_size", spec.sliceSize, Integer)
+				ASSIGN_INT_VAL(prop, "slice_offset", spec.sliceOffset, Integer)
+				int method = 0;
+				ASSIGN_INT_VAL(prop, "method", method, Int32)
+				if(method) spec.method = (Galois16OCLMethods)method;
+				// TODO: check validity of method
+				spec.cksumMethod = (Galois16Methods)cpuMethod;
+				method = 0;
+				ASSIGN_INT_VAL(prop, "cksum_method", method, Int32)
+				if(method) spec.cksumMethod = (Galois16Methods)method;
+				ASSIGN_INT_VAL(prop, "input_batchsize", spec.inputGrouping, Int32)
+				if(spec.inputGrouping > 32768)
+					RETURN_ERROR("OpenCL input batchsize is invalid");
+				ASSIGN_INT_VAL(prop, "input_minbatchsize", spec.inputMinGrouping, Int32)
+				ASSIGN_INT_VAL(prop, "target_iters", spec.targetIters, Uint32)
+				ASSIGN_INT_VAL(prop, "target_grouping", spec.targetGrouping, Uint32)
+				if(spec.targetGrouping > 65535)
+					RETURN_ERROR("OpenCL target grouping is invalid");
+				useOcl.push_back(spec);
+			}
+		}
+		if(args.Length() >= 4 && !args[3]->IsUndefined() && !args[3]->IsNull()) {
+			stagingAreas = ARG_TO_NUM(Int32, args[3]);
+			if(stagingAreas < 1 || stagingAreas > 32768)
+				RETURN_ERROR("Staging area count is invalid");
+		}
+#undef ASSIGN_INT_VAL
+		
+		if(cpuInputGrouping * stagingAreas > 65536)
+			RETURN_ERROR("Staging area too large");
+		
+		if(!useOcl.empty()) {
+			if(!load_ocl()) {
+				RETURN_ERROR("Could not load OpenCL runtime");
+			}
+		} else if(!useCpu) {
+			RETURN_ERROR("At least the CPU or one OpenCL device must be enabled");
+		}
+		
+		GfProc *self = new GfProc(sliceSize, stagingAreas, cpuOffset, cpuSliceSize, useOcl, getCurrentLoop(ISOLATE 0));
+		size_t usedSliceSize = 0;
+		if(useCpu && !self->init_cpu((Galois16Methods)cpuMethod, cpuInputGrouping, cpuChunkLen)) {
+			delete self;
+			RETURN_ERROR("Failed to allocate memory");
+		}
+		if(useCpu) self->par2cpu->setMinInputBatchSize(cpuInputMinGrouping);
+		int oclI = 0;
+		for(const auto& oclSpec : useOcl) {
+			usedSliceSize += oclSpec.sliceSize;
+			if(oclSpec.sliceSize == 0 || (oclSpec.sliceSize & 1)) {
+				delete self;
+				RETURN_ERROR("Invalid slice size allocated to OpenCL device");
+			}
+			if(oclSpec.sliceOffset & 1 || oclSpec.sliceOffset > sliceSize) {
+				delete self;
+				RETURN_ERROR("Invalid slice offset allocated to OpenCL device");
+			}
+			if(oclSpec.sliceOffset + oclSpec.sliceSize > sliceSize) {
+				delete self;
+				RETURN_ERROR("Invalid slice offset+size allocated to OpenCL device");
+			}
+			if(!self->init_ocl(oclI, oclSpec.method, oclSpec.inputGrouping, oclSpec.targetIters, oclSpec.targetGrouping, oclSpec.cksumMethod)) {
+				delete self;
+				RETURN_ERROR("Failed to initialise OpenCL device"); // TODO: add device info
+			}
+			self->par2ocl[oclI]->setMinInputBatchSize(oclSpec.inputMinGrouping);
+			oclI++;
+		}
+		if((useCpu && usedSliceSize >= sliceSize) || (!useCpu && usedSliceSize != sliceSize)) {
+			delete self;
+			RETURN_ERROR("Slice portions allocated to OpenCL devices is invalid");
+		}
+		
+		self->Wrap(args.This());
+		RETURN_UNDEF;
+	}
+	
+private:
+	bool isRunning;
+	bool isClosed;
+	bool pendingDiscardOutput;
+	bool hasOutput;
+	CallbackWrapper progressCb;
+	PAR2Proc par2;
+	std::unique_ptr<PAR2ProcCPU> par2cpu;
+	std::vector<std::unique_ptr<PAR2ProcOCL>> par2ocl;
+	
+	// disable copy constructor
+	GfProc(const GfProc&);
+	GfProc& operator=(const GfProc&);
+	
+protected:
+	FUNC(Close) {
+		FUNC_START;
+		GfProc* self = node::ObjectWrap::Unwrap<GfProc>(args.This());
+		if(self->isRunning)
+			RETURN_ERROR("Cannot close whilst running");
+		if(self->isClosed)
+			RETURN_ERROR("Already closed");
+		
+		if(args.Length() >= 1 && !args[0]->IsUndefined() && !args[1]->IsNull()) {
+			if(!args[0]->IsFunction())
+				RETURN_ERROR("First argument must be a callback");
+			
+			CallbackWrapper* cb = new CallbackWrapper(ISOLATE Local<Function>::Cast(args[0]));
+			self->par2.deinit([cb]() {
+				cb->call();
+				delete cb;
+			});
+		} else {
+			self->par2.deinit();
+		}
+		self->isClosed = true;
+		RETURN_UNDEF;
+	}
+	
+	FUNC(FreeMem) {
+		FUNC_START;
+		GfProc* self = node::ObjectWrap::Unwrap<GfProc>(args.This());
+		if(self->isRunning)
+			RETURN_ERROR("Cannot free memory whilst running");
+		if(self->isClosed)
+			RETURN_ERROR("Already closed");
+		
+		self->par2.freeProcessingMem();
+		self->hasOutput = false;
+		RETURN_UNDEF;
+	}
+	
+	FUNC(SetCurrentSliceSize) {
+		FUNC_START;
+		GfProc* self = node::ObjectWrap::Unwrap<GfProc>(args.This());
+		if(self->isRunning)
+			RETURN_ERROR("Cannot change params whilst running");
+		if(self->isClosed)
+			RETURN_ERROR("Already closed");
+		
+		if(args.Length() < 1)
+			RETURN_ERROR("Argument required");
+		
+		size_t sliceSize = (size_t)ARG_TO_NUM(Integer, args[0]);
+		if(sliceSize < 2 || sliceSize & 1)
+			RETURN_ERROR("Slice size is invalid");
+		
+		// TODO: get slice allocation from input
+		
+		self->hasOutput = false;
+		if(!self->par2.setCurrentSliceSize(sliceSize))
+			RETURN_ERROR("Failed to allocate memory");
+		RETURN_UNDEF;
+	}
+	FUNC(SetRecoverySlices) {
+		FUNC_START;
+		GfProc* self = node::ObjectWrap::Unwrap<GfProc>(args.This());
+		if(self->isRunning)
+			RETURN_ERROR("Cannot change params whilst running");
+		if(self->isClosed)
+			RETURN_ERROR("Already closed");
+		
+		if(args.Length() < 1 || !args[0]->IsArray())
+			RETURN_ERROR("List of recovery indicies required");
+		
+		auto argOutputs = Local<Array>::Cast(args[0]);
+		int numOutputs = (int)argOutputs->Length();
+		if(numOutputs > 65534)
+			RETURN_ERROR("Too many recovery indicies specified");
+		if(numOutputs < 1)
+			RETURN_ERROR("At least one recovery index must be supplied");
+		
+		std::vector<uint16_t> outputs(numOutputs);
+		
+		for(int i=0; i<numOutputs; i++) {
+			Local<Value> output = GET_ARR(argOutputs, i);
+			outputs[i] = ARG_TO_NUM(Uint32, output);
+			if(outputs[i] > 65534)
+				RETURN_ERROR("Invalid recovery index supplied");
+		}
+		
+		self->hasOutput = false; // probably can be retained, but we'll pretend not for consistency's sake
+		if(!self->par2.setRecoverySlices(outputs))
+			RETURN_ERROR("Failed to allocate memory");
+		RETURN_UNDEF;
+	}
+	
+	FUNC(SetNumThreads) {
+		FUNC_START;
+		GfProc* self = node::ObjectWrap::Unwrap<GfProc>(args.This());
+		if(self->isRunning)
+			RETURN_ERROR("Cannot change params whilst running");
+		if(self->isClosed)
+			RETURN_ERROR("Already closed");
+		if(!self->par2cpu.get())
+			RETURN_ERROR("CPU processing not enabled");
+		
+		if(args.Length() < 1)
+			RETURN_ERROR("Integer required");
+		self->par2cpu->setNumThreads(ARG_TO_NUM(Int32, args[0]));
+		
+		RETURN_VAL(Integer::New(ISOLATE self->par2cpu->getNumThreads()));
+	}
+	
+	FUNC(SetProgressCb) {
+		FUNC_START;
+		GfProc* self = node::ObjectWrap::Unwrap<GfProc>(args.This());
+		if(self->isClosed)
+			RETURN_ERROR("Already closed");
+		
+		if(args.Length() >= 1) {
+			if(!args[0]->IsFunction())
+				RETURN_ERROR("Callback required");
+			self->progressCb.attachCallback(ISOLATE args[0]);
+		} else {
+			self->progressCb.detachCallback();
+		}
+		RETURN_UNDEF;
+	}
+	
+	FUNC(GetInfo) {
+		// num threads, method name
+		FUNC_START;
+		GfProc* self = node::ObjectWrap::Unwrap<GfProc>(args.This());
+		if(self->isClosed)
+			RETURN_ERROR("Already closed");
+		if(!self->par2.getNumRecoverySlices())
+			RETURN_ERROR("setRecoverySlices not yet called");
+		
+		Local<Object> ret = NEW_OBJ(Object);
+		if(self->par2cpu.get()) {
+			SET_OBJ(ret, "threads", Integer::New(ISOLATE self->par2cpu->getNumThreads()));
+			SET_OBJ(ret, "method_desc", NEW_STRING(self->par2cpu->getMethodName()));
+			SET_OBJ(ret, "chunk_size", Number::New(ISOLATE self->par2cpu->getChunkLen()));
+			SET_OBJ(ret, "staging_count", Integer::New(ISOLATE self->par2cpu->getStagingAreas()));
+			SET_OBJ(ret, "staging_size", Integer::New(ISOLATE self->par2cpu->getInputBatchSize()));
+			SET_OBJ(ret, "alignment", Integer::New(ISOLATE self->par2cpu->getAlignment()));
+			SET_OBJ(ret, "stride", Integer::New(ISOLATE self->par2cpu->getStride()));
+			SET_OBJ(ret, "slice_mem", Number::New(ISOLATE self->par2cpu->getAllocSliceSize()));
+			SET_OBJ(ret, "num_output_slices", Integer::New(ISOLATE self->par2cpu->getNumRecoverySlices()));
+		}
+		if(!self->par2ocl.empty()) {
+			Local<Array> oclDevInfo = Array::New(ISOLATE self->par2ocl.size());
+			int i = 0;
+			for(const auto& proc : self->par2ocl) {
+				const auto devInfo = proc->deviceInfo();
+				Local<Object> oclInfo = NEW_OBJ(Object);
+				SET_OBJ(oclInfo, "device_name", NEW_STRING(devInfo.name.c_str()));
+				SET_OBJ(oclInfo, "method_desc", NEW_STRING(proc->getMethodName()));
+				SET_OBJ(oclInfo, "staging_count", Integer::New(ISOLATE proc->getStagingAreas()));
+				SET_OBJ(oclInfo, "staging_size", Integer::New(ISOLATE proc->getInputBatchSize()));
+				SET_OBJ(oclInfo, "chunk_size", Number::New(ISOLATE proc->getChunkLen()));
+				SET_OBJ(oclInfo, "output_chunks", Integer::New(ISOLATE proc->getOutputGrouping()));
+				SET_OBJ(oclInfo, "slice_mem", Number::New(ISOLATE proc->getAllocSliceSize()));
+				SET_OBJ(oclInfo, "num_output_slices", Integer::New(ISOLATE proc->getNumRecoverySlices()));
+				SET_ARR(oclDevInfo, i++, oclInfo);
+			}
+			SET_OBJ(ret, "opencl_devices", oclDevInfo);
+		}
+		
+		RETURN_VAL(ret);
+	}
+	
+	FUNC(AddSlice) {
+		FUNC_START;
+		GfProc* self = node::ObjectWrap::Unwrap<GfProc>(args.This());
+		if(self->isClosed)
+			RETURN_ERROR("Already closed");
+		if(!self->par2.getNumRecoverySlices())
+			RETURN_ERROR("setRecoverySlices not yet called");
+		
+		if(args.Length() < 3)
+			RETURN_ERROR("Requires 3 arguments");
+		
+		if(!node::Buffer::HasInstance(args[1]))
+			RETURN_ERROR("Input buffer required");
+		if(!args[2]->IsFunction())
+			RETURN_ERROR("Callback required");
+		
+		int idx = ARG_TO_NUM(Int32, args[0]);
+		if(idx < 0 || idx > 32767)
+			RETURN_ERROR("Input index not valid");
+		
+		if(node::Buffer::Length(args[1]) > self->par2.getCurrentSliceSize())
+			RETURN_ERROR("Input buffer too large");
+		
+		CallbackWrapper* cb = new CallbackWrapper(ISOLATE Local<Function>::Cast(args[2]));
+		cb->attachValue(args[1]);
+		
+		self->isRunning = true;
+		self->hasOutput = false;
+		if(self->pendingDiscardOutput) {
+			self->pendingDiscardOutput = false;
+			self->par2.discardOutput();
+		}
+		
+		bool added = self->par2.addInput(
+			node::Buffer::Data(args[1]), node::Buffer::Length(args[1]),
+			idx, false, [ISOLATE cb, idx]() {
+				HANDLE_SCOPE;
+#if NODE_VERSION_AT_LEAST(0, 11, 0)
+				Local<Value> buffer = Local<Value>::New(cb->isolate, cb->value);
+				cb->call({ Integer::New(cb->isolate, idx), buffer });
+#else
+				Local<Value> buffer = Local<Value>::New(cb->value);
+				cb->call({ Integer::New(idx), buffer });
+#endif
+				delete cb;
+			}
+		);
+		
+		if(!added) {
+			delete cb;
+		}
+		RETURN_VAL(Boolean::New(ISOLATE added));
+	}
+	
+	FUNC(EndInput) {
+		FUNC_START;
+		GfProc* self = node::ObjectWrap::Unwrap<GfProc>(args.This());
+		// NOTE: it's possible to end without adding anything, so don't require !self->isRunning
+		if(self->isClosed)
+			RETURN_ERROR("Already closed");
+		
+		if(args.Length() < 1 || !args[0]->IsFunction())
+			RETURN_ERROR("Callback required");
+		if(!self->par2.getNumRecoverySlices())
+			RETURN_ERROR("setRecoverySlices not yet called");
+		
+		if(self->pendingDiscardOutput)
+			self->par2.discardOutput();
+		
+		CallbackWrapper* cb = new CallbackWrapper(ISOLATE Local<Function>::Cast(args[0]));
+		self->par2.endInput([cb, self]() {
+			self->isRunning = false;
+			self->hasOutput = true;
+			self->pendingDiscardOutput = true;
+			cb->call();
+			delete cb;
+		});
+		RETURN_UNDEF;
+	}
+	
+	FUNC(GetOutputSlice) {
+		FUNC_START;
+		GfProc* self = node::ObjectWrap::Unwrap<GfProc>(args.This());
+		if(self->isRunning)
+			RETURN_ERROR("Cannot get output whilst running");
+		if(self->isClosed)
+			RETURN_ERROR("Already closed");
+		if(!self->hasOutput)
+			RETURN_ERROR("No finalized output to retrieve");
+		
+		if(args.Length() < 3)
+			RETURN_ERROR("Requires 3 arguments");
+		
+		if(!node::Buffer::HasInstance(args[1]))
+			RETURN_ERROR("Output buffer required");
+		if(!args[2]->IsFunction())
+			RETURN_ERROR("Callback required");
+		
+		if(node::Buffer::Length(args[1]) < self->par2.getCurrentSliceSize())
+			RETURN_ERROR("Output buffer too small");
+		int idx = ARG_TO_NUM(Int32, args[0]);
+		if(idx < 0 || idx >= self->par2.getNumRecoverySlices())
+			RETURN_ERROR("Recovery index is not valid");
+		
+		CallbackWrapper* cb = new CallbackWrapper(ISOLATE Local<Function>::Cast(args[2]));
+		cb->attachValue(args[1]);
+		
+		self->par2.getOutput(
+			idx,
+			node::Buffer::Data(args[1]),
+			[ISOLATE cb, idx](bool cksumValid) {
+				HANDLE_SCOPE;
+#if NODE_VERSION_AT_LEAST(0, 11, 0)
+				Local<Value> buffer = Local<Value>::New(cb->isolate, cb->value);
+				cb->call({ Integer::New(cb->isolate, idx), Boolean::New(cb->isolate, cksumValid), buffer });
+#else
+				Local<Value> buffer = Local<Value>::New(cb->value);
+				Local<Value> _idx = Local<Value>::New(Integer::New(idx));
+				Local<Value> _cksumValid = Local<Value>::New(Boolean::New(cksumValid));
+				cb->call({ _idx, _cksumValid, buffer });
+#endif
+				delete cb;
+			}
+		);
+		RETURN_UNDEF;
+	}
+	
+	explicit GfProc(size_t sliceSize, int stagingAreas, size_t cpuOffset, size_t cpuSliceSize, std::vector<struct GfOclSpec> useOcl, uv_loop_t* loop)
+	: ObjectWrap(), isRunning(false), isClosed(false), pendingDiscardOutput(true), hasOutput(false) {
+		std::vector<struct PAR2ProcBackendAlloc> procs;
+		for(const auto& spec : useOcl) {
+			auto proc = new PAR2ProcOCL(loop, spec.platformId, spec.deviceId, stagingAreas);
+			par2ocl.push_back(std::unique_ptr<PAR2ProcOCL>(proc));
+			procs.push_back({static_cast<IPAR2ProcBackend*>(proc), spec.sliceOffset, spec.sliceSize});
+		}
+		if(cpuSliceSize) {
+			par2cpu.reset(new PAR2ProcCPU(loop, stagingAreas));
+			procs.push_back({static_cast<IPAR2ProcBackend*>(par2cpu.get()), cpuOffset, cpuSliceSize});
+		}
+		// TODO: handle init returning false (currently, it can't)
+		par2.init(sliceSize, procs, [&](unsigned numInputs) {
+			if(progressCb.hasCallback) {
+#if NODE_VERSION_AT_LEAST(0, 11, 0)
+				HandleScope scope(progressCb.isolate);
+				progressCb.call({ Integer::New(progressCb.isolate, numInputs) });
+#else
+				HandleScope scope;
+				progressCb.call({ Integer::New(numInputs) });
+#endif
+			}
+		});
+	}
+	
+	bool init_cpu(Galois16Methods method, unsigned inputGrouping, size_t chunkLen) {
+		return par2cpu->init(method, inputGrouping, chunkLen);
+	}
+	bool init_ocl(int idx, Galois16OCLMethods method, unsigned inputGrouping, unsigned targetIters, unsigned targetGrouping, Galois16Methods cksumMethod) {
+		return par2ocl[idx]->init(method, inputGrouping, targetIters, targetGrouping, cksumMethod);
+	}
+	
+	~GfProc() {
+		par2.deinit();
+	}
+};
+
+FUNC(GfInfo) {
 	FUNC_START;
 	
-	if (mmActiveTasks)
-		RETURN_ERROR("Calculation already in progress");
+	// get method
+	Galois16Methods method = args.Length() >= 1 && !args[0]->IsUndefined() && !args[0]->IsNull() ? (Galois16Methods)ARG_TO_NUM(Int32, args[0]) : GF16_AUTO;
 	
-	if(ppgf_set_method(
-		args.Length() >= 1 && !args[0]->IsUndefined() ? ARG_TO_INT(args[0]) : 0 /*GF16_AUTO*/,
-		args.Length() >= 2 ? ARG_TO_INT(args[1]) : 0
-	))
-		RETURN_ERROR("Unknown method specified");
+	if(method == GF16_AUTO) {
+		// TODO: accept hints
+		method = PAR2ProcCPU::default_method();
+	}
 	
-	// return method info
-#if NODE_VERSION_AT_LEAST(0, 11, 0)
-	Local<Object> ret = Object::New(isolate);
-#else
-	Local<Object> ret = Object::New();
-#endif
-	
-	int rMethod;
-	const char* rMethLong;
-	ppgf_get_method(&rMethod, &rMethLong, &MEM_ALIGN, &MEM_STRIDE);
-	
-	SET_OBJ(ret, "alignment", Integer::New(ISOLATE MEM_ALIGN));
-	SET_OBJ(ret, "stride", Integer::New(ISOLATE MEM_STRIDE));
-	SET_OBJ(ret, "method", Integer::New(ISOLATE rMethod));
-	SET_OBJ(ret, "method_desc", NEW_STRING(rMethLong));
-	
+	auto info = PAR2ProcCPU::info(method);
+	Local<Object> ret = NEW_OBJ(Object);
+	SET_OBJ(ret, "id", Integer::New(ISOLATE info.id));
+	SET_OBJ(ret, "name", NEW_STRING(info.name));
+	SET_OBJ(ret, "alignment", Integer::New(ISOLATE info.alignment));
+	SET_OBJ(ret, "stride", Integer::New(ISOLATE info.stride));
+	SET_OBJ(ret, "target_chunk", Integer::New(ISOLATE info.idealChunkSize));
+	SET_OBJ(ret, "target_grouping", Integer::New(ISOLATE info.idealInputMultiple));
 	
 	RETURN_VAL(ret);
 }
+
+static void OclDeviceToJS(
+#if NODE_VERSION_AT_LEAST(0, 11, 0)
+	  Isolate* isolate,
+#endif
+	  Local<Object>& dev, const GF16OCL_DeviceInfo& device) {
+	dev = NEW_OBJ(Object);
+	SET_OBJ(dev, "id", Integer::New(ISOLATE device.id));
+	SET_OBJ(dev, "name", NEW_STRING(device.name.c_str()));
+	SET_OBJ(dev, "vendor_id", Integer::New(ISOLATE device.vendorId));
+	SET_OBJ(dev, "available", Boolean::New(ISOLATE device.available));
+	SET_OBJ(dev, "supported", Boolean::New(ISOLATE device.supported));
+	switch(device.type) {
+		case CL_DEVICE_TYPE_DEFAULT: SET_OBJ(dev, "type", NEW_STRING("Default")); break;
+		case CL_DEVICE_TYPE_CPU: SET_OBJ(dev, "type", NEW_STRING("CPU")); break;
+		case CL_DEVICE_TYPE_GPU: SET_OBJ(dev, "type", NEW_STRING("GPU")); break;
+		case CL_DEVICE_TYPE_ACCELERATOR: SET_OBJ(dev, "type", NEW_STRING("Accelerator")); break;
+		case CL_DEVICE_TYPE_CUSTOM: SET_OBJ(dev, "type", NEW_STRING("Custom")); break;
+		default: SET_OBJ(dev, "type", NEW_STRING("Unknown")); // TODO: support multi-types?
+	}
+	SET_OBJ(dev, "memory_global", Number::New(ISOLATE device.memory));
+	SET_OBJ(dev, "cache_global", Number::New(ISOLATE device.globalCache));
+	SET_OBJ(dev, "memory_unified", Boolean::New(ISOLATE device.unifiedMemory));
+	SET_OBJ(dev, "memory_constant", Number::New(ISOLATE device.constantMemory));
+	if(!device.localMemoryIsGlobal || device.memory != device.localMemory)
+		SET_OBJ(dev, "memory_local", Number::New(ISOLATE device.localMemory));
+	SET_OBJ(dev, "memory_max_alloc", Number::New(ISOLATE device.maxAllocation));
+	SET_OBJ(dev, "workgroup_limit", Integer::New(ISOLATE device.maxWorkGroup));
+	SET_OBJ(dev, "workgroup_multiple", Integer::New(ISOLATE device.workGroupMultiple));
+	SET_OBJ(dev, "compute_units", Integer::New(ISOLATE device.computeUnits));
+}
+
+FUNC(OclDevices) {
+	FUNC_START;
+	
+	if(!load_ocl()) {
+		RETURN_ERROR("Could not load OpenCL runtime");
+	}
+	
+	const auto platforms = PAR2ProcOCL::getPlatforms();
+	Local<Array> ret = Array::New(ISOLATE platforms.size());
+	for(unsigned pf=0; pf<platforms.size(); pf++) {
+		const auto devices = PAR2ProcOCL::getDevices(pf);
+		Local<Array> retDevs = Array::New(ISOLATE devices.size());
+		for(unsigned dv=0; dv<devices.size(); dv++) {
+			Local<Object> dev;
+			OclDeviceToJS(ISOLATE dev, devices[dv]);
+			SET_ARR(retDevs, dv, dev);
+		}
+		
+		Local<Object> retPlat = NEW_OBJ(Object);
+		SET_OBJ(retPlat, "id", Integer::New(ISOLATE pf));
+		SET_OBJ(retPlat, "name", NEW_STRING(platforms[pf].c_str()));
+		SET_OBJ(retPlat, "devices", retDevs);
+		SET_ARR(ret, pf, retPlat);
+	}
+	RETURN_VAL(ret);
+}
+
+FUNC(OclDeviceInfo) {
+	FUNC_START;
+	
+	if(args.Length() < 2)
+		RETURN_ERROR("Requires 2 arguments");
+	
+	int platformId = ARG_TO_NUM(Int32, args[0]);
+	int deviceId = ARG_TO_NUM(Int32, args[1]);
+	
+	if(!load_ocl()) {
+		RETURN_ERROR("Could not load OpenCL runtime");
+	}
+	
+	if(platformId == -1) platformId = PAR2ProcOCL::defaultPlatformId();
+	if(platformId < 0)
+		RETURN_UNDEF;
+	
+	const auto device = PAR2ProcOCL::getDevice(platformId, deviceId);
+	if(!device.vendorId) // invalid device
+		RETURN_UNDEF;
+	
+	Local<Object> dev;
+	OclDeviceToJS(ISOLATE dev, device);
+	SET_OBJ(dev, "platform_id", Integer::New(ISOLATE platformId));
+	RETURN_VAL(dev);
+}
+
+
+
+class HasherInput;
+static std::vector<MessageThread*> HasherInputThreadPool;
+struct input_blockHash {
+	uint64_t size;
+	uint64_t pos;
+	int count;
+	char* ptr;
+};
+struct input_work_data {
+	IHasherInput* hasher;
+	const void* buffer;
+	size_t len;
+	struct input_blockHash* bh;
+	CallbackWrapper* cb;
+	HasherInput* self;
+};
+class HasherInput : public node::ObjectWrap {
+public:
+	static inline void AttachMethods(Local<FunctionTemplate>& t) {
+		t->InstanceTemplate()->SetInternalFieldCount(1);
+		
+		NODE_SET_PROTOTYPE_METHOD(t, "update", Update);
+		NODE_SET_PROTOTYPE_METHOD(t, "end", End);
+		NODE_SET_PROTOTYPE_METHOD(t, "reset", Reset);
+	}
+	
+	FUNC(New) {
+		FUNC_START;
+		if(!args.IsConstructCall())
+			RETURN_ERROR("Class must be constructed with 'new'");
+		
+		if(args.Length() < 2 || !node::Buffer::HasInstance(args[1]))
+			RETURN_ERROR("Requires a size and buffer");
+
+		// grab slice size + buffer to write hashes into
+		double sliceSize = 0; // double ensures enough range even if int is 32-bit
+#if NODE_VERSION_AT_LEAST(8, 0, 0)
+		sliceSize = args[0].As<Number>()->Value();
+#else
+		sliceSize = args[0]->NumberValue();
+#endif
+		
+		HasherInput *self = new HasherInput(getCurrentLoop(ISOLATE 0));
+		
+		self->bh.size = (uint64_t)sliceSize;
+		self->bh.pos = 0;
+		self->bh.count = node::Buffer::Length(args[1]) / 20;
+		self->bh.ptr = node::Buffer::Data(args[1]);
+		PERSIST_VALUE(self->ifscData, args[1]);
+		
+		self->Wrap(args.This());
+		RETURN_UNDEF;
+	}
+	
+private:
+	IHasherInput* hasher;
+	uv_loop_t* loop;
+	int queueCount;
+	
+	std::unique_ptr<MessageThread> thread;
+	uv_async_t threadSignal;
+	ThreadMessageQueue<struct input_work_data*> hashesDone;
+	
+	struct input_blockHash bh;
+	Persistent<Value> ifscData;
+	
+	// disable copy constructor
+	HasherInput(const HasherInput&);
+	HasherInput& operator=(const HasherInput&);
+	
+protected:
+	FUNC(Reset) {
+		FUNC_START;
+		HasherInput* self = node::ObjectWrap::Unwrap<HasherInput>(args.This());
+		if(self->queueCount)
+			RETURN_ERROR("Cannot reset whilst running");
+		
+		self->hasher->reset();
+		RETURN_UNDEF;
+	}
+	
+	static void thread_func(ThreadMessageQueue<void*>& q) {
+		struct input_work_data* data;
+		while((data = static_cast<struct input_work_data*>(q.pop())) != NULL) {
+			char* src_ = (char*)data->buffer;
+			size_t len = data->len;
+			// feed initial part
+			uint64_t blockLeft = data->bh->size - data->bh->pos;
+			while(len >= blockLeft) {
+				data->hasher->update(src_, blockLeft);
+				src_ += blockLeft;
+				len -= blockLeft;
+				blockLeft = data->bh->size;
+				data->bh->pos = 0;
+				
+				if(data->bh->count) {
+					data->hasher->getBlock(data->bh->ptr, 0);
+					data->bh->ptr += 20;
+					data->bh->count--;
+				} // else there's an overflow
+			}
+			if(len) data->hasher->update(src_, len);
+			data->bh->pos += len;
+			
+			
+			// signal main thread that hashing has completed
+			data->self->hashesDone.push(data);
+			uv_async_send(&(data->self->threadSignal));
+		}
+	}
+	void after_process() {
+		struct input_work_data* data;
+		while(hashesDone.trypop(&data)) {
+			static_cast<HasherInput*>(data->self)->queueCount--;
+			data->cb->call();
+			delete data->cb;
+			delete data;
+		}
+	}
+	
+	inline void thread_send(struct input_work_data* data) {
+		if(thread == nullptr) {
+			if(HasherInputThreadPool.empty()) {
+				thread.reset(new MessageThread(thread_func));
+				thread->name = "par2_hash_input";
+			} else {
+				thread.reset(HasherInputThreadPool.back());
+				HasherInputThreadPool.pop_back();
+			}
+		}
+		thread->send(data);
+	}
+	
+	FUNC(Update) {
+		FUNC_START;
+		HasherInput* self = node::ObjectWrap::Unwrap<HasherInput>(args.This());
+		// TODO: consider queueing mechanism; for now, require JS to do the queueing
+		if(!self->hasher)
+			RETURN_ERROR("Process already ended");
+		
+		if(args.Length() < 2 || !node::Buffer::HasInstance(args[0]) || !args[1]->IsFunction())
+			RETURN_ERROR("Requires a buffer and callback");
+		
+		CallbackWrapper* cb = new CallbackWrapper(ISOLATE Local<Function>::Cast(args[1]));
+		cb->attachValue(args[0]);
+		
+		self->queueCount++;
+		
+		struct input_work_data* data = new struct input_work_data;
+		data->cb = cb;
+		data->hasher = self->hasher;
+		data->buffer = node::Buffer::Data(args[0]);
+		data->len = node::Buffer::Length(args[0]);
+		data->self = self;
+		data->bh = &self->bh;
+		self->thread_send(data);
+		RETURN_UNDEF;
+	}
+	
+	void deinit() {
+		if(!hasher) return;
+		hasher->destroy();
+		if(thread != nullptr)
+			HasherInputThreadPool.push_back(thread.release());
+		uv_close(reinterpret_cast<uv_handle_t*>(&threadSignal), nullptr);
+		hasher = nullptr;
+		
+		PERSIST_CLEAR(ifscData);
+	}
+	
+	FUNC(End) {
+		FUNC_START;
+		HasherInput* self = node::ObjectWrap::Unwrap<HasherInput>(args.This());
+		if(self->queueCount)
+			RETURN_ERROR("Process currently active");
+		if(!self->hasher)
+			RETURN_ERROR("Process already ended");
+		
+		if(args.Length() < 1 || !node::Buffer::HasInstance(args[0]))
+			RETURN_ERROR("Requires a buffer");
+		if(node::Buffer::Length(args[0]) < 16)
+			RETURN_ERROR("Buffer must be at least 16 bytes long");
+		
+		// finish block hashes
+		if(self->bh.count)
+			// TODO: as zero padding can be slow, consider way of doing it in separate thread to not lock this one
+			self->hasher->getBlock(self->bh.ptr, self->bh.size - self->bh.pos);
+		
+		char* result = (char*)node::Buffer::Data(args[0]);
+		self->hasher->end(result);
+		
+		// clean up everything
+		self->deinit();
+		RETURN_UNDEF;
+	}
+	
+	explicit HasherInput(uv_loop_t* _loop) : ObjectWrap(), loop(_loop), queueCount(0), thread(nullptr) {
+		hasher = HasherInput_Create();
+		uv_async_init(loop, &threadSignal, [](uv_async_t *handle
+#if UV_VERSION_MAJOR < 1
+			, int
+#endif
+		) {
+			static_cast<HasherInput*>(handle->data)->after_process();
+		});
+		threadSignal.data = static_cast<void*>(this);
+	}
+	
+	~HasherInput() {
+		// TODO: if active, cancel thread?
+		deinit();
+	}
+};
+
+FUNC(HasherInputClear) {
+	FUNC_START;
+	for(auto thread : HasherInputThreadPool)
+		delete thread;
+	HasherInputThreadPool.clear();
+	RETURN_UNDEF;
+}
+
+class HasherOutput;
+struct output_work_data {
+	MD5Multi* hasher;
+	const void* const* buffer;
+	size_t len;
+	CallbackWrapper* cb;
+	HasherOutput* self;
+};
+class HasherOutput : public node::ObjectWrap {
+public:
+	static inline void AttachMethods(Local<FunctionTemplate>& t) {
+		t->InstanceTemplate()->SetInternalFieldCount(1);
+		
+		NODE_SET_PROTOTYPE_METHOD(t, "update", Update);
+		NODE_SET_PROTOTYPE_METHOD(t, "get", Get);
+		NODE_SET_PROTOTYPE_METHOD(t, "reset", Reset);
+	}
+	
+	FUNC(New) {
+		FUNC_START;
+		if(!args.IsConstructCall())
+			RETURN_ERROR("Class must be constructed with 'new'");
+		
+		if(args.Length() < 1)
+			RETURN_ERROR("Number of regions required");
+		unsigned regions = ARG_TO_NUM(Int32, args[0]);
+		if(regions < 1 || regions > 65534)
+			RETURN_ERROR("Invalid number of regions specified");
+		
+		HasherOutput *self = new HasherOutput(regions, getCurrentLoop(ISOLATE 0));
+		self->Wrap(args.This());
+		RETURN_UNDEF;
+	}
+	
+private:
+	MD5Multi hasher;
+	uv_loop_t* loop;
+	int numRegions;
+	bool isRunning;
+	std::vector<const void*> buffers;
+	
+	// disable copy constructor
+	HasherOutput(const HasherOutput&);
+	HasherOutput& operator=(const HasherOutput&);
+	
+protected:
+	FUNC(Reset) {
+		FUNC_START;
+		HasherOutput* self = node::ObjectWrap::Unwrap<HasherOutput>(args.This());
+		if(self->isRunning)
+			RETURN_ERROR("Cannot reset whilst running");
+		
+		self->hasher.reset();
+		RETURN_UNDEF;
+	}
+	
+	static void do_update(uv_work_t *req) {
+		struct output_work_data* data = static_cast<struct output_work_data*>(req->data);
+		data->hasher->update(data->buffer, data->len);
+	}
+	static void after_update(uv_work_t *req, int status) {
+		assert(status == 0);
+		
+		struct output_work_data* data = static_cast<struct output_work_data*>(req->data);
+		data->self->isRunning = false;
+		data->cb->call();
+		delete data->cb;
+		delete data;
+		delete req;
+	}
+	
+	FUNC(Update) {
+		FUNC_START;
+		HasherOutput* self = node::ObjectWrap::Unwrap<HasherOutput>(args.This());
+		if(self->isRunning)
+			RETURN_ERROR("Process already active");
+		
+		if(args.Length() < 1 || !args[0]->IsArray())
+			RETURN_ERROR("Requires an array of buffers");
+		
+		
+		// check array of buffers
+		int numBufs = Local<Array>::Cast(args[0])->Length();
+		if(numBufs != self->numRegions)
+			RETURN_ERROR("Invalid number of array items given");
+		
+		Local<Object> oBufs = ARG_TO_OBJ(args[0]);
+		size_t bufLen = 0;
+		for(int i = 0; i < numBufs; i++) {
+			Local<Value> buffer = GET_ARR(oBufs, i);
+			if (!node::Buffer::HasInstance(buffer))
+				RETURN_ERROR("All inputs must be Buffers");
+			self->buffers[i] = static_cast<const void*>(node::Buffer::Data(buffer));
+			
+			size_t currentLen = node::Buffer::Length(buffer);
+			if(i) {
+				if (currentLen != bufLen)
+					RETURN_ERROR("All inputs' length must be equal");
+			} else {
+				bufLen = currentLen;
+			}
+		}
+		
+		if(args.Length() > 1) {
+			if(!args[1]->IsFunction())
+				RETURN_ERROR("Second argument must be a callback");
+			
+			CallbackWrapper* cb = new CallbackWrapper(ISOLATE Local<Function>::Cast(args[1]));
+			cb->attachValue(args[0]);
+			
+			self->isRunning = true;
+			
+			uv_work_t* req = new uv_work_t;
+			struct output_work_data* data = new struct output_work_data;
+			data->cb = cb;
+			data->hasher = &(self->hasher);
+			data->buffer = self->buffers.data();
+			data->len = bufLen;
+			data->self = self;
+			req->data = data;
+			uv_queue_work(self->loop, req, do_update, after_update);
+		} else {
+			self->hasher.update(self->buffers.data(), bufLen);
+		}
+		RETURN_UNDEF;
+	}
+	
+	FUNC(Get) {
+		FUNC_START;
+		HasherOutput* self = node::ObjectWrap::Unwrap<HasherOutput>(args.This());
+		if(self->isRunning)
+			RETURN_ERROR("Process currently active");
+		
+		if(args.Length() < 1 || !node::Buffer::HasInstance(args[0]))
+			RETURN_ERROR("Requires a buffer");
+		
+		if(node::Buffer::Length(args[0]) < (unsigned)self->numRegions*16)
+			RETURN_ERROR("Buffer must be large enough to hold all hashes");
+		
+		char* result = (char*)node::Buffer::Data(args[0]);
+		self->hasher.end();
+		self->hasher.get(result);
+		RETURN_UNDEF;
+	}
+	
+	explicit HasherOutput(unsigned regions, uv_loop_t* _loop) : ObjectWrap(), hasher(regions), loop(_loop), numRegions(regions), isRunning(false), buffers(regions) {
+		// TODO: consider multi-threaded hashing
+	}
+	
+	~HasherOutput() {
+		// TODO: if isRunning, cancel
+	}
+};
+
+FUNC(SetHasherInput) {
+	FUNC_START;
+	
+	if(args.Length() < 1)
+		RETURN_ERROR("Method required");
+
+	HasherInputMethods method = (HasherInputMethods)ARG_TO_NUM(Int32, args[0]);
+	RETURN_VAL(Boolean::New(ISOLATE set_hasherInput(method)));
+}
+FUNC(SetHasherOutput) {
+	FUNC_START;
+	
+	if(args.Length() < 1)
+		RETURN_ERROR("Method required");
+
+	MD5MultiLevels level = (MD5MultiLevels)ARG_TO_NUM(Int32, args[0]);
+	set_hasherMD5MultiLevel(level);
+	RETURN_UNDEF;
+}
+
 
 
 void parpar_gf_init(
@@ -662,34 +1249,32 @@ void parpar_gf_init(
  Handle<Object> target
 #endif
 ) {
-	ppgf_init_constants();
-	ppgf_init_gf_module();
-	
-	int rMethod;
-	const char* rMethLong;
-	ppgf_get_method(&rMethod, &rMethLong, &MEM_ALIGN, &MEM_STRIDE);
-	
-	NODE_SET_METHOD(target, "md5_init", MD5Start);
-	NODE_SET_METHOD(target, "md5_final", MD5Finish);
-	NODE_SET_METHOD(target, "md5_update2", MD5Update2);
-	NODE_SET_METHOD(target, "md5_update_zeroes", MD5UpdateZeroes);
-	
-	// generate(Buffer input, int inputBlockNum, Array<Buffer> outputs, Array<int> recoveryBlockNums [, bool add [, Function callback]])
-	// ** DON'T modify buffers whilst function is running! **
-	NODE_SET_METHOD(target, "generate", MultiplyMulti);
-	// int alignment_offset(Buffer buffer)
-	NODE_SET_METHOD(target, "alignment_offset", AlignmentOffset);
-	
-	NODE_SET_METHOD(target, "copy", PrepInput);
-	NODE_SET_METHOD(target, "finish", Finish);
-	
-#ifdef _OPENMP
-	// set_max_threads(int num_threads)
-	NODE_SET_METHOD(target, "set_max_threads", SetMaxThreads);
+#if NODE_VERSION_AT_LEAST(0, 11, 0)
+	Isolate* isolate = target->GetIsolate();
 #endif
-	NODE_SET_METHOD(target, "get_num_threads", GetNumThreads);
+	HANDLE_SCOPE;
+	Local<FunctionTemplate> t = FunctionTemplate::New(ISOLATE GfProc::New);
+	GfProc::AttachMethods(t);
+	SET_OBJ_FUNC(target, "GfProc", t);
 	
-	NODE_SET_METHOD(target, "set_method", SetMethod);
+	NODE_SET_METHOD(target, "gf_info", GfInfo);
+	NODE_SET_METHOD(target, "opencl_devices", OclDevices);
+	NODE_SET_METHOD(target, "opencl_device_info", OclDeviceInfo);
+	
+	t = FunctionTemplate::New(ISOLATE HasherInput::New);
+	HasherInput::AttachMethods(t);
+	SET_OBJ_FUNC(target, "HasherInput", t);
+	
+	NODE_SET_METHOD(target, "hasher_clear", HasherInputClear);
+	
+	t = FunctionTemplate::New(ISOLATE HasherOutput::New);
+	HasherOutput::AttachMethods(t);
+	SET_OBJ_FUNC(target, "HasherOutput", t);
+	
+	NODE_SET_METHOD(target, "set_HasherInput", SetHasherInput);
+	NODE_SET_METHOD(target, "set_HasherOutput", SetHasherOutput);
+	
+	setup_hasher();
 }
 
 NODE_MODULE(parpar_gf, parpar_gf_init);

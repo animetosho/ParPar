@@ -76,6 +76,19 @@ static HEDLEY_ALWAYS_INLINE void md5_extract_mb_sse(void* dst, void* state, int 
 	if(idx == 3)
 		_mm_storeu_si128((__m128i*)dst, _mm_unpackhi_epi64(tmp2, tmp4));
 }
+static HEDLEY_ALWAYS_INLINE void md5_extract_all_mb_sse(void* dst, void* state, int group) {
+	__m128i* state_ = (__m128i*)state + group*4;
+	__m128i tmp1 = _mm_unpacklo_epi32(state_[0], state_[1]);
+	__m128i tmp2 = _mm_unpackhi_epi32(state_[0], state_[1]);
+	__m128i tmp3 = _mm_unpacklo_epi32(state_[2], state_[3]);
+	__m128i tmp4 = _mm_unpackhi_epi32(state_[2], state_[3]);
+	
+	__m128i* dst_ = (__m128i*)dst;
+	_mm_storeu_si128(dst_+0, _mm_unpacklo_epi64(tmp1, tmp3));
+	_mm_storeu_si128(dst_+1, _mm_unpackhi_epi64(tmp1, tmp3));
+	_mm_storeu_si128(dst_+2, _mm_unpacklo_epi64(tmp2, tmp4));
+	_mm_storeu_si128(dst_+3, _mm_unpackhi_epi64(tmp2, tmp4));
+}
 #endif
 
 
@@ -92,6 +105,7 @@ static HEDLEY_ALWAYS_INLINE void md5_extract_mb_sse(void* dst, void* state, int 
 # undef _FN
 
 # define md5_extract_mb_avx md5_extract_mb_sse
+# define md5_extract_all_mb_avx md5_extract_all_mb_sse
 #endif
 #ifdef ROTATE
 # undef ROTATE
@@ -131,8 +145,40 @@ static HEDLEY_ALWAYS_INLINE void md5_extract_mb_sse(void* dst, void* state, int 
 #undef ROTATE
 
 #define md5_extract_mb_xop md5_extract_mb_sse
+#define md5_extract_all_mb_xop md5_extract_all_mb_sse
 #endif
 
+
+#ifdef __AVX512VL__
+#include <immintrin.h>
+#define ROTATE _mm_rol_epi32
+#define md5mb_regions_avx512_128 md5mb_regions_sse
+#define md5mb_max_regions_avx512_128 md5mb_regions_avx512_128
+#define md5mb_alignment_avx512_128 md5mb_alignment_sse
+
+#undef F
+#undef G
+#undef H
+#undef I
+#ifdef ADDF
+# undef ADDF
+#endif
+# define F(b,c,d) _mm_ternarylogic_epi32(d,c,b,0xD8)
+# define G(b,c,d) _mm_ternarylogic_epi32(d,c,b,0xAC)
+# define H(b,c,d) _mm_ternarylogic_epi32(d,c,b,0x96)
+# define I(b,c,d) _mm_ternarylogic_epi32(d,c,b,0x63)
+
+
+#define _FN(f) f##_avx512_128
+#include "md5mb-base.h"
+#undef _FN
+
+
+#undef ROTATE
+
+#define md5_extract_mb_avx512_128 md5_extract_mb_sse
+#define md5_extract_all_mb_avx512_128 md5_extract_all_mb_sse
+#endif
 
 
 
@@ -192,7 +238,7 @@ static HEDLEY_ALWAYS_INLINE void md5_extract_mb_sse(void* dst, void* state, int 
 
 
 #define ROTATE(a, r) (r == 16 ? \
-	_mm256_shufflehi_epi16(_mm256_shufflelo_epi16(a, 0xb1), 0xb1) \
+	_mm256_shuffle_epi8(a, _mm256_set_epi32(0x0d0c0f0e, 0x09080b0a, 0x05040706, 0x01000302, 0x0d0c0f0e, 0x09080b0a, 0x05040706, 0x01000302)) \
 	: _mm256_or_si256(_mm256_slli_epi32(a, r), _mm256_srli_epi32(a, 32-r)) \
 )
 #define md5mb_regions_avx2 8
@@ -253,12 +299,58 @@ static HEDLEY_ALWAYS_INLINE void md5_extract_mb_avx2(void* dst, void* state, int
 	if(idx == 7)
 		_mm_storeu_si128((__m128i*)dst, _mm256_extracti128_si256(tmp3, 1));
 }
+static HEDLEY_ALWAYS_INLINE void md5_extract_all_mb_avx2(void* dst, void* state, int group) {
+	__m256i* state_ = (__m256i*)state + group*4;
+	__m256i tmpAB0 = _mm256_unpacklo_epi32(state_[0], state_[1]);
+	__m256i tmpAB2 = _mm256_unpackhi_epi32(state_[0], state_[1]);
+	__m256i tmpCD0 = _mm256_unpacklo_epi32(state_[2], state_[3]);
+	__m256i tmpCD2 = _mm256_unpackhi_epi32(state_[2], state_[3]);
+	
+	__m256i tmp0 = _mm256_unpacklo_epi64(tmpAB0, tmpCD0);
+	__m256i tmp1 = _mm256_unpackhi_epi64(tmpAB0, tmpCD0);
+	__m256i tmp2 = _mm256_unpacklo_epi64(tmpAB2, tmpCD2);
+	__m256i tmp3 = _mm256_unpackhi_epi64(tmpAB2, tmpCD2);
+	
+	
+	__m256i* dst_ = (__m256i*)dst;
+	_mm256_storeu_si256(dst_+0, _mm256_inserti128_si256(tmp0, _mm256_castsi256_si128(tmp1), 1));
+	_mm256_storeu_si256(dst_+1, _mm256_inserti128_si256(tmp2, _mm256_castsi256_si128(tmp3), 1));
+	_mm256_storeu_si256(dst_+2, _mm256_permute2x128_si256(tmp0, tmp1, 0x31));
+	_mm256_storeu_si256(dst_+3, _mm256_permute2x128_si256(tmp2, tmp3, 0x31));
+}
 #endif
 
 
 #ifdef ADDF
 # undef ADDF
 #endif
+
+#ifdef __AVX512VL__
+#undef ROTATE
+#define ROTATE _mm256_rol_epi32
+#define md5mb_regions_avx512_256 md5mb_regions_avx2
+#define md5mb_max_regions_avx512_256 md5mb_regions_avx512_256
+#define md5mb_alignment_avx512_256 md5mb_alignment_avx2
+
+#undef F
+#undef G
+#undef H
+#undef I
+# define F(b,c,d) _mm256_ternarylogic_epi32(d,c,b,0xD8)
+# define G(b,c,d) _mm256_ternarylogic_epi32(d,c,b,0xAC)
+# define H(b,c,d) _mm256_ternarylogic_epi32(d,c,b,0x96)
+# define I(b,c,d) _mm256_ternarylogic_epi32(d,c,b,0x63)
+
+
+#define _FN(f) f##_avx512_256
+#include "md5mb-base.h"
+#undef _FN
+
+
+#define md5_extract_mb_avx512_256 md5_extract_mb_avx2
+#define md5_extract_all_mb_avx512_256 md5_extract_all_mb_avx2
+#endif
+
 
 #ifdef __AVX512F__
 #include <immintrin.h>
@@ -430,6 +522,35 @@ static HEDLEY_ALWAYS_INLINE void md5_extract_mb_avx512(void* dst, void* state, i
 		_mm_storeu_si128((__m128i*)dst, _mm512_extracti32x4_epi32(tmp2, 3));
 	if(idx == 15)
 		_mm_storeu_si128((__m128i*)dst, _mm512_extracti32x4_epi32(tmp3, 3));
+}
+static HEDLEY_ALWAYS_INLINE void md5_extract_all_mb_avx512(void* dst, void* state, int group) {
+	__m512i* state_ = (__m512i*)state + group*4;
+	__m512i tmpAB0 = _mm512_unpacklo_epi32(state_[0], state_[1]);
+	__m512i tmpAB2 = _mm512_unpackhi_epi32(state_[0], state_[1]);
+	__m512i tmpCD0 = _mm512_unpacklo_epi32(state_[2], state_[3]);
+	__m512i tmpCD2 = _mm512_unpackhi_epi32(state_[2], state_[3]);
+	
+	__m512i tmp0 = _mm512_unpacklo_epi64(tmpAB0, tmpCD0);
+	__m512i tmp1 = _mm512_unpackhi_epi64(tmpAB0, tmpCD0);
+	__m512i tmp2 = _mm512_unpacklo_epi64(tmpAB2, tmpCD2);
+	__m512i tmp3 = _mm512_unpackhi_epi64(tmpAB2, tmpCD2);
+	
+	__m512i out0415 = _mm512_inserti64x4(tmp0, _mm512_castsi512_si256(tmp1), 1);
+	__m512i out2637 = _mm512_inserti64x4(tmp2, _mm512_castsi512_si256(tmp3), 1);
+	__m512i out8C9D = _mm512_shuffle_i64x2(tmp0, tmp1, _MM_SHUFFLE(3,2,3,2));
+	__m512i outAEBF = _mm512_shuffle_i64x2(tmp2, tmp3, _MM_SHUFFLE(3,2,3,2));
+	
+	__m512i out0123 = _mm512_shuffle_i64x2(out0415, out2637, _MM_SHUFFLE(2,0,2,0));
+	__m512i out4567 = _mm512_shuffle_i64x2(out0415, out2637, _MM_SHUFFLE(3,1,3,1));
+	__m512i out89AB = _mm512_shuffle_i64x2(out8C9D, outAEBF, _MM_SHUFFLE(2,0,2,0));
+	__m512i outCDEF = _mm512_shuffle_i64x2(out8C9D, outAEBF, _MM_SHUFFLE(3,1,3,1));
+	
+	
+	__m512i* dst_ = (__m512i*)dst;
+	_mm512_storeu_si512(dst_+0, out0123);
+	_mm512_storeu_si512(dst_+1, out4567);
+	_mm512_storeu_si512(dst_+2, out89AB);
+	_mm512_storeu_si512(dst_+3, outCDEF);
 }
 #endif
 

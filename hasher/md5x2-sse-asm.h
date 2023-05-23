@@ -9,7 +9,7 @@
 # define UNUSED(...) (void)(__VA_ARGS__)
 #endif
 
-ALIGN_TO(16, static const uint32_t md5_constants[128]) = {
+ALIGN_TO(16, static const uint32_t md5_constants_sse[128]) = {
 	// F
 	0xd76aa478L, 0xe8c7b756L, 0xd76aa478L, 0xe8c7b756L, 0x242070dbL, 0xc1bdceeeL, 0x242070dbL, 0xc1bdceeeL,
 	0xf57c0fafL, 0x4787c62aL, 0xf57c0fafL, 0x4787c62aL, 0xa8304613L, 0xfd469501L, 0xa8304613L, 0xfd469501L,
@@ -41,12 +41,12 @@ ALIGN_TO(16, static const uint32_t md5_constants[128]) = {
 	[A]"+&x"(A), [B]"+&x"(B), [C]"+&x"(C), [D]"+&x"(D), [TMPI1]"=&x"(tmpI1), [TMPI2]"=&x"(tmpI2), [TMPF1]"=&x"(tmpF1), [TMPF2]"=&x"(tmpF2), \
 	[cache0]"=&x"(cache##c0), [cache1]"=&x"(cache##c1) \
 	: \
-	[k0]"m"(md5_constants[n*8]), [k1]"m"(md5_constants[n*8+4]), [i0]"m"(_in[0][n]), [i1]"m"(_in[1][n]) :
+	[k0]"m"(md5_constants_sse[n*8]), [k1]"m"(md5_constants_sse[n*8+4]), [i0]"m"(_in[0][n]), [i1]"m"(_in[1][n]) :
 
 #define ASM_PARAMS(n) \
 	[A]"+&x"(A), [B]"+&x"(B), [C]"+&x"(C), [D]"+&x"(D), [TMPI1]"=&x"(tmpI1), [TMPI2]"=&x"(tmpI2), [TMPF1]"=&x"(tmpF1), [TMPF2]"=&x"(tmpF2) \
 	: [input0]"x"(cache0), [input1]"x"(cache1), [input2]"x"(cache2), [input3]"x"(cache3), [input4]"x"(cache4), [input5]"x"(cache5), [input6]"x"(cache6), [input7]"x"(cache7), \
-	[k0_0]"m"(md5_constants[n+0]), [k1_0]"m"(md5_constants[n+4]), [k0_1]"m"(md5_constants[n+8]), [k1_1]"m"(md5_constants[n+12]), [k0_2]"m"(md5_constants[n+16]), [k1_2]"m"(md5_constants[n+20]), [k0_3]"m"(md5_constants[n+24]) , [k1_3]"m"(md5_constants[n+28]) :
+	[k0_0]"m"(md5_constants_sse[n+0]), [k1_0]"m"(md5_constants_sse[n+4]), [k0_1]"m"(md5_constants_sse[n+8]), [k1_1]"m"(md5_constants_sse[n+12]), [k0_2]"m"(md5_constants_sse[n+16]), [k1_2]"m"(md5_constants_sse[n+20]), [k0_3]"m"(md5_constants_sse[n+24]) , [k1_3]"m"(md5_constants_sse[n+28]) :
 
 #define FN_VARS \
 	UNUSED(offset); \
@@ -62,12 +62,12 @@ ALIGN_TO(16, static const uint32_t md5_constants[128]) = {
 #define ASM_PARAMS_F(n, c0, c1) \
 	[A]"+&x"(A), [B]"+&x"(B), [C]"+&x"(C), [D]"+&x"(D), [TMPI1]"=&x"(tmpI1), [TMPI2]"=&x"(tmpI2), [TMPF1]"=&x"(tmpF1), [TMPF2]"=&x"(tmpF2) \
 	: \
-	[k0]"m"(md5_constants[n*8]), [k1]"m"(md5_constants[n*8+4]), [i0]"m"(_in[0][n]), [i1]"m"(_in[1][n]), [scratch0]"m"(scratch[c0*4]), [scratch1]"m"(scratch[c1*4]) :
+	[k0]"m"(md5_constants_sse[n*8]), [k1]"m"(md5_constants_sse[n*8+4]), [i0]"m"(_in[0][n]), [i1]"m"(_in[1][n]), [scratch0]"m"(scratch[c0*4]), [scratch1]"m"(scratch[c1*4]) :
 	
 #define ASM_PARAMS(n) \
 	[A]"+&x"(A), [B]"+&x"(B), [C]"+&x"(C), [D]"+&x"(D), [TMPI1]"=&x"(tmpI1), [TMPI2]"=&x"(tmpI2), [TMPF1]"=&x"(tmpF1), [TMPF2]"=&x"(tmpF2) \
 	: \
-	[k0_0]"m"(md5_constants[n+0]), [k1_0]"m"(md5_constants[n+4]), [k0_1]"m"(md5_constants[n+8]), [k1_1]"m"(md5_constants[n+12]), [k0_2]"m"(md5_constants[n+16]), [k1_2]"m"(md5_constants[n+20]), [k0_3]"m"(md5_constants[n+24]) , [k1_3]"m"(md5_constants[n+28]), \
+	[k0_0]"m"(md5_constants_sse[n+0]), [k1_0]"m"(md5_constants_sse[n+4]), [k0_1]"m"(md5_constants_sse[n+8]), [k1_1]"m"(md5_constants_sse[n+12]), [k0_2]"m"(md5_constants_sse[n+16]), [k1_2]"m"(md5_constants_sse[n+20]), [k0_3]"m"(md5_constants_sse[n+24]) , [k1_3]"m"(md5_constants_sse[n+28]), \
 	[input0]"m"(scratch[0]), [input1]"m"(scratch[4]), [input2]"m"(scratch[8]), [input3]"m"(scratch[12]), [input4]"m"(scratch[16]), [input5]"m"(scratch[20]), [input6]"m"(scratch[24]), [input7]"m"(scratch[28]) :
 	
 #define FN_VARS \
@@ -261,6 +261,7 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_x2_sse(__m128i* state, const 
 static HEDLEY_ALWAYS_INLINE void md5_process_block_x2_avx(__m128i* state, const uint8_t* const* HEDLEY_RESTRICT data, size_t offset) {
 	FN_VARS;
 	
+	// TODO: consider vpshufb for rotate by 16
 #define ROUND_X(IA, A, B, I, R) \
 	"vpaddd " I ", %[" STR(IA) "], %[" STR(A) "]\n" \
 	"vpaddd %[TMPF1], %[" STR(A) "], %[" STR(A) "]\n" \

@@ -42,7 +42,7 @@ static void gf16_xor_create_jit_lut_avx2(void) {
 				int reg = msk-1;
 				
 				/* if we ever support 32-bit, need to ensure that vpxor/load is fixed length */
-				pC += _jit_vpxor_m(pC, reg, reg, AX, (j-4) <<5);
+				pC += _jit_vpxor_m(pC, reg, reg, AX, lshift32(j-4, 5));
 				/* advance pointers */
 				posM += 5;
 			}
@@ -212,7 +212,7 @@ static inline void* xor_write_jit_avx(const struct gf16_xor_scratch *HEDLEY_REST
 	common_mask = _mm_and_si128(tmp3, tmp4);
 	__m128i lowest = ssse3_tzcnt_epi16(common_mask);
 	_mm_store_si128((__m128i*)common_lowest, lowest);
-	__m128i common_sub1 = _mm_sub_epi16(common_mask, _mm_set1_epi16(1));
+	__m128i common_sub1 = _mm_add_epi16(common_mask, _mm_set1_epi16(-1)); // TODO: could re-use the VPXOR constant with _mm_sign_epi16 (and invert and/not below)
 	__m128i common_elim = _mm_andnot_si128(common_sub1, common_mask);
 	
 	__m128i highest;
@@ -229,10 +229,10 @@ static inline void* xor_write_jit_avx(const struct gf16_xor_scratch *HEDLEY_REST
 	if(!xor) {
 		lowest = ssse3_tzcnt_epi16(tmp3);
 		_mm_store_si128((__m128i*)dep1_lowest, lowest);
-		tmp3 = _mm_and_si128(tmp3, _mm_sub_epi16(tmp3, _mm_set1_epi16(1)));
+		tmp3 = _mm_and_si128(tmp3, _mm_add_epi16(tmp3, _mm_set1_epi16(-1)));
 		lowest = ssse3_tzcnt_epi16(tmp4);
 		_mm_store_si128((__m128i*)dep2_lowest, lowest);
-		tmp4 = _mm_and_si128(tmp4, _mm_sub_epi16(tmp4, _mm_set1_epi16(1)));
+		tmp4 = _mm_and_si128(tmp4, _mm_add_epi16(tmp4, _mm_set1_epi16(-1)));
 	}
 	highest = ssse3_lzcnt_epi16(tmp3);
 	_mm_store_si128((__m128i*)dep1_highest, _mm_sub_epi16(_mm_set1_epi16(15), highest));
@@ -278,7 +278,7 @@ static inline void* xor_write_jit_avx(const struct gf16_xor_scratch *HEDLEY_REST
 	//_jit_pxor_r(jit, r2, r1)
 	/*
 	#define _PXOR_R_(r2, r1, tr) \
-		*(int32_t*)(jitptr) = (0xC0EF0F66 + ((r2) <<27) + ((r1) <<24)) ^ (tr)
+		write32(jitptr, (0xC0EF0F66 + ((r2) <<27) + ((r1) <<24)) ^ (tr))
 	#define _PXOR_R(r2, r1) \
 		_PXOR_R_(r2, r1, 0); \
 		jitptr += 4
@@ -381,7 +381,7 @@ static inline void* xor_write_jit_avx(const struct gf16_xor_scratch *HEDLEY_REST
 	}
 	
 	/* cmp/jcc */
-	*(uint64_t*)(jitptr) = 0x800FC03948 | (DX <<16) | (CX <<19) | ((uint64_t)JL <<32);
+	write64(jitptr, 0x800FC03948 | (DX <<16) | (CX <<19) | ((uint64_t)JL <<32));
 	return jitptr+5;
 }
 
@@ -656,7 +656,7 @@ void gf16_xor_finish_copy_blocku_avx2(void *HEDLEY_RESTRICT dst, const void *HED
 
 
 #if defined(__AVX2__) && defined(PLATFORM_AMD64)
-GF_FINISH_PACKED_FUNCS(gf16_xor, _avx2, sizeof(__m256i)*16, gf16_xor_finish_copy_block_avx2, gf16_xor_finish_copy_blocku_avx2, 1, _mm256_zeroupper(), __m256i checksum = _mm256_setzero_si256(), gf16_checksum_block_avx2, gf16_checksum_blocku_avx2, gf16_checksum_finish_avx2)
+GF_FINISH_PACKED_FUNCS(gf16_xor, _avx2, sizeof(__m256i)*16, gf16_xor_finish_copy_block_avx2, gf16_xor_finish_copy_blocku_avx2, 1, _mm256_zeroupper(), gf16_checksum_block_avx2, gf16_checksum_blocku_avx2, gf16_checksum_exp_avx2, &gf16_xor_finish_block_avx2, sizeof(__m256i))
 #else
 GF_FINISH_PACKED_FUNCS_STUB(gf16_xor, _avx2)
 #endif
@@ -671,7 +671,7 @@ static size_t xor_write_init_jit(uint8_t *jitCode) {
 	
 	/* only 64-bit supported*/
 	for(int i=3; i<16; i++) {
-		jitCode += _jit_vmovdqa_load(jitCode, i, AX, (i-4)<<5);
+		jitCode += _jit_vmovdqa_load(jitCode, i, AX, lshift32(i-4, 5));
 	}
 	return jitCode-jitCodeStart;
 }

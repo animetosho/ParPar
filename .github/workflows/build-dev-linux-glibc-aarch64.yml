@@ -5,7 +5,7 @@ on:
 jobs:
   build-dev-linux-glibc-aarch64:
     name: Build dev aarch64 Linux glibc binary
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     env:
       BUILD_ARCH: arm64
       BUILD_LOGLEVEL: verbose
@@ -15,7 +15,11 @@ jobs:
       - uses: cyberjunk/gha-ubuntu-cross@v2
         with:
           arch: 'arm64'
-      - run: npm install --production
+      - uses: actions/setup-python@v4
+        id: py
+        with:
+          python-version: '3.9' # workaround "cannot import name 'Mapping' from 'collections'" error
+      - run: npm install --production --ignore-scripts
       - run: (cd nexe && npm install --production)
       - run: (cd nexe && node build)
         env:
@@ -23,7 +27,7 @@ jobs:
           CXX: aarch64-linux-gnu-g++
           CC_host: cc
           CXX_host: c++
-      - run: xz -9e --lzma2 nexe/parpar -C > parpar.xz
+      - run: xz -9e --lzma2 nexe/parpar -c > parpar.xz
       - uses: actions/upload-artifact@v3
         with:
           path: ./parpar.xz

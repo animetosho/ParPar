@@ -33,9 +33,9 @@ int gf16_affine_available_avx2 = 0;
 
 #if defined(__GFNI__) && defined(__AVX2__)
 # ifdef PLATFORM_AMD64
-GF_PREPARE_PACKED_FUNCS(gf16_affine, _avx2, sizeof(__m256i)*2, gf16_shuffle_prepare_block_avx2, gf16_shuffle_prepare_blocku_avx2, 3, _mm256_zeroupper(), __m256i checksum = _mm256_setzero_si256(), gf16_checksum_block_avx2, gf16_checksum_blocku_avx2, gf16_checksum_zeroes_avx2, gf16_checksum_prepare_avx2)
+GF_PREPARE_PACKED_FUNCS(gf16_affine, _avx2, sizeof(__m256i)*2, gf16_shuffle_prepare_block_avx2, gf16_shuffle_prepare_blocku_avx2, 3, _mm256_zeroupper(), __m256i checksum = _mm256_setzero_si256(), gf16_checksum_block_avx2, gf16_checksum_blocku_avx2, gf16_checksum_exp_avx2, gf16_checksum_prepare_avx2, sizeof(__m256i))
 # else
-GF_PREPARE_PACKED_FUNCS(gf16_affine, _avx2, sizeof(__m256i)*2, gf16_shuffle_prepare_block_avx2, gf16_shuffle_prepare_blocku_avx2, 1, _mm256_zeroupper(), __m256i checksum = _mm256_setzero_si256(), gf16_checksum_block_avx2, gf16_checksum_blocku_avx2, gf16_checksum_zeroes_avx2, gf16_checksum_prepare_avx2)
+GF_PREPARE_PACKED_FUNCS(gf16_affine, _avx2, sizeof(__m256i)*2, gf16_shuffle_prepare_block_avx2, gf16_shuffle_prepare_blocku_avx2, 1, _mm256_zeroupper(), __m256i checksum = _mm256_setzero_si256(), gf16_checksum_block_avx2, gf16_checksum_blocku_avx2, gf16_checksum_exp_avx2, gf16_checksum_prepare_avx2, sizeof(__m256i))
 # endif
 #else
 GF_PREPARE_PACKED_FUNCS_STUB(gf16_affine, _avx2)
@@ -210,6 +210,9 @@ static HEDLEY_ALWAYS_INLINE void gf16_affine2x_muladd_x_avx2(
 	__m256i matNormD, matSwapD;
 	__m256i matNormE, matSwapE;
 	__m256i matNormF, matSwapF;
+	
+	// prevent MSVC whining
+	matNormB = matSwapB = matNormC = matSwapC = matNormD = matSwapD = matNormE = matSwapE = matNormF = matSwapF = _mm256_undefined_si256();
 	
 	__m256i depmask = gf16_affine_load_matrix(scratch, coefficients[0]);
 	matNormA = _mm256_inserti128_si256(depmask, _mm256_castsi256_si128(depmask), 1);

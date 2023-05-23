@@ -188,7 +188,8 @@ function compare_files(file1, file2) {
 		if(!packet_eq(file1[k], file2[k])) {
 			//console.log('Packet mismatch for ' + k, file1[k], file2[k]);
 			var err = new Error('Packet mismatch for ' + k);
-			err.pkts = [file1[k], file2[k]];
+			//err.pkts = [file1[k], file2[k]];
+			console.log("Packet dump:", file1[k], file2[k]);
 			throw err;
 		}
 	}
@@ -209,6 +210,8 @@ function par2_args(o) {
 	if(o.percentage) a.push('-r'+o.percentage);
 	if(o.offset) a.push('-f'+o.offset);
 	if(o.blockLimit) a.push('-l'+o.blockLimit);
+	
+	//if(o.memory) a.push('-m'+Math.round(o.memory / 1048576));
 	return a.concat([o.out], o.in);
 }
 function parpar_args(o) {
@@ -228,7 +231,9 @@ function parpar_args(o) {
 	// ParPar only tests
 	if(o.memory) a.push('-m'+o.memory);
 	if(o.chunk) a.push('--min-chunk-size='+o.chunk);
-	//if(o.seqFirst) a.push('--seq-first-pass');
+	if(o.readSize) a.push('--seq-read-size='+o.readSize);
+	if(o.procBatch) a.push('--proc-batch-size='+o.procBatch);
+	if(o.recBufs) a.push('--recovery-buffers='+o.recBufs);
 	
 	return a.concat(['-o', o.out], o.in);
 }
@@ -284,7 +289,7 @@ var delOutput = function() {
 
 
 
-console.log('Creating random input file...');
+console.log('Creating random input files...');
 // use RC4 as a fast (and consistent) random number generator (pseudoRandomBytes is sloooowwww)
 function writeRndFile(name, size) {
 	if(skipFileCreate && fs.existsSync(tmpDir + name)) return;
@@ -351,17 +356,20 @@ var allTests = [
 	// 2x memory limited tests
 	{
 		in: [tmpDir + 'test64m.bin'],
-		memory: '16m',
+		memory: 24*1048576, // 2*4*1M (procBatch) + 16M (recovery)
+		procBatch: 4,
+		recBufs: 4,
 		blockSize: 1024*1024,
 		blocks: 17,
 		cacheKey: '2'
 	},
 	{
 		in: [tmpDir + 'test1b.bin', tmpDir + 'test8b.bin', tmpDir + 'test64m.bin'],
-		memory: '8m',
-		seqFirst: true,
+		memory: 11*1048576, // 2*3*512K (procBatch) + 8M (recovery)
 		blockSize: 1024*1024,
 		chunk: 512*1024,
+		procBatch: 3,
+		recBufs: 5,
 		blocks: 40,
 		singleFile: true,
 		cacheKey: '3'
@@ -371,25 +379,31 @@ var allTests = [
 		in: [tmpDir + 'test1b.bin', tmpDir + 'test65k.bin', tmpDir + 'test13m.bin'],
 		memory: 1048573, // prime less than 1MB
 		blockSize: 524309*4, // roughly 2MB
+		chunk: 65522,
 		blocks: 7,
+		procBatch: 8,
+		recBufs: 8,
 		singleFile: true,
 		cacheKey: '4'
 	},
 	{
 		in: [tmpDir + 'test64m.bin'],
-		memory: '1m',
+		memory: 1048576,
 		blockSize: 4*1048576,
 		blocks: 24,
+		procBatch: 1,
+		recBufs: 4,
 		singleFile: true,
 		cacheKey: '5'
 	},
 	{
 		in: [tmpDir + 'test1b.bin', tmpDir + 'test8b.bin', tmpDir + 'test64m.bin'],
-		memory: '8m',
-		seqFirst: true,
+		memory: 13*1048576, // 5+8M
 		blockSize: 1024*1024,
 		chunk: 512*1024,
 		blocks: 40,
+		procBatch: 5,
+		recBufs: 1,
 		singleFile: true,
 		cacheKey: '6'
 	},
@@ -430,6 +444,15 @@ var allTests = [
 		cacheKey: '11'
 	},
 	
+	// multiple sizable files (to see if concurrent file processing causes issuse)
+	{
+		in: [tmpDir + 'test64m.bin', tmpDir + 'test13m.bin', tmpDir + 'test2200m.bin', tmpDir + 'test65k.bin'],
+		blockSize: 256*1024,
+		blocks: 10,
+		singleFile: true,
+		cacheKey: '22'
+	},
+	
 	// issue #6
 	{
 		in: [tmpDir + 'test64m.bin'],
@@ -449,7 +472,7 @@ var allTests = [
 	},
 	{
 		in: [tmpDir + 'test65k.bin'],
-		blockSize: 1048576,
+		blockSize: 1048576*12,
 		blocks: 0,
 		singleFile: true,
 		cacheKey: '21'
@@ -460,7 +483,7 @@ var allTests = [
 		in: [tmpDir + 'test64m.bin'],
 		blockSize: 2048*1048576 - 1024-68,
 		blocks: 1,
-		memory: process.arch == 'x64' ? '2.5g' : '1.5g',
+		memory: process.arch == 'x64' ? 2560*1048576 : 1536*1048576,
 		singleFile: true,
 		cacheKey: '13'
 	},
@@ -468,7 +491,7 @@ var allTests = [
 		in: [tmpDir + 'test64m.bin'],
 		blockSize: 4294967296, // 4GB, should exceed node's limit
 		blocks: 2,
-		memory: '511m',
+		memory: 511*1048576,
 		singleFile: true,
 		cacheKey: '14'
 	},
@@ -492,7 +515,7 @@ var allTests = [
 	{ // max number of blocks test
 		in: [tmpDir + 'test64m.bin'],
 		blockSize: 2048,
-		blocks: 32768, // max allowed by par2cmdline; TODO: test w/ 65536
+		blocks: 32768, // max allowed by par2cmdline; TODO: test w/ 65535
 		singleFile: true,
 		cacheKey: '17'
 	},
@@ -525,9 +548,11 @@ async.timesSeries(allTests.length, function(testNum, cb) {
 	delOutput();
 	
 	var testFiles, refFiles;
+	var execArgs = exeParpar ? (Array.isArray(exeParpar) ? exeParpar : [exeParpar]).concat(testArgs) : testArgs;
+	console.log('Executing: ' + exeNode, execArgs.map(function(arg) { return '"' + arg + '"'; }).join(' ')); // arguments not properly escaped, but should be good enough for 99% of cases
 	var timePP, timeP2;
 	timePP = Date.now();
-	proc.execFile(exeNode, exeParpar ? (Array.isArray(exeParpar) ? exeParpar : [exeParpar]).concat(testArgs) : testArgs, function(err, stdout, stderr) {
+	proc.execFile(exeNode, execArgs, function(err, stdout, stderr) {
 		timePP = Date.now() - timePP;
 		if(err) throw err;
 		

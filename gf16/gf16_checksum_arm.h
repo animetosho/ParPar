@@ -1,6 +1,8 @@
 #ifndef __GF16_CHECKSUM_H
 #define __GF16_CHECKSUM_H
 
+#include "gf16_neon_common.h"
+
 static HEDLEY_ALWAYS_INLINE uint8x16_t gf16_vec_mul2_neon(uint8x16_t v) {
 	int16x8_t _v = vreinterpretq_s16_u8(v);
 	return vreinterpretq_u8_s16(veorq_s16(
@@ -59,9 +61,8 @@ static HEDLEY_ALWAYS_INLINE void gf16_checksum_blocku_neon(const void *HEDLEY_RE
 	gf16_checksum_store(checksum, v);
 }
 
-#include "gfmat_coeff.h"
-static HEDLEY_ALWAYS_INLINE void gf16_checksum_zeroes_neon(void *HEDLEY_RESTRICT checksum, size_t blocks) {
-	int16x8_t coeff = vdupq_n_s16(gf16_exp(blocks % 65535));
+static HEDLEY_ALWAYS_INLINE void gf16_checksum_exp_neon(void *HEDLEY_RESTRICT checksum, uint16_t exp) {
+	int16x8_t coeff = vdupq_n_s16(exp);
 	uint8x16_t _checksum = gf16_checksum_load(checksum);
 	uint8x16_t res = vandq_u8(vreinterpretq_u8_s16(vshrq_n_s16(coeff, 15)), _checksum);
 	for(int i=0; i<15; i++) {
@@ -90,32 +91,6 @@ static HEDLEY_ALWAYS_INLINE void gf16_checksum_prepare_neon(void *HEDLEY_RESTRIC
 		assert(blockLen == 0);
 	}
 #undef _X
-}
-static HEDLEY_ALWAYS_INLINE int gf16_checksum_finish_neon(const void *HEDLEY_RESTRICT src, void *HEDLEY_RESTRICT checksum, const size_t blockLen, gf16_transform_block finishBlock) {
-	uint8x16_t data;
-#define _X(bl) \
-	ALIGN_TO(16, uint8_t tmp[bl]); \
-	finishBlock(tmp, src); \
-	data = vld1q_u8(tmp)
-	if(blockLen == 16) {
-		_X(16);
-	} else if(blockLen == 32) {
-		_X(32);
-	} else if(blockLen == 64) {
-		_X(64);
-	} else {
-		assert(blockLen == 0);
-	}
-#undef _X
-	
-	uint8x16_t cmp = veorq_u8(data, gf16_checksum_load(checksum));
-# ifdef __aarch64__
-	return !(vget_lane_u64(vreinterpret_u64_u32(vqmovn_u64(vreinterpretq_u64_u8(cmp))), 0));
-# else
-	uint32x4_t tmp1 = vreinterpretq_u32_u8(cmp);
-	uint32x2_t tmp2 = vorr_u32(vget_low_u32(tmp1), vget_high_u32(tmp1));
-	return !(vget_lane_u32(vpmax_u32(tmp2, tmp2), 0));
-# endif
 }
 
 #endif

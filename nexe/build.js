@@ -1,29 +1,34 @@
-var nodeVer = '8.17.0';
-var nexeBase = '.';
-var nodeSrc = nexeBase + '/node/' + nodeVer + '/_/'; // TODO: auto search folder
-var yencSrc = './yencode-src/';
-var python = 'python';
-// process.env.path = '' + process.env.path; // if need to specify a Python path
-var makeArgs = ["-j", "1"];
-var vcBuildArch = "x86"; // x86 or x64
-var useLTO = true;
-var oLevel = '-O2'; // prefer -O2 on GCC, -Os on Clang
-var isaBaseFlag = ',"-msse2"'; // set to blank for non-x86 targets
+var os = require('os');
 
-var fs = require('fs');
+// -- change these variables if desired --
+var compileConcurrency = os.cpus().length;
+var python = process.env.BUILD_PYTHON || null;
+if(process.env.BUILD_PYTHONPATH)
+	process.env.PATH = process.env.BUILD_PYTHONPATH + (os.platform() == 'win32' ? ';' : ':') + process.env.PATH; // if need to specify a Python path
+var buildArch = process.env.BUILD_ARCH || os.arch(); // x86, x64, arm, arm64
+var buildOs = process.env.BUILD_OS || os.platform();
+var nexeBase = process.env.BUILD_DIR || './build';
+var nodeVer = process.env.BUILD_NODEVER || '12.22.12'; // v12 is the oldest version with native MSVC 2019 support
+var staticness = process.env.BUILD_STATIC || (buildOs == 'linux' ? '--partly-static' : '--fully-static'); // OpenCL support requires libdl on Linux
+var vsSuite = null; // if on Windows, and it's having trouble finding Visual Studio, try set this to, e.g. 'vs2019' or 'vs2017'
+var disableLTO = !!process.env.BUILD_NO_LTO;
+var stripM32 = !!process.env.BUILD_STRIP_M32;
+// downloads can be disabled by editing the 'sourceUrl' line below; source code needs to be placed in `${nexeBase}/${nodeVer}`
+
+// fix up arch aliases
+const archAliases = {amd64: 'x64', i386: 'x86', ia32: 'x86', armhf: 'arm', aarch64: 'arm64'};
+if(buildArch in archAliases)
+	buildArch = archAliases[buildArch];
+const osAliases = {darwin: 'mac', macos: 'mac', mac: 'mac', win32: 'win', win: 'win', linux: 'linux'};
+
 var nexe = require('nexe');
-
-var isNode010 = !!nodeVer.match(/^0\.10\./);
-var ltoFlag = useLTO ? '"-flto"' : '';
-var ltoFlagC = useLTO ? ',"-flto"' : '';
-var openMpLib = ''; // for clang, set to '=libomp'
-if(process.platform == 'darwin') openMpLib = '=libomp'; // assume Clang by default if compiling on OSX
-var modulePref = isNode010?'node_':'';
-fs.statSync(yencSrc + 'yencode.cc'); // trigger error if it doesn't exist
-
-
 var path = require('path');
-var copyRecursiveSync = function(src, dest) {
+var fs = require('fs');
+var browserify = require('browserify');
+var pkg = require('../package.json');
+
+
+const copyRecursiveSync = function(src, dest) {
 	if(fs.statSync(src).isDirectory()) {
 		if(!fs.existsSync(dest)) fs.mkdirSync(dest);
 		fs.readdirSync(src).forEach(function(child) {
@@ -33,480 +38,288 @@ var copyRecursiveSync = function(src, dest) {
 		fs.copyFileSync(src, dest);
 };
 
-var gypParse = function(gyp) {
-	// very hacky fixes for Python's flexibility
-	gyp = gyp.replace(/'(\s*\n\s*')/g, "' +$1");
-	gyp = gyp.replace(/#[^'"]*?(\r?\n)/g, "$1");
-	gyp = gyp.replace(/(\n\s*)#.*?(\r?\n)/g, "$1$2");
-	gyp = gyp.replace(/(\n\s*)#.*?(\r?\n)/g, "$1$2");
-	gyp = gyp.replace(/(\n\s*)#.*?(\r?\n)/g, "$1$2");
-	gyp = gyp.replace(/(\n\s*)#.*?(\r?\n)/g, "$1$2");
-	return eval('(' + gyp + ')');
-};
-// monkey patch node.gyp
-var gypData = fs.readFileSync(nodeSrc + 'node.gyp').toString();
-var gyp = gypParse(gypData);
-
-
-var findGypTarget = function(targ) {
-	for(var i in gyp.targets)
-		if(gyp.targets[i].target_name == targ)
-			return gyp.targets[i];
-	return false;
-};
-
-// changing the GYP too much breaks nexe, so resort to monkey-patching it
-
-var doPatch = function(r, s, ignoreMissing) {
-	var m = gypData.match(r);
-	if(!m) {
-		if(ignoreMissing) return;
-		throw new Error('Could not match ' + r);
-	}
-	if(!r.global && gypData.substr(m.index+1).match(r))
-		throw new Error('Expression matched >1 times: ' + r);
-	gypData = gypData.replace(r, '$1 ' + s);
-};
-if(!findGypTarget('crcutil')) {
-	// TODO: update this to enable building yencode 1.1.0
-	doPatch(/(\},\s*['"]targets['"]: \[)/, [{
-	      "target_name": "crcutil",
-	      "type": "static_library",
-	      "sources": [
-	        "yencode/crcutil-1.0/code/crc32c_sse4.cc",
-	        "yencode/crcutil-1.0/code/multiword_64_64_cl_i386_mmx.cc",
-	        "yencode/crcutil-1.0/code/multiword_64_64_gcc_amd64_asm.cc",
-	        "yencode/crcutil-1.0/code/multiword_64_64_gcc_i386_mmx.cc",
-	        "yencode/crcutil-1.0/code/multiword_64_64_intrinsic_i386_mmx.cc",
-	        "yencode/crcutil-1.0/code/multiword_128_64_gcc_amd64_sse2.cc",
-	        "yencode/crcutil-1.0/examples/interface.cc"
-	      ],
-	      "conditions": [
-	        ['OS=="win"', {
-	          "msvs_settings": {"VCCLCompilerTool": {"EnableEnhancedInstructionSet": "2", "Optimization": "MaxSpeed", "BufferSecurityCheck": "false"}}
-	        }, {
-	          "cxxflags": ["-O3", "-fomit-frame-pointer"],
-	          "cxxflags!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"]
-	        }],
-	        // some of the ASM won't compile with LTO, so disable it for CRCUtil
-	        ['target_arch == "ia32"', {
-	          "cflags!": ['-flto'],
-	          "cxxflags!": ['-flto'],
-	        }, {
-	          "cxxflags": ['-flto'],
-	        }],
-	        ['target_arch in "ia32 x64"', {
-	          "cxxflags": ["-msse2"],
-	          "xcode_settings": {"OTHER_CXXFLAGS": ["-msse2"]}
-	        }]
-	      ],
-	      "include_dirs": ["yencode/crcutil-1.0/code", "yencode/crcutil-1.0/tests"],
-	      "defines": ["CRCUTIL_USE_MM_CRC32=0"]
-     },
-     {
-      "target_name": "parpar_gf",
-      "type": "static_library",
-      "dependencies": ["gf-complete", "multi_md5"],
-      "sources": ["parpar_gf/gf-complete/module.cc"],
-      "include_dirs": [
-        "parpar_gf/gf-complete",
-      ],
-      "conditions": [
-        ['OS=="win"', {
-          "msvs_settings": {"VCCLCompilerTool": {"OpenMP": "true", "Optimization": "MaxSpeed"}}
-        }, {
-          "cflags": ["-O3", "-Wall", "-fopenmp"+openMpLib],
-          "cxxflags": ["-O3", "-Wall", "-fopenmp"+openMpLib],
-          "ldflags": ["-fopenmp"+openMpLib]
-        }],
-        ['OS=="mac"', {
-          "xcode_settings": {
-            "OTHER_CFLAGS": ["-O3", "-Wall", "-fopenmp"+openMpLib],
-            "OTHER_CXXFLAGS": ["-O3", "-Wall", "-fopenmp"+openMpLib],
-            "OTHER_LDFLAGS": ["-fopenmp"+openMpLib]
-          }
-        }],
-        ['target_arch in "ia32 x64"', {
-          "cflags": ["-msse2"],
-          "cxxflags": ["-msse2"],
-          "xcode_settings": {"OTHER_CFLAGS": ["-msse2"], "OTHER_CXXFLAGS": ["-msse2"]}
-        }]
-      ]
-    },
-    {
-      "target_name": "multi_md5",
-      "type": "static_library",
-      "sources": ["parpar_gf/md5/md5.c", "parpar_gf/md5/md5-simd.c"],
-      "conditions": [
-        ['OS=="win"', {
-          "msvs_settings": {"VCCLCompilerTool": {"EnableEnhancedInstructionSet": "2", "Optimization": "MaxSpeed", "BufferSecurityCheck": "false"}}
-        }, {
-          "cflags": ["-O3", "-Wall", "-fomit-frame-pointer"],
-          "cflags!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"]
-        }],
-        ['OS=="mac"', {
-          "xcode_settings": {
-            "OTHER_CFLAGS": ["-O3", "-Wall", "-fomit-frame-pointer"],
-             "OTHER_CFLAGS!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"]
-          }
-        }],
-        ['target_arch in "ia32 x64"', {
-          "cflags": ["-msse2"],
-          "xcode_settings": {"OTHER_CFLAGS": ["-msse2"]}
-        }]
-      ]
-    },
-    {
-      "target_name": "gf-complete",
-      "type": "static_library",
-      "defines": ["NDEBUG"],
-      "sources": [
-        "parpar_gf/gf-complete/gf.c",
-        "parpar_gf/gf-complete/gf_w16.c",
-        "parpar_gf/gf-complete/gf_w16/shuffle128.c",
-        "parpar_gf/gf-complete/gf_w16/shuffle128_neon.c",
-        "parpar_gf/gf-complete/gf_w16/shuffle256.c",
-        "parpar_gf/gf-complete/gf_w16/shuffle512.c",
-        "parpar_gf/gf-complete/gf_w16/xor128.c",
-        "parpar_gf/gf-complete/gf_w16/xor256.c",
-        "parpar_gf/gf-complete/gf_w16/xor512.c",
-        "parpar_gf/gf-complete/gf_w16/affine128.c",
-        "parpar_gf/gf-complete/gf_w16/affine512.c"
-      ],
-      "conditions": [
-        ['OS=="win"', {
-          "msvs_settings": {"VCCLCompilerTool": {"EnableEnhancedInstructionSet": "2", "Optimization": "MaxSpeed", "BufferSecurityCheck": "false"}}
-        }, {
-          "conditions": [
-            ['OS in "linux android" and target_arch in "arm arm64"', {
-              "variables": {"has_neon%": "<!(grep -e ' neon ' -e ' asimd ' /proc/cpuinfo || true)"},
-              "conditions": [
-                ['has_neon!=""', {
-                  "cflags": ["-mfpu=neon"],
-                  "cxxflags": ["-mfpu=neon"]
-                }]
-              ]
-            }],
-            ['target_arch in "ia32 x64"', {
-              "cflags": ["-msse2"],
-              "xcode_settings": {"OTHER_CFLAGS": ["-msse2"]}
-            }]
-          ],
-          "cflags": ["-Wall","-O3","-fomit-frame-pointer","-Wno-unused-function"],
-          "cflags!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"],
-          "ldflags": []
-        }],
-        ['OS=="mac"', {
-          "xcode_settings": {
-            "OTHER_CFLAGS": ["-Wall","-O3","-fomit-frame-pointer","-Wno-unused-function"],
-            "OTHER_CFLAGS!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"],
-            "OTHER_LDFLAGS": []
-          }
-        }],
-        ['OS=="win" and target_arch=="x64"', {
-          "sources": ["parpar_gf/gf-complete/gf_w16/xor_jit_stub_masm64.asm"]
-        }]
-      ]
-    }].map(JSON.stringify).join(',')+',');
-}
-
-var tNode = findGypTarget('<(node_lib_target_name)');
-var tNodeM = "['\"]target_name['\"]:\\s*['\"]<\\(node_lib_target_name\\)['\"],";
-if(!tNode) {
-	tNode = findGypTarget('<(node_core_target_name)');
-	tNodeM = "['\"]target_name['\"]:\\s*['\"]<\\(node_core_target_name\\)['\"],";
-}
-if(!tNode) {
-	tNode = findGypTarget('node');
-	tNodeM = "['\"]target_name['\"]:\\s*['\"]node['\"],";
-}
-var tNodeMatch = new RegExp('('+tNodeM+')');
-if(tNode.sources.indexOf('yencode/yencode.cc') < 0)
-	doPatch(/(['"]src\/node_file\.cc['"],)/, "'yencode/yencode.cc','parpar_gf/src/gf.cc',");
-if(tNode.dependencies.indexOf('crcutil') < 0) {
-	if(tNode.dependencies.indexOf('deps/histogram/histogram.gyp:histogram') == 0)
-		// Node 12
-		// TODO: this gets double-replaced if run twice
-		doPatch(/('src\/node_main\.cc'[^]{2,50}'dependencies': \[ 'deps\/histogram\/histogram\.gyp:histogram')/, ",'crcutil','parpar_gf'");
-	else
-		// try to avoid matching the cctest target
-		doPatch(/('target_name': '<\([^\]]+?['"]node_js2c#host['"],)/, "'crcutil','parpar_gf',");
-}
-if(tNode.include_dirs.indexOf('yencode/crcutil-1.0/code') < 0)
-	doPatch(/(['"]<\(SHARED_INTERMEDIATE_DIR\)['"])(,?) # for node_natives\.h\r?\n/g, ",'yencode/crcutil-1.0/code', 'yencode/crcutil-1.0/examples'$2");
-// TODO: add gf stuff
-
-if(gyp.variables.library_files.indexOf('lib/yencode.js') < 0)
-	doPatch(/(['"]lib\/fs\.js['"],)/, "'lib/yencode.js',");
-
-
-// disable cctest
-var tCCT = findGypTarget('cctest');
-if(tCCT && tCCT.type == 'executable')
-	doPatch(/(['"]target_name['"]:\s*['"]cctest['"],\s*['"]type['"]:\s*)['"]executable['"]/, "'none'");
-
-// urgh, copy+paste :/
-if(!tNode.msvs_settings) {
-	doPatch(tNodeMatch, "'msvs_settings': {'VCCLCompilerTool': {'EnableEnhancedInstructionSet': '2', 'FavorSizeOrSpeed': '2', 'OpenMP': 'true'}, 'VCLinkerTool': {'GenerateDebugInformation': 'false'}},");
-} else {
-	if(!tNode.msvs_settings.VCCLCompilerTool) {
-		doPatch(new RegExp("(" + tNodeM + "[^]*?['\"]msvs_settings['\"]:\\s*\\{)"), "'VCCLCompilerTool': {'EnableEnhancedInstructionSet': '2', 'FavorSizeOrSpeed': '2', 'OpenMP': 'true'},");
-	} else if(!tNode.msvs_settings.VCCLCompilerTool.EnableEnhancedInstructionSet) {
-		doPatch(/(['"]VCCLCompilerTool['"]:\s*\{)/, "'EnableEnhancedInstructionSet': '2', 'FavorSizeOrSpeed': '2', 'OpenMP': 'true',");
-	}
-	
-	if(!tNode.msvs_settings.VCLinkerTool) {
-		doPatch(new RegExp("(" + tNodeM + "[^]*?['\"]msvs_settings['\"]:\\s*\\{)"), "'VCLinkerTool': {'GenerateDebugInformation': 'false'},");
-	} else if(!tNode.msvs_settings.VCLinkerTool.GenerateDebugInformation) {
-		doPatch(/(['"]VCLinkerTool['"]:\s*\{)/, "'GenerateDebugInformation': 'false',");
-	}
-}
-
-var patchTargetFlags = function(node, regex) {
-	var match = new RegExp('('+regex+')');
-	if(!node.cxxflags) {
-		doPatch(match, "'cxxflags': ['"+oLevel+"'"+isaBaseFlag+ltoFlagC+",'-fopenmp"+openMpLib+"'],");
-	} else if(node.cxxflags.indexOf(oLevel) < 0) {
-		doPatch(new RegExp("(" + regex + "[^]*?['\"]cxxflags['\"]:\\s*\\[)"), "'"+oLevel+"'"+isaBaseFlag+ltoFlagC+",'-fopenmp"+openMpLib+"',");
-	}
-	
-	if(!node.ldflags) {
-		doPatch(match, "'ldflags': ['-s','-fopenmp"+openMpLib+"'"+ltoFlagC+"],");
-	} else if(node.ldflags.indexOf('-s') < 0) {
-		doPatch(new RegExp("(" + regex + "[^]*?['\"]ldflags['\"]:\\s*\\[)"), "'-s'"+ltoFlagC+",");
-	}
-};
-patchTargetFlags(tNode, tNodeM);
-if(tNodeM.indexOf('node_lib_target_name')) {
-	// needed in node v8.x?
-	var tNodeExe = findGypTarget('<(node_core_target_name)');
-	if(tNodeExe)
-		patchTargetFlags(tNodeExe, "['\"]target_name['\"]:\\s*['\"]<\\(node_core_target_name\\)['\"],");
-}
-
-// strip OpenSSL exports
-doPatch(/('use_openssl_def%?':) 1,/, "0,", true);
-
-
-fs.writeFileSync(nodeSrc + 'node.gyp', gypData);
-
-
-// patch manifest
-var pkg = require('../package.json');
-var manif = fs.readFileSync(nodeSrc + 'src/res/node.rc').toString();
-manif = manif
-.replace(/1 ICON node\.ico/, '')
-.replace(/VALUE "CompanyName", "[^"]+"/, '')
-.replace(/VALUE "ProductName", "[^"]+"/, 'VALUE "ProductName", "' + pkg.name + '"')
-.replace(/VALUE "FileDescription", "[^"]+"/, 'VALUE "FileDescription", "' + pkg.description + '"')
-.replace(/VALUE "FileVersion", NODE_EXE_VERSION/, 'VALUE "FileVersion", "' + pkg.version + '"')
-.replace(/VALUE "ProductVersion", NODE_EXE_VERSION/, 'VALUE "ProductVersion", "' + pkg.version + '"')
-.replace(/VALUE "InternalName", "[^"]+"/, 'VALUE "InternalName", "parpar"');
-fs.writeFileSync(nodeSrc + 'src/res/node.rc', manif);
-
-
-var patchGypCompiler = function(file, targets) {
-	// require SSE2; TODO: tweak this?
-	var gypData = fs.readFileSync(nodeSrc + file).toString();
-	var gyp = gypParse(gypData);
-	
-	if(!gyp.target_defaults) {
-		targets = targets || 'targets';
-		gypData = gypData.replace("'"+targets+"':", "'target_defaults': {'msvs_settings': {'VCCLCompilerTool': {'EnableEnhancedInstructionSet': '2', 'FavorSizeOrSpeed': '2'}, 'VCLinkerTool': {'GenerateDebugInformation': 'false'}}, 'cxxflags': ['"+oLevel+"'"+isaBaseFlag+ltoFlagC+"], 'ldflags': ['-s'"+ltoFlagC+"]}, '"+targets+"':");
-	} else {
-		// TODO: other possibilities
-		if(!gyp.target_defaults.msvs_settings)
-			gypData = gypData.replace("'target_defaults': {", "'target_defaults': {'msvs_settings': {'VCCLCompilerTool': {'EnableEnhancedInstructionSet': '2', 'FavorSizeOrSpeed': '2'}, 'VCLinkerTool': {'GenerateDebugInformation': 'false'}},");
-		else if(!gyp.target_defaults.msvs_settings.VCCLCompilerTool || !gyp.target_defaults.msvs_settings.VCLinkerTool || !gyp.target_defaults.msvs_settings.VCCLCompilerTool.EnableEnhancedInstructionSet)
-			throw new Error('To be implemented');
-		if(!gyp.target_defaults.cxxflags)
-			gypData = gypData.replace("'target_defaults': {", "'target_defaults': {'cxxflags': ['"+oLevel+"'"+isaBaseFlag+ltoFlagC+"],");
-		else if(useLTO && gyp.target_defaults.cxxflags.indexOf('-flto') < 0)
-			throw new Error('To be implemented');
-		if(!gyp.target_defaults.ldflags)
-			gypData = gypData.replace("'target_defaults': {", "'target_defaults': {'ldflags': ['-s'"+ltoFlagC+"],");
-		else if(useLTO && gyp.target_defaults.ldflags.indexOf('-flto') < 0)
-			throw new Error('To be implemented');
-	}
-	
-	fs.writeFileSync(nodeSrc + file, gypData);
-};
-//patchGypCompiler('node.gyp');
-patchGypCompiler('deps/cares/cares.gyp');
-//patchGypCompiler('deps/http_parser/http_parser.gyp');
-patchGypCompiler('deps/openssl/openssl.gyp');
-patchGypCompiler('deps/uv/uv.gyp');
-patchGypCompiler('deps/zlib/zlib.gyp', 'conditions');
-// node 12's v8 doesn't use gyp
-if(fs.existsSync(nodeSrc + 'deps/v8/src/v8.gyp'))
-	patchGypCompiler('deps/v8/src/v8.gyp');
-else if(fs.existsSync(nodeSrc + 'deps/v8/tools/gyp/v8.gyp'))
-	patchGypCompiler('deps/v8/tools/gyp/v8.gyp');
-
-
-
-var patchFile = function(path, find, replFrom, replTo) {
-	var ext = fs.readFileSync(nodeSrc + path).toString();
-	if(!find || (find.test ? !find.test(ext) : ext.indexOf(find) < 0)) {
-		ext = ext.replace(replFrom, replTo);
-		fs.writeFileSync(nodeSrc + path, ext);
-	}
-};
-
-if(fs.existsSync(nodeSrc + 'src/node_extensions.h')) { // node 0.10.x
-	patchFile('src/node_extensions.h', 'yencode', '\nNODE_EXT_LIST_START', '\nNODE_EXT_LIST_START\nNODE_EXT_LIST_ITEM('+modulePref+'yencode)\nNODE_EXT_LIST_ITEM('+modulePref+'gf)');
-}
-if(nodeVer.startsWith('8.')) { // doesn't work for node 4 or 12, but does for 8
-	patchFile('src/node_internals.h', 'V(yencode)', 'V(async_wrap)', 'V(parpar_gf) V(yencode) V(async_wrap)');
-	// nexe fails to patch the new code, so we'll do it ourself
-	patchFile('lib/internal/bootstrap_node.js', '"nexe.js"', 'function startup() {', 'if (process.argv[1] !== "nexe.js") process.argv.splice(1, 0, "nexe.js");\n  function startup() {\n    process._eval = NativeModule.getSource("nexe");');
-}
-
-// TODO: improve placement of ldflags
-patchFile('common.gypi', null, "'cflags': [ '-O3',", (useLTO ? "'ldflags': ['-flto'], ":'')+"'cflags': [ '"+oLevel+"'"+isaBaseFlag+ltoFlagC+",");
-patchFile('common.gypi', null, "'FavorSizeOrSpeed': 1,", "'FavorSizeOrSpeed': 2, 'EnableEnhancedInstructionSet': '2',");
-patchFile('common.gypi', null, "'GenerateDebugInformation': 'true',", "'GenerateDebugInformation': 'false',");
-
-// TODO: set AR=gcc-ar if ar fails
-
-// strip exports
-patchFile('src/node.h', null, 'define NODE_EXTERN __declspec(dllexport)', 'define NODE_EXTERN');
-patchFile('src/node.h', null, 'define NODE_MODULE_EXPORT __declspec(dllexport)', 'define NODE_MODULE_EXPORT');
-patchFile('src/node_api.h', null, 'define NAPI_EXTERN __declspec(dllexport)', 'define NAPI_EXTERN');
-patchFile('src/node_api.h', null, 'define NAPI_MODULE_EXPORT __declspec(dllexport)', 'define NAPI_MODULE_EXPORT');
-patchFile('common.gypi', null, /'BUILDING_(V8|UV)_SHARED=1',/g, '');
-fs.writeFileSync(nodeSrc + 'deps/zlib/win32/zlib.def', 'EXPORTS');
-
-/*
-// MSVS2017 support if not available
-patchFile('vcbuild.bat', '@rem Look for Visual Studio 2017', /((if defined target_env if "%target_env%" NEQ "vc2015" goto vc-set-2013\r\n)?@rem Look for Visual Studio 2015)/, `
-if defined target_env if "%target_env%" NEQ "vc2017" goto vc-set-2015
-@rem Look for Visual Studio 2017
-echo Looking for Visual Studio 2017
-if not defined VS150COMNTOOLS goto vc-set-2015
-if not exist "%VS150COMNTOOLS%\..\..\vc\Auxiliary\Build\vcvarsall.bat" goto vc-set-2015
-echo Found Visual Studio 2017
-if "%VCVARS_VER%" == "150" goto vc-set-2017-done
-
-SET msvs_host_arch=x86
-if _%PROCESSOR_ARCHITECTURE%_==_AMD64_ set msvs_host_arch=amd64
-if _%PROCESSOR_ARCHITEW6432%_==_AMD64_ set msvs_host_arch=amd64
-@rem usually vcvarsall takes an argument: host + '_' + target
-SET vcvarsall_arg=%msvs_host_arch%_%target_arch%
-@rem unless both host and target are x64
-if %target_arch%_%msvs_host_arch%==x64_amd64 set vcvarsall_arg=amd64
-if %target_arch%_%msvs_host_arch%==x86_x86 set vcvarsall_arg=x86
-
-@rem need to clear VSINSTALLDIR for vcvarsall to work as expected
-SET "VSINSTALLDIR="
-@rem prevent VsDevCmd.bat from changing the current working directory
-SET "VSCMD_START_DIR=%CD%"
-
-call "%VS150COMNTOOLS%\..\..\vc\Auxiliary\Build\vcvarsall.bat" %vcvarsall_arg%
-SET VCVARS_VER=150
-
-:vc-set-2017-done
-$1
-`);
-
-patchFile('tools/gyp/pylib/gyp/MSVSVersion.py', "'2017': VisualStudioVersion('2017'", "'2015': VisualStudioVersion('2015',", `      '2017': VisualStudioVersion('2017',
-                                  'Visual Studio 2017',
-                                  solution_version='12.00',
-                                  project_version='15.0',
-                                  flat_sln=False,
-                                  uses_vcxproj=True,
-                                  path=path,
-                                  sdk_based=sdk_based,
-                                  default_toolset='v141'),
-      '2015': VisualStudioVersion('2015',`);
-patchFile('tools/gyp/pylib/gyp/MSVSVersion.py', "'15.0': '2017'", "'14.0': '2015'", "'14.0': '2015', '15.0': '2017'");
-patchFile('tools/gyp/pylib/gyp/MSVSVersion.py', "'auto': ('15.0'", "''auto': ('14.0'", "'auto': ('15.0', '14.0'");
-patchFile('tools/gyp/pylib/gyp/MSVSVersion.py', "'2017': ('15.0',)", "'2015': ('14.0',)", "'2015': ('14.0',), '2017': ('15.0',)");
-patchFile('tools/gyp/pylib/gyp/MSVSVersion.py', "if version == '15.0':", "if version != '14.0':", `if version == '15.0':
-          if os.path.exists(path):
-              versions.append(_CreateVersion('2017', path))
-      elif version != '14.0':`);
-*/
 
 // create embeddable help
 fs.writeFileSync('../bin/help.json', JSON.stringify(fs.readFileSync('../help.txt').toString()));
 
-// make target folders
-var mkdir = function(d) {
-	try { fs.mkdirSync(nodeSrc + d); }
-	catch(x) {}
-};
-mkdir('parpar_gf');
-mkdir('parpar_gf/gf-complete');
-mkdir('parpar_gf/md5');
-mkdir('parpar_gf/src');
-mkdir('yencode');
-
-// copy yencode sources across
-var copyCC = function(src, dest) {
-	var code = fs.readFileSync(src).toString();
-	if(isNode010)
-		code = code.replace(/NODE_MODULE\(([a-z0-9_]+)/, 'NODE_MODULE('+modulePref+'$1');
-	else if(parseFloat(nodeVer) >= 8)
-		code = code.replace('NODE_MODULE(', '#include "'+dest.replace(/\/[^\/]+$/, '/src').replace(/[^\/]+\//g, '../') + '/node_internals.h"' + '\r\n' + 'NODE_BUILTIN_MODULE_CONTEXT_AWARE(');
-	else
-		code = code.replace('NODE_MODULE(', 'NODE_MODULE_CONTEXT_AWARE_BUILTIN(');
-	if(dest.substr(0, 3) != '../')
-		dest = nodeSrc + dest;
-	fs.writeFileSync(dest, code);
-};
-var copyJS = function(src, dest) {
-	var code = fs.readFileSync(src).toString();
-	code = code.replace(/require\(['"][^'"]*\/([0-9a-z_]+)\.node'\)/g, "process.binding('$1')");
-	if(dest.substr(0, 3) != '../')
-		dest = nodeSrc + dest;
-	fs.writeFileSync(dest, code);
-};
+// bundle into a single JS file
+// TODO: maybe explore copying all files instead, instead of bundling
+let b = browserify(['../bin/parpar.js'], {
+	debug: false,
+	detectGlobals: true,
+	node: true
+});
+['../build/Release/parpar_gf.node'].forEach(exclude => {
+	b.exclude(exclude);
+});
 
 
-copyRecursiveSync('../gf-complete', nodeSrc + 'parpar_gf/gf-complete');
-copyRecursiveSync('../md5', nodeSrc + 'parpar_gf/md5');
-copyRecursiveSync('../src', nodeSrc + 'parpar_gf/src');
-copyRecursiveSync(yencSrc, nodeSrc + 'yencode');
+// invoke nexe
+var configureArgs = [staticness, '--without-dtrace', '--without-etw', '--without-npm', '--with-intl=none', '--without-report', '--without-node-options', '--without-inspector', '--without-siphash', '--dest-cpu=' + buildArch];
+if(buildOs in osAliases)
+	configureArgs.push('--dest-os=' + osAliases[buildOs]);
+var vcbuildArgs = ["nosign", buildArch, "noetw", "intl-none", "release", "static"];
+// --v8-lite-mode ?
+if(parseFloat(nodeVer) >= 8) {
+	configureArgs.push('--without-intl');
+	vcbuildArgs.push('without-intl');
+}
+if(parseFloat(nodeVer) >= 10) {
+	if(buildOs == 'linux' && !disableLTO)
+		configureArgs.push('--enable-lto');
+	if(buildOs == 'win32') {
+		if(!disableLTO) {
+			configureArgs.push('--with-ltcg');
+			vcbuildArgs.push('ltcg');
+		}
+		vcbuildArgs.push('no-cctest');
+	}
+} else {
+	configureArgs.push('--without-perfctr');
+	vcbuildArgs.push('noperfctr');
+}
+if(vsSuite) vcbuildArgs.push(vsSuite);
 
-copyCC('../src/gf.cc', 'parpar_gf/src/gf.cc');
-copyCC(yencSrc + 'yencode.cc', 'yencode/yencode.cc');
-copyJS(yencSrc + 'index.js', 'lib/yencode.js');
-copyJS('../lib/par2.js', '../lib/par2.js'); // !! overwrites file !!
+if(process.env.BUILD_CONFIGURE)
+	configureArgs = configureArgs.concat(process.env.BUILD_CONFIGURE.split(' '));
+if(process.env.BUILD_VCBUILD)
+	vcbuildArgs = vcbuildArgs.concat(process.env.BUILD_VCBUILD.split(' '));
 
-// now run nexe
-// TODO: consider building startup snapshot?
+var v8gyp = parseFloat(nodeVer) >= 12 ? 'tools/v8_gypfiles/v8.gyp' : (parseFloat(nodeVer) >= 10 ? 'deps/v8/gypfiles/v8.gyp' : 'deps/v8/src/v8.gyp');
 
 nexe.compile({
-    input: '../bin/parpar.js', // where the input file is
-    output: './parpar' + (require('os').platform() == 'win32' ? '.exe':''), // where to output the compiled binary
-    nodeVersion: nodeVer, // node version
-    nodeTempDir: nexeBase, // where to store node source.
-    // --without-snapshot
-    nodeConfigureArgs: ['--fully-static', '--without-dtrace', '--without-etw', '--without-perfctr', '--without-npm', '--with-intl=none'], // for all your configure arg needs.
-    nodeMakeArgs: makeArgs, // when you want to control the make process.
-    nodeVCBuildArgs: ["nosign", vcBuildArch, "noetw", "noperfctr", "intl-none"], // when you want to control the make process for windows.
-                                        // By default "nosign" option will be specified
-                                        // You can check all available options and its default values here:
-                                        // https://github.com/nodejs/node/blob/master/vcbuild.bat
-    python: python, // for non-standard python setups. Or python 3.x forced ones.
-    resourceFiles: [  ], // array of files to embed.
-    resourceRoot: [  ], // where to embed the resourceFiles.
-    flags: true, // use this for applications that need command line flags.
-    jsFlags: "", // v8 flags
-    startupSnapshot: null, // when you want to specify a script to be
-                                            // added to V8's startup snapshot. This V8
-                                            // feature deserializes a heap to save startup time.
-                                            // More information in this blog post:
-                                            // http://v8project.blogspot.de/2015/09/custom-startup-snapshots.html
-    framework: "node", // node, nodejs, or iojs
-    
-    browserifyExcludes: ['yencode', '../build/Release/parpar_gf.node']
-}, function(err) {
-    if(err) {
-        return console.log(err);
-    }
-    
-    console.log('done');
-    fs.unlinkSync('../bin/help.json');
+	input: 'blank.js', // we'll overwrite _third_party_main instead
+	name: 'parpar',
+	target: buildOs+'-'+buildArch+'-'+nodeVer,
+	build: true,
+	mangle: false,
+	bundle: false,
+	python: python,
+	flags: [], // runtime flags
+	configure: configureArgs,
+	make: ['-j', compileConcurrency],
+	vcBuild: vcbuildArgs,
+	snapshot: null, // TODO: consider using this
+	temp: nexeBase,
+	rc: {
+		ProductName: pkg.name,
+		FileDescription: pkg.description,
+		FileVersion: pkg.version,
+		ProductVersion: pkg.version,
+		InternalName: 'parpar',
+		CompanyName: 'Anime Tosho'
+	},
+	//fakeArgv: 'parpar',
+	//sourceUrl: '<disable_download>',
+	loglevel: process.env.BUILD_LOGLEVEL || 'verbose',
+	
+	patches: [
+		// remove nexe's boot-nexe code + fix argv
+		async (compiler, next) => {
+			var bootFile = 'lib/internal/bootstrap_node.js';
+			if(parseFloat(nodeVer) >= 12)
+				bootFile = 'lib/internal/bootstrap/pre_execution.js';
+			else if(parseFloat(nodeVer) >= 10)
+				bootFile = 'lib/internal/bootstrap/node.js';
+			
+			if(parseFloat(nodeVer) >= 12) {
+				// TODO: is the double'd javascript entry (by nexe) problematic?
+				await compiler.replaceInFileAsync(bootFile, /(initializePolicy|initializeFrozenIntrinsics)\(\);\s*!\(function.+?new Module.+?\}\)\(\);/s, "$1();");
+				
+				// fix argv
+				await compiler.replaceInFileAsync(bootFile, /patchProcessObject\(expandArgv1\);/, 'patchProcessObject(false); if(!process.send) process.argv.splice(1,0,"parpar");');
+			}
+			// I don't get the point of the fs patch, so just remove it...
+			await compiler.replaceInFileAsync(bootFile, /if \(true\) \{.+?__nexe_patch\(.+?\}\n/s, '');
+			
+			return next();
+		},
+		
+		// fix for building on Alpine
+		// https://gitlab.alpinelinux.org/alpine/aports/-/issues/8626
+		async (compiler, next) => {
+			if(parseFloat(nodeVer) >= 12) {
+				await compiler.replaceInFileAsync(v8gyp, /('target_defaults': \{)( 'cflags': \['-U_FORTIFY_SOURCE'\],)?/, "$1 'cflags': ['-U_FORTIFY_SOURCE'],");
+			} else {
+				await compiler.replaceInFileAsync(v8gyp, /('target_defaults': {'cflags': \['-U_FORTIFY_SOURCE'\]}, )?'targets': \[/, "'target_defaults': {'cflags': ['-U_FORTIFY_SOURCE']}, 'targets': [");
+			}
+			await compiler.replaceInFileAsync('node.gyp', /('target_name': '(node_mksnapshot|mkcodecache|<\(node_core_target_name\)|<\(node_lib_target_name\))',)( 'cflags': \['-U_FORTIFY_SOURCE'\],)?/g, "$1 'cflags': ['-U_FORTIFY_SOURCE'],");
+			return next();
+		},
+		
+		// increase default UV_THREADPOOL_SIZE to 8 (allows higher --chunk-read-threads)
+		async (compiler, next) => {
+			await compiler.replaceInFileAsync('deps/uv/src/threadpool.c', /uv_thread_t default_threads[\d+];/, "uv_thread_t default_threads[8];");
+			return next();
+		},
+		
+		
+		// add parpar_gf into source list
+		async (compiler, next) => {
+			var bindingsFile;
+			if(parseFloat(nodeVer) >= 12) {
+				await compiler.replaceInFileAsync('node.gyp', /('deps\/histogram\/histogram\.gyp:histogram')(,'deps\/parpar\/binding\.gyp:parpar_gf')?/g, "$1,'deps/parpar/binding.gyp:parpar_gf'");
+				bindingsFile = 'src/node_binding.cc';
+			} else if(parseFloat(nodeVer) >= 10) {
+				await compiler.replaceInFileAsync('node.gyp', /('target_name': '<\(node_lib_target_name\)',)('dependencies': \['deps\/parpar\/binding\.gyp:parpar_gf'\], )?/g, "$1'dependencies': ['deps/parpar/binding.gyp:parpar_gf'], ");
+				bindingsFile = 'src/node_internals.h';
+			} else {
+				await compiler.replaceInFileAsync('node.gyp', /('target_name': '<\(node_lib_target_name\)',[^}]*?'dependencies': \[)('deps\/parpar\/binding\.gyp:parpar_gf', )?/g, "$1'deps/parpar/binding.gyp:parpar_gf', ");
+				bindingsFile = 'src/node_internals.h';
+			}
+			// also add it as a valid binding
+			await compiler.replaceInFileAsync(bindingsFile, /(V\(async_wrap\))( V\(parpar_gf\))?/, "$1 V(parpar_gf)");
+			
+			// patch module whitelist
+			if(parseFloat(nodeVer) >= 12) {
+				// avoid nexe's methods to prevent double-writing this to node.gyp
+				const loaderFile = path.join(compiler.src, 'lib/internal/bootstrap/loaders.js');
+				data = fs.readFileSync(loaderFile).toString();
+				data = data.replace(/('async_wrap',)( 'parpar_gf',)?/, "$1 'parpar_gf',");
+				fs.writeFileSync(loaderFile, data);
+			}
+			
+			return next();
+		},
+		// copy parpar_gf sources
+		async (compiler, next) => {
+			const dst = path.join(compiler.src, 'deps', 'parpar') + path.sep;
+			const base = '..' + path.sep;
+			if(!fs.existsSync(dst + 'binding.gyp')) {
+				if(!fs.existsSync(dst.slice(0, -1))) fs.mkdirSync(dst.slice(0, -1));
+				copyRecursiveSync(base + 'gf16', dst + 'gf16');
+				copyRecursiveSync(base + 'hasher', dst + 'hasher');
+				copyRecursiveSync(base + 'src', dst + 'src');
+				fs.copyFileSync(base + 'binding.gyp', dst + 'binding.gyp');
+			}
+			
+			// patch parpar_gf
+			let data = await compiler.readFileAsync('deps/parpar/src/gf.cc');
+			data = data.contents.toString();
+			const internalModuleRegister = (parseFloat(nodeVer) >= 12) ? 'NODE_MODULE_CONTEXT_AWARE_INTERNAL' : 'NODE_BUILTIN_MODULE_CONTEXT_AWARE';
+			data = data.replace(/NODE_MODULE\(/, '#define NODE_WANT_INTERNALS 1\n#include <node_internals.h>\n' + internalModuleRegister + '(');
+			await compiler.setFileContentsAsync('deps/parpar/src/gf.cc', data);
+			
+			data = await compiler.readFileAsync('deps/parpar/binding.gyp');
+			data = data.contents.toString();
+			data = data.replace(/"target_name": "parpar_gf",( "type": "static_library",)?/, '"target_name": "parpar_gf", "type": "static_library",');
+			var includeList = '"../../src", "../v8/include", "../uv/include"';
+			if(parseFloat(nodeVer) < 12)
+				includeList += ', "../cares/include"';
+			data = data.replace(/"include_dirs": \[("\.\.\/\.\.\/src"[^\]]+)?"gf16"/, '"include_dirs": [' + includeList + ', "gf16"');
+			data = data.replace(/"enable_native_tuning%": 1,/, '"enable_native_tuning%": 0,');
+			if(staticness == '--fully-static')
+				data = data.replace(/"PARPAR_LIBDL_SUPPORT",?/, '');
+			await compiler.setFileContentsAsync('deps/parpar/binding.gyp', data);
+			
+			return next();
+		},
+		
+		// disable unnecessary executables
+		async (compiler, next) => {
+			await compiler.replaceInFileAsync('node.gyp', /(['"]target_name['"]:\s*['"](cctest|embedtest|fuzz_url|fuzz_env)['"],\s*['"]type['"]:\s*)['"]executable['"]/g, "$1'none'");
+			return next();
+		},
+		// disable exports
+		async (compiler, next) => {
+			await compiler.replaceInFileAsync('src/node.h', /(define (NODE_EXTERN|NODE_MODULE_EXPORT)) __declspec\(dllexport\)/, '$1');
+			await compiler.replaceInFileAsync('src/node_api.h', /(define (NAPI_EXTERN|NAPI_MODULE_EXPORT)) __declspec\(dllexport\)/, '$1');
+			await compiler.replaceInFileAsync('src/node_api.h', /__declspec\(dllexport,\s*/g, '__declspec(');
+			await compiler.replaceInFileAsync('src/js_native_api.h', /(define NAPI_EXTERN) __declspec\(dllexport\)/, '$1');
+			await compiler.replaceInFileAsync('common.gypi', /'BUILDING_(V8|UV)_SHARED=1',/g, '');
+			await compiler.setFileContentsAsync('deps/zlib/win32/zlib.def', 'EXPORTS');
+			await compiler.replaceInFileAsync(v8gyp, /'defines':\s*\["BUILDING_V8_BASE_SHARED"\],/g, '');
+			
+			var data = await compiler.readFileAsync('node.gyp');
+			data = data.contents.toString();
+			data = data.replace(/('use_openssl_def%?':) 1,/, "$1 0,");
+			data = data.replace(/'\/WHOLEARCHIVE:[^']+',/g, '');
+			data = data.replace(/'-Wl,--whole-archive',.*?'-Wl,--no-whole-archive',/s, '');
+			await compiler.setFileContentsAsync('node.gyp', data);
+			
+			await compiler.replaceInFileAsync('node.gypi', /'force_load%': 'true',/, "'force_load%': 'false',");
+			
+			return next();
+		},
+		// patch build options
+		async (compiler, next) => {
+			var data = await compiler.readFileAsync('common.gypi');
+			data = data.contents.toString();
+			
+			// enable SSE2 as base targeted ISA
+			if(buildArch == 'x86' || buildArch == 'ia32') {
+				data = data.replace(/('EnableIntrinsicFunctions':\s*'true',)(\s*)('FavorSizeOrSpeed':)/, "$1$2'EnableEnhancedInstructionSet': '2',$2$3");
+				data = data.replace(/('cflags': \[)(\s*'-O3')/, "$1 '-msse2',$2");
+			}
+			
+			// MSVC - disable debug info
+			data = data.replace(/'GenerateDebugInformation': 'true',/, "'GenerateDebugInformation': 'false',\n'AdditionalOptions': ['/emittoolversioninfo:no'],");
+			
+			await compiler.setFileContentsAsync('common.gypi', data);
+			return next();
+		},
+		// strip debug symbols
+		async (compiler, next) => {
+			await compiler.replaceInFileAsync('node.gyp', /('target_name': '<\(node_core_target_name\)',)( 'ldflags': \['-s'\],)?/g, "$1 'ldflags': ['-s'],");
+			return next();
+		},
+		
+		
+		// strip icon
+		async (compiler, next) => {
+			await compiler.replaceInFileAsync('src/res/node.rc', /1 ICON node\.ico/, '');
+			return next();
+		},
+		
+		// fix for NodeJS 12 on MSVC 2019 x86
+		// note that MSVC 2019 is needed for GFNI support
+		async (compiler, next) => {
+			if(parseFloat(nodeVer) >= 12 && parseFloat(nodeVer) < 13 && buildOs == 'win32' && (buildArch == 'x86' || buildArch == 'ia32')) {
+				// for whatever reason, building Node 12 using 2019 build tools results in a horribly broken executable, but works fine in 2017
+				// Node's own Windows builds seem to be using 2017 for Node 12.x
+				var data = await compiler.readFileAsync('vcbuild.bat');
+				data = data.contents.toString();
+				data = data.replace('GYP_MSVS_VERSION=2019', 'GYP_MSVS_VERSION=2017'); // seems to be required, even if no MSI is built
+				data = data.replace('PLATFORM_TOOLSET=v142', 'PLATFORM_TOOLSET=v141');
+				await compiler.setFileContentsAsync('vcbuild.bat', data);
+			}
+			return next();
+		},
+		
+		// if '-m32' flag should be stripped
+		async (compiler, next) => {
+			if(stripM32)
+				await compiler.replaceInFileAsync(parseFloat(nodeVer) >= 12 ? 'tools/v8_gypfiles/toolchain.gypi' : 'deps/v8/gypfiles/toolchain.gypi', /'-m32'/, '');
+			return next();
+		},
+		
+		// set _third_party_main
+		async (compiler, next) => {
+			return new Promise((resolve, reject) => {
+				b.bundle(async (err, buf) => {
+					if(err) return reject(err);
+					// patch require line
+					buf = buf.toString().replace(/require\('[^'"]*\/([0-9a-z_]+)\.node'\)/g, "process.binding('$1')");
+					// for MD5 check
+					buf = buf.replace(/\/\*{{!include_in_executable!([^]*?)}}\*\//g, '$1');
+					await compiler.replaceInFileAsync('lib/_third_party_main.js', /^/, buf);
+					resolve();
+				});
+			});
+		}
+	],
+	
+}).then(() => {
+	console.log('done');
+	fs.unlinkSync('../bin/help.json');
+	
+	// append MD5 hash for self-check
+	let binary = 'parpar';
+	if(buildOs == 'win32') binary += '.exe';
+	const md5 = require('crypto').createHash('md5').update(fs.readFileSync(binary)).digest();
+	fs.appendFileSync(binary, Buffer.concat([Buffer.from('\0<!parpar#md5~>='), md5]));
+	
+	// paxmark -m parpar
+	// xz -9e -z --x86 --lzma2 -c parpar > parpar-v0.4.0-linux-static-x64.xz
+	
 });

@@ -384,12 +384,9 @@ static inline void* xor_write_jit_avx512(const struct gf16_xor_scratch *HEDLEY_R
 		_mm256_extracti128_si256(depmask, 1)
 	);
 	/* eliminate pointless common_mask entries */
-	common_mask = _mm_andnot_si128(
-		_mm_cmpeq_epi16(
-			_mm_setzero_si128(),
-			/* "(v & (v-1)) == 0" is true if only zero/one bit is set in each word */
-			_mm_and_si128(common_mask, _mm_sub_epi16(common_mask, _mm_set1_epi16(1)))
-		),
+	common_mask = _mm_maskz_mov_epi16(
+		/* "(v & (v-1)) == 0" is true if only zero/one bit is set in each word */
+		_mm_test_epi16_mask(common_mask, _mm_add_epi16(common_mask, _mm_set1_epi16(-1))),
 		common_mask
 	);
 	
@@ -470,7 +467,7 @@ static inline void* xor_write_jit_avx512(const struct gf16_xor_scratch *HEDLEY_R
 					// patch final vpternlog to merge from memory
 					// TODO: optimize
 					*(jitptr-6) |= 24<<2; // clear zreg3 bits
-					*(uint32_t*)(jitptr-2) = ((1<<3) | AX | 0x40) | (0x96<<16) | ((destOffs<<(8-6)) & 0xff00);
+					write32(jitptr-2, ((1<<3) | AX | 0x40) | (0x96<<16) | ((destOffs<<(8-6)) & 0xff00));
 					jitptr++;
 				}
 				if(popcntABC[8+bit] == 1) {
@@ -479,7 +476,7 @@ static inline void* xor_write_jit_avx512(const struct gf16_xor_scratch *HEDLEY_R
 					_mm512_storeu_si512((__m512i*)jitptr, xor_avx512_main_part_fromreg((~popcntABC[8+bit] & 1), 2, idxB));
 					jitptr += (popcntABC[8+bit] >> 1) * 7 + 6;
 					*(jitptr-6) |= 24<<2; // clear zreg3 bits
-					*(uint32_t*)(jitptr-2) = ((2<<3) | AX | 0x40) | (0x96<<16) | ((destOffs2<<(8-6)) & 0xff00);
+					write32(jitptr-2, ((2<<3) | AX | 0x40) | (0x96<<16) | ((destOffs2<<(8-6)) & 0xff00));
 					jitptr++;
 				}
 			}
@@ -548,7 +545,7 @@ static inline void* xor_write_jit_avx512(const struct gf16_xor_scratch *HEDLEY_R
 	}
 	
 	/* cmp/jcc */
-	*(uint64_t*)(jitptr) = 0x800FC03948 | (AX <<16) | (CX <<19) | ((uint64_t)JL <<32);
+	write64(jitptr, 0x800FC03948 | (AX <<16) | (CX <<19) | ((uint64_t)JL <<32));
 	return jitptr+5;
 }
 
@@ -588,12 +585,9 @@ static void* xor_write_jit_avx512_multi(const struct gf16_xor_scratch *HEDLEY_RE
 		_mm256_extracti128_si256(depmask, 1)
 	);
 	/* eliminate pointless common_mask entries */
-	common_mask = _mm_andnot_si128(
-		_mm_cmpeq_epi16(
-			_mm_setzero_si128(),
-			/* "(v & (v-1)) == 0" is true if only zero/one bit is set in each word */
-			_mm_and_si128(common_mask, _mm_sub_epi16(common_mask, _mm_set1_epi16(1)))
-		),
+	common_mask = _mm_maskz_mov_epi16(
+		/* "(v & (v-1)) == 0" is true if only zero/one bit is set in each word */
+		_mm_test_epi16_mask(common_mask, _mm_add_epi16(common_mask, _mm_set1_epi16(-1))),
 		common_mask
 	);
 	
@@ -704,7 +698,7 @@ static void* xor_write_jit_avx512_multi(const struct gf16_xor_scratch *HEDLEY_RE
 					// TODO: optimize
 					*(uint8_t*)(jitptr-6) |= 24<<2; // clear zreg3 bits
 					//*(jitptr-6) &= ~(8<<4); // set +8 flag for zreg1
-					*(uint32_t*)(jitptr-2) = ((bit<<3) | AX | 0x40) | (0x96<<16) | ((destOffs<<(8-6)) & 0xff00);
+					write32(jitptr-2, ((bit<<3) | AX | 0x40) | (0x96<<16) | ((destOffs<<(8-6)) & 0xff00));
 					jitptr++;
 				}
 				if(popcntABC[8+bit] == 1) {
@@ -716,7 +710,7 @@ static void* xor_write_jit_avx512_multi(const struct gf16_xor_scratch *HEDLEY_RE
 					jitptr += xor_avx512_main_part(jitptr, popcntABC[8+bit], (~popcntABC[8+bit] & 1), bit+8, memreg, idxB);
 					*(uint8_t*)(jitptr-6) |= 24<<2; // clear zreg3 bits
 					//*(jitptr-6) &= ~(8<<4);
-					*(uint32_t*)(jitptr-2) = ((bit<<3) | AX | 0x40) | (0x96<<16) | ((destOffs2<<(8-6)) & 0xff00);
+					write32(jitptr-2, ((bit<<3) | AX | 0x40) | (0x96<<16) | ((destOffs2<<(8-6)) & 0xff00));
 					jitptr++;
 				}
 			} else if(xor) {
@@ -855,9 +849,9 @@ void gf16_xor_jit_muladd_multi_avx512(const void *HEDLEY_RESTRICT scratch, unsig
 		}
 		
 		/* cmp/jcc */
-		*(uint64_t*)(jitptr) = 0x800FC03948 | (AX <<16) | (CX <<19) | ((uint64_t)JL <<32);
+		write64(jitptr, 0x800FC03948 | (AX <<16) | (CX <<19) | ((uint64_t)JL <<32));
 		if(info->jitOptStrat == GF16_XOR_JIT_STRAT_COPYNT || info->jitOptStrat == GF16_XOR_JIT_STRAT_COPY) {
-			*(int32_t*)(jitptr +5) = (int32_t)((jitTemp - (jitdst - (uint8_t*)jit->w)) - jitptr -9);
+			write32(jitptr +5, (int32_t)((jitTemp - (jitdst - (uint8_t*)jit->w)) - jitptr -9));
 			jitptr[9] = 0xC3; /* ret */
 			/* memcpy to destination */
 			if(info->jitOptStrat == GF16_XOR_JIT_STRAT_COPYNT) {
@@ -1197,7 +1191,7 @@ void gf16_xor_finish_copy_blocku_avx512(void *HEDLEY_RESTRICT dst, const void* H
 
 
 #if defined(__AVX512BW__) && defined(__AVX512VL__) && defined(PLATFORM_AMD64)
-GF_FINISH_PACKED_FUNCS(gf16_xor, _avx512, sizeof(__m512i)*16, gf16_xor_finish_copy_block_avx512, gf16_xor_finish_copy_blocku_avx512, 1, _mm256_zeroupper(), __m512i checksum = _mm512_setzero_si512(), gf16_checksum_block_avx512, gf16_checksum_blocku_avx512, gf16_checksum_finish_avx512)
+GF_FINISH_PACKED_FUNCS(gf16_xor, _avx512, sizeof(__m512i)*16, gf16_xor_finish_copy_block_avx512, gf16_xor_finish_copy_blocku_avx512, 1, _mm256_zeroupper(), gf16_checksum_block_avx512, gf16_checksum_blocku_avx512, gf16_checksum_exp_avx512, &gf16_xor_finish_block_avx512, sizeof(__m512i))
 #else
 GF_FINISH_PACKED_FUNCS_STUB(gf16_xor, _avx512)
 #endif

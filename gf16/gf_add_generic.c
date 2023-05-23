@@ -7,7 +7,7 @@ static HEDLEY_ALWAYS_INLINE void gf_add_x_generic(
 	const uint16_t *HEDLEY_RESTRICT coefficients,
 	const int doPrefetch, const char* _pf
 ) {
-	assert(len > 0);
+	ASSUME(len > 0);
 	
 	GF16_MULADD_MULTI_SRC_UNUSED(8);
 	UNUSED(coefficients);
@@ -15,24 +15,48 @@ static HEDLEY_ALWAYS_INLINE void gf_add_x_generic(
 	
 	int lookup3Rearrange = (int)((intptr_t)scratch); // abuse this variable
 	
-	for(intptr_t ptr = -(intptr_t)len; ptr; ptr += sizeof(uintptr_t)) {
+	// probably never happens, but ensure length is a multiple of the native int
+	intptr_t ptr = -(intptr_t)len;
+	while(ptr & (sizeof(uintptr_t)-1)) {
+		uint8_t data = _src1[ptr*srcScale];
+		if(srcCount >= 2)
+			data ^= _src2[ptr*srcScale];
+		if(srcCount >= 3)
+			data ^= _src3[ptr*srcScale];
+		if(srcCount >= 4)
+			data ^= _src4[ptr*srcScale];
+		if(srcCount >= 5)
+			data ^= _src5[ptr*srcScale];
+		if(srcCount >= 6)
+			data ^= _src6[ptr*srcScale];
+		if(srcCount >= 7)
+			data ^= _src7[ptr*srcScale];
+		if(srcCount >= 8)
+			data ^= _src8[ptr*srcScale];
+		assert(!lookup3Rearrange);
+		_dst[ptr] ^= data;
+		
+		ptr++;
+	}
+	
+	for(; ptr; ptr += sizeof(uintptr_t)) {
 		uintptr_t data;
 		
-		data = *(uintptr_t*)(_src1+ptr*srcScale);
+		data = readPtr(_src1+ptr*srcScale);
 		if(srcCount >= 2)
-			data ^= *(uintptr_t*)(_src2+ptr*srcScale);
+			data ^= readPtr(_src2+ptr*srcScale);
 		if(srcCount >= 3)
-			data ^= *(uintptr_t*)(_src3+ptr*srcScale);
+			data ^= readPtr(_src3+ptr*srcScale);
 		if(srcCount >= 4)
-			data ^= *(uintptr_t*)(_src4+ptr*srcScale);
+			data ^= readPtr(_src4+ptr*srcScale);
 		if(srcCount >= 5)
-			data ^= *(uintptr_t*)(_src5+ptr*srcScale);
+			data ^= readPtr(_src5+ptr*srcScale);
 		if(srcCount >= 6)
-			data ^= *(uintptr_t*)(_src6+ptr*srcScale);
+			data ^= readPtr(_src6+ptr*srcScale);
 		if(srcCount >= 7)
-			data ^= *(uintptr_t*)(_src7+ptr*srcScale);
+			data ^= readPtr(_src7+ptr*srcScale);
 		if(srcCount >= 8)
-			data ^= *(uintptr_t*)(_src8+ptr*srcScale);
+			data ^= readPtr(_src8+ptr*srcScale);
 		
 		if(lookup3Rearrange) {
 			// revert bit rearrangement for LOOKUP3 method
@@ -43,7 +67,7 @@ static HEDLEY_ALWAYS_INLINE void gf_add_x_generic(
 			}
 		}
 		
-		*(uintptr_t*)(_dst+ptr) ^= data;
+		writePtr(_dst+ptr, readPtr(_dst+ptr) ^ data);
 	}
 }
 

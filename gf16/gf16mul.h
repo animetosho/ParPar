@@ -1,4 +1,7 @@
-#include <assert.h>
+#ifndef __GF16MUL_H
+#define __GF16MUL_H
+
+#include <cassert>
 #include "../src/stdint.h"
 #include "../src/hedley.h"
 #include <vector>
@@ -6,9 +9,11 @@
 
 typedef void(*Galois16MulTransform) (void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen);
 typedef void(*Galois16MulTransformPacked) (void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen, size_t sliceLen, unsigned inputPackSize, unsigned inputNum, size_t chunkLen);
+typedef void(*Galois16MulTransformPackedPartial) (void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen, size_t sliceLen, unsigned inputPackSize, unsigned inputNum, size_t chunkLen, size_t partOffset, size_t partLen);
 typedef void(*Galois16MulUntransform) (void *HEDLEY_RESTRICT dst, size_t len);
 typedef void(*Galois16MulUntransformPacked) (void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t sliceLen, unsigned numOutputs, unsigned outputNum, size_t chunkLen);
 typedef int(*Galois16MulUntransformPackedCksum) (void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t sliceLen, unsigned numOutputs, unsigned outputNum, size_t chunkLen);
+typedef int(*Galois16MulUntransformPackedCksumPartial) (void *HEDLEY_RESTRICT dst, void *HEDLEY_RESTRICT src, size_t sliceLen, unsigned numOutputs, unsigned outputNum, size_t chunkLen, size_t partOffset, size_t partLen);
 
 typedef void(*Galois16MulFunc) (const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch);
 typedef void(*Galois16MulPfFunc) (const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch, const void *HEDLEY_RESTRICT prefetch);
@@ -21,6 +26,8 @@ typedef void(*Galois16AddMultiFunc) (unsigned regions, size_t offset, void *HEDL
 typedef void(*Galois16AddPackedFunc) (unsigned packedRegions, unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len);
 typedef void(*Galois16AddPackPfFunc) (unsigned packedRegions, unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, const void* HEDLEY_RESTRICT prefetchIn, const void* HEDLEY_RESTRICT prefetchOut);
 
+typedef void(*Galois16CopyCksum) (void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen, size_t sliceLen);
+typedef int(*Galois16CopyCksumCheck) (void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len);
 
 
 enum Galois16Methods {
@@ -93,6 +100,7 @@ typedef struct {
 	size_t idealChunkSize;
 	unsigned idealInputMultiple;
 	unsigned prefetchDownscale;
+	unsigned cksumSize;
 } Galois16MethodInfo;
 
 class Galois16Mul {
@@ -123,16 +131,16 @@ private:
 	Galois16Mul(const Galois16Mul&);
 	Galois16Mul& operator=(const Galois16Mul&);
 	
-#if __cplusplus >= 201100
+#ifdef __cpp_rvalue_references
 	void move(Galois16Mul& other);
 #endif
 	
 public:
-	static Galois16Methods default_method(size_t regionSizeHint = 0, unsigned outputs = 0, unsigned threadCountHint = 0);
+	static Galois16Methods default_method(size_t regionSizeHint = 0, unsigned outputs = 0);
 	Galois16Mul(Galois16Methods method = GF16_AUTO);
 	~Galois16Mul();
 	
-#if __cplusplus >= 201100
+#ifdef __cpp_rvalue_references
 	Galois16Mul(Galois16Mul&& other) noexcept {
 		move(other);
 	}
@@ -148,6 +156,9 @@ public:
 	inline bool hasMultiMulAdd() const {
 		return _mul_add_multi != NULL;
 	};
+	inline bool hasMultiMulAddPacked() const {
+		return _mul_add_multi_packed != NULL;
+	};
 	inline bool hasPowAdd() const {
 		return _pow_add != NULL;
 	};
@@ -160,6 +171,7 @@ public:
 	inline const Galois16MethodInfo& info() const {
 		return _info;
 	}
+	static Galois16MethodInfo info(Galois16Methods _method);
 	
 	inline HEDLEY_CONST bool isMultipleOfStride(size_t len) const {
 #if defined(_M_ARM64) || defined(__aarch64__)
@@ -182,14 +194,18 @@ public:
 	Galois16MulTransform prepare;
 	Galois16MulTransformPacked prepare_packed;
 	Galois16MulTransformPacked prepare_packed_cksum;
+	Galois16MulTransformPackedPartial prepare_partial_packsum; // TODO: consider a nicer interface for this
 	Galois16MulUntransform finish;
 	Galois16MulUntransformPacked finish_packed;
 	Galois16MulUntransformPackedCksum finish_packed_cksum;
+	Galois16MulUntransformPackedCksumPartial finish_partial_packsum;
 	Galois16AddMultiFunc add_multi;
 	Galois16AddPackedFunc add_multi_packed;
 	Galois16AddPackPfFunc add_multi_packpf;
+	Galois16CopyCksum copy_cksum;
+	Galois16CopyCksumCheck copy_cksum_check;
 	
-	void* mutScratch_alloc() const;
+	HEDLEY_MALLOC void* mutScratch_alloc() const;
 	void mutScratch_free(void* mutScratch) const;
 	
 	inline void mul(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch) const {
@@ -338,3 +354,5 @@ public:
 	}
 	
 };
+
+#endif

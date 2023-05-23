@@ -1,17 +1,28 @@
 
 #include <arm_neon.h>
 
-#ifdef __GNUC__
+#if defined(__GNUC__) || defined(__clang__)
 # define MD5_USE_ASM
 # include "md5x2-neon-asm.h"
 #endif
 
 #ifdef __ARM_NEON
+static HEDLEY_ALWAYS_INLINE uint32x2_t vmake_u32(
+	uint32_t a, uint32_t b
+) {
+# if defined(_MSC_VER)
+	uint32_t t[] = {a,b};
+	return vld1_u32(t);
+# else
+	return (uint32x2_t){a,b};
+# endif
+}
+
 #define ADD vadd_u32
 #define VAL vdup_n_u32
 #define word_t uint32x2_t
 #define INPUT(k, set, ptr, offs, idx, var) ADD(var, VAL(k))
-#define LOAD(k, set, ptr, offs, idx, var) ADD(var = (uint32x2_t){((uint32_t*)(ptr[0]))[idx], ((uint32_t*)(ptr[1]))[idx]}, VAL(k))
+#define LOAD(k, set, ptr, offs, idx, var) ADD(var = vmake_u32(((uint32_t*)(ptr[0]))[idx], ((uint32_t*)(ptr[1]))[idx]), VAL(k))
 #define LOAD4(set, ptr, offs, idx, var0, var1, var2, var3) { \
 	uint32x4_t in0 = vreinterpretq_u32_u8(vld1q_u8((uint8_t*)ptr[0] + idx*4)); \
 	uint32x4_t in1 = vreinterpretq_u32_u8(vld1q_u8((uint8_t*)ptr[1] + idx*4)); \

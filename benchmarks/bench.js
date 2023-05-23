@@ -1,7 +1,7 @@
 
 var proc = require('child_process');
-var isWindows = require('os').platform() == 'win32';
 var os = require('os');
+var isWindows = os.platform() == 'win32';
 var arch = os.arch();
 var isX86 = (arch == 'ia32' || arch == 'x64');
 var tmpDir = (process.env.TMP || process.env.TEMP || '');
@@ -18,12 +18,16 @@ var engines = {
 				cb(null, match[1]);
 			});
 		},
-		args: function(a) {
-			var args = ['c', '-ss' + a.blockSize, '-rn' + a.blocks, '-rf1', '-in', '-m7'];
-			if(a.st)
-				args.push('-lc1');
+		args: function(a, xa) {
+			var args = ['c', '-ss' + a.blockSize, '-rn' + a.blocks, '-rf1', '-in', '-m7'].concat(xa || []);
+			if(a.st) {
+				var lc = xa ? xa.findIndex(e => e.test(/^[/-]lc/)) : -1;
+				if(lc == -1)
+					args.push('-lc1');
+				else
+					args[lc] = args[lc].replace(/lc([0-9]+)/, (m,n)=>'lc'+(n | 1));
+			}
 			args.push(a.out);
-			args.push(a.in);
 			return args;
 		}
 	},
@@ -38,8 +42,8 @@ var engines = {
 		},
 		
 		// TODO: check MT capability + disable if always uses it
-		args: function(a) {
-			return ['c', '-s' + a.blockSize, '-c' + a.blocks, '-n1', '-m2000', a.out, a.in];
+		args: function(a, xa) {
+			return ['c', '-s' + a.blockSize, '-c' + a.blocks, '-n1', '-m2000', a.out].concat(xa || []);
 		}
 	},
 	par2: {
@@ -52,8 +56,8 @@ var engines = {
 			});
 		},
 		// TODO: check MT capability + disable if always uses it
-		args: function(a) {
-			return ['c', '-s' + a.blockSize, '-c' + a.blocks, '-n1', '-m2000', a.out, a.in];
+		args: function(a, xa) {
+			return ['c', '-s' + a.blockSize, '-c' + a.blocks, '-n1', '-m2000', a.out].concat(xa || []);
 		}
 	},
 	parpar: {
@@ -66,13 +70,13 @@ var engines = {
 				cb(null, ver);
 			});
 		},
-		args: function(a) {
-			var args = ['-s', a.blockSize+'b', '-r', a.blocks, '-m', '2000M', '-o', a.out, a.in];
+		args: function(a, xa) {
+			var args = ['-s', a.blockSize+'b', '-r', a.blocks, '-m', '2000M', '-d', 'equal', '-o', a.out];
 			if(a.st) {
 				args.push('-t');
 				args.push('1');
 			}
-			return args;
+			return args.concat(xa || []);
 		}
 	},
 	gopar: {
@@ -85,8 +89,8 @@ var engines = {
 				cb(null, '?');
 			});
 		},
-		args: function(a) {
-			return ['-g', a.st ? 1 : os.cpus().length, 'c', '-s', a.blockSize, '-c', a.blocks, a.out + '.par2', a.in];
+		args: function(a, xa) {
+			return ['-g', a.st ? 1 : os.cpus().length, 'c', '-s', a.blockSize, '-c', a.blocks, a.out + '.par2'].concat(xa || []);
 		}
 	}
 };
@@ -96,115 +100,114 @@ var exePref = isWindows ? '' : './'; // Linux needs './' prepended to execute in
 
 var benchmarks = {
 	parpar: {
-		name: 'parpar',
+		name: 'ParPar',
 		exe: exePref + 'parpar' + exeExt,
 		exeAlt: exePref + 'parpar' + (isWindows ? '.cmd' : '.sh'),
-		supportsMt: true,
-		platform: 'any',
-		arch: 'ia32',
+		platform: null,
+		x86only: false,
 		engine: 'parpar'
 	},
-	parpar64: {
-		name: 'parpar (x64)',
-		exe: exePref + 'parpar64' + exeExt,
-		exeAlt: exePref + 'parpar64' + (isWindows ? '.cmd' : '.sh'),
-		supportsMt: true,
-		platform: 'any',
-		arch: 'x64',
+	parpar_gpu10: {
+		name: 'ParPar [10% OpenCL]',
+		exe: exePref + 'parpar' + exeExt,
+		exeAlt: exePref + 'parpar' + (isWindows ? '.cmd' : '.sh'),
+		platform: null,
+		x86only: false,
+		args: ['--opencl-process=10%'],
+		engine: 'parpar'
+	},
+	parpar_gpu30: {
+		name: 'ParPar [30% OpenCL]',
+		exe: exePref + 'parpar' + exeExt,
+		exeAlt: exePref + 'parpar' + (isWindows ? '.cmd' : '.sh'),
+		platform: null,
+		x86only: false,
+		args: ['--opencl-process=30%'],
 		engine: 'parpar'
 	},
 	par2j: {
 		name: 'par2j',
-		exe: exePref + 'par2j.exe',
-		supportsMt: true,
-		platform: 'win',
-		arch: 'ia32',
+		exe: exePref + (arch == 'ia32' ? 'par2j.exe' : 'par2j64.exe'),
+		platform: 'win32',
+		x86only: true,
 		engine: 'par2j'
 	},
-	par2j64: {
-		name: 'par2j (x64)',
-		exe: exePref + 'par2j64.exe',
-		supportsMt: true,
-		platform: 'win',
-		arch: 'x64',
+	par2j_gpu: {
+		name: 'par2j -lc32',
+		exe: exePref + (arch == 'ia32' ? 'par2j.exe' : 'par2j64.exe'),
+		platform: 'win32',
+		x86only: true,
+		args: ['-lc32'],
+		engine: 'par2j'
+	},
+	par2j_gpuslow: {
+		name: 'par2j -lc64',
+		exe: exePref + (arch == 'ia32' ? 'par2j.exe' : 'par2j64.exe'),
+		platform: 'win32',
+		x86only: true,
+		args: ['-lc64'],
 		engine: 'par2j'
 	},
 	phpar2: {
 		name: 'phpar2',
 		exe: exePref + 'phpar2.exe',
-		supportsMt: true,
-		platform: 'win',
-		arch: 'ia32',
-		engine: 'phpar2'
-	},
-	phpar2_64: {
-		name: 'phpar2 (x64)',
-		exe: exePref + 'phpar2_64.exe',
-		supportsMt: true,
-		platform: 'win',
-		arch: 'x64',
+		platform: 'win32',
+		x86only: true,
 		engine: 'phpar2'
 	},
 	par2cmdline: {
 		name: 'par2cmdline',
 		exe: exePref + 'par2' + exeExt,
-		supportsMt: true,
-		platform: 'any',
-		arch: 'ia32',
-		engine: 'par2'
-	},
-	par2cmdline64: {
-		name: 'par2cmdline (x64)',
-		exe: exePref + 'par2_64' + exeExt,
-		supportsMt: true,
-		platform: 'any',
-		arch: 'x64',
+		platform: null,
+		x86only: false,
 		engine: 'par2'
 	},
 	par2cmdline_tbb: {
 		name: 'par2cmdline-tbb',
 		exe: exePref + 'par2_tbb' + exeExt,
 		version: '20150503',
-		supportsMt: true,
-		platform: 'x86',
-		arch: 'ia32',
+		platform: null,
+		x86only: true,
 		engine: 'par2'
 	},
-	par2cmdline_tbb64: {
-		name: 'par2cmdline-tbb (x64)',
-		exe: exePref + 'par2_tbb64' + exeExt,
-		version: '20150503',
-		supportsMt: true,
-		platform: 'x86',
-		arch: 'x64',
+	par2cmdline_turbo: {
+		name: 'par2cmdline-turbo',
+		exe: exePref + 'par2_turbo' + exeExt,
+		platform: null,
+		x86only: false,
 		engine: 'par2'
 	},
-	/*gopar: { // problematic due to allocating too much memory
+	gopar: {
 		name: 'gopar',
 		exe: exePref + 'gopar' + exeExt,
 		version: '?',
-		supportsMt: true,
-		platform: 'any',
-		arch: 'ia32',
-		engine: 'gopar'
-	},*/
-	gopar64: {
-		name: 'gopar (x64)',
-		exe: exePref + 'gopar64' + exeExt,
-		version: '?',
-		supportsMt: true,
-		platform: 'any',
-		arch: 'x64',
+		platform: null,
+		x86only: false,
 		engine: 'gopar'
 	},
 };
+var tests = [
+	{
+		in: [tmpDir + 'test1000m.bin'],
+		blockSize: 1024*1024,
+		blocks: 100
+	},
+	{
+		in: [tmpDir + 'test200m_1.bin', tmpDir + 'test200m_2.bin', tmpDir + 'test200m_3.bin', tmpDir + 'test200m_4.bin', tmpDir + 'test200m_5.bin'],
+		blockSize: 512*1024,
+		blocks: 200
+	},
+	{
+		in: [tmpDir + 'test1000m.bin', tmpDir + 'test200m_1.bin', tmpDir + 'test200m_2.bin'],
+		blockSize: 2048*1024,
+		blocks: 50
+	},
+];
 
 // filter out non-applicable benchmarks
 for(var i in benchmarks) {
 	var bm = benchmarks[i];
-	if(!isX86 && bm.platform != 'any')
-		delete benchmarks[i];
-	else if(arch != 'x64' && bm.arch == 'x64')
+	if((bm.x86only && !isX86) || (bm.platform && bm.platform != os.platform()))
 		delete benchmarks[i];
 }
 
@@ -224,6 +227,7 @@ var fs = require('fs');
 var nullBuf = new Buffer(1024*16);
 nullBuf.fill(0);
 var results = {};
+var testFiles = [];
 // grab versions (this also checks existence)
 async.eachSeries(Object.keys(benchmarks), function getVersion(prog, cb) {
 	var b = benchmarks[prog], e = engines[b.engine];
@@ -238,7 +242,7 @@ async.eachSeries(Object.keys(benchmarks), function getVersion(prog, cb) {
 		else
 			console.log('\t' + b.name + ' missing or failed, not benchmaking it');
 		cb();
-	}, b.arch == 'x64' ? 'wine64' : 'wine');
+	}, arch == 'x64' ? 'wine64' : 'wine');
 }, function(err) {
 	
 	if(Object.keys(results).length < 1) {
@@ -249,6 +253,11 @@ async.eachSeries(Object.keys(benchmarks), function getVersion(prog, cb) {
 	console.log('Creating random input file...');
 	// use RC4 as a fast (and consistent) random number generator (pseudoRandomBytes is sloooowwww)
 	function writeRndFile(name, size) {
+		testFiles.push(name);
+		// don't create the file if we already have it
+		if(fs.existsSync(tmpDir + name)) {
+			if(fs.statSync(tmpDir + name).size == size) return;
+		}
 		var fd = fs.openSync(tmpDir + name, 'w');
 		var rand = require('crypto').createCipher('rc4', 'my_incredibly_strong_password' + name);
 		rand.setAutoPadding(false);
@@ -263,37 +272,19 @@ async.eachSeries(Object.keys(benchmarks), function getVersion(prog, cb) {
 		//fsWriteSync(fd, rand.final());
 		fs.closeSync(fd);
 	}
-	writeRndFile('test1g.bin', 1024*1048576);
+	writeRndFile('test1000m.bin', 1000*1048576);
+	writeRndFile('test200m_1.bin', 200*1048576);
+	writeRndFile('test200m_2.bin', 200*1048576);
+	writeRndFile('test200m_3.bin', 200*1048576);
+	writeRndFile('test200m_4.bin', 200*1048576);
+	writeRndFile('test200m_5.bin', 200*1048576);
 	
 	console.log('Running benchmarks...');
-	async.eachSeries([
-		{
-			in: tmpDir + 'test1g.bin',
-			blockSize: 512*1024,
-			blocks: 200
-		},
-		{
-			in: tmpDir + 'test1g.bin',
-			blockSize: 2048*1024,
-			blocks: 50
-		},
-		{
-			in: tmpDir + 'test1g.bin',
-			blockSize: 1024*1024,
-			blocks: 200
-		},
-		{
-			in: tmpDir + 'test1g.bin',
-			blockSize: 512*1024,
-			blocks: 100
-		},
-	], function(set, cb) {
+	async.eachSeries(tests, function(set, cb) {
 		async.eachSeries(Object.keys(results), function(prog, cb) {
 			var b = benchmarks[prog], e = engines[b.engine];
 			set.out = tmpDir + 'benchout';
-			var args = e.args(set);
-			
-			if(b.args) args = args.concat(b.args);
+			var args = e.args(set, b.args).concat(set.in);
 			
 			try {
 				fs.unlinkSync(tmpDir + 'benchout.par2');
@@ -303,9 +294,9 @@ async.eachSeries(Object.keys(benchmarks), function getVersion(prog, cb) {
 			console.log(b.exe + ' ' + args.join(' '));
 			
 			var _exe = b.exe;
-			if(b.platform == 'win' && !isWindows) {
+			if(b.platform == 'win32' && !isWindows) {
 				args.unshift(b.exe);
-				_exe = b.arch == 'x64' ? 'wine64' : 'wine';
+				_exe = arch == 'x64' ? 'wine64' : 'wine';
 				// TODO: paths may need to change for Wine
 			}
 			
@@ -355,7 +346,9 @@ async.eachSeries(Object.keys(benchmarks), function getVersion(prog, cb) {
 		try {
 			fs.unlinkSync(tmpDir + 'benchout.par2');
 		} catch(x) {}
-		fs.unlinkSync(tmpDir + 'test1g.bin');
+		testFiles.forEach(function(f) {
+			fs.unlinkSync(tmpDir + f);
+		});
 	});
 	
 });

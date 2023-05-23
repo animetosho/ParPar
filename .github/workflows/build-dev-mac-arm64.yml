@@ -1,33 +1,22 @@
-name: Build dev MacOS binary
+name: Build dev MacOS arm64 binary
 on:
   workflow_dispatch:
 
 jobs:
   build-dev-mac-arm64:
     name: Build dev arm64 MacOS binary
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
     env:
       BUILD_ARCH: arm64
       BUILD_LOGLEVEL: verbose
     steps:
-      - uses: mbround18/setup-osxcross@v1
-        with:
-          osx-version: "12.3"
-      - uses: actions/setup-python@v3
-        with:
-          python-version: '2.7'
       - uses: actions/checkout@v3
-      - run: npm install --production
+      - run: npm install --production --ignore-scripts
       - run: (cd nexe && npm install --production)
       - run: (cd nexe && node build)
-        env:
-          CC: oa64e-clang
-          CXX: oa64e-clang++
-          CC_host: cc
-          CXX_host: c++
-      - run: xz -9e --lzma2 nexe/parpar -C > parpar.xz
+      - run: xz -9e --lzma2 nexe/parpar -c > parpar.xz
       - uses: actions/upload-artifact@v3
         with:
           path: ./parpar.xz
-          name: parpar-${{ github.ref_name }}-macos-arm64e.7z
+          name: parpar-${{ github.ref_name }}-macos-arm64.7z
           retention-days: 5

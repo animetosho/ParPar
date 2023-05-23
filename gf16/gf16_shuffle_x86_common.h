@@ -67,16 +67,17 @@ static HEDLEY_ALWAYS_INLINE void shuf0_vector(uint16_t val, __m128i* prod0, __m1
 
 
 static HEDLEY_ALWAYS_INLINE _mword separate_low_high(_mword data) {
+	// MSVC < 2019 doesn't seem to like #if or defines inside _mm512_set*, so we expand it manually
+#if MWORD_SIZE == 64
+	return _MM(shuffle_epi8)(data, _mm512_set4_epi32(0x0f0d0b09, 0x07050301, 0x0e0c0a08, 0x06040200));
+#else
 	return _MM(shuffle_epi8)(data, _MM(set_epi32)(
-#if MWORD_SIZE >= 64
+# if MWORD_SIZE >= 32
 		0x0f0d0b09, 0x07050301, 0x0e0c0a08, 0x06040200,
-		0x0f0d0b09, 0x07050301, 0x0e0c0a08, 0x06040200,
-#endif
-#if MWORD_SIZE >= 32
-		0x0f0d0b09, 0x07050301, 0x0e0c0a08, 0x06040200,
-#endif
+# endif
 		0x0f0d0b09, 0x07050301, 0x0e0c0a08, 0x06040200
 	));
+#endif
 }
 
 
@@ -150,14 +151,15 @@ static HEDLEY_ALWAYS_INLINE __m256i gf16_vec256_mul2(__m256i v) {
 #endif
 static HEDLEY_ALWAYS_INLINE void mul16_vec128(__m128i mulLo, __m128i mulHi, __m128i srcLo, __m128i srcHi, __m128i* dstLo, __m128i *dstHi) {
 	__m128i ti = _MM128_SRLI4_EPI8(srcHi);
+	__m128i sh = srcHi; // MSVC x86 seems to have an odd bug where the parent's variable (e.g. high0/1/2/3) can be modified if srcHi is modified; we work around this by explicitly assigning it to something else
 #ifdef GF16_POLYNOMIAL_SIMPLE
-	srcHi = _mm_xor_si128(srcHi, ti);
+	sh = _mm_xor_si128(sh, ti);
 #endif
 #if MWORD_SIZE == 64
 	__m128i th = _mm_ternarylogic_epi32(
 		_mm_srli_epi16(srcLo, 4),
 		_mm_set1_epi8(0xf),
-		_mm_slli_epi16(srcHi, 4),
+		_mm_slli_epi16(sh, 4),
 		0xE2
 	);
 	*dstLo = _mm_ternarylogic_epi32(
@@ -168,7 +170,7 @@ static HEDLEY_ALWAYS_INLINE void mul16_vec128(__m128i mulLo, __m128i mulHi, __m1
 	);
 #else
 	__m128i tl = _MM128_SLLI4_EPI8(srcLo);
-	__m128i th = _MM128_SLLI4_EPI8(srcHi);
+	__m128i th = _MM128_SLLI4_EPI8(sh);
 	th = _mm_or_si128(th, _MM128_SRLI4_EPI8(srcLo));
 	*dstLo = _mm_xor_si128(tl, _mm_shuffle_epi8(mulLo, ti));
 #endif
@@ -219,7 +221,7 @@ static HEDLEY_ALWAYS_INLINE __m512i gf16_vec512_mul2(__m512i v) {
 }
 static HEDLEY_ALWAYS_INLINE void gf16_initial_mul_vector_x2(const uint16_t* coefficients, __m256i* prod0, __m256i* mul8) {
 	*prod0 = _mm256_shuffle_epi8(
-		_mm256_broadcastd_epi32(_mm_cvtsi32_si128(*(uint32_t*)coefficients)),
+		_mm256_broadcastd_epi32(_mm_cvtsi32_si128(read32(coefficients))),
 		_mm256_set_epi32(
 			0x03020302, 0x03020302, 0x03020302, 0x03020302,
 			0x01000100, 0x01000100, 0x01000100, 0x01000100
@@ -249,7 +251,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_initial_mul_vector_x4(const uint16_t* coef
 	if(do4)
 		coeff = _mm_loadl_epi64((__m128i*)coefficients);
 	else
-		coeff = _mm_insert_epi16(_mm_cvtsi32_si128(*(uint32_t*)coefficients), coefficients[2], 2);
+		coeff = _mm_insert_epi16(_mm_cvtsi32_si128(read32(coefficients)), coefficients[2], 2);
 	
 	*prod0 = _mm512_shuffle_epi8(_mm512_broadcastq_epi64(coeff), _mm512_set_epi32(
 		0x07060706, 0x07060706, 0x07060706, 0x07060706,

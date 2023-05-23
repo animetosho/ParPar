@@ -33,9 +33,9 @@ int gf16_affine_available_avx512 = 0;
 
 #if defined(__GFNI__) && defined(__AVX512BW__) && defined(__AVX512VL__)
 # ifdef PLATFORM_AMD64
-GF_PREPARE_PACKED_FUNCS(gf16_affine, _avx512, sizeof(__m512i)*2, gf16_shuffle_prepare_block_avx512, gf16_shuffle_prepare_blocku_avx512, 6, _mm256_zeroupper(), __m512i checksum = _mm512_setzero_si512(), gf16_checksum_block_avx512, gf16_checksum_blocku_avx512, gf16_checksum_zeroes_avx512, gf16_checksum_prepare_avx512)
+GF_PREPARE_PACKED_FUNCS(gf16_affine, _avx512, sizeof(__m512i)*2, gf16_shuffle_prepare_block_avx512, gf16_shuffle_prepare_blocku_avx512, 6, _mm256_zeroupper(), __m512i checksum = _mm512_setzero_si512(), gf16_checksum_block_avx512, gf16_checksum_blocku_avx512, gf16_checksum_exp_avx512, gf16_checksum_prepare_avx512, sizeof(__m512i))
 # else
-GF_PREPARE_PACKED_FUNCS(gf16_affine, _avx512, sizeof(__m512i)*2, gf16_shuffle_prepare_block_avx512, gf16_shuffle_prepare_blocku_avx512, 1, _mm256_zeroupper(), __m512i checksum = _mm512_setzero_si512(), gf16_checksum_block_avx512, gf16_checksum_blocku_avx512, gf16_checksum_zeroes_avx512, gf16_checksum_prepare_avx512)
+GF_PREPARE_PACKED_FUNCS(gf16_affine, _avx512, sizeof(__m512i)*2, gf16_shuffle_prepare_block_avx512, gf16_shuffle_prepare_blocku_avx512, 1, _mm256_zeroupper(), __m512i checksum = _mm512_setzero_si512(), gf16_checksum_block_avx512, gf16_checksum_blocku_avx512, gf16_checksum_exp_avx512, gf16_checksum_prepare_avx512, sizeof(__m512i))
 # endif
 #else
 GF_PREPARE_PACKED_FUNCS_STUB(gf16_affine, _avx512)
@@ -328,6 +328,10 @@ static HEDLEY_ALWAYS_INLINE void gf16_affine2x_muladd_x_avx512(
 	__m512i matNormK, matSwapK;
 	__m512i matNormL, matSwapL;
 	__m512i matNormM, matSwapM;
+	
+	// prevent MSVC whining
+	matNormB = matSwapB = matNormC = matSwapC = matNormD = matSwapD = matNormE = matSwapE = matNormF = matSwapF = matNormG = matSwapG = matNormH = matSwapH = matNormI = matSwapI = matNormJ = matSwapJ = matNormK = matSwapK = matNormL = matSwapL = matNormM = matSwapM = _mm512_undefined_epi32();
+	
 	if(srcCount == 1) {
 		depmask = _mm512_castsi256_si512(gf16_affine_load_matrix(scratch, coefficients[0]));
 		matNormA = _mm512_shuffle_i64x2(depmask, depmask, _MM_SHUFFLE(0,0,0,0));
