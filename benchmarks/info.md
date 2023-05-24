@@ -14,6 +14,8 @@ Sample Benchmark Results
 
 ![](result-4570s.png)
 
+![](result-12700k.png)
+
 Benchmark Details
 =================
 
@@ -34,7 +36,7 @@ Applications Tested (and commands given)
     -   [TBB won't work on non-x86 CPUs, or older versions of Windows](https://www.threadingbuildingblocks.org/system-requirements)
 -   [par2cmdline-turbo 1.0.0](https://github.com/animetosho/par2cmdline-turbo) [2023-05-24]
     -   `par2_turbo c -s [blocksize] -c [rblocks] -n1 -m 2000 [output] [input]`
-    -   par2cmdline ~0.8.2 using the ParPar 0.4.0 backend
+    -   par2cmdline 0.8.1~0.8.2 using the ParPar 0.4.0 backend
 -   [gopar](https://github.com/akalin/gopar) [2021-05-24]
     -   `gopar -g [threads] c -s [blocksize] -c [rblocks] [output].par2 [input]`
     -   Compiled using Go v1.20.4
@@ -49,7 +51,7 @@ Applications Tested (and commands given)
 Applications Not Tested
 -----------------------
 
-The only other complete-ish implementation of PAR2 I could find is [QuickPar](http://www.quickpar.org.uk/). This is a Windows-only GUI application which hasn't been updated since 2004, and no source code available. The application has largely be superseeded by newer clients, and considering its single threaded nature, is unlikely competitive by today's standards.
+The only other complete-ish implementation of PAR2 I could find is [QuickPar](http://www.quickpar.org.uk/). This is a Windows-only GUI application which hasn't been updated since 2004, and no source code available. The application has largely be superseded by newer clients, and considering its single threaded nature, is unlikely competitive by today's standards.
 
 Running Your Own Benchmarks
 ===========================
