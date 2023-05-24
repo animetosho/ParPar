@@ -48,23 +48,26 @@ jobs:
           xz_bcj: --x86
           name: amd64
           no_lto: 
+          configure: 
         - target: aarch64-linux-musl
           arch: arm64
           xz_bcj: # --arm64 # requires xz utils >=5.4 to decompress
           name: aarch64
           no_lto: 
+          configure: 
         # disabled due to compiler crashing
         #- target: armv7l-linux-musleabihf
         #  arch: arm
         #  xz_bcj: --arm
         #  name: armhf
         #  no_lto: 1
+        #  configure: --with-arm-float-abi=hard --with-arm-fpu=vfpv3-d16
     name: Build ${{ matrix.name }} Linux static binary
     runs-on: ubuntu-latest
     env:
       BUILD_ARCH: ${{ matrix.arch }}
       BUILD_LOGLEVEL: verbose
-      BUILD_CONFIGURE: '--with-arm-float-abi=hard --with-arm-fpu=vfpv3-d16'
+      BUILD_CONFIGURE: ${{ matrix.configure }}
       BUILD_STATIC: '--fully-static'
       BUILD_NO_LTO: ${{ matrix.no_lto }}
     steps:
@@ -81,7 +84,7 @@ jobs:
         with:
           arch: i386  # '-m32' switch doesn't work without this
           packages: "libstdc++-$(c++ -dumpversion)-dev:i386 libc6-dev:i386"
-        if: ${{ matrix.arch }} == 'arm'
+        if: ${{ matrix.arch == 'arm' }}
       - name: Get release
         id: get_release
         uses: bruceadams/get-release@v1.2.3
@@ -117,6 +120,7 @@ jobs:
           no_lto: 
           ubuntu: '20.04'
           glibc: '2.31'
+          configure: 
         - xcc: aarch64-linux-gnu-
           arch: arm64
           xz_bcj: # --arm64 # requires xz utils >=5.4 to decompress
@@ -124,6 +128,7 @@ jobs:
           no_lto: 
           ubuntu: '22.04'  # gcc-11 needed for SVE support
           glibc: '2.35'
+          configure: 
         #- xcc: arm-linux-gnueabihf-
         #  arch: armhf
         #  xz_bcj: --arm
@@ -131,12 +136,13 @@ jobs:
         #  no_lto: 1  # AArch32 compilers don't like mixing FPU modes with LTO [https://github.com/sabnzbd/#sabctools/issues/56#issuecomment-1151994494]
         #  ubuntu: '20.04'
         #  glibc: '2.31'
+        #  configure: --with-arm-float-abi=hard --with-arm-fpu=vfpv3-d16
     name: Build ${{ matrix.name }} Linux glibc binary
     runs-on: ubuntu-${{ matrix.ubuntu }}
     env:
       BUILD_ARCH: ${{ matrix.arch }}
       BUILD_LOGLEVEL: verbose
-      BUILD_CONFIGURE: '--with-arm-float-abi=hard --with-arm-fpu=vfpv3-d16'
+      BUILD_CONFIGURE: ${{ matrix.configure }}
       BUILD_STATIC: '--partly-static'
       BUILD_NO_LTO: ${{ matrix.no_lto }}
     steps:
@@ -148,12 +154,12 @@ jobs:
       - uses: cyberjunk/gha-ubuntu-cross@v2
         with:
           arch: ${{ matrix.arch }}
-        if: ${{ matrix.arch }} != 'x64'
+        if: ${{ matrix.arch != 'x64' }}
       - uses: ryankurte/action-apt@v0.3.0
         with:
           arch: i386  # '-m32' switch doesn't work without this
           packages: "libstdc++-$(c++ -dumpversion)-dev:i386 libc6-dev:i386"
-        if: ${{ matrix.arch }} == 'armhf'
+        if: ${{ matrix.arch == 'armhf' }}
       - name: Get release
         id: get_release
         uses: bruceadams/get-release@v1.2.3
