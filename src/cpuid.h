@@ -27,9 +27,11 @@
 # endif
 
 // Atom Core detection
+//  Bonnell/Silvermont
 # define CPU_MODEL_IS_BNL_SLM(model) (model == 0x1C || model == 0x26 || model == 0x27 || model == 0x35 || model == 0x36 || model == 0x37 || model == 0x4A || model == 0x4C || model == 0x4D || model == 0x5A || model == 0x5D)
-// 0x7A is Goldmont Plus
+//  Goldmont / 0x7A is Goldmont Plus
 # define CPU_MODEL_IS_GLM(model) ((model == 0x5C || model == 0x5F) || (model == 0x7A))
+//  Tremont
 # define CPU_MODEL_IS_TMT(model) (model == 0x86 || model == 0x96 || model == 0x9C)
 
 // AMD Fam 14h (Bobcat) and 16h (Jaguar/Puma)
@@ -42,12 +44,6 @@
 # ifdef __ANDROID__
 // TODO: may be better to prefer auxv as it's supported
 #  include <cpu-features.h>
-# elif defined(__linux__) || (defined(__FreeBSD__) && __FreeBSD__ >= 12)
-#  include <sys/auxv.h>
-#  include <asm/hwcap.h>
-# elif (defined(__FreeBSD__) && __FreeBSD__ < 12)
-#  include <sys/sysctl.h>
-#  include <asm/hwcap.h>
 # elif defined(_WIN32)
 #  define WIN32_LEAN_AND_MEAN
 #  define NOMINMAX
@@ -55,13 +51,20 @@
 # elif defined(__APPLE__)
 #  include <sys/types.h>
 #  include <sys/sysctl.h>
-# endif
-# ifdef __FreeBSD__
+# elif defined(__has_include)
+#  if __has_include(<sys/auxv.h>)
+#   include <sys/auxv.h>
+#   ifdef __FreeBSD__
 static unsigned long getauxval(unsigned long cap) {
 	unsigned long ret;
 	elf_aux_info(cap, &ret, sizeof(ret));
 	return ret;
 }
+#   endif
+#   if __has_include(<asm/hwcap.h>)
+#    include <asm/hwcap.h>
+#   endif
+#  endif
 # endif
 
 # define CPU_HAS_NEON false
