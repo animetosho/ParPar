@@ -337,6 +337,7 @@ try {
 	}
 }
 
+var is64bPlatform = ['arm64','ppc64','x64'].indexOf(process.arch) > -1;
 var allTests = [
 	
 	{
@@ -483,7 +484,7 @@ var allTests = [
 		in: [tmpDir + 'test64m.bin'],
 		blockSize: 2048*1048576 - 1024-68,
 		blocks: 1,
-		memory: process.arch == 'x64' ? 2560*1048576 : 1536*1048576,
+		memory: is64bPlatform ? 2560*1048576 : 1536*1048576,
 		singleFile: true,
 		cacheKey: '13'
 	},
@@ -535,7 +536,19 @@ var allTests = [
 		singleFile: true,
 		cacheKey: '19'
 	},
+	
 ];
+if(is64bPlatform) {
+	allTests.push({ // recovery > 4GB in memory [https://github.com/animetosho/par2cmdline-turbo/issues/7]
+		in: [tmpDir + 'test4100m.bin'],
+		blockSize: 100*1048576,
+		blocks: 41,
+		singleFile: true,
+		memory: 8192*1048576,
+		cacheKey: '23',
+		readSize: '100M'
+	});
+}
 
 
 async.timesSeries(allTests.length, function(testNum, cb) {
