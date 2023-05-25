@@ -200,6 +200,28 @@ HEDLEY_WARNING("GFNI disabled on GCC < 10 due to incorrect GF2P8AFFINEQB operand
 # endif
 #endif
 
+// Some environments lack ARM headers, so try to check for these
+#ifdef __has_include
+# if defined(__ARM_FEATURE_SVE) && !__has_include(<arm_sve.h>)
+#  undef __ARM_FEATURE_SVE
+#  ifdef PP_PLATFORM_SHOW_WARNINGS
+HEDLEY_WARNING("SVE disabled due to missing arm_sve.h header");
+#  endif
+# endif
+# if defined(__ARM_FEATURE_SVE2) && !__has_include(<arm_sve.h>)
+#  undef __ARM_FEATURE_SVE2
+#  ifdef PP_PLATFORM_SHOW_WARNINGS
+HEDLEY_WARNING("SVE2 disabled due to missing arm_sve.h header");
+#  endif
+# endif
+# if defined(__ARM_NEON) && !__has_include(<arm_neon.h>)
+#  undef __ARM_NEON
+#  ifdef PP_PLATFORM_SHOW_WARNINGS
+HEDLEY_WARNING("NEON disabled due to missing arm_neon.h header");
+#  endif
+# endif
+#endif
+
 // alignment
 
 #ifdef _MSC_VER

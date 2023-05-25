@@ -9,6 +9,11 @@
 #  undef __ARM_FEATURE_CRC32
 # endif
 #endif
+#if defined(__ARM_FEATURE_CRC32) && defined(__has_include)
+# if !__has_include(<arm_acle.h>)
+#  undef __ARM_FEATURE_CRC32
+# endif
+#endif
 
 
 #define HasherInput HasherInput_NEONCRC

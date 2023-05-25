@@ -17,6 +17,12 @@ HEDLEY_WARNING("CRC32 acceleration has been disabled due to broken arm_acle.h sh
 # endif
 #endif
 
+#if defined(__ARM_FEATURE_CRC32) && defined(__has_include)
+# if !__has_include(<arm_acle.h>)
+#  undef __ARM_FEATURE_CRC32
+HEDLEY_WARNING("CRC32 acceleration has been disabled due to missing arm_acle.h");
+# endif
+#endif
 
 #define HasherInput HasherInput_ARMCRC
 #define CRC32Impl(n) n##_ARMCRC
