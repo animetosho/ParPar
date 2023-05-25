@@ -449,8 +449,7 @@ typedef struct __compute_req : PAR2ProcBackendBaseComputeReq<PAR2ProcCPU> {
 	uint16_t numOutputs;
 	const uint16_t *outNonZero;
 	const uint16_t* coeffs;
-	size_t len, chunkSize;
-	unsigned numChunks;
+	size_t len, chunkSize, numChunks;
 	const void* input;
 	void* output;
 	bool add;
@@ -486,7 +485,7 @@ void PAR2ProcCPU::compute_worker(ThreadMessageQueue<void*>& q) {
 			}
 		}
 		
-		for(unsigned round = 0; round < req->numChunks; round++) {
+		for(size_t round = 0; round < req->numChunks; round++) {
 			size_t procSize = MIN(req->len-round*req->chunkSize, req->chunkSize);
 			const char* srcPtr = static_cast<const char*>(req->input) + round*req->chunkSize*req->inputGrouping;
 			for(unsigned out = 0; out < req->numOutputs; out++) {
@@ -562,9 +561,9 @@ void PAR2ProcCPU::run_kernel(unsigned inBuf, unsigned numInputs) {
 	};
 	
 	// distribute chunks evenly across threads. For remaining chunks, try to distribute the outputs evenly across threads, but don't allow a thread to handle more than one remaining chunk
-	unsigned fullChunksPerThread = numChunks / numThreads;
+	size_t fullChunksPerThread = numChunks / numThreads;
 	unsigned leftoverChunks = numChunks % numThreads;
-	unsigned chunk = 0;
+	size_t chunk = 0;
 	// start off with remaining chunks
 	if(leftoverChunks) {
 		// send each chunk to this many threads

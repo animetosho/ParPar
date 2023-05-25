@@ -30,7 +30,7 @@ private:
 	
 	Galois16Mul* gf;
 	size_t chunkLen; // loop tiling size
-	unsigned numChunks;
+	size_t numChunks;
 	unsigned alignment;
 	unsigned stride;
 	void freeGf();
