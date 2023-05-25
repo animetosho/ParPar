@@ -128,9 +128,9 @@ static HEDLEY_ALWAYS_INLINE void gf16_xorjit_write_jit(const void *HEDLEY_RESTRI
 		if((uintptr_t)jitptr & (_GF16_XORJIT_COPY_ALIGN-1)) {
 			// copy unaligned part
 #if _GF16_XORJIT_COPY_ALIGN == 32 && defined(__AVX2__)
-			_mm256_store_si256((__m256i*)jitTemp, _mm256_load_si256((__m256i*)((uintptr_t)jitptr & ~(_GF16_XORJIT_COPY_ALIGN-1))));
+			_mm256_store_si256((__m256i*)jitTemp, _mm256_load_si256((__m256i*)((uintptr_t)jitptr & ~(uintptr_t)(_GF16_XORJIT_COPY_ALIGN-1))));
 #else
-			_mm_store_si128((__m128i*)jitTemp, _mm_load_si128((__m128i*)((uintptr_t)jitptr & ~(_GF16_XORJIT_COPY_ALIGN-1))));
+			_mm_store_si128((__m128i*)jitTemp, _mm_load_si128((__m128i*)((uintptr_t)jitptr & ~(uintptr_t)(_GF16_XORJIT_COPY_ALIGN-1))));
 #endif
 			copyOffset -= (uintptr_t)jitptr & (_GF16_XORJIT_COPY_ALIGN-1);
 			jitptr = jitTemp + ((uintptr_t)jitptr & (_GF16_XORJIT_COPY_ALIGN-1));

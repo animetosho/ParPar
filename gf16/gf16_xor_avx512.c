@@ -813,7 +813,7 @@ void gf16_xor_jit_muladd_multi_avx512(const void *HEDLEY_RESTRICT scratch, unsig
 		if(info->jitOptStrat == GF16_XOR_JIT_STRAT_COPYNT || info->jitOptStrat == GF16_XOR_JIT_STRAT_COPY) {
 			if((uintptr_t)jitdst & 0x1F) {
 				/* copy unaligned part (might not be worth it for these CPUs, but meh) */
-				_mm256_store_si256((__m256i*)jitTemp, _mm256_load_si256((__m256i*)((uintptr_t)jitptr & ~0x1F)));
+				_mm256_store_si256((__m256i*)jitTemp, _mm256_load_si256((__m256i*)((uintptr_t)jitptr & ~(uintptr_t)0x1F)));
 				jitptr = jitTemp + ((uintptr_t)jitdst & 0x1F);
 				jitdst -= (uintptr_t)jitdst & 0x1F;
 			}
@@ -876,7 +876,7 @@ void gf16_xor_jit_muladd_multi_avx512(const void *HEDLEY_RESTRICT scratch, unsig
 				}
 			}
 		} else {
-			*(int32_t*)(jitptr +5) = (int32_t)((uint8_t*)jit->w - jitptr -9);
+			write32(jitptr +5, (int32_t)((uint8_t*)jit->w - jitptr -9));
 			jitptr[9] = 0xC3; /* ret */
 		}
 		
@@ -920,7 +920,7 @@ void gf16_xor_jit_muladd_multi_packed_avx512(const void *HEDLEY_RESTRICT scratch
 		if(info->jitOptStrat == GF16_XOR_JIT_STRAT_COPYNT || info->jitOptStrat == GF16_XOR_JIT_STRAT_COPY) {
 			if((uintptr_t)jitdst & 0x1F) {
 				/* copy unaligned part (might not be worth it for these CPUs, but meh) */
-				_mm256_store_si256((__m256i*)jitTemp, _mm256_load_si256((__m256i*)((uintptr_t)jitptr & ~0x1F)));
+				_mm256_store_si256((__m256i*)jitTemp, _mm256_load_si256((__m256i*)((uintptr_t)jitptr & ~(uintptr_t)0x1F)));
 				jitptr = jitTemp + ((uintptr_t)jitdst & 0x1F);
 				jitdst -= (uintptr_t)jitdst & 0x1F;
 			}
@@ -955,9 +955,9 @@ void gf16_xor_jit_muladd_multi_packed_avx512(const void *HEDLEY_RESTRICT scratch
 		}
 		
 		/* cmp/jcc */
-		*(uint64_t*)(jitptr) = 0x800FC03948 | (AX <<16) | (CX <<19) | ((uint64_t)JL <<32);
+		write64(jitptr, 0x800FC03948 | (AX <<16) | (CX <<19) | ((uint64_t)JL <<32));
 		if(info->jitOptStrat == GF16_XOR_JIT_STRAT_COPYNT || info->jitOptStrat == GF16_XOR_JIT_STRAT_COPY) {
-			*(int32_t*)(jitptr +5) = (int32_t)((jitTemp - (jitdst - (uint8_t*)jit->w)) - jitptr -9);
+			write32(jitptr +5, (int32_t)((jitTemp - (jitdst - (uint8_t*)jit->w)) - jitptr -9));
 			jitptr[9] = 0xC3; /* ret */
 			/* memcpy to destination */
 			if(info->jitOptStrat == GF16_XOR_JIT_STRAT_COPYNT) {
@@ -982,7 +982,7 @@ void gf16_xor_jit_muladd_multi_packed_avx512(const void *HEDLEY_RESTRICT scratch
 				}
 			}
 		} else {
-			*(int32_t*)(jitptr +5) = (int32_t)((uint8_t*)jit->w - jitptr -9);
+			write32(jitptr +5, (int32_t)((uint8_t*)jit->w - jitptr -9));
 			jitptr[9] = 0xC3; /* ret */
 		}
 		
