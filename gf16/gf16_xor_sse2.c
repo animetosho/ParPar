@@ -267,7 +267,7 @@ static HEDLEY_ALWAYS_INLINE void STOREU_XMM(void* dest, __m128i xmm) {
 		"cmovnz %[s], %[d]\n" \
 		: [d]"+r"(dst): [c]"r"(cond), [s]"r"(src))
 #else
-	//#define CMOV(c,d,s) (d) = ((c) & (s)) | (~(c) & (d));
+	//#define CMOV(c,d,s) (d) = ((c) & (s)) | (~(uintptr_t)(c) & (d));
 	#define CMOV(c, d, s) if(c) (d) = (s)
 #endif
 

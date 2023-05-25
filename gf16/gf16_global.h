@@ -99,7 +99,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_prepare_packed(
 	
 	size_t partLeft = partLen;
 	if(partOffset + partLen == srcLen)
-		partLeft = ~0; // if we're completing the slice, ensure that we never exit early
+		partLeft = ~(size_t)0; // if we're completing the slice, ensure that we never exit early
 	
 	size_t dataChunkLen = chunkLen;
 	if(dataChunkLen > sliceLen) dataChunkLen = sliceLen;
