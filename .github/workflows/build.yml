@@ -53,8 +53,8 @@ jobs:
           xz_bcj: --x86
           name: amd64
           no_lto: 
-          ubuntu: '20.04'
-          glibc: '2.31'
+          ubuntu: '22.04'
+          glibc: '2.35'
           configure: 
         - xcc: aarch64-linux-gnu-
           arch: arm64

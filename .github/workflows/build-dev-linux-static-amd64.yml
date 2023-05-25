@@ -16,9 +16,13 @@ jobs:
         with:
           python-version: '3.9' # workaround "cannot import name 'Mapping' from 'collections'" error
       - uses: actions/checkout@v3
+      - run: apt-get install gcc-10 g++-10
       - run: npm install --production --ignore-scripts
       - run: (cd nexe && npm install --production)
       - run: (cd nexe && node build)
+        env:
+          CC: gcc-10
+          CXX: g++-10
       - run: xz -9e --x86 --lzma2 nexe/parpar -c > parpar.xz
       - uses: actions/upload-artifact@v3
         with:
