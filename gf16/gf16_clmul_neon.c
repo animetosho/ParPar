@@ -11,9 +11,6 @@
 static HEDLEY_ALWAYS_INLINE poly8x16_t veorq_p8(poly8x16_t a, poly8x16_t b) {
 	return vreinterpretq_p8_u8(veorq_u8(vreinterpretq_u8_p8(a), vreinterpretq_u8_p8(b)));
 }
-static HEDLEY_ALWAYS_INLINE poly16x8_t veorq_p16(poly16x8_t a, poly16x8_t b) {
-	return vreinterpretq_p16_u16(veorq_u16(vreinterpretq_u16_p16(a), vreinterpretq_u16_p16(b)));
-}
 
 #ifdef __aarch64__
 typedef poly8x16_t coeff_t;
@@ -48,6 +45,34 @@ typedef poly8x8_t coeff_t;
 # define pmull_high(x, y) vmull_p8(vget_high_p8(x), y)
 #endif
 
+#if defined(__aarch64__) && (defined(__GNUC__) || defined(__clang__)) && defined(__APPLE__)
+// Apple M1 supports fusing PMULL+EOR, so ensure these are paired
+static HEDLEY_ALWAYS_INLINE poly16x8_t pmacl_low(poly16x8_t sum, poly8x16_t a, poly8x16_t b) {
+	poly16x8_t result;
+	__asm__ ("pmull %0.8h,%1.8b,%2.8b\n"
+	         "eor %0.16b,%0.16b,%3.16b\n"
+		: "=&w"(result)
+		: "w"(a), "w"(b), "w"(sum)
+		: /* No clobbers */);
+	return result;
+}
+static HEDLEY_ALWAYS_INLINE poly16x8_t pmacl_high(poly16x8_t sum, poly8x16_t a, poly8x16_t b) {
+	poly16x8_t result;
+	__asm__ ("pmull2 %0.8h,%1.16b,%2.16b\n"
+	         "eor %0.16b,%0.16b,%3.16b\n"
+		: "=&w"(result)
+		: "w"(a), "w"(b), "w"(sum)
+		: /* No clobbers */);
+	return result;
+}
+#else
+static HEDLEY_ALWAYS_INLINE poly16x8_t veorq_p16(poly16x8_t a, poly16x8_t b) {
+	return vreinterpretq_p16_u16(veorq_u16(vreinterpretq_u16_p16(a), vreinterpretq_u16_p16(b)));
+}
+# define pmacl_low(sum, a, b) veorq_p16(sum, pmull_low(a, b))
+# define pmacl_high(sum, a, b) veorq_p16(sum, pmull_high(a, b))
+#endif
+
 static HEDLEY_ALWAYS_INLINE void gf16_clmul_neon_round1(const void* src, poly16x8_t* low1, poly16x8_t* low2, poly16x8_t* mid1, poly16x8_t* mid2, poly16x8_t* high1, poly16x8_t* high2, const coeff_t* coeff) {
 	poly8x16x2_t data = vld2q_p8((const poly8_t*)src);
 	*low1 = pmull_low(data.val[0], coeff[0]);
@@ -76,14 +101,14 @@ static HEDLEY_ALWAYS_INLINE void gf16_clmul_neon_round1(const void* src, poly16x
 }
 
 static HEDLEY_ALWAYS_INLINE void gf16_clmul_neon_round(const void* src, poly16x8_t* low1, poly16x8_t* low2, poly16x8_t* mid1, poly16x8_t* mid2, poly16x8_t* high1, poly16x8_t* high2, const coeff_t* coeff) {
-	poly16x8_t _low1, _low2, _mid1, _mid2, _high1, _high2;
-	gf16_clmul_neon_round1(src, &_low1, &_low2, &_mid1, &_mid2, &_high1, &_high2, coeff);
-	*low1 = veorq_p16(*low1, _low1);
-	*low2 = veorq_p16(*low2, _low2);
-	*mid1 = veorq_p16(*mid1, _mid1);
-	*mid2 = veorq_p16(*mid2, _mid2);
-	*high1 = veorq_p16(*high1, _high1);
-	*high2 = veorq_p16(*high2, _high2);
+	poly8x16x2_t data = vld2q_p8((const poly8_t*)src);
+	*low1 = pmacl_low(*low1, data.val[0], coeff[0]);
+	*low2 = pmacl_high(*low2, data.val[0], coeff[0]);
+	poly8x16_t mid = veorq_p8(data.val[0], data.val[1]);
+	*mid1 = pmacl_low(*mid1, mid, coeff[2]);
+	*mid2 = pmacl_high(*mid2, mid, coeff[2]);
+	*high1 = pmacl_low(*high1, data.val[1], coeff[1]);
+	*high2 = pmacl_high(*high2, data.val[1], coeff[1]);
 }
 
 static HEDLEY_ALWAYS_INLINE void gf16_clmul_neon_reduction(poly16x8_t* low1, poly16x8_t low2, poly16x8_t mid1, poly16x8_t mid2, poly16x8_t* high1, poly16x8_t high2) {
