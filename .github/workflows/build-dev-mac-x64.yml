@@ -14,6 +14,7 @@ jobs:
       - run: npm install --production --ignore-scripts
       - run: (cd nexe && npm install --production)
       - run: (cd nexe && node build)
+      - run: nexe/parpar --version
       - run: xz -9e --x86 --lzma2 nexe/parpar -c > parpar.xz
       - uses: actions/upload-artifact@v3
         with:

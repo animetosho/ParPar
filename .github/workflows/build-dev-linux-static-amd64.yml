@@ -25,6 +25,7 @@ jobs:
         env:
           CC: gcc-10
           CXX: g++-10
+      - run: nexe/parpar --version
       - run: xz -9e --x86 --lzma2 nexe/parpar -c > parpar.xz
       - uses: actions/upload-artifact@v3
         with:
