@@ -198,6 +198,7 @@ nexe.compile({
 			data = data.contents.toString();
 			const internalModuleRegister = (parseFloat(nodeVer) >= 12) ? 'NODE_MODULE_CONTEXT_AWARE_INTERNAL' : 'NODE_BUILTIN_MODULE_CONTEXT_AWARE';
 			data = data.replace(/NODE_MODULE\(/, '#define NODE_WANT_INTERNALS 1\n#include <node_internals.h>\n' + internalModuleRegister + '(');
+			data = data.replace(/Local<Value> module,\s*void\* priv/, 'Local<Value> module, v8::Local<v8::Context> context, void* priv');
 			await compiler.setFileContentsAsync('deps/parpar/src/gf.cc', data);
 			
 			data = await compiler.readFileAsync('deps/parpar/binding.gyp');
