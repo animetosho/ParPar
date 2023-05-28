@@ -59,8 +59,8 @@ int _FN(gf16_cksum_copy_check)(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RES
 }
 
 #else
-void _FN(gf16_cksum_copy)(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen) {
-	UNUSED(dst); UNUSED(src); UNUSED(srcLen);
+void _FN(gf16_cksum_copy)(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen, size_t sliceLen) {
+	UNUSED(dst); UNUSED(src); UNUSED(srcLen); UNUSED(sliceLen);
 }
 int _FN(gf16_cksum_copy_check)(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len) {
 	UNUSED(dst); UNUSED(src); UNUSED(len);

@@ -208,7 +208,7 @@ nexe.compile({
 			if(parseFloat(nodeVer) < 12)
 				includeList += ', "../cares/include"';
 			data = data.replace(/"include_dirs": \[("\.\.\/\.\.\/src"[^\]]+)?"gf16"/, '"include_dirs": [' + includeList + ', "gf16"');
-			data = data.replace(/"enable_native_tuning%": 1,/, '"enable_native_tuning%": 0,');
+			data = data.replace(/"enable_native_tuning%": 1/, '"enable_native_tuning%": 0');
 			if(staticness == '--fully-static')
 				data = data.replace(/"PARPAR_LIBDL_SUPPORT",?/, '');
 			await compiler.setFileContentsAsync('deps/parpar/binding.gyp', data);

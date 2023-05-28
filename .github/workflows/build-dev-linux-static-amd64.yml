@@ -5,7 +5,7 @@ on:
 jobs:
   build-dev-linux-static-amd64:
     name: Build dev amd64 Linux static binary
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     env:
       BUILD_ARCH: x64
       BUILD_LOGLEVEL: verbose
@@ -26,6 +26,7 @@ jobs:
           CC: gcc-10
           CXX: g++-10
       - run: nexe/parpar --version
+      - run: nexe/parpar -r1 -s1M -onexe/test.par2 nexe/parpar
       - run: xz -9e --x86 --lzma2 nexe/parpar -c > parpar.xz
       - uses: actions/upload-artifact@v3
         with:
