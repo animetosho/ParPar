@@ -5,11 +5,12 @@ on:
 jobs:
   build-dev-linux-static-amd64:
     name: Build dev amd64 Linux static binary
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     env:
       BUILD_ARCH: x64
       BUILD_LOGLEVEL: verbose
       BUILD_STATIC: '--fully-static'
+      BUILD_NO_LTO: 1  # LTO only supported with GCC?
     steps:
       - uses: actions/setup-python@v4
         id: py
@@ -18,13 +19,13 @@ jobs:
       - uses: actions/checkout@v3
       - run: |
           sudo apt-get update
-          sudo apt-get install -y gcc-10 g++-10
+          sudo apt-get install -y clang
       - run: npm install --production --ignore-scripts
       - run: (cd nexe && npm install --production)
       - run: (cd nexe && node build)
         env:
-          CC: gcc-10
-          CXX: g++-10
+          CC: clang
+          CXX: clang++
       - run: nexe/parpar --version
       - run: nexe/parpar -r1 -s1M -onexe/test.par2 nexe/parpar
       - run: xz -9e --x86 --lzma2 nexe/parpar -c > parpar.xz
