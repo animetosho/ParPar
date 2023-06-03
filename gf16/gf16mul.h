@@ -15,6 +15,9 @@ typedef void(*Galois16MulUntransformPacked) (void *HEDLEY_RESTRICT dst, const vo
 typedef int(*Galois16MulUntransformPackedCksum) (void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t sliceLen, unsigned numOutputs, unsigned outputNum, size_t chunkLen);
 typedef int(*Galois16MulUntransformPackedCksumPartial) (void *HEDLEY_RESTRICT dst, void *HEDLEY_RESTRICT src, size_t sliceLen, unsigned numOutputs, unsigned outputNum, size_t chunkLen, size_t partOffset, size_t partLen);
 
+typedef uint16_t(*Galois16ReplaceWord) (void* data, size_t index, uint16_t newValue);
+
+
 typedef void(*Galois16MulFunc) (const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch);
 typedef void(*Galois16MulPfFunc) (const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch, const void *HEDLEY_RESTRICT prefetch);
 typedef void(*Galois16PowFunc) (const void *HEDLEY_RESTRICT scratch, unsigned outputs, size_t offset, void **HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch);
@@ -122,6 +125,12 @@ private:
 	}
 	static void _finish_none(void *HEDLEY_RESTRICT, size_t) {}
 	static void _prepare_packed_none(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen, size_t sliceLen, unsigned inputPackSize, unsigned inputNum, size_t chunkLen);
+	static uint16_t _replace_word(void* data, size_t index, uint16_t newValue) {
+		uint16_t* p = (uint16_t*)data + index;
+		uint16_t oldValue = *p;
+		*p = newValue;
+		return oldValue;
+	}
 	
 	
 	Galois16Methods _method;
@@ -136,7 +145,7 @@ private:
 #endif
 	
 public:
-	static Galois16Methods default_method(size_t regionSizeHint = 0, unsigned outputs = 0);
+	static Galois16Methods default_method(size_t regionSizeHint = 1048576, unsigned inputs = 32768, unsigned outputs = 65535, bool forInvert = false);
 	Galois16Mul(Galois16Methods method = GF16_AUTO);
 	~Galois16Mul();
 	
@@ -199,6 +208,7 @@ public:
 	Galois16MulUntransformPacked finish_packed;
 	Galois16MulUntransformPackedCksum finish_packed_cksum;
 	Galois16MulUntransformPackedCksumPartial finish_partial_packsum;
+	Galois16ReplaceWord replace_word;
 	Galois16AddMultiFunc add_multi;
 	Galois16AddPackedFunc add_multi_packed;
 	Galois16AddPackPfFunc add_multi_packpf;

@@ -3,15 +3,24 @@
 
 static int8_t* input_diff = NULL; // difference between predicted input coefficient and actual (number range is -4...5, so could be compressed to 4 bits, but I don't feel it's worth the savings)
 static uint16_t* gf_exp = NULL; // pre-calculated exponents in GF(2^16), missing bottom 3 bits, followed by 128-entry polynomial shift table
+#ifdef PARPAR_INVERT_SUPPORT
+uint16_t* gf16_recip = NULL; // full GF(2^16) reciprocal table
+#endif
 void gfmat_init() {
 	if(input_diff) return;
 	
 	input_diff = (int8_t*)malloc(32768);
 	gf_exp = (uint16_t*)malloc((8192+128)*2);
+#ifdef PARPAR_INVERT_SUPPORT
+	gf16_recip = (uint16_t*)malloc(65536*2);
+#endif
 	
 	int exp = 0, n = 1;
 	for (int i = 0; i < 32768; i++) {
 		do {
+#ifdef PARPAR_INVERT_SUPPORT
+			gf16_recip[n] = exp; // essentially construct a log table, then alter it later to get the reciprocal
+#endif
 			if((exp & 7) == 0) gf_exp[exp>>3] = n;
 			exp++; // exp will reach 65534 by the end of the loop
 			n <<= 1;
@@ -20,6 +29,9 @@ void gfmat_init() {
 		
 		input_diff[i] = exp - i*2;
 	}
+#ifdef PARPAR_INVERT_SUPPORT
+	gf16_recip[n] = exp;
+#endif
 	
 	// correction values for handling the missing bottom 3 bits of exp
 	// essentially this is a table to speed up multiplication by 0...127 by applying the effects of polynomial masking
@@ -31,6 +43,14 @@ void gfmat_init() {
 		}
 		gf_exp[8192+i] = n;
 	}
+	
+#ifdef PARPAR_INVERT_SUPPORT
+	gf16_recip[1] = 65535;
+	// exponentiate for reciprocals
+	for (int i = 1; i < 65536; i++) {
+		gf16_recip[i] = gf16_exp(65535 - gf16_recip[i]);
+	}
+#endif
 }
 
 void gfmat_free() {
@@ -38,6 +58,10 @@ void gfmat_free() {
 	free(gf_exp);
 	input_diff = NULL;
 	gf_exp = NULL;
+#ifdef PARPAR_INVERT_SUPPORT
+	free(gf16_recip);
+	gf16_recip = NULL;
+#endif
 }
 
 HEDLEY_CONST uint16_t gf16_exp(uint_fast16_t v) {

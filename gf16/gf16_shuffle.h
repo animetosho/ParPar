@@ -121,3 +121,8 @@ void* gf16_shuffle_init_128_sve(int polynomial);
 void* gf16_shuffle_init_512_sve(int polynomial);
 
 int gf16_sve_get_size();
+
+uint16_t gf16_shuffle8_replace_word(void* data, size_t index, uint16_t newValue);
+uint16_t gf16_shuffle16_replace_word(void* data, size_t index, uint16_t newValue);
+uint16_t gf16_shuffle32_replace_word(void* data, size_t index, uint16_t newValue);
+uint16_t gf16_shuffle64_replace_word(void* data, size_t index, uint16_t newValue);
