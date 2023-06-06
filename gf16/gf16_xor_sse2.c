@@ -1065,14 +1065,14 @@ void gf16_xor_finish_block_sse2(void *HEDLEY_RESTRICT dst) {
 		srcVec = _mm_add_epi8(srcVec, srcVec); \
 		write16((target)+0, _mm_movemask_epi8(srcVec)); \
 	}
-	EXTRACT_BITS_HALF(_dst +  0, dstA, 0, srcDQb)
-	EXTRACT_BITS_HALF(_dst +  8, dstA, 1, srcDQa)
-	EXTRACT_BITS_HALF(_dst + 16, dstB, 0, srcDQd)
-	EXTRACT_BITS_HALF(_dst + 24, dstB, 1, srcDQc)
-	EXTRACT_BITS_HALF(_dst + 32, dstC, 0, srcDQf)
-	EXTRACT_BITS_HALF(_dst + 40, dstC, 1, srcDQe)
-	EXTRACT_BITS_HALF(_dst + 48, dstD, 0, srcDQh)
-	EXTRACT_BITS_HALF(_dst + 56, dstD, 1, srcDQg)
+	EXTRACT_BITS_HALF(_dst +  0, dstA, 0, srcDQa)
+	EXTRACT_BITS_HALF(_dst +  8, dstA, 1, srcDQb)
+	EXTRACT_BITS_HALF(_dst + 16, dstB, 0, srcDQc)
+	EXTRACT_BITS_HALF(_dst + 24, dstB, 1, srcDQd)
+	EXTRACT_BITS_HALF(_dst + 32, dstC, 0, srcDQe)
+	EXTRACT_BITS_HALF(_dst + 40, dstC, 1, srcDQf)
+	EXTRACT_BITS_HALF(_dst + 48, dstD, 0, srcDQg)
+	EXTRACT_BITS_HALF(_dst + 56, dstD, 1, srcDQh)
 	#undef EXTRACT_BITS_HALF
 	
 	
@@ -1098,14 +1098,14 @@ void gf16_xor_finish_block_sse2(void *HEDLEY_RESTRICT dst) {
 	
 	// extract & write all bits
 	// TODO: consider saving some to a register to reduce write ops
-	EXTRACT_BITS(_dst + 64 +  0, srcDQb)
-	EXTRACT_BITS(_dst + 64 +  8, srcDQa)
-	EXTRACT_BITS(_dst + 64 + 16, srcDQd)
-	EXTRACT_BITS(_dst + 64 + 24, srcDQc)
-	EXTRACT_BITS(_dst + 64 + 32, srcDQf)
-	EXTRACT_BITS(_dst + 64 + 40, srcDQe)
-	EXTRACT_BITS(_dst + 64 + 48, srcDQh)
-	EXTRACT_BITS(_dst + 64 + 56, srcDQg)
+	EXTRACT_BITS(_dst + 64 +  0, srcDQa)
+	EXTRACT_BITS(_dst + 64 +  8, srcDQb)
+	EXTRACT_BITS(_dst + 64 + 16, srcDQc)
+	EXTRACT_BITS(_dst + 64 + 24, srcDQd)
+	EXTRACT_BITS(_dst + 64 + 32, srcDQe)
+	EXTRACT_BITS(_dst + 64 + 40, srcDQf)
+	EXTRACT_BITS(_dst + 64 + 48, srcDQg)
+	EXTRACT_BITS(_dst + 64 + 56, srcDQh)
 }
 void gf16_xor_finish_copy_block_sse2(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src) {
 	uint16_t* _dst = (uint16_t*)dst;
@@ -1125,14 +1125,14 @@ void gf16_xor_finish_copy_block_sse2(void *HEDLEY_RESTRICT dst, const void *HEDL
 	UNPACK_VECTS;
 	
 	// write extracted bits
-	EXTRACT_BITS(_dst +  0, srcDQb)
-	EXTRACT_BITS(_dst +  8, srcDQa)
-	EXTRACT_BITS(_dst + 16, srcDQd)
-	EXTRACT_BITS(_dst + 24, srcDQc)
-	EXTRACT_BITS(_dst + 32, srcDQf)
-	EXTRACT_BITS(_dst + 40, srcDQe)
-	EXTRACT_BITS(_dst + 48, srcDQh)
-	EXTRACT_BITS(_dst + 56, srcDQg)
+	EXTRACT_BITS(_dst +  0, srcDQa)
+	EXTRACT_BITS(_dst +  8, srcDQb)
+	EXTRACT_BITS(_dst + 16, srcDQc)
+	EXTRACT_BITS(_dst + 24, srcDQd)
+	EXTRACT_BITS(_dst + 32, srcDQe)
+	EXTRACT_BITS(_dst + 40, srcDQf)
+	EXTRACT_BITS(_dst + 48, srcDQg)
+	EXTRACT_BITS(_dst + 56, srcDQh)
 	
 	
 	// load second half
@@ -1143,14 +1143,14 @@ void gf16_xor_finish_copy_block_sse2(void *HEDLEY_RESTRICT dst, const void *HEDL
 	
 	UNPACK_VECTS;
 	
-	EXTRACT_BITS(_dst + 64 +  0, srcDQb)
-	EXTRACT_BITS(_dst + 64 +  8, srcDQa)
-	EXTRACT_BITS(_dst + 64 + 16, srcDQd)
-	EXTRACT_BITS(_dst + 64 + 24, srcDQc)
-	EXTRACT_BITS(_dst + 64 + 32, srcDQf)
-	EXTRACT_BITS(_dst + 64 + 40, srcDQe)
-	EXTRACT_BITS(_dst + 64 + 48, srcDQh)
-	EXTRACT_BITS(_dst + 64 + 56, srcDQg)
+	EXTRACT_BITS(_dst + 64 +  0, srcDQa)
+	EXTRACT_BITS(_dst + 64 +  8, srcDQb)
+	EXTRACT_BITS(_dst + 64 + 16, srcDQc)
+	EXTRACT_BITS(_dst + 64 + 24, srcDQd)
+	EXTRACT_BITS(_dst + 64 + 32, srcDQe)
+	EXTRACT_BITS(_dst + 64 + 40, srcDQf)
+	EXTRACT_BITS(_dst + 64 + 48, srcDQg)
+	EXTRACT_BITS(_dst + 64 + 56, srcDQh)
 }
 void gf16_xor_finish_copy_blocku_sse2(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t bytes) {
 	uint16_t block[128];
@@ -1279,10 +1279,9 @@ void gf16_xor_jit_uninit(void* scratch) {
 #endif
 }
 
-static HEDLEY_ALWAYS_INLINE uint16_t gf16_xorX_replace_word(void* data, size_t index, uint16_t newValue, size_t width, unsigned byteFlip) {
+static HEDLEY_ALWAYS_INLINE uint16_t gf16_xorX_replace_word(void* data, size_t index, uint16_t newValue, size_t width) {
 	uint8_t* base = (uint8_t*)data + (index & ~(width*8-1)) * 2; // advance pointer to correct group
-	base += ((index >> 3) & (width-1)) ^ byteFlip; // advance to correct byte
-	// TODO: remove byteFlip parameter
+	base += ((index >> 3) & (width-1)); // advance to correct byte
 	
 	unsigned bitIndex = index&7;
 	uint16_t oldValue = 0;
@@ -1299,13 +1298,13 @@ static HEDLEY_ALWAYS_INLINE uint16_t gf16_xorX_replace_word(void* data, size_t i
 	return oldValue;
 }
 uint16_t gf16_xor16_replace_word(void* data, size_t index, uint16_t newValue) {
-	return gf16_xorX_replace_word(data, index, newValue, 16, 1);
+	return gf16_xorX_replace_word(data, index, newValue, 16);
 }
 uint16_t gf16_xor32_replace_word(void* data, size_t index, uint16_t newValue) {
-	return gf16_xorX_replace_word(data, index, newValue, 32, 0);
+	return gf16_xorX_replace_word(data, index, newValue, 32);
 }
 uint16_t gf16_xor64_replace_word(void* data, size_t index, uint16_t newValue) {
-	return gf16_xorX_replace_word(data, index, newValue, 64, 0);
+	return gf16_xorX_replace_word(data, index, newValue, 64);
 }
 
 

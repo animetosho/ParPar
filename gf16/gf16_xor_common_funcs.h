@@ -48,12 +48,12 @@ static HEDLEY_ALWAYS_INLINE void gf16_xor_prep_split(_mword ta, _mword tb, _mwor
 	*th = _mm256_permute4x64_epi64(*th, _MM_SHUFFLE(2,0,3,1));
 #else
 	*th = _mm_packus_epi16(
-		_mm_srli_epi16(tb, 8),
-		_mm_srli_epi16(ta, 8)
+		_mm_srli_epi16(ta, 8),
+		_mm_srli_epi16(tb, 8)
 	);
 	*tl = _mm_packus_epi16(
-		_mm_and_si128(tb, _mm_set1_epi16(0xff)),
-		_mm_and_si128(ta, _mm_set1_epi16(0xff))
+		_mm_and_si128(ta, _mm_set1_epi16(0xff)),
+		_mm_and_si128(tb, _mm_set1_epi16(0xff))
 	);
 #endif
 }
