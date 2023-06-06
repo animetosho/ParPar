@@ -1,4 +1,5 @@
 #include "gfmat_coeff.h"
+#include "gfmat_inv.h"
 
 #ifdef PARPAR_INVERT_SUPPORT
 extern "C" uint16_t* gf16_recip;
@@ -7,7 +8,9 @@ extern "C" uint16_t* gf16_recip;
 #include "../src/platform.h" // for ALIGN_*
 #include "gf16mul.h"
 
-uint16_t* compute_recovery_matrix(const std::vector<bool>& inputValid, unsigned validCount, std::vector<uint16_t>& recovery, unsigned& stride) {
+bool Galois16RecMatrix::Compute(const std::vector<bool>& inputValid, unsigned validCount, std::vector<uint16_t>& recovery, std::function<void(uint16_t, uint16_t)> progressCb) {
+	if(mat) ALIGN_FREE(mat);
+	
 	unsigned matWidth = inputValid.size() * sizeof(uint16_t);
 	Galois16Mul gf(Galois16Mul::default_method(matWidth, inputValid.size(), inputValid.size(), true));
 	stride = gf.alignToStride(matWidth);
@@ -16,20 +19,26 @@ uint16_t* compute_recovery_matrix(const std::vector<bool>& inputValid, unsigned 
 	
 	unsigned invalidCount = inputValid.size() - validCount;
 	assert(validCount < inputValid.size()); // i.e. invalidCount > 0
+	assert(inputValid.size() <= 32768);
+	assert(recovery.size() <= 65535);
 	
-	uint16_t* mat;
 	ALIGN_ALLOC(mat, invalidCount * stride, gfInfo.alignment);
 	
 	unsigned validCol, missingCol;
 	unsigned stride16 = stride / sizeof(uint16_t);
 	assert(stride16 * sizeof(uint16_t) == stride);
 	
+	uint16_t totalProgress = invalidCount + (gf.needPrepare() ? 3 : 1); // provision for prepare/finish/init-calc
+	
 	invert_loop: { // loop, in the unlikely case we hit the PAR2 un-invertability flaw; TODO: is there a faster way than just retrying?
 		if(invalidCount > recovery.size()) { // not enough recovery
 			gf.mutScratch_free(gfScratch);
 			ALIGN_FREE(mat);
-			return nullptr;
+			mat = nullptr;
+			return false;
 		}
+		
+		if(progressCb) progressCb(0, totalProgress);
 		
 		// generate matrix
 		validCol = 0;
@@ -44,7 +53,11 @@ uint16_t* compute_recovery_matrix(const std::vector<bool>& inputValid, unsigned 
 		assert(validCol == validCount);
 		
 		// pre-transform
+		uint16_t progressOffset = 1;
 		if(gf.needPrepare()) {
+			if(progressCb) progressCb(1, totalProgress);
+			progressOffset = 2;
+			
 			for(unsigned rec = 0; rec < invalidCount; rec++) {
 				uint16_t* row = mat + rec * stride16;
 				//memset(row + matWidth, 0, stride - matWidth); // not necessary, but do this to avoid uninitialized memory
@@ -54,9 +67,10 @@ uint16_t* compute_recovery_matrix(const std::vector<bool>& inputValid, unsigned 
 		
 		// invert
 		// TODO: optimise: multi-thread + packed arrangement
-		// TODO: progress hook
 		missingCol = validCount;
 		for(unsigned rec = 0; rec < invalidCount; rec++) {
+			if(progressCb) progressCb(rec + progressOffset, totalProgress);
+			
 			uint16_t* row = mat + rec * stride16;
 			// scale down factor
 			uint16_t baseCoeff = gf.replace_word(row, missingCol, 1);
@@ -84,6 +98,8 @@ uint16_t* compute_recovery_matrix(const std::vector<bool>& inputValid, unsigned 
 		
 		// post transform
 		if(gf.needPrepare()) {
+			if(progressCb) progressCb(totalProgress-1, totalProgress);
+			
 			for(unsigned rec = 0; rec < invalidCount; rec++) {
 				uint16_t* row = mat + rec * stride16;
 				gf.finish(row, stride);
@@ -105,11 +121,11 @@ uint16_t* compute_recovery_matrix(const std::vector<bool>& inputValid, unsigned 
 	recovery.resize(invalidCount);
 	
 	gf.mutScratch_free(gfScratch);
-	return mat;
+	return true;
 }
 
-void free_recovery_matrix(uint16_t* mat) {
-	ALIGN_FREE(mat);
+Galois16RecMatrix::~Galois16RecMatrix() {
+	if(mat) ALIGN_FREE(mat);
 }
 
 #endif
