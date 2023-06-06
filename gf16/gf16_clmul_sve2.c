@@ -178,6 +178,24 @@ static HEDLEY_ALWAYS_INLINE void gf16_clmul_muladd_x_sve2(
 
 
 
+void gf16_clmul_mul_sve2(const void *HEDLEY_RESTRICT scratch, void* dst, const void* src, size_t len, uint16_t val, void *HEDLEY_RESTRICT mutScratch) {
+	UNUSED(mutScratch); UNUSED(scratch);
+#if defined(__ARM_FEATURE_SVE2)
+	svuint8_t coeff = svreinterpret_u8_u16(svdup_n_u16(val));
+	uint8_t* _src = (uint8_t*)src + len;
+	uint8_t* _dst = (uint8_t*)dst + len;
+	
+	svuint8_t low1, low2, mid1, mid2, high1, high2;
+	for(intptr_t ptr = -(intptr_t)len; ptr; ptr += svcntb()*2) {
+		gf16_clmul_sve2_round(_src+ptr, &low1, &low2, &mid1, &mid2, &high1, &high2, coeff);
+		gf16_clmul_sve2_reduction(&low1, low2, mid1, mid2, &high1, high2);
+		svst2_u8(svptrue_b8(), _dst+ptr, svcreate2_u8(low1, high1));
+	}
+#else
+	UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(val);
+#endif
+}
+
 void gf16_clmul_muladd_sve2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t val, void *HEDLEY_RESTRICT mutScratch) {
 	UNUSED(mutScratch);
 #if defined(__ARM_FEATURE_SVE2)

@@ -2,7 +2,7 @@
 #include "gf16_shuffle_x86_common.h"
 #include "gf16_checksum_x86.h"
 
-static HEDLEY_ALWAYS_INLINE void _FN(gf16_shuffle_prepare_block)(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src) {
+static HEDLEY_ALWAYS_INLINE void _FN(gf16_shuffle_prepare_block)(void* dst, const void* src) {
 	_mword ta = _MMI(loadu)((_mword*)src);
 	_mword tb = _MMI(loadu)((_mword*)src + 1);
 	
@@ -17,7 +17,7 @@ static HEDLEY_ALWAYS_INLINE void _FN(gf16_shuffle_prepare_block)(void *HEDLEY_RE
 	);
 }
 // final block
-static HEDLEY_ALWAYS_INLINE void _FN(gf16_shuffle_prepare_blocku)(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t remaining) {
+static HEDLEY_ALWAYS_INLINE void _FN(gf16_shuffle_prepare_blocku)(void* dst, const void* src, size_t remaining) {
 	_mword ta, tb;
 	if(remaining & sizeof(_mword))
 		ta = _MMI(loadu)((_mword*)src);

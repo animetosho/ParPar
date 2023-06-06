@@ -364,7 +364,7 @@ static HEDLEY_ALWAYS_INLINE int xor_avx512_merge_part(uint8_t *HEDLEY_RESTRICT j
 }
 
 
-static inline void* xor_write_jit_avx512(const struct gf16_xor_scratch *HEDLEY_RESTRICT scratch, uint8_t *HEDLEY_RESTRICT jitptr, uint16_t val, const int xor, const int prefetch) {
+static inline void* xor_write_jit_avx512(const struct gf16_xor_scratch *HEDLEY_RESTRICT scratch, uint8_t *HEDLEY_RESTRICT jitptr, uint16_t val, const int mode, const int prefetch) {
 	uint_fast32_t bit;
 	
 	__m256i depmask = _mm256_load_si256((__m256i*)scratch->deps + (val & 0xf)*4);
@@ -420,7 +420,7 @@ static inline void* xor_write_jit_avx512(const struct gf16_xor_scratch *HEDLEY_R
 	jitptr += _jit_vmovdqa32_load(jitptr, 16, DX, 0);
 	
 	/* generate code */
-	if(xor) {
+	if(mode == XORDEP_JIT_MODE_MULADD) {
 		for(bit=0; bit<8; bit++) {
 			int destOffs = bit<<7;
 			int destOffs2 = destOffs+64;
@@ -743,9 +743,9 @@ static void* xor_write_jit_avx512_multi(const struct gf16_xor_scratch *HEDLEY_RE
 	return jitptr;
 }
 
-static HEDLEY_ALWAYS_INLINE void gf16_xor_jit_mul_avx512_base(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch, const int add, const int doPrefetch, const void *HEDLEY_RESTRICT prefetch) {
+static HEDLEY_ALWAYS_INLINE void gf16_xor_jit_mul_avx512_base(const void *HEDLEY_RESTRICT scratch, void* dst, const void* src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch, const int mode, const int doPrefetch, const void *HEDLEY_RESTRICT prefetch) {
 	jit_wx_pair* jit = (jit_wx_pair*)mutScratch;
-	gf16_xorjit_write_jit(scratch, coefficient, jit, add, doPrefetch, &xor_write_jit_avx512);
+	gf16_xorjit_write_jit(scratch, coefficient, jit, mode, doPrefetch, &xor_write_jit_avx512);
 	
 	gf16_xor512_jit_stub(
 		(intptr_t)dst - 1024,
@@ -760,13 +760,13 @@ static HEDLEY_ALWAYS_INLINE void gf16_xor_jit_mul_avx512_base(const void *HEDLEY
 
 #endif /* defined(__AVX512BW__) && defined(__AVX512VL__) && defined(PLATFORM_AMD64) */
 
-void gf16_xor_jit_mul_avx512(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch) {
+void gf16_xor_jit_mul_avx512(const void *HEDLEY_RESTRICT scratch, void* dst, const void* src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch) {
 #if defined(__AVX512BW__) && defined(__AVX512VL__) && defined(PLATFORM_AMD64)
 	if(coefficient == 0) {
 		memset(dst, 0, len);
 		return;
 	}
-	gf16_xor_jit_mul_avx512_base(scratch, dst, src, len, coefficient, mutScratch, 0, 0, NULL);
+	gf16_xor_jit_mul_avx512_base(scratch, dst, src, len, coefficient, mutScratch, XORDEP_JIT_MODE_MUL, 0, NULL);
 #else
 	UNUSED(scratch); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficient); UNUSED(mutScratch);
 #endif
@@ -775,7 +775,7 @@ void gf16_xor_jit_mul_avx512(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_R
 void gf16_xor_jit_muladd_avx512(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch) {
 #if defined(__AVX512BW__) && defined(__AVX512VL__) && defined(PLATFORM_AMD64)
 	if(coefficient == 0) return;
-	gf16_xor_jit_mul_avx512_base(scratch, dst, src, len, coefficient, mutScratch, 1, 0, NULL);
+	gf16_xor_jit_mul_avx512_base(scratch, dst, src, len, coefficient, mutScratch, XORDEP_JIT_MODE_MULADD, 0, NULL);
 #else
 	UNUSED(scratch); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficient); UNUSED(mutScratch);
 #endif
@@ -784,7 +784,7 @@ void gf16_xor_jit_muladd_avx512(const void *HEDLEY_RESTRICT scratch, void *HEDLE
 void gf16_xor_jit_muladd_prefetch_avx512(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch, const void *HEDLEY_RESTRICT prefetch) {
 #if defined(__AVX512BW__) && defined(__AVX512VL__) && defined(PLATFORM_AMD64)
 	if(coefficient == 0) return;
-	gf16_xor_jit_mul_avx512_base(scratch, dst, src, len, coefficient, mutScratch, 1, _MM_HINT_T1, prefetch);
+	gf16_xor_jit_mul_avx512_base(scratch, dst, src, len, coefficient, mutScratch, XORDEP_JIT_MODE_MULADD, _MM_HINT_T1, prefetch);
 #else
 	UNUSED(scratch); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficient); UNUSED(mutScratch); UNUSED(prefetch);
 #endif

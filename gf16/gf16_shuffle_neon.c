@@ -274,7 +274,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle_muladd_x_neon(
 
 
 
-void gf16_shuffle_mul_neon(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t val, void *HEDLEY_RESTRICT mutScratch) {
+void gf16_shuffle_mul_neon(const void *HEDLEY_RESTRICT scratch, void* dst, const void* src, size_t len, uint16_t val, void *HEDLEY_RESTRICT mutScratch) {
 	UNUSED(mutScratch);
 #if defined(__ARM_NEON)
 	qtbl_t tbl_h[4], tbl_l[4];

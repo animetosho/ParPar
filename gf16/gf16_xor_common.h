@@ -8,6 +8,9 @@
 #define XORDEP_JIT_SIZE 4096
 #define XORDEP_JIT_CODE_SIZE 1280
 
+#define XORDEP_JIT_MODE_MUL 0
+#define XORDEP_JIT_MODE_MULADD 1
+#define XORDEP_JIT_MODE_MUL_INSITU 2
 
 /* we support MSVC and GCC style ASM */
 #ifdef PLATFORM_AMD64
@@ -113,18 +116,26 @@ struct gf16_xor_scratch {
 	uint8_t deps[16*16*2*4];
 	int jitOptStrat; // GF16_XOR_JIT_STRAT_*
 	uint_fast8_t codeStart;
+	uint_fast8_t codeStartInsitu;
 };
 
 
 #ifdef __SSE2__
 typedef void*(*gf16_xorjit_write_func)(const struct gf16_xor_scratch *HEDLEY_RESTRICT scratch, uint8_t *HEDLEY_RESTRICT jitptr, uint16_t val, const int xor, const int prefetch);
-static HEDLEY_ALWAYS_INLINE void gf16_xorjit_write_jit(const void *HEDLEY_RESTRICT scratch, uint16_t coefficient, jit_wx_pair* jit, const int add, const int prefetch, gf16_xorjit_write_func writeFunc) {
+static HEDLEY_ALWAYS_INLINE void gf16_xorjit_write_jit(const void *HEDLEY_RESTRICT scratch, uint16_t coefficient, jit_wx_pair* jit, const int mode, const int prefetch, gf16_xorjit_write_func writeFunc) {
 	const struct gf16_xor_scratch *HEDLEY_RESTRICT info = (const struct gf16_xor_scratch*)scratch;
-	uint8_t* jitptr = (uint8_t*)jit->w + info->codeStart;
+	uint8_t* jitWPtr = (uint8_t*)jit->w;
+	uint8_t* jitptr;
+	if(mode == XORDEP_JIT_MODE_MUL_INSITU) {
+		jitWPtr += XORDEP_JIT_SIZE/2;
+		jitptr = jitWPtr + info->codeStartInsitu;
+	} else {
+		jitptr = jitWPtr + info->codeStart;
+	}
 	
 	if(info->jitOptStrat == GF16_XOR_JIT_STRAT_COPYNT || info->jitOptStrat == GF16_XOR_JIT_STRAT_COPY) {
 		ALIGN_TO(_GF16_XORJIT_COPY_ALIGN, uint8_t jitTemp[XORDEP_JIT_CODE_SIZE]);
-		uintptr_t copyOffset = info->codeStart;
+		uintptr_t copyOffset = (mode == XORDEP_JIT_MODE_MUL_INSITU) ? info->codeStartInsitu : info->codeStart;
 		if((uintptr_t)jitptr & (_GF16_XORJIT_COPY_ALIGN-1)) {
 			// copy unaligned part
 #if _GF16_XORJIT_COPY_ALIGN == 32 && defined(__AVX2__)
@@ -138,13 +149,13 @@ static HEDLEY_ALWAYS_INLINE void gf16_xorjit_write_jit(const void *HEDLEY_RESTRI
 		else
 			jitptr = jitTemp;
 		
-		jitptr = writeFunc(info, jitptr, coefficient, add, prefetch);
+		jitptr = writeFunc(info, jitptr, coefficient, mode, prefetch);
 		write32(jitptr, (int32_t)(jitTemp - copyOffset - jitptr -4));
 		jitptr[4] = 0xC3; /* ret */
 		jitptr += 5;
 		
 		/* memcpy to destination */
-		uint8_t* jitdst = (uint8_t*)jit->w + copyOffset;
+		uint8_t* jitdst = jitWPtr + copyOffset;
 		if(info->jitOptStrat == GF16_XOR_JIT_STRAT_COPYNT) {
 			// 256-bit NT copies never seem to be better, so just stick to 128-bit
 			for(uint_fast32_t i=0; i<(uint_fast32_t)(jitptr-jitTemp); i+=64) {
@@ -185,8 +196,8 @@ static HEDLEY_ALWAYS_INLINE void gf16_xorjit_write_jit(const void *HEDLEY_RESTRI
 			for(int i=0; i<XORDEP_JIT_CODE_SIZE; i+=64)
 				jitptr[i] = 0;
 		}
-		jitptr = writeFunc(info, jitptr, coefficient, add, prefetch);
-		write32(jitptr, (int32_t)((uint8_t*)jit->w - jitptr -4));
+		jitptr = writeFunc(info, jitptr, coefficient, mode, prefetch);
+		write32(jitptr, (int32_t)(jitWPtr - jitptr -4));
 		jitptr[4] = 0xC3; /* ret */
 	}
 	#ifdef GF16_XORJIT_ENABLE_DUAL_MAPPING

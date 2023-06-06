@@ -4,12 +4,12 @@
 
 #ifdef _AVAILABLE
 # include "gf16_checksum_x86.h"
-static HEDLEY_ALWAYS_INLINE void _FN(gf16_affine2x_prepare_block)(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src) {
+static HEDLEY_ALWAYS_INLINE void _FN(gf16_affine2x_prepare_block)(void* dst, const void* src) {
 	_mword data = _MMI(loadu)((_mword*)src);
 	data = separate_low_high(data);
 	_MMI(store)((_mword*)dst, data);
 }
-static HEDLEY_ALWAYS_INLINE void _FN(gf16_affine2x_prepare_blocku)(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t remaining) {
+static HEDLEY_ALWAYS_INLINE void _FN(gf16_affine2x_prepare_blocku)(void* dst, const void* src, size_t remaining) {
 	_mword data = partial_load(src, remaining);
 	data = separate_low_high(data);
 	_MMI(store)((_mword*)dst, data);
@@ -62,7 +62,7 @@ static HEDLEY_ALWAYS_INLINE void _FN(gf16_affine2x_finish_copy_blocku)(void *HED
 }
 #endif
 
-void _FN(gf16_affine2x_prepare)(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen) {
+void _FN(gf16_affine2x_prepare)(void* dst, const void* src, size_t srcLen) {
 #ifdef _AVAILABLE
 	gf16_prepare(dst, src, srcLen, sizeof(_mword), &_FN(gf16_affine2x_prepare_block), &_FN(gf16_affine2x_prepare_blocku));
 	_MM_END

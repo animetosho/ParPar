@@ -36,6 +36,7 @@ static HEDLEY_ALWAYS_INLINE poly16x8_t pmull_high(poly8x16_t a, poly8x16_t b) {
 #  define pmull_low(x, y) vmull_p8(vget_low_p8(x), vget_low_p8(y))
 #  define pmull_high vmull_high_p8
 # endif
+# define coeff_fn(f1, f2) f1##q_##f2
 #else
 static HEDLEY_ALWAYS_INLINE poly8x8_t veor_p8(poly8x8_t a, poly8x8_t b) {
 	return vreinterpret_p8_u8(veor_u8(vreinterpret_u8_p8(a), vreinterpret_u8_p8(b)));
@@ -43,6 +44,7 @@ static HEDLEY_ALWAYS_INLINE poly8x8_t veor_p8(poly8x8_t a, poly8x8_t b) {
 typedef poly8x8_t coeff_t;
 # define pmull_low(x, y) vmull_p8(vget_low_p8(x), y)
 # define pmull_high(x, y) vmull_p8(vget_high_p8(x), y)
+# define coeff_fn(f1, f2) f1##_##f2
 #endif
 
 #if defined(__aarch64__) && (defined(__GNUC__) || defined(__clang__)) && defined(__APPLE__)
@@ -178,18 +180,11 @@ static HEDLEY_ALWAYS_INLINE void gf16_clmul_muladd_x_neon(
 	for(int src=0; src<srcCount; src++) {
 		uint8_t lo = coefficients[src] & 0xff;
 		uint8_t hi = coefficients[src] >> 8;
-#ifdef __aarch64__
-		coeff[src*CLMUL_COEFF_PER_REGION +0] = vdupq_n_p8(lo);
-		coeff[src*CLMUL_COEFF_PER_REGION +1] = vdupq_n_p8(hi);
-		coeff[src*CLMUL_COEFF_PER_REGION +2] = veorq_p8(coeff[src*CLMUL_COEFF_PER_REGION +0], coeff[src*CLMUL_COEFF_PER_REGION +1]);
-		
-		// if we want to have one register per region, at the expense of 2 extra instructions per region
+		coeff[src*CLMUL_COEFF_PER_REGION +0] = coeff_fn(vdup, n_p8)(lo);
+		coeff[src*CLMUL_COEFF_PER_REGION +1] = coeff_fn(vdup, n_p8)(hi);
+		coeff[src*CLMUL_COEFF_PER_REGION +2] = coeff_fn(veor, p8)(coeff[src*CLMUL_COEFF_PER_REGION +0], coeff[src*CLMUL_COEFF_PER_REGION +1]);
+		// if we want to have one register per region (AArch64), at the expense of 2 extra instructions per region
 		//coeff[src] = vcombine_p8(vdup_n_p8(lo), vdup_n_p8(hi));
-#else
-		coeff[src*CLMUL_COEFF_PER_REGION +0] = vdup_n_p8(lo);
-		coeff[src*CLMUL_COEFF_PER_REGION +1] = vdup_n_p8(hi);
-		coeff[src*CLMUL_COEFF_PER_REGION +2] = veor_p8(coeff[src*CLMUL_COEFF_PER_REGION +0], coeff[src*CLMUL_COEFF_PER_REGION +1]);
-#endif
 	}
 
 	poly16x8_t low1, low2, mid1, mid2, high1, high2;
@@ -247,6 +242,32 @@ static HEDLEY_ALWAYS_INLINE void gf16_clmul_muladd_x_neon(
 }
 #endif /*defined(__ARM_NEON)*/
 
+
+
+void gf16_clmul_mul_neon(const void *HEDLEY_RESTRICT scratch, void* dst, const void* src, size_t len, uint16_t val, void *HEDLEY_RESTRICT mutScratch) {
+	UNUSED(mutScratch); UNUSED(scratch);
+#if defined(__ARM_NEON)
+	
+	coeff_t coeff[3];
+	coeff[0] = coeff_fn(vdup, n_p8)(val & 0xff);
+	coeff[1] = coeff_fn(vdup, n_p8)(val >> 8);
+	coeff[2] = coeff_fn(veor, p8)(coeff[0], coeff[1]);
+	
+	uint8_t* _src = (uint8_t*)src + len;
+	uint8_t* _dst = (uint8_t*)dst + len;
+	poly16x8_t low1, low2, mid1, mid2, high1, high2;
+	for(intptr_t ptr = -(intptr_t)len; ptr; ptr += sizeof(uint8x16_t)*2) {
+		gf16_clmul_neon_round1(_src+ptr, &low1, &low2, &mid1, &mid2, &high1, &high2, coeff);
+		gf16_clmul_neon_reduction(&low1, low2, mid1, mid2, &high1, high2);
+		uint8x16x2_t out;
+		out.val[0] = vreinterpretq_u8_p16(low1);
+		out.val[1] = vreinterpretq_u8_p16(high1);
+		vst2q_u8(_dst+ptr, out);
+	}
+#else
+	UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(val);
+#endif
+}
 
 
 void gf16_clmul_muladd_neon(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t val, void *HEDLEY_RESTRICT mutScratch) {

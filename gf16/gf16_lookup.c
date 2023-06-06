@@ -182,7 +182,7 @@ static HEDLEY_ALWAYS_INLINE void calc_table(uint16_t coefficient, uint16_t* lhta
 
 #endif
 
-void gf16_lookup_mul(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch) {
+void gf16_lookup_mul(const void *HEDLEY_RESTRICT scratch, void* dst, const void* src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch) {
 	UNUSED(scratch); UNUSED(mutScratch);
 	uint16_t lhtable[512];
 	calc_table(coefficient, lhtable);
@@ -393,7 +393,7 @@ static HEDLEY_ALWAYS_INLINE void calc_3table(uint16_t coefficient, struct gf16_l
 	}
 }
 
-void gf16_lookup3_mul(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch) {
+void gf16_lookup3_mul(const void *HEDLEY_RESTRICT scratch, void* dst, const void* src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch) {
 	UNUSED(scratch); UNUSED(mutScratch);
 	struct gf16_lookup3_tables lookup;
 	calc_3table(coefficient, &lookup);

@@ -310,6 +310,30 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle512_muladd_x_sve2(
 #endif /*defined(__ARM_FEATURE_SVE2)*/
 
 
+void gf16_shuffle_mul_512_sve2(const void *HEDLEY_RESTRICT scratch, void* dst, const void* src, size_t len, uint16_t val, void *HEDLEY_RESTRICT mutScratch) {
+	UNUSED(mutScratch);
+#if defined(__ARM_FEATURE_SVE2)
+	svuint8_t tbl_l0, tbl_l1, tbl_l2, tbl_h0, tbl_h1, tbl_h2;
+	gf16_shuffle512_sve2_calc_tables(scratch, 1, &val,
+		&tbl_l0, &tbl_l1, &tbl_l2, &tbl_h0, &tbl_h1, &tbl_h2,
+		NULL, NULL, NULL, NULL, NULL, NULL,
+		NULL, NULL, NULL, NULL, NULL, NULL,
+		NULL, NULL, NULL, NULL, NULL, NULL
+	);
+	
+	uint8_t* _src = (uint8_t*)src + len;
+	uint8_t* _dst = (uint8_t*)dst + len;
+	
+	svuint8_t rl, rh;
+	for(intptr_t ptr = -(intptr_t)len; ptr; ptr += svcntb()*2) {
+		gf16_shuffle512_sve2_round1(svld2_u8(svptrue_b8(), _src+ptr), &rl, &rh, tbl_l0, tbl_l1, tbl_l2, tbl_h0, tbl_h1, tbl_h2);
+		svst2_u8(svptrue_b8(), _dst+ptr, svcreate2_u8(rl, rh));
+	}
+#else
+	UNUSED(scratch); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(val);
+#endif
+}
+
 void gf16_shuffle_muladd_512_sve2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t val, void *HEDLEY_RESTRICT mutScratch) {
 	UNUSED(mutScratch);
 #ifdef __ARM_FEATURE_SVE2

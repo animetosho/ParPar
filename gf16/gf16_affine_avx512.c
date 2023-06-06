@@ -87,7 +87,7 @@ static HEDLEY_ALWAYS_INLINE __m512i gf16_affine_load2_matrix(const void *HEDLEY_
 }
 #endif
 
-void gf16_affine_mul_avx512(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch) {
+void gf16_affine_mul_avx512(const void *HEDLEY_RESTRICT scratch, void* dst, const void* src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch) {
 	UNUSED(mutScratch);
 #if defined(__GFNI__) && defined(__AVX512BW__) && defined(__AVX512VL__)
 	__m256i depmask = gf16_affine_load_matrix(scratch, coefficient);
@@ -464,6 +464,29 @@ static HEDLEY_ALWAYS_INLINE void gf16_affine2x_muladd_x_avx512(
 }
 #endif /*defined(__GFNI__) && defined(__AVX512BW__) && defined(__AVX512VL__)*/
 
+
+void gf16_affine2x_mul_avx512(const void *HEDLEY_RESTRICT scratch, void* dst, const void* src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch) {
+	UNUSED(mutScratch);
+#if defined(__GFNI__) && defined(__AVX512BW__) && defined(__AVX512VL__)
+	__m512i depmask = _mm512_castsi256_si512(gf16_affine_load_matrix(scratch, coefficient));
+	__m512i matNorm = _mm512_shuffle_i64x2(depmask, depmask, _MM_SHUFFLE(0,0,0,0));
+	__m512i matSwap = _mm512_shuffle_i64x2(depmask, depmask, _MM_SHUFFLE(1,1,1,1));
+	
+	uint8_t* _src = (uint8_t*)src + len;
+	uint8_t* _dst = (uint8_t*)dst + len;
+	
+	for(intptr_t ptr = -(intptr_t)len; ptr; ptr += sizeof(__m512i)) {
+		__m512i data = _mm512_load_si512((__m512i*)(_src + ptr));
+		__m512i result = _mm512_gf2p8affine_epi64_epi8(data, matNorm, 0);
+		__m512i swapped = _mm512_gf2p8affine_epi64_epi8(data, matSwap, 0);
+		
+		result = _mm512_xor_si512(result, _mm512_shuffle_epi32(swapped, _MM_SHUFFLE(1,0,3,2)));
+		_mm512_store_si512((__m512i*)(_dst + ptr), result);
+	}
+#else
+	UNUSED(scratch); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficient);
+#endif
+}
 
 void gf16_affine2x_muladd_avx512(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch) {
 	UNUSED(mutScratch);
