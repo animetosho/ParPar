@@ -726,7 +726,7 @@ void* gf16_xor_jit_init_mut_avx2() {
 #if defined(__AVX2__) && defined(PLATFORM_AMD64)
 	jit_wx_pair *jitCode = jit_alloc(XORDEP_JIT_SIZE);
 	if(!jitCode) return NULL;
-	xor_write_init_jit(jitCode->w, jitCode->w + XORDEP_JIT_SIZE/2, NULL, NULL);
+	xor_write_init_jit(jitCode->w, (uint8_t*)jitCode->w + XORDEP_JIT_SIZE/2, NULL, NULL);
 	return jitCode;
 #else
 	return NULL;
