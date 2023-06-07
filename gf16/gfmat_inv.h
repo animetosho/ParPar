@@ -6,9 +6,13 @@
 #include "../src/stdint.h"
 
 #ifdef PARPAR_INVERT_SUPPORT
+class Galois16Mul;
 class Galois16RecMatrix {
 	uint16_t* mat;
 	unsigned stride;
+	
+	template<int rows>
+	int processRow(unsigned rec, unsigned validCount, unsigned invalidCount, Galois16Mul& gf, void* gfScratch);
 public:
 	Galois16RecMatrix() : mat(nullptr) {}
 	~Galois16RecMatrix();
