@@ -88,6 +88,11 @@ PAR2 Options:
                              This default also causes an error to be thrown if
                              the number exceeds the maximum of 65535.
   -e,  --recovery-offset     Recovery slice start offset. Default 0.
+       --recovery-exponents  Comma-separated list of exact recovery exponents
+                             to use. If specified, `--recovery-offset` and
+                             `recovery-slices` related options cannot be used,
+                             and only a single PAR2 output file will be
+                             produced.
   -c,  --comment             Add PAR2 comment. Can be specified multiple times.
        --packet-redundancy   How many copies of critical packets to use in
                              recovery files. This option uses the same syntax

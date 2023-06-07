@@ -61,6 +61,10 @@ var opts = {
 		type: 'int',
 		map: 'recoveryOffset'
 	},
+	'recovery-exponents': {
+		type: 'list',
+		map: 'recoveryExponents'
+	},
 	'comment': {
 		alias: 'c',
 		type: 'array',
@@ -415,6 +419,15 @@ if(argv['hash-method']) {
 }
 if(argv['md5-method']) {
 	require('../lib/par2.js').set_outhash_method(argv['md5-method']);
+}
+
+if(argv['recovery-exponents']) {
+	['recovery-slices', 'min-recovery-slices', 'max-recovery-slices', 'recovery-offset', 'slice-dist', 'slices-per-file', 'slices-first-file', 'recovery-files'].forEach(function(conflictOpt) {
+		if(argv[conflictOpt])
+			error('`--recovery-exponents` cannot be used with `--' + conflictOpt + '`');
+	});
+	if(!argv.noindex)
+		error('`--recovery-exponents` cannot be used with `--noindex`');
 }
 
 var inputFiles = argv._;
