@@ -166,8 +166,8 @@ bool Galois16RecMatrix::Compute(const std::vector<bool>& inputValid, unsigned va
 	
 	unsigned invalidCount = inputValid.size() - validCount;
 	assert(validCount < inputValid.size()); // i.e. invalidCount > 0
-	assert(inputValid.size() <= 32768);
-	assert(recovery.size() <= 65535);
+	assert(inputValid.size() <= 32768 && inputValid.size() > 0);
+	assert(recovery.size() <= 65535 && recovery.size() > 0);
 	
 	ALIGN_ALLOC(mat, invalidCount * stride, gfInfo.alignment);
 	
@@ -190,11 +190,36 @@ bool Galois16RecMatrix::Compute(const std::vector<bool>& inputValid, unsigned va
 		// generate matrix
 		validCol = 0;
 		missingCol = validCount;
-		for(unsigned input = 0; input < inputValid.size(); input++) {
-			uint16_t inputLog = gfmat_input_log(input);
-			unsigned targetCol = inputValid.at(input) ? validCol++ : missingCol++;
-			for(unsigned rec = 0; rec < invalidCount; rec++) {
-				mat[rec * stride16 + targetCol] = gfmat_coeff_from_log(inputLog, recovery.at(rec));
+		unsigned rec, recStart = 0;
+		if(recovery.at(0) == 0) { // first recovery has exponent 0 is a common case
+			for(unsigned input = 0; input < inputValid.size(); input++) {
+				mat[input] = 1;
+			}
+			recStart++;
+		}
+		{
+			unsigned input = 0;
+			const unsigned GROUP_AMOUNT = 4;
+			for(; input + GROUP_AMOUNT <= inputValid.size(); input+=GROUP_AMOUNT) {
+				uint16_t inputLog[GROUP_AMOUNT];
+				unsigned targetCol[GROUP_AMOUNT];
+				for(unsigned i=0; i<GROUP_AMOUNT; i++) {
+					inputLog[i] = gfmat_input_log(input+i);
+					targetCol[i] = inputValid.at(input+i) ? validCol++ : missingCol++;
+				}
+				for(rec = recStart; rec < invalidCount; rec++) {
+					uint16_t exp = recovery.at(rec);
+					for(unsigned i=0; i<GROUP_AMOUNT; i++) {
+						mat[rec * stride16 + targetCol[i]] = gfmat_coeff_from_log(inputLog[i], exp);
+					}
+				}
+			}
+			for(; input < inputValid.size(); input++) {
+				uint16_t inputLog = gfmat_input_log(input);
+				unsigned targetCol = inputValid.at(input) ? validCol++ : missingCol++;
+				for(rec = recStart; rec < invalidCount; rec++) {
+					mat[rec * stride16 + targetCol] = gfmat_coeff_from_log(inputLog, recovery.at(rec));
+				}
 			}
 		}
 		assert(validCol == validCount);
@@ -205,7 +230,7 @@ bool Galois16RecMatrix::Compute(const std::vector<bool>& inputValid, unsigned va
 			if(progressCb) progressCb(1, totalProgress);
 			progressOffset = 2;
 			
-			for(unsigned rec = 0; rec < invalidCount; rec++) {
+			for(rec = 0; rec < invalidCount; rec++) {
 				uint16_t* row = mat + rec * stride16;
 				//memset(row + matWidth, 0, stride - matWidth); // not necessary, but do this to avoid uninitialized memory
 				gf.prepare(row, row, stride);
@@ -214,7 +239,7 @@ bool Galois16RecMatrix::Compute(const std::vector<bool>& inputValid, unsigned va
 		
 		// invert
 		// TODO: optimise: multi-thread + packed arrangement
-		unsigned rec = 0;
+		rec = 0;
 		#define INVERT_GROUP(rows) \
 			if(gfInfo.idealInputMultiple >= rows && invalidCount >= rows) { \
 				for(; rec <= invalidCount-rows; rec+=rows) { \
@@ -241,7 +266,7 @@ bool Galois16RecMatrix::Compute(const std::vector<bool>& inputValid, unsigned va
 		if(gf.needPrepare()) {
 			if(progressCb) progressCb(totalProgress-1, totalProgress);
 			
-			for(unsigned rec = 0; rec < invalidCount; rec++) {
+			for(rec = 0; rec < invalidCount; rec++) {
 				uint16_t* row = mat + rec * stride16;
 				gf.finish(row, stride);
 				

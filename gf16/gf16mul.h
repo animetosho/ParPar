@@ -313,13 +313,22 @@ public:
 		assert(srcStride > 0);
 		assert(regions > 0);
 		
-		if(_mul_add_multi_stridepf)
+		if(_mul_add_multi_stridepf) {
 			_mul_add_multi_stridepf(scratch, regions, srcStride, dst, src, len, coefficients, mutScratch, prefetch);
-		else {
-			// TODO: _mul_add_pf fallback; _mul_add_multi shouldn't be set (exception: XorJit AVX512)
-			for(unsigned region = 0; region<regions; region++) {
-				_mul_add(scratch, dst, (const uint8_t*)src+region*srcStride, len, coefficients[region], mutScratch);
-			}
+			return;
+		}
+		
+		// assume _mul_add_multi isn't set (exception: XorJit AVX512)
+		// fallback to using single multiplies
+		unsigned region = 0;
+		size_t pfLen = len>>_info.prefetchDownscale;
+		const char* _pf = (const char*)prefetch;
+		for(unsigned outputPfRounds = 1<<_info.prefetchDownscale; region<regions && outputPfRounds; region++, outputPfRounds--) {
+			_mul_add_pf(scratch, dst, (const uint8_t*)src+region*srcStride, len, coefficients[region], mutScratch, _pf);
+			_pf += pfLen;
+		}
+		for(; region<regions; region++) {
+			_mul_add(scratch, dst, (const uint8_t*)src+region*srcStride, len, coefficients[region], mutScratch);
 		}
 	}
 	
