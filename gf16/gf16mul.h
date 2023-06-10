@@ -23,6 +23,7 @@ typedef void(*Galois16MulRstFunc) (const void *HEDLEY_RESTRICT scratch, void *HE
 typedef void(*Galois16MulPfFunc) (const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch, const void *HEDLEY_RESTRICT prefetch);
 typedef void(*Galois16PowFunc) (const void *HEDLEY_RESTRICT scratch, unsigned outputs, size_t offset, void **HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch);
 typedef void(*Galois16MulMultiFunc) (const void *HEDLEY_RESTRICT scratch, unsigned regions, size_t offset, void *HEDLEY_RESTRICT dst, const void* const*HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch);
+typedef void(*Galois16MulStridePfFunc) (const void *HEDLEY_RESTRICT scratch, unsigned regions, size_t srcStride, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch, const void *HEDLEY_RESTRICT prefetch);
 typedef void(*Galois16MulPackedFunc) (const void *HEDLEY_RESTRICT scratch, unsigned packedRegions, unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch);
 typedef void(*Galois16MulPackPfFunc) (const void *HEDLEY_RESTRICT scratch, unsigned packedRegions, unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch, const void* HEDLEY_RESTRICT prefetchIn, const void* HEDLEY_RESTRICT prefetchOut);
 typedef void(*Galois16AddFunc) (void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len);
@@ -118,6 +119,7 @@ private:
 	Galois16PowFunc _pow;
 	Galois16PowFunc _pow_add;
 	Galois16MulMultiFunc _mul_add_multi;
+	Galois16MulStridePfFunc _mul_add_multi_stridepf;
 	Galois16MulPackedFunc _mul_add_multi_packed;
 	Galois16MulPackPfFunc _mul_add_multi_packpf;
 	
@@ -241,6 +243,17 @@ public:
 		_mul_add(scratch, dst, src, len, coefficient, mutScratch);
 	}
 	
+	inline void mul_add_pf(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch, const void *HEDLEY_RESTRICT prefetch) const {
+		assert(isMultipleOfStride(len));
+		assert(len > 0);
+		
+		if(HEDLEY_UNLIKELY(coefficient == 0)) return;
+		if(_mul_add_pf)
+			_mul_add_pf(scratch, dst, src, len, coefficient, mutScratch, prefetch);
+		else
+			_mul_add(scratch, dst, src, len, coefficient, mutScratch);
+	}
+	
 	inline void pow(unsigned outputs, size_t offset, void **HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch) const {
 		assert(isMultipleOfStride(len));
 		assert(len > 0);
@@ -290,6 +303,22 @@ public:
 		else {
 			for(unsigned region = 0; region<regions; region++) {
 				_mul_add(scratch, (uint8_t*)dst+offset, ((const uint8_t*)src[region])+offset, len, coefficients[region], mutScratch);
+			}
+		}
+	}
+	
+	inline void mul_add_multi_stridepf(unsigned regions, size_t srcStride, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch, const void* HEDLEY_RESTRICT prefetch) const {
+		assert(isMultipleOfStride(len));
+		assert(len > 0);
+		assert(srcStride > 0);
+		assert(regions > 0);
+		
+		if(_mul_add_multi_stridepf)
+			_mul_add_multi_stridepf(scratch, regions, srcStride, dst, src, len, coefficients, mutScratch, prefetch);
+		else {
+			// TODO: _mul_add_pf fallback; _mul_add_multi shouldn't be set (exception: XorJit AVX512)
+			for(unsigned region = 0; region<regions; region++) {
+				_mul_add(scratch, dst, (const uint8_t*)src+region*srcStride, len, coefficients[region], mutScratch);
 			}
 		}
 	}

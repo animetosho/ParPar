@@ -558,6 +558,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 					#ifdef PLATFORM_AMD64
 					// if 32 registers are available, can do multi-region
 					_mul_add_multi = &gf16_shuffle_muladd_multi_avx512;
+					_mul_add_multi_stridepf = &gf16_shuffle_muladd_multi_stridepf_avx512;
 					_mul_add_multi_packed = &gf16_shuffle_muladd_multi_packed_avx512;
 					_mul_add_multi_packpf = &gf16_shuffle_muladd_multi_packpf_avx512;
 					add_multi_packed = &gf_add_multi_packed_v2i3_avx512;
@@ -590,6 +591,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			add_multi = &gf_add_multi_avx512;
 			#ifdef PLATFORM_AMD64
 			_mul_add_multi = &gf16_shuffle_muladd_multi_vbmi;
+			_mul_add_multi_stridepf = &gf16_shuffle_muladd_multi_stridepf_vbmi;
 			_mul_add_multi_packed = &gf16_shuffle_muladd_multi_packed_vbmi;
 			_mul_add_multi_packpf = &gf16_shuffle_muladd_multi_packpf_vbmi;
 			add_multi_packed = &gf_add_multi_packed_v2i4_avx512;
@@ -618,6 +620,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			add_multi = &gf_add_multi_avx512;
 			#ifdef PLATFORM_AMD64
 			_mul_add_multi = &gf16_shuffle2x_muladd_multi_avx512;
+			_mul_add_multi_stridepf = &gf16_shuffle2x_muladd_multi_stridepf_avx512;
 			_mul_add_multi_packed = &gf16_shuffle2x_muladd_multi_packed_avx512;
 			_mul_add_multi_packpf = &gf16_shuffle2x_muladd_multi_packpf_avx512;
 			add_multi_packed = &gf_add_multi_packed_v1i6_avx512;
@@ -646,6 +649,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			add_multi = &gf_add_multi_avx2;
 			#ifdef PLATFORM_AMD64
 			_mul_add_multi = &gf16_shuffle2x_muladd_multi_avx2;
+			_mul_add_multi_stridepf = &gf16_shuffle2x_muladd_multi_stridepf_avx2;
 			_mul_add_multi_packed = &gf16_shuffle2x_muladd_multi_packed_avx2;
 			_mul_add_multi_packpf = &gf16_shuffle2x_muladd_multi_packpf_avx2;
 			add_multi_packed = &gf_add_multi_packed_v1i2_avx2;
@@ -677,6 +681,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			#ifdef __aarch64__
 			// enable only if 32 registers available
 			_mul_add_multi = &gf16_shuffle_muladd_multi_neon;
+			_mul_add_multi_stridepf = &gf16_shuffle_muladd_multi_stridepf_neon;
 			_mul_add_multi_packed = &gf16_shuffle_muladd_multi_packed_neon;
 			// TODO: on Cortex A53, prefetching seems to be slower, so disabled for now
 			//_mul_add_multi_packpf = &gf16_shuffle_muladd_multi_packpf_neon;
@@ -700,6 +705,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			_mul = &gf16_clmul_mul_neon;
 			_mul_add = &gf16_clmul_muladd_neon;
 			_mul_add_multi = &gf16_clmul_muladd_multi_neon;
+			_mul_add_multi_stridepf = &gf16_clmul_muladd_multi_stridepf_neon;
 			_mul_add_multi_packed = &gf16_clmul_muladd_multi_packed_neon;
 			add_multi = &gf_add_multi_neon;
 			add_multi_packed = &gf_add_multi_packed_clmul_neon;
@@ -724,6 +730,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			_mul = &gf16_shuffle_mul_128_sve;
 			_mul_add = &gf16_shuffle_muladd_128_sve;
 			_mul_add_multi = &gf16_shuffle_muladd_multi_128_sve;
+			_mul_add_multi_stridepf = &gf16_shuffle_muladd_multi_stridepf_128_sve;
 			_mul_add_multi_packed = &gf16_shuffle_muladd_multi_packed_128_sve;
 			//_mul_add_multi_packpf = &gf16_shuffle_muladd_multi_packpf_128_sve;
 			add_multi = &gf_add_multi_sve;
@@ -745,6 +752,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			_mul = &gf16_shuffle_mul_128_sve2;
 			_mul_add = &gf16_shuffle_muladd_128_sve2;
 			_mul_add_multi = &gf16_shuffle_muladd_multi_128_sve2;
+			_mul_add_multi_stridepf = &gf16_shuffle_muladd_multi_stridepf_128_sve2;
 			_mul_add_multi_packed = &gf16_shuffle_muladd_multi_packed_128_sve2;
 			//_mul_add_multi_packpf = &gf16_shuffle_muladd_multi_packpf_128_sve2;
 			add_multi = &gf_add_multi_sve2;
@@ -766,6 +774,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			_mul = &gf16_shuffle2x_mul_128_sve2;
 			_mul_add = &gf16_shuffle2x_muladd_128_sve2;
 			_mul_add_multi = &gf16_shuffle2x_muladd_multi_128_sve2;
+			_mul_add_multi_stridepf = &gf16_shuffle2x_muladd_multi_stridepf_128_sve2;
 			_mul_add_multi_packed = &gf16_shuffle2x_muladd_multi_packed_128_sve2;
 			//_mul_add_multi_packpf = &gf16_shuffle2x_muladd_multi_packpf_128_sve2;
 			add_multi = &gf_add_multi_sve2;
@@ -790,6 +799,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			_mul = &gf16_shuffle_mul_512_sve2;
 			_mul_add = &gf16_shuffle_muladd_512_sve2;
 			_mul_add_multi = &gf16_shuffle_muladd_multi_512_sve2;
+			_mul_add_multi_stridepf = &gf16_shuffle_muladd_multi_stridepf_512_sve2;
 			_mul_add_multi_packed = &gf16_shuffle_muladd_multi_packed_512_sve2;
 			//_mul_add_multi_packpf = &gf16_shuffle_muladd_multi_packpf_512_sve2;
 			add_multi = &gf_add_multi_sve2;
@@ -811,6 +821,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			_mul = &gf16_clmul_mul_sve2;
 			_mul_add = &gf16_clmul_muladd_sve2;
 			_mul_add_multi = &gf16_clmul_muladd_multi_sve2;
+			_mul_add_multi_stridepf = &gf16_clmul_muladd_multi_stridepf_sve2;
 			_mul_add_multi_packed = &gf16_clmul_muladd_multi_packed_sve2;
 			//_mul_add_multi_packpf = &gf16_clmul_muladd_multi_packpf_sve2;
 			add_multi = &gf_add_multi_sve2;
@@ -835,6 +846,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			add_multi = &gf_add_multi_avx512;
 			#ifdef PLATFORM_AMD64
 			_mul_add_multi = &gf16_affine_muladd_multi_avx512;
+			_mul_add_multi_stridepf = &gf16_affine_muladd_multi_stridepf_avx512;
 			_mul_add_multi_packed = &gf16_affine_muladd_multi_packed_avx512;
 			_mul_add_multi_packpf = &gf16_affine_muladd_multi_packpf_avx512;
 			add_multi_packed = &gf_add_multi_packed_v2i6_avx512;
@@ -865,6 +877,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			add_multi = &gf_add_multi_avx2;
 			#ifdef PLATFORM_AMD64
 			_mul_add_multi = &gf16_affine_muladd_multi_avx2;
+			_mul_add_multi_stridepf = &gf16_affine_muladd_multi_stridepf_avx2;
 			_mul_add_multi_packed = &gf16_affine_muladd_multi_packed_avx2;
 			_mul_add_multi_packpf = &gf16_affine_muladd_multi_packpf_avx2;
 			add_multi_packed = &gf_add_multi_packed_v2i3_avx2;
@@ -895,6 +908,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			add_multi = &gf_add_multi_sse2;
 			#ifdef PLATFORM_AMD64
 			_mul_add_multi = &gf16_affine_muladd_multi_gfni;
+			_mul_add_multi_stridepf = &gf16_affine_muladd_multi_stridepf_gfni;
 			_mul_add_multi_packed = &gf16_affine_muladd_multi_packed_gfni;
 			_mul_add_multi_packpf = &gf16_affine_muladd_multi_packpf_gfni;
 			add_multi_packed = &gf_add_multi_packed_v2i3_sse2;
@@ -922,6 +936,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			_mul = &gf16_affine2x_mul_avx512;
 			_mul_add = &gf16_affine2x_muladd_avx512;
 			_mul_add_multi = &gf16_affine2x_muladd_multi_avx512;
+			_mul_add_multi_stridepf = &gf16_affine2x_muladd_multi_stridepf_avx512;
 			_mul_add_multi_packed = &gf16_affine2x_muladd_multi_packed_avx512;
 			_mul_add_multi_packpf = &gf16_affine2x_muladd_multi_packpf_avx512;
 			add_multi = &gf_add_multi_avx512;
@@ -951,6 +966,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			_mul = &gf16_affine2x_mul_avx2;
 			_mul_add = &gf16_affine2x_muladd_avx2;
 			_mul_add_multi = &gf16_affine2x_muladd_multi_avx2;
+			_mul_add_multi_stridepf = &gf16_affine2x_muladd_multi_stridepf_avx2;
 			_mul_add_multi_packed = &gf16_affine2x_muladd_multi_packed_avx2;
 			_mul_add_multi_packpf = &gf16_affine2x_muladd_multi_packpf_avx2;
 			add_multi = &gf_add_multi_avx2;
@@ -980,6 +996,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			_mul = &gf16_affine2x_mul_gfni;
 			_mul_add = &gf16_affine2x_muladd_gfni;
 			_mul_add_multi = &gf16_affine2x_muladd_multi_gfni;
+			_mul_add_multi_stridepf = &gf16_affine2x_muladd_multi_stridepf_gfni;
 			_mul_add_multi_packed = &gf16_affine2x_muladd_multi_packed_gfni;
 			_mul_add_multi_packpf = &gf16_affine2x_muladd_multi_packpf_gfni;
 			add_multi = &gf_add_multi_sse2;
@@ -1171,6 +1188,7 @@ Galois16Mul::Galois16Mul(Galois16Methods method) {
 	add_multi_packed = &gf_add_multi_packed_generic;
 	add_multi_packpf = &gf_add_multi_packpf_generic;
 	_mul_add_multi = NULL;
+	_mul_add_multi_stridepf = NULL;
 	_mul_add_multi_packed = NULL;
 	_mul_add_multi_packpf = NULL;
 	copy_cksum = &gf16_cksum_copy_generic;
@@ -1208,6 +1226,7 @@ void Galois16Mul::move(Galois16Mul& other) {
 	_mul_add = other._mul_add;
 	_mul_add_pf = other._mul_add_pf;
 	_mul_add_multi = other._mul_add_multi;
+	_mul_add_multi_stridepf = other._mul_add_multi_stridepf;
 	_mul_add_multi_packed = other._mul_add_multi_packed;
 	_mul_add_multi_packpf = other._mul_add_multi_packpf;
 	_pow = other._pow;

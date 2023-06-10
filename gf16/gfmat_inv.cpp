@@ -15,8 +15,10 @@ int Galois16RecMatrix::processRow(unsigned rec, unsigned validCount, unsigned in
 	uint16_t baseCoeff;
 	uint16_t coeff[rows];
 	
+	#define MAT_ROW(r) (mat + (r) * (stride / sizeof(uint16_t)))
+	
 	void* srcRows[rows];
-	srcRows[0] = mat + rec * (stride / sizeof(uint16_t));
+	srcRows[0] = MAT_ROW(rec);
 	for(unsigned i=1; i<rows; i++)
 		srcRows[i] = (uint8_t*)srcRows[0] + i * stride;
 	
@@ -33,69 +35,124 @@ int Galois16RecMatrix::processRow(unsigned rec, unsigned validCount, unsigned in
 		if(HEDLEY_LIKELY(coeff[0] != 0)) \
 			gf.mul_add(rowDst, srcRows[rowSrc], stride, coeff[0], gfScratch)
 	// TODO: is a coefficient of 0 ever correct?
+	#define MULADD_ROW_PF(rowDst, rowSrc, rowPf) \
+		coeff[0] = gf.replace_word(rowDst, missingCol+rowSrc, 0); \
+		if(HEDLEY_LIKELY(coeff[0] != 0)) \
+			gf.mul_add_pf(rowDst, srcRows[rowSrc], stride, coeff[0], gfScratch, rowPf)
 	#define MULADD_MULTI_ROW(rowDst, srcOffs, numRows) \
 		for(unsigned i=0; i<numRows; i++) \
 			coeff[i] = gf.replace_word(rowDst, missingCol+srcOffs+i, 0); \
 		gf.mul_add_multi(numRows, 0, rowDst, srcRows+srcOffs, stride, coeff, gfScratch)
+	#define MULADD_MULTI_ROW_PF(rowDst, srcOffs, numRows, rowPf) \
+		for(unsigned i=0; i<numRows; i++) \
+			coeff[i] = gf.replace_word(rowDst, missingCol+srcOffs+i, 0); \
+		gf.mul_add_multi_stridepf(numRows, stride, rowDst, srcRows[srcOffs], stride, coeff, gfScratch, rowPf)
 	
-	// scale down factor
+	#define MULADD_LASTROW(rowDst, rowSrc) \
+		if(HEDLEY_LIKELY(rec2 < invalidCount)) { \
+			MULADD_ROW_PF(rowDst, rowSrc, MAT_ROW(rec2)); \
+		} else { \
+			if(nextScaleRow) { \
+				MULADD_ROW_PF(rowDst, rowSrc, nextScaleRow); \
+			} else { \
+				MULADD_ROW(rowDst, rowSrc); \
+			} \
+			return -1; \
+		}
+	#define MULADD_MULTI_LASTROW(rowDst, srcOffs, numRows) \
+		if(HEDLEY_LIKELY(rec2 < invalidCount)) { \
+			MULADD_MULTI_ROW_PF(rowDst, srcOffs, numRows, MAT_ROW(rec2)); \
+		} else { \
+			if(nextScaleRow) { \
+				MULADD_MULTI_ROW_PF(rowDst, srcOffs, numRows, nextScaleRow); \
+			} else { \
+				MULADD_MULTI_ROW(rowDst, srcOffs, numRows); \
+			} \
+			return -1; \
+		}
+	
+	unsigned rec2 = rec == 0 ? rows : 0;
+	// the next row when `processRow` is called; last action will prefetch this row
+	uint16_t* nextScaleRow = (rec+rows < invalidCount) ? MAT_ROW(rec+rows) : nullptr;
+	
+	// rescale the row
 	SCALE_ROW(0);
 	
+	// if we're processing multiple source rows, run elimination on the source group first
 	if(rows >= 2) {
 		// multiply-add to the next row
 		MULADD_ROW(srcRows[1], 0);
 		// scale it, and multiply-add back
 		SCALE_ROW(1);
-		MULADD_ROW(srcRows[0], 1);
+		if(rows > 2) {
+			MULADD_ROW_PF(srcRows[0], 1, srcRows[2]);
+		} else MULADD_LASTROW(srcRows[0], 1)
+	} else {
+		if(rec2 >= invalidCount)
+			return -1;
 	}
 	if(rows >= 3) {
-		MULADD_MULTI_ROW(srcRows[2], 0, 2);
-		SCALE_ROW(2);
 		if(rows >= 4) {
+			MULADD_MULTI_ROW_PF(srcRows[2], 0, 2, srcRows[3]);
+			SCALE_ROW(2);
 			MULADD_MULTI_ROW(srcRows[3], 0, 2);
 			MULADD_ROW(srcRows[3], 2);
 			SCALE_ROW(3);
 			MULADD_ROW(srcRows[2], 3);
 			MULADD_MULTI_ROW(srcRows[0], 2, 2);
-			MULADD_MULTI_ROW(srcRows[1], 2, 2);
+			if(rows > 4) {
+				MULADD_MULTI_ROW_PF(srcRows[1], 2, 2, srcRows[4]);
+			} else MULADD_MULTI_LASTROW(srcRows[1], 2, 2)
 		} else {
+			MULADD_MULTI_ROW(srcRows[2], 0, 2);
+			SCALE_ROW(2);
 			MULADD_ROW(srcRows[0], 2);
-			MULADD_ROW(srcRows[1], 2);
+			MULADD_LASTROW(srcRows[1], 2)
 		}
 	}
 	if(rows >= 5) {
-		MULADD_MULTI_ROW(srcRows[4], 0, 4);
-		SCALE_ROW(4);
 		if(rows >= 6) {
+			MULADD_MULTI_ROW_PF(srcRows[4], 0, 4, srcRows[5]);
+			SCALE_ROW(4);
 			MULADD_MULTI_ROW(srcRows[5], 0, 4);
 			MULADD_ROW(srcRows[5], 4);
 			SCALE_ROW(5);
 			MULADD_ROW(srcRows[4], 5);
-			for(unsigned rec2 = 0; rec2 < 4; rec2++) {
-				MULADD_MULTI_ROW(srcRows[rec2], 4, 2);
+			for(unsigned r = 0; r < 3; r++) {
+				MULADD_MULTI_ROW(srcRows[r], 4, 2);
 			}
+			MULADD_MULTI_LASTROW(srcRows[3], 4, 2)
 		} else {
-			for(unsigned rec2 = 0; rec2 < 4; rec2++) {
-				MULADD_ROW(srcRows[rec2], 4);
+			MULADD_MULTI_ROW(srcRows[4], 0, 4);
+			SCALE_ROW(4);
+			for(unsigned r = 0; r < 3; r++) {
+				MULADD_ROW(srcRows[r], 4);
 			}
+			MULADD_LASTROW(srcRows[3], 4)
 		}
 	}
 	
-	for(unsigned rec2 = 0; rec2 < invalidCount; rec2++) {
-		if(HEDLEY_UNLIKELY(rec2 >= rec && rec2 < rec+rows)) continue;
-		uint16_t* row2 = mat + rec2 * (stride / sizeof(uint16_t));
+	// do main elimination, using the source group
+	while(1) {
+		uint16_t* row2 = MAT_ROW(rec2);
+		rec2++;
+		if(HEDLEY_UNLIKELY(rec2 == rec))
+			rec2 += rows;
 		if(rows > 1) {
-			MULADD_MULTI_ROW(row2, 0, rows);
+			MULADD_MULTI_LASTROW(row2, 0, rows)
 		} else {
-			MULADD_ROW(row2, 0);
+			MULADD_LASTROW(row2, 0)
 		}
 	}
 	
+	#undef MAT_ROW
 	#undef SCALE_ROW
 	#undef MULADD_ROW
+	#undef MULADD_ROW_PF
 	#undef MULADD_MULTI_ROW
-	
-	return -1;
+	#undef MULADD_MULTI_ROW_PF
+	#undef MULADD_LASTROW
+	#undef MULADD_MULTI_LASTROW
 }
 
 bool Galois16RecMatrix::Compute(const std::vector<bool>& inputValid, unsigned validCount, std::vector<uint16_t>& recovery, std::function<void(uint16_t, uint16_t)> progressCb) {

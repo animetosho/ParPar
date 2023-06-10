@@ -29,6 +29,11 @@ void fnpre ## _muladd_multi ## fnsuf(const void *HEDLEY_RESTRICT scratch, unsign
 	gf16_muladd_multi(scratch, &xfn, procRegions, regions, offset, dst, src, len, coefficients); \
 	finisher; \
 } \
+void fnpre ## _muladd_multi_stridepf ## fnsuf(const void *HEDLEY_RESTRICT scratch, unsigned regions, size_t srcStride, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch, const void* HEDLEY_RESTRICT prefetch) { \
+	UNUSED(mutScratch); \
+	gf16_muladd_multi_stridepf(scratch, &xfn, procRegions, regions, srcStride, dst, src, len, coefficients, pfFactor, prefetch); \
+	finisher; \
+} \
 void fnpre ## _muladd_multi_packed ## fnsuf(const void *HEDLEY_RESTRICT scratch, unsigned packedRegions, unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch) { \
 	UNUSED(mutScratch); \
 	gf16_muladd_multi_packed(scratch, &xfn, procRegions, procRegions, packedRegions, regions, dst, src, len, blocksize, coefficients); \
@@ -44,6 +49,10 @@ void fnpre ## _muladd_multi_packpf ## fnsuf(const void *HEDLEY_RESTRICT scratch,
 void fnpre ## _muladd_multi ## fnsuf(const void *HEDLEY_RESTRICT scratch, unsigned regions, size_t offset, void *HEDLEY_RESTRICT dst, const void* const*HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch) { \
 	UNUSED(mutScratch); \
 	UNUSED(scratch); UNUSED(regions); UNUSED(offset); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficients); \
+} \
+void fnpre ## _muladd_multi_stridepf ## fnsuf(const void *HEDLEY_RESTRICT scratch, unsigned regions, size_t srcStride, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch, const void* HEDLEY_RESTRICT prefetch) { \
+	UNUSED(mutScratch); \
+	UNUSED(scratch); UNUSED(regions); UNUSED(srcStride); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficients); UNUSED(prefetch); \
 } \
 void fnpre ## _muladd_multi_packed ## fnsuf(const void *HEDLEY_RESTRICT scratch, unsigned packedRegions, unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch) { \
 	UNUSED(mutScratch); \
@@ -102,8 +111,8 @@ static HEDLEY_ALWAYS_INLINE void gf16_muladd_multi(const void *HEDLEY_RESTRICT s
 	uint8_t* _dst = (uint8_t*)dst + offset + len;
 	
 	#define _SRC(limit, n) limit > n ? (const uint8_t*)src[region+n] + offset + len : NULL
-	unsigned region = 0;
-	if(regions >= interleave) do {
+	unsigned region;
+	for(region = 0; region + interleave <= regions; region += interleave) {
 		muladd_pf(
 			scratch, _dst, 1, interleave,
 			(const uint8_t*)src[region] + offset + len,
@@ -114,8 +123,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_muladd_multi(const void *HEDLEY_RESTRICT s
 			_SRC(interleave,17),
 			len, coefficients + region, 0, NULL
 		);
-		region += interleave;
-	} while(interleave <= regions - region);
+	}
 	unsigned remaining = regions - region;
 	HEDLEY_ASSUME(remaining < interleave); // doesn't seem to always work, so we have additional checks in the switch cases
 	switch(remaining) {
@@ -140,6 +148,89 @@ static HEDLEY_ALWAYS_INLINE void gf16_muladd_multi(const void *HEDLEY_RESTRICT s
 	#undef _SRC
 }
 
+static HEDLEY_ALWAYS_INLINE void gf16_muladd_multi_stridepf(const void *HEDLEY_RESTRICT scratch, fMuladdPF muladd_pf, const unsigned interleave, unsigned regions, size_t srcStride, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, const unsigned pfFactor, const void* HEDLEY_RESTRICT prefetch) {
+	uint8_t* _dst = (uint8_t*)dst + len;
+	uint8_t* srcEnd = (uint8_t*)src + len;
+	
+	size_t pfLen = len>>pfFactor;
+	const char* _pf = (const char*)prefetch + pfLen;
+	unsigned outputPfRounds = 1<<pfFactor;
+	
+	#define _SRC(limit, n) limit > n ? srcEnd + srcStride*n : NULL
+	unsigned region;
+	for(region = 0; region + interleave <= regions && outputPfRounds; region += interleave) {
+		muladd_pf(
+			scratch, _dst, 1, interleave,
+			srcEnd,
+			_SRC(interleave, 1), _SRC(interleave,  2), _SRC(interleave,  3), _SRC(interleave,  4),
+			_SRC(interleave, 5), _SRC(interleave,  6), _SRC(interleave,  7), _SRC(interleave,  8),
+			_SRC(interleave, 9), _SRC(interleave, 10), _SRC(interleave, 11), _SRC(interleave, 12),
+			_SRC(interleave,13), _SRC(interleave, 14), _SRC(interleave, 15), _SRC(interleave, 16),
+			_SRC(interleave,17),
+			len, coefficients + region, 1, _pf
+		);
+		srcEnd += srcStride*interleave;
+		outputPfRounds--;
+		_pf += pfLen;
+	}
+	for(; region + interleave <= regions; region += interleave) {
+		muladd_pf(
+			scratch, _dst, 1, interleave,
+			srcEnd,
+			_SRC(interleave, 1), _SRC(interleave,  2), _SRC(interleave,  3), _SRC(interleave,  4),
+			_SRC(interleave, 5), _SRC(interleave,  6), _SRC(interleave,  7), _SRC(interleave,  8),
+			_SRC(interleave, 9), _SRC(interleave, 10), _SRC(interleave, 11), _SRC(interleave, 12),
+			_SRC(interleave,13), _SRC(interleave, 14), _SRC(interleave, 15), _SRC(interleave, 16),
+			_SRC(interleave,17),
+			len, coefficients + region, 0, NULL
+		);
+		srcEnd += srcStride*interleave;
+	}
+	unsigned remaining = regions - region;
+	HEDLEY_ASSUME(remaining < interleave); // doesn't seem to always work, so we have additional checks in the switch cases
+	if(outputPfRounds) {
+		switch(remaining) {
+			#define CASE(x) \
+				case x: \
+					HEDLEY_ASSUME(x < interleave); \
+					muladd_pf( \
+						scratch, _dst, 1, x, \
+						srcEnd, \
+						_SRC(x, 1), _SRC(x,  2), _SRC(x,  3), _SRC(x,  4), \
+						_SRC(x, 5), _SRC(x,  6), _SRC(x,  7), _SRC(x,  8), \
+						_SRC(x, 9), _SRC(x, 10), _SRC(x, 11), _SRC(x, 12), \
+						_SRC(x,13), _SRC(x, 14), _SRC(x, 15), _SRC(x, 16), \
+						_SRC(x,17), \
+						len, coefficients + region, 1, _pf \
+					); \
+				break
+				REMAINING_CASES;
+			#undef CASE
+			default: break;
+		}
+	} else {
+		switch(remaining) {
+			#define CASE(x) \
+				case x: \
+					HEDLEY_ASSUME(x < interleave); \
+					muladd_pf( \
+						scratch, _dst, 1, x, \
+						srcEnd, \
+						_SRC(x, 1), _SRC(x,  2), _SRC(x,  3), _SRC(x,  4), \
+						_SRC(x, 5), _SRC(x,  6), _SRC(x,  7), _SRC(x,  8), \
+						_SRC(x, 9), _SRC(x, 10), _SRC(x, 11), _SRC(x, 12), \
+						_SRC(x,13), _SRC(x, 14), _SRC(x, 15), _SRC(x, 16), \
+						_SRC(x,17), \
+						len, coefficients + region, 0, NULL \
+					); \
+				break
+				REMAINING_CASES;
+			#undef CASE
+			default: break;
+		}
+	}
+	#undef _SRC
+}
 
 static HEDLEY_ALWAYS_INLINE void gf16_muladd_multi_packed(const void *HEDLEY_RESTRICT scratch, fMuladdPF muladd_pf, const unsigned interleave, unsigned regionsPerCall, unsigned inputPackSize, unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, size_t blockLen, const uint16_t *HEDLEY_RESTRICT coefficients) {
 	ASSUME(regions <= inputPackSize);
