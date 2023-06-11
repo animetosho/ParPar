@@ -13,8 +13,16 @@ extern size_t gf16pmul_blocklen;
 void setup_pmul();
 
 HEDLEY_BEGIN_C_DECLS
-void gf16pmul_clmul_sse(void *HEDLEY_RESTRICT dst, const void* src1, const void* src2, size_t len);
-extern int gf16pmul_clmul_sse_available;
+#define _PMUL_DECL(f) \
+	void gf16pmul_clmul_##f(void *HEDLEY_RESTRICT dst, const void* src1, const void* src2, size_t len); \
+	extern int gf16pmul_clmul_available_##f
+
+_PMUL_DECL(sse);
+_PMUL_DECL(avx2);
+_PMUL_DECL(vpclmul);
+_PMUL_DECL(vpclgfni);
+
+#undef _PMUL_DECL
 HEDLEY_END_C_DECLS
 
 #endif // defined(__GF16PMUL_H__)
