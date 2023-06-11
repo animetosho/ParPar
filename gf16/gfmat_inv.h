@@ -11,6 +11,7 @@ class Galois16RecMatrix {
 	uint16_t* mat;
 	unsigned stride;
 	
+	void Construct(const std::vector<bool>& inputValid, unsigned validCount, const std::vector<uint16_t>& recovery);
 	template<int rows>
 	int processRow(unsigned rec, unsigned validCount, unsigned invalidCount, Galois16Mul& gf, void* gfScratch);
 public:

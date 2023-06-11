@@ -1,5 +1,7 @@
 #include "gfmat_coeff.h"
 #include "gfmat_inv.h"
+#include "gf16pmul.h"
+#include <algorithm>
 
 #ifdef PARPAR_INVERT_SUPPORT
 extern "C" uint16_t* gf16_recip;
@@ -155,8 +157,107 @@ int Galois16RecMatrix::processRow(unsigned rec, unsigned validCount, unsigned in
 	#undef MULADD_MULTI_LASTROW
 }
 
+
+// construct initial matrix (pre-inversion)
+void Galois16RecMatrix::Construct(const std::vector<bool>& inputValid, unsigned validCount, const std::vector<uint16_t>& recovery) {
+	unsigned validCol = 0;
+	unsigned missingCol = validCount;
+	unsigned recStart = 0;
+	unsigned stride16 = stride / sizeof(uint16_t);
+	unsigned invalidCount = inputValid.size() - validCount;
+	if(recovery.at(0) == 0) { // first recovery having exponent 0 is a common case
+		for(unsigned input = 0; input < inputValid.size(); input++) {
+			mat[input] = 1;
+		}
+		recStart++;
+	}
+	if(recStart >= recovery.size()) return;
+	
+	
+	unsigned input = 0;
+	const unsigned GROUP_AMOUNT = 4;
+	#define CONSTRUCT_VIA_EXP(loopcond) \
+		for(; input + GROUP_AMOUNT <= inputValid.size(); input+=GROUP_AMOUNT) { \
+			uint16_t inputLog[GROUP_AMOUNT]; \
+			unsigned targetCol[GROUP_AMOUNT]; \
+			for(unsigned i=0; i<GROUP_AMOUNT; i++) { \
+				inputLog[i] = gfmat_input_log(input+i); \
+				targetCol[i] = inputValid.at(input+i) ? validCol++ : missingCol++; \
+			} \
+			for(loopcond) { \
+				uint16_t exp = recovery.at(rec); \
+				for(unsigned i=0; i<GROUP_AMOUNT; i++) { \
+					mat[rec * stride16 + targetCol[i]] = gfmat_coeff_from_log(inputLog[i], exp); \
+				} \
+			} \
+		} \
+		for(; input < inputValid.size(); input++) { \
+			uint16_t inputLog = gfmat_input_log(input); \
+			unsigned targetCol = inputValid.at(input) ? validCol++ : missingCol++; \
+			for(loopcond) { \
+				mat[rec * stride16 + targetCol] = gfmat_coeff_from_log(inputLog, recovery.at(rec)); \
+			} \
+		} \
+		assert(validCol == validCount)
+	
+	if(recovery.at(recStart) == 1) {
+		bool canUseFastMul = false;
+		if(gf16pmul) {
+			// these shouldn't fail, but just in case, check alignments
+			// blocklen is assumed to be a multiple of alignment
+			canUseFastMul = (stride % gf16pmul_blocklen == 0) && ((uintptr_t)mat % gf16pmul_alignment == 0);
+		}
+		
+		if(canUseFastMul) {
+			// there's a good chance that we have a mostly sequential sequence of recovery blocks
+			// check this by looking for gaps in the sequence
+			std::vector<uint16_t> recSkips;
+			recSkips.reserve(invalidCount);
+			recSkips.push_back(recStart);
+			unsigned maxSkips = invalidCount/2; // TODO: tune threshold
+			uint16_t lastExp = 1;
+			for(unsigned rec = recStart+1; rec < invalidCount; rec++) {
+				uint16_t exp = recovery.at(rec);
+				if(exp != lastExp+1) {
+					recSkips.push_back(rec);
+					if(recSkips.size() >= maxSkips) break;
+				}
+				lastExp = exp;
+			}
+			
+			if(recSkips.size() < maxSkips) {
+				// not many gaps - use the strategy of filling these gaps first...
+				CONSTRUCT_VIA_EXP(uint16_t rec : recSkips);
+				
+				// ...then compute most of the rows via multiplication
+				lastExp = 1;
+				uint16_t* src1 = mat + recStart * stride16;
+				for(unsigned rec = recStart+1; rec < invalidCount; rec++) {
+					uint16_t exp = recovery.at(rec);
+					bool skip = (exp != lastExp+1);
+					lastExp = exp;
+					if(skip) continue;
+					
+					gf16pmul(mat + rec * stride16, src1, mat + (rec-1) * stride16, stride);
+				}
+				
+				return;
+			}
+		}
+	}
+	
+	CONSTRUCT_VIA_EXP(unsigned rec = recStart; rec < invalidCount; rec++);
+	#undef CONSTRUCT_VIA_EXP
+}
+
 bool Galois16RecMatrix::Compute(const std::vector<bool>& inputValid, unsigned validCount, std::vector<uint16_t>& recovery, std::function<void(uint16_t, uint16_t)> progressCb) {
-	if(mat) ALIGN_FREE(mat);
+	unsigned invalidCount = inputValid.size() - validCount;
+	assert(validCount < inputValid.size()); // i.e. invalidCount > 0
+	assert(inputValid.size() <= 32768 && inputValid.size() > 0);
+	assert(recovery.size() <= 65535 && recovery.size() > 0);
+	
+	if(invalidCount > recovery.size()) return false;
+	
 	
 	unsigned matWidth = inputValid.size() * sizeof(uint16_t);
 	Galois16Mul gf(Galois16Mul::default_method(matWidth, inputValid.size(), inputValid.size(), true));
@@ -164,18 +265,22 @@ bool Galois16RecMatrix::Compute(const std::vector<bool>& inputValid, unsigned va
 	const auto gfInfo = gf.info();
 	void* gfScratch = gf.mutScratch_alloc();
 	
-	unsigned invalidCount = inputValid.size() - validCount;
-	assert(validCount < inputValid.size()); // i.e. invalidCount > 0
-	assert(inputValid.size() <= 32768 && inputValid.size() > 0);
-	assert(recovery.size() <= 65535 && recovery.size() > 0);
-	
+	if(mat) ALIGN_FREE(mat);
 	ALIGN_ALLOC(mat, invalidCount * stride, gfInfo.alignment);
 	
-	unsigned validCol, missingCol;
 	unsigned stride16 = stride / sizeof(uint16_t);
 	assert(stride16 * sizeof(uint16_t) == stride);
 	
 	uint16_t totalProgress = invalidCount + (gf.needPrepare() ? 3 : 1); // provision for prepare/finish/init-calc
+	
+	// easier to handle if exponents are in order
+	std::sort(recovery.begin(), recovery.end());
+	
+	static bool pmulInit = false;
+	if(!pmulInit) {
+		pmulInit = true;
+		setup_pmul();
+	}
 	
 	invert_loop: { // loop, in the unlikely case we hit the PAR2 un-invertability flaw; TODO: is there a faster way than just retrying?
 		if(invalidCount > recovery.size()) { // not enough recovery
@@ -186,43 +291,7 @@ bool Galois16RecMatrix::Compute(const std::vector<bool>& inputValid, unsigned va
 		}
 		
 		if(progressCb) progressCb(0, totalProgress);
-		
-		// generate matrix
-		validCol = 0;
-		missingCol = validCount;
-		unsigned rec, recStart = 0;
-		if(recovery.at(0) == 0) { // first recovery has exponent 0 is a common case
-			for(unsigned input = 0; input < inputValid.size(); input++) {
-				mat[input] = 1;
-			}
-			recStart++;
-		}
-		{
-			unsigned input = 0;
-			const unsigned GROUP_AMOUNT = 4;
-			for(; input + GROUP_AMOUNT <= inputValid.size(); input+=GROUP_AMOUNT) {
-				uint16_t inputLog[GROUP_AMOUNT];
-				unsigned targetCol[GROUP_AMOUNT];
-				for(unsigned i=0; i<GROUP_AMOUNT; i++) {
-					inputLog[i] = gfmat_input_log(input+i);
-					targetCol[i] = inputValid.at(input+i) ? validCol++ : missingCol++;
-				}
-				for(rec = recStart; rec < invalidCount; rec++) {
-					uint16_t exp = recovery.at(rec);
-					for(unsigned i=0; i<GROUP_AMOUNT; i++) {
-						mat[rec * stride16 + targetCol[i]] = gfmat_coeff_from_log(inputLog[i], exp);
-					}
-				}
-			}
-			for(; input < inputValid.size(); input++) {
-				uint16_t inputLog = gfmat_input_log(input);
-				unsigned targetCol = inputValid.at(input) ? validCol++ : missingCol++;
-				for(rec = recStart; rec < invalidCount; rec++) {
-					mat[rec * stride16 + targetCol] = gfmat_coeff_from_log(inputLog, recovery.at(rec));
-				}
-			}
-		}
-		assert(validCol == validCount);
+		Construct(inputValid, validCount, recovery);
 		
 		// pre-transform
 		uint16_t progressOffset = 1;
@@ -230,8 +299,8 @@ bool Galois16RecMatrix::Compute(const std::vector<bool>& inputValid, unsigned va
 			if(progressCb) progressCb(1, totalProgress);
 			progressOffset = 2;
 			
-			for(rec = 0; rec < invalidCount; rec++) {
-				uint16_t* row = mat + rec * stride16;
+			for(unsigned r = 0; r < invalidCount; r++) {
+				uint16_t* row = mat + r * stride16;
 				//memset(row + matWidth, 0, stride - matWidth); // not necessary, but do this to avoid uninitialized memory
 				gf.prepare(row, row, stride);
 			}
@@ -239,7 +308,7 @@ bool Galois16RecMatrix::Compute(const std::vector<bool>& inputValid, unsigned va
 		
 		// invert
 		// TODO: optimise: multi-thread + packed arrangement
-		rec = 0;
+		unsigned rec = 0;
 		#define INVERT_GROUP(rows) \
 			if(gfInfo.idealInputMultiple >= rows && invalidCount >= rows) { \
 				for(; rec <= invalidCount-rows; rec+=rows) { \
@@ -266,15 +335,15 @@ bool Galois16RecMatrix::Compute(const std::vector<bool>& inputValid, unsigned va
 		if(gf.needPrepare()) {
 			if(progressCb) progressCb(totalProgress-1, totalProgress);
 			
-			for(rec = 0; rec < invalidCount; rec++) {
-				uint16_t* row = mat + rec * stride16;
+			for(unsigned r = 0; r < invalidCount; r++) {
+				uint16_t* row = mat + r * stride16;
 				gf.finish(row, stride);
 				
 				/*
 				// check for zeroes; TODO: does this need to be the full row?
 				for(unsigned col = validCount; col < inputValid.size(); col++) {
 					if(HEDLEY_UNLIKELY(row[col] == 0)) { // bad coeff
-						recovery.erase(recovery.begin() + rec);
+						recovery.erase(recovery.begin() + r);
 						goto invert_loop;
 					}
 				}
