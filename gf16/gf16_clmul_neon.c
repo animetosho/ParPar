@@ -3,7 +3,6 @@
 #include "gf16_muladd_multi.h"
 
 // TODO: for any multiplicand byte that's 0 (e.g. for coeff < 256), can shortcut a bunch of stuff, but may not be worth the effort
-// can also look at BCAX/EOR3 from SHA3 if bored; SVE2 implementation can also use XAR
 
 #if defined(__ARM_NEON)
 
@@ -47,6 +46,7 @@ typedef poly8x8_t coeff_t;
 # define coeff_fn(f1, f2) f1##_##f2
 #endif
 
+// NOTE: we avoid EOR3 in pmacl* - only chip which supports NEON-SHA3 without SVE2, are the Apple chips and Neoverse V1; the former has PMULL+EOR fusion, which is better than EOR3
 #if defined(__aarch64__) && (defined(__GNUC__) || defined(__clang__)) && defined(__APPLE__)
 // Apple M1 supports fusing PMULL+EOR, so ensure these are paired
 static HEDLEY_ALWAYS_INLINE poly16x8_t pmacl_low(poly16x8_t sum, poly8x16_t a, poly8x16_t b) {
@@ -113,6 +113,10 @@ static HEDLEY_ALWAYS_INLINE void gf16_clmul_neon_round(const void* src, poly16x8
 	*high2 = pmacl_high(*high2, data.val[1], coeff[1]);
 }
 
+static HEDLEY_ALWAYS_INLINE uint8x16_t eor3q_u8(uint8x16_t a, uint8x16_t b, uint8x16_t c) {
+	return veorq_u8(a, veorq_u8(b, c));
+}
+
 static HEDLEY_ALWAYS_INLINE void gf16_clmul_neon_reduction(poly16x8_t* low1, poly16x8_t low2, poly16x8_t mid1, poly16x8_t mid2, poly16x8_t* high1, poly16x8_t high2) {
 	// put data in proper form
 	uint8x16x2_t hibytes = vuzpq_u8(vreinterpretq_u8_p16(*high1), vreinterpretq_u8_p16(high2));
@@ -121,8 +125,8 @@ static HEDLEY_ALWAYS_INLINE void gf16_clmul_neon_reduction(poly16x8_t* low1, pol
 	// merge mid into high/low
 	uint8x16x2_t midbytes = vuzpq_u8(vreinterpretq_u8_p16(mid1), vreinterpretq_u8_p16(mid2));
 	uint8x16_t libytes = veorq_u8(hibytes.val[0], lobytes.val[1]);
-	lobytes.val[1] = veorq_u8(libytes, veorq_u8(lobytes.val[0], midbytes.val[0]));
-	hibytes.val[0] = veorq_u8(libytes, veorq_u8(hibytes.val[1], midbytes.val[1]));
+	lobytes.val[1] = eor3q_u8(libytes, lobytes.val[0], midbytes.val[0]);
+	hibytes.val[0] = eor3q_u8(libytes, hibytes.val[1], midbytes.val[1]);
 	
 	
 	// Barrett reduction
@@ -130,7 +134,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_clmul_neon_reduction(poly16x8_t* low1, pol
 	// multiply hibytes by 0x11100
 	uint8x16_t highest_nibble = vshrq_n_u8(hibytes.val[1], 4);
 	uint8x16_t th0 = vsriq_n_u8(vshlq_n_u8(hibytes.val[1], 4), hibytes.val[0], 4);
-	th0 = veorq_u8(th0, veorq_u8(hibytes.val[0], hibytes.val[1]));
+	th0 = eor3q_u8(th0, hibytes.val[0], hibytes.val[1]);
 	uint8x16_t th1 = veorq_u8(hibytes.val[1], highest_nibble);
 	
 	// subsequent polynomial multiplication doesn't need the low bits of th0 to be correct, so trim these now for a shorter dep chain
@@ -154,11 +158,11 @@ static HEDLEY_ALWAYS_INLINE void gf16_clmul_neon_reduction(poly16x8_t* low1, pol
 	poly8x16_t redL = vdupq_n_p8(0x0b);
 	hibytes.val[1] = veorq_u8(th0_hi3, th0_hi1);
 	hibytes.val[1] = vsliq_n_u8(hibytes.val[1], th0, 4);
-	lobytes.val[1] = veorq_u8(lobytes.val[1], vreinterpretq_u8_p8(vmulq_p8(vreinterpretq_p8_u8(th1), redL)));
+	th1 = vreinterpretq_u8_p8(vmulq_p8(vreinterpretq_p8_u8(th1), redL));
 	hibytes.val[0] = vreinterpretq_u8_p8(vmulq_p8(vreinterpretq_p8_u8(th0), redL));
 	
 	*low1 = vreinterpretq_p16_u8(veorq_u8(lobytes.val[0], hibytes.val[0]));
-	*high1 = vreinterpretq_p16_u8(veorq_u8(lobytes.val[1], hibytes.val[1]));
+	*high1 = vreinterpretq_p16_u8(eor3q_u8(hibytes.val[1], lobytes.val[1], th1));
 }
 
 #ifdef __aarch64__
