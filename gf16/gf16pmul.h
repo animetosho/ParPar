@@ -21,8 +21,13 @@ _PMUL_DECL(sse);
 _PMUL_DECL(avx2);
 _PMUL_DECL(vpclmul);
 _PMUL_DECL(vpclgfni);
+_PMUL_DECL(neon);
+_PMUL_DECL(sve2);
 
 #undef _PMUL_DECL
+
+unsigned gf16pmul_clmul_sve2_width();
+
 HEDLEY_END_C_DECLS
 
 #endif // defined(__GF16PMUL_H__)

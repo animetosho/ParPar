@@ -61,5 +61,18 @@ void setup_pmul() {
 #endif
 	
 #ifdef PLATFORM_ARM
+	if(!CPU_HAS_SVE2) gf16pmul_clmul_available_sve2 = 0;
+	if(!CPU_HAS_NEON) gf16pmul_clmul_available_neon = 0;
+	
+	if(gf16pmul_clmul_available_sve2) {
+		gf16pmul = &gf16pmul_clmul_sve2;
+		gf16pmul_alignment = gf16pmul_clmul_sve2_width();
+		gf16pmul_blocklen = gf16pmul_alignment*2;
+	}
+	else if(gf16pmul_clmul_available_neon) {
+		gf16pmul = &gf16pmul_clmul_neon;
+		gf16pmul_alignment = 16;
+		gf16pmul_blocklen = 32;
+	}
 #endif
 }
