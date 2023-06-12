@@ -51,8 +51,13 @@ static HEDLEY_ALWAYS_INLINE void _FN(gf16pmul_clmul_initmul)(const _mword* src1,
 	_mword prod1Odd  = _MM(clmulepi64_epi128)(data1Odd, data2Odd, 0x00);
 	_mword prod2Odd  = _MM(clmulepi64_epi128)(data1Odd, data2Odd, 0x11);
 # endif
+# if MWORD_SIZE >= 64
+	*prod1 = _MM(mask_blend_epi32)(0xAAAA, prod1Even, prod1Odd);
+	*prod2 = _MM(mask_blend_epi32)(0xAAAA, prod2Even, prod2Odd);
+# else
 	*prod1 = _MM(blend_epi16)(prod1Even, prod1Odd, 0xCC);
 	*prod2 = _MM(blend_epi16)(prod2Even, prod2Odd, 0xCC);
+# endif
 #endif
 }
 
@@ -63,21 +68,29 @@ void _FN(gf16pmul_clmul)(void *HEDLEY_RESTRICT dst, const void* src1, const void
 	const uint8_t* _src2 = (const uint8_t*)src2 + len;
 	uint8_t* _dst = (uint8_t*)dst + len;
 	
+#if MWORD_SIZE >= 64
+	_mword shufLoHi = _MM(set4_epi32)(0x0f0e0b0a, 0x07060302, 0x0d0c0908, 0x05040100);
+#else
 	_mword shufLoHi = _MM(set_epi16)(
-#if MWORD_SIZE >= 32
+# if MWORD_SIZE >= 32
 		0x0f0e, 0x0b0a, 0x0706, 0x0302, 0x0d0c, 0x0908, 0x0504, 0x0100,
-#endif
+# endif
 		0x0f0e, 0x0b0a, 0x0706, 0x0302, 0x0d0c, 0x0908, 0x0504, 0x0100
 	);
+#endif
 	
 #ifdef _USE_GFNI
 	assert(len % (sizeof(_mword)*2) == 0);
+# if MWORD_SIZE >= 64
+	_mword shufBLoHi = _MM(set4_epi32)(0x0f0d0b09, 0x07050301, 0x0e0c0a08, 0x06040200);
+# else
 	_mword shufBLoHi = _MM(set_epi8)(
-# if MWORD_SIZE >= 32
+#  if MWORD_SIZE >= 32
 		15,13,11,9,7,5,3,1,14,12,10,8,6,4,2,0,
-# endif
+#  endif
 		15,13,11,9,7,5,3,1,14,12,10,8,6,4,2,0
 	);
+# endif
 	for(intptr_t ptr = -(intptr_t)len; ptr; ptr += sizeof(_mword)*2) {
 		_mword prod1, prod2, prod3, prod4;
 		_FN(gf16pmul_clmul_initmul)((_mword*)(_src1 + ptr), (_mword*)(_src2 + ptr), &prod1, &prod2);
@@ -100,14 +113,20 @@ void _FN(gf16pmul_clmul)(void *HEDLEY_RESTRICT dst, const void* src1, const void
 		quot2 = _MM(unpackhi_epi64)(tmp1, tmp2);
 		
 		// do reduction
+		#if MWORD_SIZE >= 64
+		# define SET1_EPI64 _MM(set1_epi64)
+		#else
+		# define SET1_EPI64 _MM(set1_epi64x)
+		#endif
 		tmp2 = _MMI(xor)(
-			_MM(gf2p8affine_epi64_epi8)(quot2, _MM(set1_epi64x)(0xbb77eedd0b162c58), 0),
-			_MM(gf2p8affine_epi64_epi8)(quot1, _MM(set1_epi64x)(0xa040800011224488), 0)
+			_MM(gf2p8affine_epi64_epi8)(quot2, SET1_EPI64(0xbb77eedd0b162c58), 0),
+			_MM(gf2p8affine_epi64_epi8)(quot1, SET1_EPI64(0xa040800011224488), 0)
 		);
 		tmp1 = _MMI(xor)(
-			_MM(gf2p8affine_epi64_epi8)(quot2, _MM(set1_epi64x)(0xb1d3a6fdfbf7eedd), 0),
-			_MM(gf2p8affine_epi64_epi8)(quot1, _MM(set1_epi64x)(0x113366ddba74e8d0), 0)
+			_MM(gf2p8affine_epi64_epi8)(quot2, SET1_EPI64(0xb1d3a6fdfbf7eedd), 0),
+			_MM(gf2p8affine_epi64_epi8)(quot1, SET1_EPI64(0x113366ddba74e8d0), 0)
 		);
+		#undef SET1_EPI64
 		
 		/* mappings for above affine matrices: (tmp1 = bottom, tmp2 = top)
 		 * Mul by 0x1111a
