@@ -14,8 +14,11 @@ class Galois16RecMatrix {
 	unsigned numRec;
 	
 	void Construct(const std::vector<bool>& inputValid, unsigned validCount, const std::vector<uint16_t>& recovery);
+	
 	template<int rows>
-	int processRow(unsigned rec, unsigned validCount, unsigned invalidCount, Galois16Mul& gf, void* gfScratch, uint16_t* rowCoeffs);
+	void invertLoop(unsigned stripeStart, unsigned stripeEnd, unsigned recFirst, unsigned recLast, unsigned recSrc, uint16_t* rowCoeffs, void* srcRows[rows], Galois16Mul& gf, void* gfScratch, const void* nextPf);
+	template<int rows>
+	int processRow(unsigned rec, unsigned validCount, Galois16Mul& gf, void* gfScratch, uint16_t* rowCoeffs);
 public:
 	Galois16RecMatrix() : mat(nullptr) {}
 	~Galois16RecMatrix();
