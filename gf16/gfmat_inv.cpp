@@ -9,17 +9,64 @@ extern "C" uint16_t* gf16_recip;
 #include <cassert>
 #include "../src/platform.h" // for ALIGN_*
 #include "gf16mul.h"
+#include "threadqueue.h"
+#include <future>
+
+static const unsigned MIN_THREAD_REC = 10; // minimum number of rows to process on a thread
+
+class Galois16RecMatrixWorker {
+	const Galois16Mul& gf;
+public:
+	MessageThread thread;
+	void* gfScratch;
+	
+	explicit Galois16RecMatrixWorker(const Galois16Mul& _gf) : gf(_gf) {
+		gfScratch = _gf.mutScratch_alloc();
+	}
+	Galois16RecMatrixWorker(Galois16RecMatrixWorker&& other) noexcept : gf(other.gf) {
+		thread = std::move(other.thread);
+		gfScratch = other.gfScratch;
+	}
+	~Galois16RecMatrixWorker() {
+		thread.end();
+		gf.mutScratch_free(gfScratch);
+	}
+};
+
+struct Galois16RecMatrixWorkerMessage {
+	unsigned stripeStart, stripeEnd;
+	unsigned recFirst, recLast;
+	unsigned recSrc; uint16_t* rowCoeffs; void** srcRows; Galois16Mul* gf; void* gfScratch;
+	void(Galois16RecMatrix::*fn)(unsigned, unsigned, unsigned, unsigned, unsigned, uint16_t*, void**, Galois16Mul&, void*, const void*);
+	Galois16RecMatrix* parent;
+	std::atomic<int>* procRefs;
+	std::promise<void>* done;
+};
+
+static void invert_worker(ThreadMessageQueue<void*>& q) {
+	Galois16RecMatrixWorkerMessage* req;
+	while((req = static_cast<Galois16RecMatrixWorkerMessage*>(q.pop())) != NULL) {
+		(req->parent->*(req->fn))(req->stripeStart, req->stripeEnd, req->recFirst, req->recLast, req->recSrc, req->rowCoeffs, req->srcRows, *(req->gf), req->gfScratch, nullptr);
+		if(req->procRefs->fetch_sub(1, std::memory_order_acq_rel) <= 1) {
+			req->done->set_value();
+		}
+		delete req;
+	}
+}
 
 #define MAT_ROW(s, r) (mat + (((s)*numRec) + (r)) * (stripeWidth / sizeof(uint16_t)))
+#define CEIL_DIV(a, b) (((a) + (b)-1) / (b))
+#define ROUND_DIV(a, b) (((a) + ((b)>>1)) / (b))
 
 template<int rows>
-void Galois16RecMatrix::invertLoop(unsigned stripeStart, unsigned stripeEnd, unsigned recFirst, unsigned recLast, unsigned recSrc, uint16_t* rowCoeffs, void* srcRows[rows], Galois16Mul& gf, void* gfScratch, const void* nextPf) {
+void Galois16RecMatrix::invertLoop(unsigned stripeStart, unsigned stripeEnd, unsigned recFirst, unsigned recLast, unsigned recSrc, uint16_t* rowCoeffs, void** srcRows, Galois16Mul& gf, void* gfScratch, const void* nextPf) {
 	for(unsigned stripe=stripeStart; stripe<stripeEnd; stripe++) {
 		for(unsigned rec2=recFirst; rec2<recLast; ) {
 			unsigned curRec2 = rec2++;
 			if(HEDLEY_UNLIKELY(rec2 == recSrc))
 				rec2 += rows;
 			
+			// TODO: fixup prefetching
 			const void* pf = nextPf;
 			if(HEDLEY_LIKELY(rec2 < recLast)) {
 				pf = MAT_ROW(stripe, rec2);
@@ -44,7 +91,7 @@ void Galois16RecMatrix::invertLoop(unsigned stripeStart, unsigned stripeEnd, uns
 }
 
 template<int rows>
-int Galois16RecMatrix::processRow(unsigned rec, unsigned validCount, Galois16Mul& gf, void* gfScratch, uint16_t* rowCoeffs) {
+int Galois16RecMatrix::processRow(unsigned rec, unsigned validCount, Galois16Mul& gf, void* gfScratch, uint16_t* rowCoeffs, std::vector<Galois16RecMatrixWorker>& workers) {
 	unsigned missingCol = validCount + rec;
 	
 	uint16_t baseCoeff;
@@ -191,7 +238,85 @@ int Galois16RecMatrix::processRow(unsigned rec, unsigned validCount, Galois16Mul
 				rowCoeffs[r*rows + c] = REPLACE_WORD(r, missingCol+c, 0);
 		}
 	}
-	invertLoop<rows>(0, numStripes, recFirst, numRec, rec, rowCoeffs, srcRows, gf, gfScratch, nextScaleRow);
+	if(workers.empty())
+		// process elimination directly
+		invertLoop<rows>(0, numStripes, recFirst, numRec, rec, rowCoeffs, srcRows, gf, gfScratch, nextScaleRow);
+	else {
+		// process using workers
+		std::atomic<int> procRefs;
+		std::promise<void> done;
+		auto makeReq = [&, this]() -> Galois16RecMatrixWorkerMessage* {
+			auto* req = new Galois16RecMatrixWorkerMessage;
+			req->recFirst = recFirst;
+			req->recLast = numRec;
+			req->recSrc = rec;
+			req->rowCoeffs = rowCoeffs;
+			req->srcRows = srcRows;
+			req->gf = &gf;
+			req->fn = &Galois16RecMatrix::invertLoop<rows>;
+			req->parent = this;
+			req->procRefs = &procRefs;
+			req->done = &done;
+			return req;
+		};
+		if(numStripes >= workers.size()) { // split full stripes across workers
+			float stripesPerWorker = (float)numStripes / workers.size();
+			float stripe = 0.5;
+			procRefs.store(workers.size());
+			for(auto& worker : workers) {
+				auto* req = makeReq();
+				req->stripeStart = (unsigned)stripe;
+				req->stripeEnd = (unsigned)(stripe + stripesPerWorker);
+				req->gfScratch = worker.gfScratch;
+				worker.thread.send(req);
+				stripe += stripesPerWorker;
+			}
+		} else { // each stripe may need >1 worker
+			std::vector<Galois16RecMatrixWorkerMessage*> reqs;
+			reqs.reserve(workers.size());
+			float workersPerStripe = (float)workers.size() / numStripes;
+			float workerCnt = 0.5;
+			for(unsigned stripe=0; stripe<numStripes; stripe++) {
+				unsigned workerNum = (unsigned)(workerCnt + workersPerStripe) - (unsigned)workerCnt;
+				unsigned numRows = CEIL_DIV(numRec - rows, workerNum);
+				if(numRows < MIN_THREAD_REC) numRows = MIN_THREAD_REC; // ensure workers have a half decent amount of stuff to do
+				unsigned rowPos = recFirst;
+				
+				while(rowPos < numRec) {
+					unsigned sendRows = numRows;
+					if(rowPos+sendRows > rec && rowPos <= rec)
+						// need to send extra to compensate for the gap
+						sendRows += rows;
+					if(rowPos+sendRows > numRec)
+						sendRows = numRec - rowPos;
+					
+					auto* req = makeReq();
+					req->stripeStart = stripe;
+					req->stripeEnd = stripe+1;
+					req->recFirst = rowPos;
+					req->recLast = rowPos+sendRows;
+					reqs.push_back(req);
+					
+					rowPos += sendRows;
+					if(rowPos == rec) rowPos += rows;
+				}
+				
+				workerCnt += workersPerStripe;
+			}
+			assert(reqs.size() <= workers.size());
+			procRefs.store(reqs.size());
+			
+			for(unsigned i=0; i<reqs.size(); i++) {
+				auto& worker = workers[i];
+				auto* req = reqs[i];
+				req->gfScratch = worker.gfScratch;
+				worker.thread.send(req);
+			}
+		}
+		
+		// wait for threads to finish
+		done.get_future().wait();
+	}
 	
 	return -1;
 	
@@ -306,9 +431,6 @@ void Galois16RecMatrix::Construct(const std::vector<bool>& inputValid, unsigned 
 	#undef CONSTRUCT_VIA_EXP
 }
 
-#define CEIL_DIV(a, b) (((a) + (b)-1) / (b))
-#define ROUND_DIV(a, b) (((a) + ((b)>>1)) / (b))
-
 bool Galois16RecMatrix::Compute(const std::vector<bool>& inputValid, unsigned validCount, std::vector<uint16_t>& recovery, std::function<void(uint16_t, uint16_t)> progressCb) {
 	numRec = inputValid.size() - validCount;
 	assert(validCount < inputValid.size()); // i.e. numRec > 0
@@ -329,7 +451,6 @@ bool Galois16RecMatrix::Compute(const std::vector<bool>& inputValid, unsigned va
 	numStripes = CEIL_DIV(matWidth, stripeWidth);
 	assert(numStripes >= 1);
 	
-	void* gfScratch = gf.mutScratch_alloc();
 	
 	if(mat) ALIGN_FREE(mat);
 	unsigned matSize = numRec * stripeWidth*numStripes;
@@ -346,9 +467,24 @@ bool Galois16RecMatrix::Compute(const std::vector<bool>& inputValid, unsigned va
 		setup_pmul();
 	}
 	
+	std::vector<Galois16RecMatrixWorker> workers;
+	void* gfScratch;
+	unsigned _numThreads = numThreads;
+	if(numRec < MIN_THREAD_REC) _numThreads = 1; // don't spawn threads if not enough work
+	if(_numThreads > 1) {
+		for(unsigned i=0; i<_numThreads; i++) {
+			workers.push_back(Galois16RecMatrixWorker(gf));
+			workers[i].thread.name = "gauss_worker";
+			workers[i].thread.setCallback(invert_worker);
+		}
+		gfScratch = nullptr; // ...otherwise MSVC won't be happy
+	} else
+		gfScratch = gf.mutScratch_alloc();
+	
 	invert_loop: { // loop, in the unlikely case we hit the PAR2 un-invertability flaw; TODO: is there a faster way than just retrying?
 		if(numRec > recovery.size()) { // not enough recovery
-			gf.mutScratch_free(gfScratch);
+			if(_numThreads <= 1)
+				gf.mutScratch_free(gfScratch);
 			ALIGN_FREE(mat);
 			mat = nullptr;
 			return false;
@@ -373,7 +509,7 @@ bool Galois16RecMatrix::Compute(const std::vector<bool>& inputValid, unsigned va
 				for(; rec <= numRec-rows; rec+=rows) { \
 					if(progressCb) progressCb(rec + progressOffset, totalProgress); \
 					 \
-					int badRowOffset = processRow<rows>(rec, validCount, gf, gfScratch, rowCoeffs); \
+					int badRowOffset = processRow<rows>(rec, validCount, gf, gfScratch, rowCoeffs, workers); \
 					if(badRowOffset >= 0) { \
 						/* ignore this recovery row and try again */ \
 						recovery.erase(recovery.begin() + rec + badRowOffset); \
@@ -404,8 +540,16 @@ bool Galois16RecMatrix::Compute(const std::vector<bool>& inputValid, unsigned va
 	// remove excess recovery
 	recovery.resize(numRec);
 	
-	gf.mutScratch_free(gfScratch);
+	if(_numThreads <= 1)
+		gf.mutScratch_free(gfScratch);
 	return true;
+}
+
+Galois16RecMatrix::Galois16RecMatrix() : mat(nullptr) {
+	numThreads = hardware_concurrency();
+	numRec = 0;
+	numStripes = 0;
+	stripeWidth = 0;
 }
 
 Galois16RecMatrix::~Galois16RecMatrix() {

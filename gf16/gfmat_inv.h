@@ -7,21 +7,25 @@
 
 #ifdef PARPAR_INVERT_SUPPORT
 class Galois16Mul;
+class Galois16RecMatrixWorker;
 class Galois16RecMatrix {
 	uint16_t* mat;
 	unsigned numStripes;
 	unsigned stripeWidth;
 	unsigned numRec;
-	
+	unsigned numThreads;
 	void Construct(const std::vector<bool>& inputValid, unsigned validCount, const std::vector<uint16_t>& recovery);
 	
 	template<int rows>
-	void invertLoop(unsigned stripeStart, unsigned stripeEnd, unsigned recFirst, unsigned recLast, unsigned recSrc, uint16_t* rowCoeffs, void* srcRows[rows], Galois16Mul& gf, void* gfScratch, const void* nextPf);
+	void invertLoop(unsigned stripeStart, unsigned stripeEnd, unsigned recFirst, unsigned recLast, unsigned recSrc, uint16_t* rowCoeffs, void** srcRows, Galois16Mul& gf, void* gfScratch, const void* nextPf);
 	template<int rows>
-	int processRow(unsigned rec, unsigned validCount, Galois16Mul& gf, void* gfScratch, uint16_t* rowCoeffs);
+	int processRow(unsigned rec, unsigned validCount, Galois16Mul& gf, void* gfScratch, uint16_t* rowCoeffs, std::vector<Galois16RecMatrixWorker>& workers);
 public:
-	Galois16RecMatrix() : mat(nullptr) {}
+	Galois16RecMatrix();
 	~Galois16RecMatrix();
+	void setNumThreads(int threads) {
+		numThreads = threads;
+	}
 	bool Compute(const std::vector<bool>& inputValid, unsigned validCount, std::vector<uint16_t>& recovery, std::function<void(uint16_t, uint16_t)> progressCb = nullptr);
 	inline uint16_t GetFactor(uint16_t inIdx, uint16_t recIdx) const {
 		// TODO: check if numStripes==1? consider optimising division?
