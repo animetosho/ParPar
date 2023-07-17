@@ -113,7 +113,7 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_avx512(uint32_t* HEDLEY_RESTR
 	"vprord $" STR(R) ", %[" STR(A) "], %[" STR(A) "]\n" \
 	"vpaddd %[" STR(B) "], %[" STR(A) "], %[" STR(A) "]\n"
 	
-	asm(
+	__asm__(
 		"vmovdqa %[ID], %[TMP2]\n"
 		RF4_FIRST(0)
 		RF4(4)
@@ -132,7 +132,7 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_avx512(uint32_t* HEDLEY_RESTR
 	: [k0]"m"(md5_constants_avx512[n]), [k1]"m"(md5_constants_avx512[n+4]), [k2]"m"(md5_constants_avx512[n+8]), [k3]"m"(md5_constants_avx512[n+12]) \
 	:
 	
-	asm(
+	__asm__(
 		"vpaddd %[k0], %[in0], %[in0]\n"
 		"vpaddd %[k1], %[in4], %[in4]\n"
 		"vpaddd %[k2], %[in8], %[in8]\n"
@@ -143,7 +143,7 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_avx512(uint32_t* HEDLEY_RESTR
 		RG4("%[in12]", "%[in0]", "%[in4]")
 	: ASM_PARAMS(16));
 	
-	asm(
+	__asm__(
 		"vpaddd %[k1], %[in4], %[in4]\n"
 		"vpsrlq $32, %[in4], %[TMP1]\n"
 		
@@ -168,7 +168,7 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_avx512(uint32_t* HEDLEY_RESTR
 		"vmovdqa %[D], %[TMP2]\n"
 	: ASM_PARAMS(32));
 	
-	asm(
+	__asm__(
 		"vpaddd %[k0], %[in0], %[in0]\n"
 		"vpaddd %[k1], %[in4], %[in4]\n"
 		"vpaddd %[k3], %[in12], %[in12]\n"

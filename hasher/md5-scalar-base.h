@@ -38,7 +38,7 @@
    */
 #  if defined(__i386) || defined(__i386__) || defined(__x86_64) || defined(__x86_64__)
 #   define ROTATE(a,n)  ({ unsigned int ret;   \
-                                asm (                   \
+                                __asm__ (                   \
                                 "roll %1,%0"            \
                                 : "=r"(ret)             \
                                 : "I"(n), "0"((unsigned int)(a))        \
@@ -48,7 +48,7 @@
 #  elif defined(_ARCH_PPC) || defined(_ARCH_PPC64) || \
         defined(__powerpc) || defined(__ppc__) || defined(__powerpc64__)
 #   define ROTATE(a,n)  ({ unsigned int ret;   \
-                                asm (                   \
+                                __asm__ (                   \
                                 "rlwinm %0,%1,%2,0,31"  \
                                 : "=r"(ret)             \
                                 : "r"(a), "I"(n));      \
@@ -56,7 +56,7 @@
                         })
 #  elif defined(__s390x__)
 #   define ROTATE(a,n) ({ unsigned int ret;    \
-                                asm ("rll %0,%1,%2"     \
+                                __asm__ ("rll %0,%1,%2"     \
                                 : "=r"(ret)             \
                                 : "r"(a), "I"(n));      \
                           ret;                          \

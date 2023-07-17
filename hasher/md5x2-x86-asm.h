@@ -163,34 +163,34 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_x2_scalar(uint32_t* state, co
   [i1_0]"m"(_data[1][i0]), [i1_1]"m"(_data[1][i1])  ASM_PARAMS_ONES \
 :
 
-#define RF4(i0, i1, i2, i3, k0, k1, k2, k3) asm( \
+#define RF4(i0, i1, i2, i3, k0, k1, k2, k3) __asm__( \
 	ROUND_F(A1, B1, C1, D1, A2, B2, C2, D2, "%[i0_0]", "%[i1_0]", k0, 7) \
 	ROUND_F(D1, A1, B1, C1, D2, A2, B2, C2, "%[i0_1]", "%[i1_1]", k1, 12) \
-: ASM_PARAMS(i0, i1)); asm( \
+: ASM_PARAMS(i0, i1)); __asm__( \
 	ROUND_F(C1, D1, A1, B1, C2, D2, A2, B2, "%[i0_0]", "%[i1_0]", k2, 17) \
 	ROUND_F(B1, C1, D1, A1, B2, C2, D2, A2, "%[i0_1]", "%[i1_1]", k3, 22) \
 : ASM_PARAMS(i2, i3));
 	
-#define RG4(i0, i1, i2, i3, k0, k1, k2, k3) asm( \
+#define RG4(i0, i1, i2, i3, k0, k1, k2, k3) __asm__( \
 	ROUND_G(A1, B1, C1, D1, A2, B2, C2, D2, "%[i0_0]", "%[i1_0]", k0, 5) \
 	ROUND_G(D1, A1, B1, C1, D2, A2, B2, C2, "%[i0_1]", "%[i1_1]", k1, 9) \
-: ASM_PARAMS(i0, i1)); asm( \
+: ASM_PARAMS(i0, i1)); __asm__( \
 	ROUND_G(C1, D1, A1, B1, C2, D2, A2, B2, "%[i0_0]", "%[i1_0]", k2, 14) \
 	ROUND_G(B1, C1, D1, A1, B2, C2, D2, A2, "%[i0_1]", "%[i1_1]", k3, 20) \
 : ASM_PARAMS(i2, i3));
 	
-#define RH4(i0, i1, i2, i3, k0, k1, k2, k3) asm( \
+#define RH4(i0, i1, i2, i3, k0, k1, k2, k3) __asm__( \
 	ROUND_H(A1, B1, C1, D1, A2, B2, C2, D2, "%[i0_0]", "%[i1_0]", k0, 4) \
 	ROUND_H(D1, A1, B1, C1, D2, A2, B2, C2, "%[i0_1]", "%[i1_1]", k1, 11) \
-: ASM_PARAMS(i0, i1)); asm( \
+: ASM_PARAMS(i0, i1)); __asm__( \
 	ROUND_H(C1, D1, A1, B1, C2, D2, A2, B2, "%[i0_0]", "%[i1_0]", k2, 16) \
 	ROUND_H(B1, C1, D1, A1, B2, C2, D2, A2, "%[i0_1]", "%[i1_1]", k3, 23) \
 : ASM_PARAMS(i2, i3));
 	
-#define RI4(i0, i1, i2, i3, k0, k1, k2, k3) asm( \
+#define RI4(i0, i1, i2, i3, k0, k1, k2, k3) __asm__( \
 	ROUND_I(A1, B1, C1, D1, A2, B2, C2, D2, "%[i0_0]", "%[i1_0]", k0, 6) \
 	ROUND_I(D1, A1, B1, C1, D2, A2, B2, C2, "%[i0_1]", "%[i1_1]", k1, 10) \
-: ASM_PARAMS(i0, i1)); asm( \
+: ASM_PARAMS(i0, i1)); __asm__( \
 	ROUND_I(C1, D1, A1, B1, C2, D2, A2, B2, "%[i0_0]", "%[i1_0]", k2, 15) \
 	ROUND_I(B1, C1, D1, A1, B2, C2, D2, A2, "%[i0_1]", "%[i1_1]", k3, 21) \
 : ASM_PARAMS(i2, i3));
@@ -217,10 +217,10 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_x2_scalar(uint32_t* state, co
 	RI4( 3, 10,  1,  8,  0x655b59c3, -0x70f3336e, -0x00100b83, -0x7a7ba22f)
 	RI4(15,  6, 13,  4,  0x6fa87e4f, -0x01d31920, -0x5cfebcec, 0x4e0811a1)
 	
-	asm(
+	__asm__(
 		ROUND_I(A1, B1, C1, D1, A2, B2, C2, D2, "%[i0_0]", "%[i1_0]", -0x08ac817e, 6)
 		ROUND_I(D1, A1, B1, C1, D2, A2, B2, C2, "%[i0_1]", "%[i1_1]", -0x42c50dcb, 10)
-	: ASM_PARAMS(11, 2)); asm(
+	: ASM_PARAMS(11, 2)); __asm__(
 		ROUND_I(C1, D1, A1, B1, C2, D2, A2, B2, "%[i0_0]", "%[i1_0]", 0x2ad7d2bb, 15)
 		ROUND_I_LAST(B1, C1, D1, A1, B2, C2, D2, A2, -0x14792c6f, 21)
 	: ASM_PARAMS(9, 0));

@@ -262,7 +262,7 @@ static HEDLEY_ALWAYS_INLINE void STOREU_XMM(void* dest, __m128i xmm) {
 
 /* conditional move, because, for whatever reason, no-one thought of making a CMOVcc intrinsic */
 #if defined(__GNUC__) || defined(__clang__)
-	#define CMOV(cond, dst, src) asm( \
+	#define CMOV(cond, dst, src) __asm__( \
 		"test %[c], %[c]\n" \
 		"cmovnz %[s], %[d]\n" \
 		: [d]"+r"(dst): [c]"r"(cond), [s]"r"(src))

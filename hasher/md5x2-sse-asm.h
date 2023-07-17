@@ -152,7 +152,7 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_x2_sse(__m128i* state, const 
 	"psrlq $" STR(R) ", %[" STR(A) "]\n" \
 	"paddd %[" STR(B) "], %[" STR(A) "]\n"
 
-#define RF4(offs, r1, r2) asm( \
+#define RF4(offs, r1, r2) __asm__( \
 	READ4 \
 	ROUND_F(A, B, C, D, "%[TMPI1]", 25) \
 	"psrlq $32, %[TMPI1]\n" \
@@ -216,21 +216,21 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_x2_sse(__m128i* state, const 
 	RF4(2, 4, 5)
 	RF4(3, 6, 7)
 	
-	asm(
+	__asm__(
 		RG4(0, 0, 3, 5)
 		RG4(1, 2, 5, 7)
 		RG4(2, 4, 7, 1)
 		RG4(3, 6, 1, 3)
 	: ASM_PARAMS(32));
 	
-	asm(
+	__asm__(
 		RH4(0, ROUND_H_FIRST, 2, 4, 5, 7)
 		RH4(1, ROUND_H, 0, 2, 3, 5)
 		RH4(2, ROUND_H, 6, 0, 1, 3)
 		RH4(3, ROUND_H, 4, 6, 7, 1)
 	: ASM_PARAMS(64));
 	
-	asm(
+	__asm__(
 		"pcmpeqb %[TMPF2], %[TMPF2]\n"
 		RI4(0, 0, 3, 7, 2)
 		RI4(1, 6, 1, 5, 0)
@@ -314,7 +314,7 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_x2_avx(__m128i* state, const 
 	"vpsrlq $" STR(R) ", %[" STR(A) "], %[" STR(A) "]\n" \
 	"vpaddd %[" STR(B) "], %[" STR(A) "], %[" STR(A) "]\n"
 
-#define RF4(offs, r1, r2) asm( \
+#define RF4(offs, r1, r2) __asm__( \
 	READ4 \
 	ROUND_F(A, B, C, D, "%[TMPI1]", 25) \
 	"vpsrlq $32, %[TMPI1], %[TMPI1]\n" \
@@ -380,21 +380,21 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_x2_avx(__m128i* state, const 
 	RF4(2, 4, 5)
 	RF4(3, 6, 7)
 	
-	asm(
+	__asm__(
 		RG4(0, 0, 3, 5)
 		RG4(1, 2, 5, 7)
 		RG4(2, 4, 7, 1)
 		RG4(3, 6, 1, 3)
 	: ASM_PARAMS(32));
 	
-	asm(
+	__asm__(
 		RH4(0, ROUND_H, 2, 4, 5, 7)
 		RH4(1, ROUND_H, 0, 2, 3, 5)
 		RH4(2, ROUND_H, 6, 0, 1, 3)
 		RH4(3, ROUND_H, 4, 6, 7, 1)
 	: ASM_PARAMS(64));
 	
-	asm(
+	__asm__(
 		"vpcmpeqb %[TMPF2], %[TMPF2], %[TMPF2]\n"
 		RI4(0, 0, 3, 7, 2)
 		RI4(1, 6, 1, 5, 0)
@@ -460,21 +460,21 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_x2_avx512(__m128i* state, con
 	RF4(2, 4, 5)
 	RF4(3, 6, 7)
 	
-	asm(
+	__asm__(
 		RG4(0, 0, 3, 5)
 		RG4(1, 2, 5, 7)
 		RG4(2, 4, 7, 1)
 		RG4(3, 6, 1, 3)
 	: ASM_PARAMS(32));
 	
-	asm(
+	__asm__(
 		RH4(0, ROUND_H_FIRST, 2, 4, 5, 7)
 		RH4(1, ROUND_H, 0, 2, 3, 5)
 		RH4(2, ROUND_H, 6, 0, 1, 3)
 		RH4(3, ROUND_H, 4, 6, 7, 1)
 	: ASM_PARAMS(64));
 	
-	asm(
+	__asm__(
 		RI4(0, 0, 3, 7, 2)
 		RI4(1, 6, 1, 5, 0)
 		RI4(2, 4, 7, 3, 6)
