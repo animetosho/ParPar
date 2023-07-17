@@ -26,6 +26,7 @@ void setup_hasher() {
 	CRC32_Calc = &CRC32_Calc_Slice4;
 	
 	struct _CpuCap CpuCap;
+	(void)CpuCap;
 	
 	// CPU detection
 #ifdef PLATFORM_X86
@@ -222,6 +223,7 @@ void set_hasherMD5MultiLevel(MD5MultiLevels level) {
 		case MD5MULT_AVX2:
 		case MD5MULT_SSE:
 #endif
+		default:
 		case MD5MULT_SCALAR: break;
 	}
 #undef SET_LEVEL
