@@ -738,7 +738,13 @@ static HEDLEY_ALWAYS_INLINE jit_wx_pair* jit_alloc(size_t len) {
 	if(!ret) return NULL;
 	
 	ret->len = len;
-	void* mem = mmap(NULL, len, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANON, -1, 0);
+	void* mem = mmap(NULL, len, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE |
+# ifdef MAP_ANONYMOUS
+		MAP_ANONYMOUS,
+# else
+		MAP_ANON,
+# endif
+		-1, 0);
 	if(mem) {
 		if((uintptr_t)mem & 63) { // page not cacheline aligned? something's gone wrong...
 			munmap(mem, len);
