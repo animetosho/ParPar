@@ -76,7 +76,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_checksum_exp_neon(void *HEDLEY_RESTRICT ch
 	gf16_checksum_store(checksum, res);
 }
 
-static HEDLEY_ALWAYS_INLINE void gf16_checksum_prepare_neon(void *HEDLEY_RESTRICT dst, void *HEDLEY_RESTRICT checksum, const size_t blockLen, gf16_transform_block prepareBlock) {
+static HEDLEY_ALWAYS_INLINE void gf16_checksum_prepare_neon(void *HEDLEY_RESTRICT dst, void *HEDLEY_RESTRICT checksum, const size_t blockLen, gf16_transform_block_rst prepareBlock) {
 #define _X(bl) \
 	ALIGN_TO(16, uint8_t tmp[bl]) = {0}; \
 	vst1q_u8(tmp, gf16_checksum_load(checksum)); \

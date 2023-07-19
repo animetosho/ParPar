@@ -149,7 +149,7 @@ static HEDLEY_ALWAYS_INLINE void _FN(gf16_checksum_exp)(void *HEDLEY_RESTRICT ch
 	*(_mword*)checksum = res;
 }
 
-static HEDLEY_ALWAYS_INLINE void _FN(gf16_checksum_prepare)(void *HEDLEY_RESTRICT dst, void *HEDLEY_RESTRICT checksum, const size_t blockLen, gf16_transform_block prepareBlock) {
+static HEDLEY_ALWAYS_INLINE void _FN(gf16_checksum_prepare)(void *HEDLEY_RESTRICT dst, void *HEDLEY_RESTRICT checksum, const size_t blockLen, gf16_transform_block_rst prepareBlock) {
 	// because some compilers don't like `tmp[blockLen]` despite blockLen being constant, just implement every possibility
 #define _X(bl) \
 	ALIGN_TO(MWORD_SIZE, uint8_t tmp[bl]) = {0}; \
