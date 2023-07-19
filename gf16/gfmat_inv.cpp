@@ -26,10 +26,12 @@ public:
 	Galois16RecMatrixWorker(Galois16RecMatrixWorker&& other) noexcept : gf(other.gf) {
 		thread = std::move(other.thread);
 		gfScratch = other.gfScratch;
+		other.gfScratch = nullptr;
 	}
 	~Galois16RecMatrixWorker() {
 		thread.end();
-		gf.mutScratch_free(gfScratch);
+		if(gfScratch)
+			gf.mutScratch_free(gfScratch);
 	}
 };
 
@@ -37,7 +39,8 @@ struct Galois16RecMatrixWorkerMessage {
 	unsigned stripeStart, stripeEnd;
 	unsigned recFirst, recLast;
 	unsigned recSrc; uint16_t* rowCoeffs; void** srcRows; Galois16Mul* gf; void* gfScratch;
-	void(Galois16RecMatrix::*fn)(unsigned, unsigned, unsigned, unsigned, unsigned, uint16_t*, void**, Galois16Mul&, void*, const void*);
+	unsigned coeffWidth;
+	void(Galois16RecMatrix::*fn)(unsigned, unsigned, unsigned, unsigned, unsigned, uint16_t*, unsigned, void**, Galois16Mul&, void*, const void*);
 	Galois16RecMatrix* parent;
 	std::atomic<int>* procRefs;
 	std::promise<void>* done;
@@ -46,7 +49,7 @@ struct Galois16RecMatrixWorkerMessage {
 static void invert_worker(ThreadMessageQueue<void*>& q) {
 	Galois16RecMatrixWorkerMessage* req;
 	while((req = static_cast<Galois16RecMatrixWorkerMessage*>(q.pop())) != NULL) {
-		(req->parent->*(req->fn))(req->stripeStart, req->stripeEnd, req->recFirst, req->recLast, req->recSrc, req->rowCoeffs, req->srcRows, *(req->gf), req->gfScratch, nullptr);
+		(req->parent->*(req->fn))(req->stripeStart, req->stripeEnd, req->recFirst, req->recLast, req->recSrc, req->rowCoeffs, req->coeffWidth, req->srcRows, *(req->gf), req->gfScratch, nullptr);
 		if(req->procRefs->fetch_sub(1, std::memory_order_acq_rel) <= 1) {
 			req->done->set_value();
 		}
@@ -59,7 +62,7 @@ static void invert_worker(ThreadMessageQueue<void*>& q) {
 #define ROUND_DIV(a, b) (((a) + ((b)>>1)) / (b))
 
 template<int rows>
-void Galois16RecMatrix::invertLoop(unsigned stripeStart, unsigned stripeEnd, unsigned recFirst, unsigned recLast, unsigned recSrc, uint16_t* rowCoeffs, void** srcRows, Galois16Mul& gf, void* gfScratch, const void* nextPf) {
+void Galois16RecMatrix::invertLoop(unsigned stripeStart, unsigned stripeEnd, unsigned recFirst, unsigned recLast, unsigned recSrc, uint16_t* rowCoeffs, unsigned coeffWidth, void** srcRows, Galois16Mul& gf, void* gfScratch, const void* nextPf) {
 	for(unsigned stripe=stripeStart; stripe<stripeEnd; stripe++) {
 		for(unsigned rec2=recFirst; rec2<recLast; ) {
 			unsigned curRec2 = rec2++;
@@ -75,33 +78,32 @@ void Galois16RecMatrix::invertLoop(unsigned stripeStart, unsigned stripeEnd, uns
 				// TODO: need to prefetch next stripe's initial matrix?
 			}
 			
+			uint16_t* coeffPtr = rowCoeffs + (curRec2-recFirst)*coeffWidth;
 			if(rows > 1) {
 				if(HEDLEY_LIKELY(pf))
-					gf.mul_add_multi_stridepf(rows, stripeWidth, MAT_ROW(stripe, curRec2), MAT_ROW(stripe, recSrc), stripeWidth, rowCoeffs + curRec2*rows, gfScratch, pf);
+					gf.mul_add_multi_stridepf(rows, stripeWidth, MAT_ROW(stripe, curRec2), MAT_ROW(stripe, recSrc), stripeWidth, coeffPtr, gfScratch, pf);
 				else
-					gf.mul_add_multi(rows, stripeWidth*stripe, MAT_ROW(0, curRec2), srcRows, stripeWidth, rowCoeffs + curRec2*rows, gfScratch);
+					gf.mul_add_multi(rows, stripeWidth*numRec*stripe, MAT_ROW(0, curRec2), srcRows, stripeWidth, coeffPtr, gfScratch);
 			} else {
 				if(HEDLEY_LIKELY(pf))
-					gf.mul_add_pf(MAT_ROW(stripe, curRec2), MAT_ROW(stripe, recSrc), stripeWidth, rowCoeffs[curRec2], gfScratch, pf);
+					gf.mul_add_pf(MAT_ROW(stripe, curRec2), MAT_ROW(stripe, recSrc), stripeWidth, *coeffPtr, gfScratch, pf);
 				else
-					gf.mul_add(MAT_ROW(stripe, curRec2), MAT_ROW(stripe, recSrc), stripeWidth, rowCoeffs[curRec2], gfScratch);
+					gf.mul_add(MAT_ROW(stripe, curRec2), MAT_ROW(stripe, recSrc), stripeWidth, *coeffPtr, gfScratch);
 			}
 		}
 	}
 }
 
+#define REPLACE_WORD(r, c, v) gf.replace_word(MAT_ROW((c)/(stripeWidth / sizeof(uint16_t)), r), (c)%(stripeWidth / sizeof(uint16_t)), v)
+
 template<int rows>
-int Galois16RecMatrix::processRow(unsigned rec, unsigned validCount, Galois16Mul& gf, void* gfScratch, uint16_t* rowCoeffs, std::vector<Galois16RecMatrixWorker>& workers) {
+int Galois16RecMatrix::initScale(unsigned rec, unsigned validCount, unsigned recFirst, unsigned recLast, Galois16Mul& gf, void* gfScratch) {
+	assert(recFirst <= recLast);
+	
 	unsigned missingCol = validCount + rec;
 	
 	uint16_t baseCoeff;
 	uint16_t coeff[rows];
-	
-	unsigned sw16 = stripeWidth / sizeof(uint16_t);
-	// TODO: consider optimisation for numStripes == 1 ?
-	
-	
-	#define REPLACE_WORD(r, c, v) gf.replace_word(MAT_ROW((c)/sw16, r), (c)%sw16, v)
 	
 	void* srcRows[rows];
 	srcRows[0] = MAT_ROW(0, rec);
@@ -135,7 +137,7 @@ int Galois16RecMatrix::processRow(unsigned rec, unsigned validCount, Galois16Mul
 		for(unsigned i=0; i<numRows; i++) \
 			coeff[i] = REPLACE_WORD(rowDst, missingCol+srcOffs+i, 0); \
 		for(unsigned stripe=0; stripe<numStripes; stripe++) \
-			gf.mul_add_multi(numRows, stripeWidth*stripe, MAT_ROW(0, rowDst), srcRows+srcOffs, stripeWidth, coeff, gfScratch)
+			gf.mul_add_multi(numRows, stripeWidth*numRec*stripe, MAT_ROW(0, rowDst), srcRows+srcOffs, stripeWidth, coeff, gfScratch)
 	#define MULADD_MULTI_ROW_PF(rowDst, srcOffs, numRows, rowPf) \
 		for(unsigned i=0; i<numRows; i++) \
 			coeff[i] = REPLACE_WORD(rowDst, missingCol+srcOffs+i, 0); \
@@ -165,9 +167,9 @@ int Galois16RecMatrix::processRow(unsigned rec, unsigned validCount, Galois16Mul
 			return -1; \
 		}
 	
-	unsigned recFirst = rec == 0 ? rows : 0;
+	if(recFirst == rec) recFirst += rows;
 	// the next row when `processRow` is called; last action will prefetch this row
-	uint16_t* nextScaleRow = (rec+rows < numRec) ? MAT_ROW(0, rec+rows) : nullptr;
+	uint16_t* nextScaleRow = (rec+rows < recLast) ? MAT_ROW(0, rec+rows) : nullptr;
 	
 	// TODO: consider loop tiling this stuff; requires extracting a small matrix (rows*rows), and solving that, which means a scalar multiply is necessary
 	
@@ -181,7 +183,7 @@ int Galois16RecMatrix::processRow(unsigned rec, unsigned validCount, Galois16Mul
 		// scale it, and multiply-add back
 		SCALE_ROW(1);
 		if(rows > 2) {
-			MULADD_ROW_PF(rec+0, 1, srcRows[2]);
+			MULADD_ROW_PF(rec+0, 1, MAT_ROW(0, 2));
 		} else MULADD_LASTROW(rec+0, 1)
 	} else {
 		if(recFirst >= numRec)
@@ -189,7 +191,7 @@ int Galois16RecMatrix::processRow(unsigned rec, unsigned validCount, Galois16Mul
 	}
 	if(rows >= 3) {
 		if(rows >= 4) {
-			MULADD_MULTI_ROW_PF(rec+2, 0, 2, srcRows[3]);
+			MULADD_MULTI_ROW_PF(rec+2, 0, 2, MAT_ROW(0, 3));
 			SCALE_ROW(2);
 			MULADD_MULTI_ROW(rec+3, 0, 2);
 			MULADD_ROW(rec+3, 2);
@@ -197,7 +199,7 @@ int Galois16RecMatrix::processRow(unsigned rec, unsigned validCount, Galois16Mul
 			MULADD_ROW(rec+2, 3);
 			MULADD_MULTI_ROW(rec+0, 2, 2);
 			if(rows > 4) {
-				MULADD_MULTI_ROW_PF(rec+1, 2, 2, srcRows[4]);
+				MULADD_MULTI_ROW_PF(rec+1, 2, 2, MAT_ROW(0, 4));
 			} else MULADD_MULTI_LASTROW(rec+1, 2, 2)
 		} else {
 			MULADD_MULTI_ROW(rec+2, 0, 2);
@@ -208,7 +210,7 @@ int Galois16RecMatrix::processRow(unsigned rec, unsigned validCount, Galois16Mul
 	}
 	if(rows >= 5) {
 		if(rows >= 6) {
-			MULADD_MULTI_ROW_PF(rec+4, 0, 4, srcRows[5]);
+			MULADD_MULTI_ROW_PF(rec+4, 0, 4, MAT_ROW(0, 5));
 			SCALE_ROW(4);
 			MULADD_MULTI_ROW(rec+5, 0, 4);
 			MULADD_ROW(rec+5, 4);
@@ -227,20 +229,50 @@ int Galois16RecMatrix::processRow(unsigned rec, unsigned validCount, Galois16Mul
 			MULADD_LASTROW(rec+3, 4)
 		}
 	}
-	
-	// do main elimination, using the source group
-	// first, gather all relevant coefficients
-	for(unsigned r=0; r<numRec; r++) {
+	return -1;
+	#undef SCALE_ROW
+	#undef MULADD_ROW
+	#undef MULADD_ROW_PF
+	#undef MULADD_MULTI_ROW
+	#undef MULADD_MULTI_ROW_PF
+	#undef MULADD_LASTROW
+	#undef MULADD_MULTI_LASTROW
+}
+
+void Galois16RecMatrix::fillCoeffs(uint16_t* rowCoeffs, unsigned rows, unsigned validCount, unsigned recFirst, unsigned recLast, unsigned rec, unsigned coeffWidth, Galois16Mul& gf) {
+	unsigned missingCol = validCount + rec;
+	if(recFirst == rec) recFirst += rows;
+	for(unsigned r=recFirst; r<recLast; r++) {
 		if(HEDLEY_UNLIKELY(r == rec)) {
 			r += rows-1;
 		} else {
 			for(unsigned c=0; c<rows; c++)
-				rowCoeffs[r*rows + c] = REPLACE_WORD(r, missingCol+c, 0);
+				rowCoeffs[(r-recFirst)*coeffWidth + c] = REPLACE_WORD(r, missingCol+c, 0);
 		}
 	}
+}
+
+template<int rows>
+void Galois16RecMatrix::processRow(unsigned rec, unsigned recFirst, unsigned recLast, Galois16Mul& gf, void* gfScratch, uint16_t* rowCoeffs, unsigned coeffWidth, std::vector<Galois16RecMatrixWorker>& workers) {
+	// TODO: consider optimisation for numStripes == 1 ?
+	
+	assert(recFirst <= recLast);
+	
+	void* srcRows[rows];
+	srcRows[0] = MAT_ROW(0, rec);
+	for(unsigned i=1; i<rows; i++)
+		srcRows[i] = (uint8_t*)srcRows[0] + i * stripeWidth;
+	
+	if(recFirst == rec) recFirst += rows;
+	// the next row when `processRow` is called; last action will prefetch this row
+	uint16_t* nextScaleRow = (rec+rows < recLast) ? MAT_ROW(0, rec+rows) : nullptr;
+	
+	if(recFirst >= recLast) return;
+	
+	// do main elimination, using the source group
 	if(workers.empty())
 		// process elimination directly
-		invertLoop<rows>(0, numStripes, recFirst, numRec, rec, rowCoeffs, srcRows, gf, gfScratch, nextScaleRow);
+		invertLoop<rows>(0, numStripes, recFirst, recLast, rec, rowCoeffs, coeffWidth, srcRows, gf, gfScratch, nextScaleRow);
 	else {
 		// process using workers
 		std::atomic<int> procRefs;
@@ -248,11 +280,12 @@ int Galois16RecMatrix::processRow(unsigned rec, unsigned validCount, Galois16Mul
 		auto makeReq = [&, this]() -> Galois16RecMatrixWorkerMessage* {
 			auto* req = new Galois16RecMatrixWorkerMessage;
 			req->recFirst = recFirst;
-			req->recLast = numRec;
+			req->recLast = recLast;
 			req->recSrc = rec;
 			req->rowCoeffs = rowCoeffs;
 			req->srcRows = srcRows;
 			req->gf = &gf;
+			req->coeffWidth = coeffWidth;
 			req->fn = &Galois16RecMatrix::invertLoop<rows>;
 			req->parent = this;
 			req->procRefs = &procRefs;
@@ -278,23 +311,26 @@ int Galois16RecMatrix::processRow(unsigned rec, unsigned validCount, Galois16Mul
 			float workerCnt = 0.5;
 			for(unsigned stripe=0; stripe<numStripes; stripe++) {
 				unsigned workerNum = (unsigned)(workerCnt + workersPerStripe) - (unsigned)workerCnt;
-				unsigned numRows = CEIL_DIV(numRec - rows, workerNum);
+				unsigned numRows = recLast - recFirst;
+				if(rec >= recFirst && rec < recLast) numRows -= rows;
+				numRows = CEIL_DIV(numRows, workerNum);
 				if(numRows < MIN_THREAD_REC) numRows = MIN_THREAD_REC; // ensure workers have a half decent amount of stuff to do
 				unsigned rowPos = recFirst;
 				
-				while(rowPos < numRec) {
+				while(rowPos < recLast) {
 					unsigned sendRows = numRows;
 					if(rowPos+sendRows > rec && rowPos <= rec)
 						// need to send extra to compensate for the gap
 						sendRows += rows;
-					if(rowPos+sendRows > numRec)
-						sendRows = numRec - rowPos;
+					if(rowPos+sendRows > recLast)
+						sendRows = recLast - rowPos;
 					
 					auto* req = makeReq();
 					req->stripeStart = stripe;
 					req->stripeEnd = stripe+1;
 					req->recFirst = rowPos;
 					req->recLast = rowPos+sendRows;
+					req->rowCoeffs += (rowPos-recFirst) * coeffWidth;
 					reqs.push_back(req);
 					
 					rowPos += sendRows;
@@ -305,6 +341,7 @@ int Galois16RecMatrix::processRow(unsigned rec, unsigned validCount, Galois16Mul
 			}
 			assert(reqs.size() <= workers.size());
 			procRefs.store(reqs.size());
+			assert(procRefs > 0);
 			
 			for(unsigned i=0; i<reqs.size(); i++) {
 				auto& worker = workers[i];
@@ -317,19 +354,65 @@ int Galois16RecMatrix::processRow(unsigned rec, unsigned validCount, Galois16Mul
 		// wait for threads to finish
 		done.get_future().wait();
 	}
-	
-	return -1;
-	
-	#undef REPLACE_WORD
-	#undef SCALE_ROW
-	#undef MULADD_ROW
-	#undef MULADD_ROW_PF
-	#undef MULADD_MULTI_ROW
-	#undef MULADD_MULTI_ROW_PF
-	#undef MULADD_LASTROW
-	#undef MULADD_MULTI_LASTROW
 }
+#undef REPLACE_WORD
 #undef MAT_ROW
+
+
+template<int rows>
+int Galois16RecMatrix::processRows(unsigned& rec, unsigned rowGroupSize, unsigned validCount, Galois16Mul& gf, void* gfScratch, uint16_t* rowCoeffs, std::vector<Galois16RecMatrixWorker>& workers, std::function<void(uint16_t, uint16_t)> progressCb, uint16_t progressOffset, uint16_t totalProgress) {
+	unsigned alignedRowGroupSize = (rowGroupSize / rows) * rows;
+	while(rec <= numRec-rows) {
+		
+		unsigned curRowGroupSize = alignedRowGroupSize;
+		if(numRec-rec < curRowGroupSize) {
+			curRowGroupSize = numRec-rec;
+			curRowGroupSize -= curRowGroupSize % rows;
+		}
+		assert(curRowGroupSize > 0);
+		
+		unsigned recStart = rec;
+		// for progress indicator, we'll even it out by computing a ratio to advance by
+		unsigned progressRatio = (curRowGroupSize<<16)/numRec;
+		unsigned progressBase = recStart + progressOffset;
+		
+		// loop through this row group (normalize values)
+		for(; rec < curRowGroupSize+recStart; rec+=rows) {
+			if(progressCb) progressCb(progressBase + (((rec-recStart)*progressRatio+32768)>>16), totalProgress);
+			int badRowOffset = initScale<rows>(rec, validCount, recStart, curRowGroupSize+recStart, gf, gfScratch);
+			if(badRowOffset >= 0) return rec+badRowOffset;
+			fillCoeffs(rowCoeffs, rows, validCount, recStart, curRowGroupSize+recStart, rec, rows, gf);
+			processRow<rows>(rec, recStart, curRowGroupSize+recStart, gf, gfScratch, rowCoeffs, rows, workers);
+		}
+		
+		
+		// apply current row group to all other row groups
+		for(unsigned recGroup=0; recGroup<numRec; ) {
+			if(recGroup == recStart) {
+				recGroup += curRowGroupSize;
+				continue;
+			}
+			if(progressCb) {
+				unsigned progressPos = recGroup;
+				if(recGroup < recStart) progressPos += curRowGroupSize;
+				progressCb(progressBase + ((progressPos*progressRatio+32768)>>16), totalProgress);
+			}
+			
+			unsigned curRowGroupSize2 = rowGroupSize;
+			if(numRec-recGroup < curRowGroupSize2)
+				curRowGroupSize2 = numRec-recGroup;
+			if(recGroup < recStart && recGroup+curRowGroupSize2 > recStart)
+				curRowGroupSize2 = recStart-recGroup; // don't let this group cross into the normalized group
+			fillCoeffs(rowCoeffs, curRowGroupSize, validCount, recGroup, recGroup+curRowGroupSize2, recStart, curRowGroupSize, gf);
+			for(unsigned rec2=recStart; rec2 < curRowGroupSize+recStart; rec2+=rows) {
+				processRow<rows>(rec2, recGroup, recGroup+curRowGroupSize2, gf, gfScratch, rowCoeffs + (rec2-recStart), curRowGroupSize, workers);
+			}
+			recGroup += curRowGroupSize2;
+		}
+	}
+	return -1;
+}
+
 
 
 // construct initial matrix (pre-inversion)
@@ -472,14 +555,22 @@ bool Galois16RecMatrix::Compute(const std::vector<bool>& inputValid, unsigned va
 	unsigned _numThreads = numThreads;
 	if(numRec < MIN_THREAD_REC) _numThreads = 1; // don't spawn threads if not enough work
 	if(_numThreads > 1) {
+		workers.reserve(_numThreads);
 		for(unsigned i=0; i<_numThreads; i++) {
-			workers.push_back(Galois16RecMatrixWorker(gf));
+			workers.emplace_back(gf);
 			workers[i].thread.name = "gauss_worker";
 			workers[i].thread.setCallback(invert_worker);
 		}
-		gfScratch = nullptr; // ...otherwise MSVC won't be happy
+		gfScratch = workers[0].gfScratch;
 	} else
 		gfScratch = gf.mutScratch_alloc();
+	
+	// target L3 slice? use 1MB target for now; TODO: improve this
+	unsigned rowGroupSize = (1024*1024 / stripeWidth);
+	// if it's going to be split amongst cores, increase the number of rows in a group
+	if(numStripes < _numThreads) rowGroupSize *= _numThreads/numStripes;
+	if(rowGroupSize < gfInfo.idealInputMultiple*2) rowGroupSize = gfInfo.idealInputMultiple*2;
+	if(rowGroupSize > numRec) rowGroupSize = numRec;
 	
 	invert_loop: { // loop, in the unlikely case we hit the PAR2 un-invertability flaw; TODO: is there a faster way than just retrying?
 		if(numRec > recovery.size()) { // not enough recovery
@@ -506,19 +597,15 @@ bool Galois16RecMatrix::Compute(const std::vector<bool>& inputValid, unsigned va
 		unsigned rec = 0;
 		#define INVERT_GROUP(rows) \
 			if(gfInfo.idealInputMultiple >= rows && numRec >= rows) { \
-				for(; rec <= numRec-rows; rec+=rows) { \
-					if(progressCb) progressCb(rec + progressOffset, totalProgress); \
-					 \
-					int badRowOffset = processRow<rows>(rec, validCount, gf, gfScratch, rowCoeffs, workers); \
-					if(badRowOffset >= 0) { \
-						/* ignore this recovery row and try again */ \
-						recovery.erase(recovery.begin() + rec + badRowOffset); \
-						goto invert_loop; \
-					} \
+				int badRow = processRows<rows>(rec, rowGroupSize, validCount, gf, gfScratch, rowCoeffs, workers, progressCb, progressOffset, totalProgress); \
+				if(badRow >= 0) { \
+					/* ignore this recovery row and try again */ \
+					recovery.erase(recovery.begin() + badRow); \
+					goto invert_loop; \
 				} \
 			}
 		// max out at 6 groups (registers + cache assoc?)
-		uint16_t* rowCoeffs = new uint16_t[numRec*6];
+		uint16_t* rowCoeffs = new uint16_t[rowGroupSize*rowGroupSize];
 		INVERT_GROUP(6)
 		INVERT_GROUP(5)
 		INVERT_GROUP(4)
@@ -547,6 +634,7 @@ bool Galois16RecMatrix::Compute(const std::vector<bool>& inputValid, unsigned va
 
 Galois16RecMatrix::Galois16RecMatrix() : mat(nullptr) {
 	numThreads = hardware_concurrency();
+	if(numThreads > 4) numThreads = 4; // by default, cap at 4 threads, as scaling doesn't work so well; TODO: tweak this later
 	numRec = 0;
 	numStripes = 0;
 	stripeWidth = 0;

@@ -17,9 +17,14 @@ class Galois16RecMatrix {
 	void Construct(const std::vector<bool>& inputValid, unsigned validCount, const std::vector<uint16_t>& recovery);
 	
 	template<int rows>
-	void invertLoop(unsigned stripeStart, unsigned stripeEnd, unsigned recFirst, unsigned recLast, unsigned recSrc, uint16_t* rowCoeffs, void** srcRows, Galois16Mul& gf, void* gfScratch, const void* nextPf);
+	void invertLoop(unsigned stripeStart, unsigned stripeEnd, unsigned recFirst, unsigned recLast, unsigned recSrc, uint16_t* rowCoeffs, unsigned coeffWidth, void** srcRows, Galois16Mul& gf, void* gfScratch, const void* nextPf);
 	template<int rows>
-	int processRow(unsigned rec, unsigned validCount, Galois16Mul& gf, void* gfScratch, uint16_t* rowCoeffs, std::vector<Galois16RecMatrixWorker>& workers);
+	int initScale(unsigned rec, unsigned validCount, unsigned recFirst, unsigned recLast, Galois16Mul& gf, void* gfScratch);
+	void fillCoeffs(uint16_t* rowCoeffs, unsigned rows, unsigned validCount, unsigned recFirst, unsigned recLast, unsigned rec, unsigned coeffWidth, Galois16Mul& gf);
+	template<int rows>
+	void processRow(unsigned rec, unsigned recFirst, unsigned recLast, Galois16Mul& gf, void* gfScratch, uint16_t* rowCoeffs, unsigned coeffWidth, std::vector<Galois16RecMatrixWorker>& workers);
+	template<int rows>
+	int processRows(unsigned& rec, unsigned rowGroupSize, unsigned validCount, Galois16Mul& gf, void* gfScratch, uint16_t* rowCoeffs, std::vector<Galois16RecMatrixWorker>& workers, std::function<void(uint16_t, uint16_t)> progressCb, uint16_t progressOffset, uint16_t totalProgress);
 public:
 	Galois16RecMatrix();
 	~Galois16RecMatrix();
