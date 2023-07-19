@@ -21,7 +21,7 @@
         ]
       }]
     ],
-    "cflags": ["-std=gnu99", "-D_POSIX_C_SOURCE=200112L"],
+    "cflags": ["-std=c99", "-D_POSIX_C_SOURCE=200112L", "-D_DARWIN_C_SOURCE", "-D_GNU_SOURCE"],
     "cxxflags": ["-std=c++11"],
     "msvs_settings": {"VCCLCompilerTool": {"Optimization": "MaxSpeed"}},
     "configurations": {"Release": {
