@@ -702,8 +702,16 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			int available = gf16_clmul_init_arm(GF16_POLYNOMIAL);
 			
 			METHOD_REQUIRES(gf16_available_neon && available)
-			_mul = &gf16_clmul_mul_neon;
-			_mul_add = &gf16_clmul_muladd_neon;
+			
+			// use Shuffle for single region multiplies, because it's faster
+			scratch = gf16_shuffle_init_arm(GF16_POLYNOMIAL);
+			if(scratch) {
+				_mul = &gf16_shuffle_mul_neon;
+				_mul_add = &gf16_shuffle_muladd_neon;
+			} else {
+				_mul = &gf16_clmul_mul_neon;
+				_mul_add = &gf16_clmul_muladd_neon;
+			}
 			_mul_add_multi = &gf16_clmul_muladd_multi_neon;
 			_mul_add_multi_stridepf = &gf16_clmul_muladd_multi_stridepf_neon;
 			_mul_add_multi_packed = &gf16_clmul_muladd_multi_packed_neon;
@@ -818,8 +826,9 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 		case GF16_CLMUL_SVE2:
 			METHOD_REQUIRES(gf16_available_sve2)
 			
-			_mul = &gf16_clmul_mul_sve2;
-			_mul_add = &gf16_clmul_muladd_sve2;
+			// single region multiplies (_mul/add) use Shuffle-128 instead
+			_mul = &gf16_shuffle_mul_128_sve2;
+			_mul_add = &gf16_shuffle_muladd_128_sve2;
 			_mul_add_multi = &gf16_clmul_muladd_multi_sve2;
 			_mul_add_multi_stridepf = &gf16_clmul_muladd_multi_stridepf_sve2;
 			_mul_add_multi_packed = &gf16_clmul_muladd_multi_packed_sve2;
@@ -1310,7 +1319,7 @@ Galois16Methods Galois16Mul::default_method(size_t regionSizeHint, unsigned inpu
 	if(caps.hasSVE2) {
 		if(gf16_sve_get_size() >= 64)
 			return GF16_SHUFFLE_512_SVE2;
-		return inputs > 3 && !forInvert ? GF16_CLMUL_SVE2 : GF16_SHUFFLE_128_SVE2;
+		return inputs > 3 ? GF16_CLMUL_SVE2 : GF16_SHUFFLE_128_SVE2;
 	}
 	if(caps.hasSVE && gf16_sve_get_size() > 16)
 		return GF16_SHUFFLE_128_SVE;
@@ -1321,7 +1330,7 @@ Galois16Methods Galois16Mul::default_method(size_t regionSizeHint, unsigned inpu
 # else
 			inputs > 1
 # endif
-			&& !forInvert ? GF16_CLMUL_NEON : GF16_SHUFFLE_NEON;
+			? GF16_CLMUL_NEON : GF16_SHUFFLE_NEON;
 #endif
 	
 	
