@@ -282,7 +282,7 @@ class MessageThread {
 				if(fnSetTD) {
 					wchar_t nameUCS2[17];
 					//assert(strlen(self->name) <= 16); // always hard-coded string, plus Linux limits it to 16 chars, so shouldn't ever overflow
-					MultiByteToWideChar(CP_ACP, MB_PRECOMPOSED, self->name, -1, nameUCS2, 50);
+					MultiByteToWideChar(CP_ACP, MB_PRECOMPOSED, self->name, -1, nameUCS2, sizeof(nameUCS2)/sizeof(wchar_t) -1);
 					fnSetTD(GetCurrentThread(), nameUCS2);
 				}
 			}
