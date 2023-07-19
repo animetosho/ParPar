@@ -1197,7 +1197,7 @@ GF_FINISH_PACKED_FUNCS_STUB(gf16_xor, _sse2)
 #include "gf16_bitdep_init_sse2.h"
 
 #ifdef PLATFORM_X86
-static void xor_write_init_jit(uint8_t *jitCodeNorm, uint8_t *jitCodeInsitu, uint_fast8_t* sizeNorm, uint_fast8_t* sizeInsitu) {
+static void xor_write_init_jit(uint8_t *jitCodeNorm, uint8_t *jitCodeInsitu, uint_fast16_t* sizeNorm, uint_fast16_t* sizeInsitu) {
 	uint8_t *jitCodeStart = jitCodeNorm;
 	jitCodeNorm += _jit_add_i(jitCodeNorm, AX, 256);
 	jitCodeNorm += _jit_add_i(jitCodeNorm, DX, 256);
@@ -1214,7 +1214,7 @@ static void xor_write_init_jit(uint8_t *jitCodeNorm, uint8_t *jitCodeInsitu, uin
 	}
 # endif
 	
-	if(sizeNorm) *sizeNorm = jitCodeNorm-jitCodeStart;
+	if(sizeNorm) *sizeNorm = (uint_fast16_t)(jitCodeNorm-jitCodeStart);
 	
 	// in-situ version
 	jitCodeStart = jitCodeInsitu;
@@ -1237,7 +1237,7 @@ static void xor_write_init_jit(uint8_t *jitCodeNorm, uint8_t *jitCodeInsitu, uin
 	}
 # endif
 	
-	if(sizeInsitu) *sizeInsitu = jitCodeInsitu-jitCodeStart;
+	if(sizeInsitu) *sizeInsitu = (uint_fast16_t)(jitCodeInsitu-jitCodeStart);
 }
 #endif
 

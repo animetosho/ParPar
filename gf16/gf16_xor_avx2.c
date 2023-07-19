@@ -675,7 +675,7 @@ GF_FINISH_PACKED_FUNCS_STUB(gf16_xor, _avx2)
 
 
 #if defined(__AVX2__) && defined(PLATFORM_AMD64)
-static void xor_write_init_jit(uint8_t *jitCodeNorm, uint8_t *jitCodeInsitu, uint_fast8_t* sizeNorm, uint_fast8_t* sizeInsitu) {
+static void xor_write_init_jit(uint8_t *jitCodeNorm, uint8_t *jitCodeInsitu, uint_fast16_t* sizeNorm, uint_fast16_t* sizeInsitu) {
 	uint8_t *jitCodeStart = jitCodeNorm;
 	jitCodeNorm += _jit_add_i(jitCodeNorm, AX, 512);
 	jitCodeNorm += _jit_add_i(jitCodeNorm, DX, 512);
@@ -684,7 +684,7 @@ static void xor_write_init_jit(uint8_t *jitCodeNorm, uint8_t *jitCodeInsitu, uin
 	for(int i=3; i<16; i++) {
 		jitCodeNorm += _jit_vmovdqa_load(jitCodeNorm, i, AX, lshift32(i-4, 5));
 	}
-	if(sizeNorm) *sizeNorm = jitCodeNorm-jitCodeStart;
+	if(sizeNorm) *sizeNorm = (uint_fast16_t)(jitCodeNorm-jitCodeStart);
 	
 	
 	jitCodeStart = jitCodeInsitu;
@@ -696,7 +696,7 @@ static void xor_write_init_jit(uint8_t *jitCodeNorm, uint8_t *jitCodeInsitu, uin
 	for(int i=0; i<3; i++) {
 		jitCodeInsitu += _jit_vmovdqa_store(jitCodeInsitu, AX, lshift32(i-4, 5), i);
 	}
-	if(sizeInsitu) *sizeInsitu = jitCodeInsitu-jitCodeStart;
+	if(sizeInsitu) *sizeInsitu = (uint_fast16_t)(jitCodeInsitu-jitCodeStart);
 }
 
 # include "gf16_bitdep_init_avx2.h"

@@ -115,8 +115,8 @@ static HEDLEY_ALWAYS_INLINE void gf16_xor_jit_stub(intptr_t src, intptr_t dEnd, 
 struct gf16_xor_scratch {
 	uint8_t deps[16*16*2*4];
 	int jitOptStrat; // GF16_XOR_JIT_STRAT_*
-	uint_fast8_t codeStart;
-	uint_fast8_t codeStartInsitu;
+	uint_fast16_t codeStart;
+	uint_fast16_t codeStartInsitu;
 };
 
 

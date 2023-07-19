@@ -1206,7 +1206,7 @@ void* gf16_xor_jit_init_avx512(int polynomial, int jitOptStrat) {
 	gf16_bitdep_init256(ret->deps, polynomial, 0);
 	
 	ret->jitOptStrat = jitOptStrat;
-	ret->codeStart = (uint_fast8_t)xor_write_init_jit(tmpCode);
+	ret->codeStart = (uint_fast16_t)xor_write_init_jit(tmpCode);
 	return ret;
 #else
 	UNUSED(polynomial); UNUSED(jitOptStrat);
