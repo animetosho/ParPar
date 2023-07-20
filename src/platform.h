@@ -81,6 +81,9 @@
 #if defined(__AVX512F__) && _MSC_VER >= 1914
 	#define __AVX512VBMI__ 1
 #endif
+#if defined(__AVX2__) && _MSC_VER >= 1915
+	#define __VPCLMULQDQ__ 1
+#endif
 #if defined(__SSE2__) && _MSC_VER >= 1920
 	#define __GFNI__ 1
 #endif
