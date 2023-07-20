@@ -38,9 +38,9 @@ public:
 struct Galois16RecMatrixWorkerMessage {
 	unsigned stripeStart, stripeEnd;
 	unsigned recFirst, recLast;
-	unsigned recSrc; uint16_t* rowCoeffs; void** srcRows; Galois16Mul* gf; void* gfScratch;
+	unsigned recSrc; unsigned recSrcCount; uint16_t* rowCoeffs; void** srcRows; Galois16Mul* gf; void* gfScratch;
 	unsigned coeffWidth;
-	void(Galois16RecMatrix::*fn)(unsigned, unsigned, unsigned, unsigned, unsigned, uint16_t*, unsigned, void**, Galois16Mul&, void*, const void*);
+	void(Galois16RecMatrix::*fn)(unsigned, unsigned, unsigned, unsigned, unsigned, unsigned, uint16_t*, unsigned, void**, Galois16Mul&, void*, const void*);
 	Galois16RecMatrix* parent;
 	std::atomic<int>* procRefs;
 	std::promise<void>* done;
@@ -49,7 +49,7 @@ struct Galois16RecMatrixWorkerMessage {
 static void invert_worker(ThreadMessageQueue<void*>& q) {
 	Galois16RecMatrixWorkerMessage* req;
 	while((req = static_cast<Galois16RecMatrixWorkerMessage*>(q.pop())) != NULL) {
-		(req->parent->*(req->fn))(req->stripeStart, req->stripeEnd, req->recFirst, req->recLast, req->recSrc, req->rowCoeffs, req->coeffWidth, req->srcRows, *(req->gf), req->gfScratch, nullptr);
+		(req->parent->*(req->fn))(req->stripeStart, req->stripeEnd, req->recFirst, req->recLast, req->recSrc, req->recSrcCount, req->rowCoeffs, req->coeffWidth, req->srcRows, *(req->gf), req->gfScratch, nullptr);
 		if(req->procRefs->fetch_sub(1, std::memory_order_acq_rel) <= 1) {
 			req->done->set_value();
 		}
@@ -62,33 +62,39 @@ static void invert_worker(ThreadMessageQueue<void*>& q) {
 #define ROUND_DIV(a, b) (((a) + ((b)>>1)) / (b))
 
 template<int rows>
-void Galois16RecMatrix::invertLoop(unsigned stripeStart, unsigned stripeEnd, unsigned recFirst, unsigned recLast, unsigned recSrc, uint16_t* rowCoeffs, unsigned coeffWidth, void** srcRows, Galois16Mul& gf, void* gfScratch, const void* nextPf) {
+void Galois16RecMatrix::invertLoop(unsigned stripeStart, unsigned stripeEnd, unsigned recFirst, unsigned recLast, unsigned recSrc, unsigned recSrcCount, uint16_t* rowCoeffs, unsigned coeffWidth, void** srcRows, Galois16Mul& gf, void* gfScratch, const void* nextPf) {
+	assert(recSrcCount % rows == 0);
 	for(unsigned stripe=stripeStart; stripe<stripeEnd; stripe++) {
-		for(unsigned rec2=recFirst; rec2<recLast; ) {
-			unsigned curRec2 = rec2++;
-			if(HEDLEY_UNLIKELY(rec2 == recSrc))
-				rec2 += rows;
-			
-			// TODO: fixup prefetching
-			const void* pf = nextPf;
-			if(HEDLEY_LIKELY(rec2 < recLast)) {
-				pf = MAT_ROW(stripe, rec2);
-			} else if(stripe < stripeEnd-1) {
-				pf = MAT_ROW(stripe+1, recFirst);
-				// TODO: need to prefetch next stripe's initial matrix?
-			}
-			
-			uint16_t* coeffPtr = rowCoeffs + (curRec2-recFirst)*coeffWidth;
-			if(rows > 1) {
-				if(HEDLEY_LIKELY(pf))
-					gf.mul_add_multi_stridepf(rows, stripeWidth, MAT_ROW(stripe, curRec2), MAT_ROW(stripe, recSrc), stripeWidth, coeffPtr, gfScratch, pf);
-				else
-					gf.mul_add_multi(rows, stripeWidth*numRec*stripe, MAT_ROW(0, curRec2), srcRows, stripeWidth, coeffPtr, gfScratch);
-			} else {
-				if(HEDLEY_LIKELY(pf))
-					gf.mul_add_pf(MAT_ROW(stripe, curRec2), MAT_ROW(stripe, recSrc), stripeWidth, *coeffPtr, gfScratch, pf);
-				else
-					gf.mul_add(MAT_ROW(stripe, curRec2), MAT_ROW(stripe, recSrc), stripeWidth, *coeffPtr, gfScratch);
+		for(unsigned recI = 0; recI < recSrcCount; recI += rows) {
+			unsigned rec = recI+recSrc;
+			for(unsigned rec2=recFirst; rec2<recLast; ) {
+				unsigned curRec2 = rec2++;
+				if(HEDLEY_UNLIKELY(rec2 == rec))
+					rec2 += rows;
+				
+				// TODO: fixup prefetching
+				const void* pf = nextPf;
+				if(HEDLEY_LIKELY(rec2 < recLast)) {
+					pf = MAT_ROW(stripe, rec2);
+				} else if(recI+rows < recSrcCount) {
+					pf = nullptr; // TODO: same row group - no need to prefetch as it should be in cache?
+				} else if(stripe < stripeEnd-1) {
+					pf = MAT_ROW(stripe+1, recFirst);
+					// TODO: need to prefetch next stripe's initial matrix?
+				}
+				
+				uint16_t* coeffPtr = rowCoeffs + (curRec2-recFirst)*coeffWidth + recI;
+				if(rows > 1) {
+					if(HEDLEY_LIKELY(pf))
+						gf.mul_add_multi_stridepf(rows, stripeWidth, MAT_ROW(stripe, curRec2), MAT_ROW(stripe, rec), stripeWidth, coeffPtr, gfScratch, pf);
+					else
+						gf.mul_add_multi(rows, stripeWidth*(numRec*stripe + recI), MAT_ROW(0, curRec2) - recI*stripeWidth/sizeof(uint16_t), srcRows, stripeWidth, coeffPtr, gfScratch);
+				} else {
+					if(HEDLEY_LIKELY(pf))
+						gf.mul_add_pf(MAT_ROW(stripe, curRec2), MAT_ROW(stripe, rec), stripeWidth, *coeffPtr, gfScratch, pf);
+					else
+						gf.mul_add(MAT_ROW(stripe, curRec2), MAT_ROW(stripe, rec), stripeWidth, *coeffPtr, gfScratch);
+				}
 			}
 		}
 	}
@@ -253,7 +259,7 @@ void Galois16RecMatrix::fillCoeffs(uint16_t* rowCoeffs, unsigned rows, unsigned 
 }
 
 template<int rows>
-void Galois16RecMatrix::processRow(unsigned rec, unsigned recFirst, unsigned recLast, Galois16Mul& gf, void* gfScratch, uint16_t* rowCoeffs, unsigned coeffWidth, std::vector<Galois16RecMatrixWorker>& workers) {
+void Galois16RecMatrix::processRow(unsigned rec, unsigned recCount, unsigned recFirst, unsigned recLast, Galois16Mul& gf, void* gfScratch, uint16_t* rowCoeffs, unsigned coeffWidth, std::vector<Galois16RecMatrixWorker>& workers) {
 	// TODO: consider optimisation for numStripes == 1 ?
 	
 	assert(recFirst <= recLast);
@@ -272,7 +278,7 @@ void Galois16RecMatrix::processRow(unsigned rec, unsigned recFirst, unsigned rec
 	// do main elimination, using the source group
 	if(workers.empty())
 		// process elimination directly
-		invertLoop<rows>(0, numStripes, recFirst, recLast, rec, rowCoeffs, coeffWidth, srcRows, gf, gfScratch, nextScaleRow);
+		invertLoop<rows>(0, numStripes, recFirst, recLast, rec, recCount, rowCoeffs, coeffWidth, srcRows, gf, gfScratch, nextScaleRow);
 	else {
 		// process using workers
 		std::atomic<int> procRefs;
@@ -282,6 +288,7 @@ void Galois16RecMatrix::processRow(unsigned rec, unsigned recFirst, unsigned rec
 			req->recFirst = recFirst;
 			req->recLast = recLast;
 			req->recSrc = rec;
+			req->recSrcCount = recCount;
 			req->rowCoeffs = rowCoeffs;
 			req->srcRows = srcRows;
 			req->gf = &gf;
@@ -382,7 +389,7 @@ int Galois16RecMatrix::processRows(unsigned& rec, unsigned rowGroupSize, unsigne
 			int badRowOffset = initScale<rows>(rec, validCount, recStart, curRowGroupSize+recStart, gf, gfScratch);
 			if(badRowOffset >= 0) return rec+badRowOffset;
 			fillCoeffs(rowCoeffs, rows, validCount, recStart, curRowGroupSize+recStart, rec, rows, gf);
-			processRow<rows>(rec, recStart, curRowGroupSize+recStart, gf, gfScratch, rowCoeffs, rows, workers);
+			processRow<rows>(rec, rows, recStart, curRowGroupSize+recStart, gf, gfScratch, rowCoeffs, rows, workers);
 		}
 		
 		
@@ -404,9 +411,7 @@ int Galois16RecMatrix::processRows(unsigned& rec, unsigned rowGroupSize, unsigne
 			if(recGroup < recStart && recGroup+curRowGroupSize2 > recStart)
 				curRowGroupSize2 = recStart-recGroup; // don't let this group cross into the normalized group
 			fillCoeffs(rowCoeffs, curRowGroupSize, validCount, recGroup, recGroup+curRowGroupSize2, recStart, curRowGroupSize, gf);
-			for(unsigned rec2=recStart; rec2 < curRowGroupSize+recStart; rec2+=rows) {
-				processRow<rows>(rec2, recGroup, recGroup+curRowGroupSize2, gf, gfScratch, rowCoeffs + (rec2-recStart), curRowGroupSize, workers);
-			}
+			processRow<rows>(recStart, curRowGroupSize, recGroup, recGroup+curRowGroupSize2, gf, gfScratch, rowCoeffs, curRowGroupSize, workers);
 			recGroup += curRowGroupSize2;
 		}
 	}
