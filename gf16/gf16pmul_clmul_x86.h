@@ -222,6 +222,9 @@ void _FN(gf16pmul_clmul)(void *HEDLEY_RESTRICT dst, const void* src1, const void
 		_MMI(store)((_mword*)(_dst + ptr), result);
 	}
 #endif
+#if MWORD_SIZE >= 32
+	_mm256_zeroupper();
+#endif
 }
 
 #else
