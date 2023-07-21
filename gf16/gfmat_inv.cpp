@@ -612,8 +612,9 @@ bool Galois16RecMatrix::Compute(const std::vector<bool>& inputValid, unsigned va
 	} else
 		state.gfScratch = state.gf.mutScratch_alloc();
 	
-	// target L3 slice? use 1MB target for now; TODO: improve this
-	unsigned rowGroupSize = (1024*1024 / stripeWidth);
+	// target L2 size - 512K seems to be a reasonable guess for now; TODO: improve this
+	// - targeting larger L2 (e.g. >1MB) seems to perform worse, so a fixed size might end up being better
+	unsigned rowGroupSize = (512*1024 / stripeWidth);
 	// if it's going to be split amongst cores, increase the number of rows in a group
 	if(numStripes < _numThreads) rowGroupSize *= _numThreads/numStripes;
 	unsigned rowMultiple = (std::min)(gfInfo.idealInputMultiple, PP_INVERT_MAX_MULTI_ROWS);
