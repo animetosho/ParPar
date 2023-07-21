@@ -82,9 +82,11 @@ template<unsigned rows>
 void Galois16RecMatrix::invertLoop(unsigned stripeStart, unsigned stripeEnd, unsigned recFirst, unsigned recLast, unsigned recSrc, unsigned recSrcCount, uint16_t* rowCoeffs, unsigned coeffWidth, void* (&srcRowsBase)[PP_INVERT_MAX_MULTI_ROWS], Galois16Mul& gf, void* gfScratch, const void* nextPf, unsigned pfFactor) {
 	assert(recSrcCount % rows == 0);
 	// when to start prefetching the next stripe
-	unsigned recStartPf = 0;
+	unsigned recStartPf = 0, recSrcStartPf = recFirst;
 	if(recSrcCount > rows<<pfFactor)
 		recStartPf = recSrcCount - (rows<<pfFactor);
+	if(recLast-recFirst > rows<<pfFactor)
+		recSrcStartPf = recLast - (rows<<pfFactor);
 	const uint8_t* pf = nullptr;
 	for(unsigned stripe=stripeStart; stripe<stripeEnd; stripe++) {
 		for(unsigned recI = 0; recI < recSrcCount; recI += rows) {
@@ -101,12 +103,15 @@ void Galois16RecMatrix::invertLoop(unsigned stripeStart, unsigned stripeEnd, uns
 							pf = (const uint8_t*)(MAT_ROW(stripe+1, recFirst));
 						else
 							pf = (const uint8_t*)nextPf;
-					} else if(pf) {
-						pf += stripeWidth >> pfFactor;
 					}
 					// TODO: if numStripes==1, we might want to avoid prefetching the same row group as the first applyRows loop would
-				} else
-					pf = nullptr;
+				} else {
+					if(curRec2 == recSrcStartPf)
+						// prefetch next rowSrc
+						pf = (const uint8_t*)(MAT_ROW(stripe, rec+rows));
+					else if(curRec2 < recSrcStartPf)
+						pf = nullptr;
+				}
 				
 				uint16_t* target = MAT_ROW(stripe, curRec2);
 				uint16_t* coeffPtr = rowCoeffs + (curRec2-recFirst)*coeffWidth + recI;
@@ -123,6 +128,7 @@ void Galois16RecMatrix::invertLoop(unsigned stripeStart, unsigned stripeEnd, uns
 					else
 						gf.mul_add(target, MAT_ROW(stripe, rec), stripeWidth, *coeffPtr, gfScratch);
 				}
+				if(pf) pf += stripeWidth >> pfFactor;
 			}
 		}
 	}
@@ -676,7 +682,6 @@ bool Galois16RecMatrix::Compute(const std::vector<bool>& inputValid, unsigned va
 
 Galois16RecMatrix::Galois16RecMatrix() : mat(nullptr) {
 	numThreads = hardware_concurrency();
-	if(numThreads > 4) numThreads = 4; // by default, cap at 4 threads, as scaling doesn't work so well; TODO: tweak this later
 	numRec = 0;
 	numStripes = 0;
 	stripeWidth = 0;
