@@ -19,14 +19,14 @@ class Galois16RecMatrix {
 	unsigned numThreads;
 	void Construct(const std::vector<bool>& inputValid, unsigned validCount, const std::vector<uint16_t>& recovery);
 	
-	template<int rows>
-	void invertLoop(unsigned stripeStart, unsigned stripeEnd, unsigned recFirst, unsigned recLast, unsigned recSrc, unsigned recSrcCount, uint16_t* rowCoeffs, unsigned coeffWidth, void* (&srcRowsBase)[PP_INVERT_MAX_MULTI_ROWS], Galois16Mul& gf, void* gfScratch, const void* nextPf);
-	template<int rows>
-	int initScale(Galois16RecMatrixComputeState& state, unsigned rec, unsigned recFirst, unsigned recLast);
+	template<unsigned rows>
+	void invertLoop(unsigned stripeStart, unsigned stripeEnd, unsigned recFirst, unsigned recLast, unsigned recSrc, unsigned recSrcCount, uint16_t* rowCoeffs, unsigned coeffWidth, void* (&srcRowsBase)[PP_INVERT_MAX_MULTI_ROWS], Galois16Mul& gf, void* gfScratch, const void* nextPf, unsigned pfFactor);
+	template<unsigned rows>
+	int scaleRows(Galois16RecMatrixComputeState& state, unsigned rec, unsigned recFirst, unsigned recLast);
 	void fillCoeffs(Galois16RecMatrixComputeState& state, unsigned rows, unsigned recFirst, unsigned recLast, unsigned rec, unsigned coeffWidth);
-	template<int rows>
-	void processRow(Galois16RecMatrixComputeState& state, unsigned rec, unsigned recCount, unsigned recFirst, unsigned recLast, unsigned coeffWidth);
-	template<int rows>
+	template<unsigned rows>
+	void applyRows(Galois16RecMatrixComputeState& state, unsigned rec, unsigned recCount, unsigned recFirst, unsigned recLast, unsigned coeffWidth, int nextRow);
+	template<unsigned rows>
 	int processRows(Galois16RecMatrixComputeState& state, unsigned& rec, unsigned rowGroupSize, std::function<void(uint16_t, uint16_t)> progressCb, uint16_t progressOffset, uint16_t totalProgress);
 public:
 	Galois16RecMatrix();

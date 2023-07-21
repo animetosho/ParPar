@@ -167,7 +167,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_muladd_multi_stridepf(const void *HEDLEY_R
 			_SRC(interleave, 9), _SRC(interleave, 10), _SRC(interleave, 11), _SRC(interleave, 12),
 			_SRC(interleave,13), _SRC(interleave, 14), _SRC(interleave, 15), _SRC(interleave, 16),
 			_SRC(interleave,17),
-			len, coefficients + region, 1, _pf
+			len, coefficients + region, 2, _pf
 		);
 		srcEnd += srcStride*interleave;
 		outputPfRounds--;
@@ -201,7 +201,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_muladd_multi_stridepf(const void *HEDLEY_R
 						_SRC(x, 9), _SRC(x, 10), _SRC(x, 11), _SRC(x, 12), \
 						_SRC(x,13), _SRC(x, 14), _SRC(x, 15), _SRC(x, 16), \
 						_SRC(x,17), \
-						len, coefficients + region, 1, _pf \
+						len, coefficients + region, 2, _pf \
 					); \
 				break
 				REMAINING_CASES;

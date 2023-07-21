@@ -21,6 +21,7 @@ struct Galois16RecMatrixComputeState {
 	unsigned validCount;
 	void* srcRowsBase[PP_INVERT_MAX_MULTI_ROWS];
 	std::vector<Galois16RecMatrixWorker> workers;
+	unsigned pfFactor;
 	
 	Galois16RecMatrixComputeState(Galois16Methods method) : gf(method) {}
 };
@@ -52,19 +53,20 @@ struct Galois16RecMatrixWorkerMessage {
 	unsigned recSrc; unsigned recSrcCount; uint16_t* rowCoeffs; Galois16Mul* gf; void* gfScratch;
 	void* (&srcRowsBase)[PP_INVERT_MAX_MULTI_ROWS];
 	unsigned coeffWidth;
-	void(Galois16RecMatrix::*fn)(unsigned, unsigned, unsigned, unsigned, unsigned, unsigned, uint16_t*, unsigned, void*(&)[PP_INVERT_MAX_MULTI_ROWS], Galois16Mul&, void*, const void*);
+	void(Galois16RecMatrix::*fn)(unsigned, unsigned, unsigned, unsigned, unsigned, unsigned, uint16_t*, unsigned, void*(&)[PP_INVERT_MAX_MULTI_ROWS], Galois16Mul&, void*, const void*, unsigned);
+	unsigned pfFactor;
 	Galois16RecMatrix* parent;
 	std::atomic<int>* procRefs;
 	std::promise<void>* done;
 	
 	Galois16RecMatrixWorkerMessage(Galois16RecMatrixComputeState& state)
-	: rowCoeffs(state.coeff), gf(&state.gf), srcRowsBase(state.srcRowsBase) {}
+	: rowCoeffs(state.coeff), gf(&state.gf), srcRowsBase(state.srcRowsBase), pfFactor(state.pfFactor) {}
 };
 
 static void invert_worker(ThreadMessageQueue<void*>& q) {
 	Galois16RecMatrixWorkerMessage* req;
 	while((req = static_cast<Galois16RecMatrixWorkerMessage*>(q.pop())) != NULL) {
-		(req->parent->*(req->fn))(req->stripeStart, req->stripeEnd, req->recFirst, req->recLast, req->recSrc, req->recSrcCount, req->rowCoeffs, req->coeffWidth, req->srcRowsBase, *(req->gf), req->gfScratch, nullptr);
+		(req->parent->*(req->fn))(req->stripeStart, req->stripeEnd, req->recFirst, req->recLast, req->recSrc, req->recSrcCount, req->rowCoeffs, req->coeffWidth, req->srcRowsBase, *(req->gf), req->gfScratch, nullptr, req->pfFactor);
 		if(req->procRefs->fetch_sub(1, std::memory_order_acq_rel) <= 1) {
 			req->done->set_value();
 		}
@@ -76,9 +78,14 @@ static void invert_worker(ThreadMessageQueue<void*>& q) {
 #define CEIL_DIV(a, b) (((a) + (b)-1) / (b))
 #define ROUND_DIV(a, b) (((a) + ((b)>>1)) / (b))
 
-template<int rows>
-void Galois16RecMatrix::invertLoop(unsigned stripeStart, unsigned stripeEnd, unsigned recFirst, unsigned recLast, unsigned recSrc, unsigned recSrcCount, uint16_t* rowCoeffs, unsigned coeffWidth, void* (&srcRowsBase)[PP_INVERT_MAX_MULTI_ROWS], Galois16Mul& gf, void* gfScratch, const void* nextPf) {
+template<unsigned rows>
+void Galois16RecMatrix::invertLoop(unsigned stripeStart, unsigned stripeEnd, unsigned recFirst, unsigned recLast, unsigned recSrc, unsigned recSrcCount, uint16_t* rowCoeffs, unsigned coeffWidth, void* (&srcRowsBase)[PP_INVERT_MAX_MULTI_ROWS], Galois16Mul& gf, void* gfScratch, const void* nextPf, unsigned pfFactor) {
 	assert(recSrcCount % rows == 0);
+	// when to start prefetching the next stripe
+	unsigned recStartPf = 0;
+	if(recSrcCount > rows<<pfFactor)
+		recStartPf = recSrcCount - (rows<<pfFactor);
+	const uint8_t* pf = nullptr;
 	for(unsigned stripe=stripeStart; stripe<stripeEnd; stripe++) {
 		for(unsigned recI = 0; recI < recSrcCount; recI += rows) {
 			unsigned rec = recI+recSrc;
@@ -87,30 +94,34 @@ void Galois16RecMatrix::invertLoop(unsigned stripeStart, unsigned stripeEnd, uns
 				if(HEDLEY_UNLIKELY(rec2 == rec))
 					rec2 += rows;
 				
-				// TODO: fixup prefetching
-				const void* pf = nextPf;
-				if(HEDLEY_LIKELY(rec2 < recLast)) {
-					pf = MAT_ROW(stripe, rec2);
-				} else if(recI+rows < recSrcCount) {
-					pf = nullptr; // TODO: same row group - no need to prefetch as it should be in cache?
-				} else if(stripe < stripeEnd-1) {
-					pf = MAT_ROW(stripe+1, recFirst);
-					// TODO: need to prefetch next stripe's initial matrix?
-				}
+				if(recI >= recStartPf) {
+					if(recI == recStartPf && curRec2 == recFirst) {
+						if(stripe < stripeEnd-1)
+							// prefetch next stripe
+							pf = (const uint8_t*)(MAT_ROW(stripe+1, recFirst));
+						else
+							pf = (const uint8_t*)nextPf;
+					} else if(pf) {
+						pf += stripeWidth >> pfFactor;
+					}
+					// TODO: if numStripes==1, we might want to avoid prefetching the same row group as the first applyRows loop would
+				} else
+					pf = nullptr;
 				
+				uint16_t* target = MAT_ROW(stripe, curRec2);
 				uint16_t* coeffPtr = rowCoeffs + (curRec2-recFirst)*coeffWidth + recI;
 				if(rows > 1) {
-					if(HEDLEY_LIKELY(pf))
-						gf.mul_add_multi_stridepf(rows, stripeWidth, MAT_ROW(stripe, curRec2), MAT_ROW(stripe, rec), stripeWidth, coeffPtr, gfScratch, pf);
+					if(pf)
+						gf.mul_add_multi_stridepf(rows, stripeWidth, target, MAT_ROW(stripe, rec), stripeWidth, coeffPtr, gfScratch, pf);
 					else {
 						unsigned offset = rec*stripeWidth;
 						gf.mul_add_multi(rows, stripeWidth*numRec*stripe + offset, MAT_ROW(0, curRec2) - offset/sizeof(uint16_t), srcRowsBase, stripeWidth, coeffPtr, gfScratch);
 					}
 				} else {
-					if(HEDLEY_LIKELY(pf))
-						gf.mul_add_pf(MAT_ROW(stripe, curRec2), MAT_ROW(stripe, rec), stripeWidth, *coeffPtr, gfScratch, pf);
+					if(pf)
+						gf.mul_add_pf(target, MAT_ROW(stripe, rec), stripeWidth, *coeffPtr, gfScratch, pf);
 					else
-						gf.mul_add(MAT_ROW(stripe, curRec2), MAT_ROW(stripe, rec), stripeWidth, *coeffPtr, gfScratch);
+						gf.mul_add(target, MAT_ROW(stripe, rec), stripeWidth, *coeffPtr, gfScratch);
 				}
 			}
 		}
@@ -119,8 +130,8 @@ void Galois16RecMatrix::invertLoop(unsigned stripeStart, unsigned stripeEnd, uns
 
 #define REPLACE_WORD(r, c, v) state.gf.replace_word(MAT_ROW((c)/(stripeWidth / sizeof(uint16_t)), r), (c)%(stripeWidth / sizeof(uint16_t)), v)
 
-template<int rows>
-int Galois16RecMatrix::initScale(Galois16RecMatrixComputeState& state, unsigned rec, unsigned recFirst, unsigned recLast) {
+template<unsigned rows>
+int Galois16RecMatrix::scaleRows(Galois16RecMatrixComputeState& state, unsigned rec, unsigned recFirst, unsigned recLast) {
 	assert(recFirst <= recLast);
 	assert(rec != recFirst);
 	
@@ -185,8 +196,10 @@ int Galois16RecMatrix::initScale(Galois16RecMatrixComputeState& state, unsigned 
 			return -1; \
 		}
 	
-	// the next row when `processRow` is called; last action will prefetch this row
-	uint16_t* nextScaleRow = (rec+rows < recLast) ? MAT_ROW(0, rec+rows) : nullptr;
+	// the next row when `applyRows` is called; last action will prefetch this row
+	uint16_t* nextScaleRow = nullptr;
+	if(!state.workers.empty() && recFirst < recLast)
+		nextScaleRow = MAT_ROW(0, recFirst); // only prefetch if we're not sending data to threads
 	
 	// TODO: consider loop tiling this stuff; requires extracting a small matrix (rows*rows), and solving that, which means a scalar multiply is necessary
 	
@@ -271,20 +284,19 @@ void Galois16RecMatrix::fillCoeffs(Galois16RecMatrixComputeState& state, unsigne
 	}
 }
 
-template<int rows>
-void Galois16RecMatrix::processRow(Galois16RecMatrixComputeState& state, unsigned rec, unsigned recCount, unsigned recFirst, unsigned recLast, unsigned coeffWidth) {
+template<unsigned rows>
+void Galois16RecMatrix::applyRows(Galois16RecMatrixComputeState& state, unsigned rec, unsigned recCount, unsigned recFirst, unsigned recLast, unsigned coeffWidth, int nextRow) {
 	// TODO: consider optimisation for numStripes == 1 ?
 	
 	assert(recFirst < recLast);
 	assert(rec != recFirst);
-	// the next row when `processRow` is called; last action will prefetch this row
-	uint16_t* nextScaleRow = (rec+rows < recLast) ? MAT_ROW(0, rec+rows) : nullptr;
 	
 	// do main elimination, using the source group
-	if(state.workers.empty())
+	if(state.workers.empty()) {
 		// process elimination directly
-		invertLoop<rows>(0, numStripes, recFirst, recLast, rec, recCount, state.coeff, coeffWidth, state.srcRowsBase, state.gf, state.gfScratch, nextScaleRow);
-	else {
+		uint16_t* nextScaleRow = nextRow >= 0 ? MAT_ROW(0, (unsigned)nextRow) : nullptr;
+		invertLoop<rows>(0, numStripes, recFirst, recLast, rec, recCount, state.coeff, coeffWidth, state.srcRowsBase, state.gf, state.gfScratch, nextScaleRow, state.pfFactor);
+	} else {
 		// process using workers
 		std::atomic<int> procRefs;
 		std::promise<void> done;
@@ -370,7 +382,7 @@ void Galois16RecMatrix::processRow(Galois16RecMatrixComputeState& state, unsigne
 #undef MAT_ROW
 
 
-template<int rows>
+template<unsigned rows>
 int Galois16RecMatrix::processRows(Galois16RecMatrixComputeState& state, unsigned& rec, unsigned rowGroupSize, std::function<void(uint16_t, uint16_t)> progressCb, uint16_t progressOffset, uint16_t totalProgress) {
 	unsigned alignedRowGroupSize = (rowGroupSize / rows) * rows;
 	while(rec <= numRec-rows) {
@@ -393,11 +405,15 @@ int Galois16RecMatrix::processRows(Galois16RecMatrixComputeState& state, unsigne
 			unsigned recFirst = recStart;
 			if(recFirst == rec) recFirst += rows;
 			
-			int badRowOffset = initScale<rows>(state, rec, recFirst, curRowGroupSize+recStart);
+			int badRowOffset = scaleRows<rows>(state, rec, recFirst, curRowGroupSize+recStart);
 			if(badRowOffset >= 0) return rec+badRowOffset;
 			if(recFirst == curRowGroupSize+recStart) continue;
 			fillCoeffs(state, rows, recFirst, curRowGroupSize+recStart, rec, rows);
-			processRow<rows>(state, rec, rows, recFirst, curRowGroupSize+recStart, rows);
+			
+			int nextRow = recStart;
+			if(rec+rows == curRowGroupSize+recStart)
+				nextRow = recStart > 0 ? 0 : (numRec>=curRowGroupSize*2 ? curRowGroupSize : -1);
+			applyRows<rows>(state, rec, rows, recFirst, curRowGroupSize+recStart, rows, nextRow);
 		}
 		
 		
@@ -420,7 +436,14 @@ int Galois16RecMatrix::processRows(Galois16RecMatrixComputeState& state, unsigne
 				curRowGroupSize2 = recStart-recGroup; // don't let this group cross into the normalized group
 			assert(curRowGroupSize2 > 0);
 			fillCoeffs(state, curRowGroupSize, recGroup, recGroup+curRowGroupSize2, recStart, curRowGroupSize);
-			processRow<rows>(state, recStart, curRowGroupSize, recGroup, recGroup+curRowGroupSize2, curRowGroupSize);
+			
+			int nextRow = recGroup + curRowGroupSize2;
+			if((unsigned)nextRow >= numRec)
+				nextRow = rec+curRowGroupSize2 < numRec ? rec : -1;
+			else if((unsigned)nextRow+curRowGroupSize2 > numRec)
+				nextRow = -1; // don't over prefetch; TODO: is there a way to still prefetch something?
+			applyRows<rows>(state, recStart, curRowGroupSize, recGroup, recGroup+curRowGroupSize2, curRowGroupSize, nextRow);
+			
 			recGroup += curRowGroupSize2;
 		}
 	}
@@ -541,6 +564,7 @@ bool Galois16RecMatrix::Compute(const std::vector<bool>& inputValid, unsigned va
 	Galois16RecMatrixComputeState state(Galois16Mul::default_method(matWidth, (unsigned)inputValid.size(), (unsigned)inputValid.size(), true));
 	state.validCount = validCount;
 	const auto gfInfo = state.gf.info();
+	state.pfFactor = gfInfo.prefetchDownscale;
 	
 	// divide the matrix up into evenly sized stripes (for loop tiling optimisation)
 	numStripes = ROUND_DIV(matWidth, (unsigned)gfInfo.idealChunkSize);
