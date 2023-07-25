@@ -9,4 +9,4 @@
 #if defined(__PCLMUL__) && defined(__SSSE3__) && defined(__SSE4_1__)
 # define _AVAILABLE 1
 #endif
-#include "gf16pmul_clmul_x86.h"
+#include "gf16pmul_x86.h"

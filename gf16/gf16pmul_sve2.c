@@ -2,9 +2,9 @@
 #include "gf16_clmul_sve2.h"
 
 #ifdef __ARM_FEATURE_SVE2
-int gf16pmul_clmul_available_sve2 = 1;
+int gf16pmul_available_sve2 = 1;
 
-void gf16pmul_clmul_sve2(void *HEDLEY_RESTRICT dst, const void* src1, const void* src2, size_t len) {
+void gf16pmul_sve2(void *HEDLEY_RESTRICT dst, const void* src1, const void* src2, size_t len) {
 	assert(len % svcntb()*2 == 0);
 	
 	const uint8_t* _src1 = (const uint8_t*)src1 + len;
@@ -28,17 +28,17 @@ void gf16pmul_clmul_sve2(void *HEDLEY_RESTRICT dst, const void* src1, const void
 	}
 }
 
-unsigned gf16pmul_clmul_sve2_width() {
+unsigned gf16pmul_sve2_width() {
 	return svcntb();
 }
 
 #else // defined(__ARM_FEATURE_SVE2)
-int gf16pmul_clmul_available_sve2 = 0;
-void gf16pmul_clmul_sve2(void *HEDLEY_RESTRICT dst, const void* src1, const void* src2, size_t len) {
+int gf16pmul_available_sve2 = 0;
+void gf16pmul_sve2(void *HEDLEY_RESTRICT dst, const void* src1, const void* src2, size_t len) {
 	UNUSED(dst); UNUSED(src1); UNUSED(src2); UNUSED(len);
 }
 
-unsigned gf16pmul_clmul_sve2_width() {
+unsigned gf16pmul_sve2_width() {
 	return 1;
 }
 #endif

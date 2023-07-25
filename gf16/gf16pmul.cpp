@@ -30,47 +30,47 @@ void setup_pmul() {
 	hasGFNI = (cpuInfoX[2] & 0x100) == 0x100;
 #endif
 	
-	if(!hasGFNI) gf16pmul_clmul_available_vpclgfni = 0;
+	if(!hasGFNI) gf16pmul_available_vpclgfni = 0;
 	if(!hasVPCLMUL) {
-		gf16pmul_clmul_available_vpclmul = 0;
-		gf16pmul_clmul_available_vpclgfni = 0;
+		gf16pmul_available_vpclmul = 0;
+		gf16pmul_available_vpclgfni = 0;
 	}
-	if(!hasAVX2) gf16pmul_clmul_available_avx2 = 0;
-	if(!hasClMul) gf16pmul_clmul_available_sse = 0;
+	if(!hasAVX2) gf16pmul_available_avx2 = 0;
+	if(!hasClMul) gf16pmul_available_sse = 0;
 	
-	if(gf16pmul_clmul_available_vpclgfni) {
-		gf16pmul = &gf16pmul_clmul_vpclgfni;
+	if(gf16pmul_available_vpclgfni) {
+		gf16pmul = &gf16pmul_vpclgfni;
 		gf16pmul_alignment = 32;
 		gf16pmul_blocklen = 64;
 	}
-	else if(gf16pmul_clmul_available_vpclmul) {
-		gf16pmul = &gf16pmul_clmul_vpclmul;
+	else if(gf16pmul_available_vpclmul) {
+		gf16pmul = &gf16pmul_vpclmul;
 		gf16pmul_alignment = 32;
 		gf16pmul_blocklen = 32;
 	}
-	else if(gf16pmul_clmul_available_avx2) {
-		gf16pmul = &gf16pmul_clmul_avx2;
+	else if(gf16pmul_available_avx2) {
+		gf16pmul = &gf16pmul_avx2;
 		gf16pmul_alignment = 32;
 		gf16pmul_blocklen = 32;
 	}
-	else if(gf16pmul_clmul_available_sse) {
-		gf16pmul = &gf16pmul_clmul_sse;
+	else if(gf16pmul_available_sse) {
+		gf16pmul = &gf16pmul_sse;
 		gf16pmul_alignment = 16;
 		gf16pmul_blocklen = 16;
 	}
 #endif
 	
 #ifdef PLATFORM_ARM
-	if(!CPU_HAS_SVE2) gf16pmul_clmul_available_sve2 = 0;
-	if(!CPU_HAS_NEON) gf16pmul_clmul_available_neon = 0;
+	if(!CPU_HAS_SVE2) gf16pmul_available_sve2 = 0;
+	if(!CPU_HAS_NEON) gf16pmul_available_neon = 0;
 	
-	if(gf16pmul_clmul_available_sve2) {
-		gf16pmul = &gf16pmul_clmul_sve2;
-		gf16pmul_alignment = gf16pmul_clmul_sve2_width();
+	if(gf16pmul_available_sve2) {
+		gf16pmul = &gf16pmul_sve2;
+		gf16pmul_alignment = gf16pmul_sve2_width();
 		gf16pmul_blocklen = gf16pmul_alignment*2;
 	}
-	else if(gf16pmul_clmul_available_neon) {
-		gf16pmul = &gf16pmul_clmul_neon;
+	else if(gf16pmul_available_neon) {
+		gf16pmul = &gf16pmul_neon;
 		gf16pmul_alignment = 16;
 		gf16pmul_blocklen = 32;
 	}

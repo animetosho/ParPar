@@ -2,9 +2,9 @@
 #include "gf16_clmul_neon.h"
 
 #ifdef __ARM_NEON
-int gf16pmul_clmul_available_neon = 1;
+int gf16pmul_available_neon = 1;
 
-void gf16pmul_clmul_neon(void *HEDLEY_RESTRICT dst, const void* src1, const void* src2, size_t len) {
+void gf16pmul_neon(void *HEDLEY_RESTRICT dst, const void* src1, const void* src2, size_t len) {
 	assert(len % sizeof(uint8x16_t)*2 == 0);
 	
 	const poly8_t* _src1 = (const poly8_t*)src1 + len;
@@ -32,8 +32,8 @@ void gf16pmul_clmul_neon(void *HEDLEY_RESTRICT dst, const void* src1, const void
 }
 
 #else // defined(__ARM_NEON)
-int gf16pmul_clmul_available_neon = 0;
-void gf16pmul_clmul_neon(void *HEDLEY_RESTRICT dst, const void* src1, const void* src2, size_t len) {
+int gf16pmul_available_neon = 0;
+void gf16pmul_neon(void *HEDLEY_RESTRICT dst, const void* src1, const void* src2, size_t len) {
 	UNUSED(dst); UNUSED(src1); UNUSED(src2); UNUSED(len);
 }
 #endif

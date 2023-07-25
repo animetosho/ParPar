@@ -12,4 +12,4 @@
 #if defined(__VPCLMULQDQ__) && defined(__GFNI__) && defined(__AVX2__)
 # define _AVAILABLE 1
 #endif
-#include "gf16pmul_clmul_x86.h"
+#include "gf16pmul_x86.h"

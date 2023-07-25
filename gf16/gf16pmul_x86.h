@@ -1,9 +1,9 @@
 #include "gf16_global.h"
 
 #if defined(_AVAILABLE)
-int _FN(gf16pmul_clmul_available) = 1;
+int _FN(gf16pmul_available) = 1;
 
-static HEDLEY_ALWAYS_INLINE void _FN(gf16pmul_clmul_initmul)(const _mword* src1, const _mword* src2, _mword* prod1, _mword* prod2) {
+static HEDLEY_ALWAYS_INLINE void _FN(gf16pmul_initmul)(const _mword* src1, const _mword* src2, _mword* prod1, _mword* prod2) {
 	_mword wordMask = _MM(set1_epi32)(0xffff);
 	
 	_mword data1 = _MMI(load)(src1);
@@ -61,7 +61,7 @@ static HEDLEY_ALWAYS_INLINE void _FN(gf16pmul_clmul_initmul)(const _mword* src1,
 #endif
 }
 
-void _FN(gf16pmul_clmul)(void *HEDLEY_RESTRICT dst, const void* src1, const void* src2, size_t len) {
+void _FN(gf16pmul)(void *HEDLEY_RESTRICT dst, const void* src1, const void* src2, size_t len) {
 	assert(len % sizeof(_mword) == 0);
 	
 	const uint8_t* _src1 = (const uint8_t*)src1 + len;
@@ -93,8 +93,8 @@ void _FN(gf16pmul_clmul)(void *HEDLEY_RESTRICT dst, const void* src1, const void
 # endif
 	for(intptr_t ptr = -(intptr_t)len; ptr; ptr += sizeof(_mword)*2) {
 		_mword prod1, prod2, prod3, prod4;
-		_FN(gf16pmul_clmul_initmul)((_mword*)(_src1 + ptr), (_mword*)(_src2 + ptr), &prod1, &prod2);
-		_FN(gf16pmul_clmul_initmul)((_mword*)(_src1 + ptr) +1, (_mword*)(_src2 + ptr) +1, &prod3, &prod4);
+		_FN(gf16pmul_initmul)((_mword*)(_src1 + ptr), (_mword*)(_src2 + ptr), &prod1, &prod2);
+		_FN(gf16pmul_initmul)((_mword*)(_src1 + ptr) +1, (_mword*)(_src2 + ptr) +1, &prod3, &prod4);
 		
 		// split low/high
 		_mword tmp1 = _MM(shuffle_epi8)(prod1, shufLoHi);
@@ -168,7 +168,7 @@ void _FN(gf16pmul_clmul)(void *HEDLEY_RESTRICT dst, const void* src1, const void
 #else
 	for(intptr_t ptr = -(intptr_t)len; ptr; ptr += sizeof(_mword)) {
 		_mword prod1, prod2;
-		_FN(gf16pmul_clmul_initmul)((_mword*)(_src1 + ptr), (_mword*)(_src2 + ptr), &prod1, &prod2);
+		_FN(gf16pmul_initmul)((_mword*)(_src1 + ptr), (_mword*)(_src2 + ptr), &prod1, &prod2);
 		
 		// do reduction
 		/*  obvious Barret reduction strategy, using CLMUL instructions
@@ -228,8 +228,8 @@ void _FN(gf16pmul_clmul)(void *HEDLEY_RESTRICT dst, const void* src1, const void
 }
 
 #else
-int _FN(gf16pmul_clmul_available) = 0;
-void _FN(gf16pmul_clmul)(void *HEDLEY_RESTRICT dst, const void* src1, const void* src2, size_t len) {
+int _FN(gf16pmul_available) = 0;
+void _FN(gf16pmul)(void *HEDLEY_RESTRICT dst, const void* src1, const void* src2, size_t len) {
 	UNUSED(dst); UNUSED(src1); UNUSED(src2); UNUSED(len);
 }
 #endif
