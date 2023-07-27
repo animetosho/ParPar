@@ -8,6 +8,7 @@
 #define _MM(f) _mm_ ## f
 #define _MMI(f) _mm_ ## f ## _si128
 #define _FNSUFFIX _gfni
+#define _FNPREP(f) f##_gfni
 #define _MM_END
 
 #if defined(__GFNI__) && defined(__SSSE3__)
@@ -25,6 +26,7 @@ int gf16_affine_available_gfni = 0;
 #endif
 #undef _MM_END
 #undef _FNSUFFIX
+#undef _FNPREP
 #undef _MMI
 #undef _MM
 #undef _mword

@@ -847,7 +847,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 		break;
 		
 		case GF16_AFFINE_AVX512:
-			scratch = gf16_affine_init_avx512(GF16_POLYNOMIAL);
+			scratch = gf16_affine_init_avx2(GF16_POLYNOMIAL);
 			METHOD_REQUIRES(gf16_affine_available_avx512 && gf16_shuffle_available_avx512)
 			_mul = &gf16_affine_mul_avx512;
 			_mul_add = &gf16_affine_muladd_avx512;
@@ -940,7 +940,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 		break;
 		
 		case GF16_AFFINE2X_AVX512:
-			scratch = gf16_affine_init_avx512(GF16_POLYNOMIAL);
+			scratch = gf16_affine_init_avx2(GF16_POLYNOMIAL);
 			METHOD_REQUIRES(gf16_affine_available_avx512 && gf16_shuffle_available_avx512)
 			_mul = &gf16_affine2x_mul_avx512;
 			_mul_add = &gf16_affine2x_muladd_avx512;
