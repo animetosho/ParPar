@@ -183,7 +183,7 @@ function compare_files(file1, file2) {
 	for(var k in file1) {
 		// ignore Creator packet + unicode filename
 		// TODO: consider comparing unicode filename packets
-		if(k == 'creator' || k.substr(0, 5) == 'unifn') continue;
+		if(k == 'creator' || k.substring(0, 5) == 'unifn') continue;
 		
 		if(!packet_eq(file1[k], file2[k])) {
 			//console.log('Packet mismatch for ' + k, file1[k], file2[k]);

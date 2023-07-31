@@ -393,7 +393,7 @@ if(argv.json)
 		print_json('progress', data);
 	};
 else if(argv.progress == 'stdout' || argv.progress == 'stderr') {
-	var decimalPoint = (1.1).toLocaleString().substr(1, 1);
+	var decimalPoint = (1.1).toLocaleString().substring(1, 2);
 	// TODO: display slices processed, pass# if verbose progress requested
 	writeProgress = function(data) {
 		// add formatting for aesthetics
@@ -457,7 +457,7 @@ var inputFiles = argv._;
 					stdInUsed = true;
 					stream = process.stdin;
 				} else {
-					stream = fs.createReadStream(null, {fd: fl[0].substr(5)|0});
+					stream = fs.createReadStream(null, {fd: fl[0].substring(5)|0});
 				}
 				// read from stream
 				var data = '';
@@ -469,7 +469,7 @@ var inputFiles = argv._;
 				});
 				stream.once('error', cb);
 			} else if(/^proc:\/\//i.test(fl[0])) {
-				require('child_process').exec(fl[0].substr(7), {maxBuffer: 1048576*32, encoding: inlistEnc}, function(err, stdout, stderr) {
+				require('child_process').exec(fl[0].substring(7), {maxBuffer: 1048576*32, encoding: inlistEnc}, function(err, stdout, stderr) {
 					cb(err, [fl[1], stdout]);
 				});
 			} else {
@@ -502,7 +502,7 @@ var inputFiles = argv._;
 		creator: creator
 	};
 	if(argv.out.match(/\.par2$/i))
-		ppo.outputBase = argv.out.substr(0, argv.out.length-5);
+		ppo.outputBase = argv.out.substring(0, argv.out.length-5);
 
 	for(var k in opts) {
 		if(opts[k].map && (k in argv))
@@ -521,7 +521,7 @@ var inputFiles = argv._;
 
 	var parseSizeOrNum = function(arg, input, multiple) {
 		var m;
-		var isRec = (arg.substr(-15) == 'recovery-slices' || arg == 'slices-per-file' || arg == 'slices-first-file' || arg == 'packet-redundancy');
+		var isRec = (arg.slice(-15) == 'recovery-slices' || arg == 'slices-per-file' || arg == 'slices-first-file' || arg == 'packet-redundancy');
 		input = input || argv[arg];
 		if(typeof input == 'number' || /^-?\d+$/.test(input)) {
 			input = input|0;
@@ -540,7 +540,7 @@ var inputFiles = argv._;
 					error('Invalid value specified for `'+arg+'`');
 				var scale = 1;
 				if(m[2].length > 2) {
-					scale = +(m[2].substr(2));
+					scale = +(m[2].substring(2));
 					if(isNaN(scale) || !isFinite(scale)) error('Invalid value specified for `'+arg+'`');
 					if(m[2][1] == '/') {
 						scale = 1/scale;
@@ -588,7 +588,7 @@ var inputFiles = argv._;
 			if(/^slices-/.test(k[0]) && (val[0] == '<' || val[0] == '>')) {
 				// TODO: also do this for packet-redundancy?
 				ppo[k[1]+'Rounding'] = (val[0] == '<' ? 'floor' : 'ceil');
-				val = val.substr(1);
+				val = val.substring(1);
 			}
 			var expr = val.replace(/^[\-+]/, function(x) {
 				if(x == '-') return '0-'; // hack to get initial negative term to work
@@ -626,7 +626,7 @@ var inputFiles = argv._;
 		var ret = {};
 		if(data.process) {
 			ret.ratio = parseFloat(data.process);
-			if(data.process.substr(-1) == '%')
+			if(data.process.slice(-1) == '%')
 				ret.ratio /= 100;
 		}
 		if(data.device) {
@@ -675,8 +675,8 @@ var inputFiles = argv._;
 	};
 	var openclOpts = {};
 	for(var k in argv)
-		if(k.substr(0, 7) == 'opencl-')
-			openclOpts[k.substr(7)] = argv[k];
+		if(k.substring(0, 7) == 'opencl-')
+			openclOpts[k.substring(7)] = argv[k];
 	openclOpts = openclMap(openclOpts);
 	if(argv.opencl) {
 		ppo.openclDevices = argv.opencl.map(function(spec) {
