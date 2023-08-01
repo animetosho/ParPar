@@ -223,9 +223,10 @@ var findFile = function(dir, re) {
 	return ret;
 };
 
+var allocBuffer = (Buffer.allocUnsafe || Buffer);
 var async = require('async');
 var fs = require('fs');
-var nullBuf = new Buffer(1024*16);
+var nullBuf = allocBuffer(1024*16);
 nullBuf.fill(0);
 var results = {};
 var testFiles = [];
@@ -262,7 +263,7 @@ async.eachSeries(Object.keys(benchmarks), function getVersion(prog, cb) {
 		var fd = fs.openSync(tmpDir + name, 'w');
 		var rand = require('crypto').createCipheriv('rc4', 'my_incredibly_strong_password' + name, '');
 		rand.setAutoPadding(false);
-		var nullBuf = new Buffer(1024*16);
+		var nullBuf = allocBuffer(1024*16);
 		nullBuf.fill(0);
 		var written = 0;
 		while(written < size) {

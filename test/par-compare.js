@@ -18,15 +18,16 @@ var skipFileCreate = true; // skip creating test files if they already exist (sp
 var fs = require('fs');
 var crypto = require('crypto');
 
+var bufferSlice = Buffer.prototype.subarray || Buffer.prototype.slice;
+var allocBuffer = (Buffer.allocUnsafe || Buffer);
 var fsRead = function(fd, len) {
-	var buf = new Buffer(len);
+	var buf = allocBuffer(len);
 	var readLen = fs.readSync(fd, buf, 0, len, null);
 	if(readLen != len)
 		throw new Error("Couldn't read requested data: got " + readLen + " bytes instead of " + len);
 	return buf;
 };
 
-var bufferSlice = Buffer.prototype.subarray || Buffer.prototype.slice;
 var BufferCompare;
 if(Buffer.compare) BufferCompare = Buffer.compare;
 else BufferCompare = function(a, b) {
@@ -75,7 +76,7 @@ function parse_file(file) {
 				if(BufferCompare(ret.rsId, bufferSlice.call(header, 32, 48)))
 					throw new Error('Mismatching recovery set ID');
 			} else {
-				ret.rsId = new Buffer(16);
+				ret.rsId = allocBuffer(16);
 				bufferSlice.call(header, 32, 48).copy(ret.rsId);
 			}
 			
@@ -297,7 +298,7 @@ function writeRndFile(name, size) {
 	var fd = fs.openSync(tmpDir + name, 'w');
 	var rand = require('crypto').createCipheriv('rc4', 'my_incredibly_strong_password' + name, '');
 	rand.setAutoPadding(false);
-	var nullBuf = new Buffer(1024*16);
+	var nullBuf = allocBuffer(1024*16);
 	nullBuf.fill(0);
 	var written = 0;
 	while(written < size) {
@@ -588,7 +589,7 @@ async.timesSeries(allTests.length, function(testNum, cb) {
 					for(var k in f) {
 						ret[k] = {
 							type: f[k].type,
-							md5: new Buffer(f[k].md5, 'hex'),
+							md5: (Buffer.alloc ? Buffer.from : Buffer)(f[k].md5, 'hex'),
 							len: f[k].len
 						};
 					}
