@@ -26,6 +26,7 @@ var fsRead = function(fd, len) {
 	return buf;
 };
 
+var bufferSlice = Buffer.prototype.subarray || Buffer.prototype.slice;
 var BufferCompare;
 if(Buffer.compare) BufferCompare = Buffer.compare;
 else BufferCompare = function(a, b) {
@@ -57,29 +58,29 @@ function parse_file(file) {
 	
 	while(pos != stat.size) { // != ensures that size should exactly match expected
 		var header = fsRead(fd, 64);
-		if(header.slice(0, 8).toString() != 'PAR2\0PKT')
+		if(bufferSlice.call(header, 0, 8).toString() != 'PAR2\0PKT')
 			throw new Error('Invalid packet signature @' + pos);
 		
 		var pkt = {
 			len: header.readUInt32LE(8) + header.readUInt32LE(12) * 4294967296,
 			offset: pos,
-			md5: header.slice(16, 32),
-			type: header.slice(48, 64).toString().replace(/\0+$/, '')
+			md5: bufferSlice.call(header, 16, 32),
+			type: bufferSlice.call(header, 48, 64).toString().replace(/\0+$/, '')
 		};
 		try {
 			if(pkt.len % 4 || pkt.len < 64)
 				throw new Error('Invalid packet length specified');
 			
 			if(ret.rsId) {
-				if(BufferCompare(ret.rsId, header.slice(32, 48)))
+				if(BufferCompare(ret.rsId, bufferSlice.call(header, 32, 48)))
 					throw new Error('Mismatching recovery set ID');
 			} else {
 				ret.rsId = new Buffer(16);
-				header.slice(32, 48).copy(ret.rsId);
+				bufferSlice.call(header, 32, 48).copy(ret.rsId);
 			}
 			
 			var md5 = crypto.createHash('md5');
-			md5.update(header.slice(32));
+			md5.update(bufferSlice.call(header, 32));
 			var pktPos = 64;
 			
 			var idLen = 0;
@@ -294,13 +295,13 @@ console.log('Creating random input files...');
 function writeRndFile(name, size) {
 	if(skipFileCreate && fs.existsSync(tmpDir + name)) return;
 	var fd = fs.openSync(tmpDir + name, 'w');
-	var rand = require('crypto').createCipher('rc4', 'my_incredibly_strong_password' + name);
+	var rand = require('crypto').createCipheriv('rc4', 'my_incredibly_strong_password' + name, '');
 	rand.setAutoPadding(false);
 	var nullBuf = new Buffer(1024*16);
 	nullBuf.fill(0);
 	var written = 0;
 	while(written < size) {
-		var b = rand.update(nullBuf).slice(0, Math.min(1024*16, size-written));
+		var b = bufferSlice.call(rand.update(nullBuf), 0, Math.min(1024*16, size-written));
 		fsWriteSync(fd, b);
 		written += b.length;
 	}
