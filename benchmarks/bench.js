@@ -211,7 +211,7 @@ for(var i in benchmarks) {
 		delete benchmarks[i];
 }
 
-var bufferSlice = Buffer.prototype.subarray || Buffer.prototype.slice;
+var bufferSlice = Buffer.prototype.readBigInt64BE ? Buffer.prototype.subarray : Buffer.prototype.slice;
 var fsWriteSync = function(fd, data) {
 	fs.writeSync(fd, data, 0, data.length, null);
 };

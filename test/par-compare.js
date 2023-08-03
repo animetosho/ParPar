@@ -18,7 +18,7 @@ var skipFileCreate = true; // skip creating test files if they already exist (sp
 var fs = require('fs');
 var crypto = require('crypto');
 
-var bufferSlice = Buffer.prototype.subarray || Buffer.prototype.slice;
+var bufferSlice = Buffer.prototype.readBigInt64BE ? Buffer.prototype.subarray : Buffer.prototype.slice;
 var allocBuffer = (Buffer.allocUnsafe || Buffer);
 var fsRead = function(fd, len) {
 	var buf = allocBuffer(len);

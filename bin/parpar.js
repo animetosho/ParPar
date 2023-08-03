@@ -309,7 +309,7 @@ var fs = require('fs');
 /*{{!include_in_executable!
 if(!argv['skip-self-check']) {
 	// if this is a compiled EXE, do a self MD5 check to detect corruption
-	var bufferSlice = Buffer.prototype.subarray || Buffer.prototype.slice;
+	var bufferSlice = Buffer.prototype.readBigInt64BE ? Buffer.prototype.subarray : Buffer.prototype.slice;
 	var executable = fs.readFileSync(process.execPath);
 	var md5loc = bufferSlice.call(executable, -1024, -16).indexOf('\0<!parpar#md5~>=');
 	if(md5loc < 0)
