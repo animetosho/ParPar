@@ -295,6 +295,8 @@ CPU Tuning Options:
                                  shuffle2x128-sve2: half width variant of shuffle-neon (requires SVE width >= 256 bits)
                                  shuffle512-sve2: SVE2 variant of shuffle-vbmi (requires SVE width >= 512 bits)
                                  clmul-sve2: SVE2 variant of clmul-neon
+                             RISC-V only choices:
+                                 shuffle128-rvv: RISC-V Vector variant of shuffle128-sve2
                              Default is auto-detected.
        --loop-tile-size      Target size used for loop tiling optimisation.
                              Default is 0 (auto-detected)

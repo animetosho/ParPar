@@ -36,15 +36,13 @@ FUNCS(neon);
 FUNCS(128_sve);
 FUNCS(128_sve2);
 FUNCS(512_sve2);
+FUNCS(128_rvv);
 
 #undef FUNCS
 
 void gf16_shuffle_mul_vbmi(const void *HEDLEY_RESTRICT scratch, void* dst, const void* src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch);
 void gf16_shuffle_muladd_vbmi(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch);
 void gf16_shuffle_muladd_prefetch_vbmi(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch, const void *HEDLEY_RESTRICT prefetch);
-void gf16_shuffle_prepare_packed_vbmi(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen, size_t sliceLen, unsigned inputPackSize, unsigned inputNum, size_t chunkLen);
-void gf16_shuffle_prepare_packed_cksum_vbmi(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen, size_t sliceLen, unsigned inputPackSize, unsigned inputNum, size_t chunkLen);
-void gf16_shuffle_prepare_partial_packsum_vbmi(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen, size_t sliceLen, unsigned inputPackSize, unsigned inputNum, size_t chunkLen, size_t partOffset, size_t partLen);
 extern int gf16_shuffle_available_vbmi;
 
 #define FUNCS(v) \
@@ -55,31 +53,41 @@ FUNCS(neon);
 FUNCS(128_sve);
 FUNCS(128_sve2);
 FUNCS(512_sve2);
+FUNCS(128_rvv);
 
 #undef FUNCS
 
-void gf16_shuffle_prepare_packed_neon(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen, size_t sliceLen, unsigned inputPackSize, unsigned inputNum, size_t chunkLen);
-void gf16_shuffle_prepare_packed_cksum_neon(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen, size_t sliceLen, unsigned inputPackSize, unsigned inputNum, size_t chunkLen);
-void gf16_shuffle_prepare_partial_packsum_neon(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen, size_t sliceLen, unsigned inputPackSize, unsigned inputNum, size_t chunkLen, size_t partOffset, size_t partLen);
-void gf16_shuffle_finish_packed_neon(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t sliceLen, unsigned numOutputs, unsigned outputNum, size_t chunkLen);
-int gf16_shuffle_finish_packed_cksum_neon(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t sliceLen, unsigned numOutputs, unsigned outputNum, size_t chunkLen);
-int gf16_shuffle_finish_partial_packsum_neon(void *HEDLEY_RESTRICT dst, void *HEDLEY_RESTRICT src, size_t sliceLen, unsigned numOutputs, unsigned outputNum, size_t chunkLen, size_t partOffset, size_t partLen);
+#define FUNCS(v) \
+	void gf16_shuffle_prepare_packed_##v(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen, size_t sliceLen, unsigned inputPackSize, unsigned inputNum, size_t chunkLen); \
+	void gf16_shuffle_prepare_packed_cksum_##v(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen, size_t sliceLen, unsigned inputPackSize, unsigned inputNum, size_t chunkLen); \
+	void gf16_shuffle_prepare_partial_packsum_##v(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen, size_t sliceLen, unsigned inputPackSize, unsigned inputNum, size_t chunkLen, size_t partOffset, size_t partLen)
 
-void gf16_shuffle_prepare_packed_sve(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen, size_t sliceLen, unsigned inputPackSize, unsigned inputNum, size_t chunkLen);
-void gf16_shuffle_prepare_packed_cksum_sve(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen, size_t sliceLen, unsigned inputPackSize, unsigned inputNum, size_t chunkLen);
-void gf16_shuffle_prepare_partial_packsum_sve(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen, size_t sliceLen, unsigned inputPackSize, unsigned inputNum, size_t chunkLen, size_t partOffset, size_t partLen);
-void gf16_shuffle_finish_packed_sve(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t sliceLen, unsigned numOutputs, unsigned outputNum, size_t chunkLen);
-int gf16_shuffle_finish_packed_cksum_sve(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t sliceLen, unsigned numOutputs, unsigned outputNum, size_t chunkLen);
-int gf16_shuffle_finish_partial_packsum_sve(void *HEDLEY_RESTRICT dst, void *HEDLEY_RESTRICT src, size_t sliceLen, unsigned numOutputs, unsigned outputNum, size_t chunkLen, size_t partOffset, size_t partLen);
+FUNCS(vbmi);
+FUNCS(neon);
+FUNCS(sve);
+FUNCS(512_sve2);
+FUNCS(rvv);
 
-void gf16_shuffle_prepare_packed_512_sve2(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen, size_t sliceLen, unsigned inputPackSize, unsigned inputNum, size_t chunkLen);
-void gf16_shuffle_prepare_packed_cksum_512_sve2(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen, size_t sliceLen, unsigned inputPackSize, unsigned inputNum, size_t chunkLen);
-void gf16_shuffle_prepare_partial_packsum_512_sve2(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen, size_t sliceLen, unsigned inputPackSize, unsigned inputNum, size_t chunkLen, size_t partOffset, size_t partLen);
+#undef FUNCS
+
+#define FUNCS(v) \
+	void gf16_shuffle_finish_packed_##v(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t sliceLen, unsigned numOutputs, unsigned outputNum, size_t chunkLen); \
+	int gf16_shuffle_finish_packed_cksum_##v(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t sliceLen, unsigned numOutputs, unsigned outputNum, size_t chunkLen); \
+	int gf16_shuffle_finish_partial_packsum_##v(void *HEDLEY_RESTRICT dst, void *HEDLEY_RESTRICT src, size_t sliceLen, unsigned numOutputs, unsigned outputNum, size_t chunkLen, size_t partOffset, size_t partLen)
+
+FUNCS(neon);
+FUNCS(sve);
+FUNCS(rvv);
+
+#undef FUNCS
+
 
 // also used for clmul, but declared here for convenience
 extern int gf16_available_neon;
 extern int gf16_available_sve;
 extern int gf16_available_sve2;
+
+extern int gf16_available_rvv;
 
 // shuffle2x
 #define FUNCS(v) \
@@ -122,8 +130,10 @@ void* gf16_shuffle_init_vbmi(int polynomial);
 void* gf16_shuffle_init_arm(int polynomial);
 void* gf16_shuffle_init_128_sve(int polynomial);
 void* gf16_shuffle_init_512_sve(int polynomial);
+void* gf16_shuffle_init_128_rvv(int polynomial);
 
 int gf16_sve_get_size();
+int gf16_rvv_get_size();
 
 uint16_t gf16_affine2x_replace_word(void* data, size_t index, uint16_t newValue);
 uint16_t gf16_shuffle16_replace_word(void* data, size_t index, uint16_t newValue);

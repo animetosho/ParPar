@@ -867,6 +867,59 @@
           ]
         }]
       ]
+    },
+    {
+      "target_name": "gf16_rvv",
+      "type": "static_library",
+      "defines": ["NDEBUG"],
+      "sources": [
+        "gf16/gf16_shuffle128_rvv.c",
+        "gf16/gf_add_rvv.c",
+        "gf16/gf16_cksum_rvv.c"
+      ],
+      "cflags": ["-Wno-unused-function", "-std=c99"],
+      "xcode_settings": {
+        "OTHER_CFLAGS": ["-Wno-unused-function"],
+        "OTHER_CFLAGS!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"]
+      },
+      "cflags!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"],
+      "msvs_settings": {"VCCLCompilerTool": {"BufferSecurityCheck": "false"}},
+      "conditions": [
+        ['target_arch=="riscv64" and OS!="win"', {
+          "variables": {"supports_rvv%": "<!(<!(echo ${CC_target:-${CC:-cc}}) -MM -E gf16/gf16_shuffle128_rvv.c -march=rv64gcv 2>/dev/null || true)"},
+          "conditions": [
+            ['supports_rvv!=""', {
+              "cflags!": ["-march=native"],
+              "cxxflags!": ["-march=native"],
+              "cflags": ["-march=rv64gcv"],
+              "cxxflags": ["-march=rv64gcv"],
+              "xcode_settings": {
+                "OTHER_CFLAGS!": ["-march=native"],
+                "OTHER_CXXFLAGS!": ["-march=native"],
+                "OTHER_CFLAGS": ["-march=rv64gcv"],
+                "OTHER_CXXFLAGS": ["-march=rv64gcv"],
+              }
+            }]
+          ]
+        }],
+        ['target_arch=="riscv32" and OS!="win"', {
+          "variables": {"supports_rvv%": "<!(<!(echo ${CC_target:-${CC:-cc}}) -MM -E gf16/gf16_shuffle128_rvv.c -march=rv32gcv 2>/dev/null || true)"},
+          "conditions": [
+            ['supports_rvv!=""', {
+              "cflags!": ["-march=native"],
+              "cxxflags!": ["-march=native"],
+              "cflags": ["-march=rv32gcv"],
+              "cxxflags": ["-march=rv32gcv"],
+              "xcode_settings": {
+                "OTHER_CFLAGS!": ["-march=native"],
+                "OTHER_CXXFLAGS!": ["-march=native"],
+                "OTHER_CFLAGS": ["-march=rv32gcv"],
+                "OTHER_CXXFLAGS": ["-march=rv32gcv"],
+              }
+            }]
+          ]
+        }]
+      ]
     }
   ]
 }

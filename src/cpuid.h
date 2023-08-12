@@ -125,4 +125,32 @@ static unsigned long getauxval(unsigned long cap) {
 
 #endif
 
+#ifdef __riscv
+# if defined(__has_include)
+#  if __has_include(<sys/auxv.h>)
+#   include <sys/auxv.h>
+#   ifdef __FreeBSD__
+static unsigned long getauxval(unsigned long cap) {
+	unsigned long ret;
+	elf_aux_info(cap, &ret, sizeof(ret));
+	return ret;
+}
+#   endif
+#   if __has_include(<asm/hwcap.h>)
+#    include <asm/hwcap.h>
+#   endif
+#  endif
+# endif
+
+# ifndef CPU_HAS_VECTOR
+#  define CPU_HAS_VECTOR false
+
+#  if defined(AT_HWCAP)
+#   undef CPU_HAS_VECTOR
+#   define CPU_HAS_VECTOR (getauxval(AT_HWCAP) & (1 << ('V'-'A')))
+#  endif
+# endif
+
+#endif
+
 #endif /* PP_CPUID_H */

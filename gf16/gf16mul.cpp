@@ -210,6 +210,17 @@ struct CpuCap {
 	}
 };
 #endif
+#ifdef __riscv
+# include "../src/cpuid.h"
+
+struct CpuCap {
+	bool hasVector;
+	CpuCap(bool detect) : hasVector(true) {
+		if(!detect) return;
+		hasVector = CPU_HAS_VECTOR;
+	}
+};
+#endif
 
 
 Galois16MethodInfo Galois16Mul::info(Galois16Methods _method) {
@@ -307,6 +318,13 @@ Galois16MethodInfo Galois16Mul::info(Galois16Methods _method) {
 			_info.cksumSize = gf16_sve_get_size();
 			_info.stride = _info.cksumSize*2;
 			_info.idealInputMultiple = 4;
+		break;
+
+		case GF16_SHUFFLE_128_RVV:
+			_info.alignment = 16; // I guess this is good enough...
+			_info.cksumSize = gf16_rvv_get_size();
+			_info.stride = _info.cksumSize*2;
+			_info.idealInputMultiple = 3;
 		break;
 
 		case GF16_CLMUL_SVE2:
@@ -436,6 +454,7 @@ Galois16MethodInfo Galois16Mul::info(Galois16Methods _method) {
 		case GF16_SHUFFLE_NEON:
 		case GF16_SHUFFLE_128_SVE: // may need smaller chunks for larger vector size
 		case GF16_SHUFFLE_128_SVE2:
+		case GF16_SHUFFLE_128_RVV:
 			_info.idealChunkSize = 16*1024;
 		break;
 		case GF16_SHUFFLE_AVX2:
@@ -844,6 +863,29 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			finish_partial_packsum = &gf16_shuffle_finish_partial_packsum_sve;
 			copy_cksum = &gf16_cksum_copy_sve;
 			copy_cksum_check = &gf16_cksum_copy_check_sve;
+		break;
+		
+		case GF16_SHUFFLE_128_RVV:
+			scratch = gf16_shuffle_init_128_rvv(GF16_POLYNOMIAL);
+			METHOD_REQUIRES(gf16_available_rvv)
+			
+			_mul = &gf16_shuffle_mul_128_rvv;
+			_mul_add = &gf16_shuffle_muladd_128_rvv;
+			_mul_add_multi = &gf16_shuffle_muladd_multi_128_rvv;
+			_mul_add_multi_stridepf = &gf16_shuffle_muladd_multi_stridepf_128_rvv;
+			_mul_add_multi_packed = &gf16_shuffle_muladd_multi_packed_128_rvv;
+			//_mul_add_multi_packpf = &gf16_shuffle_muladd_multi_packpf_128_rvv;
+			add_multi = &gf_add_multi_rvv;
+			add_multi_packed = &gf_add_multi_packed_v2i3_rvv;
+			add_multi_packpf = &gf_add_multi_packpf_v2i3_rvv;
+			prepare_packed = &gf16_shuffle_prepare_packed_rvv;
+			prepare_packed_cksum = &gf16_shuffle_prepare_packed_cksum_rvv;
+			prepare_partial_packsum = &gf16_shuffle_prepare_partial_packsum_rvv;
+			finish_packed = &gf16_shuffle_finish_packed_rvv;
+			finish_packed_cksum = &gf16_shuffle_finish_packed_cksum_rvv;
+			finish_partial_packsum = &gf16_shuffle_finish_partial_packsum_rvv;
+			copy_cksum = &gf16_cksum_copy_rvv;
+			copy_cksum_check = &gf16_cksum_copy_check_rvv;
 		break;
 		
 		case GF16_AFFINE_AVX512:
@@ -1332,7 +1374,11 @@ Galois16Methods Galois16Mul::default_method(size_t regionSizeHint, unsigned inpu
 # endif
 			? GF16_CLMUL_NEON : GF16_SHUFFLE_NEON;
 #endif
-	
+#ifdef __riscv_
+	const CpuCap caps(true);
+	if(caps.hasVector && gf16_available_rvv && gf16_rvv_get_size() >= 16)
+		return GF16_SHUFFLE_128_RVV;
+#endif
 	
 	// lookup vs lookup3: latter seems to be slightly faster than former in most cases (SKX, Silvermont, Zen1, Rpi3 (arm64; arm32 faster muladd, slower mul)), sometimes slightly slower (Haswell, IvB?, Piledriver)
 	// but test w/ multi-region lh-lookup & fat table before preferring it
@@ -1409,6 +1455,11 @@ std::vector<Galois16Methods> Galois16Mul::availableMethods(bool checkCpuid) {
 		if(gf16_sve_get_size() >= 64)
 			ret.push_back(GF16_SHUFFLE_512_SVE2);
 	}
+#endif
+#ifdef __riscv
+	const CpuCap caps(checkCpuid);
+	if(gf16_available_rvv && caps.hasVector && gf16_rvv_get_size() >= 16)
+		ret.push_back(GF16_SHUFFLE_128_RVV);
 #endif
 	
 	return ret;
