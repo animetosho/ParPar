@@ -732,6 +732,7 @@ var inputFiles = argv._;
 			var sizeDisp = function(val) {
 				return cliFormat('1', friendlySize(val));
 			};
+			var hash_methods = g.hash_methods();
 			if(argv.json) {
 				print_json('processing_info', {
 					input_size: g.totalSize,
@@ -753,7 +754,9 @@ var inputFiles = argv._;
 							recovery_offset: rf.recoveryOffset,
 							size: rf.totalSize
 						};
-					})
+					}),
+					hash_input_method: hash_methods[0],
+					hash_recovery_method: hash_methods[1]
 				});
 			} else {
 				if(g.opts.sliceSize > 1024*1048576) {
@@ -771,6 +774,9 @@ var inputFiles = argv._;
 					process.stderr.write('Input pass(es)    : ' + cliFormat('1', g.chunks * g.passes) + ', processing ' + pluralDisp(g.slicesPerPass, '* ' + sizeDisp(g._chunkSize) + ' chunk') + ' per pass\n');
 				}
 				process.stderr.write('Read buffer size  : ' + sizeDisp(g.readSize) + ' * max ' + pluralDisp(g.opts.readBuffers, 'buffer') + '\n');
+				process.stderr.write('Hash method       : ' + cliFormat('1', hash_methods[0]) + ' (input)' + (g.opts.recoverySlices ?
+					', ' + cliFormat('1', hash_methods[1]) + ' (recovery)'
+				: '') + '\n');
 			}
 		}
 		if(argv.progress != 'none') {

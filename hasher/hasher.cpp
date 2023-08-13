@@ -3,8 +3,11 @@
 #include <string.h>
 
 IHasherInput*(*HasherInput_Create)() = NULL;
+HasherInputMethods HasherInput_Method = INHASH_SCALAR;
 uint32_t(*MD5CRC_Calc)(const void*, size_t, size_t, void*) = NULL;
+MD5CRCMethods MD5CRC_Method = MD5CRCMETH_SCALAR;
 uint32_t(*CRC32_Calc)(const void*, size_t) = NULL;
+MD5CRCMethods CRC32_Method = MD5CRCMETH_SCALAR;
 struct _CpuCap {
 #ifdef PLATFORM_X86
 	bool hasSSE2, hasXOP, hasBMI1, hasAVX2, hasAVX512F, hasAVX512VLBW;
@@ -22,8 +25,11 @@ void setup_hasher() {
 	if(HasherInput_Create) return;
 	
 	HasherInput_Create = &HasherInput_Scalar::create;
+	HasherInput_Method = INHASH_SCALAR;
 	MD5CRC_Calc = &MD5CRC_Calc_Scalar;
+	MD5CRC_Method = MD5CRCMETH_SCALAR;
 	CRC32_Calc = &CRC32_Calc_Slice4;
+	CRC32_Method = MD5CRCMETH_SCALAR;
 	
 	struct _CpuCap CpuCap;
 	(void)CpuCap;
@@ -73,45 +79,67 @@ void setup_hasher() {
 	_cpuid(cpuInfo, 0x80000001);
 	CpuCap.hasXOP = hasAVX && (cpuInfo[2] & 0x800);
 	
-	if(CpuCap.hasAVX512VLBW && hasClMul && !isVecRotSlow && HasherInput_AVX512::isAvailable)
+	if(CpuCap.hasAVX512VLBW && hasClMul && !isVecRotSlow && HasherInput_AVX512::isAvailable) {
 		HasherInput_Create = &HasherInput_AVX512::create;
+		HasherInput_Method = INHASH_AVX512;
+	}
 	// SSE seems to be faster than scalar on Zen1/2, not Zen3; BMI > SSE on Zen1, unknown on Zen2
 	else if(hasClMul && !isSmallCore && HasherInput_ClMulScalar::isAvailable) {
 		// Gracemont: SSE > scalar, but SSE ~= BMI
-		if(CpuCap.hasBMI1 && HasherInput_BMI1::isAvailable)
+		if(CpuCap.hasBMI1 && HasherInput_BMI1::isAvailable) {
 			HasherInput_Create = &HasherInput_BMI1::create;
-		else
+			HasherInput_Method = INHASH_BMI1;
+		} else {
 			HasherInput_Create = &HasherInput_ClMulScalar::create;
-	} else if(hasClMul && isSmallCore && HasherInput_ClMulSSE::isAvailable)
+			HasherInput_Method = INHASH_CRC;
+		}
+	} else if(hasClMul && isSmallCore && HasherInput_ClMulSSE::isAvailable) {
 		HasherInput_Create = &HasherInput_ClMulSSE::create;
-	else if(CpuCap.hasSSE2 && isSmallCore && HasherInput_SSE::isAvailable) // TODO: CPU w/o ClMul might all be small enough
+		HasherInput_Method = INHASH_SIMD_CRC;
+	}
+	else if(CpuCap.hasSSE2 && isSmallCore && HasherInput_SSE::isAvailable) { // TODO: CPU w/o ClMul might all be small enough
 		HasherInput_Create = &HasherInput_SSE::create;
+		HasherInput_Method = INHASH_SIMD;
+	}
 	
 	if(CpuCap.hasAVX512VLBW && !isVecRotSlow && MD5Single_isAvailable_AVX512) {
 		MD5Single::_update = &MD5Single_update_AVX512;
 		MD5Single::_updateZero = &MD5Single_updateZero_AVX512;
+		MD5Single::method = MD5CRCMETH_AVX512;
 	}
 	else if(isLEASlow && hasClMul && MD5Single_isAvailable_NoLEA) {
 		MD5Single::_update = &MD5Single_update_NoLEA;
 		MD5Single::_updateZero = &MD5Single_updateZero_NoLEA;
+		MD5Single::method = MD5CRCMETH_NOLEA;
 	}
 	// for some reason, single MD5 BMI1 seems to be slower on most cores, except Jaguar... unsure why
 	else if(CpuCap.hasBMI1 && isSmallCore && MD5Single_isAvailable_BMI1) {
 		MD5Single::_update = &MD5Single_update_BMI1;
 		MD5Single::_updateZero = &MD5Single_updateZero_BMI1;
+		MD5Single::method = MD5CRCMETH_BMI1;
 	}
 	
-	if(CpuCap.hasAVX512VLBW && hasClMul && !isVecRotSlow && MD5CRC_isAvailable_AVX512)
+	if(CpuCap.hasAVX512VLBW && hasClMul && !isVecRotSlow && MD5CRC_isAvailable_AVX512) {
 		MD5CRC_Calc = &MD5CRC_Calc_AVX512;
-	else if(isLEASlow && hasClMul && MD5CRC_isAvailable_NoLEA)
+		MD5CRC_Method = MD5CRCMETH_AVX512;
+	}
+	else if(isLEASlow && hasClMul && MD5CRC_isAvailable_NoLEA) {
 		MD5CRC_Calc = &MD5CRC_Calc_NoLEA;
-	else if(CpuCap.hasBMI1 && hasClMul && isSmallCore && MD5CRC_isAvailable_BMI1)
+		MD5CRC_Method = MD5CRCMETH_NOLEA;
+	}
+	else if(CpuCap.hasBMI1 && hasClMul && isSmallCore && MD5CRC_isAvailable_BMI1) {
 		MD5CRC_Calc = &MD5CRC_Calc_BMI1;
-	else if(hasClMul && MD5CRC_isAvailable_ClMul)
+		MD5CRC_Method = MD5CRCMETH_BMI1;
+	}
+	else if(hasClMul && MD5CRC_isAvailable_ClMul) {
 		MD5CRC_Calc = &MD5CRC_Calc_ClMul;
+		MD5CRC_Method = MD5CRCMETH_PCLMUL;
+	}
 	
-	if(hasClMul && CRC32_isAvailable_ClMul)
+	if(hasClMul && CRC32_isAvailable_ClMul) {
 		CRC32_Calc = &CRC32_Calc_ClMul;
+		CRC32_Method = MD5CRCMETH_PCLMUL;
+	}
 	
 #endif
 #ifdef PLATFORM_ARM
@@ -120,19 +148,28 @@ void setup_hasher() {
 	CpuCap.hasNEON = CPU_HAS_NEON;
 	CpuCap.hasSVE2 = CPU_HAS_SVE2;
 	
-	if(hasCRC && HasherInput_ARMCRC::isAvailable) // TODO: fast core only
+	if(hasCRC && HasherInput_ARMCRC::isAvailable) { // TODO: fast core only
 		HasherInput_Create = &HasherInput_ARMCRC::create;
+		HasherInput_Method = INHASH_CRC;
+	}
 	else if(CpuCap.hasNEON) { // TODO: slow core only
-		if(hasCRC && HasherInput_NEONCRC::isAvailable)
+		if(hasCRC && HasherInput_NEONCRC::isAvailable) {
 			HasherInput_Create = &HasherInput_NEONCRC::create;
-		else if(HasherInput_NEON::isAvailable)
+			HasherInput_Method = INHASH_SIMD_CRC;
+		} else if(HasherInput_NEON::isAvailable) {
 			HasherInput_Create = &HasherInput_NEON::create;
+			HasherInput_Method = INHASH_SIMD;
+		}
 	}
 	
-	if(hasCRC && MD5CRC_isAvailable_ARMCRC)
+	if(hasCRC && MD5CRC_isAvailable_ARMCRC) {
 		MD5CRC_Calc = &MD5CRC_Calc_ARMCRC;
-	if(hasCRC && CRC32_isAvailable_ARMCRC)
+		MD5CRC_Method = MD5CRCMETH_ARMCRC;
+	}
+	if(hasCRC && CRC32_isAvailable_ARMCRC) {
 		CRC32_Calc = &CRC32_Calc_ARMCRC;
+		CRC32_Method = MD5CRCMETH_ARMCRC;
+	}
 #endif
 	
 	
@@ -155,24 +192,25 @@ void setup_hasher() {
 }
 
 bool set_hasherInput(HasherInputMethods method) {
-#define SET_HASHER(x) { \
+#define SET_HASHER(h, x) if(method == h) { \
 		if(!x::isAvailable) return false; \
 		HasherInput_Create = &x::create; \
+		HasherInput_Method = h; \
 		return true; \
 	}
 	
-	if(method == INHASH_SCALAR) SET_HASHER(HasherInput_Scalar)
+	SET_HASHER(INHASH_SCALAR, HasherInput_Scalar)
 #ifdef PLATFORM_X86
-	if(method == INHASH_SIMD) SET_HASHER(HasherInput_SSE)
-	if(method == INHASH_CRC) SET_HASHER(HasherInput_ClMulScalar)
-	if(method == INHASH_SIMD_CRC) SET_HASHER(HasherInput_ClMulSSE)
-	if(method == INHASH_BMI1) SET_HASHER(HasherInput_BMI1)
-	if(method == INHASH_AVX512) SET_HASHER(HasherInput_AVX512)
+	SET_HASHER(INHASH_SIMD, HasherInput_SSE)
+	SET_HASHER(INHASH_CRC, HasherInput_ClMulScalar)
+	SET_HASHER(INHASH_SIMD_CRC, HasherInput_ClMulSSE)
+	SET_HASHER(INHASH_BMI1, HasherInput_BMI1)
+	SET_HASHER(INHASH_AVX512, HasherInput_AVX512)
 #endif
 #ifdef PLATFORM_ARM
-	if(method == INHASH_SIMD) SET_HASHER(HasherInput_NEON)
-	if(method == INHASH_CRC) SET_HASHER(HasherInput_ARMCRC)
-	if(method == INHASH_SIMD_CRC) SET_HASHER(HasherInput_NEONCRC)
+	SET_HASHER(INHASH_SIMD, HasherInput_NEON)
+	SET_HASHER(INHASH_CRC, HasherInput_ARMCRC)
+	SET_HASHER(INHASH_SIMD_CRC, HasherInput_NEONCRC)
 #endif
 #undef SET_HASHER
 	return false;
@@ -367,6 +405,7 @@ void MD5Multi::get(void* md5s) {
 
 void(*MD5Single::_update)(uint32_t*, const void*, size_t) = &MD5Single_update_Scalar;
 void(*MD5Single::_updateZero)(uint32_t*, size_t) = &MD5Single_updateZero_Scalar;
+MD5CRCMethods MD5Single::method = MD5CRCMETH_SCALAR;
 const size_t MD5_BLOCKSIZE = 64;
 void MD5Single::update(const void* data, size_t len) {
 	uint_fast8_t buffered = dataLen & (MD5_BLOCKSIZE-1);
@@ -414,4 +453,54 @@ void MD5Single::updateZero(size_t len) {
 void MD5Single::end(void* md5) {
 	md5_final_block(md5State, tmp, dataLen, 0);
 	memcpy(md5, md5State, 16);
+}
+
+
+const char* hasherInput_methodName() {
+	const char* names[] = {
+		"Scalar + Slice4",
+#ifdef PLATFORM_X86
+		"SSE2 + Slice4",
+		"Scalar + PCLMUL",
+		"SSE2 + PCLMUL",
+#elif defined(PLATFORM_ARM)
+		"NEON + Slice4",
+		"Scalar + ARMv8-CRC32",
+		"NEON + ARMv8-CRC32",
+#else
+		"SIMD + Slice4",
+		"Scalar + CRC",
+		"SIMD + CRC",
+#endif
+		"BMI1 + PCLMUL",
+		"AVX512"
+	};
+	
+	return names[(int)HasherInput_Method];
+}
+const char* hasherMD5Multi_methodName() {
+	const char* names[] = {
+		"Scalar",
+		"SSE2",
+		"AVX2",
+		"XOP",
+		"AVX512F",
+		"AVX512VL",
+		"NEON",
+		"SVE2"
+	};
+	
+	return names[(int)HasherMD5Multi_level];
+}
+const char* md5crc_methodName(MD5CRCMethods m) {
+	const char* names[] = {
+		"Scalar",
+		"BMI1",
+		"NoLEA",
+		"AVX512",
+		"ARMv8-CRC32",
+		"PCLMUL"
+	};
+	
+	return names[(int)m];
 }

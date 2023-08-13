@@ -2,11 +2,13 @@
 #include "../src/cpuid.h"
 
 Gf16PMulFunc gf16pmul = nullptr;
+Galois16PointMulMethods gf16pmul_method = GF16PMUL_NONE;
 size_t gf16pmul_alignment = 1;
 size_t gf16pmul_blocklen = 1;
 
 void setup_pmul() {
 	gf16pmul = nullptr;
+	gf16pmul_method = GF16PMUL_NONE;
 	gf16pmul_alignment = 1;
 	gf16pmul_blocklen = 1;
 	
@@ -40,21 +42,25 @@ void setup_pmul() {
 	
 	if(gf16pmul_available_vpclgfni) {
 		gf16pmul = &gf16pmul_vpclgfni;
+		gf16pmul_method = GF16PMUL_VPCLMUL_GFNI;
 		gf16pmul_alignment = 32;
 		gf16pmul_blocklen = 64;
 	}
 	else if(gf16pmul_available_vpclmul) {
 		gf16pmul = &gf16pmul_vpclmul;
+		gf16pmul_method = GF16PMUL_VPCLMUL;
 		gf16pmul_alignment = 32;
 		gf16pmul_blocklen = 32;
 	}
 	else if(gf16pmul_available_avx2) {
 		gf16pmul = &gf16pmul_avx2;
+		gf16pmul_method = GF16PMUL_AVX2;
 		gf16pmul_alignment = 32;
 		gf16pmul_blocklen = 32;
 	}
 	else if(gf16pmul_available_sse) {
 		gf16pmul = &gf16pmul_sse;
+		gf16pmul_method = GF16PMUL_PCLMUL;
 		gf16pmul_alignment = 16;
 		gf16pmul_blocklen = 16;
 	}
@@ -66,13 +72,29 @@ void setup_pmul() {
 	
 	if(gf16pmul_available_sve2) {
 		gf16pmul = &gf16pmul_sve2;
+		gf16pmul_method = GF16PMUL_SVE2;
 		gf16pmul_alignment = gf16pmul_sve2_width();
 		gf16pmul_blocklen = gf16pmul_alignment*2;
 	}
 	else if(gf16pmul_available_neon) {
 		gf16pmul = &gf16pmul_neon;
+		gf16pmul_method = GF16PMUL_NEON;
 		gf16pmul_alignment = 16;
 		gf16pmul_blocklen = 32;
 	}
 #endif
+}
+
+const char* gf16pmul_methodName() {
+	const char* names[] = {
+		"None (exponentiate)",
+		"PCLMUL",
+		"AVX2",
+		"VPCLMUL",
+		"VPCLMUL+GFNI",
+		"NEON",
+		"SVE2"
+	};
+	
+	return names[(int)gf16pmul_method];
 }

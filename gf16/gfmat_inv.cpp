@@ -567,7 +567,11 @@ bool Galois16RecMatrix::Compute(const std::vector<bool>& inputValid, unsigned va
 	
 	
 	unsigned matWidth = (unsigned)inputValid.size() * sizeof(uint16_t);
-	Galois16RecMatrixComputeState state(Galois16Mul::default_method(matWidth, (unsigned)inputValid.size(), (unsigned)inputValid.size(), true));
+	if(regionMethod == GF16_AUTO) {
+		regionMethod = Galois16Mul::default_method(matWidth, numRec, numRec, true);
+	}
+	
+	Galois16RecMatrixComputeState state((Galois16Methods)regionMethod);
 	state.validCount = validCount;
 	const auto gfInfo = state.gf.info();
 	state.pfFactor = gfInfo.prefetchDownscale;
@@ -681,11 +685,17 @@ bool Galois16RecMatrix::Compute(const std::vector<bool>& inputValid, unsigned va
 	return true;
 }
 
+const char* Galois16RecMatrix::getPointMulMethodName() const {
+	return gf16pmul_methodName();
+}
+
 Galois16RecMatrix::Galois16RecMatrix() : mat(nullptr) {
 	numThreads = hardware_concurrency();
 	numRec = 0;
 	numStripes = 0;
 	stripeWidth = 0;
+	
+	regionMethod = (int)GF16_AUTO;
 }
 
 Galois16RecMatrix::~Galois16RecMatrix() {

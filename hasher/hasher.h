@@ -30,6 +30,9 @@ bool set_hasherInput(HasherInputMethods method);
 void set_hasherMD5MultiLevel(MD5MultiLevels level);
 extern IHasherInput*(*HasherInput_Create)();
 
+const char* hasherInput_methodName();
+const char* hasherMD5Multi_methodName();
+
 class MD5Multi {
 	std::vector<IMD5Multi*> ctx;
 	std::vector<const void*> lastCtxData;
@@ -58,6 +61,9 @@ public:
 
 // single hash instances
 extern uint32_t(*CRC32_Calc)(const void*, size_t);
+extern MD5CRCMethods CRC32_Method;
 extern uint32_t(*MD5CRC_Calc)(const void*, size_t, size_t, void*);
+extern MD5CRCMethods MD5CRC_Method;
+const char* md5crc_methodName(MD5CRCMethods m);
 
 #endif /* __HASHER_H */

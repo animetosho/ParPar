@@ -41,6 +41,10 @@ public:
 		unsigned stripe = inIdx / sw;
 		return mat[stripe * numRec*sw + recIdx * sw + (inIdx % sw)];
 	}
+	
+	// these should only be queried after Compute has started (i.e. from the progressCb, or after it returns)
+	/*Galois16Methods*/ int regionMethod;
+	const char* getPointMulMethodName() const;
 };
 #endif
 
