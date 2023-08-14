@@ -189,20 +189,10 @@ public:
 	static Galois16MethodInfo info(Galois16Methods _method);
 	
 	inline HEDLEY_CONST bool isMultipleOfStride(size_t len) const {
-#if defined(_M_ARM64) || defined(__aarch64__)
-		// SVE can have non-power-of-2 strides
-		if(HEDLEY_UNLIKELY((_info.stride & (_info.stride-1)) != 0)) // ...but most of the time, expect stride to be a power of 2
-			return (len % _info.stride) == 0;
-#endif
 		return (len & (_info.stride-1)) == 0;
 	}
 	inline HEDLEY_CONST size_t alignToStride(size_t len) const {
 		size_t alignMask = _info.stride-1;
-#if defined(_M_ARM64) || defined(__aarch64__)
-		if(HEDLEY_UNLIKELY((_info.stride & (_info.stride-1)) != 0)) {
-			return ((len + alignMask) / _info.stride) * _info.stride;
-		}
-#endif
 		return (len + alignMask) & ~alignMask;
 	}
 	

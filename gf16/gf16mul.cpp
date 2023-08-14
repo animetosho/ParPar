@@ -207,6 +207,13 @@ struct CpuCap {
 		hasNEON = CPU_HAS_NEON;
 		hasSVE = CPU_HAS_SVE;
 		hasSVE2 = CPU_HAS_SVE2;
+		if(hasSVE) {
+			size_t sz = gf16_sve_get_size();
+			if(sz & (sz-1)) { // we don't support non-pow2 vector widths
+				hasSVE = false;
+				hasSVE2 = false;
+			}
+		}
 	}
 };
 #endif
