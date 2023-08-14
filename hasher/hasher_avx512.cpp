@@ -1,4 +1,13 @@
+// suppress warning spam in GCC 12.0-12.2 (caused by some AVX512 intrinsics)
+#include "../src/hedley.h"
+#if HEDLEY_GCC_VERSION_CHECK(12,0,0) && !HEDLEY_GCC_VERSION_CHECK(12,3,0)
+# pragma GCC diagnostic push
+# pragma GCC diagnostic ignored "-Wuninitialized"
+# pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
+#endif
+
 #include "../src/platform.h"
+
 
 #define MD5Multi MD5Multi_AVX512
 #define _FNMD5mb(f) f##_avx512
