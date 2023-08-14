@@ -37,11 +37,14 @@ static HEDLEY_ALWAYS_INLINE void gf16_checksum_blocku_rvv(const void *HEDLEY_RES
 	while(amount) {
 		size_t vl = RV(vsetvl_e8m1)(amount);
 		
-		// intrinsics lack tail-undisturbed, so emulate it
+#if defined(__riscv_v_intrinsic) && __riscv_v_intrinsic >= 13000
+		v8 = RV(vxor_vv_i8m1_tu)(v8, v8, RV(vle8_v_i8m1)(_src, vl), vl);
+#else
+		// emulate tail-undisturbed
 		vint8m1_t tmp = RV(vmv_v_x_i8m1)(0, vlmax);
 		memcpy(&tmp, _src, vl);
 		v8 = RV(vxor_vv_i8m1)(v8, tmp, vlmax);
-		//v8 = RV(vxor_vv_i8m1)(v8, RV(vle8_v_i8m1)(_src, vl), vl);
+#endif
 		amount -= vl;
 		_src += vl;
 	}
@@ -58,7 +61,12 @@ static HEDLEY_ALWAYS_INLINE void gf16_checksum_exp_rvv(void *HEDLEY_RESTRICT che
 	for(int i=0; i<15; i++) {
 		res = gf16_vec_mul2_rvv(res);
 		coeff = RV(vadd_vv_i16m1)(coeff, coeff, vl);
-		res = RV(vxor_vv_i16m1_m)(
+#if defined(__riscv_v_intrinsic) && __riscv_v_intrinsic >= 13000
+		res = RV(vxor_vv_i16m1_mu)
+#else
+		res = RV(vxor_vv_i16m1_m)
+#endif
+		(
 			RV(vmslt_vx_i16m1_b16)(coeff, 0, vl),
 			res, res, _checksum,
 			vl

@@ -9,12 +9,7 @@ int gf16_available_rvv = 0;
 #include "gf16_muladd_multi.h"
 
 #if defined(__RVV_LE)
-// TODO: detect intrinsics version
-# if 1
-// intrinsics v0.11.x (up to at least GCC 13 / Clang 16)
-#  define _vlseg2e8 RV(vlseg2e8_v_u8m1)
-#  define _vsseg2e8 RV(vsseg2e8_v_u8m1)
-# else
+# if defined(__riscv_v_intrinsic) && __riscv_v_intrinsic >= 12000
 // intrinsics v0.12.x
 static HEDLEY_ALWAYS_INLINE void _vlseg2e8(vuint8m1_t* v0, vuint8m1_t* v1, const uint8_t* src, size_t vl) {
 	vuint8m1x2_t d = RV(vlseg2e8_v_u8m1x2)(src, vl);
@@ -27,6 +22,10 @@ static HEDLEY_ALWAYS_INLINE void _vsseg2e8(uint8_t* dst, vuint8m1_t v0, vuint8m1
 	d = RV(vset_v_u8m1_u8m1x2)(d, 1, v1);
 	RV(vsseg2e8_v_u8m1x2)(dst, d, vl);
 }
+# else
+// intrinsics v0.11.x (up to at least GCC 13 / Clang 16)
+#  define _vlseg2e8 RV(vlseg2e8_v_u8m1)
+#  define _vsseg2e8 RV(vsseg2e8_v_u8m1)
 # endif
 
 static HEDLEY_ALWAYS_INLINE void gf16_shuffle_128_rvv_calc_table(vuint8m1_t poly_l, uint16_t val,
@@ -217,11 +216,17 @@ static HEDLEY_ALWAYS_INLINE void gf16_prepare_block_rvv(void *HEDLEY_RESTRICT ds
 }
 // final block
 static HEDLEY_ALWAYS_INLINE void gf16_prepare_blocku_rvv(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t remaining) {
-	// current intrinsics don't seem to support tail-undisturbed policy, so zero explicitly for now
-	size_t vl = RV(vsetvlmax_e8m2)();
-	RV(vse8_v_u8m2)((uint8_t*)dst, RV(vmv_v_x_u8m2)(0, vl), vl);
-	vl = RV(vsetvl_e8m2)(remaining);
+	size_t vlmax = RV(vsetvlmax_e8m2)();
+	vuint8m1_t v = RV(vmv_v_x_u8m2)(0, vlmax);
+	size_t vl = RV(vsetvl_e8m2)(remaining);
+#if defined(__riscv_v_intrinsic) && __riscv_v_intrinsic >= 13000
+	v = RV(vle8_v_u8m2_tu)(v, (const uint8_t*)src, vl);
+	RV(vse8_v_u8m2)((uint8_t*)dst, v, vlmax);
+#else
+	// tail-undisturbed not supported, so zero explicitly as a workaround
+	RV(vse8_v_u8m2)((uint8_t*)dst, v, vlmax);
 	RV(vse8_v_u8m2)((uint8_t*)dst, RV(vle8_v_u8m2)((const uint8_t*)src, vl), vl);
+#endif
 }
 static HEDLEY_ALWAYS_INLINE void gf16_finish_blocku_rvv(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t remaining) {
 	size_t vl = RV(vsetvl_e8m2)(remaining);
