@@ -200,11 +200,13 @@ struct CpuCap {
 
 struct CpuCap {
 	bool hasNEON;
+	bool hasSHA3;
 	bool hasSVE;
 	bool hasSVE2;
 	CpuCap(bool detect) : hasNEON(true), hasSVE(true), hasSVE2(true) {
 		if(!detect) return;
 		hasNEON = CPU_HAS_NEON;
+		hasSHA3 = CPU_HAS_NEON_SHA3;
 		hasSVE = CPU_HAS_SVE;
 		hasSVE2 = CPU_HAS_SVE2;
 		if(hasSVE) {
@@ -295,6 +297,7 @@ Galois16MethodInfo Galois16Mul::info(Galois16Methods _method) {
 		break;
 		
 		case GF16_CLMUL_NEON:
+		case GF16_CLMUL_SHA3:
 			_info.alignment = 32; // presumably double-loads work best when aligned to 32 instead of 16?
 			_info.stride = 32;
 			_info.cksumSize = 16;
@@ -483,6 +486,7 @@ Galois16MethodInfo Galois16Mul::info(Galois16Methods _method) {
 			_info.idealChunkSize = 4*1024;
 		break;
 		case GF16_CLMUL_NEON: // faster init than Shuffle, and usually faster
+		case GF16_CLMUL_SHA3:
 		case GF16_CLMUL_SVE2: // may want smaller chunk size for wider vectors
 		case GF16_AFFINE_GFNI:
 		case GF16_AFFINE2X_GFNI:
@@ -746,6 +750,35 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			add_multi_packpf = &gf_add_multi_packpf_clmul_neon;
 			// TODO: on Cortex A53, prefetching seems to be slower, so disabled for now
 			//_mul_add_multi_packpf = &gf16_clmul_muladd_multi_packpf_neon;
+			prepare_packed = &gf16_clmul_prepare_packed_neon;
+			prepare_packed_cksum = &gf16_clmul_prepare_packed_cksum_neon;
+			prepare_partial_packsum = &gf16_clmul_prepare_partial_packsum_neon;
+			finish_packed = &gf16_shuffle_finish_packed_neon;
+			finish_packed_cksum = &gf16_shuffle_finish_packed_cksum_neon; // re-use shuffle routine
+			finish_partial_packsum = &gf16_shuffle_finish_partial_packsum_neon;
+			copy_cksum = &gf16_cksum_copy_neon;
+			copy_cksum_check = &gf16_cksum_copy_check_neon;
+		} break;
+		
+		case GF16_CLMUL_SHA3: {
+			int available = gf16_clmul_init_arm(GF16_POLYNOMIAL);
+			METHOD_REQUIRES(gf16_available_neon_sha3 && available)
+			
+			scratch = gf16_shuffle_init_arm(GF16_POLYNOMIAL);
+			if(scratch) {
+				_mul = &gf16_shuffle_mul_neon;
+				_mul_add = &gf16_shuffle_muladd_neon;
+			} else {
+				_mul = &gf16_clmul_mul_sha3;
+				_mul_add = &gf16_clmul_muladd_sha3;
+			}
+			_mul_add_multi = &gf16_clmul_muladd_multi_sha3;
+			_mul_add_multi_stridepf = &gf16_clmul_muladd_multi_stridepf_sha3;
+			_mul_add_multi_packed = &gf16_clmul_muladd_multi_packed_sha3;
+			add_multi = &gf_add_multi_neon;
+			add_multi_packed = &gf_add_multi_packed_clmul_neon;
+			add_multi_packpf = &gf_add_multi_packpf_clmul_neon;
+			_mul_add_multi_packpf = &gf16_clmul_muladd_multi_packpf_sha3;
 			prepare_packed = &gf16_clmul_prepare_packed_neon;
 			prepare_packed_cksum = &gf16_clmul_prepare_packed_cksum_neon;
 			prepare_partial_packsum = &gf16_clmul_prepare_partial_packsum_neon;
@@ -1372,6 +1405,10 @@ Galois16Methods Galois16Mul::default_method(size_t regionSizeHint, unsigned inpu
 	}
 	if(caps.hasSVE && gf16_sve_get_size() > 16)
 		return GF16_SHUFFLE_128_SVE;
+# ifdef __aarch64__
+	if(gf16_available_neon_sha3 && caps.hasSHA3)
+		return inputs > 3 ? GF16_CLMUL_SHA3 : GF16_SHUFFLE_NEON;
+# endif
 	if(gf16_available_neon && caps.hasNEON)
 		return
 # ifdef __aarch64__
@@ -1451,6 +1488,9 @@ std::vector<Galois16Methods> Galois16Mul::availableMethods(bool checkCpuid) {
 	if(gf16_available_neon && caps.hasNEON) {
 		ret.push_back(GF16_SHUFFLE_NEON);
 		ret.push_back(GF16_CLMUL_NEON);
+	}
+	if(gf16_available_neon_sha3 && caps.hasSHA3) {
+		ret.push_back(GF16_CLMUL_SHA3);
 	}
 	if(gf16_available_sve && caps.hasSVE)
 		ret.push_back(GF16_SHUFFLE_128_SVE);

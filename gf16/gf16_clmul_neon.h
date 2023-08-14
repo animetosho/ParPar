@@ -1,6 +1,6 @@
 #include "gf16_neon_common.h"
 
-#if defined(__ARM_NEON)
+#if defined(_AVAILABLE)
 
 // `vaddq_p8` and co seems to be missing from some compilers (like GCC), so define our own variant
 static HEDLEY_ALWAYS_INLINE poly8x16_t veorq_p8(poly8x16_t a, poly8x16_t b) {
@@ -42,9 +42,11 @@ typedef poly8x8_t coeff_t;
 # define coeff_fn(f1, f2) f1##_##f2
 #endif
 
+#ifndef eor3q_u8
 static HEDLEY_ALWAYS_INLINE uint8x16_t eor3q_u8(uint8x16_t a, uint8x16_t b, uint8x16_t c) {
 	return veorq_u8(a, veorq_u8(b, c));
 }
+#endif
 
 static HEDLEY_ALWAYS_INLINE void gf16_clmul_neon_reduction(poly16x8_t* low1, poly16x8_t low2, poly16x8_t mid1, poly16x8_t mid2, poly16x8_t* high1, poly16x8_t high2) {
 	// put data in proper form

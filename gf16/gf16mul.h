@@ -64,6 +64,7 @@ enum Galois16Methods {
 	GF16_AFFINE2X_AVX2,
 	GF16_AFFINE2X_AVX512,
 	GF16_CLMUL_NEON,
+	GF16_CLMUL_SHA3,
 	GF16_CLMUL_SVE2
 	// TODO: consider non-transforming shuffle/affine
 };
@@ -96,6 +97,7 @@ static const char* Galois16MethodsText[] = {
 	"Affine2x (GFNI+AVX2)",
 	"Affine2x (GFNI+AVX512)",
 	"CLMul (NEON)",
+	"CLMul (SHA3)",
 	"CLMul (SVE2)"
 };
 

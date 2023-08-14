@@ -1,7 +1,13 @@
 #include "gf16_global.h"
+
+#ifdef __ARM_NEON
+# define _AVAILABLE
+#endif
 #include "gf16_clmul_neon.h"
 
 #ifdef __ARM_NEON
+# undef _AVAILABLE
+
 int gf16pmul_available_neon = 1;
 
 void gf16pmul_neon(void *HEDLEY_RESTRICT dst, const void* src1, const void* src2, size_t len) {

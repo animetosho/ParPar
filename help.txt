@@ -294,6 +294,7 @@ CPU Tuning Options:
                                  shuffle128-sve2: SVE2 variant of shuffle-neon
                                  shuffle2x128-sve2: half width variant of shuffle-neon (requires SVE width >= 256 bits)
                                  shuffle512-sve2: SVE2 variant of shuffle-vbmi (requires SVE width >= 512 bits)
+                                 clmul-sha3: NEON-SHA3 variant of clmul-neon
                                  clmul-sve2: SVE2 variant of clmul-neon
                              RISC-V only choices:
                                  shuffle128-rvv: RISC-V Vector variant of shuffle128-sve2

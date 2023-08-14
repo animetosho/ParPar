@@ -37,7 +37,7 @@
     {
       "target_name": "parpar_gf",
       "dependencies": [
-        "parpar_gf_c", "gf16", "gf16_generic", "gf16_sse2", "gf16_ssse3", "gf16_avx", "gf16_avx2", "gf16_avx512", "gf16_vbmi", "gf16_gfni", "gf16_gfni_avx2", "gf16_gfni_avx512", "gf16_neon", "gf16_sve", "gf16_sve2", "gf16_rvv",
+        "parpar_gf_c", "gf16", "gf16_generic", "gf16_sse2", "gf16_ssse3", "gf16_avx", "gf16_avx2", "gf16_avx512", "gf16_vbmi", "gf16_gfni", "gf16_gfni_avx2", "gf16_gfni_avx512", "gf16_neon", "gf16_sha3", "gf16_sve", "gf16_sve2", "gf16_rvv",
         "hasher", "hasher_sse2", "hasher_clmul", "hasher_xop", "hasher_bmi1", "hasher_avx2", "hasher_avx512", "hasher_avx512vl", "hasher_armcrc", "hasher_neon", "hasher_neoncrc", "hasher_sve2"
       ],
       "sources": ["src/gf.cc", "gf16/controller.cpp", "gf16/controller_cpu.cpp", "gf16/controller_ocl.cpp", "gf16/controller_ocl_init.cpp"],
@@ -791,6 +791,40 @@
           "xcode_settings": {
             "OTHER_CFLAGS": ["-march=armv7-a"]
           }
+        }]
+      ]
+    },
+    {
+      "target_name": "gf16_sha3",
+      "type": "static_library",
+      "defines": ["NDEBUG"],
+      "sources": [
+        "gf16/gf16_clmul_sha3.c"
+      ],
+      "cflags": ["-Wno-unused-function", "-std=c99"],
+      "xcode_settings": {
+        "OTHER_CFLAGS": ["-Wno-unused-function"],
+        "OTHER_CFLAGS!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"]
+      },
+      "cflags!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"],
+      "msvs_settings": {"VCCLCompilerTool": {"BufferSecurityCheck": "false"}},
+      "conditions": [
+        ['target_arch=="arm64" and OS!="win"', {
+          "variables": {"supports_sha3%": "<!(<!(echo ${CC_target:-${CC:-cc}}) -MM -E gf16/gf16_clmul_sha3.c -march=armv8.2-a+sha3 2>/dev/null || true)"},
+          "conditions": [
+            ['supports_sha3!=""', {
+              "cflags!": ["-march=native"],
+              "cxxflags!": ["-march=native"],
+              "cflags": ["-march=armv8.2-a+sha3"],
+              "cxxflags": ["-march=armv8.2-a+sha3"],
+              "xcode_settings": {
+                "OTHER_CFLAGS!": ["-march=native"],
+                "OTHER_CXXFLAGS!": ["-march=native"],
+                "OTHER_CFLAGS": ["-march=armv8.2-a+sha3"],
+                "OTHER_CXXFLAGS": ["-march=armv8.2-a+sha3"],
+              }
+            }]
+          ]
         }]
       ]
     },
