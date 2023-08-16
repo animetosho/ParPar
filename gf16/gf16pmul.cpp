@@ -85,9 +85,9 @@ void setup_pmul() {
 #endif
 }
 
-const char* gf16pmul_methodName() {
+const char* gf16pmul_methodName(Galois16PointMulMethods method) {
 	const char* names[] = {
-		"None (exponentiate)",
+		"None",
 		"PCLMUL",
 		"AVX2",
 		"VPCLMUL",
@@ -96,5 +96,5 @@ const char* gf16pmul_methodName() {
 		"SVE2"
 	};
 	
-	return names[(int)gf16pmul_method];
+	return names[(int)method];
 }
