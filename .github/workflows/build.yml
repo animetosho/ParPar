@@ -2,6 +2,7 @@ name: Build release binary
 on:
   release:
     types: [published]
+  workflow_dispatch:
   #push:
   #  tags:
   #  - v*.*.*
