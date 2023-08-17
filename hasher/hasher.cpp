@@ -31,6 +31,7 @@ struct CpuCap {
 		model = ((cpuInfo[0]>>4) & 0xf) + ((cpuInfo[0]>>12) & 0xf0);
 		
 		// TODO: check perf on small cores
+		isLEASlow = false;
 		if(family == 6) {
 			isSmallCore = CPU_MODEL_IS_BNL_SLM(model);
 			// Intel Sandy Bridge to Skylake has slow 3-component LEA
@@ -41,6 +42,7 @@ struct CpuCap {
 		
 		isVecRotSlow = (family == 0xaf); // vector rotate has 2 cycle latency on Zen4
 		
+		hasAVX = false; hasBMI1 = false; hasAVX2 = false; hasAVX512F = false; hasAVX512VLBW = false;
 #if !defined(_MSC_VER) || _MSC_VER >= 1600
 		_cpuidX(cpuInfoX, 7, 0);
 		if((cpuInfo[2] & 0x1C000000) == 0x1C000000) { // has AVX + OSXSAVE + XSAVE
