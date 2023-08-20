@@ -1430,6 +1430,7 @@ Galois16Methods Galois16Mul::default_method(size_t regionSizeHint, unsigned inpu
 }
 
 std::vector<Galois16Methods> Galois16Mul::availableMethods(bool checkCpuid) {
+	UNUSED(checkCpuid);
 	std::vector<Galois16Methods> ret;
 	ret.push_back(GF16_LOOKUP);
 	if(gf16_lookup3_stride())

@@ -150,7 +150,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_xorjit_write_jit(const void *HEDLEY_RESTRI
 			jitptr = jitTemp;
 		
 		jitptr = writeFunc(info, jitptr, coefficient, mode, prefetch);
-		write32(jitptr, (int32_t)(jitTemp - copyOffset - jitptr -4));
+		write32(jitptr, (int32_t)((intptr_t)jitTemp - copyOffset - (intptr_t)jitptr -4));
 		jitptr[4] = 0xC3; /* ret */
 		jitptr += 5;
 		

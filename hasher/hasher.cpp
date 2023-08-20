@@ -522,6 +522,7 @@ const char* md5crc_methodName(MD5CRCMethods m) {
 
 
 std::vector<HasherInputMethods> hasherInput_availableMethods(bool checkCpuid) {
+	(void)checkCpuid;
 	std::vector<HasherInputMethods> ret;
 	ret.push_back(INHASH_SCALAR);
 	
@@ -553,6 +554,7 @@ std::vector<HasherInputMethods> hasherInput_availableMethods(bool checkCpuid) {
 	return ret;
 }
 std::vector<MD5CRCMethods> hasherMD5CRC_availableMethods(bool checkCpuid) {
+	(void)checkCpuid;
 	std::vector<MD5CRCMethods> ret;
 	ret.push_back(MD5CRCMETH_SCALAR);
 	
@@ -578,6 +580,7 @@ std::vector<MD5CRCMethods> hasherMD5CRC_availableMethods(bool checkCpuid) {
 	return ret;
 }
 std::vector<MD5MultiLevels> hasherMD5Multi_availableMethods(bool checkCpuid) {
+	(void)checkCpuid;
 	std::vector<MD5MultiLevels> ret;
 	ret.push_back(MD5MULT_SCALAR);
 	

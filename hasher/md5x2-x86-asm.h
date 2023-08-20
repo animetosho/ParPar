@@ -195,8 +195,8 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_x2_scalar(uint32_t* state, co
 	ROUND_I(B1, C1, D1, A1, B2, C2, D2, A2, "%[i0_1]", "%[i1_1]", k3, 21) \
 : ASM_PARAMS(i2, i3));
 	
-	A1 += _data[0][0];
-	A2 += _data[1][0];
+	A1 += read32(_data[0]);
+	A2 += read32(_data[1]);
 	
 	RF4( 1,  2,  3,  4,  -0x28955b88, -0x173848aa, 0x242070db, -0x3e423112)
 	RF4( 5,  6,  7,  8,  -0x0a83f051, 0x4787c62a, -0x57cfb9ed, -0x02b96aff)
