@@ -158,11 +158,15 @@ static unsigned long getauxval(unsigned long cap) {
 # endif
 
 # ifdef PARPAR_SKIP_AUX_CHECK
+#  define CPU_HAS_GC true
 #  define CPU_HAS_VECTOR true
 # else
+#  define CPU_HAS_GC false
 #  define CPU_HAS_VECTOR false
 
 #  if defined(AT_HWCAP)
+#   undef CPU_HAS_GC
+#   define CPU_HAS_GC ((getauxval(AT_HWCAP) & 4397) == 4397) // 4397 = IMAFDC; TODO: how to detect Z* features of 'G'?
 #   undef CPU_HAS_VECTOR
 #   define CPU_HAS_VECTOR (getauxval(AT_HWCAP) & (1 << ('V'-'A')))
 #  endif

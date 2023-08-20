@@ -226,7 +226,7 @@ struct CpuCap {
 	bool hasVector;
 	CpuCap(bool detect) : hasVector(true) {
 		if(!detect) return;
-		hasVector = CPU_HAS_VECTOR;
+		hasVector = CPU_HAS_VECTOR && CPU_HAS_GC;
 	}
 };
 #endif
