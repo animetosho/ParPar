@@ -1,0 +1,243 @@
+name: Test GF16/Hasher
+on:
+  workflow_dispatch:
+
+jobs:
+  test-win-x86:
+    strategy:
+      fail-fast: false
+      matrix:
+        config: [Debug, Release]
+        compiler: ['v141', 'v142', 'v143', 'ClangCL']
+        arch: ['Win32', 'x64']
+    name: Test VS ${{ matrix.compiler }} ${{ matrix.arch }} (${{ matrix.config }})
+    runs-on: windows-latest
+    steps:
+      - uses: ilammy/setup-nasm@v1
+      - uses: petarpetrovt/setup-sde@v2.1
+      - uses: actions/checkout@v3
+      - run: |
+          mkdir test\gf16\build
+          cmake -B test\gf16\build -S test\gf16 -G "Visual Studio 16 2019" -T ${{ matrix.compiler }} -A ${{ matrix.arch }}
+          cmake --build test\gf16\build --config ${{ matrix.config }}
+          
+          mkdir test\hasher\build
+          cmake -B test\hasher\build -S test\hasher -G "Visual Studio 16 2019" -T ${{ matrix.compiler }} -A ${{ matrix.arch }}
+          cmake --build test\hasher\build --config ${{ matrix.config }}
+      - run: sde -icx -- test\gf16\build\${{ matrix.config }}\test.exe
+      - run: sde -icx -- test\gf16\build\${{ matrix.config }}\test-pmul.exe
+      - run: sde -icx -- test\gf16\build\${{ matrix.config }}\test-ctrl.exe -f
+        if: ${{ matrix.config == 'Release' && (matric.compiler == 'ClangCL' || matric.compiler == 'v143') }}
+      - run: sde -icx -- test\gf16\build\${{ matrix.config }}\test-inv.exe -f
+        if: ${{ matrix.config == 'Release' && (matric.compiler == 'ClangCL' || matric.compiler == 'v143') }}
+      - run: sde -icx -- test\hasher\build\${{ matrix.config }}\test.exe
+      
+      # test SSE2-only to see if CPUID checking works
+      - run: |
+          sde -p4 -- test\gf16\build\${{ matrix.config }}\test.exe
+          sde -p4 -- test\gf16\build\${{ matrix.config }}\test-pmul.exe
+          sde -p4 -- test\hasher\build\${{ matrix.config }}\test.exe
+        if: ${{ matrix.config == 'Release' && matrix.arch == 'x64' && matrix.compiler == 'ClangCL' }}
+      
+  
+  # test building only
+  test-win-arm:
+    strategy:
+      fail-fast: false
+      matrix:
+        compiler: ['v142', 'v143', 'ClangCL']
+        arch: ['ARM', 'ARM64']
+    name: Test VS ${{ matrix.compiler }} ${{ matrix.arch }}
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v3
+      - run: |
+          mkdir test\gf16\build
+          cmake -B test\gf16\build -S test\gf16 -G "Visual Studio 16 2019" -T ${{ matrix.compiler }} -A ${{ matrix.arch }}
+          cmake --build test\gf16\build --config Debug
+          
+          mkdir test\hasher\build
+          cmake -B test\hasher\build -S test\hasher -G "Visual Studio 16 2019" -T ${{ matrix.compiler }} -A ${{ matrix.arch }}
+          cmake --build test\hasher\build --config Debug
+    
+  # TODO: test mingw
+  #  https://github.com/msys2/setup-msys2
+  #  https://www.msys2.org/docs/ci/
+  # TODO: test libuv, OpenCL
+  
+  test-linux-gcc:
+    strategy:
+      fail-fast: false
+      matrix:
+        config: [Debug, Release]
+        # GCC 8 available in 20.04
+        cc_ver: ['9','12']
+        t:
+          # qemu x86 doesn't support AVX, so we use Intel SDE instead
+          - {arch: 'i386',     target: 'i686-linux-gnu',       libc: 'i386',    emu: '$SDE_PATH/sde -icl --'}
+          - {arch: 'amd64',    target: 'x86-64-linux-gnu',     libc: 'amd64',   emu: '$SDE_PATH/sde64 -icl --'}
+          #- {arch: 'amd64',    target: 'x86-64-linux-gnux32',  libc: 'x32',     emu: 'qemu-x86_64-static -cpu max'}
+          # TODO: how to test x32?
+          - {arch: 'aarch64',  target: 'aarch64-linux-gnu',    libc: 'arm64',   emu: 'qemu-aarch64-static -L /usr/aarch64-linux-gnu -cpu max,sve-max-vq=4'}
+          - {arch: 'arm',      target: 'arm-linux-gnueabihf',  libc: 'armhf',   emu: 'qemu-arm-static -L /usr/arm-linux-gnueabihf -cpu max'}
+          # RVV unavailable in Ubuntu 22.04's qemu
+          # TODO: consider using newer qemu
+          #- {arch: 'riscv64',  target: 'riscv64-linux-gnu',    libc: 'riscv64', emu: 'qemu-riscv64-static -L /usr/riscv64-linux-gnu -cpu rv64,v=true,vlen=512,elen=64,vext_spec=v1.0,zba=true,zbb=true,zbc=true'}
+          - {arch: 'ppc64',  target: 'powerpc64-linux-gnu',    libc: 'ppc64', emu: 'qemu-ppc64-static -L /usr/powerpc64-linux-gnu'}
+    name: Test Ubuntu GCC ${{ matrix.cc_ver }} ${{ matrix.t.arch }} (${{ matrix.config }})
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v3
+      - run: apt update
+      - uses: petarpetrovt/setup-sde@v2.1
+        if: ${{ matrix.t.arch == 'amd64' || matrix.t.arch == 'i386' }}
+      - run: apt install -y qemu-user-static
+        if: ${{ matrix.t.arch != 'amd64' && matrix.t.arch != 'i386' }}
+      - run: |
+          apt install -y g++-${{ matrix.cc_ver }}-${{ matrix.t.target }}
+          echo "CC=${{ matrix.t.target }}-gcc-${{ matrix.cc_ver }}" >> $GITHUB_ENV
+          echo "CXX=${{ matrix.t.target }}-g++-${{ matrix.cc_ver }}" >> $GITHUB_ENV
+        if: ${{ matrix.t.arch != 'amd64' }}
+      - run: |
+          apt install -y g++-${{ matrix.cc_ver }}
+          echo "CC=gcc-${{ matrix.cc_ver }}" >> $GITHUB_ENV
+          echo "CXX=g++-${{ matrix.cc_ver }}" >> $GITHUB_ENV
+        if: ${{ matrix.t.arch == 'amd64' }}
+      - run: |
+          mkdir test/gf16/build
+          cmake -Btest/gf16/build -Stest/gf16 -DSKIP_AUX=1 -DCMAKE_BUILD_TYPE=${{ matrix.config }} \
+            -DCMAKE_SYSTEM_PROCESSOR=${{ matrix.t.arch }} \
+            -DCMAKE_SYSTEM_NAME=Linux \
+            -DCMAKE_FIND_ROOT_PATH=/usr/${{ matrix.t.target }} \
+            -DCMAKE_FIND_ROOT_PATH_MODE_PROGRAM=NEVER \
+            -DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=ONLY \
+            -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=ONLY
+          cmake --build test/gf16/build
+          
+          mkdir test/hasher/build
+          cmake -Btest/hasher/build -Stest/hasher -DSKIP_AUX=1 -DCMAKE_BUILD_TYPE=${{ matrix.config }} \
+            -DCMAKE_SYSTEM_PROCESSOR=${{ matrix.t.arch }} \
+            -DCMAKE_SYSTEM_NAME=Linux \
+            -DCMAKE_FIND_ROOT_PATH=/usr/${{ matrix.t.target }} \
+            -DCMAKE_FIND_ROOT_PATH_MODE_PROGRAM=NEVER \
+            -DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=ONLY \
+            -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=ONLY
+          cmake --build test/hasher/build
+      - run: ${{ matrix.t.emu }} test/gf16/build/test
+      - run: ${{ matrix.t.emu }} test/gf16/build/test-pmul
+      - run: ${{ matrix.t.emu }} test/gf16/build/test-ctrl -f
+        if: ${{ matrix.config == 'Release' && matric.cc_ver == '12' }}
+      - run: ${{ matrix.t.emu }} test/gf16/build/test-inv -f
+        if: ${{ matrix.config == 'Release' && matric.cc_ver == '12' }}
+      - run: ${{ matrix.t.emu }} test/hasher/build/test
+  
+  test-linux-clang:
+    strategy:
+      fail-fast: false
+      matrix:
+        config: ['Debug', 'Release']
+        # Clang 6 available in 20.04
+        cc_ver: ['11','15']
+        t:
+          - {arch: 'i386', target: 'i686-linux-gnu', cl_target: 'x86-linux-gnu', libc: 'i386', emu: '$SDE_PATH/sde -icl --'}
+          - {arch: 'amd64', target: 'x86-64-linux-gnu', cl_target: 'x86_64-linux-gnu', libc: 'amd64', emu: '$SDE_PATH/sde64 -icl --'}
+          #- {arch: 'amd64', target: 'x86-64-linux-gnux32', cl_target: 'x86-64-linux-gnux32', libc: 'x32', emu: 'qemu- -cpu max'}
+          # TODO: how to test x32?
+          - {arch: 'aarch64', target: 'aarch64-linux-gnu', cl_target: 'aarch64-linux-gnu', libc: 'arm64', emu: 'qemu-aarch64-static -L /usr/aarch64-linux-gnu -cpu max,sve-max-vq=4'}
+          - {arch: 'arm', target: 'arm-linux-gnueabihf', cl_target: 'armv7a-linux-gnueabihf', libc: 'armhf', emu: 'qemu-arm-static -L /usr/arm-linux-gnueabihf -cpu max'}
+          # TODO: can't test ARM BE/RISCV32 without available libc
+          #- {arch: 'aarch64be', target: 'aarch64_be-linux-gnu', cl_target: 'aarch64_be-linux-gnu', libc: 'arm64be', emu: 'qemu-aarch64_be-static -L /usr/aarch64_be-linux-gnu -cpu max,sve-max-vq=4'}
+          #- {arch: 'arm_be', target: 'armeb-linux-gnu', cl_target: 'armebv7a-linux-gnu', libc: 'armeb', emu: 'qemu-armeb-static -L /usr/armeb-linux-gnu -cpu max'}
+          #- {arch: 'riscv32', target: 'riscv32-linux-gnu', cl_target: 'riscv32-linux-gnu', libc: 'riscv32', emu: 'qemu-riscv32-static -L /usr/riscv32-linux-gnu -cpu rv32,v=true,vlen=512,elen=64,vext_spec=v1.0,zba=true,zbb=true,zbc=true'}
+          # RVV unavailable in Ubuntu 22.04's qemu
+          #- {arch: 'riscv64', target: 'riscv64-linux-gnu', cl_target: 'riscv64-linux-gnu', libc: 'riscv64', emu: 'qemu-riscv64-static -L /usr/riscv64-linux-gnu -cpu rv64,v=true,vlen=512,elen=64,vext_spec=v1.0,zba=true,zbb=true,zbc=true'}
+          - {arch: 'ppc64', target: 'powerpc64-linux-gnu', cl_target: 'ppc64-linux-gnu', libc: 'ppc64', emu: 'qemu-ppc64-static -L /usr/powerpc64-linux-gnu'}
+    name: Test Ubuntu Clang ${{ matrix.cc_ver }} ${{ matrix.t.arch }} (${{ matrix.config }})
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v3
+      - run: apt update && apt install -y clang-${{ matrix.cc_ver }}
+      - uses: petarpetrovt/setup-sde@v2.1
+        if: ${{ matrix.t.arch == 'amd64' || matrix.t.arch == 'i386' }}
+      - run: apt install -y qemu-user-static
+        if: ${{ matrix.t.arch != 'amd64' && matrix.t.arch != 'i386' }}
+      - run: apt install -y binutils-${{ matrix.t.target }} libgcc-12-dev-${{ matrix.t.libc }}-cross libstdc++-12-dev-${{ matrix.t.libc }}-cross
+        if: ${{ matrix.t.arch != 'amd64' }}
+      - run: echo "SANITIZE=-DENABLE_SANITIZE=1" >> $GITHUB_ENV
+        if: ${{ matrix.config == 'Release' && matrix.t.arch == 'amd64' }}
+      - run: |
+          mkdir test/gf16/build
+          cmake -Btest/gf16/build -Stest/gf16 -DSKIP_AUX=1 -DCMAKE_BUILD_TYPE=${{ matrix.config }} $SANITIZE \
+            -DCMAKE_C_COMPILER=clang-${{ matrix.cc_ver }} \
+            -DCMAKE_CXX_COMPILER=clang++-${{ matrix.cc_ver }} \
+            -DCMAKE_C_COMPILER_TARGET=${{ matrix.t.cl_target }} \
+            -DCMAKE_CXX_COMPILER_TARGET=${{ matrix.t.cl_target }} \
+            -DCMAKE_SYSTEM_PROCESSOR=${{ matrix.t.arch }} \
+            -DCMAKE_SYSTEM_NAME=Linux \
+            -DCMAKE_FIND_ROOT_PATH="/usr/${{ matrix.t.target }};/usr/lib/llvm-${{ matrix.cc_ver }}/lib/clang/" \
+            -DCMAKE_FIND_ROOT_PATH_MODE_PROGRAM=NEVER \
+            -DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=ONLY \
+            -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=ONLY \
+            -DCMAKE_C_STANDARD_INCLUDE_DIRECTORIES=/usr/${{ matrix.t.target }}/include \
+            -DCMAKE_CXX_STANDARD_INCLUDE_DIRECTORIES=/usr/${{ matrix.t.target }}/include \
+            -DCMAKE_EXE_LINKER_FLAGS=-fuse-ld=/usr/bin/${{ matrix.t.target }}-ld
+          cmake --build test/gf16/build
+          
+          mkdir test/hasher/build
+          cmake -Btest/hasher/build -Stest/hasher -DSKIP_AUX=1 -DCMAKE_BUILD_TYPE=${{ matrix.config }} $SANITIZE \
+            -DCMAKE_C_COMPILER=clang-${{ matrix.cc_ver }} \
+            -DCMAKE_CXX_COMPILER=clang++-${{ matrix.cc_ver }} \
+            -DCMAKE_C_COMPILER_TARGET=${{ matrix.t.cl_target }} \
+            -DCMAKE_CXX_COMPILER_TARGET=${{ matrix.t.cl_target }} \
+            -DCMAKE_SYSTEM_PROCESSOR=${{ matrix.t.arch }} \
+            -DCMAKE_SYSTEM_NAME=Linux \
+            -DCMAKE_FIND_ROOT_PATH="/usr/${{ matrix.t.target }};/usr/lib/llvm-${{ matrix.cc_ver }}/lib/clang/" \
+            -DCMAKE_FIND_ROOT_PATH_MODE_PROGRAM=NEVER \
+            -DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=ONLY \
+            -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=ONLY \
+            -DCMAKE_C_STANDARD_INCLUDE_DIRECTORIES=/usr/${{ matrix.t.target }}/include \
+            -DCMAKE_CXX_STANDARD_INCLUDE_DIRECTORIES=/usr/${{ matrix.t.target }}/include \
+            -DCMAKE_EXE_LINKER_FLAGS=-fuse-ld=/usr/bin/${{ matrix.t.target }}-ld
+          cmake --build test/hasher/build
+      - run: ${{ matrix.t.emu }} test/gf16/build/test
+      - run: ${{ matrix.t.emu }} test/gf16/build/test-pmul
+      - run: ${{ matrix.t.emu }} test/gf16/build/test-ctrl -f
+        if: ${{ matrix.config == 'Release' && matric.cc_ver == '15' }}
+      - run: ${{ matrix.t.emu }} test/gf16/build/test-inv -f
+        if: ${{ matrix.config == 'Release' && matric.cc_ver == '15' }}
+      - run: ${{ matrix.t.emu }} test/hasher/build/test
+  
+  
+  test-mac-x86:
+    strategy:
+      fail-fast: false
+      matrix:
+        config: ['Debug', 'Release']
+        compiler:
+          - {cc: 'gcc-12', cxx: 'g++-12'}
+          - {cc: 'clang', cxx: 'clang++'}
+    name: Test MacOS ${{ matrix.compiler.cc }} (${{ matrix.config }})
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v3
+      - run: |
+          mkdir test/gf16/build
+          cmake -Btest/gf16/build -Stest/gf16 -DCMAKE_BUILD_TYPE=${{ matrix.config }} -DCMAKE_C_COMPILER=${{ matrix.compiler.cc }} -DCMAKE_CXX_COMPILER=${{ matrix.compiler.cxx }}
+          cmake --build test/gf16/build
+          
+          mkdir test/hasher/build
+          cmake -Btest/hasher/build -Stest/hasher -DCMAKE_BUILD_TYPE=${{ matrix.config }} -DCMAKE_C_COMPILER=${{ matrix.compiler.cc }} -DCMAKE_CXX_COMPILER=${{ matrix.compiler.cxx }}
+          cmake --build test/hasher/build
+      - run: test/gf16/build/test
+      - run: test/gf16/build/test-pmul
+      - run: test/gf16/build/test-ctrl -f
+        if: ${{ matrix.config == 'Release' && matrix.compiler.cc == 'clang' }}
+      - run: test/gf16/build/test-inv -f
+        if: ${{ matrix.config == 'Release' && matrix.compiler.cc == 'clang' }}
+      - run: test/hasher/build/test
+  
+  # TODO: test building on Mac ARM64? might not be necessary, given we build it in par2cmdline-turbo
+  
+  # TODO: BSD?
+  #  https://github.com/marketplace/actions/freebsd-vm
+  #  https://github.com/vmactions
