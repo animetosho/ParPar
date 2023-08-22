@@ -11,18 +11,18 @@ jobs:
         compiler: ['v141', 'v142', 'v143', 'ClangCL']
         arch: ['Win32', 'x64']
     name: Test VS ${{ matrix.compiler }} ${{ matrix.arch }} (${{ matrix.config }})
-    runs-on: windows-latest
+    runs-on: windows-2022
     steps:
       - uses: ilammy/setup-nasm@v1
       - uses: petarpetrovt/setup-sde@v2.1
       - uses: actions/checkout@v3
       - run: |
           mkdir test\gf16\build
-          cmake -B test\gf16\build -S test\gf16 -G "Visual Studio 16 2019" -T ${{ matrix.compiler }} -A ${{ matrix.arch }}
+          cmake -B test\gf16\build -S test\gf16 -G "Visual Studio 17 2022" -T ${{ matrix.compiler }} -A ${{ matrix.arch }}
           cmake --build test\gf16\build --config ${{ matrix.config }}
           
           mkdir test\hasher\build
-          cmake -B test\hasher\build -S test\hasher -G "Visual Studio 16 2019" -T ${{ matrix.compiler }} -A ${{ matrix.arch }}
+          cmake -B test\hasher\build -S test\hasher -G "Visual Studio 17 2022" -T ${{ matrix.compiler }} -A ${{ matrix.arch }}
           cmake --build test\hasher\build --config ${{ matrix.config }}
       - run: sde -icx -- test\gf16\build\${{ matrix.config }}\test.exe
       - run: sde -icx -- test\gf16\build\${{ matrix.config }}\test-pmul.exe
@@ -48,16 +48,16 @@ jobs:
         compiler: ['v142', 'v143', 'ClangCL']
         arch: ['ARM', 'ARM64']
     name: Test VS ${{ matrix.compiler }} ${{ matrix.arch }}
-    runs-on: windows-latest
+    runs-on: windows-2022
     steps:
       - uses: actions/checkout@v3
       - run: |
           mkdir test\gf16\build
-          cmake -B test\gf16\build -S test\gf16 -G "Visual Studio 16 2019" -T ${{ matrix.compiler }} -A ${{ matrix.arch }}
+          cmake -B test\gf16\build -S test\gf16 -G "Visual Studio 17 2022" -T ${{ matrix.compiler }} -A ${{ matrix.arch }}
           cmake --build test\gf16\build --config Debug
           
           mkdir test\hasher\build
-          cmake -B test\hasher\build -S test\hasher -G "Visual Studio 16 2019" -T ${{ matrix.compiler }} -A ${{ matrix.arch }}
+          cmake -B test\hasher\build -S test\hasher -G "Visual Studio 17 2022" -T ${{ matrix.compiler }} -A ${{ matrix.arch }}
           cmake --build test\hasher\build --config Debug
     
   # TODO: test mingw
@@ -88,18 +88,18 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v3
-      - run: apt update
+      - run: sudo apt update
       - uses: petarpetrovt/setup-sde@v2.1
         if: ${{ matrix.t.arch == 'amd64' || matrix.t.arch == 'i386' }}
-      - run: apt install -y qemu-user-static
+      - run: sudo apt install -y qemu-user-static
         if: ${{ matrix.t.arch != 'amd64' && matrix.t.arch != 'i386' }}
       - run: |
-          apt install -y g++-${{ matrix.cc_ver }}-${{ matrix.t.target }}
+          sudo apt install -y g++-${{ matrix.cc_ver }}-${{ matrix.t.target }}
           echo "CC=${{ matrix.t.target }}-gcc-${{ matrix.cc_ver }}" >> $GITHUB_ENV
           echo "CXX=${{ matrix.t.target }}-g++-${{ matrix.cc_ver }}" >> $GITHUB_ENV
         if: ${{ matrix.t.arch != 'amd64' }}
       - run: |
-          apt install -y g++-${{ matrix.cc_ver }}
+          sudo apt install -y g++-${{ matrix.cc_ver }}
           echo "CC=gcc-${{ matrix.cc_ver }}" >> $GITHUB_ENV
           echo "CXX=g++-${{ matrix.cc_ver }}" >> $GITHUB_ENV
         if: ${{ matrix.t.arch == 'amd64' }}
@@ -156,12 +156,12 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v3
-      - run: apt update && apt install -y clang-${{ matrix.cc_ver }}
+      - run: sudo apt update && sudo apt install -y clang-${{ matrix.cc_ver }}
       - uses: petarpetrovt/setup-sde@v2.1
         if: ${{ matrix.t.arch == 'amd64' || matrix.t.arch == 'i386' }}
-      - run: apt install -y qemu-user-static
+      - run: sudo apt install -y qemu-user-static
         if: ${{ matrix.t.arch != 'amd64' && matrix.t.arch != 'i386' }}
-      - run: apt install -y binutils-${{ matrix.t.target }} libgcc-12-dev-${{ matrix.t.libc }}-cross libstdc++-12-dev-${{ matrix.t.libc }}-cross
+      - run: sudo apt install -y binutils-${{ matrix.t.target }} libgcc-12-dev-${{ matrix.t.libc }}-cross libstdc++-12-dev-${{ matrix.t.libc }}-cross
         if: ${{ matrix.t.arch != 'amd64' }}
       - run: echo "SANITIZE=-DENABLE_SANITIZE=1" >> $GITHUB_ENV
         if: ${{ matrix.config == 'Release' && matrix.t.arch == 'amd64' }}
