@@ -21,7 +21,7 @@
         ]
       }]
     ],
-    "cflags": ["-std=c99", "-D_POSIX_C_SOURCE=200112L", "-D_DARWIN_C_SOURCE", "-D_GNU_SOURCE"],
+    "cflags_c": ["-std=c99", "-D_POSIX_C_SOURCE=200112L", "-D_DARWIN_C_SOURCE", "-D_GNU_SOURCE"],
     "cxxflags": ["-std=c++11"],
     "msvs_settings": {"VCCLCompilerTool": {"Optimization": "MaxSpeed"}},
     "configurations": {"Release": {
@@ -46,8 +46,8 @@
       "cxxflags!": ["-fno-exceptions"],
       "cflags_cc!": ["-fno-exceptions"],
       "defines": ["USE_LIBUV"],
-      "cflags": ["-fexceptions", "-std=c++11"],
-      "cxxflags": ["-fexceptions"],
+      "cflags": ["-fexceptions"],
+      "cxxflags": ["-fexceptions", "-std=c++11"],
       "cflags_cc": ["-fexceptions"],
       "xcode_settings": {
         "OTHER_CFLAGS!": ["-fno-exceptions"],
@@ -64,7 +64,7 @@
       "defines": ["NDEBUG", "PARPAR_LIBDL_SUPPORT"],
       "sources": ["gf16/opencl-include/cl.c", "gf16/gfmat_coeff.c"],
       "include_dirs": ["gf16/opencl-include"],
-      "cflags": ["-Wno-unused-function", "-std=gnu99"],
+      "cflags": ["-Wno-unused-function", "-std=c99"],
       "cflags!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"],
       "xcode_settings": {
         "OTHER_CFLAGS": ["-Wno-unused-function"],
@@ -77,6 +77,7 @@
       "defines": ["NDEBUG"],
       "sources": ["hasher/hasher.cpp", "hasher/hasher_scalar.cpp"],
       "dependencies": ["hasher_c"],
+      "cxxflags": ["-std=c++11"],
       "cflags!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"],
       "cxxflags!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"],
       "xcode_settings": {
@@ -90,7 +91,7 @@
       "type": "static_library",
       "defines": ["NDEBUG"],
       "sources": ["hasher/crc_zeropad.c", "hasher/md5-final.c"],
-      "cflags": ["-Wno-unused-function", "-std=gnu99"],
+      "cflags": ["-Wno-unused-function", "-std=c99"],
       "cflags!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"],
       "xcode_settings": {
         "OTHER_CFLAGS!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"],
@@ -444,7 +445,7 @@
         "gf16/gf_add_generic.c",
         "gf16/gf16_cksum_generic.c"
       ],
-      "cflags": ["-Wno-unused-function", "-std=gnu99"],
+      "cflags": ["-Wno-unused-function", "-std=c99"],
       "xcode_settings": {
         "OTHER_CFLAGS": ["-Wno-unused-function"],
         "OTHER_CFLAGS!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"],
@@ -772,7 +773,7 @@
         "gf16/gf_add_neon.c",
         "gf16/gf16_cksum_neon.c"
       ],
-      "cflags": ["-Wno-unused-function", "-std=gnu99"],
+      "cflags": ["-Wno-unused-function", "-std=c99"],
       "xcode_settings": {
         "OTHER_CFLAGS": ["-Wno-unused-function"],
         "OTHER_CFLAGS!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"]
@@ -837,7 +838,7 @@
         "gf16/gf_add_sve.c",
         "gf16/gf16_cksum_sve.c"
       ],
-      "cflags": ["-Wno-unused-function", "-std=gnu99"],
+      "cflags": ["-Wno-unused-function", "-std=c99"],
       "xcode_settings": {
         "OTHER_CFLAGS": ["-Wno-unused-function"],
         "OTHER_CFLAGS!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"]
@@ -875,7 +876,7 @@
         "gf16/gf16_clmul_sve2.c",
         "gf16/gf_add_sve2.c"
       ],
-      "cflags": ["-Wno-unused-function", "-std=gnu99"],
+      "cflags": ["-Wno-unused-function", "-std=c99"],
       "xcode_settings": {
         "OTHER_CFLAGS": ["-Wno-unused-function"],
         "OTHER_CFLAGS!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"]
