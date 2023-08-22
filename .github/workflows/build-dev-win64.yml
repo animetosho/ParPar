@@ -11,7 +11,7 @@ jobs:
       BUILD_LOGLEVEL: verbose
     steps:
       - uses: ilammy/setup-nasm@v1
-      - uses: actions/setup-python@v4
+      - uses: MatteoH2O1999/setup-python@v1
         id: py
         with:
           python-version: '2.7'
