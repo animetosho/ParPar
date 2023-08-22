@@ -27,9 +27,9 @@ jobs:
       - run: sde -icx -- test\gf16\build\${{ matrix.config }}\test.exe
       - run: sde -icx -- test\gf16\build\${{ matrix.config }}\test-pmul.exe
       - run: sde -icx -- test\gf16\build\${{ matrix.config }}\test-ctrl.exe -f
-        if: ${{ matrix.config == 'Release' && (matric.compiler == 'ClangCL' || matric.compiler == 'v143') }}
+        if: ${{ matrix.config == 'Release' && (matrix.compiler == 'ClangCL' || matrix.compiler == 'v143') }}
       - run: sde -icx -- test\gf16\build\${{ matrix.config }}\test-inv.exe -f
-        if: ${{ matrix.config == 'Release' && (matric.compiler == 'ClangCL' || matric.compiler == 'v143') }}
+        if: ${{ matrix.config == 'Release' && (matrix.compiler == 'ClangCL' || matrix.compiler == 'v143') }}
       - run: sde -icx -- test\hasher\build\${{ matrix.config }}\test.exe
       
       # test SSE2-only to see if CPUID checking works
@@ -126,9 +126,9 @@ jobs:
       - run: ${{ matrix.t.emu }} test/gf16/build/test
       - run: ${{ matrix.t.emu }} test/gf16/build/test-pmul
       - run: ${{ matrix.t.emu }} test/gf16/build/test-ctrl -f
-        if: ${{ matrix.config == 'Release' && matric.cc_ver == '12' }}
+        if: ${{ matrix.config == 'Release' && matrix.cc_ver == '12' }}
       - run: ${{ matrix.t.emu }} test/gf16/build/test-inv -f
-        if: ${{ matrix.config == 'Release' && matric.cc_ver == '12' }}
+        if: ${{ matrix.config == 'Release' && matrix.cc_ver == '12' }}
       - run: ${{ matrix.t.emu }} test/hasher/build/test
   
   test-linux-clang:
@@ -202,9 +202,9 @@ jobs:
       - run: ${{ matrix.t.emu }} test/gf16/build/test
       - run: ${{ matrix.t.emu }} test/gf16/build/test-pmul
       - run: ${{ matrix.t.emu }} test/gf16/build/test-ctrl -f
-        if: ${{ matrix.config == 'Release' && matric.cc_ver == '15' }}
+        if: ${{ matrix.config == 'Release' && matrix.cc_ver == '15' }}
       - run: ${{ matrix.t.emu }} test/gf16/build/test-inv -f
-        if: ${{ matrix.config == 'Release' && matric.cc_ver == '15' }}
+        if: ${{ matrix.config == 'Release' && matrix.cc_ver == '15' }}
       - run: ${{ matrix.t.emu }} test/hasher/build/test
   
   
