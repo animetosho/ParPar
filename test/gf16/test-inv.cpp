@@ -21,11 +21,12 @@ static void compare_invert(const Galois16RecMatrix& mat, Galois16* leftmatrix, s
 	if(recovery.size() != invalidCount) abort();
 	
 	// compare
-	for(unsigned outRow = 0; outRow < invalidCount; outRow++)
+	for(unsigned outRow = 0; outRow < invalidCount; outRow++) {
 		for(unsigned inCol = 0; inCol < inputValid.size(); inCol++) {
 			if(leftmatrix[outRow * inputValid.size() + inCol] != mat.GetFactor(inCol, outRow))
 				abort();
 		}
+	}
 }
 
 static void do_test(std::vector<bool> inputValid, std::vector<uint16_t> recovery, Galois16Methods method) {

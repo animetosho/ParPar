@@ -8,7 +8,7 @@ jobs:
       fail-fast: false
       matrix:
         config: [Debug, Release]
-        compiler: ['v141', 'v142', 'v143', 'ClangCL']
+        compiler: ['v141', 'v143', 'ClangCL']
         arch: ['Win32', 'x64']
     name: Test VS ${{ matrix.compiler }} ${{ matrix.arch }} (${{ matrix.config }})
     runs-on: windows-2022
@@ -24,19 +24,19 @@ jobs:
           mkdir test\hasher\build
           cmake -B test\hasher\build -S test\hasher -G "Visual Studio 17 2022" -T ${{ matrix.compiler }} -A ${{ matrix.arch }}
           cmake --build test\hasher\build --config ${{ matrix.config }}
-      - run: sde -icx -- test\gf16\build\${{ matrix.config }}\test.exe
-      - run: sde -icx -- test\gf16\build\${{ matrix.config }}\test-pmul.exe
-      - run: sde -icx -- test\gf16\build\${{ matrix.config }}\test-ctrl.exe -f
+      - run: $SDE_PATH\sde -icx -- test\gf16\build\${{ matrix.config }}\test.exe
+      - run: $SDE_PATH\sde -icx -- test\gf16\build\${{ matrix.config }}\test-pmul.exe
+      - run: $SDE_PATH\sde -icx -- test\gf16\build\${{ matrix.config }}\test-ctrl.exe -f
         if: ${{ matrix.config == 'Release' && (matrix.compiler == 'ClangCL' || matrix.compiler == 'v143') }}
-      - run: sde -icx -- test\gf16\build\${{ matrix.config }}\test-inv.exe -f
+      - run: $SDE_PATH\sde -icx -- test\gf16\build\${{ matrix.config }}\test-inv.exe -f
         if: ${{ matrix.config == 'Release' && (matrix.compiler == 'ClangCL' || matrix.compiler == 'v143') }}
-      - run: sde -icx -- test\hasher\build\${{ matrix.config }}\test.exe
+      - run: $SDE_PATH\sde -icx -- test\hasher\build\${{ matrix.config }}\test.exe
       
       # test SSE2-only to see if CPUID checking works
       - run: |
-          sde -p4 -- test\gf16\build\${{ matrix.config }}\test.exe
-          sde -p4 -- test\gf16\build\${{ matrix.config }}\test-pmul.exe
-          sde -p4 -- test\hasher\build\${{ matrix.config }}\test.exe
+          $SDE_PATH\sde -p4 -- test\gf16\build\${{ matrix.config }}\test.exe
+          $SDE_PATH\sde -p4 -- test\gf16\build\${{ matrix.config }}\test-pmul.exe
+          $SDE_PATH\sde -p4 -- test\hasher\build\${{ matrix.config }}\test.exe
         if: ${{ matrix.config == 'Release' && matrix.arch == 'x64' && matrix.compiler == 'ClangCL' }}
       
   
@@ -47,6 +47,9 @@ jobs:
       matrix:
         compiler: ['v142', 'v143', 'ClangCL']
         arch: ['ARM', 'ARM64']
+        exclude:
+          - compiler: ClangCL
+            arch: ARM
     name: Test VS ${{ matrix.compiler }} ${{ matrix.arch }}
     runs-on: windows-2022
     steps:
@@ -74,8 +77,8 @@ jobs:
         cc_ver: ['9','12']
         t:
           # qemu x86 doesn't support AVX, so we use Intel SDE instead
-          - {arch: 'i386',     target: 'i686-linux-gnu',       libc: 'i386',    emu: '$SDE_PATH/sde -icl --'}
-          - {arch: 'amd64',    target: 'x86-64-linux-gnu',     libc: 'amd64',   emu: '$SDE_PATH/sde64 -icl --'}
+          - {arch: 'i386',     target: 'i686-linux-gnu',       libc: 'i386',    emu: '$SDE_PATH/sde -icx --'}
+          - {arch: 'amd64',    target: 'x86-64-linux-gnu',     libc: 'amd64',   emu: '$SDE_PATH/sde64 -icx --'}
           #- {arch: 'amd64',    target: 'x86-64-linux-gnux32',  libc: 'x32',     emu: 'qemu-x86_64-static -cpu max'}
           # TODO: how to test x32?
           - {arch: 'aarch64',  target: 'aarch64-linux-gnu',    libc: 'arm64',   emu: 'qemu-aarch64-static -L /usr/aarch64-linux-gnu -cpu max,sve-max-vq=4'}
@@ -139,8 +142,8 @@ jobs:
         # Clang 6 available in 20.04
         cc_ver: ['11','15']
         t:
-          - {arch: 'i386', target: 'i686-linux-gnu', cl_target: 'x86-linux-gnu', libc: 'i386', emu: '$SDE_PATH/sde -icl --'}
-          - {arch: 'amd64', target: 'x86-64-linux-gnu', cl_target: 'x86_64-linux-gnu', libc: 'amd64', emu: '$SDE_PATH/sde64 -icl --'}
+          - {arch: 'i386', target: 'i686-linux-gnu', cl_target: 'i386-linux-gnu', libc: 'i386', emu: '$SDE_PATH/sde -icx --'}
+          - {arch: 'amd64', target: 'x86-64-linux-gnu', cl_target: 'x86_64-linux-gnu', libc: 'amd64', emu: '$SDE_PATH/sde64 -icx --'}
           #- {arch: 'amd64', target: 'x86-64-linux-gnux32', cl_target: 'x86-64-linux-gnux32', libc: 'x32', emu: 'qemu- -cpu max'}
           # TODO: how to test x32?
           - {arch: 'aarch64', target: 'aarch64-linux-gnu', cl_target: 'aarch64-linux-gnu', libc: 'arm64', emu: 'qemu-aarch64-static -L /usr/aarch64-linux-gnu -cpu max,sve-max-vq=4'}
@@ -166,6 +169,9 @@ jobs:
       - run: echo "SANITIZE=-DENABLE_SANITIZE=1" >> $GITHUB_ENV
         if: ${{ matrix.config == 'Release' && matrix.t.arch == 'amd64' }}
       - run: |
+          if [ '${{ matrix.t.arch }}' != 'amd64' ]; then
+            LINKER_FLAG=-DCMAKE_EXE_LINKER_FLAGS=-fuse-ld=/usr/bin/${{ matrix.t.target }}-ld
+          fi
           mkdir test/gf16/build
           cmake -Btest/gf16/build -Stest/gf16 -DSKIP_AUX=1 -DCMAKE_BUILD_TYPE=${{ matrix.config }} $SANITIZE \
             -DCMAKE_C_COMPILER=clang-${{ matrix.cc_ver }} \
@@ -178,9 +184,9 @@ jobs:
             -DCMAKE_FIND_ROOT_PATH_MODE_PROGRAM=NEVER \
             -DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=ONLY \
             -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=ONLY \
-            -DCMAKE_C_STANDARD_INCLUDE_DIRECTORIES=/usr/${{ matrix.t.target }}/include \
-            -DCMAKE_CXX_STANDARD_INCLUDE_DIRECTORIES=/usr/${{ matrix.t.target }}/include \
-            -DCMAKE_EXE_LINKER_FLAGS=-fuse-ld=/usr/bin/${{ matrix.t.target }}-ld
+            -DCMAKE_C_STANDARD_INCLUDE_DIRECTORIES="/usr/${{ matrix.t.target }}/include;`ls -d /usr/${{ matrix.t.target }}/include/c++/*|head -n1`/${{ matrix.t.target }}" \
+            -DCMAKE_CXX_STANDARD_INCLUDE_DIRECTORIES="/usr/${{ matrix.t.target }}/include;`ls -d /usr/${{ matrix.t.target }}/include/c++/*|head -n1`/${{ matrix.t.target }}" \
+            $LINKER_FLAG
           cmake --build test/gf16/build
           
           mkdir test/hasher/build
@@ -195,9 +201,9 @@ jobs:
             -DCMAKE_FIND_ROOT_PATH_MODE_PROGRAM=NEVER \
             -DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=ONLY \
             -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=ONLY \
-            -DCMAKE_C_STANDARD_INCLUDE_DIRECTORIES=/usr/${{ matrix.t.target }}/include \
-            -DCMAKE_CXX_STANDARD_INCLUDE_DIRECTORIES=/usr/${{ matrix.t.target }}/include \
-            -DCMAKE_EXE_LINKER_FLAGS=-fuse-ld=/usr/bin/${{ matrix.t.target }}-ld
+            -DCMAKE_C_STANDARD_INCLUDE_DIRECTORIES="/usr/${{ matrix.t.target }}/include;`ls -d /usr/${{ matrix.t.target }}/include/c++/*|head -n1`/${{ matrix.t.target }}" \
+            -DCMAKE_CXX_STANDARD_INCLUDE_DIRECTORIES="/usr/${{ matrix.t.target }}/include;`ls -d /usr/${{ matrix.t.target }}/include/c++/*|head -n1`/${{ matrix.t.target }}" \
+            $LINKER_FLAG
           cmake --build test/hasher/build
       - run: ${{ matrix.t.emu }} test/gf16/build/test
       - run: ${{ matrix.t.emu }} test/gf16/build/test-pmul
