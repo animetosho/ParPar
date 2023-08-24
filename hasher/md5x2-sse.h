@@ -1,5 +1,5 @@
 
-#if defined(__GNUC__) || defined(__clang__)
+#if (defined(__GNUC__) || defined(__clang__)) && defined(__OPTIMIZE__)
 # define MD5_USE_ASM
 # include "md5x2-sse-asm.h"
 #endif
