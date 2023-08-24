@@ -203,6 +203,16 @@ HEDLEY_WARNING("GFNI disabled on GCC < 10 due to incorrect GF2P8AFFINEQB operand
 # endif
 #endif
 
+#if defined(__ARM_FEATURE_SVE) && defined(__clang__) && __clang_major__<12
+// Clang < 12 has issues with SVE
+# ifdef __ARM_FEATURE_SVE
+#  undef __ARM_FEATURE_SVE
+# endif
+# ifdef __ARM_FEATURE_SVE2
+#  undef __ARM_FEATURE_SVE2
+# endif
+#endif
+
 #if defined(__riscv_vector) && defined(HEDLEY_GCC_VERSION) && !HEDLEY_GCC_VERSION_CHECK(13,0,0)
 // GCC added RVV intrinsics in GCC13
 # undef __riscv_vector
