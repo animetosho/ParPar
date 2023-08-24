@@ -920,7 +920,15 @@ int main(int argc, char** argv) {
 						memcpy(dst, src, regionSize);
 					
 					for(unsigned i=0; i<regionSize/sizeof(uint16_t); i++) {
+#if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+						uint16_t w = src2[i];
+						w = (w>>8) | ((w&0xff) <<8);
+						w = g.replace_word(dst, i, w);
+						w = (w>>8) | ((w&0xff) <<8);
+						tmp[i] = w;
+#else
 						tmp[i] = g.replace_word(dst, i, src2[i]);
+#endif
 					}
 					if(g.needPrepare())
 						g.finish(dst, regionSize);

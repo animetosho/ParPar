@@ -134,9 +134,10 @@ private:
 	static void _finish_none(void *HEDLEY_RESTRICT, size_t) {}
 	static void _prepare_packed_none(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen, size_t sliceLen, unsigned inputPackSize, unsigned inputNum, size_t chunkLen);
 	static uint16_t _replace_word(void* data, size_t index, uint16_t newValue) {
-		uint16_t* p = (uint16_t*)data + index;
-		uint16_t oldValue = *p;
-		*p = newValue;
+		uint8_t* p = (uint8_t*)data + index*2;
+		uint16_t oldValue = p[0] | (p[1]<<8);
+		p[0] = newValue & 0xff;
+		p[1] = newValue>>8;
 		return oldValue;
 	}
 	

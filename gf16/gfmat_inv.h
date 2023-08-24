@@ -6,7 +6,9 @@
 #include "../src/stdint.h"
 
 #ifdef PARPAR_INVERT_SUPPORT
+#include "../src/platform.h"
 const unsigned PP_INVERT_MAX_MULTI_ROWS = 6; // process up to 6 rows in a multi-mul call
+
 
 class Galois16Mul;
 class Galois16RecMatrixWorker;
@@ -39,13 +41,14 @@ public:
 		// TODO: check if numStripes==1? consider optimising division?
 		unsigned sw = stripeWidth/sizeof(uint16_t);
 		unsigned stripe = inIdx / sw;
-		return mat[stripe * numRec*sw + recIdx * sw + (inIdx % sw)];
+		return _LE16(mat[stripe * numRec*sw + recIdx * sw + (inIdx % sw)]);
 	}
 	
 	// these should only be queried after Compute has started (i.e. from the progressCb, or after it returns)
 	/*Galois16Methods*/ int regionMethod;
 	const char* getPointMulMethodName() const;
 };
+
 #endif
 
 #endif

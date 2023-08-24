@@ -467,7 +467,7 @@ void Galois16RecMatrix::Construct(const std::vector<bool>& inputValid, unsigned 
 	if(recovery.at(0) == 0) { // first recovery having exponent 0 is a common case
 		for(unsigned stripe=0; stripe<numStripes; stripe++) {
 			for(unsigned i=0; i<sw16; i++)
-				mat[stripe * numRec*sw16 + i] = 1;
+				mat[stripe * numRec*sw16 + i] = _LE16(1);
 		}
 		recStart++;
 	}
@@ -488,7 +488,7 @@ void Galois16RecMatrix::Construct(const std::vector<bool>& inputValid, unsigned 
 			for(loopcond) { \
 				uint16_t exp = recovery.at(rec); \
 				for(unsigned i=0; i<GROUP_AMOUNT; i++) { \
-					mat[rec * sw16 + targetCol[i]] = gfmat_coeff_from_log(inputLog[i], exp); \
+					mat[rec * sw16 + targetCol[i]] = _LE16(gfmat_coeff_from_log(inputLog[i], exp)); \
 				} \
 			} \
 		} \
@@ -497,7 +497,7 @@ void Galois16RecMatrix::Construct(const std::vector<bool>& inputValid, unsigned 
 			unsigned targetCol = inputValid.at(input) ? validCol++ : missingCol++; \
 			targetCol = (targetCol/sw16)*sw16*numRec + (targetCol%sw16); \
 			for(loopcond) { \
-				mat[rec * sw16 + targetCol] = gfmat_coeff_from_log(inputLog, recovery.at(rec)); \
+				mat[rec * sw16 + targetCol] = _LE16(gfmat_coeff_from_log(inputLog, recovery.at(rec))); \
 			} \
 		} \
 		assert(validCol == validCount)

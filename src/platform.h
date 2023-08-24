@@ -44,6 +44,21 @@
 # endif
 #endif
 
+#if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+# ifdef __GNUC__
+#  define _LE16 __builtin_bswap16
+#  define _LE32 __builtin_bswap32
+#  define _LE64 __builtin_bswap64
+# else
+// currently not supported
+#  error No endian swap intrinsic defined
+# endif
+#else
+# define _LE16(x) (x)
+# define _LE32(x) (x)
+# define _LE64(x) (x)
+#endif
+
 # ifdef _M_ARM64
 	#define __ARM_NEON 1
 	#define __aarch64__ 1
