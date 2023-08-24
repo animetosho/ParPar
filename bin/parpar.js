@@ -3,6 +3,7 @@
 "use strict";
 
 var ParPar = require('../lib/parpar.js');
+var cliUtil = require('../cli/util');
 var cliFormat = process.stderr.isTTY ? function(code, msg) {
 	return '\x1b[' + code + 'm' + msg + '\x1b[0m';
 } : function(code, msg) { return msg; };
@@ -18,15 +19,6 @@ var print_json = function(type, obj) {
 	console.log(JSON.stringify(o, null, 2));
 };
 var arg_parser = require('../lib/arg_parser.js');
-
-var friendlySize = function(s) {
-	var units = ['B', 'KiB', 'MiB', 'GiB', 'TiB', 'PiB', 'EiB'];
-	for(var i=0; i<units.length; i++) {
-		if(s < 10000) break;
-		s /= 1024;
-	}
-	return (Math.round(s *100)/100) + ' ' + units[i];
-};
 
 var opts = {
 	'input-slices': {
@@ -362,7 +354,7 @@ if(argv['opencl-list']) {
 				var output = [
 					'  - Device #' + dvId + ': ' + device.name + (dvId == defaultDev.id ? defaultLabel : ''),
 					'    Type: ' + device.type,
-					'    Memory: ' + friendlySize(device.memory_global) + (device.memory_unified ? ' (shared)':''),
+					'    Memory: ' + cliUtil.friendlySize(device.memory_global) + (device.memory_unified ? ' (shared)':''),
 				];
 				if(!device.supported)
 					output.splice(1, 0, '    Supported: no');
@@ -394,20 +386,13 @@ if(argv.json)
 		print_json('progress', data);
 	};
 else if(argv.progress == 'stdout' || argv.progress == 'stderr') {
-	var decimalPoint = (1.1).toLocaleString().substring(1, 2);
 	// TODO: display slices processed, pass# if verbose progress requested
 	writeProgress = function(data) {
 		// add formatting for aesthetics
 		var parts = data.progress_percent.toLocaleString().match(/^([0-9]+)([.,][0-9]+)?$/);
-		while(parts[1].length < 3)
-			parts[1] = ' ' + parts[1];
-		if(parts[2]) while(parts[2].length < 3)
-			parts[2] += '0';
-		else
-			parts[2] = decimalPoint + '00';
-		var state = data.state;
-		while(state.length < 18)
-			state += ' ';
+		parts[1] = cliUtil.lpad(parts[1], 3, ' ');
+		parts[2] = cliUtil.rpad(parts[2] || cliUtil.decimalPoint, 3, '0');
+		var state = cliUtil.rpad(data.state, 18, ' ');
 		if(process[argv.progress].isTTY)
 			process[argv.progress].write(state + ': \x1b[1m' + (parts[1] + parts[2]) + '%\x1b[0m\x1b[0G');
 		else
@@ -730,7 +715,7 @@ var inputFiles = argv._;
 				return cliFormat('1', n) + ' ' + unit + suffix;
 			};
 			var sizeDisp = function(val) {
-				return cliFormat('1', friendlySize(val));
+				return cliFormat('1', cliUtil.friendlySize(val));
 			};
 			var hash_methods = g.hash_methods();
 			if(argv.json) {
@@ -762,10 +747,10 @@ var inputFiles = argv._;
 				if(g.opts.sliceSize > 1024*1048576) {
 					// par2j has 1GB slice size limit hard-coded; 32-bit version supports 1GB slices
 					// some 32-bit applications seem to have issues with 1GB slices as well (phpar2 v1.4 win32 seems to have trouble with 854M slices, 848M works in the test I did)
-					process.stderr.write(cliFormat('33', 'Warning') + ': selected slice size (' + friendlySize(g.opts.sliceSize) + ') is larger than 1GB, which is beyond what a number of PAR2 clients support. Consider increasing the number of slices or reducing the slice size so that it is under 1GB\n');
+					process.stderr.write(cliFormat('33', 'Warning') + ': selected slice size (' + cliUtil.friendlySize(g.opts.sliceSize) + ') is larger than 1GB, which is beyond what a number of PAR2 clients support. Consider increasing the number of slices or reducing the slice size so that it is under 1GB\n');
 				}
 				else if(g.opts.sliceSize > 100*1000000 && g.totalSize <= 32768*100*1000000) { // we also check whether 100MB slices are viable by checking the input size - essentially there's a max of 32768 slices, so at 100MB, max size would be 3051.76GB
-					process.stderr.write(cliFormat('33', 'Warning') + ': selected slice size (' + friendlySize(g.opts.sliceSize) + ') may be too large to be compatible with QuickPar\n');
+					process.stderr.write(cliFormat('33', 'Warning') + ': selected slice size (' + cliUtil.friendlySize(g.opts.sliceSize) + ') may be too large to be compatible with QuickPar\n');
 				}
 				
 				process.stderr.write('Input data        : ' + sizeDisp(g.totalSize) + ' (' + pluralDisp(g.inputSlices, 'slice') + ' from ' + pluralDisp(info.length, 'file') + ')\n');
@@ -921,6 +906,17 @@ var inputFiles = argv._;
 				else
 					process.stderr.write('\nProcessing time   : ' + cliFormat('1', timeTaken + ' s') + '\n');
 			}
+			
+			setTimeout(function() {
+				if(!argv.quiet) {
+					process.stderr.write('Process did not terminate cleanly');
+					var handles = cliUtil.activeHandleCounts();
+					if(handles)
+						process.stderr.write('; active handles: ' + cliUtil.activeHandlesStr(handles[0]));
+					process.stderr.write('\n');
+				}
+				process.exit();
+			}, 5000).unref();
 		});
 		
 	});
