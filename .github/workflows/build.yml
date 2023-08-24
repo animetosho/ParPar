@@ -29,7 +29,7 @@ jobs:
       - run: (cd nexe && npm install --production)
       - run: (cd nexe && node build)
       - run: nexe\parpar.exe --version
-      - run: nexe\parpar.exe -r1 -s1M -onexe\test.par2 nexe\parpar.exe
+      - run: nexe\parpar.exe -r1 -s1M -o nexe\test.par2 nexe\parpar.exe
       - run: move nexe\parpar.exe parpar.exe && 7z a -t7z -mx=9 parpar.7z parpar.exe
       - uses: actions/upload-release-asset@v1
         env:
