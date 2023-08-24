@@ -30,7 +30,7 @@ jobs:
         if: ${{ matrix.config == 'Release' && (matrix.compiler == 'ClangCL' || matrix.compiler == 'v143') }}
       - run: "%SDE_PATH%\\sde -icx -- test\\gf16\\build\\${{ matrix.config }}\\test-inv.exe -f"
         if: ${{ matrix.config == 'Release' && (matrix.compiler == 'ClangCL' || matrix.compiler == 'v143') }}
-      - run: "%SDE_PATH%\\sde -icx -- test\hasher\\build\\${{ matrix.config }}\\test.exe"
+      - run: "%SDE_PATH%\\sde -icx -- test\\hasher\\build\\${{ matrix.config }}\\test.exe"
       
       # test SSE2-only to see if CPUID checking works
       - run: |
