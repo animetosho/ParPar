@@ -24,19 +24,19 @@ jobs:
           mkdir test\hasher\build
           cmake -B test\hasher\build -S test\hasher -G "Visual Studio 17 2022" -T ${{ matrix.compiler }} -A ${{ matrix.arch }}
           cmake --build test\hasher\build --config ${{ matrix.config }}
-      - run: "%SDE_PATH%\\sde -icx -- test\\gf16\\build\\${{ matrix.config }}\\test.exe"
-      - run: "%SDE_PATH%\\sde -icx -- test\\gf16\\build\\${{ matrix.config }}\\test-pmul.exe"
-      - run: "%SDE_PATH%\\sde -icx -- test\\gf16\\build\\${{ matrix.config }}\\test-ctrl.exe -f"
+      - run: "$env:SDE_PATH\\sde -icx -- test\\gf16\\build\\${{ matrix.config }}\\test.exe"
+      - run: "$env:SDE_PATH\\sde -icx -- test\\gf16\\build\\${{ matrix.config }}\\test-pmul.exe"
+      - run: "$env:SDE_PATH\\sde -icx -- test\\gf16\\build\\${{ matrix.config }}\\test-ctrl.exe -f"
         if: ${{ matrix.config == 'Release' && (matrix.compiler == 'ClangCL' || matrix.compiler == 'v143') }}
-      - run: "%SDE_PATH%\\sde -icx -- test\\gf16\\build\\${{ matrix.config }}\\test-inv.exe -f"
+      - run: "$env:SDE_PATH\\sde -icx -- test\\gf16\\build\\${{ matrix.config }}\\test-inv.exe -f"
         if: ${{ matrix.config == 'Release' && (matrix.compiler == 'ClangCL' || matrix.compiler == 'v143') }}
-      - run: "%SDE_PATH%\\sde -icx -- test\\hasher\\build\\${{ matrix.config }}\\test.exe"
+      - run: "$env:SDE_PATH\\sde -icx -- test\\hasher\\build\\${{ matrix.config }}\\test.exe"
       
       # test SSE2-only to see if CPUID checking works
       - run: |
-          %SDE_PATH%\\sde -p4 -- test\\gf16\\build\\${{ matrix.config }}\\test.exe
-          %SDE_PATH%\\sde -p4 -- test\\gf16\\build\\${{ matrix.config }}\test-pmul.exe
-          %SDE_PATH%\\sde -p4 -- test\\hasher\\build\\${{ matrix.config }}\\test.exe
+          $env:SDE_PATH\sde -p4 -- test\gf16\build\${{ matrix.config }}\test.exe
+          $env:SDE_PATH\sde -p4 -- test\gf16\build\${{ matrix.config }}\test-pmul.exe
+          $env:SDE_PATH\sde -p4 -- test\hasher\build\${{ matrix.config }}\test.exe
         if: ${{ matrix.config == 'Release' && matrix.arch == 'x64' && matrix.compiler == 'ClangCL' }}
       
   
@@ -167,7 +167,7 @@ jobs:
       - run: sudo apt install -y binutils-${{ matrix.t.target }} libgcc-12-dev-${{ matrix.t.libc }}-cross libstdc++-12-dev-${{ matrix.t.libc }}-cross
         if: ${{ matrix.t.arch != 'amd64' }}
       - run: echo "SANITIZE=-DENABLE_SANITIZE=1" >> $GITHUB_ENV
-        if: ${{ matrix.config == 'Release' && matrix.t.arch == 'amd64' }}
+        if: ${{ matrix.config == 'Release' && matrix.t.arch == 'amd64' && matrix.cc_ver == '15' }} # SDE+ASAN problematic with Clang 11
       - run: |
           if [ '${{ matrix.t.arch }}' != 'amd64' ]; then
             LINKER_FLAG=-DCMAKE_EXE_LINKER_FLAGS=-fuse-ld=/usr/bin/${{ matrix.t.target }}-ld
