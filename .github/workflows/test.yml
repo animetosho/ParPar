@@ -62,11 +62,47 @@ jobs:
           mkdir test\hasher\build
           cmake -B test\hasher\build -S test\hasher -G "Visual Studio 17 2022" -T ${{ matrix.compiler }} -A ${{ matrix.arch }}
           cmake --build test\hasher\build --config Debug
-    
-  # TODO: test mingw
-  #  https://github.com/msys2/setup-msys2
-  #  https://www.msys2.org/docs/ci/
-  # TODO: test libuv, OpenCL
+  
+  test-msys:
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        sys: [mingw32, ucrt64, clang64]
+        compiler:
+          - {cc: gcc, cxx: g++}
+          - {cc: clang, cxx: clang++}
+          #- { sys: mingw32, env: i686 }
+          #- { sys: ucrt64,  env: ucrt-x86_64 }
+          #- { sys: clang64, env: clang-x86_64 }
+    name: Test MSYS ${{matrix.sys}} ${{matrix.compiler.cc}}
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      #- uses: petarpetrovt/setup-sde@v2.1
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: ${{matrix.sys}}
+          #update: true
+          install: cmake ${{matrix.compiler.cc}} make git
+      - uses: actions/checkout@v3
+      - run: |
+          mkdir test/gf16/build
+          cmake -B test/gf16/build -S test/gf16 -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=${{matrix.compiler.cc}} -DCMAKE_CXX_COMPILER=${{matrix.compiler.cxx}}
+          cmake --build test/gf16/build
+          
+          mkdir test/hasher/build
+          cmake -B test/hasher/build -S test/hasher -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=${{matrix.compiler.cc}} -DCMAKE_CXX_COMPILER=${{matrix.compiler.cxx}}
+          cmake --build test/hasher/build
+      # TODO: test under SDE (needs static linking, or calling SDE from within MSYS)
+      - run: test/gf16/build/test
+      - run: test/gf16/build/test-pmul
+      - run: test/gf16/build/test-ctrl -f
+      - run: test/gf16/build/test-inv -f
+      - run: test/hasher/build/test
+  
+  # TODO: test libuv
   
   test-linux-gcc:
     strategy:
@@ -213,6 +249,17 @@ jobs:
         if: ${{ matrix.config == 'Release' && matrix.cc_ver == '15' }}
       - run: ${{ matrix.t.emu }} test/hasher/build/test
   
+  test-linux-pocl:
+    name: Test POCL (OpenCL)
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v3
+      - run: sudo apt update && sudo apt install -y pocl-opencl-icd
+      - run: |
+          mkdir test/gf16/build
+          cmake -Btest/gf16/build -Stest/gf16 -DCMAKE_BUILD_TYPE=Release -DENABLE_OCL=1
+          cmake --build test/gf16/build
+      - run: test/gf16/build/test-ctrl -pg
   
   test-mac-x86:
     strategy:
@@ -244,6 +291,27 @@ jobs:
   
   # TODO: test building on Mac ARM64? might not be necessary, given we build it in par2cmdline-turbo
   
-  # TODO: BSD?
-  #  https://github.com/marketplace/actions/freebsd-vm
-  #  https://github.com/vmactions
+  test-fbsd-x86:
+    runs-on: macos-12
+    name: Test FreeBSD amd64
+    steps:
+    - uses: actions/checkout@v3
+    - id: fbsd_test
+      uses: vmactions/freebsd-vm@v0
+      with:
+        usesh: true
+        prepare: pkg install -y cmake lang/gcc gmake
+        run: |
+          mkdir test/gf16/build
+          cmake -Btest/gf16/build -Stest/gf16 -DCMAKE_BUILD_TYPE=Release
+          cmake --build test/gf16/build
+          
+          mkdir test/hasher/build
+          cmake -Btest/hasher/build -Stest/hasher -DCMAKE_BUILD_TYPE=Release
+          cmake --build test/hasher/build
+          
+          test/gf16/build/test
+          test/gf16/build/test-pmul
+          test/gf16/build/test-ctrl -f
+          test/gf16/build/test-inv -f
+          test/hasher/build/test
