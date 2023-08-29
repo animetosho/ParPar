@@ -625,6 +625,9 @@ bool Galois16RecMatrix::Compute(const std::vector<bool>& inputValid, unsigned va
 	if(rowGroupSize < rowMultiple*2) rowGroupSize = rowMultiple*2;
 	if(rowGroupSize > numRec) rowGroupSize = numRec;
 	
+	std::vector<uint16_t> stateCoeff(rowGroupSize*rowGroupSize);
+	state.coeff = stateCoeff.data();
+	
 	invert_loop: { // loop, in the unlikely case we hit the PAR2 un-invertability flaw; TODO: is there a faster way than just retrying?
 		if(numRec > recovery.size()) { // not enough recovery
 			if(_numThreads <= 1)
@@ -658,14 +661,12 @@ bool Galois16RecMatrix::Compute(const std::vector<bool>& inputValid, unsigned va
 				} \
 			}
 		// max out at 6 groups (registers + cache assoc?)
-		state.coeff = new uint16_t[rowGroupSize*rowGroupSize];
 		INVERT_GROUP(6)
 		INVERT_GROUP(5)
 		INVERT_GROUP(4)
 		INVERT_GROUP(3)
 		INVERT_GROUP(2)
 		INVERT_GROUP(1)
-		delete[] state.coeff;
 		#undef INVERT_GROUP
 		
 		// post transform
