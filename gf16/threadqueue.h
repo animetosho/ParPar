@@ -201,7 +201,9 @@ typedef std::function<void(ThreadMessageQueue<void*>&)> thread_cb_t;
 
 
 #if defined(_WINDOWS) || defined(__WINDOWS__) || defined(_WIN32) || defined(_WIN64)
-# define NOMINMAX
+# ifndef NOMINMAX
+#  define NOMINMAX
+# endif
 # define WIN32_LEAN_AND_MEAN
 # include <Windows.h>
 #else

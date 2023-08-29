@@ -24,19 +24,19 @@ jobs:
           mkdir test\hasher\build
           cmake -B test\hasher\build -S test\hasher -G "Visual Studio 17 2022" -T ${{ matrix.compiler }} -A ${{ matrix.arch }}
           cmake --build test\hasher\build --config ${{ matrix.config }}
-      - run: $env:SDE_PATH/sde -icx -- test\gf16\build\${{ matrix.config }}\test.exe
-      - run: $env:SDE_PATH/sde -icx -- test\gf16\build\${{ matrix.config }}\test-pmul.exe
-      - run: $env:SDE_PATH/sde -icx -- test\gf16\build\${{ matrix.config }}\test-ctrl.exe -f
+      - run: Invoke-Expression "$env:SDE_PATH/sde -icx -- test/gf16/build/${{ matrix.config }}/test.exe"
+      - run: Invoke-Expression "$env:SDE_PATH/sde -icx -- test/gf16/build/${{ matrix.config }}/test-pmul.exe"
+      - run: Invoke-Expression "$env:SDE_PATH/sde -icx -- test/gf16/build/${{ matrix.config }}/test-ctrl.exe -f"
         if: ${{ matrix.config == 'Release' && (matrix.compiler == 'ClangCL' || matrix.compiler == 'v143') }}
-      - run: $env:SDE_PATH/sde -icx -- test\gf16\build\${{ matrix.config }}\test-inv.exe -f
+      - run: Invoke-Expression "$env:SDE_PATH/sde -icx -- test/gf16/build/${{ matrix.config }}/test-inv.exe -f"
         if: ${{ matrix.config == 'Release' && (matrix.compiler == 'ClangCL' || matrix.compiler == 'v143') }}
-      - run: $env:SDE_PATH/sde -icx -- test\hasher\build\${{ matrix.config }}\test.exe
+      - run: Invoke-Expression "$env:SDE_PATH/sde -icx -- test/hasher/build/${{ matrix.config }}/test.exe"
       
       # test SSE2-only to see if CPUID checking works
       - run: |
-          $env:SDE_PATH/sde -p4 -- test\gf16\build\${{ matrix.config }}\test.exe
-          $env:SDE_PATH/sde -p4 -- test\gf16\build\${{ matrix.config }}\test-pmul.exe
-          $env:SDE_PATH/sde -p4 -- test\hasher\build\${{ matrix.config }}\test.exe
+          Invoke-Expression "$env:SDE_PATH/sde -p4 -- test/gf16/build/${{ matrix.config }}/test.exe"
+          Invoke-Expression "$env:SDE_PATH/sde -p4 -- test/gf16/build/${{ matrix.config }}/test-pmul.exe"
+          Invoke-Expression "$env:SDE_PATH/sde -p4 -- test/hasher/build/${{ matrix.config }}/test.exe"
         if: ${{ matrix.config == 'Release' && matrix.arch == 'x64' && matrix.compiler == 'ClangCL' }}
       # TODO: XOP tests for hasher?
   
@@ -68,11 +68,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        sys: [mingw32, ucrt64, clang64]
+        sys:
+          - { sys: mingw32, env: i686 }
+          - { sys: ucrt64, env: ucrt-x86_64 }
+          - { sys: clang64, env: clang-x86_64 }
         compiler:
-          - {cc: gcc, cxx: g++, cc_extra: ""}
-          - {cc: clang, cxx: clang++, cc_extra: gcc}
-    name: Test MSYS ${{matrix.sys}} ${{matrix.compiler.cc}}
+          - {cc: gcc, cxx: g++}
+          - {cc: clang, cxx: clang++}
+    name: Test MSYS ${{matrix.sys.sys}} ${{matrix.compiler.cc}}
     defaults:
       run:
         shell: msys2 {0}
@@ -80,9 +83,9 @@ jobs:
       #- uses: petarpetrovt/setup-sde@v2.1
       - uses: msys2/setup-msys2@v2
         with:
-          msystem: ${{matrix.sys}}
+          msystem: ${{matrix.sys.sys}}
           #update: true
-          install: cmake ${{matrix.compiler.cc}} ${{matrix.compiler.cc_extra}} make git
+          install: cmake mingw-w64-${{matrix.sys.env}}-${{matrix.compiler.cc}} make git
       - uses: actions/checkout@v3
       - run: |
           mkdir test/gf16/build
