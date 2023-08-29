@@ -19,7 +19,7 @@ jobs:
           flags: '--trace-warnings'
           python2: false
         - version: '20.5.1'
-          flags: '--pending-deprecation --throw-deprecation --trace-warnings'
+          flags: '--pending-deprecation --throw-deprecation --trace-warnings --openssl-legacy-provider'
           python2: false
     name: Test on Node v${{ matrix.version }}
     runs-on: ubuntu-latest

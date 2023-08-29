@@ -194,7 +194,7 @@ function compare_files(file1, file2) {
 			//console.log('Packet mismatch for ' + k, file1[k], file2[k]);
 			var err = new Error('Packet mismatch for ' + k);
 			//err.pkts = [file1[k], file2[k]];
-			console.log("Packet dump:", file1[k], file2[k]);
+			console.log("Packet dump (expected/actual):", file1[k], file2[k]);
 			throw err;
 		}
 	}
@@ -314,8 +314,6 @@ function writeRndFile(name, size) {
 }
 writeRndFile('test64m.bin', 64*1048576);
 writeRndFile('test2200m.bin', 2200*1048576);
-if(!fastTest)
-	writeRndFile('test4100m.bin', 4100*1048576); // >4GB to test 32-bit overflows
 
 // we don't test 0 byte files - different implementations seem to treat it differently:
 // - par2cmdline: skips all 0 byte files
@@ -328,6 +326,8 @@ fs.writeFileSync(tmpDir + 'test8b.bin', '01234567');
 writeRndFile('test65k.bin', 65521);
 writeRndFile('test13m.bin', 13631477);
 
+if(!fastTest) // ensure this is last to make input files consistent between fast/slow tests
+	writeRndFile('test4100m.bin', 4100*1048576); // >4GB to test 32-bit overflows
 
 var cachedResults = {};
 var setCacheKeys = {};
@@ -493,8 +493,7 @@ var allTests = [
 		blocks: 2,
 		singleFile: true,
 		cacheKey: '18'
-	},
-	
+	}
 ];
 if(!fastTest) {
 	allTests.push(
@@ -546,7 +545,7 @@ if(!fastTest) {
 			blocks: 2,
 			singleFile: true,
 			cacheKey: '19'
-		},
+		}
 	);
 	if(is64bPlatform) {
 		allTests.push({ // recovery > 4GB in memory [https://github.com/animetosho/par2cmdline-turbo/issues/7]
