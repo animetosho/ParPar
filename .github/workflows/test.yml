@@ -15,6 +15,7 @@ jobs:
     steps:
       - uses: ilammy/setup-nasm@v1
       - uses: petarpetrovt/setup-sde@v2.1
+        sdeVersion: 8.69.1
       - uses: actions/checkout@v3
       - run: |
           mkdir test\gf16\build
