@@ -83,9 +83,21 @@ else()
 	endif()
 	
 	if(ENABLE_SANITIZE)
-		set(SANITIZE_OPTS -fsanitize=address -fsanitize=undefined)
+		set(SANITIZE_OPTS -fsanitize=address -fsanitize=undefined -fno-sanitize-recover=all)
 		add_compile_options(-fno-omit-frame-pointer ${SANITIZE_OPTS})
 		add_link_options(${SANITIZE_OPTS})
+		
+		#include(CheckLinkerFlag)
+		#check_linker_flag(C -static-libasan HAS_LIBASAN)  # GCC
+		#check_linker_flag(C -static-libsan HAS_LIBSAN)  # Clang
+		CHECK_CXX_COMPILER_FLAG(-static-libasan HAS_LIBASAN)
+		CHECK_CXX_COMPILER_FLAG(-static-libsan HAS_LIBSAN)
+		if(HAS_LIBASAN)
+			add_link_options(-static-libasan)
+		endif()
+		if(HAS_LIBSAN)
+			add_link_options(-static-libsan)
+		endif()
 	endif()
 endif()
 
@@ -103,6 +115,7 @@ if(NOT MSVC)
 	target_compile_definitions(hasher_c PRIVATE _POSIX_C_SOURCE=200112L)
 	target_compile_definitions(hasher_c PRIVATE _DARWIN_C_SOURCE=)
 	target_compile_definitions(hasher_c PRIVATE _GNU_SOURCE=)
+	target_compile_definitions(hasher_c PRIVATE _DEFAULT_SOURCE=)
 endif()
 
 if(MSVC)

@@ -19,9 +19,17 @@
             }
           }]
         ]
+      }],
+      ['OS!="win"', {
+        "variables": {"missing_memalign%": "<!(<!(echo ${CC_target:-${CC:-cc}}) -c src/test_alignalloc.c -o /dev/null -Werror 2>/dev/null || echo failed)"},
+        "conditions": [
+          ['missing_memalign!=""', {
+            "cflags_c": ["-D_POSIX_C_SOURCE=200112L"],
+          }]
+        ]
       }]
     ],
-    "cflags_c": ["-std=c99", "-D_POSIX_C_SOURCE=200112L", "-D_DARWIN_C_SOURCE", "-D_GNU_SOURCE"],
+    "cflags_c": ["-std=c99", "-D_DARWIN_C_SOURCE", "-D_GNU_SOURCE", "-D_DEFAULT_SOURCE"],
     "cxxflags": ["-std=c++11"],
     "msvs_settings": {"VCCLCompilerTool": {"Optimization": "MaxSpeed"}},
     "configurations": {"Release": {

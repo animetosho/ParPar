@@ -116,11 +116,6 @@ set(GF16_CPP_SOURCES
 	${GF16_DIR}/controller_cpu.cpp
 	${GF16_DIR}/controller_ocl.cpp
 	${GF16_DIR}/controller_ocl_init.cpp
-	${GF16_DIR}/gf16mul.cpp
-	
-	
-	${GF16_DIR}/gf16pmul.cpp
-	${GF16_DIR}/gfmat_inv.cpp
 )
 
 include_directories(${GF16_DIR}/opencl-include ${GF16_DIR})
@@ -142,11 +137,23 @@ else()
 	endif()
 	
 	if(ENABLE_SANITIZE)
-		set(SANITIZE_OPTS -fsanitize=address -fsanitize=bool,builtin,bounds,enum,float-cast-overflow,function,integer-divide-by-zero,nonnull-attribute,null,object-size,return,returns-nonnull-attribute,shift,signed-integer-overflow,unreachable,vla-bound)
+		set(SANITIZE_OPTS -fsanitize=address -fsanitize=bool,builtin,bounds,enum,float-cast-overflow,function,integer-divide-by-zero,nonnull-attribute,null,object-size,return,returns-nonnull-attribute,shift,signed-integer-overflow,unreachable,vla-bound -fno-sanitize-recover=all)
 		# -fsanitize=pointer-overflow causes compilation of shuffle_avx512 to freeze on clang10
 		# -fsanitize=memory requires instrumented libraries, so not useful
 		add_compile_options(-fno-omit-frame-pointer ${SANITIZE_OPTS})
 		add_link_options(${SANITIZE_OPTS})
+		
+		#include(CheckLinkerFlag)
+		#check_linker_flag(C -static-libasan HAS_LIBASAN)  # GCC
+		#check_linker_flag(C -static-libsan HAS_LIBSAN)  # Clang
+		CHECK_CXX_COMPILER_FLAG(-static-libasan HAS_LIBASAN)
+		CHECK_CXX_COMPILER_FLAG(-static-libsan HAS_LIBSAN)
+		if(HAS_LIBASAN)
+			add_link_options(-static-libasan)
+		endif()
+		if(HAS_LIBSAN)
+			add_link_options(-static-libsan)
+		endif()
 	endif()
 	
 	#if(ENABLE_OCL)
@@ -158,20 +165,38 @@ endif()
 
 add_compile_definitions(PARPAR_INVERT_SUPPORT=1)
 add_library(gf16_c STATIC ${GF16_C_SOURCES})
+add_library(gf16_base STATIC ${GF16_DIR}/gf16mul.cpp)
+add_library(gf16_pmul STATIC ${GF16_DIR}/gf16pmul.cpp)
+add_library(gf16_inv STATIC ${GF16_DIR}/gfmat_inv.cpp)
 add_library(gf16_ctl STATIC ${GF16_CPP_SOURCES})
-target_link_libraries(gf16_ctl gf16_c)
+target_link_libraries(gf16_base gf16_c)
+target_link_libraries(gf16_pmul gf16_c)
+target_link_libraries(gf16_inv gf16_base gf16_pmul)
+target_link_libraries(gf16_ctl gf16_base)
 
 if(NOT MSVC)
 	if(NOT ENABLE_SANITIZE)
+		target_compile_options(gf16_base PRIVATE -fno-rtti -fno-exceptions)
+		target_compile_options(gf16_pmul PRIVATE -fno-rtti -fno-exceptions)
+		target_compile_options(gf16_inv PRIVATE -fno-rtti -fno-exceptions)
 		target_compile_options(gf16_ctl PRIVATE -fno-rtti)
 	endif()
-	target_compile_definitions(gf16_c PRIVATE _POSIX_C_SOURCE=200112L)
+	
+	# posix_memalign may require _POSIX_C_SOURCE, but doing that on FreeBSD causes MAP_ANON* to disappear
+	# try to work around this by checking if posix_memalign exists without the define
+	include(CheckSymbolExists)
+	check_symbol_exists(posix_memalign "stdlib.h" HAVE_MEMALIGN)
+	if(NOT HAVE_MEMALIGN)
+		target_compile_definitions(gf16_c PRIVATE _POSIX_C_SOURCE=200112L)
+	endif()
 	target_compile_definitions(gf16_c PRIVATE _DARWIN_C_SOURCE=)
 	target_compile_definitions(gf16_c PRIVATE _GNU_SOURCE=)
+	target_compile_definitions(gf16_c PRIVATE _DEFAULT_SOURCE=)
 	
 	if(ENABLE_SANITIZE)
 		# not supported on all platforms?
 		#target_compile_options(gf16_ctl PRIVATE -fsanitize=thread)
+		#target_compile_options(gf16_inv PRIVATE -fsanitize=thread)
 	endif()
 endif()
 
@@ -291,13 +316,13 @@ endif()
 # binaries
 set(TEST_DIR .)
 add_executable(test ${TEST_DIR}/test.cpp)
-target_link_libraries(test gf16_ctl)
+target_link_libraries(test gf16_base)
 add_executable(test-ctrl ${TEST_DIR}/test-ctrl.cpp)
 target_link_libraries(test-ctrl gf16_ctl)
 add_executable(test-inv ${TEST_DIR}/test-inv.cpp ${TEST_DIR}/p2c-inv/reedsolomon.cpp)
-target_link_libraries(test-inv gf16_ctl)
+target_link_libraries(test-inv gf16_inv)
 add_executable(test-pmul ${TEST_DIR}/test-pmul.cpp)
-target_link_libraries(test-pmul gf16_ctl)
+target_link_libraries(test-pmul gf16_pmul)
 
 if(NOT MSVC)
 	target_link_libraries(test-ctrl -pthread)
