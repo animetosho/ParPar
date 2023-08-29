@@ -1,7 +1,7 @@
 name: Run PAR2 Create Tests
 on:
   workflow_dispatch:
-  #push:
+  push:
 
 jobs:
   test-node:

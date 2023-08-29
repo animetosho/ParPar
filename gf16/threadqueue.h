@@ -280,7 +280,7 @@ class MessageThread {
 			#if defined(_WINDOWS) || defined(__WINDOWS__) || defined(_WIN32) || defined(_WIN64)
 			HMODULE h = GetModuleHandleA("kernelbase.dll");
 			if(h) {
-				HRESULT(__stdcall *fnSetTD)(HANDLE, PCWSTR) = (HRESULT(__stdcall *)(HANDLE, PCWSTR))GetProcAddress(h, "SetThreadDescription");
+				HRESULT(__stdcall *fnSetTD)(HANDLE, PCWSTR) = (HRESULT(__stdcall *)(HANDLE, PCWSTR))((void*)GetProcAddress(h, "SetThreadDescription"));
 				if(fnSetTD) {
 					wchar_t nameUCS2[17];
 					//assert(strlen(self->name) <= 16); // always hard-coded string, plus Linux limits it to 16 chars, so shouldn't ever overflow

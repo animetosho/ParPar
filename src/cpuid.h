@@ -16,8 +16,8 @@
 # else
 	#include <cpuid.h>
 	/* GCC seems to support this, I assume everyone else does too? */
-	#define _cpuid(ar, eax) __cpuid(eax, ar[0], ar[1], ar[2], ar[3])
-	#define _cpuidX(ar, eax, ecx) __cpuid_count(eax, ecx, ar[0], ar[1], ar[2], ar[3])
+	#define _cpuid(ar, eax) __cpuid(eax, (ar)[0], (ar)[1], (ar)[2], (ar)[3])
+	#define _cpuidX(ar, eax, ecx) __cpuid_count(eax, ecx, (ar)[0], (ar)[1], (ar)[2], (ar)[3])
 	
 	static inline int _GET_XCR() {
 		int xcr0;

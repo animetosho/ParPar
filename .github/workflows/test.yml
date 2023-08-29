@@ -24,19 +24,20 @@ jobs:
           mkdir test\hasher\build
           cmake -B test\hasher\build -S test\hasher -G "Visual Studio 17 2022" -T ${{ matrix.compiler }} -A ${{ matrix.arch }}
           cmake --build test\hasher\build --config ${{ matrix.config }}
-      - run: Invoke-Expression "$env:SDE_PATH/sde -icx -- test/gf16/build/${{ matrix.config }}/test.exe"
-      - run: Invoke-Expression "$env:SDE_PATH/sde -icx -- test/gf16/build/${{ matrix.config }}/test-pmul.exe"
-      - run: Invoke-Expression "$env:SDE_PATH/sde -icx -- test/gf16/build/${{ matrix.config }}/test-ctrl.exe -f"
+      - run: dir $env:SDE_PATH
+      - run: Invoke-Expression "$env:SDE_PATH/sde.exe -icx -- test/gf16/build/${{ matrix.config }}/test.exe"
+      - run: Invoke-Expression "$env:SDE_PATH/sde.exe -icx -- test/gf16/build/${{ matrix.config }}/test-pmul.exe"
+      - run: Invoke-Expression "$env:SDE_PATH/sde.exe -icx -- test/gf16/build/${{ matrix.config }}/test-ctrl.exe -f"
         if: ${{ matrix.config == 'Release' && (matrix.compiler == 'ClangCL' || matrix.compiler == 'v143') }}
-      - run: Invoke-Expression "$env:SDE_PATH/sde -icx -- test/gf16/build/${{ matrix.config }}/test-inv.exe -f"
+      - run: Invoke-Expression "$env:SDE_PATH/sde.exe -icx -- test/gf16/build/${{ matrix.config }}/test-inv.exe -f"
         if: ${{ matrix.config == 'Release' && (matrix.compiler == 'ClangCL' || matrix.compiler == 'v143') }}
-      - run: Invoke-Expression "$env:SDE_PATH/sde -icx -- test/hasher/build/${{ matrix.config }}/test.exe"
+      - run: Invoke-Expression "$env:SDE_PATH/sde.exe -icx -- test/hasher/build/${{ matrix.config }}/test.exe"
       
       # test SSE2-only to see if CPUID checking works
       - run: |
-          Invoke-Expression "$env:SDE_PATH/sde -p4 -- test/gf16/build/${{ matrix.config }}/test.exe"
-          Invoke-Expression "$env:SDE_PATH/sde -p4 -- test/gf16/build/${{ matrix.config }}/test-pmul.exe"
-          Invoke-Expression "$env:SDE_PATH/sde -p4 -- test/hasher/build/${{ matrix.config }}/test.exe"
+          Invoke-Expression "$env:SDE_PATH/sde.exe -p4 -- test/gf16/build/${{ matrix.config }}/test.exe"
+          Invoke-Expression "$env:SDE_PATH/sde.exe -p4 -- test/gf16/build/${{ matrix.config }}/test-pmul.exe"
+          Invoke-Expression "$env:SDE_PATH/sde.exe -p4 -- test/hasher/build/${{ matrix.config }}/test.exe"
         if: ${{ matrix.config == 'Release' && matrix.arch == 'x64' && matrix.compiler == 'ClangCL' }}
       # TODO: XOP tests for hasher?
   
