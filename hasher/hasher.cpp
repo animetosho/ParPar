@@ -8,11 +8,11 @@ uint32_t(*MD5CRC_Calc)(const void*, size_t, size_t, void*) = NULL;
 MD5CRCMethods MD5CRC_Method = MD5CRCMETH_SCALAR;
 uint32_t(*CRC32_Calc)(const void*, size_t) = NULL;
 MD5CRCMethods CRC32_Method = MD5CRCMETH_SCALAR;
-struct CpuCap {
+struct HasherCpuCap {
 #ifdef PLATFORM_X86
 	bool hasSSE2, hasClMul, hasXOP, hasBMI1, hasAVX2, hasAVX512F, hasAVX512VLBW;
 	bool isSmallCore, isLEASlow, isVecRotSlow;
-	CpuCap(bool detect) :
+	HasherCpuCap(bool detect) :
 		hasSSE2(true), hasClMul(true), hasXOP(true), hasBMI1(true), hasAVX2(true), hasAVX512F(true), hasAVX512VLBW(true),
 		isSmallCore(false), isLEASlow(false), isVecRotSlow(false)
 	{
@@ -65,7 +65,7 @@ struct CpuCap {
 #endif
 #ifdef PLATFORM_ARM
 	bool hasCRC, hasNEON, hasSVE2;
-	CpuCap(bool detect) : hasCRC(true), hasNEON(true), hasSVE2(true) {
+	HasherCpuCap(bool detect) : hasCRC(true), hasNEON(true), hasSVE2(true) {
 		if(!detect) return;
 		hasCRC = CPU_HAS_ARMCRC;
 		hasNEON = CPU_HAS_NEON;
@@ -83,7 +83,7 @@ void setup_hasher() {
 	set_hasherMD5CRC(MD5CRCMETH_SCALAR);
 	
 #ifdef PLATFORM_X86
-	struct CpuCap caps(true);
+	struct HasherCpuCap caps(true);
 	
 	if(caps.hasAVX512VLBW && caps.hasClMul && !caps.isVecRotSlow && HasherInput_AVX512::isAvailable)
 		set_hasherInput(INHASH_AVX512);
@@ -111,7 +111,7 @@ void setup_hasher() {
 	
 #endif
 #ifdef PLATFORM_ARM
-	struct CpuCap caps(true);
+	struct HasherCpuCap caps(true);
 	
 	if(caps.hasCRC && HasherInput_ARMCRC::isAvailable) // TODO: fast core only
 		set_hasherInput(INHASH_CRC);
@@ -527,7 +527,7 @@ std::vector<HasherInputMethods> hasherInput_availableMethods(bool checkCpuid) {
 	ret.push_back(INHASH_SCALAR);
 	
 #ifdef PLATFORM_X86
-	const CpuCap caps(checkCpuid);
+	const HasherCpuCap caps(checkCpuid);
 	if(caps.hasClMul) {
 		if(caps.hasAVX512VLBW && HasherInput_AVX512::isAvailable)
 			ret.push_back(INHASH_AVX512);
@@ -542,7 +542,7 @@ std::vector<HasherInputMethods> hasherInput_availableMethods(bool checkCpuid) {
 		ret.push_back(INHASH_SIMD);
 #endif
 #ifdef PLATFORM_ARM
-	const CpuCap caps(checkCpuid);
+	const HasherCpuCap caps(checkCpuid);
 	if(caps.hasCRC && HasherInput_ARMCRC::isAvailable)
 		ret.push_back(INHASH_CRC);
 	if(caps.hasNEON && HasherInput_NEON::isAvailable)
@@ -559,7 +559,7 @@ std::vector<MD5CRCMethods> hasherMD5CRC_availableMethods(bool checkCpuid) {
 	ret.push_back(MD5CRCMETH_SCALAR);
 	
 #ifdef PLATFORM_X86
-	const CpuCap caps(checkCpuid);
+	const HasherCpuCap caps(checkCpuid);
 	if(caps.hasClMul) {
 		if(caps.hasAVX512VLBW && MD5CRC_isAvailable_AVX512)
 			ret.push_back(MD5CRCMETH_AVX512);
@@ -572,7 +572,7 @@ std::vector<MD5CRCMethods> hasherMD5CRC_availableMethods(bool checkCpuid) {
 	}
 #endif
 #ifdef PLATFORM_ARM
-	const CpuCap caps(checkCpuid);
+	const HasherCpuCap caps(checkCpuid);
 	if(caps.hasCRC && MD5CRC_isAvailable_ARMCRC)
 		ret.push_back(MD5CRCMETH_ARMCRC);
 #endif
@@ -585,7 +585,7 @@ std::vector<MD5MultiLevels> hasherMD5Multi_availableMethods(bool checkCpuid) {
 	ret.push_back(MD5MULT_SCALAR);
 	
 #ifdef PLATFORM_X86
-	const CpuCap caps(checkCpuid);
+	const HasherCpuCap caps(checkCpuid);
 	if(caps.hasAVX512VLBW && MD5Multi_AVX512_256::isAvailable)
 		ret.push_back(MD5MULT_AVX512VL);
 	if(caps.hasAVX512F && MD5Multi_AVX512::isAvailable)
@@ -598,7 +598,7 @@ std::vector<MD5MultiLevels> hasherMD5Multi_availableMethods(bool checkCpuid) {
 		ret.push_back(MD5MULT_SSE);
 #endif
 #ifdef PLATFORM_ARM
-	const CpuCap caps(checkCpuid);
+	const HasherCpuCap caps(checkCpuid);
 	if(caps.hasSVE2 && MD5Multi_SVE2::isAvailable)
 		ret.push_back(MD5MULT_SVE2);
 	if(caps.hasNEON && MD5Multi_NEON::isAvailable)

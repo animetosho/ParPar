@@ -13,21 +13,20 @@ extern "C" {
 }
 
 // CPUID stuff
-#include "../src/platform.h"
+#include "../src/cpuid.h"
 #ifdef PLATFORM_X86
-# include "../src/cpuid.h"
 # ifdef __APPLE__
 #  include <sys/types.h>
 #  include <sys/sysctl.h>
 # endif
 # include "x86_jit.h"
-struct CpuCap {
+struct GF16CpuCap {
 	bool hasSSE2, hasSSSE3, hasAVX, hasAVX2, hasAVX512VLBW, hasAVX512VBMI, hasGFNI;
 	size_t propPrefShuffleThresh;
 	bool propFastJit, propHT;
 	bool canMemWX, isEmulated;
 	int jitOptStrat;
-	CpuCap(bool detect) :
+	GF16CpuCap(bool detect) :
 	  hasSSE2(true),
 	  hasSSSE3(true),
 	  hasAVX(true),
@@ -196,14 +195,12 @@ struct CpuCap {
 };
 #endif
 #ifdef PLATFORM_ARM
-# include "../src/cpuid.h"
-
-struct CpuCap {
+struct GF16CpuCap {
 	bool hasNEON;
 	bool hasSHA3;
 	bool hasSVE;
 	bool hasSVE2;
-	CpuCap(bool detect) : hasNEON(true), hasSVE(true), hasSVE2(true) {
+	GF16CpuCap(bool detect) : hasNEON(true), hasSVE(true), hasSVE2(true) {
 		if(!detect) return;
 		hasNEON = CPU_HAS_NEON;
 		hasSHA3 = CPU_HAS_NEON_SHA3;
@@ -220,11 +217,9 @@ struct CpuCap {
 };
 #endif
 #ifdef __riscv
-# include "../src/cpuid.h"
-
-struct CpuCap {
+struct GF16CpuCap {
 	bool hasVector;
-	CpuCap(bool detect) : hasVector(true) {
+	GF16CpuCap(bool detect) : hasVector(true) {
 		if(!detect) return;
 		hasVector = CPU_HAS_VECTOR && CPU_HAS_GC;
 	}
@@ -1117,7 +1112,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 		case GF16_XOR_JIT_SSE2:
 		case GF16_XOR_SSE2: {
 #ifdef PLATFORM_X86
-			int jitOptStrat = CpuCap(true).jitOptStrat;
+			int jitOptStrat = GF16CpuCap(true).jitOptStrat;
 			
 			switch(method) {
 				case GF16_XOR_JIT_SSE2:
@@ -1359,7 +1354,7 @@ Galois16Methods Galois16Mul::default_method(size_t regionSizeHint, unsigned inpu
 	(void)forInvert;
 	
 #ifdef PLATFORM_X86
-	const CpuCap caps(true);
+	const GF16CpuCap caps(true);
 	if(caps.hasGFNI) {
 		if(gf16_affine_available_avx512 && caps.hasAVX512VLBW)
 			return GF16_AFFINE_AVX512;
@@ -1397,7 +1392,7 @@ Galois16Methods Galois16Mul::default_method(size_t regionSizeHint, unsigned inpu
 		return GF16_XOR_SSE2;
 #endif
 #ifdef PLATFORM_ARM
-	const CpuCap caps(true);
+	const GF16CpuCap caps(true);
 	if(caps.hasSVE2) {
 		if(gf16_sve_get_size() >= 64)
 			return GF16_SHUFFLE_512_SVE2;
@@ -1419,7 +1414,7 @@ Galois16Methods Galois16Mul::default_method(size_t regionSizeHint, unsigned inpu
 			? GF16_CLMUL_NEON : GF16_SHUFFLE_NEON;
 #endif
 #ifdef __riscv_
-	const CpuCap caps(true);
+	const GF16CpuCap caps(true);
 	if(caps.hasVector && gf16_available_rvv && gf16_rvv_get_size() >= 16)
 		return GF16_SHUFFLE_128_RVV;
 #endif
@@ -1437,7 +1432,7 @@ std::vector<Galois16Methods> Galois16Mul::availableMethods(bool checkCpuid) {
 		ret.push_back(GF16_LOOKUP3);
 	
 #ifdef PLATFORM_X86
-	const CpuCap caps(checkCpuid);
+	const GF16CpuCap caps(checkCpuid);
 	if(gf16_shuffle_available_ssse3 && caps.hasSSSE3)
 		ret.push_back(GF16_SHUFFLE_SSSE3);
 	if(gf16_shuffle_available_avx && caps.hasAVX)
@@ -1485,7 +1480,7 @@ std::vector<Galois16Methods> Galois16Mul::availableMethods(bool checkCpuid) {
 	}
 #endif
 #ifdef PLATFORM_ARM
-	const CpuCap caps(checkCpuid);
+	const GF16CpuCap caps(checkCpuid);
 	if(gf16_available_neon && caps.hasNEON) {
 		ret.push_back(GF16_SHUFFLE_NEON);
 		ret.push_back(GF16_CLMUL_NEON);
@@ -1505,7 +1500,7 @@ std::vector<Galois16Methods> Galois16Mul::availableMethods(bool checkCpuid) {
 	}
 #endif
 #ifdef __riscv
-	const CpuCap caps(checkCpuid);
+	const GF16CpuCap caps(checkCpuid);
 	if(gf16_available_rvv && caps.hasVector && gf16_rvv_get_size() >= 16)
 		ret.push_back(GF16_SHUFFLE_128_RVV);
 #endif
