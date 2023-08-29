@@ -477,22 +477,22 @@ static HEDLEY_ALWAYS_INLINE __m256i gf16_xor_finish_extract_bits(__m256i src) {
 static HEDLEY_ALWAYS_INLINE void gf16_xor_finish_extract_bits_store(uint32_t* dst, __m256i src) {
 	__m256i srcShifted = _mm256_add_epi8(src, src);
 	__m256i lane = _mm256_inserti128_si256(srcShifted, _mm256_castsi256_si128(src), 1);
-	dst[3] = _mm256_movemask_epi8(lane);
+	write32(dst+3, _mm256_movemask_epi8(lane));
 	lane = _mm256_slli_epi16(lane, 2);
-	dst[2] = _mm256_movemask_epi8(lane);
+	write32(dst+2, _mm256_movemask_epi8(lane));
 	lane = _mm256_slli_epi16(lane, 2);
-	dst[1] = _mm256_movemask_epi8(lane);
+	write32(dst+1, _mm256_movemask_epi8(lane));
 	lane = _mm256_slli_epi16(lane, 2);
-	dst[0] = _mm256_movemask_epi8(lane);
+	write32(dst+0, _mm256_movemask_epi8(lane));
 	
 	lane = _mm256_permute2x128_si256(srcShifted, src, 0x31);
-	dst[7] = _mm256_movemask_epi8(lane);
+	write32(dst+7, _mm256_movemask_epi8(lane));
 	lane = _mm256_slli_epi16(lane, 2);
-	dst[6] = _mm256_movemask_epi8(lane);
+	write32(dst+6, _mm256_movemask_epi8(lane));
 	lane = _mm256_slli_epi16(lane, 2);
-	dst[5] = _mm256_movemask_epi8(lane);
+	write32(dst+5, _mm256_movemask_epi8(lane));
 	lane = _mm256_slli_epi16(lane, 2);
-	dst[4] = _mm256_movemask_epi8(lane);
+	write32(dst+4, _mm256_movemask_epi8(lane));
 }
 
 #define LOAD_HALVES(a, b, upper) \

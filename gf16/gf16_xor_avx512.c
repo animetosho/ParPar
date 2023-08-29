@@ -1024,20 +1024,20 @@ static HEDLEY_ALWAYS_INLINE void gf16_xor_finish_bit_extract(uint64_t* dst, __m5
 		0x10101010, 0x10101010, 0x10101010, 0x10101010
 	);
 	__m512i lane = _mm512_shuffle_i32x4(src, src, _MM_SHUFFLE(0,0,0,0));
-	dst[0] = _mm512_test_epi8_mask(lane, lo_nibble_test);
-	dst[1] = _mm512_test_epi8_mask(lane, hi_nibble_test);
+	write64(dst+0, _mm512_test_epi8_mask(lane, lo_nibble_test));
+	write64(dst+1, _mm512_test_epi8_mask(lane, hi_nibble_test));
 	
 	lane = _mm512_shuffle_i32x4(src, src, _MM_SHUFFLE(1,1,1,1));
-	dst[32 +0] = _mm512_test_epi8_mask(lane, lo_nibble_test);
-	dst[32 +1] = _mm512_test_epi8_mask(lane, hi_nibble_test);
+	write64(dst+32 +0, _mm512_test_epi8_mask(lane, lo_nibble_test));
+	write64(dst+32 +1, _mm512_test_epi8_mask(lane, hi_nibble_test));
 	
 	lane = _mm512_shuffle_i32x4(src, src, _MM_SHUFFLE(2,2,2,2));
-	dst[64 +0] = _mm512_test_epi8_mask(lane, lo_nibble_test);
-	dst[64 +1] = _mm512_test_epi8_mask(lane, hi_nibble_test);
+	write64(dst+64 +0, _mm512_test_epi8_mask(lane, lo_nibble_test));
+	write64(dst+64 +1, _mm512_test_epi8_mask(lane, hi_nibble_test));
 	
 	lane = _mm512_shuffle_i32x4(src, src, _MM_SHUFFLE(3,3,3,3));
-	dst[96 +0] = _mm512_test_epi8_mask(lane, lo_nibble_test);
-	dst[96 +1] = _mm512_test_epi8_mask(lane, hi_nibble_test);
+	write64(dst+96 +0, _mm512_test_epi8_mask(lane, lo_nibble_test));
+	write64(dst+96 +1, _mm512_test_epi8_mask(lane, hi_nibble_test));
 }
 
 static HEDLEY_ALWAYS_INLINE void _gf16_xor_finish_copy_block_avx512(void* dst, const void* src) {

@@ -271,7 +271,7 @@ static HEDLEY_ALWAYS_INLINE void STOREU_XMM(void* dest, __m128i xmm) {
 	#define CMOV(c, d, s) if(c) (d) = (s)
 #endif
 
-static HEDLEY_ALWAYS_INLINE uint_fast16_t xor_jit_bitpair3(uint8_t* dest, uint_fast32_t mask, __m128i* tCode, uint16_t* tInfo, intptr_t* posC, unsigned long* movC, uint_fast8_t isR64) {
+static HEDLEY_ALWAYS_INLINE uint_fast16_t xor_jit_bitpair3(uint8_t* dest, uint_fast32_t mask, __m128i* tCode, uint16_t* tInfo, intptr_t* posC, long* movC, uint_fast8_t isR64) {
 	uint_fast16_t info = tInfo[mask>>1];
 	intptr_t pC = info >> 12;
 	
@@ -281,12 +281,12 @@ static HEDLEY_ALWAYS_INLINE uint_fast16_t xor_jit_bitpair3(uint8_t* dest, uint_f
 	// handle conditional move for common mask (since it's always done)
 	CMOV(*movC, *posC, pC+isR64);
 	*posC -= info & 0xF;
-	*movC &= -(pC == 0);
+	*movC &= -(long)(pC == 0);
 	
 	return info;
 }
 
-static HEDLEY_ALWAYS_INLINE uint_fast16_t xor_jit_bitpair3_noxor(uint8_t* dest, uint_fast16_t info, intptr_t* pos1, unsigned long* mov1, intptr_t* pos2, unsigned long* mov2, int isR64) {
+static HEDLEY_ALWAYS_INLINE uint_fast16_t xor_jit_bitpair3_noxor(uint8_t* dest, uint_fast16_t info, intptr_t* pos1, long* mov1, intptr_t* pos2, long* mov2, int isR64) {
 	UNUSED(dest);
 	uintptr_t p1 = (info >> 4) & 0xF;
 	uintptr_t p2 = (info >> 8) & 0xF;
@@ -294,12 +294,12 @@ static HEDLEY_ALWAYS_INLINE uint_fast16_t xor_jit_bitpair3_noxor(uint8_t* dest, 
 	CMOV(*mov2, *pos2, p2+isR64);
 	*pos1 -= info & 0xF;
 	*pos2 -= info & 0xF;
-	*mov1 &= -(p1 == 0);
-	*mov2 &= -(p2 == 0);
+	*mov1 &= -(long)(p1 == 0);
+	*mov2 &= -(long)(p2 == 0);
 	return info & 0xF;
 }
 
-static HEDLEY_ALWAYS_INLINE uint_fast16_t xor_jit_bitpair3_nc_noxor(uint8_t* dest, uint_fast16_t info, intptr_t* pos1, unsigned long* mov1, intptr_t* pos2, unsigned long* mov2, int isR64) {
+static HEDLEY_ALWAYS_INLINE uint_fast16_t xor_jit_bitpair3_nc_noxor(uint8_t* dest, uint_fast16_t info, intptr_t* pos1, long* mov1, intptr_t* pos2, long* mov2, int isR64) {
 	UNUSED(dest);
 	uintptr_t p1 = (info >> 8) & 0xF;
 	uintptr_t p2 = info >> 12;
@@ -307,8 +307,8 @@ static HEDLEY_ALWAYS_INLINE uint_fast16_t xor_jit_bitpair3_nc_noxor(uint8_t* des
 	CMOV(*mov2, *pos2, p2+isR64);
 	*pos1 -= info & 0xF;
 	*pos2 -= info & 0xF;
-	*mov1 &= -(p1 == 0);
-	*mov2 &= -(p2 == 0);
+	*mov1 &= -(long)(p1 == 0);
+	*mov2 &= -(long)(p2 == 0);
 	return info & 0xF;
 }
 #undef CMOV
@@ -499,7 +499,7 @@ static inline void* xor_write_jit_sse(const struct gf16_xor_scratch *HEDLEY_REST
 		for(bit=0; bit<8; bit++) {
 			int destOffs = (bit<<5)-128;
 			int destOffs2 = destOffs+16;
-			unsigned long movC = 0xFF;
+			long movC = 0xFF;
 			intptr_t posC = 0;
 			uint_fast32_t mask = lumask[bit];
 			_LD_APS(0, DX, destOffs);
@@ -572,8 +572,8 @@ static inline void* xor_write_jit_sse(const struct gf16_xor_scratch *HEDLEY_REST
 		for(bit=0; bit<8; bit++) {
 			int destOffs = (bit<<5)-128;
 			int destOffs2 = destOffs+16;
-			unsigned long mov1 = 0xFF, mov2 = 0xFF,
-			              movC = 0xFF;
+			long mov1 = 0xFF, mov2 = 0xFF,
+			     movC = 0xFF;
 			intptr_t pos1 = 0, pos2 = 0, posC = 0;
 			uint_fast32_t mask = lumask[bit];
 			
@@ -1012,10 +1012,10 @@ void gf16_xor_muladd_sse2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_REST
 	srcDQh = _mm_unpackhi_epi64(srcQ0d, srcQ8d)
 
 #define EXTRACT_BITS(target, srcVec) \
-	(target)[7] = _mm_movemask_epi8(srcVec); \
+	write16((target) + 7, _mm_movemask_epi8(srcVec)); \
 	for(int i=6; i>=0; i--) { \
 		srcVec = _mm_add_epi8(srcVec, srcVec); \
-		(target)[i] = _mm_movemask_epi8(srcVec); \
+		write16((target) + i, _mm_movemask_epi8(srcVec)); \
 	}
 void gf16_xor_finish_block_sse2(void *HEDLEY_RESTRICT dst) {
 	uint16_t* _dst = (uint16_t*)dst;

@@ -199,10 +199,10 @@ GF16_MULADD_MULTI_FUNCS_STUB(gf16_affine, _FNSUFFIX)
 
 
 #ifdef _AVAILABLE
-static HEDLEY_ALWAYS_INLINE void _FN(gf16_affine2x_muladd_2round)(const int srcCountOffs, const void* _src1, const void* _src2, _mword* result, _mword* swapped, _mword matNorm1, _mword matSwap1, _mword matNorm2, _mword matSwap2) {
+static HEDLEY_ALWAYS_INLINE void _FN(gf16_affine2x_muladd_2round)(const int srcCountOffs, const uint8_t* _src1, const uint8_t* _src2, intptr_t srcOffset, _mword* result, _mword* swapped, _mword matNorm1, _mword matSwap1, _mword matNorm2, _mword matSwap2) {
 	if(srcCountOffs < 0) return;
 	
-	_mword data1 = _MMI(load)(_src1);
+	_mword data1 = _MMI(load)((const _mword*)(_src1 + srcOffset));
 	if(srcCountOffs == 0) {
 		*result = _MMI(xor)(
 			*result,
@@ -214,7 +214,7 @@ static HEDLEY_ALWAYS_INLINE void _FN(gf16_affine2x_muladd_2round)(const int srcC
 		);
 	}
 	else { // if(srcCountOffs > 0)
-		_mword data2 = _MMI(load)(_src2);
+		_mword data2 = _MMI(load)((const _mword*)(_src2 + srcOffset));
 		*result = _MM(ternarylogic_epi32)(
 			*result,
 			_MM(gf2p8affine_epi64_epi8)(data1, matNorm1, 0),
@@ -391,11 +391,11 @@ static HEDLEY_ALWAYS_INLINE void _FN(gf16_affine2x_muladd_x)(
 			);
 		}
 		
-		_FN(gf16_affine2x_muladd_2round)(srcCount - 4, _src4 + ptr*srcScale, _src5 + ptr*srcScale, &result, &swapped, matNormD, matSwapD, matNormE, matSwapE);
-		_FN(gf16_affine2x_muladd_2round)(srcCount - 6, _src6 + ptr*srcScale, _src7 + ptr*srcScale, &result, &swapped, matNormF, matSwapF, matNormG, matSwapG);
-		_FN(gf16_affine2x_muladd_2round)(srcCount - 8, _src8 + ptr*srcScale, _src9 + ptr*srcScale, &result, &swapped, matNormH, matSwapH, matNormI, matSwapI);
-		_FN(gf16_affine2x_muladd_2round)(srcCount - 10, _src10 + ptr*srcScale, _src11 + ptr*srcScale, &result, &swapped, matNormJ, matSwapJ, matNormK, matSwapK);
-		_FN(gf16_affine2x_muladd_2round)(srcCount - 12, _src12 + ptr*srcScale, _src13 + ptr*srcScale, &result, &swapped, matNormL, matSwapL, matNormM, matSwapM);
+		_FN(gf16_affine2x_muladd_2round)(srcCount - 4, _src4, _src5, ptr*srcScale, &result, &swapped, matNormD, matSwapD, matNormE, matSwapE);
+		_FN(gf16_affine2x_muladd_2round)(srcCount - 6, _src6, _src7, ptr*srcScale, &result, &swapped, matNormF, matSwapF, matNormG, matSwapG);
+		_FN(gf16_affine2x_muladd_2round)(srcCount - 8, _src8, _src9, ptr*srcScale, &result, &swapped, matNormH, matSwapH, matNormI, matSwapI);
+		_FN(gf16_affine2x_muladd_2round)(srcCount - 10, _src10, _src11, ptr*srcScale, &result, &swapped, matNormJ, matSwapJ, matNormK, matSwapK);
+		_FN(gf16_affine2x_muladd_2round)(srcCount - 12, _src12, _src13, ptr*srcScale, &result, &swapped, matNormL, matSwapL, matNormM, matSwapM);
 		
 		result = _MM(ternarylogic_epi32)(
 			result,

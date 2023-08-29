@@ -137,8 +137,7 @@ else()
 	endif()
 	
 	if(ENABLE_SANITIZE)
-		set(SANITIZE_OPTS -fsanitize=address -fsanitize=bool,builtin,bounds,enum,float-cast-overflow,function,integer-divide-by-zero,nonnull-attribute,null,object-size,return,returns-nonnull-attribute,shift,signed-integer-overflow,unreachable,vla-bound -fno-sanitize-recover=all)
-		# -fsanitize=pointer-overflow causes compilation of shuffle_avx512 to freeze on clang10
+		set(SANITIZE_OPTS -fsanitize=address -fsanitize=undefined -fno-sanitize-recover=all)
 		# -fsanitize=memory requires instrumented libraries, so not useful
 		add_compile_options(-fno-omit-frame-pointer ${SANITIZE_OPTS})
 		add_link_options(${SANITIZE_OPTS})

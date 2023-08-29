@@ -38,7 +38,7 @@ jobs:
           $env:SDE_PATH/sde -p4 -- test\gf16\build\${{ matrix.config }}\test-pmul.exe
           $env:SDE_PATH/sde -p4 -- test\hasher\build\${{ matrix.config }}\test.exe
         if: ${{ matrix.config == 'Release' && matrix.arch == 'x64' && matrix.compiler == 'ClangCL' }}
-      
+      # TODO: XOP tests for hasher?
   
   # test building only
   test-win-arm:

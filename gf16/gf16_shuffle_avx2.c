@@ -17,8 +17,8 @@
 #include "gf16_muladd_multi.h"
 
 #if defined(_AVAILABLE)
-static HEDLEY_ALWAYS_INLINE void gf16_shuffle2x_muladd_round_avx2(__m256i* _dst, const int srcCount, __m256i* _src1, __m256i* _src2, __m256i shufNormLoA, __m256i shufNormLoB, __m256i shufNormHiA, __m256i shufNormHiB, __m256i shufSwapLoA, __m256i shufSwapLoB, __m256i shufSwapHiA, __m256i shufSwapHiB) {
-	__m256i data = _mm256_load_si256(_src1);
+static HEDLEY_ALWAYS_INLINE void gf16_shuffle2x_muladd_round_avx2(__m256i* _dst, const int srcCount, const uint8_t* _src1, const uint8_t* _src2, intptr_t srcOffset, __m256i shufNormLoA, __m256i shufNormLoB, __m256i shufNormHiA, __m256i shufNormHiB, __m256i shufSwapLoA, __m256i shufSwapLoB, __m256i shufSwapHiA, __m256i shufSwapHiB) {
+	__m256i data = _mm256_load_si256((const __m256i*)(_src1 + srcOffset));
 	__m256i mask = _mm256_set1_epi8(0x0f);
 	
 	__m256i ti = _mm256_and_si256(mask, data);
@@ -32,7 +32,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle2x_muladd_round_avx2(__m256i* _dst,
 	result = _mm256_xor_si256(result, _mm256_load_si256(_dst));
 	
 	if(srcCount > 1) {
-		data = _mm256_load_si256(_src2);
+		data = _mm256_load_si256((const __m256i*)(_src2 + srcOffset));
 		
 		ti = _mm256_and_si256(mask, data);
 		result = _mm256_xor_si256(_mm256_shuffle_epi8(shufNormLoB, ti), result);
@@ -117,7 +117,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle2x_muladd_x_avx2(const void *HEDLEY
 		intptr_t ptr = -(intptr_t)len;
 		if(len & (sizeof(__m256i)*2-1)) { // number of loop iterations isn't even, so do one iteration to make it even
 			gf16_shuffle2x_muladd_round_avx2(
-				(__m256i*)(_dst+ptr), srcCount, (__m256i*)(_src1+ptr*srcScale), (__m256i*)(_src2+ptr*srcScale),
+				(__m256i*)(_dst+ptr), srcCount, _src1, _src2, ptr*srcScale,
 				shufNormLoA, shufNormLoB, shufNormHiA, shufNormHiB, shufSwapLoA, shufSwapLoB, shufSwapHiA, shufSwapHiB
 			);
 			if(doPrefetch == 1)
@@ -128,12 +128,12 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle2x_muladd_x_avx2(const void *HEDLEY
 		}
 		while(ptr) {
 			gf16_shuffle2x_muladd_round_avx2(
-				(__m256i*)(_dst+ptr), srcCount, (__m256i*)(_src1+ptr*srcScale), (__m256i*)(_src2+ptr*srcScale),
+				(__m256i*)(_dst+ptr), srcCount, _src1, _src2, ptr*srcScale,
 				shufNormLoA, shufNormLoB, shufNormHiA, shufNormHiB, shufSwapLoA, shufSwapLoB, shufSwapHiA, shufSwapHiB
 			);
 			ptr += sizeof(__m256i);
 			gf16_shuffle2x_muladd_round_avx2(
-				(__m256i*)(_dst+ptr), srcCount, (__m256i*)(_src1+ptr*srcScale), (__m256i*)(_src2+ptr*srcScale),
+				(__m256i*)(_dst+ptr), srcCount, _src1, _src2, ptr*srcScale,
 				shufNormLoA, shufNormLoB, shufNormHiA, shufNormHiB, shufSwapLoA, shufSwapLoB, shufSwapHiA, shufSwapHiB
 			);
 			
@@ -146,7 +146,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle2x_muladd_x_avx2(const void *HEDLEY
 	} else {
 		for(intptr_t ptr = -(intptr_t)len; ptr; ptr += sizeof(__m256i)) {
 			gf16_shuffle2x_muladd_round_avx2(
-				(__m256i*)(_dst+ptr), srcCount, (__m256i*)(_src1+ptr*srcScale), (__m256i*)(_src2+ptr*srcScale),
+				(__m256i*)(_dst+ptr), srcCount, _src1, _src2, ptr*srcScale,
 				shufNormLoA, shufNormLoB, shufNormHiA, shufNormHiB, shufSwapLoA, shufSwapLoB, shufSwapHiA, shufSwapHiB
 			);
 		}
