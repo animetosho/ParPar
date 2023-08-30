@@ -9,7 +9,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-        - version: '0.10.40'
+        - version: '0.10.48'
           flags: ''
           python2: true
         - version: '4.9.1'

@@ -299,13 +299,17 @@ console.log('Creating random input files...');
 function writeRndFile(name, size) {
 	if(skipFileCreate && fs.existsSync(tmpDir + name)) return;
 	var fd = fs.openSync(tmpDir + name, 'w');
-	var rand = require('crypto').createCipheriv('rc4', 'my_incredibly_strong_password' + name, '');
+	var rand = crypto.createCipheriv('rc4', 'my_incredibly_strong_password' + name, '');
 	rand.setAutoPadding(false);
 	var nullBuf = allocBuffer(1024*16);
 	nullBuf.fill(0);
 	var written = 0;
 	while(written < size) {
-		var b = bufferSlice.call(rand.update(nullBuf), 0, Math.min(1024*16, size-written));
+		var b = rand.update(nullBuf);
+		if(b.subarray)
+			b = bufferSlice.call(b, 0, Math.min(1024*16, size-written));
+		else // on Node v0.10.x, rand is a SlowBuffer, so calling Buffer.slice on it won't work
+			b = b.slice(0, Math.min(1024*16, size-written));
 		fsWriteSync(fd, b);
 		written += b.length;
 	}
