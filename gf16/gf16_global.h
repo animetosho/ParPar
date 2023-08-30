@@ -31,13 +31,15 @@
 typedef void (CONST_PTR gf16_checksum_exp)(void *HEDLEY_RESTRICT checksum, uint16_t exp);
 typedef void (CONST_PTR gf16_checksum_block)(const void *HEDLEY_RESTRICT src, void *HEDLEY_RESTRICT checksum, const size_t blockLen, const int aligned);
 typedef void (CONST_PTR gf16_checksum_blocku)(const void *HEDLEY_RESTRICT src, size_t amount, void *HEDLEY_RESTRICT checksum);
-typedef void (CONST_PTR gf16_transform_block)(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src);
-typedef void (CONST_PTR gf16_transform_blocku)(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t remaining);
-typedef void (CONST_PTR gf16_prepare_checksum)(void *HEDLEY_RESTRICT dst, void *HEDLEY_RESTRICT checksum, const size_t blockLen, gf16_transform_block prepareBlock);
+typedef void (CONST_PTR gf16_transform_block)(void* dst, const void* src);
+typedef void (CONST_PTR gf16_transform_blocku)(void* dst, const void* src, size_t remaining);
+typedef void (CONST_PTR gf16_transform_block_rst)(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src);
+typedef void (CONST_PTR gf16_transform_blocku_rst)(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t remaining);
+typedef void (CONST_PTR gf16_prepare_checksum)(void *HEDLEY_RESTRICT dst, void *HEDLEY_RESTRICT checksum, const size_t blockLen, gf16_transform_block_rst prepareBlock);
 typedef void (CONST_PTR gf16_finish_block)(void *HEDLEY_RESTRICT dst);
 #undef CONST_PTR
 
-static HEDLEY_ALWAYS_INLINE void gf16_prepare(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen, const size_t blockLen, gf16_transform_block prepareBlock, gf16_transform_blocku prepareBlockU) {
+static HEDLEY_ALWAYS_INLINE void gf16_prepare(void* dst, const void* src, size_t srcLen, const size_t blockLen, gf16_transform_block prepareBlock, gf16_transform_blocku prepareBlockU) {
 	size_t remaining = srcLen % blockLen;
 	size_t len = srcLen - remaining;
 	uint8_t* _src = (uint8_t*)src + len;
@@ -79,7 +81,7 @@ static HEDLEY_ALWAYS_INLINE void* gf16_checksum_ptr(void* ptr, size_t sliceLen, 
 #include <string.h>
 #include "gfmat_coeff.h"
 static HEDLEY_ALWAYS_INLINE void gf16_prepare_packed(
-	void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen, size_t sliceLen, const size_t blockLen, gf16_transform_block prepareBlock, gf16_transform_blocku prepareBlockU,
+	void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen, size_t sliceLen, const size_t blockLen, gf16_transform_block_rst prepareBlock, gf16_transform_blocku_rst prepareBlockU,
 	unsigned inputPackSize, unsigned inputNum, size_t chunkLen, const unsigned interleaveSize,
 	size_t partOffset, size_t partLen,
 	void *HEDLEY_RESTRICT checksum, gf16_checksum_block checksumBlock, gf16_checksum_blocku checksumBlockU, gf16_checksum_exp checksumExp, gf16_prepare_checksum prepareChecksum
@@ -217,7 +219,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_prepare_packed(
 
 
 static HEDLEY_ALWAYS_INLINE int gf16_finish_packed(
-	void *HEDLEY_RESTRICT dst, void *HEDLEY_RESTRICT src, size_t sliceLen, const size_t blockLen, gf16_transform_block finishBlock, gf16_transform_blocku finishBlockU,
+	void *HEDLEY_RESTRICT dst, void *HEDLEY_RESTRICT src, size_t sliceLen, const size_t blockLen, gf16_transform_block_rst finishBlock, gf16_transform_blocku_rst finishBlockU,
 	unsigned numOutputs, unsigned outputNum, size_t chunkLen, const unsigned interleaveSize,
 	size_t partOffset, size_t partLen,
 	gf16_checksum_block checksumBlock, gf16_checksum_blocku checksumBlockU, gf16_checksum_exp checksumExp, gf16_finish_block inlineFinishBlock,

@@ -65,7 +65,7 @@ static HEDLEY_ALWAYS_INLINE void calc_table(uint16_t val, uint16_t* lhtable) {
 }
 #endif
 
-void gf16_lookup_mul_sse2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch) {
+void gf16_lookup_mul_sse2(const void *HEDLEY_RESTRICT scratch, void* dst, const void* src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch) {
 	UNUSED(scratch); UNUSED(mutScratch);
 #ifdef __SSE2__
 	ALIGN_TO(16, uint16_t lhtable[513]); // +1 for potential misaligned load at end

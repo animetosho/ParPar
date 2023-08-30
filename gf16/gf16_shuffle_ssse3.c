@@ -21,6 +21,44 @@
 #undef _FNSUFFIX
 #undef _MM_END
 
+static HEDLEY_ALWAYS_INLINE uint16_t gf16_shuffleX_replace_word(void* data, size_t index, uint16_t newValue, size_t width) {
+	uint8_t* base = (uint8_t*)data + (index & ~(width-1)) * 2;
+	unsigned pos = index & (width-1);
+	if(width > 16)
+		pos = (pos & 7) | ((pos & ((width/2)-8)) << 1) | ((pos & (width/2)) ? 8 : 0); // handle awkward positioning due to avoiding cross-lane shuffles
+	uint16_t oldValue = base[pos + width] | (base[pos] << 8);
+	base[pos + width] = newValue & 0xff;
+	base[pos] = newValue >> 8;
+	return oldValue;
+}
+
+static HEDLEY_ALWAYS_INLINE uint16_t gf16_shuffle2X_replace_word(void* data, size_t index, uint16_t newValue, size_t width) {
+	uint8_t* base = (uint8_t*)data + (index & ~(width-1)) * 2;
+	unsigned pos = index & (width-1);
+	uint16_t oldValue = base[pos] | (base[pos + width] << 8);
+	base[pos] = newValue & 0xff;
+	base[pos + width] = newValue >> 8;
+	return oldValue;
+}
+
+uint16_t gf16_affine2x_replace_word(void* data, size_t index, uint16_t newValue) {
+	return gf16_shuffle2X_replace_word(data, index, newValue, 8);
+}
+uint16_t gf16_shuffle16_replace_word(void* data, size_t index, uint16_t newValue) {
+	return gf16_shuffleX_replace_word(data, index, newValue, 16);
+}
+uint16_t gf16_shuffle32_replace_word(void* data, size_t index, uint16_t newValue) {
+	return gf16_shuffleX_replace_word(data, index, newValue, 32);
+}
+uint16_t gf16_shuffle64_replace_word(void* data, size_t index, uint16_t newValue) {
+	return gf16_shuffleX_replace_word(data, index, newValue, 64);
+}
+uint16_t gf16_shuffle2x16_replace_word(void* data, size_t index, uint16_t newValue) {
+	return gf16_shuffle2X_replace_word(data, index, newValue, 16);
+}
+uint16_t gf16_shuffle2x32_replace_word(void* data, size_t index, uint16_t newValue) {
+	return gf16_shuffle2X_replace_word(data, index, newValue, 32);
+}
 
 
 void* gf16_shuffle_init_x86(int polynomial) {

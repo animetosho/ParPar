@@ -142,7 +142,7 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_scalar(uint32_t* HEDLEY_RESTR
 	D = state[3];
 #endif
 	
-	asm(
+	__asm__(
 		"ldr " REG(TMP2) ", [%[in]]\n"
 		REV(TMP2)
 #ifdef ARM_THUMB_LIMIT_REGS

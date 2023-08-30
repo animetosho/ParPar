@@ -182,7 +182,7 @@ static HEDLEY_ALWAYS_INLINE void calc_table(uint16_t coefficient, uint16_t* lhta
 
 #endif
 
-void gf16_lookup_mul(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch) {
+void gf16_lookup_mul(const void *HEDLEY_RESTRICT scratch, void* dst, const void* src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch) {
 	UNUSED(scratch); UNUSED(mutScratch);
 	uint16_t lhtable[512];
 	calc_table(coefficient, lhtable);
@@ -393,7 +393,7 @@ static HEDLEY_ALWAYS_INLINE void calc_3table(uint16_t coefficient, struct gf16_l
 	}
 }
 
-void gf16_lookup3_mul(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch) {
+void gf16_lookup3_mul(const void *HEDLEY_RESTRICT scratch, void* dst, const void* src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch) {
 	UNUSED(scratch); UNUSED(mutScratch);
 	struct gf16_lookup3_tables lookup;
 	calc_3table(coefficient, &lookup);
@@ -579,7 +579,7 @@ HEDLEY_CONST size_t gf16_lookup3_stride() {
 
 
 
-static HEDLEY_ALWAYS_INLINE void gf16_lookup_checksum_prepare(void *HEDLEY_RESTRICT dst, void *HEDLEY_RESTRICT checksum, const size_t blockLen, gf16_transform_block prepareBlock) {
+static HEDLEY_ALWAYS_INLINE void gf16_lookup_checksum_prepare(void *HEDLEY_RESTRICT dst, void *HEDLEY_RESTRICT checksum, const size_t blockLen, gf16_transform_block_rst prepareBlock) {
 	UNUSED(prepareBlock);
 	memset(dst, 0, blockLen);
 	if(sizeof(uintptr_t) >= 8)
@@ -628,7 +628,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_lookup3_prepare_blocku(void *HEDLEY_RESTRI
 	memcpy(&data, src, remaining);
 	gf16_lookup3_prepare_block(dst, &data);
 }
-static HEDLEY_ALWAYS_INLINE void gf16_lookup3_checksum_prepare(void *HEDLEY_RESTRICT dst, void *HEDLEY_RESTRICT checksum, const size_t blockLen, gf16_transform_block prepareBlock) {
+static HEDLEY_ALWAYS_INLINE void gf16_lookup3_checksum_prepare(void *HEDLEY_RESTRICT dst, void *HEDLEY_RESTRICT checksum, const size_t blockLen, gf16_transform_block_rst prepareBlock) {
 	UNUSED(prepareBlock);
 	gf16_lookup3_prepare_block(dst, checksum);
 	memset((char*)dst+gf16_lookup3_stride(), 0, blockLen-gf16_lookup3_stride());

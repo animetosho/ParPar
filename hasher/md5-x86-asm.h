@@ -221,7 +221,7 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_scalar(uint32_t* HEDLEY_RESTR
 #endif
 	
 	
-	asm(
+	__asm__(
 #ifdef PLATFORM_AMD64
 		"movl %[input0], %k[TMP2]\n"
 		"movl %k[ID], %k[TMP1]\n"
@@ -249,7 +249,7 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_scalar(uint32_t* HEDLEY_RESTR
 	ASM_INPUTS
 	:);
 	
-	asm(
+	__asm__(
 		RG4( 6, 11,  0,  5,  -0x09e1da9e, -0x3fbf4cc0, 0x265e5a51, -0x16493856)
 		RG4(10, 15,  4,  9,  -0x29d0efa3, 0x02441453, -0x275e197f, -0x182c0438)
 		RG4(14,  3,  8, 13,  0x21e1cde6, -0x3cc8f82a, -0x0b2af279, 0x455a14ed)
@@ -429,7 +429,7 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_nolea(uint32_t* HEDLEY_RESTRI
 	D = state[3];
 	
 	
-	asm(
+	__asm__(
 		"addl %[input0], %k[A]\n"
 		"movl %k[D], %k[TMP1]\n"
 		RF4(,  1,  2,  3,  4,  -0x28955b88, -0x173848aa, 0x242070db, -0x3e423112)
@@ -444,7 +444,7 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_nolea(uint32_t* HEDLEY_RESTRI
 	: ASM_INPUTS
 	:);
 	
-	asm(
+	__asm__(
 		RG4( 6, 11,  0,  5,  -0x09e1da9e, -0x3fbf4cc0, 0x265e5a51, -0x16493856)
 		RG4(10, 15,  4,  9,  -0x29d0efa3, 0x02441453, -0x275e197f, -0x182c0438)
 		RG4(14,  3,  8, 13,  0x21e1cde6, -0x3cc8f82a, -0x0b2af279, 0x455a14ed)

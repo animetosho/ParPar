@@ -262,7 +262,7 @@ static HEDLEY_ALWAYS_INLINE void STOREU_XMM(void* dest, __m128i xmm) {
 
 /* conditional move, because, for whatever reason, no-one thought of making a CMOVcc intrinsic */
 #if defined(__GNUC__) || defined(__clang__)
-	#define CMOV(cond, dst, src) asm( \
+	#define CMOV(cond, dst, src) __asm__( \
 		"test %[c], %[c]\n" \
 		"cmovnz %[s], %[d]\n" \
 		: [d]"+r"(dst): [c]"r"(cond), [s]"r"(src))
@@ -271,7 +271,7 @@ static HEDLEY_ALWAYS_INLINE void STOREU_XMM(void* dest, __m128i xmm) {
 	#define CMOV(c, d, s) if(c) (d) = (s)
 #endif
 
-static HEDLEY_ALWAYS_INLINE uint_fast16_t xor_jit_bitpair3(uint8_t* dest, uint_fast32_t mask, __m128i* tCode, uint16_t* tInfo, intptr_t* posC, unsigned long* movC, uint_fast8_t isR64) {
+static HEDLEY_ALWAYS_INLINE uint_fast16_t xor_jit_bitpair3(uint8_t* dest, uint_fast32_t mask, __m128i* tCode, uint16_t* tInfo, intptr_t* posC, long* movC, uint_fast8_t isR64) {
 	uint_fast16_t info = tInfo[mask>>1];
 	intptr_t pC = info >> 12;
 	
@@ -281,12 +281,12 @@ static HEDLEY_ALWAYS_INLINE uint_fast16_t xor_jit_bitpair3(uint8_t* dest, uint_f
 	// handle conditional move for common mask (since it's always done)
 	CMOV(*movC, *posC, pC+isR64);
 	*posC -= info & 0xF;
-	*movC &= -(pC == 0);
+	*movC &= -(long)(pC == 0);
 	
 	return info;
 }
 
-static HEDLEY_ALWAYS_INLINE uint_fast16_t xor_jit_bitpair3_noxor(uint8_t* dest, uint_fast16_t info, intptr_t* pos1, unsigned long* mov1, intptr_t* pos2, unsigned long* mov2, int isR64) {
+static HEDLEY_ALWAYS_INLINE uint_fast16_t xor_jit_bitpair3_noxor(uint8_t* dest, uint_fast16_t info, intptr_t* pos1, long* mov1, intptr_t* pos2, long* mov2, int isR64) {
 	UNUSED(dest);
 	uintptr_t p1 = (info >> 4) & 0xF;
 	uintptr_t p2 = (info >> 8) & 0xF;
@@ -294,12 +294,12 @@ static HEDLEY_ALWAYS_INLINE uint_fast16_t xor_jit_bitpair3_noxor(uint8_t* dest, 
 	CMOV(*mov2, *pos2, p2+isR64);
 	*pos1 -= info & 0xF;
 	*pos2 -= info & 0xF;
-	*mov1 &= -(p1 == 0);
-	*mov2 &= -(p2 == 0);
+	*mov1 &= -(long)(p1 == 0);
+	*mov2 &= -(long)(p2 == 0);
 	return info & 0xF;
 }
 
-static HEDLEY_ALWAYS_INLINE uint_fast16_t xor_jit_bitpair3_nc_noxor(uint8_t* dest, uint_fast16_t info, intptr_t* pos1, unsigned long* mov1, intptr_t* pos2, unsigned long* mov2, int isR64) {
+static HEDLEY_ALWAYS_INLINE uint_fast16_t xor_jit_bitpair3_nc_noxor(uint8_t* dest, uint_fast16_t info, intptr_t* pos1, long* mov1, intptr_t* pos2, long* mov2, int isR64) {
 	UNUSED(dest);
 	uintptr_t p1 = (info >> 8) & 0xF;
 	uintptr_t p2 = info >> 12;
@@ -307,15 +307,15 @@ static HEDLEY_ALWAYS_INLINE uint_fast16_t xor_jit_bitpair3_nc_noxor(uint8_t* des
 	CMOV(*mov2, *pos2, p2+isR64);
 	*pos1 -= info & 0xF;
 	*pos2 -= info & 0xF;
-	*mov1 &= -(p1 == 0);
-	*mov2 &= -(p2 == 0);
+	*mov1 &= -(long)(p1 == 0);
+	*mov2 &= -(long)(p2 == 0);
 	return info & 0xF;
 }
 #undef CMOV
 
 
 
-static inline void* xor_write_jit_sse(const struct gf16_xor_scratch *HEDLEY_RESTRICT scratch, uint8_t *HEDLEY_RESTRICT jitptr, uint16_t val, const int xor, const int prefetch) {
+static inline void* xor_write_jit_sse(const struct gf16_xor_scratch *HEDLEY_RESTRICT scratch, uint8_t *HEDLEY_RESTRICT jitptr, uint16_t val, const int mode, const int prefetch) {
 	uint_fast32_t bit;
 	ALIGN_TO(16, uint32_t lumask[8]);
 	
@@ -495,11 +495,11 @@ static inline void* xor_write_jit_sse(const struct gf16_xor_scratch *HEDLEY_REST
 		jitptr += ((c)<<2)+(c)
 	
 	/* generate code */
-	if(xor) {
+	if(mode == XORDEP_JIT_MODE_MULADD) {
 		for(bit=0; bit<8; bit++) {
 			int destOffs = (bit<<5)-128;
 			int destOffs2 = destOffs+16;
-			unsigned long movC = 0xFF;
+			long movC = 0xFF;
 			intptr_t posC = 0;
 			uint_fast32_t mask = lumask[bit];
 			_LD_APS(0, DX, destOffs);
@@ -572,8 +572,8 @@ static inline void* xor_write_jit_sse(const struct gf16_xor_scratch *HEDLEY_REST
 		for(bit=0; bit<8; bit++) {
 			int destOffs = (bit<<5)-128;
 			int destOffs2 = destOffs+16;
-			unsigned long mov1 = 0xFF, mov2 = 0xFF,
-			              movC = 0xFF;
+			long mov1 = 0xFF, mov2 = 0xFF,
+			     movC = 0xFF;
 			intptr_t pos1 = 0, pos2 = 0, posC = 0;
 			uint_fast32_t mask = lumask[bit];
 			
@@ -669,30 +669,46 @@ static inline void* xor_write_jit_sse(const struct gf16_xor_scratch *HEDLEY_REST
 	return jitptr;
 }
 
-static HEDLEY_ALWAYS_INLINE void gf16_xor_jit_mul_sse2_base(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch, const int add, const int doPrefetch, const void *HEDLEY_RESTRICT prefetch) {
+static HEDLEY_ALWAYS_INLINE void gf16_xor_jit_mul_sse2_base(const void *HEDLEY_RESTRICT scratch, void* dst, const void* src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch, const int mode, const int doPrefetch, const void *HEDLEY_RESTRICT prefetch) {
 	jit_wx_pair* jit = (jit_wx_pair*)mutScratch;
-	gf16_xorjit_write_jit(scratch, coefficient, jit, add, doPrefetch, &xor_write_jit_sse);
+	gf16_xorjit_write_jit(scratch, coefficient, jit, mode, doPrefetch, &xor_write_jit_sse);
 	
 	// exec
 	/* adding 128 to the destination pointer allows the register offset to be coded in 1 byte
 	 * eg: 'movdqa xmm0, [rdx+0x90]' is 8 bytes, whilst 'movdqa xmm0, [rdx-0x60]' is 5 bytes */
-	gf16_xor_jit_stub(
-		(intptr_t)src - 128,
-		(intptr_t)dst + len - 128,
-		(intptr_t)dst - 128,
-		(intptr_t)prefetch - 128,
-		jit->x
-	);
+	if(mode == XORDEP_JIT_MODE_MUL_INSITU) {
+		// need a place to store a copy of the source, that won't fit in registers; these will be used as the memory source
+#ifdef PLATFORM_AMD64
+		ALIGN_TO(16, __m128i spill[3]);
+#else
+		ALIGN_TO(16, __m128i spill[11]);
+#endif
+		gf16_xor_jit_stub(
+			(intptr_t)spill + 128,
+			(intptr_t)dst + len - 128,
+			(intptr_t)dst - 128,
+			(intptr_t)prefetch - 128,
+			(uint8_t*)jit->x + XORDEP_JIT_SIZE/2
+		);
+	} else {
+		gf16_xor_jit_stub(
+			(intptr_t)src - 128,
+			(intptr_t)dst + len - 128,
+			(intptr_t)dst - 128,
+			(intptr_t)prefetch - 128,
+			jit->x
+		);
+	}
 }
 #endif /* defined(__SSE2__) */
 
-void gf16_xor_jit_mul_sse2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch) {
+void gf16_xor_jit_mul_sse2(const void *HEDLEY_RESTRICT scratch, void* dst, const void* src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch) {
 #ifdef __SSE2__
 	if(coefficient == 0) {
 		memset(dst, 0, len);
 		return;
 	}
-	gf16_xor_jit_mul_sse2_base(scratch, dst, src, len, coefficient, mutScratch, 0, 0, NULL);
+	gf16_xor_jit_mul_sse2_base(scratch, dst, src, len, coefficient, mutScratch, dst==src ? XORDEP_JIT_MODE_MUL_INSITU : XORDEP_JIT_MODE_MUL, 0, NULL);
 #else
 	UNUSED(scratch); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficient); UNUSED(mutScratch);
 #endif
@@ -701,7 +717,7 @@ void gf16_xor_jit_mul_sse2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RES
 void gf16_xor_jit_muladd_sse2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch) {
 #ifdef __SSE2__
 	if(coefficient == 0) return;
-	gf16_xor_jit_mul_sse2_base(scratch, dst, src, len, coefficient, mutScratch, 1, 0, NULL);
+	gf16_xor_jit_mul_sse2_base(scratch, dst, src, len, coefficient, mutScratch, XORDEP_JIT_MODE_MULADD, 0, NULL);
 #else
 	UNUSED(scratch); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficient); UNUSED(mutScratch);
 #endif
@@ -710,7 +726,7 @@ void gf16_xor_jit_muladd_sse2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_
 void gf16_xor_jit_muladd_prefetch_sse2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch, const void *HEDLEY_RESTRICT prefetch) {
 #ifdef __SSE2__
 	if(coefficient == 0) return;
-	gf16_xor_jit_mul_sse2_base(scratch, dst, src, len, coefficient, mutScratch, 1, _MM_HINT_T1, prefetch);
+	gf16_xor_jit_mul_sse2_base(scratch, dst, src, len, coefficient, mutScratch, XORDEP_JIT_MODE_MULADD, _MM_HINT_T1, prefetch);
 #else
 	UNUSED(scratch); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficient); UNUSED(mutScratch); UNUSED(prefetch);
 #endif
@@ -818,9 +834,53 @@ static HEDLEY_ALWAYS_INLINE void gf16_xor_write_deptable(intptr_t *HEDLEY_RESTRI
 		*/
 	}
 }
+
+static HEDLEY_ALWAYS_INLINE void gf16_xor_mul_block_sse2(const uint8_t* inP, uint8_t* outP, uint_fast32_t counts[16], intptr_t deptable[256]) {
+	/* Note that we assume that all counts are at least 1; I don't think it's possible for that to be false */
+	#define STEP(bit, type, typev, typed) { \
+		intptr_t* deps = deptable + bit*16; \
+		typev tmp = _mm_load_ ## type((typed*)(inP + deps[ 0])); \
+		HEDLEY_ASSUME(counts[bit] <= 15); \
+		switch(counts[bit]) { \
+			case 15: tmp = _mm_xor_ ## type(tmp, *(typev*)(inP + deps[15])); /* FALLTHRU */ \
+			case 14: tmp = _mm_xor_ ## type(tmp, *(typev*)(inP + deps[14])); /* FALLTHRU */ \
+			case 13: tmp = _mm_xor_ ## type(tmp, *(typev*)(inP + deps[13])); /* FALLTHRU */ \
+			case 12: tmp = _mm_xor_ ## type(tmp, *(typev*)(inP + deps[12])); /* FALLTHRU */ \
+			case 11: tmp = _mm_xor_ ## type(tmp, *(typev*)(inP + deps[11])); /* FALLTHRU */ \
+			case 10: tmp = _mm_xor_ ## type(tmp, *(typev*)(inP + deps[10])); /* FALLTHRU */ \
+			case  9: tmp = _mm_xor_ ## type(tmp, *(typev*)(inP + deps[ 9])); /* FALLTHRU */ \
+			case  8: tmp = _mm_xor_ ## type(tmp, *(typev*)(inP + deps[ 8])); /* FALLTHRU */ \
+			case  7: tmp = _mm_xor_ ## type(tmp, *(typev*)(inP + deps[ 7])); /* FALLTHRU */ \
+			case  6: tmp = _mm_xor_ ## type(tmp, *(typev*)(inP + deps[ 6])); /* FALLTHRU */ \
+			case  5: tmp = _mm_xor_ ## type(tmp, *(typev*)(inP + deps[ 5])); /* FALLTHRU */ \
+			case  4: tmp = _mm_xor_ ## type(tmp, *(typev*)(inP + deps[ 4])); /* FALLTHRU */ \
+			case  3: tmp = _mm_xor_ ## type(tmp, *(typev*)(inP + deps[ 3])); /* FALLTHRU */ \
+			case  2: tmp = _mm_xor_ ## type(tmp, *(typev*)(inP + deps[ 2])); /* FALLTHRU */ \
+			case  1: tmp = _mm_xor_ ## type(tmp, *(typev*)(inP + deps[ 1])); /* FALLTHRU */ \
+		} \
+		_mm_store_ ## type((typed*)outP + bit, tmp); \
+	}
+	STEP( 0, si128, __m128i, __m128i)
+	STEP( 1, si128, __m128i, __m128i)
+	STEP( 2, si128, __m128i, __m128i)
+	STEP( 3, si128, __m128i, __m128i)
+	STEP( 4, si128, __m128i, __m128i)
+	STEP( 5, si128, __m128i, __m128i)
+	STEP( 6, si128, __m128i, __m128i)
+	STEP( 7, si128, __m128i, __m128i)
+	STEP( 8, si128, __m128i, __m128i)
+	STEP( 9, si128, __m128i, __m128i)
+	STEP(10, si128, __m128i, __m128i)
+	STEP(11, si128, __m128i, __m128i)
+	STEP(12, si128, __m128i, __m128i)
+	STEP(13, si128, __m128i, __m128i)
+	STEP(14, si128, __m128i, __m128i)
+	STEP(15, si128, __m128i, __m128i)
+	#undef STEP
+}
 #endif
 
-void gf16_xor_mul_sse2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t val, void *HEDLEY_RESTRICT mutScratch) {
+void gf16_xor_mul_sse2(const void *HEDLEY_RESTRICT scratch, void* dst, const void* src, size_t len, uint16_t val, void *HEDLEY_RESTRICT mutScratch) {
 	UNUSED(mutScratch);
 #ifdef __SSE2__
 	if(val == 0) {
@@ -831,51 +891,24 @@ void gf16_xor_mul_sse2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRIC
 	ALIGN_TO(16, intptr_t deptable[256]);
 	uint8_t* _dst = (uint8_t*)dst + len;
 	
-	gf16_xor_write_deptable(deptable, counts, (uint8_t*)scratch, val, (uintptr_t)src - (uintptr_t)dst);
-	
-	for(intptr_t ptr = -(intptr_t)len; ptr; ptr += sizeof(__m128i)*16) {
-		uint8_t* p = _dst + ptr;
-		/* Note that we assume that all counts are at least 1; I don't think it's possible for that to be false */
-		#define STEP(bit, type, typev, typed) { \
-			intptr_t* deps = deptable + bit*16; \
-			typev tmp = _mm_load_ ## type((typed*)(p + deps[ 0])); \
-			HEDLEY_ASSUME(counts[bit] <= 15); \
-			switch(counts[bit]) { \
-				case 15: tmp = _mm_xor_ ## type(tmp, *(typev*)(p + deps[15])); /* FALLTHRU */ \
-				case 14: tmp = _mm_xor_ ## type(tmp, *(typev*)(p + deps[14])); /* FALLTHRU */ \
-				case 13: tmp = _mm_xor_ ## type(tmp, *(typev*)(p + deps[13])); /* FALLTHRU */ \
-				case 12: tmp = _mm_xor_ ## type(tmp, *(typev*)(p + deps[12])); /* FALLTHRU */ \
-				case 11: tmp = _mm_xor_ ## type(tmp, *(typev*)(p + deps[11])); /* FALLTHRU */ \
-				case 10: tmp = _mm_xor_ ## type(tmp, *(typev*)(p + deps[10])); /* FALLTHRU */ \
-				case  9: tmp = _mm_xor_ ## type(tmp, *(typev*)(p + deps[ 9])); /* FALLTHRU */ \
-				case  8: tmp = _mm_xor_ ## type(tmp, *(typev*)(p + deps[ 8])); /* FALLTHRU */ \
-				case  7: tmp = _mm_xor_ ## type(tmp, *(typev*)(p + deps[ 7])); /* FALLTHRU */ \
-				case  6: tmp = _mm_xor_ ## type(tmp, *(typev*)(p + deps[ 6])); /* FALLTHRU */ \
-				case  5: tmp = _mm_xor_ ## type(tmp, *(typev*)(p + deps[ 5])); /* FALLTHRU */ \
-				case  4: tmp = _mm_xor_ ## type(tmp, *(typev*)(p + deps[ 4])); /* FALLTHRU */ \
-				case  3: tmp = _mm_xor_ ## type(tmp, *(typev*)(p + deps[ 3])); /* FALLTHRU */ \
-				case  2: tmp = _mm_xor_ ## type(tmp, *(typev*)(p + deps[ 2])); /* FALLTHRU */ \
-				case  1: tmp = _mm_xor_ ## type(tmp, *(typev*)(p + deps[ 1])); /* FALLTHRU */ \
-			} \
-			_mm_store_ ## type((typed*)p + bit, tmp); \
+	if(dst == src) {
+		// for in-situ mul, write to a temp block and copy back
+		ALIGN_TO(16, uint8_t tmp[256]);
+		__m128i* _tmp = (__m128i*)tmp;
+		gf16_xor_write_deptable(deptable, counts, (uint8_t*)scratch, val, 0);
+		for(intptr_t ptr = -(intptr_t)len; ptr; ptr += sizeof(__m128i)*16) {
+			uint8_t* p = _dst + ptr;
+			gf16_xor_mul_block_sse2(p, tmp, counts, deptable);
+			for(int i=0; i<16; i++) {
+				_mm_store_si128((__m128i*)p + i, _mm_load_si128(_tmp+i));
+			}
 		}
-		STEP( 0, si128, __m128i, __m128i)
-		STEP( 1, si128, __m128i, __m128i)
-		STEP( 2, si128, __m128i, __m128i)
-		STEP( 3, si128, __m128i, __m128i)
-		STEP( 4, si128, __m128i, __m128i)
-		STEP( 5, si128, __m128i, __m128i)
-		STEP( 6, si128, __m128i, __m128i)
-		STEP( 7, si128, __m128i, __m128i)
-		STEP( 8, si128, __m128i, __m128i)
-		STEP( 9, si128, __m128i, __m128i)
-		STEP(10, si128, __m128i, __m128i)
-		STEP(11, si128, __m128i, __m128i)
-		STEP(12, si128, __m128i, __m128i)
-		STEP(13, si128, __m128i, __m128i)
-		STEP(14, si128, __m128i, __m128i)
-		STEP(15, si128, __m128i, __m128i)
-		#undef STEP
+	} else {
+		gf16_xor_write_deptable(deptable, counts, (uint8_t*)scratch, val, (uintptr_t)src - (uintptr_t)dst);
+		
+		for(intptr_t ptr = -(intptr_t)len; ptr; ptr += sizeof(__m128i)*16) {
+			gf16_xor_mul_block_sse2(_dst + ptr, _dst + ptr, counts, deptable);
+		}
 	}
 #else
 	UNUSED(scratch); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(val);
@@ -979,10 +1012,10 @@ void gf16_xor_muladd_sse2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_REST
 	srcDQh = _mm_unpackhi_epi64(srcQ0d, srcQ8d)
 
 #define EXTRACT_BITS(target, srcVec) \
-	(target)[7] = _mm_movemask_epi8(srcVec); \
+	write16((target) + 7, _mm_movemask_epi8(srcVec)); \
 	for(int i=6; i>=0; i--) { \
 		srcVec = _mm_add_epi8(srcVec, srcVec); \
-		(target)[i] = _mm_movemask_epi8(srcVec); \
+		write16((target) + i, _mm_movemask_epi8(srcVec)); \
 	}
 void gf16_xor_finish_block_sse2(void *HEDLEY_RESTRICT dst) {
 	uint16_t* _dst = (uint16_t*)dst;
@@ -1032,14 +1065,14 @@ void gf16_xor_finish_block_sse2(void *HEDLEY_RESTRICT dst) {
 		srcVec = _mm_add_epi8(srcVec, srcVec); \
 		write16((target)+0, _mm_movemask_epi8(srcVec)); \
 	}
-	EXTRACT_BITS_HALF(_dst +  0, dstA, 0, srcDQb)
-	EXTRACT_BITS_HALF(_dst +  8, dstA, 1, srcDQa)
-	EXTRACT_BITS_HALF(_dst + 16, dstB, 0, srcDQd)
-	EXTRACT_BITS_HALF(_dst + 24, dstB, 1, srcDQc)
-	EXTRACT_BITS_HALF(_dst + 32, dstC, 0, srcDQf)
-	EXTRACT_BITS_HALF(_dst + 40, dstC, 1, srcDQe)
-	EXTRACT_BITS_HALF(_dst + 48, dstD, 0, srcDQh)
-	EXTRACT_BITS_HALF(_dst + 56, dstD, 1, srcDQg)
+	EXTRACT_BITS_HALF(_dst +  0, dstA, 0, srcDQa)
+	EXTRACT_BITS_HALF(_dst +  8, dstA, 1, srcDQb)
+	EXTRACT_BITS_HALF(_dst + 16, dstB, 0, srcDQc)
+	EXTRACT_BITS_HALF(_dst + 24, dstB, 1, srcDQd)
+	EXTRACT_BITS_HALF(_dst + 32, dstC, 0, srcDQe)
+	EXTRACT_BITS_HALF(_dst + 40, dstC, 1, srcDQf)
+	EXTRACT_BITS_HALF(_dst + 48, dstD, 0, srcDQg)
+	EXTRACT_BITS_HALF(_dst + 56, dstD, 1, srcDQh)
 	#undef EXTRACT_BITS_HALF
 	
 	
@@ -1065,14 +1098,14 @@ void gf16_xor_finish_block_sse2(void *HEDLEY_RESTRICT dst) {
 	
 	// extract & write all bits
 	// TODO: consider saving some to a register to reduce write ops
-	EXTRACT_BITS(_dst + 64 +  0, srcDQb)
-	EXTRACT_BITS(_dst + 64 +  8, srcDQa)
-	EXTRACT_BITS(_dst + 64 + 16, srcDQd)
-	EXTRACT_BITS(_dst + 64 + 24, srcDQc)
-	EXTRACT_BITS(_dst + 64 + 32, srcDQf)
-	EXTRACT_BITS(_dst + 64 + 40, srcDQe)
-	EXTRACT_BITS(_dst + 64 + 48, srcDQh)
-	EXTRACT_BITS(_dst + 64 + 56, srcDQg)
+	EXTRACT_BITS(_dst + 64 +  0, srcDQa)
+	EXTRACT_BITS(_dst + 64 +  8, srcDQb)
+	EXTRACT_BITS(_dst + 64 + 16, srcDQc)
+	EXTRACT_BITS(_dst + 64 + 24, srcDQd)
+	EXTRACT_BITS(_dst + 64 + 32, srcDQe)
+	EXTRACT_BITS(_dst + 64 + 40, srcDQf)
+	EXTRACT_BITS(_dst + 64 + 48, srcDQg)
+	EXTRACT_BITS(_dst + 64 + 56, srcDQh)
 }
 void gf16_xor_finish_copy_block_sse2(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src) {
 	uint16_t* _dst = (uint16_t*)dst;
@@ -1092,14 +1125,14 @@ void gf16_xor_finish_copy_block_sse2(void *HEDLEY_RESTRICT dst, const void *HEDL
 	UNPACK_VECTS;
 	
 	// write extracted bits
-	EXTRACT_BITS(_dst +  0, srcDQb)
-	EXTRACT_BITS(_dst +  8, srcDQa)
-	EXTRACT_BITS(_dst + 16, srcDQd)
-	EXTRACT_BITS(_dst + 24, srcDQc)
-	EXTRACT_BITS(_dst + 32, srcDQf)
-	EXTRACT_BITS(_dst + 40, srcDQe)
-	EXTRACT_BITS(_dst + 48, srcDQh)
-	EXTRACT_BITS(_dst + 56, srcDQg)
+	EXTRACT_BITS(_dst +  0, srcDQa)
+	EXTRACT_BITS(_dst +  8, srcDQb)
+	EXTRACT_BITS(_dst + 16, srcDQc)
+	EXTRACT_BITS(_dst + 24, srcDQd)
+	EXTRACT_BITS(_dst + 32, srcDQe)
+	EXTRACT_BITS(_dst + 40, srcDQf)
+	EXTRACT_BITS(_dst + 48, srcDQg)
+	EXTRACT_BITS(_dst + 56, srcDQh)
 	
 	
 	// load second half
@@ -1110,14 +1143,14 @@ void gf16_xor_finish_copy_block_sse2(void *HEDLEY_RESTRICT dst, const void *HEDL
 	
 	UNPACK_VECTS;
 	
-	EXTRACT_BITS(_dst + 64 +  0, srcDQb)
-	EXTRACT_BITS(_dst + 64 +  8, srcDQa)
-	EXTRACT_BITS(_dst + 64 + 16, srcDQd)
-	EXTRACT_BITS(_dst + 64 + 24, srcDQc)
-	EXTRACT_BITS(_dst + 64 + 32, srcDQf)
-	EXTRACT_BITS(_dst + 64 + 40, srcDQe)
-	EXTRACT_BITS(_dst + 64 + 48, srcDQh)
-	EXTRACT_BITS(_dst + 64 + 56, srcDQg)
+	EXTRACT_BITS(_dst + 64 +  0, srcDQa)
+	EXTRACT_BITS(_dst + 64 +  8, srcDQb)
+	EXTRACT_BITS(_dst + 64 + 16, srcDQc)
+	EXTRACT_BITS(_dst + 64 + 24, srcDQd)
+	EXTRACT_BITS(_dst + 64 + 32, srcDQe)
+	EXTRACT_BITS(_dst + 64 + 40, srcDQf)
+	EXTRACT_BITS(_dst + 64 + 48, srcDQg)
+	EXTRACT_BITS(_dst + 64 + 56, srcDQh)
 }
 void gf16_xor_finish_copy_blocku_sse2(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t bytes) {
 	uint16_t block[128];
@@ -1164,23 +1197,47 @@ GF_FINISH_PACKED_FUNCS_STUB(gf16_xor, _sse2)
 #include "gf16_bitdep_init_sse2.h"
 
 #ifdef PLATFORM_X86
-static size_t xor_write_init_jit(uint8_t *jitCode) {
-	uint8_t *jitCodeStart = jitCode;
-	jitCode += _jit_add_i(jitCode, AX, 256);
-	jitCode += _jit_add_i(jitCode, DX, 256);
+static void xor_write_init_jit(uint8_t *jitCodeNorm, uint8_t *jitCodeInsitu, uint_fast16_t* sizeNorm, uint_fast16_t* sizeInsitu) {
+	uint8_t *jitCodeStart = jitCodeNorm;
+	jitCodeNorm += _jit_add_i(jitCodeNorm, AX, 256);
+	jitCodeNorm += _jit_add_i(jitCodeNorm, DX, 256);
 	
 # ifdef PLATFORM_AMD64
 	/* preload upper 13 inputs into registers */
 	for(int i=3; i<16; i++) {
-		jitCode += _jit_movaps_load(jitCode, i, AX, lshift32(i-8, 4));
+		jitCodeNorm += _jit_movaps_load(jitCodeNorm, i, AX, lshift32(i-8, 4));
 	}
 # else
 	/* can only fit 5 in 32-bit mode :( */
 	for(int i=3; i<8; i++) { /* despite appearances, we're actually loading the top 5, not mid 5 */
-		jitCode += _jit_movaps_load(jitCode, i, AX, i<<4);
+		jitCodeNorm += _jit_movaps_load(jitCodeNorm, i, AX, i<<4);
 	}
 # endif
-	return jitCode-jitCodeStart;
+	
+	if(sizeNorm) *sizeNorm = (uint_fast16_t)(jitCodeNorm-jitCodeStart);
+	
+	// in-situ version
+	jitCodeStart = jitCodeInsitu;
+	jitCodeInsitu += _jit_add_i(jitCodeInsitu, DX, 256);
+	
+# ifdef PLATFORM_AMD64
+	for(int i=0; i<16; i++) {
+		jitCodeInsitu += _jit_movaps_load(jitCodeInsitu, i, DX, lshift32(i-8, 4));
+	}
+	for(int i=0; i<3; i++) {
+		jitCodeInsitu += _jit_movaps_store(jitCodeInsitu, AX, lshift32(i-8, 4), i);
+	}
+# else
+	for(int i=0; i<11; i++) {
+		jitCodeInsitu += _jit_movaps_load(jitCodeInsitu, 0, DX, lshift32(i-8, 4));
+		jitCodeInsitu += _jit_movaps_store(jitCodeInsitu, AX, lshift32(i-8, 4), 0);
+	}
+	for(int i=3; i<8; i++) { /* despite appearances, we're actually loading the top 5, not mid 5 */
+		jitCodeInsitu += _jit_movaps_load(jitCodeInsitu, i, DX, i<<4);
+	}
+# endif
+	
+	if(sizeInsitu) *sizeInsitu = (uint_fast16_t)(jitCodeInsitu-jitCodeStart);
 }
 #endif
 
@@ -1195,7 +1252,7 @@ void* gf16_xor_jit_init_sse2(int polynomial, int jitOptStrat) {
 	gf16_xor_create_jit_lut_sse2();
 	
 	ret->jitOptStrat = jitOptStrat;
-	ret->codeStart = (uint_fast8_t)xor_write_init_jit(tmpCode);
+	xor_write_init_jit(tmpCode, tmpCode, &(ret->codeStart), &(ret->codeStartInsitu));
 	return ret;
 #else
 	UNUSED(polynomial); UNUSED(jitOptStrat);
@@ -1207,7 +1264,7 @@ void* gf16_xor_jit_init_mut_sse2() {
 #ifdef PLATFORM_X86
 	jit_wx_pair *jitCode = jit_alloc(XORDEP_JIT_SIZE);
 	if(!jitCode) return NULL;
-	xor_write_init_jit(jitCode->w);
+	xor_write_init_jit(jitCode->w, (uint8_t*)jitCode->w + XORDEP_JIT_SIZE/2, NULL, NULL);
 	return jitCode;
 #else
 	return NULL;
@@ -1221,6 +1278,35 @@ void gf16_xor_jit_uninit(void* scratch) {
 	UNUSED(scratch);
 #endif
 }
+
+static HEDLEY_ALWAYS_INLINE uint16_t gf16_xorX_replace_word(void* data, size_t index, uint16_t newValue, size_t width) {
+	uint8_t* base = (uint8_t*)data + (index & ~(width*8-1)) * 2; // advance pointer to correct group
+	base += ((index >> 3) & (width-1)); // advance to correct byte
+	
+	unsigned bitIndex = index&7;
+	uint16_t oldValue = 0;
+	unsigned _newValue = newValue << bitIndex;
+	uint8_t byteMask = 1 << bitIndex;
+	for(int i=0; i<16; i++) {
+		uint8_t byte = base[i*width];
+		oldValue <<= 1;
+		_newValue <<= 1;
+		oldValue |= (byte >> bitIndex) & 1;
+		
+		base[i*width] = (byte & ~byteMask) | ((_newValue >> 16) & byteMask);
+	}
+	return oldValue;
+}
+uint16_t gf16_xor16_replace_word(void* data, size_t index, uint16_t newValue) {
+	return gf16_xorX_replace_word(data, index, newValue, 16);
+}
+uint16_t gf16_xor32_replace_word(void* data, size_t index, uint16_t newValue) {
+	return gf16_xorX_replace_word(data, index, newValue, 32);
+}
+uint16_t gf16_xor64_replace_word(void* data, size_t index, uint16_t newValue) {
+	return gf16_xorX_replace_word(data, index, newValue, 64);
+}
+
 
 void* gf16_xor_init_sse2(int polynomial) {
 #ifdef __SSE2__

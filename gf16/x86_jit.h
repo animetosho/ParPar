@@ -702,7 +702,9 @@ typedef struct {
 } jit_wx_pair;
 
 #if defined(_WINDOWS) || defined(__WINDOWS__) || defined(_WIN32) || defined(_WIN64)
-# define NOMINMAX
+# ifndef NOMINMAX
+#  define NOMINMAX
+# endif
 # include <windows.h>
 static HEDLEY_ALWAYS_INLINE jit_wx_pair* jit_alloc(size_t len) {
 	void* mem = VirtualAlloc(NULL, len, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
@@ -738,7 +740,13 @@ static HEDLEY_ALWAYS_INLINE jit_wx_pair* jit_alloc(size_t len) {
 	if(!ret) return NULL;
 	
 	ret->len = len;
-	void* mem = mmap(NULL, len, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANON, -1, 0);
+	void* mem = mmap(NULL, len, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE |
+# ifdef MAP_ANONYMOUS
+		MAP_ANONYMOUS,
+# else
+		MAP_ANON,
+# endif
+		-1, 0);
 	if(mem) {
 		if((uintptr_t)mem & 63) { // page not cacheline aligned? something's gone wrong...
 			munmap(mem, len);

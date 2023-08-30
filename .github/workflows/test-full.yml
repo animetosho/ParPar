@@ -1,0 +1,36 @@
+name: Run PAR2 Create Tests
+on:
+  workflow_dispatch:
+  push:
+
+jobs:
+  test-node:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+        - version: '0.10.48'
+          flags: ''
+          python2: true
+        - version: '4.9.1'
+          flags: ''
+          python2: true
+        - version: '12.22.12'
+          flags: '--trace-warnings'
+          python2: false
+        - version: '20.5.1'
+          flags: '--pending-deprecation --throw-deprecation --trace-warnings --openssl-legacy-provider'
+          python2: false
+    name: Test on Node v${{ matrix.version }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: MatteoH2O1999/setup-python@v1
+        with:
+          python-version: '2.7'
+        if: ${{ matrix.python2 }}
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+        with:
+          node-version: ${{ matrix.version }}
+      - run: npm install --production
+      - run: (cd test && node ${{ matrix.flags }} par-compare.js -f)

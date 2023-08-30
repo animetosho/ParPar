@@ -15,23 +15,23 @@ jobs:
       BUILD_LOGLEVEL: verbose
     steps:
       - uses: ilammy/setup-nasm@v1
-      - uses: actions/setup-python@v4
+      - uses: MatteoH2O1999/setup-python@v1
         id: py
         with:
           python-version: '2.7'
       - uses: actions/checkout@v3
       - name: Get release
         id: get_release
-        uses: bruceadams/get-release@v1.2.3
+        uses: bruceadams/get-release@v1.3.2
         env:
           GITHUB_TOKEN: ${{ github.token }}
       - run: npm install --production --ignore-scripts
       - run: (cd nexe && npm install --production)
       - run: (cd nexe && node build)
       - run: nexe\parpar.exe --version
-      - run: nexe\parpar.exe -r1 -s1M -onexe\test.par2 nexe\parpar.exe
+      - run: nexe\parpar.exe -r1 -s1M -o nexe\test.par2 nexe\parpar.exe
       - run: move nexe\parpar.exe parpar.exe && 7z a -t7z -mx=9 parpar.7z parpar.exe
-      - uses: actions/upload-release-asset@v1
+      - uses: sekwah41/upload-release-assets@v1
         env:
           GITHUB_TOKEN: ${{ github.token }}
         with:
@@ -63,7 +63,7 @@ jobs:
           python-version: '3.9' # workaround "cannot import name 'Mapping' from 'collections'" error
       - name: Get release
         id: get_release
-        uses: bruceadams/get-release@v1.2.3
+        uses: bruceadams/get-release@v1.3.2
         env:
           GITHUB_TOKEN: ${{ github.token }}
       - run: |
@@ -78,7 +78,7 @@ jobs:
       - run: nexe/parpar --version
       - run: nexe/parpar -r1 -s1M -onexe/test.par2 nexe/parpar
       - run: xz -9e --x86 --lzma2 nexe/parpar -c > parpar.xz
-      - uses: actions/upload-release-asset@v1
+      - uses: sekwah41/upload-release-assets@v1
         env:
           GITHUB_TOKEN: ${{ github.token }}
         with:
@@ -113,7 +113,7 @@ jobs:
           arch: arm64
       - name: Get release
         id: get_release
-        uses: bruceadams/get-release@v1.2.3
+        uses: bruceadams/get-release@v1.3.2
         env:
           GITHUB_TOKEN: ${{ github.token }}
       - run: npm install --production --ignore-scripts
@@ -125,7 +125,7 @@ jobs:
           CC_host: cc
           CXX_host: c++
       - run: xz -9e --lzma2 nexe/parpar -c > parpar.xz
-      - uses: actions/upload-release-asset@v1
+      - uses: sekwah41/upload-release-assets@v1
         env:
           GITHUB_TOKEN: ${{ github.token }}
         with:
@@ -166,7 +166,7 @@ jobs:
 #          packages: "libstdc++-$(c++ -dumpversion)-dev:i386 libc6-dev:i386"
 #      - name: Get release
 #        id: get_release
-#        uses: bruceadams/get-release@v1.2.3
+#        uses: bruceadams/get-release@v1.3.2
 #        env:
 #          GITHUB_TOKEN: ${{ github.token }}
 #      - run: npm install --production --ignore-scripts
@@ -178,7 +178,7 @@ jobs:
 #          CC_host: cc
 #          CXX_host: c++
 #      - run: xz -9e --arm --lzma2 nexe/parpar -c > parpar.xz
-#      - uses: actions/upload-release-asset@v1
+#      - uses: sekwah41/upload-release-assets@v1
 #        env:
 #          GITHUB_TOKEN: ${{ github.token }}
 #        with:
@@ -197,7 +197,7 @@ jobs:
       - uses: actions/checkout@v3
       - name: Get release
         id: get_release
-        uses: bruceadams/get-release@v1.2.3
+        uses: bruceadams/get-release@v1.3.2
         env:
           GITHUB_TOKEN: ${{ github.token }}
       - run: npm install --production --ignore-scripts
@@ -206,7 +206,7 @@ jobs:
       - run: nexe/parpar --version
       - run: nexe/parpar -r1 -s1M -onexe/test.par2 nexe/parpar
       - run: xz -9e --x86 --lzma2 nexe/parpar -c > parpar.xz
-      - uses: actions/upload-release-asset@v1
+      - uses: sekwah41/upload-release-assets@v1
         env:
           GITHUB_TOKEN: ${{ github.token }}
         with:

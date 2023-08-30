@@ -382,7 +382,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle_muladd_x_vbmi(
 }
 #endif
 
-void gf16_shuffle_mul_vbmi(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t val, void *HEDLEY_RESTRICT mutScratch) {
+void gf16_shuffle_mul_vbmi(const void *HEDLEY_RESTRICT scratch, void* dst, const void* src, size_t len, uint16_t val, void *HEDLEY_RESTRICT mutScratch) {
 	UNUSED(mutScratch);
 #if defined(__AVX512VBMI__) && defined(__AVX512VL__)
 	__m512i lo0, lo1, lo2, hi0, hi1, hi2;

@@ -3,6 +3,7 @@
 "use strict";
 
 var ParPar = require('../lib/parpar.js');
+var cliUtil = require('../cli/util');
 var cliFormat = process.stderr.isTTY ? function(code, msg) {
 	return '\x1b[' + code + 'm' + msg + '\x1b[0m';
 } : function(code, msg) { return msg; };
@@ -18,15 +19,6 @@ var print_json = function(type, obj) {
 	console.log(JSON.stringify(o, null, 2));
 };
 var arg_parser = require('../lib/arg_parser.js');
-
-var friendlySize = function(s) {
-	var units = ['B', 'KiB', 'MiB', 'GiB', 'TiB', 'PiB', 'EiB'];
-	for(var i=0; i<units.length; i++) {
-		if(s < 10000) break;
-		s /= 1024;
-	}
-	return (Math.round(s *100)/100) + ' ' + units[i];
-};
 
 var opts = {
 	'input-slices': {
@@ -60,6 +52,10 @@ var opts = {
 		alias: 'e',
 		type: 'int',
 		map: 'recoveryOffset'
+	},
+	'recovery-exponents': {
+		type: 'list',
+		map: 'recoveryExponents'
 	},
 	'comment': {
 		alias: 'c',
@@ -305,12 +301,13 @@ var fs = require('fs');
 /*{{!include_in_executable!
 if(!argv['skip-self-check']) {
 	// if this is a compiled EXE, do a self MD5 check to detect corruption
+	var bufferSlice = Buffer.prototype.readBigInt64BE ? Buffer.prototype.subarray : Buffer.prototype.slice;
 	var executable = fs.readFileSync(process.execPath);
-	var md5loc = executable.slice(-1024, -16).indexOf('\0<!parpar#md5~>=');
+	var md5loc = bufferSlice.call(executable, -1024, -16).indexOf('\0<!parpar#md5~>=');
 	if(md5loc < 0)
 		error('Could not find self-check hash - this executable may be truncated or corrupt. If you are certain this is not a problem, you may use the `--skip-self-check` flag to bypass this check.');
-	var expectedMd5 = executable.slice(-1024 + md5loc + 16, (-1024 + md5loc + 32) || undefined).toString('hex');
-	var actualMd5 = require('crypto').createHash('md5').update(executable.slice(0, -1024 + md5loc)).digest('hex');
+	var expectedMd5 = bufferSlice.call(executable, -1024 + md5loc + 16, (-1024 + md5loc + 32) || undefined).toString('hex');
+	var actualMd5 = require('crypto').createHash('md5').update(bufferSlice.call(executable, 0, -1024 + md5loc)).digest('hex');
 	if(expectedMd5 != actualMd5)
 		error('Self-check failed - this executable may be corrupt. If you are certain this is not a problem, you may use the `--skip-self-check` flag to bypass this check.');
 }
@@ -357,7 +354,7 @@ if(argv['opencl-list']) {
 				var output = [
 					'  - Device #' + dvId + ': ' + device.name + (dvId == defaultDev.id ? defaultLabel : ''),
 					'    Type: ' + device.type,
-					'    Memory: ' + friendlySize(device.memory_global) + (device.memory_unified ? ' (shared)':''),
+					'    Memory: ' + cliUtil.friendlySize(device.memory_global) + (device.memory_unified ? ' (shared)':''),
 				];
 				if(!device.supported)
 					output.splice(1, 0, '    Supported: no');
@@ -389,20 +386,13 @@ if(argv.json)
 		print_json('progress', data);
 	};
 else if(argv.progress == 'stdout' || argv.progress == 'stderr') {
-	var decimalPoint = (1.1).toLocaleString().substr(1, 1);
 	// TODO: display slices processed, pass# if verbose progress requested
 	writeProgress = function(data) {
 		// add formatting for aesthetics
 		var parts = data.progress_percent.toLocaleString().match(/^([0-9]+)([.,][0-9]+)?$/);
-		while(parts[1].length < 3)
-			parts[1] = ' ' + parts[1];
-		if(parts[2]) while(parts[2].length < 3)
-			parts[2] += '0';
-		else
-			parts[2] = decimalPoint + '00';
-		var state = data.state;
-		while(state.length < 18)
-			state += ' ';
+		parts[1] = cliUtil.lpad(parts[1], 3, ' ');
+		parts[2] = cliUtil.rpad(parts[2] || cliUtil.decimalPoint, 3, '0');
+		var state = cliUtil.rpad(data.state, 18, ' ');
 		if(process[argv.progress].isTTY)
 			process[argv.progress].write(state + ': \x1b[1m' + (parts[1] + parts[2]) + '%\x1b[0m\x1b[0G');
 		else
@@ -415,6 +405,15 @@ if(argv['hash-method']) {
 }
 if(argv['md5-method']) {
 	require('../lib/par2.js').set_outhash_method(argv['md5-method']);
+}
+
+if(argv['recovery-exponents']) {
+	['recovery-slices', 'min-recovery-slices', 'max-recovery-slices', 'recovery-offset', 'slice-dist', 'slices-per-file', 'slices-first-file', 'recovery-files'].forEach(function(conflictOpt) {
+		if(argv[conflictOpt])
+			error('`--recovery-exponents` cannot be used with `--' + conflictOpt + '`');
+	});
+	if(!argv.noindex)
+		error('`--recovery-exponents` cannot be used with `--noindex`');
 }
 
 var inputFiles = argv._;
@@ -444,7 +443,7 @@ var inputFiles = argv._;
 					stdInUsed = true;
 					stream = process.stdin;
 				} else {
-					stream = fs.createReadStream(null, {fd: fl[0].substr(5)|0});
+					stream = fs.createReadStream(null, {fd: fl[0].substring(5)|0});
 				}
 				// read from stream
 				var data = '';
@@ -456,7 +455,7 @@ var inputFiles = argv._;
 				});
 				stream.once('error', cb);
 			} else if(/^proc:\/\//i.test(fl[0])) {
-				require('child_process').exec(fl[0].substr(7), {maxBuffer: 1048576*32, encoding: inlistEnc}, function(err, stdout, stderr) {
+				require('child_process').exec(fl[0].substring(7), {maxBuffer: 1048576*32, encoding: inlistEnc}, function(err, stdout, stderr) {
 					cb(err, [fl[1], stdout]);
 				});
 			} else {
@@ -489,7 +488,7 @@ var inputFiles = argv._;
 		creator: creator
 	};
 	if(argv.out.match(/\.par2$/i))
-		ppo.outputBase = argv.out.substr(0, argv.out.length-5);
+		ppo.outputBase = argv.out.substring(0, argv.out.length-5);
 
 	for(var k in opts) {
 		if(opts[k].map && (k in argv))
@@ -508,7 +507,7 @@ var inputFiles = argv._;
 
 	var parseSizeOrNum = function(arg, input, multiple) {
 		var m;
-		var isRec = (arg.substr(-15) == 'recovery-slices' || arg == 'slices-per-file' || arg == 'slices-first-file' || arg == 'packet-redundancy');
+		var isRec = (arg.slice(-15) == 'recovery-slices' || arg == 'slices-per-file' || arg == 'slices-first-file' || arg == 'packet-redundancy');
 		input = input || argv[arg];
 		if(typeof input == 'number' || /^-?\d+$/.test(input)) {
 			input = input|0;
@@ -527,7 +526,7 @@ var inputFiles = argv._;
 					error('Invalid value specified for `'+arg+'`');
 				var scale = 1;
 				if(m[2].length > 2) {
-					scale = +(m[2].substr(2));
+					scale = +(m[2].substring(2));
 					if(isNaN(scale) || !isFinite(scale)) error('Invalid value specified for `'+arg+'`');
 					if(m[2][1] == '/') {
 						scale = 1/scale;
@@ -575,7 +574,7 @@ var inputFiles = argv._;
 			if(/^slices-/.test(k[0]) && (val[0] == '<' || val[0] == '>')) {
 				// TODO: also do this for packet-redundancy?
 				ppo[k[1]+'Rounding'] = (val[0] == '<' ? 'floor' : 'ceil');
-				val = val.substr(1);
+				val = val.substring(1);
 			}
 			var expr = val.replace(/^[\-+]/, function(x) {
 				if(x == '-') return '0-'; // hack to get initial negative term to work
@@ -613,7 +612,7 @@ var inputFiles = argv._;
 		var ret = {};
 		if(data.process) {
 			ret.ratio = parseFloat(data.process);
-			if(data.process.substr(-1) == '%')
+			if(data.process.slice(-1) == '%')
 				ret.ratio /= 100;
 		}
 		if(data.device) {
@@ -662,8 +661,8 @@ var inputFiles = argv._;
 	};
 	var openclOpts = {};
 	for(var k in argv)
-		if(k.substr(0, 7) == 'opencl-')
-			openclOpts[k.substr(7)] = argv[k];
+		if(k.substring(0, 7) == 'opencl-')
+			openclOpts[k.substring(7)] = argv[k];
 	openclOpts = openclMap(openclOpts);
 	if(argv.opencl) {
 		ppo.openclDevices = argv.opencl.map(function(spec) {
@@ -716,8 +715,9 @@ var inputFiles = argv._;
 				return cliFormat('1', n) + ' ' + unit + suffix;
 			};
 			var sizeDisp = function(val) {
-				return cliFormat('1', friendlySize(val));
+				return cliFormat('1', cliUtil.friendlySize(val));
 			};
+			var hash_methods = g.hash_methods();
 			if(argv.json) {
 				print_json('processing_info', {
 					input_size: g.totalSize,
@@ -739,16 +739,18 @@ var inputFiles = argv._;
 							recovery_offset: rf.recoveryOffset,
 							size: rf.totalSize
 						};
-					})
+					}),
+					hash_input_method: hash_methods[0],
+					hash_recovery_method: hash_methods[1]
 				});
 			} else {
 				if(g.opts.sliceSize > 1024*1048576) {
 					// par2j has 1GB slice size limit hard-coded; 32-bit version supports 1GB slices
 					// some 32-bit applications seem to have issues with 1GB slices as well (phpar2 v1.4 win32 seems to have trouble with 854M slices, 848M works in the test I did)
-					process.stderr.write(cliFormat('33', 'Warning') + ': selected slice size (' + friendlySize(g.opts.sliceSize) + ') is larger than 1GB, which is beyond what a number of PAR2 clients support. Consider increasing the number of slices or reducing the slice size so that it is under 1GB\n');
+					process.stderr.write(cliFormat('33', 'Warning') + ': selected slice size (' + cliUtil.friendlySize(g.opts.sliceSize) + ') is larger than 1GB, which is beyond what a number of PAR2 clients support. Consider increasing the number of slices or reducing the slice size so that it is under 1GB\n');
 				}
 				else if(g.opts.sliceSize > 100*1000000 && g.totalSize <= 32768*100*1000000) { // we also check whether 100MB slices are viable by checking the input size - essentially there's a max of 32768 slices, so at 100MB, max size would be 3051.76GB
-					process.stderr.write(cliFormat('33', 'Warning') + ': selected slice size (' + friendlySize(g.opts.sliceSize) + ') may be too large to be compatible with QuickPar\n');
+					process.stderr.write(cliFormat('33', 'Warning') + ': selected slice size (' + cliUtil.friendlySize(g.opts.sliceSize) + ') may be too large to be compatible with QuickPar\n');
 				}
 				
 				process.stderr.write('Input data        : ' + sizeDisp(g.totalSize) + ' (' + pluralDisp(g.inputSlices, 'slice') + ' from ' + pluralDisp(info.length, 'file') + ')\n');
@@ -757,6 +759,9 @@ var inputFiles = argv._;
 					process.stderr.write('Input pass(es)    : ' + cliFormat('1', g.chunks * g.passes) + ', processing ' + pluralDisp(g.slicesPerPass, '* ' + sizeDisp(g._chunkSize) + ' chunk') + ' per pass\n');
 				}
 				process.stderr.write('Read buffer size  : ' + sizeDisp(g.readSize) + ' * max ' + pluralDisp(g.opts.readBuffers, 'buffer') + '\n');
+				process.stderr.write('Hash method       : ' + cliFormat('1', hash_methods[0]) + ' (input)' + (g.opts.recoverySlices ?
+					', ' + cliFormat('1', hash_methods[1]) + ' (recovery)'
+				: '') + '\n');
 			}
 		}
 		if(argv.progress != 'none') {
@@ -901,6 +906,17 @@ var inputFiles = argv._;
 				else
 					process.stderr.write('\nProcessing time   : ' + cliFormat('1', timeTaken + ' s') + '\n');
 			}
+			
+			setTimeout(function() {
+				if(!argv.quiet) {
+					process.stderr.write('Process did not terminate cleanly');
+					var handles = cliUtil.activeHandleCounts();
+					if(handles)
+						process.stderr.write('; active handles: ' + cliUtil.activeHandlesStr(handles[0]));
+					process.stderr.write('\n');
+				}
+				process.exit();
+			}, 5000).unref();
 		});
 		
 	});

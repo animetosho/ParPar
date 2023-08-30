@@ -7,6 +7,7 @@
 #define _MM(f) _mm256_ ## f
 #define _MMI(f) _mm256_ ## f ## _si256
 #define _FNSUFFIX _avx2
+#define _FNPREP(f) f##_avx2
 #define _MM_END _mm256_zeroupper();
 
 #if defined(__GFNI__) && defined(__AVX2__)
@@ -24,6 +25,7 @@ int gf16_affine_available_avx2 = 0;
 #endif
 #undef _MM_END
 #undef _FNSUFFIX
+#undef _FNPREP
 #undef _MMI
 #undef _MM
 #undef _mword
@@ -53,7 +55,7 @@ static HEDLEY_ALWAYS_INLINE __m256i gf16_affine_load_matrix(const void *HEDLEY_R
 }
 #endif
 
-void gf16_affine_mul_avx2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch) {
+void gf16_affine_mul_avx2(const void *HEDLEY_RESTRICT scratch, void* dst, const void* src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch) {
 	UNUSED(mutScratch);
 #if defined(__GFNI__) && defined(__AVX2__)
 	__m256i depmask = gf16_affine_load_matrix(scratch, coefficient);
@@ -335,6 +337,29 @@ static HEDLEY_ALWAYS_INLINE void gf16_affine2x_muladd_x_avx2(
 	}
 }
 #endif /*defined(__GFNI__) && defined(__AVX2__)*/
+
+void gf16_affine2x_mul_avx2(const void *HEDLEY_RESTRICT scratch, void* dst, const void* src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch) {
+	UNUSED(mutScratch);
+#if defined(__GFNI__) && defined(__AVX2__)
+	__m256i depmask = gf16_affine_load_matrix(scratch, coefficient);
+	__m256i matNorm = _mm256_inserti128_si256(depmask, _mm256_castsi256_si128(depmask), 1);
+	__m256i matSwap = _mm256_permute2x128_si256(depmask, depmask, 0x11);
+	
+	uint8_t* _src = (uint8_t*)src + len;
+	uint8_t* _dst = (uint8_t*)dst + len;
+	
+	for(intptr_t ptr = -(intptr_t)len; ptr; ptr += sizeof(__m256i)) {
+		__m256i data = _mm256_load_si256((__m256i*)(_src + ptr));
+		__m256i result1 = _mm256_gf2p8affine_epi64_epi8(data, matNorm, 0);
+		__m256i result2 = _mm256_gf2p8affine_epi64_epi8(data, matSwap, 0);
+		
+		result1 = _mm256_xor_si256(result1, _mm256_shuffle_epi32(result2, _MM_SHUFFLE(1,0,3,2)));
+		_mm256_store_si256((__m256i*)(_dst + ptr), result1);
+	}
+#else
+	UNUSED(scratch); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficient);
+#endif
+}
 
 void gf16_affine2x_muladd_avx2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch) {
 	UNUSED(mutScratch);

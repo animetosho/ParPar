@@ -6,10 +6,6 @@
 
 std::vector<cl::Platform> PAR2ProcOCL::platforms;
 
-// buffer for zeroing GPU memory
-#define ZERO_MEM_SIZE 65536
-#include "gfmat_coeff.h"
-
 int PAR2ProcOCL::load_runtime() {
 	if(load_opencl()) {
 		return 1;
@@ -384,6 +380,7 @@ bool PAR2ProcOCL::fillInput(const void* buffer) {
 	return false;
 }
 
+#include "gfmat_coeff.h"
 void PAR2ProcOCL::set_coeffs(PAR2ProcOCLStaging& area, unsigned idx, uint16_t inputNum) {
 	uint16_t inputLog = gfmat_input_log(inputNum);
 	auto& coeffs = area.procCoeffs;

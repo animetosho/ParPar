@@ -211,6 +211,7 @@ for(var i in benchmarks) {
 		delete benchmarks[i];
 }
 
+var bufferSlice = Buffer.prototype.readBigInt64BE ? Buffer.prototype.subarray : Buffer.prototype.slice;
 var fsWriteSync = function(fd, data) {
 	fs.writeSync(fd, data, 0, data.length, null);
 };
@@ -222,9 +223,10 @@ var findFile = function(dir, re) {
 	return ret;
 };
 
+var allocBuffer = (Buffer.allocUnsafe || Buffer);
 var async = require('async');
 var fs = require('fs');
-var nullBuf = new Buffer(1024*16);
+var nullBuf = allocBuffer(1024*16);
 nullBuf.fill(0);
 var results = {};
 var testFiles = [];
@@ -259,13 +261,13 @@ async.eachSeries(Object.keys(benchmarks), function getVersion(prog, cb) {
 			if(fs.statSync(tmpDir + name).size == size) return;
 		}
 		var fd = fs.openSync(tmpDir + name, 'w');
-		var rand = require('crypto').createCipher('rc4', 'my_incredibly_strong_password' + name);
+		var rand = require('crypto').createCipheriv('rc4', 'my_incredibly_strong_password' + name, '');
 		rand.setAutoPadding(false);
-		var nullBuf = new Buffer(1024*16);
+		var nullBuf = allocBuffer(1024*16);
 		nullBuf.fill(0);
 		var written = 0;
 		while(written < size) {
-			var b = rand.update(nullBuf).slice(0, size-written);
+			var b = bufferSlice.call(rand.update(nullBuf), 0, size-written);
 			fsWriteSync(fd, b);
 			written += b.length;
 		}

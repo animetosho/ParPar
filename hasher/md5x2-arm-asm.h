@@ -176,7 +176,7 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_x2_scalar(uint32_t* state, co
 	ROUND_I(C1, D1, A1, B1, C2, D2, A2, B2, "[%[i0], #" STR(i2) "]", "[%[i1], #" STR(i2) "]", k2l, k2h, 17) \
 	ROUND_I(B1, C1, D1, A1, B2, C2, D2, A2, "[%[i0], #" STR(i3) "]", "[%[i1], #" STR(i3) "]", k3l, k3h, 11)
 	
-	asm(
+	__asm__(
 		"ldr " REG(TMP1) ", [%[i0]]\n"
 		"ldr " REG(TMP2) ", [%[i1]]\n"
 #if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__

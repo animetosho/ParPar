@@ -16,8 +16,8 @@
 # else
 	#include <cpuid.h>
 	/* GCC seems to support this, I assume everyone else does too? */
-	#define _cpuid(ar, eax) __cpuid(eax, ar[0], ar[1], ar[2], ar[3])
-	#define _cpuidX(ar, eax, ecx) __cpuid_count(eax, ecx, ar[0], ar[1], ar[2], ar[3])
+	#define _cpuid(ar, eax) __cpuid(eax, (ar)[0], (ar)[1], (ar)[2], (ar)[3])
+	#define _cpuidX(ar, eax, ecx) __cpuid_count(eax, ecx, (ar)[0], (ar)[1], (ar)[2], (ar)[3])
 	
 	static inline int _GET_XCR() {
 		int xcr0;
@@ -46,7 +46,9 @@
 #  include <cpu-features.h>
 # elif defined(_WIN32)
 #  define WIN32_LEAN_AND_MEAN
-#  define NOMINMAX
+#  ifndef NOMINMAX
+#   define NOMINMAX
+#  endif
 #  include <Windows.h>
 # elif defined(__APPLE__)
 #  include <sys/types.h>
@@ -67,53 +69,67 @@ static unsigned long getauxval(unsigned long cap) {
 #  endif
 # endif
 
-# define CPU_HAS_NEON false
-# define CPU_HAS_ARMCRC false
-# define CPU_HAS_SVE false
-# define CPU_HAS_SVE2 false
 
-# if defined(AT_HWCAP)
-#  undef CPU_HAS_NEON
-#  ifdef __aarch64__
-#   define CPU_HAS_NEON (getauxval(AT_HWCAP) & HWCAP_ASIMD)
-#   if defined(HWCAP_SVE)
-#    undef CPU_HAS_SVE
-#    define CPU_HAS_SVE (getauxval(AT_HWCAP) & HWCAP_SVE)
+# ifdef PARPAR_SKIP_AUX_CHECK
+#  define CPU_HAS_NEON true
+#  define CPU_HAS_ARMCRC true
+#  define CPU_HAS_NEON_SHA3 true
+#  define CPU_HAS_SVE true
+#  define CPU_HAS_SVE2 true
+# else
+#  define CPU_HAS_NEON false
+#  define CPU_HAS_ARMCRC false
+#  define CPU_HAS_NEON_SHA3 false
+#  define CPU_HAS_SVE false
+#  define CPU_HAS_SVE2 false
+
+#  if defined(AT_HWCAP)
+#   undef CPU_HAS_NEON
+#   ifdef __aarch64__
+#    define CPU_HAS_NEON (getauxval(AT_HWCAP) & HWCAP_ASIMD)
+#    if defined(HWCAP_SHA3)
+#     undef CPU_HAS_NEON_SHA3
+#     define CPU_HAS_NEON_SHA3 (getauxval(AT_HWCAP) & HWCAP_SHA3)
+#    endif
+#    if defined(HWCAP_SVE)
+#     undef CPU_HAS_SVE
+#     define CPU_HAS_SVE (getauxval(AT_HWCAP) & HWCAP_SVE)
+#    endif
+#    if defined(AT_HWCAP2) && defined(HWCAP2_SVE2)
+#     undef CPU_HAS_SVE2
+#     define CPU_HAS_SVE2 (getauxval(AT_HWCAP2) & HWCAP2_SVE2)
+#    endif
+#   else
+#    define CPU_HAS_NEON (getauxval(AT_HWCAP) & HWCAP_NEON)
 #   endif
-#   if defined(AT_HWCAP2) && defined(HWCAP2_SVE2)
-#    undef CPU_HAS_SVE2
-#    define CPU_HAS_SVE2 (getauxval(AT_HWCAP2) & HWCAP2_SVE2)
+#   if defined(AT_HWCAP2) && defined(HWCAP2_CRC32)
+#    undef CPU_HAS_ARMCRC
+#    define CPU_HAS_ARMCRC (getauxval(AT_HWCAP2) & HWCAP2_CRC32)
+#   elif defined(HWCAP_CRC32)
+#    undef CPU_HAS_ARMCRC
+#    define CPU_HAS_ARMCRC (getauxval(AT_HWCAP) & HWCAP_CRC32)
 #   endif
-#  else
-#   define CPU_HAS_NEON (getauxval(AT_HWCAP) & HWCAP_NEON)
-#  endif
-#  if defined(AT_HWCAP2) && defined(HWCAP2_CRC32)
+#  elif defined(ANDROID_CPU_FAMILY_ARM)
+#   undef CPU_HAS_NEON
 #   undef CPU_HAS_ARMCRC
-#   define CPU_HAS_ARMCRC (getauxval(AT_HWCAP2) & HWCAP2_CRC32)
-#  elif defined(HWCAP_CRC32)
+#   ifdef __aarch64__
+#    define CPU_HAS_NEON (android_getCpuFeatures() & ANDROID_CPU_ARM64_FEATURE_ASIMD)
+#    define CPU_HAS_ARMCRC (android_getCpuFeatures() & ANDROID_CPU_ARM64_FEATURE_CRC32)
+#   else
+#    define CPU_HAS_NEON (android_getCpuFeatures() & ANDROID_CPU_ARM_FEATURE_NEON)
+#    define CPU_HAS_ARMCRC (android_getCpuFeatures() & ANDROID_CPU_ARM_FEATURE_CRC32)
+#   endif
+#  elif defined(_WIN32)
+#   undef CPU_HAS_NEON
 #   undef CPU_HAS_ARMCRC
-#   define CPU_HAS_ARMCRC (getauxval(AT_HWCAP) & HWCAP_CRC32)
-#  endif
-# elif defined(ANDROID_CPU_FAMILY_ARM)
-#  undef CPU_HAS_NEON
-#  undef CPU_HAS_ARMCRC
-#  ifdef __aarch64__
-#   define CPU_HAS_NEON (android_getCpuFeatures() & ANDROID_CPU_ARM64_FEATURE_ASIMD)
-#   define CPU_HAS_ARMCRC (android_getCpuFeatures() & ANDROID_CPU_ARM64_FEATURE_CRC32)
-#  else
-#   define CPU_HAS_NEON (android_getCpuFeatures() & ANDROID_CPU_ARM_FEATURE_NEON)
-#   define CPU_HAS_ARMCRC (android_getCpuFeatures() & ANDROID_CPU_ARM_FEATURE_CRC32)
-#  endif
-# elif defined(_WIN32)
-#  undef CPU_HAS_NEON
-#  undef CPU_HAS_ARMCRC
-#  define CPU_HAS_NEON (IsProcessorFeaturePresent(PF_ARM_NEON_INSTRUCTIONS_AVAILABLE))
-#  define CPU_HAS_ARMCRC (IsProcessorFeaturePresent(PF_ARM_V8_CRC32_INSTRUCTIONS_AVAILABLE))
-# elif defined(__APPLE__)
-#  undef CPU_HAS_NEON
-#  undef CPU_HAS_ARMCRC
-#  define CPU_HAS_NEON (cpuHasFeature("hw.optional.neon"))
-#  define CPU_HAS_ARMCRC (cpuHasFeature("hw.optional.armv8_crc32"))
+#   define CPU_HAS_NEON (IsProcessorFeaturePresent(PF_ARM_NEON_INSTRUCTIONS_AVAILABLE))
+#   define CPU_HAS_ARMCRC (IsProcessorFeaturePresent(PF_ARM_V8_CRC32_INSTRUCTIONS_AVAILABLE))
+#  elif defined(__APPLE__)
+#   undef CPU_HAS_NEON
+#   undef CPU_HAS_ARMCRC
+#   define CPU_HAS_NEON (cpuHasFeature("hw.optional.neon"))
+#   define CPU_HAS_ARMCRC (cpuHasFeature("hw.optional.armv8_crc32"))
+#   define CPU_HAS_NEON_SHA3 (cpuHasFeature("hw.optional.armv8_2_sha3"))
 	static inline bool cpuHasFeature(const char* feature) {
 		int supported = 0;
 		size_t len = sizeof(supported);
@@ -121,6 +137,41 @@ static unsigned long getauxval(unsigned long cap) {
 			return (bool)supported;
 		return false;
 	}
+#  endif
+# endif
+
+#endif
+
+#ifdef __riscv
+# if defined(__has_include)
+#  if __has_include(<sys/auxv.h>)
+#   include <sys/auxv.h>
+#   ifdef __FreeBSD__
+static unsigned long getauxval(unsigned long cap) {
+	unsigned long ret;
+	elf_aux_info(cap, &ret, sizeof(ret));
+	return ret;
+}
+#   endif
+#   if __has_include(<asm/hwcap.h>)
+#    include <asm/hwcap.h>
+#   endif
+#  endif
+# endif
+
+# ifdef PARPAR_SKIP_AUX_CHECK
+#  define CPU_HAS_GC true
+#  define CPU_HAS_VECTOR true
+# else
+#  define CPU_HAS_GC false
+#  define CPU_HAS_VECTOR false
+
+#  if defined(AT_HWCAP)
+#   undef CPU_HAS_GC
+#   define CPU_HAS_GC ((getauxval(AT_HWCAP) & 4397) == 4397) // 4397 = IMAFDC; TODO: how to detect Z* features of 'G'?
+#   undef CPU_HAS_VECTOR
+#   define CPU_HAS_VECTOR (getauxval(AT_HWCAP) & (1 << ('V'-'A')))
+#  endif
 # endif
 
 #endif

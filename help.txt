@@ -33,7 +33,9 @@ PAR2 Options:
                              equals that size, otherwise is 4B
   -S,  --auto-slice-size     Automatically scale up input slice size if the
                              number of input slices would exceed the maximum
-                             allowed. This option takes no parameters.
+                             allowed. The chosen slice size will respect
+                             `--slice-size-multiple` when scaling up the slice.
+                             This option takes no parameters.
                              Alias for `--max-input-slices=32768`
   -r,  --recovery-slices     Number of recovery slices to generate. You can
                              append a suffix to auto-calculate this, as in the
@@ -88,6 +90,11 @@ PAR2 Options:
                              This default also causes an error to be thrown if
                              the number exceeds the maximum of 65535.
   -e,  --recovery-offset     Recovery slice start offset. Default 0.
+       --recovery-exponents  Comma-separated list of exact recovery exponents
+                             to use. If specified, `--recovery-offset` and
+                             `recovery-slices` related options cannot be used,
+                             and only a single PAR2 output file will be
+                             produced.
   -c,  --comment             Add PAR2 comment. Can be specified multiple times.
        --packet-redundancy   How many copies of critical packets to use in
                              recovery files. This option uses the same syntax
@@ -287,7 +294,10 @@ CPU Tuning Options:
                                  shuffle128-sve2: SVE2 variant of shuffle-neon
                                  shuffle2x128-sve2: half width variant of shuffle-neon (requires SVE width >= 256 bits)
                                  shuffle512-sve2: SVE2 variant of shuffle-vbmi (requires SVE width >= 512 bits)
+                                 clmul-sha3: NEON-SHA3 variant of clmul-neon
                                  clmul-sve2: SVE2 variant of clmul-neon
+                             RISC-V only choices:
+                                 shuffle128-rvv: RISC-V Vector variant of shuffle128-sve2
                              Default is auto-detected.
        --loop-tile-size      Target size used for loop tiling optimisation.
                              Default is 0 (auto-detected)

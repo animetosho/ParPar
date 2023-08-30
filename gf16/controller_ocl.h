@@ -165,6 +165,7 @@ class PAR2ProcOCL : public IPAR2ProcBackend {
 public:
 	static int load_runtime();
 	static inline int unload_runtime() {
+		platforms.clear();
 		return unload_opencl();
 	}
 	static int defaultPlatformId();

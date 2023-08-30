@@ -19,8 +19,17 @@
             }
           }]
         ]
+      }],
+      ['OS!="win"', {
+        "variables": {"missing_memalign%": "<!(<!(echo ${CC_target:-${CC:-cc}}) -c src/test_alignalloc.c -o /dev/null -Werror 2>/dev/null || echo failed)"},
+        "conditions": [
+          ['missing_memalign!=""', {
+            "cflags_c": ["-D_POSIX_C_SOURCE=200112L"],
+          }]
+        ]
       }]
     ],
+    "cflags_c": ["-std=c99", "-D_DARWIN_C_SOURCE", "-D_GNU_SOURCE", "-D_DEFAULT_SOURCE"],
     "cxxflags": ["-std=c++11"],
     "msvs_settings": {"VCCLCompilerTool": {"Optimization": "MaxSpeed"}},
     "configurations": {"Release": {
@@ -36,7 +45,7 @@
     {
       "target_name": "parpar_gf",
       "dependencies": [
-        "parpar_gf_c", "gf16", "gf16_generic", "gf16_sse2", "gf16_ssse3", "gf16_avx", "gf16_avx2", "gf16_avx512", "gf16_vbmi", "gf16_gfni", "gf16_gfni_avx2", "gf16_gfni_avx512", "gf16_neon", "gf16_sve", "gf16_sve2",
+        "parpar_gf_c", "gf16", "gf16_generic", "gf16_sse2", "gf16_ssse3", "gf16_avx", "gf16_avx2", "gf16_avx512", "gf16_vbmi", "gf16_gfni", "gf16_gfni_avx2", "gf16_gfni_avx512", "gf16_neon", "gf16_sha3", "gf16_sve", "gf16_sve2", "gf16_rvv",
         "hasher", "hasher_sse2", "hasher_clmul", "hasher_xop", "hasher_bmi1", "hasher_avx2", "hasher_avx512", "hasher_avx512vl", "hasher_armcrc", "hasher_neon", "hasher_neoncrc", "hasher_sve2"
       ],
       "sources": ["src/gf.cc", "gf16/controller.cpp", "gf16/controller_cpu.cpp", "gf16/controller_ocl.cpp", "gf16/controller_ocl_init.cpp"],
@@ -45,8 +54,8 @@
       "cxxflags!": ["-fno-exceptions"],
       "cflags_cc!": ["-fno-exceptions"],
       "defines": ["USE_LIBUV"],
-      "cflags": ["-fexceptions", "-std=c++11"],
-      "cxxflags": ["-fexceptions"],
+      "cflags": ["-fexceptions"],
+      "cxxflags": ["-fexceptions", "-std=c++11"],
       "cflags_cc": ["-fexceptions"],
       "xcode_settings": {
         "OTHER_CFLAGS!": ["-fno-exceptions"],
@@ -63,7 +72,7 @@
       "defines": ["NDEBUG", "PARPAR_LIBDL_SUPPORT"],
       "sources": ["gf16/opencl-include/cl.c", "gf16/gfmat_coeff.c"],
       "include_dirs": ["gf16/opencl-include"],
-      "cflags": ["-Wno-unused-function", "-std=gnu99"],
+      "cflags": ["-Wno-unused-function", "-std=c99"],
       "cflags!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"],
       "xcode_settings": {
         "OTHER_CFLAGS": ["-Wno-unused-function"],
@@ -76,6 +85,7 @@
       "defines": ["NDEBUG"],
       "sources": ["hasher/hasher.cpp", "hasher/hasher_scalar.cpp"],
       "dependencies": ["hasher_c"],
+      "cxxflags": ["-std=c++11"],
       "cflags!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"],
       "cxxflags!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"],
       "xcode_settings": {
@@ -89,7 +99,7 @@
       "type": "static_library",
       "defines": ["NDEBUG"],
       "sources": ["hasher/crc_zeropad.c", "hasher/md5-final.c"],
-      "cflags": ["-Wno-unused-function", "-std=gnu99"],
+      "cflags": ["-Wno-unused-function", "-std=c99"],
       "cflags!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"],
       "xcode_settings": {
         "OTHER_CFLAGS!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"],
@@ -443,7 +453,7 @@
         "gf16/gf_add_generic.c",
         "gf16/gf16_cksum_generic.c"
       ],
-      "cflags": ["-Wno-unused-function", "-std=gnu99"],
+      "cflags": ["-Wno-unused-function", "-std=c99"],
       "xcode_settings": {
         "OTHER_CFLAGS": ["-Wno-unused-function"],
         "OTHER_CFLAGS!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"],
@@ -771,7 +781,7 @@
         "gf16/gf_add_neon.c",
         "gf16/gf16_cksum_neon.c"
       ],
-      "cflags": ["-Wno-unused-function", "-std=gnu99"],
+      "cflags": ["-Wno-unused-function", "-std=c99"],
       "xcode_settings": {
         "OTHER_CFLAGS": ["-Wno-unused-function"],
         "OTHER_CFLAGS!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"]
@@ -794,6 +804,40 @@
       ]
     },
     {
+      "target_name": "gf16_sha3",
+      "type": "static_library",
+      "defines": ["NDEBUG"],
+      "sources": [
+        "gf16/gf16_clmul_sha3.c"
+      ],
+      "cflags": ["-Wno-unused-function", "-std=c99"],
+      "xcode_settings": {
+        "OTHER_CFLAGS": ["-Wno-unused-function"],
+        "OTHER_CFLAGS!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"]
+      },
+      "cflags!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"],
+      "msvs_settings": {"VCCLCompilerTool": {"BufferSecurityCheck": "false"}},
+      "conditions": [
+        ['target_arch=="arm64" and OS!="win"', {
+          "variables": {"supports_sha3%": "<!(<!(echo ${CC_target:-${CC:-cc}}) -MM -E gf16/gf16_clmul_sha3.c -march=armv8.2-a+sha3 2>/dev/null || true)"},
+          "conditions": [
+            ['supports_sha3!=""', {
+              "cflags!": ["-march=native"],
+              "cxxflags!": ["-march=native"],
+              "cflags": ["-march=armv8.2-a+sha3"],
+              "cxxflags": ["-march=armv8.2-a+sha3"],
+              "xcode_settings": {
+                "OTHER_CFLAGS!": ["-march=native"],
+                "OTHER_CXXFLAGS!": ["-march=native"],
+                "OTHER_CFLAGS": ["-march=armv8.2-a+sha3"],
+                "OTHER_CXXFLAGS": ["-march=armv8.2-a+sha3"],
+              }
+            }]
+          ]
+        }]
+      ]
+    },
+    {
       "target_name": "gf16_sve",
       "type": "static_library",
       "defines": ["NDEBUG"],
@@ -802,7 +846,7 @@
         "gf16/gf_add_sve.c",
         "gf16/gf16_cksum_sve.c"
       ],
-      "cflags": ["-Wno-unused-function", "-std=gnu99"],
+      "cflags": ["-Wno-unused-function", "-std=c99"],
       "xcode_settings": {
         "OTHER_CFLAGS": ["-Wno-unused-function"],
         "OTHER_CFLAGS!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"]
@@ -840,7 +884,7 @@
         "gf16/gf16_clmul_sve2.c",
         "gf16/gf_add_sve2.c"
       ],
-      "cflags": ["-Wno-unused-function", "-std=gnu99"],
+      "cflags": ["-Wno-unused-function", "-std=c99"],
       "xcode_settings": {
         "OTHER_CFLAGS": ["-Wno-unused-function"],
         "OTHER_CFLAGS!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"]
@@ -861,6 +905,59 @@
                 "OTHER_CXXFLAGS!": ["-march=native"],
                 "OTHER_CFLAGS": ["-march=armv8-a+sve2"],
                 "OTHER_CXXFLAGS": ["-march=armv8-a+sve2"],
+              }
+            }]
+          ]
+        }]
+      ]
+    },
+    {
+      "target_name": "gf16_rvv",
+      "type": "static_library",
+      "defines": ["NDEBUG"],
+      "sources": [
+        "gf16/gf16_shuffle128_rvv.c",
+        "gf16/gf_add_rvv.c",
+        "gf16/gf16_cksum_rvv.c"
+      ],
+      "cflags": ["-Wno-unused-function", "-std=c99"],
+      "xcode_settings": {
+        "OTHER_CFLAGS": ["-Wno-unused-function"],
+        "OTHER_CFLAGS!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"]
+      },
+      "cflags!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"],
+      "msvs_settings": {"VCCLCompilerTool": {"BufferSecurityCheck": "false"}},
+      "conditions": [
+        ['target_arch=="riscv64" and OS!="win"', {
+          "variables": {"supports_rvv%": "<!(<!(echo ${CC_target:-${CC:-cc}}) -MM -E gf16/gf16_shuffle128_rvv.c -march=rv64gcv 2>/dev/null || true)"},
+          "conditions": [
+            ['supports_rvv!=""', {
+              "cflags!": ["-march=native"],
+              "cxxflags!": ["-march=native"],
+              "cflags": ["-march=rv64gcv"],
+              "cxxflags": ["-march=rv64gcv"],
+              "xcode_settings": {
+                "OTHER_CFLAGS!": ["-march=native"],
+                "OTHER_CXXFLAGS!": ["-march=native"],
+                "OTHER_CFLAGS": ["-march=rv64gcv"],
+                "OTHER_CXXFLAGS": ["-march=rv64gcv"],
+              }
+            }]
+          ]
+        }],
+        ['target_arch=="riscv32" and OS!="win"', {
+          "variables": {"supports_rvv%": "<!(<!(echo ${CC_target:-${CC:-cc}}) -MM -E gf16/gf16_shuffle128_rvv.c -march=rv32gcv 2>/dev/null || true)"},
+          "conditions": [
+            ['supports_rvv!=""', {
+              "cflags!": ["-march=native"],
+              "cxxflags!": ["-march=native"],
+              "cflags": ["-march=rv32gcv"],
+              "cxxflags": ["-march=rv32gcv"],
+              "xcode_settings": {
+                "OTHER_CFLAGS!": ["-march=native"],
+                "OTHER_CXXFLAGS!": ["-march=native"],
+                "OTHER_CFLAGS": ["-march=rv32gcv"],
+                "OTHER_CXXFLAGS": ["-march=rv32gcv"],
               }
             }]
           ]

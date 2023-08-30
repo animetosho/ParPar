@@ -44,6 +44,21 @@
 # endif
 #endif
 
+#if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+# ifdef __GNUC__
+#  define _LE16 __builtin_bswap16
+#  define _LE32 __builtin_bswap32
+#  define _LE64 __builtin_bswap64
+# else
+// currently not supported
+#  error No endian swap intrinsic defined
+# endif
+#else
+# define _LE16(x) (x)
+# define _LE32(x) (x)
+# define _LE64(x) (x)
+#endif
+
 # ifdef _M_ARM64
 	#define __ARM_NEON 1
 	#define __aarch64__ 1
@@ -80,6 +95,9 @@
 /* VBMI added in 15.7 */
 #if defined(__AVX512F__) && _MSC_VER >= 1914
 	#define __AVX512VBMI__ 1
+#endif
+#if defined(__AVX2__) && _MSC_VER >= 1915
+	#define __VPCLMULQDQ__ 1
 #endif
 #if defined(__SSE2__) && _MSC_VER >= 1920
 	#define __GFNI__ 1
@@ -198,6 +216,21 @@ HEDLEY_WARNING("GFNI disabled on GCC < 10 due to incorrect GF2P8AFFINEQB operand
 # ifdef __ARM_FEATURE_SVE2
 #  undef __ARM_FEATURE_SVE2
 # endif
+#endif
+
+#if defined(__ARM_FEATURE_SVE) && defined(__clang__) && __clang_major__<12
+// Clang < 12 has issues with SVE
+# ifdef __ARM_FEATURE_SVE
+#  undef __ARM_FEATURE_SVE
+# endif
+# ifdef __ARM_FEATURE_SVE2
+#  undef __ARM_FEATURE_SVE2
+# endif
+#endif
+
+#if defined(__riscv_vector) && defined(HEDLEY_GCC_VERSION) && !HEDLEY_GCC_VERSION_CHECK(13,0,0)
+// GCC added RVV intrinsics in GCC13
+# undef __riscv_vector
 #endif
 
 // Some environments lack ARM headers, so try to check for these

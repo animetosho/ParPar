@@ -18,14 +18,22 @@ static void compare_invert(const Galois16RecMatrix& mat, Galois16* leftmatrix, s
 	unsigned validCount = std::count(inputValid.begin(), inputValid.end(), true);
 	unsigned invalidCount = inputValid.size()-validCount;
 	
-	if(recovery.size() != invalidCount) abort();
+	if(recovery.size() != invalidCount) {
+		std::cout << "Count mismatch: " << recovery.size() << "!=" << invalidCount << std::endl;
+		abort();
+	}
 	
 	// compare
-	for(unsigned outRow = 0; outRow < invalidCount; outRow++)
+	for(unsigned outRow = 0; outRow < invalidCount; outRow++) {
 		for(unsigned inCol = 0; inCol < inputValid.size(); inCol++) {
-			if(leftmatrix[outRow * inputValid.size() + inCol] != mat.GetFactor(inCol, outRow))
+			auto expected = leftmatrix[outRow * inputValid.size() + inCol];
+			auto actual = mat.GetFactor(inCol, outRow);
+			if(expected != actual) {
+				std::cout << "Value mismatch at " << outRow << "x" << inCol << ": " << expected << "!=" << actual << std::endl;
 				abort();
+			}
 		}
+	}
 }
 
 static void do_test(std::vector<bool> inputValid, std::vector<uint16_t> recovery, Galois16Methods method) {
@@ -39,7 +47,10 @@ static void do_test(std::vector<bool> inputValid, std::vector<uint16_t> recovery
 	unsigned validCount = std::count(inputValid.begin(), inputValid.end(), true);
 	Galois16RecMatrix mat;
 	mat.regionMethod = (int)method;
-	if(mat.Compute(inputValid, validCount, recovery) != canInvert) abort();
+	if(mat.Compute(inputValid, validCount, recovery) != canInvert) {
+		std::cout << "Inversion success mismatch" << std::endl;
+		abort();
+	}
 	if(canInvert) {
 		compare_invert(mat, leftmatrix, inputValid, recovery);
 	}
@@ -101,9 +112,18 @@ int main(int argc, char** argv) {
 			mat.regionMethod = (int)method;
 			
 			unsigned validCount = std::count(flawedInput.begin(), flawedInput.end(), true);
-			if(!mat.Compute(flawedInput, validCount, recovery)) abort();
-			if(recovery.size() != 2) abort();
-			if(!((recovery.at(0) == 0 || recovery.at(0) == 5) && recovery.at(1) == 6)) abort();
+			if(!mat.Compute(flawedInput, validCount, recovery)) {
+				std::cout << "Failed to invert PAR2 flaw" << std::endl;
+				abort();
+			}
+			if(recovery.size() != 2) {
+				std::cout << "Recovery size mismatch: 2 != " << recovery.size() << std::endl;
+				abort();
+			}
+			if(!((recovery.at(0) == 0 || recovery.at(0) == 5) && recovery.at(1) == 6)) {
+				std::cout << "Recovery exponent incorrect" << std::endl;
+				abort();
+			}
 			
 			Galois16* leftmatrix = nullptr;
 			bool canInvert = p2c_invert(flawedInput, recovery, leftmatrix);
@@ -169,7 +189,10 @@ int main(int argc, char** argv) {
 					// do inversion
 					Galois16RecMatrix mat;
 					mat.regionMethod = (int)method;
-					if(mat.Compute(inputValid, iSize-invalidCount, recovery) != canInvert) abort();
+					if(mat.Compute(inputValid, iSize-invalidCount, recovery) != canInvert) {
+						std::cout << "Inversion success mismatch" << std::endl;
+						abort();
+					}
 					if(canInvert) {
 						compare_invert(mat, leftmatrix, inputValid, recovery);
 					}

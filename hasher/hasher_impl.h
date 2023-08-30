@@ -5,6 +5,16 @@
 #include "../src/platform.h"
 #include <new>
 
+enum MD5CRCMethods {
+	MD5CRCMETH_SCALAR,
+	// MD5
+	MD5CRCMETH_BMI1,
+	MD5CRCMETH_NOLEA,
+	MD5CRCMETH_AVX512,
+	// CRC32
+	MD5CRCMETH_ARMCRC,
+	MD5CRCMETH_PCLMUL
+};
 
 class MD5Single {
 public:
@@ -16,6 +26,7 @@ public:
 	// private, set by setup_hasher
 	static void(*_update)(uint32_t*, const void*, size_t);
 	static void(*_updateZero)(uint32_t*, size_t);
+	static MD5CRCMethods method; // public, read-only
 	
 	// public interface
 	void reset() {

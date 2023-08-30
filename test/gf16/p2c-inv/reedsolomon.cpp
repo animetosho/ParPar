@@ -135,9 +135,9 @@ bool ReedSolomon_Compute(const vector<bool> &present, vector<RSOutputRow> output
   // SetInput
   u32 inputcount = (u32)present.size();
 
-  u32* datapresentindex = new u32[inputcount];
-  u32* datamissingindex = new u32[inputcount];
-  Galois16::ValueType* database    = new Galois16::ValueType[inputcount];
+  vector<u32> datapresentindex(inputcount);
+  vector<u32> datamissingindex(inputcount);
+  vector<Galois16::ValueType> database(inputcount);
   u32 datapresent = 0, datamissing = 0;
 
   unsigned int logbase = 0;

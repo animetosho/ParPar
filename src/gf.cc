@@ -1275,6 +1275,8 @@ void parpar_gf_init(
 	NODE_SET_METHOD(target, "set_HasherOutput", SetHasherOutput);
 	
 	setup_hasher();
+	SET_OBJ(target, "hasherInput_method", NEW_STRING(hasherInput_methodName()));
+	SET_OBJ(target, "hasherOutput_method", NEW_STRING(hasherMD5Multi_methodName()));
 }
 
 NODE_MODULE(parpar_gf, parpar_gf_init);

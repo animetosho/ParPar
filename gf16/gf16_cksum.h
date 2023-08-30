@@ -11,5 +11,6 @@ FUNCS(avx2);
 FUNCS(avx512);
 FUNCS(neon);
 FUNCS(sve);
+FUNCS(rvv);
 
 #undef FUNCS

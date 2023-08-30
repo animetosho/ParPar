@@ -18,21 +18,6 @@ static HEDLEY_ALWAYS_INLINE void crc_init_arm(void* crc) {
 	memset(crc, 0xff, sizeof(uint32_t));
 }
 
-#if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
-# ifdef __GNUC__
-#  define _LE16 __builtin_bswap16
-#  define _LE32 __builtin_bswap32
-#  define _LE64 __builtin_bswap64
-# else
-// currently not supported
-#  error No endian swap intrinsic defined
-# endif
-#else
-# define _LE16(x) (x)
-# define _LE32(x) (x)
-# define _LE64(x) (x)
-#endif
-
 static HEDLEY_ALWAYS_INLINE void crc_process_block_arm(void* HEDLEY_RESTRICT crc, const void* HEDLEY_RESTRICT src) {
 	uint32_t* _crc = (uint32_t*)crc;
 #ifdef __aarch64__
@@ -74,6 +59,3 @@ static HEDLEY_ALWAYS_INLINE uint32_t crc_finish_arm(void* HEDLEY_RESTRICT state,
 	return ~crc;
 }
 
-#undef _LE16
-#undef _LE32
-#undef _LE64

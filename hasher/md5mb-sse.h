@@ -59,7 +59,7 @@
 
 
 static HEDLEY_ALWAYS_INLINE void md5_extract_mb_sse(void* dst, void* state, int idx) {
-	HEDLEY_ASSUME(idx < md5mb_regions_sse);
+	HEDLEY_ASSUME(idx >= 0 && idx < md5mb_regions_sse*2); // 2 = md5mb_interleave
 	__m128i* state_ = (__m128i*)state + (idx & 4);
 	__m128i tmp1 = _mm_unpacklo_epi32(state_[0], state_[1]);
 	__m128i tmp2 = _mm_unpackhi_epi32(state_[0], state_[1]);
@@ -269,7 +269,7 @@ static HEDLEY_ALWAYS_INLINE void md5_extract_all_mb_sse(void* dst, void* state, 
 
 
 static HEDLEY_ALWAYS_INLINE void md5_extract_mb_avx2(void* dst, void* state, int idx) {
-	HEDLEY_ASSUME(idx < md5mb_regions_avx2);
+	HEDLEY_ASSUME(idx >= 0 && idx < md5mb_regions_avx2*2);
 	__m256i* state_ = (__m256i*)state + ((idx & 8) >> 1);
 	__m256i tmpAB0 = _mm256_unpacklo_epi32(state_[0], state_[1]);
 	__m256i tmpAB2 = _mm256_unpackhi_epi32(state_[0], state_[1]);
@@ -477,7 +477,7 @@ static HEDLEY_ALWAYS_INLINE void md5_extract_all_mb_avx2(void* dst, void* state,
 #undef LOAD16
 
 static HEDLEY_ALWAYS_INLINE void md5_extract_mb_avx512(void* dst, void* state, int idx) {
-	HEDLEY_ASSUME(idx < md5mb_regions_avx512);
+	HEDLEY_ASSUME(idx >= 0 && idx < md5mb_regions_avx512*2);
 	__m512i* state_ = (__m512i*)state + ((idx & 16) >> 2);
 	__m512i tmpAB0 = _mm512_unpacklo_epi32(state_[0], state_[1]);
 	__m512i tmpAB2 = _mm512_unpackhi_epi32(state_[0], state_[1]);

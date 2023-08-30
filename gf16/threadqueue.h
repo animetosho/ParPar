@@ -201,7 +201,9 @@ typedef std::function<void(ThreadMessageQueue<void*>&)> thread_cb_t;
 
 
 #if defined(_WINDOWS) || defined(__WINDOWS__) || defined(_WIN32) || defined(_WIN64)
-# define NOMINMAX
+# ifndef NOMINMAX
+#  define NOMINMAX
+# endif
 # define WIN32_LEAN_AND_MEAN
 # include <Windows.h>
 #else
@@ -278,11 +280,11 @@ class MessageThread {
 			#if defined(_WINDOWS) || defined(__WINDOWS__) || defined(_WIN32) || defined(_WIN64)
 			HMODULE h = GetModuleHandleA("kernelbase.dll");
 			if(h) {
-				HRESULT(__stdcall *fnSetTD)(HANDLE, PCWSTR) = (HRESULT(__stdcall *)(HANDLE, PCWSTR))GetProcAddress(h, "SetThreadDescription");
+				HRESULT(__stdcall *fnSetTD)(HANDLE, PCWSTR) = (HRESULT(__stdcall *)(HANDLE, PCWSTR))((void*)GetProcAddress(h, "SetThreadDescription"));
 				if(fnSetTD) {
 					wchar_t nameUCS2[17];
 					//assert(strlen(self->name) <= 16); // always hard-coded string, plus Linux limits it to 16 chars, so shouldn't ever overflow
-					MultiByteToWideChar(CP_ACP, MB_PRECOMPOSED, self->name, -1, nameUCS2, 50);
+					MultiByteToWideChar(CP_ACP, MB_PRECOMPOSED, self->name, -1, nameUCS2, sizeof(nameUCS2)/sizeof(wchar_t) -1);
 					fnSetTD(GetCurrentThread(), nameUCS2);
 				}
 			}
@@ -392,8 +394,8 @@ public:
 };
 
 static inline int hardware_concurrency() {
-#ifdef USE_LIBUV
 	int threads;
+#ifdef USE_LIBUV
 #if UV_VERSION_HEX >= 0x12c00  // 1.44.0
 	threads = uv_available_parallelism();
 #else
@@ -401,10 +403,11 @@ static inline int hardware_concurrency() {
 	uv_cpu_info(&info, &threads);
 	uv_free_cpu_info(info, threads);
 #endif
-	return threads;
 #else
-	return (int)std::thread::hardware_concurrency();
+	threads = (int)std::thread::hardware_concurrency();
 #endif
+	if(threads < 1) threads = 1;
+	return threads;
 }
 
 

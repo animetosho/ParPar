@@ -128,7 +128,7 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_x2_neon(uint32x2_t* state, co
 	ROUND_I(C, D, A, B, "v18", 17, 15) \
 	ROUND_I(B, C, D, A, "v19", 11, 21)
 
-	asm(
+	__asm__(
 		"ld1 {v20.16b, v21.16b, v22.16b, v23.16b}, [%[i0]]\n"
 		"ld1 {v28.16b, v29.16b, v30.16b, v31.16b}, [%[i1]]\n"
 		"zip1 v24.4s, v20.4s, v28.4s\n"
@@ -237,7 +237,7 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_x2_neon(uint32x2_t* state, co
 	ROUND_I(C, D, A, B, "d14", 17, 15) \
 	ROUND_I(B, C, D, A, "d15", 11, 21)
 	
-	asm(
+	__asm__(
 		"vld1.8 {d16-d19}, [%[i0]]\n"
 		"add r4, %[i0], #32\n"
 		"vld1.8 {d24-d27}, [%[i1]]\n"

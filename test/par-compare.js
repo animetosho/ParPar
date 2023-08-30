@@ -13,13 +13,18 @@ var exeParpar = '../bin/parpar';
 var exePar2 = 'par2';
 
 var skipFileCreate = true; // skip creating test files if they already exist (speeds up repeated failing tests, but existing files aren't checked)
+var pruneCache = false; // prune unused keys from cached results
 
+
+var fastTest = process.argv.slice(2).indexOf('-f') > -1;
 
 var fs = require('fs');
 var crypto = require('crypto');
 
+var bufferSlice = Buffer.prototype.readBigInt64BE ? Buffer.prototype.subarray : Buffer.prototype.slice;
+var allocBuffer = (Buffer.allocUnsafe || Buffer);
 var fsRead = function(fd, len) {
-	var buf = new Buffer(len);
+	var buf = allocBuffer(len);
 	var readLen = fs.readSync(fd, buf, 0, len, null);
 	if(readLen != len)
 		throw new Error("Couldn't read requested data: got " + readLen + " bytes instead of " + len);
@@ -57,29 +62,29 @@ function parse_file(file) {
 	
 	while(pos != stat.size) { // != ensures that size should exactly match expected
 		var header = fsRead(fd, 64);
-		if(header.slice(0, 8).toString() != 'PAR2\0PKT')
+		if(bufferSlice.call(header, 0, 8).toString() != 'PAR2\0PKT')
 			throw new Error('Invalid packet signature @' + pos);
 		
 		var pkt = {
 			len: header.readUInt32LE(8) + header.readUInt32LE(12) * 4294967296,
 			offset: pos,
-			md5: header.slice(16, 32),
-			type: header.slice(48, 64).toString().replace(/\0+$/, '')
+			md5: bufferSlice.call(header, 16, 32),
+			type: bufferSlice.call(header, 48, 64).toString().replace(/\0+$/, '')
 		};
 		try {
 			if(pkt.len % 4 || pkt.len < 64)
 				throw new Error('Invalid packet length specified');
 			
 			if(ret.rsId) {
-				if(BufferCompare(ret.rsId, header.slice(32, 48)))
+				if(BufferCompare(ret.rsId, bufferSlice.call(header, 32, 48)))
 					throw new Error('Mismatching recovery set ID');
 			} else {
-				ret.rsId = new Buffer(16);
-				header.slice(32, 48).copy(ret.rsId);
+				ret.rsId = allocBuffer(16);
+				bufferSlice.call(header, 32, 48).copy(ret.rsId);
 			}
 			
 			var md5 = crypto.createHash('md5');
-			md5.update(header.slice(32));
+			md5.update(bufferSlice.call(header, 32));
 			var pktPos = 64;
 			
 			var idLen = 0;
@@ -183,13 +188,13 @@ function compare_files(file1, file2) {
 	for(var k in file1) {
 		// ignore Creator packet + unicode filename
 		// TODO: consider comparing unicode filename packets
-		if(k == 'creator' || k.substr(0, 5) == 'unifn') continue;
+		if(k == 'creator' || k.substring(0, 5) == 'unifn') continue;
 		
 		if(!packet_eq(file1[k], file2[k])) {
 			//console.log('Packet mismatch for ' + k, file1[k], file2[k]);
 			var err = new Error('Packet mismatch for ' + k);
 			//err.pkts = [file1[k], file2[k]];
-			console.log("Packet dump:", file1[k], file2[k]);
+			console.log("Packet dump (expected/actual):", file1[k], file2[k]);
 			throw err;
 		}
 	}
@@ -294,13 +299,17 @@ console.log('Creating random input files...');
 function writeRndFile(name, size) {
 	if(skipFileCreate && fs.existsSync(tmpDir + name)) return;
 	var fd = fs.openSync(tmpDir + name, 'w');
-	var rand = require('crypto').createCipher('rc4', 'my_incredibly_strong_password' + name);
+	var rand = crypto.createCipheriv('rc4', 'my_incredibly_strong_password' + name, '');
 	rand.setAutoPadding(false);
-	var nullBuf = new Buffer(1024*16);
+	var nullBuf = allocBuffer(1024*16);
 	nullBuf.fill(0);
 	var written = 0;
 	while(written < size) {
-		var b = rand.update(nullBuf).slice(0, Math.min(1024*16, size-written));
+		var b = rand.update(nullBuf);
+		if(b.subarray)
+			b = bufferSlice.call(b, 0, Math.min(1024*16, size-written));
+		else // on Node v0.10.x, rand is a SlowBuffer, so calling Buffer.slice on it won't work
+			b = b.slice(0, Math.min(1024*16, size-written));
 		fsWriteSync(fd, b);
 		written += b.length;
 	}
@@ -309,7 +318,6 @@ function writeRndFile(name, size) {
 }
 writeRndFile('test64m.bin', 64*1048576);
 writeRndFile('test2200m.bin', 2200*1048576);
-writeRndFile('test4100m.bin', 4100*1048576); // >4GB to test 32-bit overflows
 
 // we don't test 0 byte files - different implementations seem to treat it differently:
 // - par2cmdline: skips all 0 byte files
@@ -322,16 +330,19 @@ fs.writeFileSync(tmpDir + 'test8b.bin', '01234567');
 writeRndFile('test65k.bin', 65521);
 writeRndFile('test13m.bin', 13631477);
 
+if(!fastTest) // ensure this is last to make input files consistent between fast/slow tests
+	writeRndFile('test4100m.bin', 4100*1048576); // >4GB to test 32-bit overflows
 
 var cachedResults = {};
+var setCacheKeys = {};
 var sourceFiles = {};
-
+var cacheFileName = fastTest ? 'cached-cmpref-fast.json' : 'cached-cmpref.json';
 try {
-	cachedResults = require(tmpDir + 'cached-cmpref.json');
+	cachedResults = require(tmpDir + cacheFileName);
 } catch(x) {
 	try {
 		// try current folder as well, since I tend to stick it there
-		cachedResults = require('./cached-cmpref.json');
+		cachedResults = require('./' + cacheFileName);
 	} catch(x) {
 		cachedResults = {};
 	}
@@ -454,15 +465,6 @@ var allTests = [
 		cacheKey: '22'
 	},
 	
-	// issue #6
-	{
-		in: [tmpDir + 'test64m.bin'],
-		blockSize: 40000,
-		blocks: 10000,
-		singleFile: true,
-		cacheKey: '12'
-	},
-	
 	// no recovery test
 	{
 		in: [tmpDir + 'test64m.bin'],
@@ -479,15 +481,7 @@ var allTests = [
 		cacheKey: '21'
 	},
 	
-	// 2x large block size test
-	{
-		in: [tmpDir + 'test64m.bin'],
-		blockSize: 2048*1048576 - 1024-68,
-		blocks: 1,
-		memory: is64bPlatform ? 2560*1048576 : 1536*1048576,
-		singleFile: true,
-		cacheKey: '13'
-	},
+	// large block size test
 	{
 		in: [tmpDir + 'test64m.bin'],
 		blockSize: 4294967296, // 4GB, should exceed node's limit
@@ -497,57 +491,77 @@ var allTests = [
 		cacheKey: '14'
 	},
 	
-	// 2x large input file test
-	{
-		in: [tmpDir + 'test4100m.bin'],
-		blockSize: 1048576,
-		blocks: 64,
-		singleFile: true,
-		cacheKey: '15'
-	},
-	{
-		in: [tmpDir + 'test2200m.bin', tmpDir + 'test1b.bin'],
-		blockSize: 768000,
-		blocks: 2800,
-		singleFile: true,
-		cacheKey: '16'
-	},
-	
-	{ // max number of blocks test
-		in: [tmpDir + 'test64m.bin'],
-		blockSize: 2048,
-		blocks: 32768, // max allowed by par2cmdline; TODO: test w/ 65535
-		singleFile: true,
-		cacheKey: '17'
-	},
-	
 	{ // skewed slice size to test chunk miscalculation bug
 		in: [tmpDir + 'test2200m.bin'],
 		blockSize: 256*1048576 + 4,
 		blocks: 2,
 		singleFile: true,
 		cacheKey: '18'
-	},
-	
-	{ // slice > 4GB (generally unsupported, but can be made via par2cmdline with some trickery)
-		in: [tmpDir + 'test4100m.bin'],
-		inBlocks: 1, // 4100MB slice
-		blocks: 2,
-		singleFile: true,
-		cacheKey: '19'
-	},
-	
+	}
 ];
-if(is64bPlatform) {
-	allTests.push({ // recovery > 4GB in memory [https://github.com/animetosho/par2cmdline-turbo/issues/7]
-		in: [tmpDir + 'test4100m.bin'],
-		blockSize: 100*1048576,
-		blocks: 41,
-		singleFile: true,
-		memory: 8192*1048576,
-		cacheKey: '23',
-		readSize: '100M'
-	});
+if(!fastTest) {
+	allTests.push(
+		// issue #6
+		{
+			in: [tmpDir + 'test64m.bin'],
+			blockSize: 40000,
+			blocks: 10000,
+			singleFile: true,
+			cacheKey: '12'
+		},
+		// large block+mem test
+		{
+			in: [tmpDir + 'test64m.bin'],
+			blockSize: 2048*1048576 - 1024-68,
+			blocks: 1,
+			memory: is64bPlatform ? 2560*1048576 : 1536*1048576,
+			singleFile: true,
+			cacheKey: '13'
+		},
+		
+		// 2x large input file test
+		{
+			in: [tmpDir + 'test4100m.bin'],
+			blockSize: 1048576,
+			blocks: 64,
+			singleFile: true,
+			cacheKey: '15'
+		},
+		{
+			in: [tmpDir + 'test2200m.bin', tmpDir + 'test1b.bin'],
+			blockSize: 768000,
+			blocks: 2800,
+			singleFile: true,
+			cacheKey: '16'
+		},
+		
+		{ // max number of blocks test
+			in: [tmpDir + 'test64m.bin'],
+			blockSize: 2048,
+			blocks: 32768, // max allowed by par2cmdline; TODO: test w/ 65535
+			singleFile: true,
+			cacheKey: '17'
+		},
+		
+		{ // slice > 4GB (generally unsupported, but can be made via par2cmdline with some trickery)
+			in: [tmpDir + 'test4100m.bin'],
+			inBlocks: 1, // 4100MB slice
+			blocks: 2,
+			singleFile: true,
+			cacheKey: '19'
+		}
+	);
+	if(is64bPlatform) {
+		allTests.push({ // recovery > 4GB in memory [https://github.com/animetosho/par2cmdline-turbo/issues/7]
+			in: [tmpDir + 'test4100m.bin'],
+			blockSize: 100*1048576,
+			blocks: 41,
+			singleFile: true,
+			memory: 8192*1048576,
+			cacheKey: '23',
+			readSize: '100M'
+		});
+	}
 }
 
 
@@ -587,7 +601,7 @@ async.timesSeries(allTests.length, function(testNum, cb) {
 					for(var k in f) {
 						ret[k] = {
 							type: f[k].type,
-							md5: new Buffer(f[k].md5, 'hex'),
+							md5: (Buffer.alloc ? Buffer.from : Buffer)(f[k].md5, 'hex'),
 							len: f[k].len
 						};
 					}
@@ -633,6 +647,7 @@ async.timesSeries(allTests.length, function(testNum, cb) {
 				}
 				return ret;
 			})));
+			setCacheKeys[test.cacheKey] = 1;
 			
 			delOutput();
 			cb();
@@ -648,12 +663,19 @@ async.timesSeries(allTests.length, function(testNum, cb) {
 		fs.unlinkSync(tmpDir + 'test65k.bin');
 		fs.unlinkSync(tmpDir + 'test13m.bin');
 		fs.unlinkSync(tmpDir + 'test2200m.bin');
-		fs.unlinkSync(tmpDir + 'test4100m.bin');
+		if(!fastTest)
+			fs.unlinkSync(tmpDir + 'test4100m.bin');
 	}
 	
 	if(!err) {
+		if(pruneCache) {
+			for(var k in cachedResults)
+				if(!(k in setCacheKeys))
+					delete cachedResults[k];
+		}
+		
 		try {
-			fs.writeFileSync(tmpDir + 'cached-cmpref.json', JSON.stringify(cachedResults));
+			fs.writeFileSync(tmpDir + cacheFileName, JSON.stringify(cachedResults));
 		} catch(x) {
 			console.log(x);
 		}

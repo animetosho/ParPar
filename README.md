@@ -156,6 +156,7 @@ var par2creator = require('@animetosho/parpar').run(
             value: 65537
         },
         recoveryOffset: 0,
+        recoveryExponents: null, // if an array of numbers is specified, recoveryOffset is ignored, and a single output file is produced regardless of output* options
         memoryLimit: null, // 0 to specify no limit
         minChunkSize: 128*1024,
         processBatchSize: 12,

@@ -182,7 +182,7 @@ static inline int xor_write_avx_main_part(void* jitptr, uint8_t dep1, uint8_t de
 	return xor256_jit_len[dep];
 }
 
-static inline void* xor_write_jit_avx(const struct gf16_xor_scratch *HEDLEY_RESTRICT scratch, uint8_t *HEDLEY_RESTRICT jitptr, uint16_t val, const int xor, const int prefetch) {
+static inline void* xor_write_jit_avx(const struct gf16_xor_scratch *HEDLEY_RESTRICT scratch, uint8_t *HEDLEY_RESTRICT jitptr, uint16_t val, const int mode, const int prefetch) {
 	uint_fast32_t bit;
 	
 	__m256i depmask = _mm256_load_si256((__m256i*)scratch->deps + (val & 0xf)*4);
@@ -226,7 +226,7 @@ static inline void* xor_write_jit_avx(const struct gf16_xor_scratch *HEDLEY_REST
 	tmp3 = _mm_xor_si128(tmp3, common_elim);
 	tmp4 = _mm_xor_si128(tmp4, common_elim);
 	
-	if(!xor) {
+	if(mode != XORDEP_JIT_MODE_MULADD) {
 		lowest = ssse3_tzcnt_epi16(tmp3);
 		_mm_store_si128((__m128i*)dep1_lowest, lowest);
 		tmp3 = _mm_and_si128(tmp3, _mm_add_epi16(tmp3, _mm_set1_epi16(-1)));
@@ -292,7 +292,7 @@ static inline void* xor_write_jit_avx(const struct gf16_xor_scratch *HEDLEY_REST
 	#define _C_PXOR_R(rD, r2, r1, c) jitptr += _jit_vpxor_r(jitptr, rD, r2, r1) & -(c)
 	
 	/* generate code */
-	if(xor) {
+	if(mode == XORDEP_JIT_MODE_MULADD) {
 		for(bit=0; bit<8; bit++) {
 			int destOffs = (bit<<6)-128;
 			int destOffs2 = destOffs+32;
@@ -385,29 +385,40 @@ static inline void* xor_write_jit_avx(const struct gf16_xor_scratch *HEDLEY_REST
 	return jitptr+5;
 }
 
-static HEDLEY_ALWAYS_INLINE void gf16_xor_jit_mul_avx2_base(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch, const int add, const int doPrefetch, const void *HEDLEY_RESTRICT prefetch) {
+static HEDLEY_ALWAYS_INLINE void gf16_xor_jit_mul_avx2_base(const void *HEDLEY_RESTRICT scratch, void* dst, const void* src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch, const int mode, const int doPrefetch, const void *HEDLEY_RESTRICT prefetch) {
 	jit_wx_pair* jit = (jit_wx_pair*)mutScratch;
-	gf16_xorjit_write_jit(scratch, coefficient, jit, add, doPrefetch, &xor_write_jit_avx);
+	gf16_xorjit_write_jit(scratch, coefficient, jit, mode, doPrefetch, &xor_write_jit_avx);
 	
-	gf16_xor256_jit_stub(
-		(intptr_t)src - 384,
-		(intptr_t)dst + len - 384,
-		(intptr_t)dst - 384,
-		(intptr_t)prefetch - 128,
-		jit->x
-	);
+	if(mode == XORDEP_JIT_MODE_MUL_INSITU) {
+		ALIGN_TO(32, __m256i spill[3]);
+		gf16_xor256_jit_stub(
+			(intptr_t)spill + 128,
+			(intptr_t)dst + len - 384,
+			(intptr_t)dst - 384,
+			(intptr_t)prefetch - 128,
+			(uint8_t*)jit->x + XORDEP_JIT_SIZE/2
+		);
+	} else {
+		gf16_xor256_jit_stub(
+			(intptr_t)src - 384,
+			(intptr_t)dst + len - 384,
+			(intptr_t)dst - 384,
+			(intptr_t)prefetch - 128,
+			jit->x
+		);
+	}
 	
 	_mm256_zeroupper();
 }
 #endif /* defined(__AVX2__) && defined(PLATFORM_AMD64) */
 
-void gf16_xor_jit_mul_avx2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch) {
+void gf16_xor_jit_mul_avx2(const void *HEDLEY_RESTRICT scratch, void* dst, const void* src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch) {
 #if defined(__AVX2__) && defined(PLATFORM_AMD64)
 	if(coefficient == 0) {
 		memset(dst, 0, len);
 		return;
 	}
-	gf16_xor_jit_mul_avx2_base(scratch, dst, src, len, coefficient, mutScratch, 0, 0, NULL);
+	gf16_xor_jit_mul_avx2_base(scratch, dst, src, len, coefficient, mutScratch, dst==src ? XORDEP_JIT_MODE_MUL_INSITU : XORDEP_JIT_MODE_MUL, 0, NULL);
 #else
 	UNUSED(scratch); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficient); UNUSED(mutScratch);
 #endif
@@ -416,7 +427,7 @@ void gf16_xor_jit_mul_avx2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RES
 void gf16_xor_jit_muladd_avx2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch) {
 #if defined(__AVX2__) && defined(PLATFORM_AMD64)
 	if(coefficient == 0) return;
-	gf16_xor_jit_mul_avx2_base(scratch, dst, src, len, coefficient, mutScratch, 1, 0, NULL);
+	gf16_xor_jit_mul_avx2_base(scratch, dst, src, len, coefficient, mutScratch, XORDEP_JIT_MODE_MULADD, 0, NULL);
 #else
 	UNUSED(scratch); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficient); UNUSED(mutScratch);
 #endif
@@ -425,7 +436,7 @@ void gf16_xor_jit_muladd_avx2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_
 void gf16_xor_jit_muladd_prefetch_avx2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch, const void *HEDLEY_RESTRICT prefetch) {
 #if defined(__AVX2__) && defined(PLATFORM_AMD64)
 	if(coefficient == 0) return;
-	gf16_xor_jit_mul_avx2_base(scratch, dst, src, len, coefficient, mutScratch, 1, _MM_HINT_T1, prefetch);
+	gf16_xor_jit_mul_avx2_base(scratch, dst, src, len, coefficient, mutScratch, XORDEP_JIT_MODE_MULADD, _MM_HINT_T1, prefetch);
 #else
 	UNUSED(scratch); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficient); UNUSED(mutScratch); UNUSED(prefetch);
 #endif
@@ -466,22 +477,22 @@ static HEDLEY_ALWAYS_INLINE __m256i gf16_xor_finish_extract_bits(__m256i src) {
 static HEDLEY_ALWAYS_INLINE void gf16_xor_finish_extract_bits_store(uint32_t* dst, __m256i src) {
 	__m256i srcShifted = _mm256_add_epi8(src, src);
 	__m256i lane = _mm256_inserti128_si256(srcShifted, _mm256_castsi256_si128(src), 1);
-	dst[3] = _mm256_movemask_epi8(lane);
+	write32(dst+3, _mm256_movemask_epi8(lane));
 	lane = _mm256_slli_epi16(lane, 2);
-	dst[2] = _mm256_movemask_epi8(lane);
+	write32(dst+2, _mm256_movemask_epi8(lane));
 	lane = _mm256_slli_epi16(lane, 2);
-	dst[1] = _mm256_movemask_epi8(lane);
+	write32(dst+1, _mm256_movemask_epi8(lane));
 	lane = _mm256_slli_epi16(lane, 2);
-	dst[0] = _mm256_movemask_epi8(lane);
+	write32(dst+0, _mm256_movemask_epi8(lane));
 	
 	lane = _mm256_permute2x128_si256(srcShifted, src, 0x31);
-	dst[7] = _mm256_movemask_epi8(lane);
+	write32(dst+7, _mm256_movemask_epi8(lane));
 	lane = _mm256_slli_epi16(lane, 2);
-	dst[6] = _mm256_movemask_epi8(lane);
+	write32(dst+6, _mm256_movemask_epi8(lane));
 	lane = _mm256_slli_epi16(lane, 2);
-	dst[5] = _mm256_movemask_epi8(lane);
+	write32(dst+5, _mm256_movemask_epi8(lane));
 	lane = _mm256_slli_epi16(lane, 2);
-	dst[4] = _mm256_movemask_epi8(lane);
+	write32(dst+4, _mm256_movemask_epi8(lane));
 }
 
 #define LOAD_HALVES(a, b, upper) \
@@ -664,16 +675,28 @@ GF_FINISH_PACKED_FUNCS_STUB(gf16_xor, _avx2)
 
 
 #if defined(__AVX2__) && defined(PLATFORM_AMD64)
-static size_t xor_write_init_jit(uint8_t *jitCode) {
-	uint8_t *jitCodeStart = jitCode;
-	jitCode += _jit_add_i(jitCode, AX, 512);
-	jitCode += _jit_add_i(jitCode, DX, 512);
+static void xor_write_init_jit(uint8_t *jitCodeNorm, uint8_t *jitCodeInsitu, uint_fast16_t* sizeNorm, uint_fast16_t* sizeInsitu) {
+	uint8_t *jitCodeStart = jitCodeNorm;
+	jitCodeNorm += _jit_add_i(jitCodeNorm, AX, 512);
+	jitCodeNorm += _jit_add_i(jitCodeNorm, DX, 512);
 	
 	/* only 64-bit supported*/
 	for(int i=3; i<16; i++) {
-		jitCode += _jit_vmovdqa_load(jitCode, i, AX, lshift32(i-4, 5));
+		jitCodeNorm += _jit_vmovdqa_load(jitCodeNorm, i, AX, lshift32(i-4, 5));
 	}
-	return jitCode-jitCodeStart;
+	if(sizeNorm) *sizeNorm = (uint_fast16_t)(jitCodeNorm-jitCodeStart);
+	
+	
+	jitCodeStart = jitCodeInsitu;
+	jitCodeInsitu += _jit_add_i(jitCodeInsitu, DX, 512);
+	
+	for(int i=0; i<16; i++) {
+		jitCodeInsitu += _jit_vmovdqa_load(jitCodeInsitu, i, DX, lshift32(i-4, 5));
+	}
+	for(int i=0; i<3; i++) {
+		jitCodeInsitu += _jit_vmovdqa_store(jitCodeInsitu, AX, lshift32(i-4, 5), i);
+	}
+	if(sizeInsitu) *sizeInsitu = (uint_fast16_t)(jitCodeInsitu-jitCodeStart);
 }
 
 # include "gf16_bitdep_init_avx2.h"
@@ -691,7 +714,7 @@ void* gf16_xor_jit_init_avx2(int polynomial, int jitOptStrat) {
 	gf16_xor_create_jit_lut_avx2();
 	
 	ret->jitOptStrat = jitOptStrat;
-	ret->codeStart = (uint_fast8_t)xor_write_init_jit(tmpCode);
+	xor_write_init_jit(tmpCode, tmpCode, &(ret->codeStart), &(ret->codeStartInsitu));
 	return ret;
 #else
 	UNUSED(polynomial); UNUSED(jitOptStrat);
@@ -703,7 +726,7 @@ void* gf16_xor_jit_init_mut_avx2() {
 #if defined(__AVX2__) && defined(PLATFORM_AMD64)
 	jit_wx_pair *jitCode = jit_alloc(XORDEP_JIT_SIZE);
 	if(!jitCode) return NULL;
-	xor_write_init_jit(jitCode->w);
+	xor_write_init_jit(jitCode->w, (uint8_t*)jitCode->w + XORDEP_JIT_SIZE/2, NULL, NULL);
 	return jitCode;
 #else
 	return NULL;

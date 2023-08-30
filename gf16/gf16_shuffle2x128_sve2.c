@@ -251,6 +251,43 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle2x_muladd_x_sve2(
 #endif /*defined(__ARM_FEATURE_SVE2)*/
 
 
+void gf16_shuffle2x_mul_128_sve2(const void *HEDLEY_RESTRICT scratch, void* dst, const void* src, size_t len, uint16_t val, void *HEDLEY_RESTRICT mutScratch) {
+	UNUSED(mutScratch);
+	UNUSED(scratch);
+#if defined(__ARM_FEATURE_SVE2)
+	svuint8_t tbl_ln, tbl_ls, tbl_hn, tbl_hs;
+	gf16_shuffle2x128_sve2_calc_tables(1, &val,
+		&tbl_ln, &tbl_ls, &tbl_hn, &tbl_hs,
+		NULL, NULL, NULL, NULL,
+		NULL, NULL, NULL, NULL,
+		NULL, NULL, NULL, NULL,
+		NULL, NULL, NULL, NULL,
+		NULL, NULL, NULL, NULL
+	);
+	
+	svuint8_t mask = svreinterpret_u8_u16(svdup_n_u16(0x1000));
+	uint8_t* _src = (uint8_t*)src + len;
+	uint8_t* _dst = (uint8_t*)dst + len;
+	for(intptr_t ptr = -(intptr_t)len; ptr; ptr += svcntb()) {
+		svuint8_t data = svld1_u8(svptrue_b8(), _src+ptr);;
+		svuint8_t tmp1 = svbsl_n_u8(data, mask, 0xf);
+		svuint8_t tmp2 = svsri_n_u8(mask, data, 4);
+		data = sveor3_u8(
+			svtbl_u8(tbl_ln, tmp1),
+			svtbl_u8(tbl_hn, tmp2),
+			svreinterpret_u8_u16(svxar_n_u16(
+				svreinterpret_u16_u8(svtbl_u8(tbl_ls, tmp1)),
+				svreinterpret_u16_u8(svtbl_u8(tbl_hs, tmp2)),
+				8
+			))
+		);
+		svst1_u8(svptrue_b8(), _dst+ptr, data);
+	}
+#else
+	UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(val);
+#endif
+}
+
 void gf16_shuffle2x_muladd_128_sve2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t val, void *HEDLEY_RESTRICT mutScratch) {
 	UNUSED(mutScratch);
 #if defined(__ARM_FEATURE_SVE2)

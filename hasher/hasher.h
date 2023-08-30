@@ -25,10 +25,37 @@ enum MD5MultiLevels {
 	MD5MULT_SVE2
 };
 
+// single hash instances
+extern uint32_t(*CRC32_Calc)(const void*, size_t);
+extern MD5CRCMethods CRC32_Method;
+extern uint32_t(*MD5CRC_Calc)(const void*, size_t, size_t, void*);
+extern MD5CRCMethods MD5CRC_Method;
+
+
 void setup_hasher();
 bool set_hasherInput(HasherInputMethods method);
+bool set_hasherMD5CRC(MD5CRCMethods method);
 void set_hasherMD5MultiLevel(MD5MultiLevels level);
 extern IHasherInput*(*HasherInput_Create)();
+extern HasherInputMethods HasherInput_Method;
+extern MD5MultiLevels HasherMD5Multi_level;
+
+const char* hasherInput_methodName(HasherInputMethods m);
+const char* md5crc_methodName(MD5CRCMethods m);
+const char* hasherMD5Multi_methodName(MD5MultiLevels l);
+inline const char* hasherInput_methodName() {
+	return hasherInput_methodName(HasherInput_Method);
+}
+inline const char* md5crc_methodName() {
+	return md5crc_methodName(MD5CRC_Method);
+}
+inline const char* hasherMD5Multi_methodName() {
+	return hasherMD5Multi_methodName(HasherMD5Multi_level);
+}
+
+std::vector<HasherInputMethods> hasherInput_availableMethods(bool checkCpuid);
+std::vector<MD5CRCMethods> hasherMD5CRC_availableMethods(bool checkCpuid);
+std::vector<MD5MultiLevels> hasherMD5Multi_availableMethods(bool checkCpuid);
 
 class MD5Multi {
 	std::vector<IMD5Multi*> ctx;
@@ -55,9 +82,5 @@ public:
 	}
 };
 
-
-// single hash instances
-extern uint32_t(*CRC32_Calc)(const void*, size_t);
-extern uint32_t(*MD5CRC_Calc)(const void*, size_t, size_t, void*);
 
 #endif /* __HASHER_H */

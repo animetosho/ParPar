@@ -10,7 +10,7 @@ int _FN(gf16_shuffle_available) = 1;
 int _FN(gf16_shuffle_available) = 0;
 #endif
 
-void _FN(gf16_shuffle_prepare)(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen) {
+void _FN(gf16_shuffle_prepare)(void* dst, const void* src, size_t srcLen) {
 #ifdef _AVAILABLE
 	gf16_prepare(dst, src, srcLen, sizeof(_mword)*2, &_FN(gf16_shuffle_prepare_block), &_FN(gf16_shuffle_prepare_blocku));
 	_MM_END

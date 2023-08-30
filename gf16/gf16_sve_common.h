@@ -45,7 +45,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_finish_half_blocku_sve(void *HEDLEY_RESTRI
 	svst1_u8(svwhilelt_b8((uint64_t)0, (uint64_t)remaining), dst, svld1_u8(svptrue_b8(), src));
 }
 
-static HEDLEY_ALWAYS_INLINE void gf16_checksum_prepare_sve(void *HEDLEY_RESTRICT dst, void *HEDLEY_RESTRICT checksum, const size_t blockLen, gf16_transform_block prepareBlock) {
+static HEDLEY_ALWAYS_INLINE void gf16_checksum_prepare_sve(void *HEDLEY_RESTRICT dst, void *HEDLEY_RESTRICT checksum, const size_t blockLen, gf16_transform_block_rst prepareBlock) {
 	ALIGN_TO(16, int16_t tmp[blockLen/2]);
 	memset(tmp, 0, blockLen);
 	svst1_s16(svptrue_b16(), tmp, *(svint16_t*)checksum);

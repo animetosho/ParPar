@@ -8,6 +8,7 @@
 #define _MM(f) _mm_ ## f
 #define _MMI(f) _mm_ ## f ## _si128
 #define _FNSUFFIX _gfni
+#define _FNPREP(f) f##_gfni
 #define _MM_END
 
 #if defined(__GFNI__) && defined(__SSSE3__)
@@ -25,6 +26,7 @@ int gf16_affine_available_gfni = 0;
 #endif
 #undef _MM_END
 #undef _FNSUFFIX
+#undef _FNPREP
 #undef _MMI
 #undef _MM
 #undef _mword
@@ -56,7 +58,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_affine_load_matrix(const void *HEDLEY_REST
 }
 #endif
 
-void gf16_affine_mul_gfni(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch) {
+void gf16_affine_mul_gfni(const void *HEDLEY_RESTRICT scratch, void* dst, const void* src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch) {
 	UNUSED(mutScratch);
 #if defined(__GFNI__) && defined(__SSSE3__)
 	__m128i depmask1, depmask2;
@@ -363,6 +365,28 @@ static HEDLEY_ALWAYS_INLINE void gf16_affine2x_muladd_x_gfni(
 	}
 }
 #endif /*defined(__GFNI__) && defined(__SSSE3__)*/
+
+void gf16_affine2x_mul_gfni(const void *HEDLEY_RESTRICT scratch, void* dst, const void* src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch) {
+	UNUSED(mutScratch);
+#if defined(__GFNI__) && defined(__SSSE3__)
+	__m128i matNorm, matSwap;
+	gf16_affine_load_matrix(scratch, coefficient, &matNorm, &matSwap);
+	
+	uint8_t* _src = (uint8_t*)src + len;
+	uint8_t* _dst = (uint8_t*)dst + len;
+	
+	for(intptr_t ptr = -(intptr_t)len; ptr; ptr += sizeof(__m128i)) {
+		__m128i data = _mm_load_si128((__m128i*)(_src + ptr));
+		__m128i result1 = _mm_gf2p8affine_epi64_epi8(data, matNorm, 0);
+		__m128i result2 = _mm_gf2p8affine_epi64_epi8(data, matSwap, 0);
+		
+		result1 = _mm_xor_si128(result1, _mm_shuffle_epi32(result2, _MM_SHUFFLE(1,0,3,2)));
+		_mm_store_si128((__m128i*)(_dst + ptr), result1);
+	}
+#else
+	UNUSED(scratch); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficient);
+#endif
+}
 
 void gf16_affine2x_muladd_gfni(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch) {
 	UNUSED(mutScratch);
