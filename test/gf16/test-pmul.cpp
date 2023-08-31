@@ -78,7 +78,11 @@ int main(int argc, char** argv) {
 		for(size_t i=0; i<REGION_SIZE/sizeof(uint16_t); i++) {
 			src1[i] = rand() & 0xffff;
 			src2[i] = rand() & 0xffff;
-			ref[i] = gf16_mul_le(src1[i], src2[i]);
+			uint16_t coeff = src2[i];
+			#if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+			coeff = (coeff>>8) | ((coeff&0xff))<<8;
+			#endif
+			ref[i] = gf16_mul_le(src1[i], coeff);
 		}
 		
 		for(const auto& fn : funcs) {
@@ -90,7 +94,12 @@ int main(int argc, char** argv) {
 			fn.fn(dst, src1, src2, regionSize);
 			if(memcmp(dst, ref, regionSize)) {
 				std::cout << "PointMul failure: " << name << std::endl;
-				display_mem_diff(ref, dst, regionSize/2);
+				int from = display_mem_diff(ref, dst, regionSize/2);
+				int to = (std::min)(from+16, (int)regionSize/2);
+				std::cout << "\nSrc1:\n";
+				print_mem_region(src1, from, to);
+				std::cout << "Src2:\n";
+				print_mem_region(src2, from, to);
 				return 1;
 			}
 		}

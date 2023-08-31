@@ -75,10 +75,11 @@ static HEDLEY_ALWAYS_INLINE uint8x16_t vmakeq_u8(
 	uint8_t a, uint8_t b, uint8_t c, uint8_t d, uint8_t e, uint8_t f, uint8_t g, uint8_t h,
 	uint8_t i, uint8_t j, uint8_t k, uint8_t l, uint8_t m, uint8_t n, uint8_t o, uint8_t p
 ) {
-# if defined(_MSC_VER)
+# if defined(_MSC_VER) || __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
 	uint8_t t[] = {a,b,c,d,e,f,g,h,i,j,k,l,m,n,o,p};
 	return vld1q_u8(t);
 # else
+	// compilers might reverse the order of the following in big endian, for some reason
 	return (uint8x16_t){a,b,c,d,e,f,g,h,i,j,k,l,m,n,o,p};
 # endif
 }

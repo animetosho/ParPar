@@ -7,12 +7,12 @@
 #endif
 
 #ifdef __ARM_NEON
-static HEDLEY_ALWAYS_INLINE uint32x2_t vmake_u32(
+static HEDLEY_ALWAYS_INLINE uint32x2_t vmake_u32le(
 	uint32_t a, uint32_t b
 ) {
-# if defined(_MSC_VER)
+# if defined(_MSC_VER) || __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
 	uint32_t t[] = {a,b};
-	return vld1_u32(t);
+	return vreinterpret_u32_u8(vld1_u8((const uint8_t*)t));
 # else
 	return (uint32x2_t){a,b};
 # endif
@@ -22,7 +22,7 @@ static HEDLEY_ALWAYS_INLINE uint32x2_t vmake_u32(
 #define VAL vdup_n_u32
 #define word_t uint32x2_t
 #define INPUT(k, set, ptr, offs, idx, var) ADD(var, VAL(k))
-#define LOAD(k, set, ptr, offs, idx, var) ADD(var = vmake_u32(((uint32_t*)(ptr[0]))[idx], ((uint32_t*)(ptr[1]))[idx]), VAL(k))
+#define LOAD(k, set, ptr, offs, idx, var) ADD(var = vmake_u32le(((uint32_t*)(ptr[0]))[idx], ((uint32_t*)(ptr[1]))[idx]), VAL(k))
 #define LOAD4(set, ptr, offs, idx, var0, var1, var2, var3) { \
 	uint32x4_t in0 = vreinterpretq_u32_u8(vld1q_u8((uint8_t*)ptr[0] + idx*4)); \
 	uint32x4_t in1 = vreinterpretq_u32_u8(vld1q_u8((uint8_t*)ptr[1] + idx*4)); \
