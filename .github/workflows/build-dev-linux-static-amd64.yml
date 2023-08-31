@@ -20,8 +20,14 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y gcc-10 g++-10
       - run: npm install --production --ignore-scripts
-      - run: (cd nexe && npm install --production)
-      - run: (cd nexe && node build)
+      - run: npm install --production
+        working-directory: nexe
+      # diagnose weird failure between initial message and download message
+      - run: sed -i '/return tryInvokeMiddleware/i try{console.log("Invoke middleware", mw.name);}catch(x){}' node_modules/app-builder/lib/compose.js
+        working-directory: nexe
+        continue-on-error: true
+      - run: node build
+        working-directory: nexe
         env:
           CC: gcc-10
           CXX: g++-10

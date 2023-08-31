@@ -12,8 +12,10 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - run: npm install --production --ignore-scripts
-      - run: (cd nexe && npm install --production)
-      - run: (cd nexe && node build)
+      - run: npm install --production
+        working-directory: nexe
+      - run: node build
+        working-directory: nexe
       - run: xz -9e --lzma2 nexe/parpar -c > parpar.xz
       - uses: actions/upload-artifact@v3
         with:

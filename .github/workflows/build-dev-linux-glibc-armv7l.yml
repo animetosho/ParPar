@@ -25,8 +25,14 @@ jobs:
           arch: i386  # '-m32' switch doesn't work without this
           packages: "libstdc++-$(c++ -dumpversion)-dev:i386 libc6-dev:i386"
       - run: npm install --production --ignore-scripts
-      - run: (cd nexe && npm install --production)
-      - run: (cd nexe && node build)
+      - run: npm install --production
+        working-directory: nexe
+      # diagnose weird failure between initial message and download message
+      - run: sed -i '/return tryInvokeMiddleware/i try{console.log("Invoke middleware", mw.name);}catch(x){}' node_modules/app-builder/lib/compose.js
+        working-directory: nexe
+        continue-on-error: true
+      - run: node build
+        working-directory: nexe
         env:
           CC: arm-linux-gnueabihf-gcc
           CXX: arm-linux-gnueabihf-g++
