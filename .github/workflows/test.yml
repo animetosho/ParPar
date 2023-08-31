@@ -14,9 +14,7 @@ jobs:
     runs-on: windows-2022
     steps:
       - uses: ilammy/setup-nasm@v1
-      - uses: petarpetrovt/setup-sde@v2.1
-        with:
-          sdeVersion: 8.69.1
+      #- uses: petarpetrovt/setup-sde@v2.1
       - uses: actions/checkout@v3
       - run: |
           mkdir test\gf16\build
@@ -26,21 +24,26 @@ jobs:
           mkdir test\hasher\build
           cmake -B test\hasher\build -S test\hasher -G "Visual Studio 17 2022" -T ${{ matrix.compiler }} -A ${{ matrix.arch }}
           cmake --build test\hasher\build --config ${{ matrix.config }}
-      - run: dir $env:SDE_PATH
-      - run: Invoke-Expression "$env:SDE_PATH/sde.exe -icx -- test/gf16/build/${{ matrix.config }}/test.exe"
-      - run: Invoke-Expression "$env:SDE_PATH/sde.exe -icx -- test/gf16/build/${{ matrix.config }}/test-pmul.exe"
-      - run: Invoke-Expression "$env:SDE_PATH/sde.exe -icx -- test/gf16/build/${{ matrix.config }}/test-ctrl.exe -f"
+      #- run: dir $env:SDE_PATH
+      #- run: Invoke-Expression "$env:SDE_PATH/sde.exe -icx -- test/gf16/build/${{ matrix.config }}/test.exe"
+      - run: test/gf16/build/${{ matrix.config }}/test.exe
+      #- run: Invoke-Expression "$env:SDE_PATH/sde.exe -icx -- test/gf16/build/${{ matrix.config }}/test-pmul.exe"
+      - run: test/gf16/build/${{ matrix.config }}/test-pmul.exe
+      #- run: Invoke-Expression "$env:SDE_PATH/sde.exe -icx -- test/gf16/build/${{ matrix.config }}/test-ctrl.exe -f"
+      - run: test/gf16/build/${{ matrix.config }}/test-ctrl.exe -f
         if: ${{ matrix.config == 'Release' && (matrix.compiler == 'ClangCL' || matrix.compiler == 'v143') }}
-      - run: Invoke-Expression "$env:SDE_PATH/sde.exe -icx -- test/gf16/build/${{ matrix.config }}/test-inv.exe -f"
+      #- run: Invoke-Expression "$env:SDE_PATH/sde.exe -icx -- test/gf16/build/${{ matrix.config }}/test-inv.exe -f"
+      - run: test/gf16/build/${{ matrix.config }}/test-inv.exe -f
         if: ${{ matrix.config == 'Release' && (matrix.compiler == 'ClangCL' || matrix.compiler == 'v143') }}
-      - run: Invoke-Expression "$env:SDE_PATH/sde.exe -icx -- test/hasher/build/${{ matrix.config }}/test.exe"
+      #- run: Invoke-Expression "$env:SDE_PATH/sde.exe -icx -- test/hasher/build/${{ matrix.config }}/test.exe"
+      - run: test/hasher/build/${{ matrix.config }}/test.exe
       
-      # test SSE2-only to see if CPUID checking works
-      - run: |
-          Invoke-Expression "$env:SDE_PATH/sde.exe -p4 -- test/gf16/build/${{ matrix.config }}/test.exe"
-          Invoke-Expression "$env:SDE_PATH/sde.exe -p4 -- test/gf16/build/${{ matrix.config }}/test-pmul.exe"
-          Invoke-Expression "$env:SDE_PATH/sde.exe -p4 -- test/hasher/build/${{ matrix.config }}/test.exe"
-        if: ${{ matrix.config == 'Release' && matrix.arch == 'x64' && matrix.compiler == 'ClangCL' }}
+      ## test SSE2-only to see if CPUID checking works
+      #- run: |
+      #    Invoke-Expression "$env:SDE_PATH/sde.exe -p4 -- test/gf16/build/${{ matrix.config }}/test.exe"
+      #    Invoke-Expression "$env:SDE_PATH/sde.exe -p4 -- test/gf16/build/${{ matrix.config }}/test-pmul.exe"
+      #    Invoke-Expression "$env:SDE_PATH/sde.exe -p4 -- test/hasher/build/${{ matrix.config }}/test.exe"
+      #  if: ${{ matrix.config == 'Release' && matrix.arch == 'x64' && matrix.compiler == 'ClangCL' }}
       # TODO: XOP tests for hasher?
   
   # test building only
@@ -118,8 +121,6 @@ jobs:
           # qemu x86 doesn't support AVX, so we use Intel SDE instead
           - {arch: 'i386',     target: 'i686-linux-gnu',       libc: 'i386',    emu: '$SDE_PATH/sde -icx --'}
           - {arch: 'amd64',    target: 'x86-64-linux-gnu',     libc: 'amd64',   emu: '$SDE_PATH/sde64 -icx --'}
-          #- {arch: 'amd64',    target: 'x86-64-linux-gnux32',  libc: 'x32',     emu: 'qemu-x86_64-static -cpu max'}
-          # TODO: how to test x32?
           - {arch: 'aarch64',  target: 'aarch64-linux-gnu',    libc: 'arm64',   emu: 'qemu-aarch64-static -L /usr/aarch64-linux-gnu -cpu max,sve-max-vq=4'}
           - {arch: 'arm',      target: 'arm-linux-gnueabihf',  libc: 'armhf',   emu: 'qemu-arm-static -L /usr/arm-linux-gnueabihf -cpu max'}
           # RVV unavailable in Ubuntu 22.04's qemu
@@ -183,14 +184,8 @@ jobs:
         t:
           - {arch: 'i386', target: 'i686-linux-gnu', cl_target: 'i386-linux-gnu', libc: 'i386', emu: '$SDE_PATH/sde -icx --'}
           - {arch: 'amd64', target: 'x86-64-linux-gnu', cl_target: 'x86_64-linux-gnu', libc: 'amd64', emu: '$SDE_PATH/sde64 -icx --'}
-          #- {arch: 'amd64', target: 'x86-64-linux-gnux32', cl_target: 'x86-64-linux-gnux32', libc: 'x32', emu: 'qemu- -cpu max'}
-          # TODO: how to test x32?
           - {arch: 'aarch64', target: 'aarch64-linux-gnu', cl_target: 'aarch64-linux-gnu', libc: 'arm64', emu: 'qemu-aarch64-static -L /usr/aarch64-linux-gnu -cpu max,sve-max-vq=4'}
           - {arch: 'arm', target: 'arm-linux-gnueabihf', cl_target: 'armv7a-linux-gnueabihf', libc: 'armhf', emu: 'qemu-arm-static -L /usr/arm-linux-gnueabihf -cpu max'}
-          # TODO: can't test ARM BE/RISCV32 without available libc
-          #- {arch: 'aarch64be', target: 'aarch64_be-linux-gnu', cl_target: 'aarch64_be-linux-gnu', libc: 'arm64be', emu: 'qemu-aarch64_be-static -L /usr/aarch64_be-linux-gnu -cpu max,sve-max-vq=4'}
-          #- {arch: 'arm_be', target: 'armeb-linux-gnu', cl_target: 'armebv7a-linux-gnu', libc: 'armeb', emu: 'qemu-armeb-static -L /usr/armeb-linux-gnu -cpu max'}
-          #- {arch: 'riscv32', target: 'riscv32-linux-gnu', cl_target: 'riscv32-linux-gnu', libc: 'riscv32', emu: 'qemu-riscv32-static -L /usr/riscv32-linux-gnu -cpu rv32,v=true,vlen=512,elen=64,vext_spec=v1.0,zba=true,zbb=true,zbc=true'}
           # RVV unavailable in Ubuntu 22.04's qemu
           #- {arch: 'riscv64', target: 'riscv64-linux-gnu', cl_target: 'riscv64-linux-gnu', libc: 'riscv64', emu: 'qemu-riscv64-static -L /usr/riscv64-linux-gnu -cpu rv64,v=true,vlen=512,elen=64,vext_spec=v1.0,zba=true,zbb=true,zbc=true'}
           - {arch: 'ppc64', target: 'powerpc64-linux-gnu', cl_target: 'ppc64-linux-gnu', libc: 'ppc64', emu: 'qemu-ppc64-static -L /usr/powerpc64-linux-gnu'}
@@ -250,6 +245,47 @@ jobs:
         if: ${{ matrix.config == 'Release' && matrix.cc_ver == '15' }}
       - run: ${{ matrix.t.emu }} test/gf16/build/test-inv -f
         if: ${{ matrix.config == 'Release' && matrix.cc_ver == '15' }}
+      - run: ${{ matrix.t.emu }} test/hasher/build/test
+  
+  test-linux-musl:
+    strategy:
+      fail-fast: false
+      matrix:
+        config: [Debug, Release]
+        t:
+          - {arch: 'amd64', target: 'x86_64-linux-muslx32', emu: ''}
+          - {arch: 'armeb', target: 'armeb-linux-musleabihf', emu: 'qemu-armeb-static -cpu max'}
+          - {arch: 'aarch64_be', target: 'aarch64_be-linux-musl', emu: 'qemu-aarch64_be-static -cpu max,sve-max-vq=4'}
+          # RV32 MUSL compiler currently unavailable
+          #- {arch: 'riscv32', target: 'riscv32-linux-musl', emu: 'qemu-riscv32-static -cpu rv32,v=true,vlen=512,elen=64,vext_spec=v1.0,zba=true,zbb=true,zbc=true'}
+    name: Test MUSL ${{ matrix.t.arch }} (${{ matrix.config }})
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v3
+      - run: sudo apt update && sudo apt install -y qemu-user-static
+        if: ${{ matrix.t.arch != 'amd64' }}
+      - uses: Lesmiscore/musl-cross-compilers@jockie
+        id: musl
+        with:
+          target: ${{ matrix.t.target }}
+      - run: |
+          mkdir test/gf16/build
+          cmake -Btest/gf16/build -Stest/gf16 -DSKIP_AUX=1 -DSTATIC_LINK=1 -DCMAKE_BUILD_TYPE=${{ matrix.config }} \
+            -DCMAKE_SYSTEM_PROCESSOR=${{ matrix.t.arch }} \
+            -DCMAKE_SYSTEM_NAME=Linux
+          cmake --build test/gf16/build
+          
+          mkdir test/hasher/build
+          cmake -Btest/hasher/build -Stest/hasher -DSKIP_AUX=1 -DSTATIC_LINK=1 -DCMAKE_BUILD_TYPE=${{ matrix.config }} \
+            -DCMAKE_SYSTEM_PROCESSOR=${{ matrix.t.arch }} \
+            -DCMAKE_SYSTEM_NAME=Linux
+          cmake --build test/hasher/build
+        env:
+          CC: ${{ steps.musl.outputs.path }}/${{ matrix.t.target }}-cc
+          CXX: ${{ steps.musl.outputs.path }}/${{ matrix.t.target }}-c++
+          AR: ${{ steps.musl.outputs.path }}/${{ matrix.t.target }}-ar
+      - run: ${{ matrix.t.emu }} test/gf16/build/test
+      - run: ${{ matrix.t.emu }} test/gf16/build/test-pmul
       - run: ${{ matrix.t.emu }} test/hasher/build/test
   
   test-linux-pocl:
