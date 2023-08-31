@@ -16,7 +16,7 @@ Features
 -   various features for high performance (see [benchmark comparisons](benchmarks/info.md))
     -   asychronous calculations and I/O
     -   multi-threading support
-    -   multiple fast calculation implementations leveraging x86 (SSE2, SSSE3, AVX2, AVX512BW, GFNI) and ARM (NEON, SVE, SVE2) SIMD capabilities, automatically selecting the best routine for the CPU
+    -   multiple fast calculation implementations leveraging x86 (SSE2, SSSE3, AVX2, AVX512BW, GFNI), ARM (NEON, SVE, SVE2) and RISC-V (Vector) SIMD capabilities, automatically selecting the best routine for the CPU
     -   multi-buffer (SIMD) MD5 implementation and accelerated CRC32 computation
     -   single read pass on source files if memory constraints allow (no separate hashing pass required)
     -   minimum chunk size restrictions to avoid heavy I/O seeking when memory is limited, plus support for concurrent chunk read requests
