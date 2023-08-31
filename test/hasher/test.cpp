@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <iostream>
+#include <iomanip>
 #include <vector>
 #include <tuple>
 #include <memory>
@@ -21,6 +22,11 @@ void writeUint32LE(uint8_t* p, uint32_t v) {
 	p[1] = (v >> 8) & 0xff;
 	p[2] = (v >> 16) & 0xff;
 	p[3] = (v >> 24) & 0xff;
+}
+
+void printMd5(const uint8_t* h) {
+	for(int i=0; i<16; i++)
+		std::cout << std::hex << std::setfill('0') << std::setw(2) << (int)h[i];
 }
 
 // TODO: test MD5Single::updateZero
@@ -249,7 +255,7 @@ int main(void) {
 	auto singleHashers = hasherMD5CRC_availableMethods(true);
 	for(auto hId : singleHashers) {
 		set_hasherMD5CRC(hId);
-		std::cout << "  " << md5crc_methodName();
+		std::cout << "  " << md5crc_methodName() << " ";
 		if(do_tests(nullptr, MD5Single::_update, MD5CRC_Calc, CRC32_Calc)) ERROR(" - FAILED");
 		std::cout << std::endl;
 	}
@@ -258,7 +264,7 @@ int main(void) {
 	auto inputHashers = hasherInput_availableMethods(true);
 	for(auto hId : inputHashers) {
 		set_hasherInput(hId);
-		std::cout << "  " << hasherInput_methodName();
+		std::cout << "  " << hasherInput_methodName() << " ";
 		auto hasher = HasherInput_Create();
 		if(do_tests(hasher, nullptr, nullptr, nullptr)) ERROR(" - FAILED");
 		hasher->destroy();

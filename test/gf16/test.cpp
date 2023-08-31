@@ -7,7 +7,7 @@ const int MAX_TEST_REGIONS = 20;
 const int MAX_TEST_OUTPUTS = 17;
 // earlier GCC doesn't like `const int` used for alignment statements, so use a define instead
 #define REGION_ALIGNMENT 4096
-const int REGION_SIZE = MAX_TEST_REGIONS * 1024; // largest stride = 1024 bytes from Xor512
+const unsigned REGION_SIZE = MAX_TEST_REGIONS * 1024; // largest stride = 1024 bytes from Xor512
 const int MAX_PACK_REGIONS = 8; // should be <= MAX_TEST_REGIONS (because we re-use the memory allocated for it)
 const int MAX_MISALIGN = 3; // maximum misaligned bytes to test finish_packed
 

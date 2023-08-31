@@ -20,7 +20,7 @@
 
 const int MAX_TEST_REGIONS = 20;
 const int MAX_TEST_OUTPUTS = 20;
-const int REGION_SIZE = 20000;
+const unsigned REGION_SIZE = 20000;
 
 
 

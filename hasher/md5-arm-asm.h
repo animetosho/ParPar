@@ -41,8 +41,8 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_scalar(uint32_t* HEDLEY_RESTR
 #  define SETI_L(dst, x) "movw %[" STR(dst) "], #" STR(x) "\n"
 #  define SETI_H(dst, x) "movt %[" STR(dst) "], #" STR(x) "\n"
 # else
-#  define SETI_L(dst, x) "mov %[" dst "], #" STR(x) " & 0xff\n orr %[" dst "], #" STR(x) " & 0xff00\n"
-#  define SETI_H(dst, x) "orr %[" dst "], #(" STR(x) " & 0xff)<<16\n orr %[" dst "], #(" STR(x) " & 0xff00)<<16\n"
+#  define SETI_L(dst, x) "mov %[" STR(dst) "], #" STR(x) " & 0xff\n orr %[" STR(dst) "], #" STR(x) " & 0xff00\n"
+#  define SETI_H(dst, x) "orr %[" STR(dst) "], #(" STR(x) " & 0xff)<<16\n orr %[" STR(dst) "], #(" STR(x) " & 0xff00)<<16\n"
 # endif
 
 # define REG(x) "%[" STR(x) "]"
