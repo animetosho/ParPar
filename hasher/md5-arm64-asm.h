@@ -11,29 +11,31 @@
 #endif
 
 static const uint64_t md5_constants_aarch64[32] __attribute__((aligned(8))) = {
+	#define _NUM_PAIR(a,b) 0x##b##a##ULL
 	// F
-	0xe8c7b756d76aa478ULL, 0xc1bdceee242070dbULL,
-	0x4787c62af57c0fafULL, 0xfd469501a8304613ULL,
-	0x8b44f7af698098d8ULL, 0x895cd7beffff5bb1ULL,
-	0xfd9871936b901122ULL, 0x49b40821a679438eULL,
+	_NUM_PAIR(d76aa478,e8c7b756), _NUM_PAIR(242070db,c1bdceee),
+	_NUM_PAIR(f57c0faf,4787c62a), _NUM_PAIR(a8304613,fd469501),
+	_NUM_PAIR(698098d8,8b44f7af), _NUM_PAIR(ffff5bb1,895cd7be),
+	_NUM_PAIR(6b901122,fd987193), _NUM_PAIR(a679438e,49b40821),
 	
 	// G
-	0xc040b340f61e2562ULL, 0xe9b6c7aa265e5a51ULL,
-	0x02441453d62f105dULL, 0xe7d3fbc8d8a1e681ULL,
-	0xc33707d621e1cde6ULL, 0x455a14edf4d50d87ULL,
-	0xfcefa3f8a9e3e905ULL, 0x8d2a4c8a676f02d9ULL,
+	_NUM_PAIR(f61e2562,c040b340), _NUM_PAIR(265e5a51,e9b6c7aa),
+	_NUM_PAIR(d62f105d,02441453), _NUM_PAIR(d8a1e681,e7d3fbc8),
+	_NUM_PAIR(21e1cde6,c33707d6), _NUM_PAIR(f4d50d87,455a14ed),
+	_NUM_PAIR(a9e3e905,fcefa3f8), _NUM_PAIR(676f02d9,8d2a4c8a),
 	
 	// H
-	0x8771f681fffa3942ULL, 0xfde5380c6d9d6122ULL,
-	0x4bdecfa9a4beea44ULL, 0xbebfbc70f6bb4b60ULL,
-	0xeaa127fa289b7ec6ULL, 0x04881d05d4ef3085ULL,
-	0xe6db99e5d9d4d039ULL, 0xc4ac56651fa27cf8ULL,
+	_NUM_PAIR(fffa3942,8771f681), _NUM_PAIR(6d9d6122,fde5380c),
+	_NUM_PAIR(a4beea44,4bdecfa9), _NUM_PAIR(f6bb4b60,bebfbc70),
+	_NUM_PAIR(289b7ec6,eaa127fa), _NUM_PAIR(d4ef3085,04881d05),
+	_NUM_PAIR(d9d4d039,e6db99e5), _NUM_PAIR(1fa27cf8,c4ac5665),
 	
 	// I
-	0x432aff97f4292244ULL, 0xfc93a039ab9423a7ULL,
-	0x8f0ccc92655b59c3ULL, 0x85845dd1ffeff47dULL,
-	0xfe2ce6e06fa87e4fULL, 0x4e0811a1a3014314ULL,
-	0xbd3af235f7537e82ULL, 0xeb86d3912ad7d2bbULL
+	_NUM_PAIR(f4292244,432aff97), _NUM_PAIR(ab9423a7,fc93a039),
+	_NUM_PAIR(655b59c3,8f0ccc92), _NUM_PAIR(ffeff47d,85845dd1),
+	_NUM_PAIR(6fa87e4f,fe2ce6e0), _NUM_PAIR(a3014314,4e0811a1),
+	_NUM_PAIR(f7537e82,bd3af235), _NUM_PAIR(2ad7d2bb,eb86d391)
+	#undef _NUM_PAIR
 };
 
 static HEDLEY_ALWAYS_INLINE void md5_process_block_scalar(uint32_t* HEDLEY_RESTRICT state, const uint8_t* const* HEDLEY_RESTRICT data, size_t offset) {

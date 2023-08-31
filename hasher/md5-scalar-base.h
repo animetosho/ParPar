@@ -7,13 +7,7 @@
 #define VAL(k) (k)
 #define word_t uint32_t
 #define INPUT(k, set, ptr, offs, idx, var) (var + k)
-#if __BYTE_ORDER__ != __ORDER_BIG_ENDIAN__
-# define LOAD(k, set, ptr, offs, idx, var) (memcpy(&var, ((char*)(ptr[set])) + offs + idx*4, 4), var + k)
-#else
-/* big-endian -> need to byteswap */
-# define BSWAP(v) ((((v)&0xff) << 24) | (((v)&0xff00) << 8) | (((v)>>8) & 0xff00) | (((v)>>24) & 0xff))
-# define LOAD(k, set, ptr, offs, idx, var) (memcpy(&var, ((char*)(ptr[set])) + offs + idx*4, 4), var = BSWAP(var), var + k)
-#endif
+#define LOAD(k, set, ptr, offs, idx, var) (var = _LE32(read32(((char*)(ptr[set])) + offs + idx*4)), var + k)
 
 
 # if defined(_MSC_VER)

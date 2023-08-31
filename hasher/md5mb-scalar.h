@@ -27,14 +27,10 @@
 #undef ADDF
 
 static HEDLEY_ALWAYS_INLINE void md5_extract_mb_scalar(void* dst, void* state, int idx) {
-#if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
 	uint32_t* state_ = (uint32_t*)state + idx*4;
 	uint32_t* dst_ = (uint32_t*)dst;
 	for(int i=0; i<4; i++)
-		write32(dst_+i, BSWAP(read32(state_+i)));
-#else
-	memcpy(dst, (uint32_t*)state + idx*4, 16);
-#endif
+		write32(dst_+i, _LE32(read32(state_+i)));
 }
 static HEDLEY_ALWAYS_INLINE void md5_extract_all_mb_scalar(void* dst, void* state, int group) {
 	md5_extract_mb_scalar(dst, state, group);
