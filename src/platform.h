@@ -83,25 +83,46 @@
 # if !defined(__AVX2__) && (_MSC_VER >= 1800 && defined(__SSE2__))
 	#define __AVX2__ 1
 # endif
+
+# ifdef PLATFORM_AMD64
 /* AVX512 requires VS 15.3 */
-#if !defined(__AVX512F__) && (_MSC_VER >= 1911 && defined(__AVX__))
+#  if !defined(__AVX512F__) && (_MSC_VER >= 1911 && defined(__AVX__))
 	#define __AVX512BW__ 1
 	#define __AVX512F__ 1
-#endif
+#  endif
 /* AVX512VL not available until VS 15.5 */
-#if defined(__AVX512F__) && _MSC_VER >= 1912
+#  if defined(__AVX512F__) && _MSC_VER >= 1912
 	#define __AVX512VL__ 1
-#endif
+#  endif
 /* VBMI added in 15.7 */
-#if defined(__AVX512F__) && _MSC_VER >= 1914
+#  if defined(__AVX512F__) && _MSC_VER >= 1914
 	#define __AVX512VBMI__ 1
-#endif
-#if defined(__AVX2__) && _MSC_VER >= 1915
+#  endif
+# else
+// earlier versions of MSVC have buggy AVX-512
+// not investigated fully, but it seems mostly problematic with 32-bit Release builds, so require VS2019 for AVX-512
+#  if !defined(__AVX512F__) && _MSC_VER >= 1920 && defined(__AVX__)
+	#define __AVX512BW__ 1
+	#define __AVX512F__ 1
+	#define __AVX512VL__ 1
+	#define __AVX512VBMI__ 1
+#  elif defined(__AVX512F__) && _MSC_VER < 1920
+#   undef __AVX512F__
+#   ifdef __AVX512BW__
+#    undef __AVX512BW__
+#   endif
+#   ifdef __AVX512VL__
+#    undef __AVX512VL__
+#   endif
+#  endif
+# endif
+
+# if defined(__AVX2__) && _MSC_VER >= 1915
 	#define __VPCLMULQDQ__ 1
-#endif
-#if defined(__SSE2__) && _MSC_VER >= 1920
+# endif
+# if defined(__SSE2__) && _MSC_VER >= 1920
 	#define __GFNI__ 1
-#endif
+# endif
 
 #endif /* _MSC_VER */
 

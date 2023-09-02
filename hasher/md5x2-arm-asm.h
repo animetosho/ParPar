@@ -209,7 +209,7 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_x2_scalar(uint32_t* state, co
 	: [A1]"+&r"(A1), [B1]"+&r"(B1), [C1]"+&r"(C1), [D1]"+&r"(D1),
 	  [A2]"+&r"(A2), [B2]"+&r"(B2), [C2]"+&r"(C2), [D2]"+&r"(D2),
 	  [TMP1]"=&r"(tmp1), [TMP2]"=&r"(tmp2)
-	: [i0]"r"(data[0]), [i1]"r"(data[1])
+	: [i0]"h"(data[0]), [i1]"h"(data[1])
 	:
 	);
 	state[0] += A1;

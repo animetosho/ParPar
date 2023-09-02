@@ -284,9 +284,6 @@ jobs:
           CC: ${{ steps.musl.outputs.path }}/${{ matrix.t.target }}-cc
           CXX: ${{ steps.musl.outputs.path }}/${{ matrix.t.target }}-c++
           AR: ${{ steps.musl.outputs.path }}/${{ matrix.t.target }}-ar
-      # temp check
-      - run: ${{ matrix.t.emu }} test/gf16/build/test -m -v
-        if: ${{ matrix.t.arch == 'amd64' }}
       - run: ${{ matrix.t.emu }} test/gf16/build/test
       - run: ${{ matrix.t.emu }} test/gf16/build/test-pmul
       - run: ${{ matrix.t.emu }} test/hasher/build/test
