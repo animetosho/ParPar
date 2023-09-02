@@ -61,6 +61,7 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_x2_scalar(uint32_t* state, co
 	"ldr " REG(TMP1) ", " NEXT_IN1 "\n" \
 	"ldr " REG(TMP2) ", " NEXT_IN2 "\n"
 #else
+// REV requires ARMv6
 # define LD2(NEXT_IN1, NEXT_IN2) \
 	"ldr " REG(TMP1) ", " NEXT_IN1 "\n" \
 	"ldr " REG(TMP2) ", " NEXT_IN2 "\n" \

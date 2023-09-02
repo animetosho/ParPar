@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 2.8.9...3.22)
+cmake_minimum_required(VERSION 3.12...3.22)
 project(gf16_test)
 
 option(USE_LIBUV "Use libuv interface with callbacks, instead of C++11 threading + futures" OFF)

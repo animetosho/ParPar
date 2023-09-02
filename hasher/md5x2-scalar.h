@@ -6,7 +6,9 @@
 # define MD5_USE_ASM
 # include "md5x2-x86-asm.h"
 #endif
-#if (defined(__GNUC__) || defined(__clang__)) && defined(PLATFORM_ARM) && defined(__OPTIMIZE__)
+#if (defined(__GNUC__) || defined(__clang__)) && defined(PLATFORM_ARM) && defined(__OPTIMIZE__) \
+	&& (defined(__aarch64__) || (__BYTE_ORDER__ != __ORDER_BIG_ENDIAN__) || (defined(__ARM_ARCH) && __ARM_ARCH >= 6) || defined(__armv7__) || defined(__ARM_ARCH_6__) || defined(__ARM_ARCH_7__) || defined(__ARM_ARCH_7A__) || defined(__ARM_ARCH_8A__) || defined(_M_ARM))
+// disable ASM on ARMv5 or older if big-endian
 # define MD5_USE_ASM
 # include "md5x2-arm-asm.h"
 #endif

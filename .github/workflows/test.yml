@@ -253,6 +253,7 @@ jobs:
       matrix:
         config: [Debug, Release]
         t:
+          # x32 tested as 'amd64'
           - {arch: 'amd64', target: 'x86_64-linux-muslx32', emu: ''}
           - {arch: 'armeb', target: 'armeb-linux-musleabihf', emu: 'qemu-armeb-static -cpu max'}
           - {arch: 'aarch64_be', target: 'aarch64_be-linux-musl', emu: 'qemu-aarch64_be-static -cpu max,sve-max-vq=4'}
@@ -330,16 +331,21 @@ jobs:
   
   # TODO: test building on Mac ARM64? might not be necessary, given we build it in par2cmdline-turbo
   
-  test-fbsd-x86:
+  test-bsd-x86:
+    strategy:
+      fail-fast: false
+      matrix:
+        bsd:
+          - {name: freebsd, prep: "pkg install -y cmake lang/gcc gmake"}
+          - {name: netbsd, prep: "/usr/sbin/pkg_add cmake gcc13 gmake"}
     runs-on: macos-12
-    name: Test FreeBSD amd64
+    name: Test ${{matrix.bsd.name}} amd64
     steps:
     - uses: actions/checkout@v3
-    - id: fbsd_test
-      uses: vmactions/freebsd-vm@v0
+    - uses: vmactions/${{matrix.bsd.name}}-vm@v0
       with:
         copyback: false
-        prepare: pkg install -y cmake lang/gcc gmake
+        prepare: ${{matrix.bsd.prep}}
         run: |
           mkdir test/gf16/build
           cmake -Btest/gf16/build -Stest/gf16 -DCMAKE_BUILD_TYPE=Release
