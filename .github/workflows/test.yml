@@ -331,21 +331,38 @@ jobs:
   
   # TODO: test building on Mac ARM64? might not be necessary, given we build it in par2cmdline-turbo
   
-  test-bsd-x86:
-    strategy:
-      fail-fast: false
-      matrix:
-        bsd:
-          - {name: freebsd, prep: "pkg install -y cmake lang/gcc gmake"}
-          - {name: netbsd, prep: "/usr/sbin/pkg_add cmake gcc13 gmake"}
+  test-fbsd-x86:
     runs-on: macos-12
-    name: Test ${{matrix.bsd.name}} amd64
+    name: Test freebsd amd64
     steps:
     - uses: actions/checkout@v3
-    - uses: vmactions/${{matrix.bsd.name}}-vm@v0
+    - uses: vmactions/freebsd-vm@v0
       with:
         copyback: false
-        prepare: ${{matrix.bsd.prep}}
+        prepare: pkg install -y cmake lang/gcc gmake
+        run: |
+          mkdir test/gf16/build
+          cmake -Btest/gf16/build -Stest/gf16 -DCMAKE_BUILD_TYPE=Release
+          cmake --build test/gf16/build
+          
+          mkdir test/hasher/build
+          cmake -Btest/hasher/build -Stest/hasher -DCMAKE_BUILD_TYPE=Release
+          cmake --build test/hasher/build
+          
+          test/gf16/build/test
+          test/gf16/build/test-pmul
+          test/gf16/build/test-ctrl -f
+          test/gf16/build/test-inv -f
+          test/hasher/build/test
+  test-nbsd-x86:
+    runs-on: macos-12
+    name: Test netbsd amd64
+    steps:
+    - uses: actions/checkout@v3
+    - uses: vmactions/netbsd-vm@v0
+      with:
+        copyback: false
+        prepare: /usr/sbin/pkg_add cmake gcc13 gmake
         run: |
           mkdir test/gf16/build
           cmake -Btest/gf16/build -Stest/gf16 -DCMAKE_BUILD_TYPE=Release
