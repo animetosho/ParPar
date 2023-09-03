@@ -12,9 +12,11 @@ jobs:
       BUILD_STATIC: '--fully-static'
     steps:
       - uses: actions/checkout@v3
-      - uses: junelife/gha-ubuntu-cross@v4
-        with:
-          arch: 'arm64'
+      - name: Setup musl
+        run: |
+          wget http://musl.cc/aarch64-linux-musl-cross.tgz
+          tar zxf aarch64-linux-musl-cross.tgz
+          mv aarch64-linux-musl-cross musl
       - uses: actions/setup-python@v4
         id: py
         with:
@@ -29,8 +31,8 @@ jobs:
       - run: node build
         working-directory: nexe
         env:
-          CC: aarch64-linux-gnu-gcc
-          CXX: aarch64-linux-gnu-g++
+          CC: musl/bin/aarch64-linux-musl-cc
+          CXX: musl/bin/aarch64-linux-musl-c++
           CC_host: cc
           CXX_host: c++
       - run: xz -9e --lzma2 nexe/parpar -c > parpar.xz

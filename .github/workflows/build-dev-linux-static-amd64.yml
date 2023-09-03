@@ -16,9 +16,11 @@ jobs:
         with:
           python-version: '3.9' # workaround "cannot import name 'Mapping' from 'collections'" error
       - uses: actions/checkout@v3
-      - run: |
-          sudo apt-get update
-          sudo apt-get install -y gcc-10 g++-10
+      - name: Setup musl
+        run: |
+          wget http://musl.cc/x86_64-linux-musl-native.tgz
+          tar zxf x86_64-linux-musl-native.tgz
+          mv x86_64-linux-musl-native musl
       - run: npm install --production --ignore-scripts
       - run: npm install --production
         working-directory: nexe
@@ -29,8 +31,8 @@ jobs:
       - run: node build
         working-directory: nexe
         env:
-          CC: gcc-10
-          CXX: g++-10
+          CC: musl/bin/x86_64-linux-musl-cc
+          CXX: musl/bin/x86_64-linux-musl-c++
       - run: nexe/parpar --version
       - run: nexe/parpar -r1 -s1M -onexe/test.par2 nexe/parpar
       - run: xz -9e --x86 --lzma2 nexe/parpar -c > parpar.xz
