@@ -5,6 +5,7 @@
 #include "../src/platform.h"
 #include <new>
 
+#ifdef PARPAR_ENABLE_HASHER_MD5CRC
 enum MD5CRCMethods {
 	MD5CRCMETH_SCALAR,
 	// MD5
@@ -52,6 +53,7 @@ __DECL_MD5SINGLE(BMI1);
 __DECL_MD5SINGLE(AVX512);
 #undef __DECL_MD5SINGLE
 
+#endif // defined(PARPAR_ENABLE_HASHER_MD5CRC)
 
 class IHasherInput {
 protected:
@@ -71,11 +73,18 @@ public:
 	virtual void getBlock(void* md5crc, uint64_t zeroPad) = 0;
 	virtual void end(void* md5) = 0;
 	virtual void reset() = 0;
+#ifdef PARPAR_ENABLE_HASHER_MD5CRC
 	virtual void extractFileMD5(MD5Single& outMD5) = 0;
+#endif
 	virtual ~IHasherInput() {}
 	inline void destroy() { ALIGN_FREE(this); } \
 };
 
+#ifdef PARPAR_ENABLE_HASHER_MD5CRC
+# define __DECL_HASHERINPUT_EXTRACT void extractFileMD5(MD5Single& outMD5);
+#else
+# define __DECL_HASHERINPUT_EXTRACT
+#endif
 #define __DECL_HASHERINPUT(name) \
 class HasherInput_##name : public IHasherInput { \
 	HasherInput_##name(); \
@@ -92,7 +101,7 @@ public: \
 	void getBlock(void* md5crc, uint64_t zeroPad); \
 	void end(void* md5); \
 	void reset(); \
-	void extractFileMD5(MD5Single& outMD5); \
+	__DECL_HASHERINPUT_EXTRACT \
 }
 __DECL_HASHERINPUT(Scalar);
 __DECL_HASHERINPUT(SSE);
@@ -103,9 +112,11 @@ __DECL_HASHERINPUT(AVX512);
 __DECL_HASHERINPUT(ARMCRC);
 __DECL_HASHERINPUT(NEON);
 __DECL_HASHERINPUT(NEONCRC);
+#undef __DECL_HASHERINPUT_EXTRACT
 #undef __DECL_HASHERINPUT
 
 
+#ifdef PARPAR_ENABLE_HASHER_MULTIMD5
 class IMD5Multi {
 public:
 	virtual void update(const void* const* data, size_t len) = 0;
@@ -159,6 +170,10 @@ __DECL_MD5MULTI(_SVE2);
 __DECL_MD5MULTI(2_SVE2);
 #undef __DECL_MD5MULTI
 
+#endif // defined(PARPAR_ENABLE_HASHER_MULTIMD5)
+
+
+#ifdef PARPAR_ENABLE_HASHER_MD5CRC
 
 #define __DECL_MD5CRC(name) \
 uint32_t MD5CRC_Calc_##name(const void*, size_t, size_t, void*); \
@@ -179,5 +194,7 @@ __DECL_CRC32(ClMul);
 //__DECL_CRC32(VClMul);
 __DECL_CRC32(ARMCRC);
 #undef __DECL_CRC32
+
+#endif // defined(PARPAR_ENABLE_HASHER_MD5CRC)
 
 #endif /* __HASHER_IMPL_H */

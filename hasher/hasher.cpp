@@ -4,10 +4,14 @@
 
 IHasherInput*(*HasherInput_Create)() = NULL;
 HasherInputMethods HasherInput_Method = INHASH_SCALAR;
+
+#ifdef PARPAR_ENABLE_HASHER_MD5CRC
 uint32_t(*MD5CRC_Calc)(const void*, size_t, size_t, void*) = NULL;
 MD5CRCMethods MD5CRC_Method = MD5CRCMETH_SCALAR;
 uint32_t(*CRC32_Calc)(const void*, size_t) = NULL;
 MD5CRCMethods CRC32_Method = MD5CRCMETH_SCALAR;
+#endif
+
 struct HasherCpuCap {
 #ifdef PLATFORM_X86
 	bool hasSSE2, hasClMul, hasXOP, hasBMI1, hasAVX2, hasAVX512F, hasAVX512VLBW;
@@ -74,13 +78,17 @@ struct HasherCpuCap {
 #endif
 };
 
+#ifdef PARPAR_ENABLE_HASHER_MULTIMD5
 MD5MultiLevels HasherMD5Multi_level;
+#endif
 
 void setup_hasher() {
 	if(HasherInput_Create) return;
 	
 	set_hasherInput(INHASH_SCALAR);
+#ifdef PARPAR_ENABLE_HASHER_MD5CRC
 	set_hasherMD5CRC(MD5CRCMETH_SCALAR);
+#endif
 	
 #ifdef PLATFORM_X86
 	struct HasherCpuCap caps(true);
@@ -99,6 +107,7 @@ void setup_hasher() {
 	else if(caps.hasSSE2 && caps.isSmallCore && HasherInput_SSE::isAvailable) // TODO: CPU w/o ClMul might all be small enough
 		set_hasherInput(INHASH_SIMD);
 	
+# ifdef PARPAR_ENABLE_HASHER_MD5CRC
 	if(caps.hasAVX512VLBW && caps.hasClMul && !caps.isVecRotSlow && MD5CRC_isAvailable_AVX512)
 		set_hasherMD5CRC(MD5CRCMETH_AVX512);
 	else if(caps.isLEASlow && caps.hasClMul && MD5CRC_isAvailable_NoLEA)
@@ -108,6 +117,7 @@ void setup_hasher() {
 		set_hasherMD5CRC(MD5CRCMETH_BMI1);
 	else if(caps.hasClMul && MD5CRC_isAvailable_ClMul)
 		set_hasherMD5CRC(MD5CRCMETH_PCLMUL);
+# endif
 	
 #endif
 #ifdef PLATFORM_ARM
@@ -122,27 +132,31 @@ void setup_hasher() {
 			set_hasherInput(INHASH_SIMD);
 	}
 	
+# ifdef PARPAR_ENABLE_HASHER_MD5CRC
 	if(caps.hasCRC && MD5CRC_isAvailable_ARMCRC)
 		set_hasherMD5CRC(MD5CRCMETH_ARMCRC);
+# endif
 #endif
 	
 	
+#ifdef PARPAR_ENABLE_HASHER_MULTIMD5
 	// note that this logic assumes that if a compiler can compile for more advanced ISAs, it supports simpler ones as well
-#ifdef PLATFORM_X86
+# ifdef PLATFORM_X86
 	if(caps.hasAVX512VLBW && MD5Multi_AVX512_256::isAvailable) HasherMD5Multi_level = MD5MULT_AVX512VL;
 	else if(caps.hasAVX512F && MD5Multi_AVX512::isAvailable) HasherMD5Multi_level = MD5MULT_AVX512F;
 	else if(caps.hasXOP && MD5Multi_XOP::isAvailable) HasherMD5Multi_level = MD5MULT_XOP;  // for the only CPU with AVX2 + XOP (Excavator) I imagine XOP works better than AVX2, due to half rate AVX
 	else if(caps.hasAVX2 && MD5Multi_AVX2::isAvailable) HasherMD5Multi_level = MD5MULT_AVX2;
 	else if(caps.hasSSE2 && MD5Multi_SSE::isAvailable) HasherMD5Multi_level = MD5MULT_SSE;
 	else
-#endif
-#ifdef PLATFORM_ARM
+# endif
+# ifdef PLATFORM_ARM
 	// TODO: if SVE2 width = 128b, prefer NEON?
 	if(caps.hasSVE2 && MD5Multi_SVE2::isAvailable) HasherMD5Multi_level = MD5MULT_SVE2;
 	else if(caps.hasNEON && MD5Multi_NEON::isAvailable) HasherMD5Multi_level = MD5MULT_NEON;
 	else
-#endif
+# endif
 	HasherMD5Multi_level = MD5MULT_SCALAR;
+#endif
 }
 
 bool set_hasherInput(HasherInputMethods method) {
@@ -170,6 +184,7 @@ bool set_hasherInput(HasherInputMethods method) {
 	return false;
 }
 
+#ifdef PARPAR_ENABLE_HASHER_MD5CRC
 bool set_hasherMD5CRC(MD5CRCMethods method) {
 #define SET_HASHER(h, x, hMd5, hCrc) case h: { \
 		if(!MD5CRC_isAvailable_##x) return false; \
@@ -229,7 +244,10 @@ bool set_hasherMD5CRC(MD5CRCMethods method) {
 	
 	return true;
 }
+#endif
 
+
+#ifdef PARPAR_ENABLE_HASHER_MULTIMD5
 void set_hasherMD5MultiLevel(MD5MultiLevels level) {
 #define SET_LEVEL(h, l) \
 		if(h::isAvailable) { \
@@ -415,8 +433,10 @@ void MD5Multi::get(void* md5s) {
 		ctx[ctxI]->get(md5_);
 	}
 }
+#endif
 
 
+#ifdef PARPAR_ENABLE_HASHER_MD5CRC
 void(*MD5Single::_update)(uint32_t*, const void*, size_t) = &MD5Single_update_Scalar;
 void(*MD5Single::_updateZero)(uint32_t*, size_t) = &MD5Single_updateZero_Scalar;
 MD5CRCMethods MD5Single::method = MD5CRCMETH_SCALAR;
@@ -468,7 +488,7 @@ void MD5Single::end(void* md5) {
 	md5_final_block(md5State, tmp, dataLen, 0);
 	memcpy(md5, md5State, 16);
 }
-
+#endif
 
 const char* hasherInput_methodName(HasherInputMethods m) {
 	const char* names[] = {
@@ -492,6 +512,8 @@ const char* hasherInput_methodName(HasherInputMethods m) {
 	
 	return names[(int)m];
 }
+
+#ifdef PARPAR_ENABLE_HASHER_MULTIMD5
 const char* hasherMD5Multi_methodName(MD5MultiLevels l) {
 	const char* names[] = {
 		"Scalar",
@@ -506,6 +528,9 @@ const char* hasherMD5Multi_methodName(MD5MultiLevels l) {
 	
 	return names[(int)l];
 }
+#endif
+
+#ifdef PARPAR_ENABLE_HASHER_MD5CRC
 const char* md5crc_methodName(MD5CRCMethods m) {
 	const char* names[] = {
 		"Generic", // or Slice4 for CRC
@@ -518,7 +543,7 @@ const char* md5crc_methodName(MD5CRCMethods m) {
 	
 	return names[(int)m];
 }
-
+#endif
 
 
 std::vector<HasherInputMethods> hasherInput_availableMethods(bool checkCpuid) {
@@ -553,6 +578,7 @@ std::vector<HasherInputMethods> hasherInput_availableMethods(bool checkCpuid) {
 	
 	return ret;
 }
+#ifdef PARPAR_ENABLE_HASHER_MD5CRC
 std::vector<MD5CRCMethods> hasherMD5CRC_availableMethods(bool checkCpuid) {
 	(void)checkCpuid;
 	std::vector<MD5CRCMethods> ret;
@@ -579,6 +605,8 @@ std::vector<MD5CRCMethods> hasherMD5CRC_availableMethods(bool checkCpuid) {
 	
 	return ret;
 }
+#endif
+#ifdef PARPAR_ENABLE_HASHER_MULTIMD5
 std::vector<MD5MultiLevels> hasherMD5Multi_availableMethods(bool checkCpuid) {
 	(void)checkCpuid;
 	std::vector<MD5MultiLevels> ret;
@@ -607,3 +635,4 @@ std::vector<MD5MultiLevels> hasherMD5Multi_availableMethods(bool checkCpuid) {
 	
 	return ret;
 }
+#endif

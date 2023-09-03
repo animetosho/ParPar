@@ -13,6 +13,8 @@
 #endif
 
 
+#ifdef PARPAR_ENABLE_HASHER_MD5CRC
+
 #ifdef MD5SingleVer
 const bool MD5SingleVer(isAvailable) = true;
 void MD5SingleVer(update)(uint32_t* md5State, const void* data, size_t blocks) {
@@ -78,6 +80,8 @@ uint32_t MD5CRC(Calc)(const void* data, size_t length, size_t zeroPad, void* md5
 	return crc_zeroPad(crc, zeroPad);
 }
 #endif
+
+#endif // defined(PARPAR_ENABLE_HASHER_MD5CRC)
 
 
 #ifdef HasherInput
@@ -185,6 +189,7 @@ _MD5x2_UPDATEFN_ATTRIB void HasherInput::end(void* md5) {
 	md5_final_block(md5, tmp, dataLen[HASH2X_FILE], 0);
 }
 
+#ifdef PARPAR_ENABLE_HASHER_MD5CRC
 void HasherInput::extractFileMD5(MD5Single& outMD5) {
 	_FNMD5x2(md5_extract_x2)(outMD5.md5State, md5State, HASH2X_FILE);
 	outMD5.dataLen = dataLen[HASH2X_FILE];
@@ -196,7 +201,10 @@ void HasherInput::extractFileMD5(MD5Single& outMD5) {
 	}
 }
 #endif
+#endif
 
+
+#ifdef PARPAR_ENABLE_HASHER_MULTIMD5
 
 #ifdef MD5Multi
 #ifdef md5mb_interleave
@@ -289,6 +297,11 @@ void MD5Multi::reset() {
 #undef md5mb_regions
 #endif
 
+#endif // defined(PARPAR_ENABLE_HASHER_MULTIMD5)
+
+
+#ifdef PARPAR_ENABLE_HASHER_MD5CRC
+
 #ifdef CRC32Impl
 const bool CRC32Impl(CRC32_isAvailable) = true;
 uint32_t CRC32Impl(CRC32_Calc)(const void* data, size_t len) {
@@ -309,4 +322,6 @@ uint32_t CRC32Impl(CRC32_Calc)(const void* data, size_t len) {
 	
 	return _FNCRC(crc_finish)(crcState, data_, len);
 }
+
 #endif
+#endif // defined(PARPAR_ENABLE_HASHER_MD5CRC)

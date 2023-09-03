@@ -31,6 +31,7 @@
     ],
     "cflags_c": ["-std=c99", "-D_DARWIN_C_SOURCE", "-D_GNU_SOURCE", "-D_DEFAULT_SOURCE"],
     "cxxflags": ["-std=c++11"],
+    "defines": ["PARPAR_ENABLE_HASHER_MULTIMD5"],
     "msvs_settings": {"VCCLCompilerTool": {"Optimization": "MaxSpeed"}},
     "configurations": {"Release": {
       "cflags": ["-fomit-frame-pointer"],

@@ -13,6 +13,17 @@ typedef char md5hash[16]; // add null byte for convenience
 typedef void(*MD5SingleUpdate_t)(uint32_t*, const void*, size_t);
 typedef uint32_t(*CRC32_Calc_t)(const void*, size_t);
 typedef uint32_t(*MD5CRC_Calc_t)(const void*, size_t, size_t, void*);
+#ifndef PARPAR_ENABLE_HASHER_MD5CRC
+class MD5Single { // dummy class
+public:
+	MD5SingleUpdate_t _update;
+	void* _updateZero;
+	void reset() {}
+	void update(const void*, size_t) {}
+	void updateZero(size_t) {}
+	void end(void*) {}
+};
+#endif
 
 uint32_t readUint32LE(uint8_t* p) {
 	return (*p) | (p[1] << 8) | (p[2] << 16) | (p[3] << 24);
@@ -35,6 +46,8 @@ bool do_tests(IHasherInput* hasher, MD5SingleUpdate_t md5sgl, MD5CRC_Calc_t md5c
 	md5hash md5;
 	uint8_t md5crc[20];
 	MD5Single md5hasher, md5extract;
+	(void)md5extract; // prevent warning if single MD5 disabled
+	
 	if(md5sgl) md5hasher._update = md5sgl;
 	#define MD5_ACTION(act) if(hasher) hasher->act; if(md5sgl) md5hasher.act
 	#define DO_MD5CRC(data, zp) \
@@ -55,6 +68,7 @@ bool do_tests(IHasherInput* hasher, MD5SingleUpdate_t md5sgl, MD5CRC_Calc_t md5c
 			if(memcmp(md5crc, xMd5, 16)) { printf("getBlock-md5 (" t "): "); return true; } \
 			if(readUint32LE(md5crc+16) != xCrc) { printf("getBlock-crc (" t ") [%x <> %x]: ", readUint32LE(md5crc+16), xCrc); return true; } \
 		}
+#ifdef PARPAR_ENABLE_HASHER_MD5CRC
 	#define CHECK_END(xMd5, t) \
 		if(hasher) { \
 			hasher->extractFileMD5(md5extract); \
@@ -67,6 +81,13 @@ bool do_tests(IHasherInput* hasher, MD5SingleUpdate_t md5sgl, MD5CRC_Calc_t md5c
 			md5hasher.end(md5); \
 			if(memcmp(md5, xMd5, 16)) { printf("single (" t "): "); return true; } \
 		}
+#else
+	#define CHECK_END(xMd5, t) \
+		if(hasher) { \
+			hasher->end(md5); \
+			if(memcmp(md5, xMd5, 16)) { printf("input-end (" t "): "); return true; } \
+		}
+#endif
 	#define CHECK_CRC(data, xCrc, t) \
 		if(crc32impl) { \
 			if(crc32impl(data, sizeof(data)-1) != xCrc) { printf("crc (" t "): "); return true; } \
@@ -196,6 +217,7 @@ bool do_tests(IHasherInput* hasher, MD5SingleUpdate_t md5sgl, MD5CRC_Calc_t md5c
 }
 
 
+#ifdef PARPAR_ENABLE_HASHER_MULTIMD5
 const int MAX_REGIONS = 128; // max SVE2 region count
 bool do_mb_tests(MD5Multi* hasher, const md5hash expected[MAX_REGIONS], const void* const* src, size_t len, int regions) {
 	hasher->reset();
@@ -246,11 +268,12 @@ bool do_mb_tests(MD5Multi* hasher, const md5hash expected[MAX_REGIONS], const vo
 	
 	return false;
 }
-
+#endif
 
 int main(void) {
 	#define ERROR(s) { std::cout << s << std::endl; return 1; }
 	
+	#ifdef PARPAR_ENABLE_HASHER_MD5CRC
 	std::cout << "Testing individual hashers..." << std::endl;
 	auto singleHashers = hasherMD5CRC_availableMethods(true);
 	for(auto hId : singleHashers) {
@@ -259,6 +282,7 @@ int main(void) {
 		if(do_tests(nullptr, MD5Single::_update, MD5CRC_Calc, CRC32_Calc)) ERROR(" - FAILED");
 		std::cout << std::endl;
 	}
+	#endif
 	
 	std::cout << "Testing input hashers..." << std::endl;
 	auto inputHashers = hasherInput_availableMethods(true);
@@ -271,6 +295,7 @@ int main(void) {
 		std::cout << std::endl;
 	}
 	
+	#ifdef PARPAR_ENABLE_HASHER_MULTIMD5
 	set_hasherInput(inputHashers[0]);
 	IHasherInput* hiScalar = HasherInput_Create();
 	
@@ -312,6 +337,7 @@ int main(void) {
 	}
 	
 	hiScalar->destroy();
+	#endif
 	
 	std::cout << "All tests passed" << std::endl;
 	return 0;
