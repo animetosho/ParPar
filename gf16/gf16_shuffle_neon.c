@@ -19,7 +19,7 @@ int gf16_available_neon = 0;
 
 
 
-#if defined(__ARM_NEON)
+#if defined(__ARM_NEON) && !defined(PARPAR_SLIM_GF16)
 
 static HEDLEY_ALWAYS_INLINE void gf16_shuffle_neon_calc_tables(
 #ifdef GF16_POLYNOMIAL_SIMPLE
@@ -269,14 +269,14 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle_muladd_x_neon(
 	}
 }
 
-#endif /*defined(__ARM_NEON)*/
+#endif /*defined(__ARM_NEON) && !defined(PARPAR_SLIM_GF16)*/
 
 
 
 
 void gf16_shuffle_mul_neon(const void *HEDLEY_RESTRICT scratch, void* dst, const void* src, size_t len, uint16_t val, void *HEDLEY_RESTRICT mutScratch) {
 	UNUSED(mutScratch);
-#if defined(__ARM_NEON)
+#if defined(__ARM_NEON) && !defined(PARPAR_SLIM_GF16)
 	qtbl_t tbl_h[4], tbl_l[4];
 #ifdef GF16_POLYNOMIAL_SIMPLE
 	uint8x16_t poly = vld1q_u8_align(scratch, 16);
@@ -300,7 +300,7 @@ void gf16_shuffle_mul_neon(const void *HEDLEY_RESTRICT scratch, void* dst, const
 
 void gf16_shuffle_muladd_neon(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t val, void *HEDLEY_RESTRICT mutScratch) {
 	UNUSED(mutScratch);
-#if defined(__ARM_NEON)
+#if defined(__ARM_NEON) && !defined(PARPAR_SLIM_GF16)
 	gf16_muladd_single(scratch, &gf16_shuffle_muladd_x_neon, dst, src, len, val);
 #else
 	UNUSED(scratch); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(val);
@@ -308,14 +308,14 @@ void gf16_shuffle_muladd_neon(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_
 }
 
 
-#if defined(__ARM_NEON) && defined(__aarch64__)
+#if defined(__ARM_NEON) && defined(__aarch64__) && !defined(PARPAR_SLIM_GF16)
 GF16_MULADD_MULTI_FUNCS(gf16_shuffle, _neon, gf16_shuffle_muladd_x_neon, 2, sizeof(uint8x16_t)*2, 0, (void)0)
 #else
 GF16_MULADD_MULTI_FUNCS_STUB(gf16_shuffle, _neon)
 #endif
 
 
-#if defined(__ARM_NEON)
+#if defined(__ARM_NEON) && !defined(PARPAR_SLIM_GF16)
 # ifdef __aarch64__
 GF_PREPARE_PACKED_FUNCS(gf16_shuffle, _neon, sizeof(uint8x16x2_t), gf16_prepare_block_neon, gf16_prepare_blocku_neon, 2, (void)0, uint8x16_t checksum = vdupq_n_u8(0), gf16_checksum_block_neon, gf16_checksum_blocku_neon, gf16_checksum_exp_neon, gf16_checksum_prepare_neon, sizeof(uint8x16_t))
 # else
@@ -325,7 +325,8 @@ GF_PREPARE_PACKED_FUNCS(gf16_shuffle, _neon, sizeof(uint8x16x2_t), gf16_prepare_
 GF_PREPARE_PACKED_FUNCS_STUB(gf16_shuffle, _neon)
 #endif
 
-#ifdef __ARM_NEON
+#if defined(__ARM_NEON)
+// NOTE: these are used in CLMul kernels as well
 GF_FINISH_PACKED_FUNCS(gf16_shuffle, _neon, sizeof(uint8x16x2_t), gf16_finish_block_neon, gf16_copy_blocku, 1, (void)0, gf16_checksum_block_neon, gf16_checksum_blocku_neon, gf16_checksum_exp_neon, NULL, sizeof(uint8x16_t))
 #else
 GF_FINISH_PACKED_FUNCS_STUB(gf16_shuffle, _neon)
@@ -334,7 +335,7 @@ GF_FINISH_PACKED_FUNCS_STUB(gf16_shuffle, _neon)
 
 
 void* gf16_shuffle_init_arm(int polynomial) {
-#if defined(__ARM_NEON)
+#if defined(__ARM_NEON) && !defined(PARPAR_SLIM_GF16)
 	uint8_t* ret;
 # ifdef GF16_POLYNOMIAL_SIMPLE
 	if((polynomial | 0x1f) != 0x1101f) return NULL;

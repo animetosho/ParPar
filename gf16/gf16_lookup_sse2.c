@@ -2,7 +2,10 @@
 #include "gf16_global.h"
 #include "../src/platform.h"
 
-#ifdef __SSE2__
+#if defined(__SSE2__) && !defined(PARPAR_SLIM_GF16)
+# define _AVAILABLE 1
+#endif
+#ifdef _AVAILABLE
 static HEDLEY_ALWAYS_INLINE void calc_table(uint16_t val, uint16_t* lhtable) {
 	int j, k;
 	__m128i* _lhtable = (__m128i*)lhtable;
@@ -67,7 +70,7 @@ static HEDLEY_ALWAYS_INLINE void calc_table(uint16_t val, uint16_t* lhtable) {
 
 void gf16_lookup_mul_sse2(const void *HEDLEY_RESTRICT scratch, void* dst, const void* src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch) {
 	UNUSED(scratch); UNUSED(mutScratch);
-#ifdef __SSE2__
+#ifdef _AVAILABLE
 	ALIGN_TO(16, uint16_t lhtable[513]); // +1 for potential misaligned load at end
 	calc_table(coefficient, lhtable);
 	
@@ -119,7 +122,7 @@ void gf16_lookup_mul_sse2(const void *HEDLEY_RESTRICT scratch, void* dst, const 
 
 void gf16_lookup_muladd_sse2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch) {
 	UNUSED(scratch); UNUSED(mutScratch);
-#ifdef __SSE2__
+#ifdef _AVAILABLE
 	ALIGN_TO(16, uint16_t lhtable[513]); // +1 for potential misaligned load at end
 	calc_table(coefficient, lhtable);
 	
@@ -173,7 +176,7 @@ void gf16_lookup_muladd_sse2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_R
 }
 
 
-#ifdef __SSE2__
+#ifdef _AVAILABLE
 static HEDLEY_ALWAYS_INLINE void gf16_lookup_prepare_block_sse2(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src) {
 	_mm_store_si128((__m128i*)dst, _mm_loadu_si128(src));
 }
@@ -205,7 +208,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_lookup_prepare_blocku(void *HEDLEY_RESTRIC
 #endif
 
 
-#ifdef __SSE2__
+#ifdef _AVAILABLE
 GF_PREPARE_PACKED_CKSUM_FUNCS(gf16_lookup, _sse2, sizeof(__m128i), gf16_lookup_prepare_block_sse2, gf16_lookup_prepare_blocku, 1, (void)0, __m128i checksum = _mm_setzero_si128(), gf16_checksum_block_sse2, gf16_checksum_blocku_sse2, gf16_checksum_exp_sse2, gf16_checksum_prepare_sse2, sizeof(__m128i))
 GF_FINISH_PACKED_FUNCS(gf16_lookup, _sse2, sizeof(__m128i), gf16_lookup_finish_block_sse2, gf16_copy_blocku, 1, (void)0, gf16_checksum_block_sse2, gf16_checksum_blocku_sse2, gf16_checksum_exp_sse2, NULL, sizeof(__m128i))
 #else

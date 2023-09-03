@@ -197,7 +197,7 @@ void* gf16_affine_init_avx2(int polynomial) {
 
 
 
-#if defined(__GFNI__) && defined(__AVX2__)
+#if defined(__GFNI__) && defined(__AVX2__) && !defined(PARPAR_SLIM_GF16)
 static HEDLEY_ALWAYS_INLINE void gf16_affine2x_muladd_x_avx2(
 	const void *HEDLEY_RESTRICT scratch,
 	uint8_t *HEDLEY_RESTRICT _dst, const unsigned srcScale,
@@ -336,11 +336,11 @@ static HEDLEY_ALWAYS_INLINE void gf16_affine2x_muladd_x_avx2(
 		}
 	}
 }
-#endif /*defined(__GFNI__) && defined(__AVX2__)*/
+#endif /*defined(__GFNI__) && defined(__AVX2__) && !defined(PARPAR_SLIM_GF16)*/
 
 void gf16_affine2x_mul_avx2(const void *HEDLEY_RESTRICT scratch, void* dst, const void* src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch) {
 	UNUSED(mutScratch);
-#if defined(__GFNI__) && defined(__AVX2__)
+#if defined(__GFNI__) && defined(__AVX2__) && !defined(PARPAR_SLIM_GF16)
 	__m256i depmask = gf16_affine_load_matrix(scratch, coefficient);
 	__m256i matNorm = _mm256_inserti128_si256(depmask, _mm256_castsi256_si128(depmask), 1);
 	__m256i matSwap = _mm256_permute2x128_si256(depmask, depmask, 0x11);
@@ -363,7 +363,7 @@ void gf16_affine2x_mul_avx2(const void *HEDLEY_RESTRICT scratch, void* dst, cons
 
 void gf16_affine2x_muladd_avx2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch) {
 	UNUSED(mutScratch);
-#if defined(__GFNI__) && defined(__AVX2__)
+#if defined(__GFNI__) && defined(__AVX2__) && !defined(PARPAR_SLIM_GF16)
 	gf16_muladd_single(scratch, &gf16_affine2x_muladd_x_avx2, dst, src, len, coefficient);
 	_mm256_zeroupper();
 #else
@@ -372,7 +372,7 @@ void gf16_affine2x_muladd_avx2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY
 }
 
 
-#if defined(__GFNI__) && defined(__AVX2__)
+#if defined(__GFNI__) && defined(__AVX2__) && !defined(PARPAR_SLIM_GF16)
 # ifdef PLATFORM_AMD64
 GF16_MULADD_MULTI_FUNCS(gf16_affine2x, _avx2, gf16_affine2x_muladd_x_avx2, 6, sizeof(__m256i), 0, _mm256_zeroupper())
 # else

@@ -98,7 +98,7 @@ void gf16_affine_mul_avx512(const void *HEDLEY_RESTRICT scratch, void* dst, cons
 
 void gf16_affine2x_mul_avx512(const void *HEDLEY_RESTRICT scratch, void* dst, const void* src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch) {
 	UNUSED(mutScratch);
-#if defined(__GFNI__) && defined(__AVX512BW__) && defined(__AVX512VL__)
+#if defined(__GFNI__) && defined(__AVX512BW__) && defined(__AVX512VL__) && !defined(PARPAR_SLIM_GF16)
 	__m512i depmask = _mm512_castsi256_si512(gf16_affine_load_matrix(scratch, coefficient));
 	__m512i matNorm = _mm512_shuffle_i64x2(depmask, depmask, _MM_SHUFFLE(0,0,0,0));
 	__m512i matSwap = _mm512_shuffle_i64x2(depmask, depmask, _MM_SHUFFLE(1,1,1,1));

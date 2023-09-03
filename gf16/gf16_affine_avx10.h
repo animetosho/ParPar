@@ -198,7 +198,7 @@ GF16_MULADD_MULTI_FUNCS_STUB(gf16_affine, _FNSUFFIX)
 
 
 
-#ifdef _AVAILABLE
+#if defined(_AVAILABLE) && !defined(PARPAR_SLIM_GF16)
 static HEDLEY_ALWAYS_INLINE void _FN(gf16_affine2x_muladd_2round)(const int srcCountOffs, const uint8_t* _src1, const uint8_t* _src2, intptr_t srcOffset, _mword* result, _mword* swapped, _mword matNorm1, _mword matSwap1, _mword matNorm2, _mword matSwap2) {
 	if(srcCountOffs < 0) return;
 	
@@ -416,7 +416,7 @@ static HEDLEY_ALWAYS_INLINE void _FN(gf16_affine2x_muladd_x)(
 
 void _FN(gf16_affine2x_muladd)(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch) {
 	UNUSED(mutScratch);
-#ifdef _AVAILABLE
+#if defined(_AVAILABLE) && !defined(PARPAR_SLIM_GF16)
 	gf16_muladd_single(scratch, &_FN(gf16_affine2x_muladd_x), dst, src, len, coefficient);
 	_mm256_zeroupper();
 #else
@@ -425,7 +425,7 @@ void _FN(gf16_affine2x_muladd)(const void *HEDLEY_RESTRICT scratch, void *HEDLEY
 }
 
 
-#ifdef _AVAILABLE
+#if defined(_AVAILABLE) && !defined(PARPAR_SLIM_GF16)
 # ifdef PLATFORM_AMD64
 // TODO: may not want 12 regions for non-packed variant
 GF16_MULADD_MULTI_FUNCS(gf16_affine2x, _FNSUFFIX, _FN(gf16_affine2x_muladd_x), 12, sizeof(_mword), 0, _mm256_zeroupper())

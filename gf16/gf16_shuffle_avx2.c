@@ -16,7 +16,7 @@
 
 #include "gf16_muladd_multi.h"
 
-#if defined(_AVAILABLE)
+#if defined(_AVAILABLE) && !defined(PARPAR_SLIM_GF16)
 static HEDLEY_ALWAYS_INLINE void gf16_shuffle2x_muladd_round_avx2(__m256i* _dst, const int srcCount, const uint8_t* _src1, const uint8_t* _src2, intptr_t srcOffset, __m256i shufNormLoA, __m256i shufNormLoB, __m256i shufNormHiA, __m256i shufNormHiB, __m256i shufSwapLoA, __m256i shufSwapLoB, __m256i shufSwapHiA, __m256i shufSwapHiB) {
 	__m256i data = _mm256_load_si256((const __m256i*)(_src1 + srcOffset));
 	__m256i mask = _mm256_set1_epi8(0x0f);
@@ -155,7 +155,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle2x_muladd_x_avx2(const void *HEDLEY
 #endif
 
 
-#if defined(_AVAILABLE) && defined(PLATFORM_AMD64)
+#if defined(_AVAILABLE) && !defined(PARPAR_SLIM_GF16) && defined(PLATFORM_AMD64)
 GF16_MULADD_MULTI_FUNCS(gf16_shuffle2x, _avx2, gf16_shuffle2x_muladd_x_avx2, 2, sizeof(__m256i), 0, _mm256_zeroupper())
 #else
 GF16_MULADD_MULTI_FUNCS_STUB(gf16_shuffle2x, _avx2)
@@ -163,7 +163,7 @@ GF16_MULADD_MULTI_FUNCS_STUB(gf16_shuffle2x, _avx2)
 
 void gf16_shuffle2x_muladd_avx2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t val, void *HEDLEY_RESTRICT mutScratch) {
 	UNUSED(mutScratch);
-#ifdef _AVAILABLE
+#if defined(_AVAILABLE) && !defined(PARPAR_SLIM_GF16)
 	gf16_muladd_single(scratch, &gf16_shuffle2x_muladd_x_avx2, dst, src, len, val);
 	_mm256_zeroupper();
 #else

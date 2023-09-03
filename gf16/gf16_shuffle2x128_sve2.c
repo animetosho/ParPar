@@ -3,7 +3,7 @@
 #include "gf16_muladd_multi.h"
 
 
-#if defined(__ARM_FEATURE_SVE2)
+#if defined(__ARM_FEATURE_SVE2) && !defined(PARPAR_SLIM_GF16)
 
 // emulate svzip1q_u8 without FP64MatMul feature
 static HEDLEY_ALWAYS_INLINE svuint8_t join_lane(svuint8_t a, svuint8_t b, int lane) {
@@ -248,13 +248,13 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle2x_muladd_x_sve2(
 		svst1_u8(svptrue_b8(), _dst+ptr, rn);
 	}
 }
-#endif /*defined(__ARM_FEATURE_SVE2)*/
+#endif /*defined(__ARM_FEATURE_SVE2) && !defined(PARPAR_SLIM_GF16)*/
 
 
 void gf16_shuffle2x_mul_128_sve2(const void *HEDLEY_RESTRICT scratch, void* dst, const void* src, size_t len, uint16_t val, void *HEDLEY_RESTRICT mutScratch) {
 	UNUSED(mutScratch);
 	UNUSED(scratch);
-#if defined(__ARM_FEATURE_SVE2)
+#if defined(__ARM_FEATURE_SVE2) && !defined(PARPAR_SLIM_GF16)
 	svuint8_t tbl_ln, tbl_ls, tbl_hn, tbl_hs;
 	gf16_shuffle2x128_sve2_calc_tables(1, &val,
 		&tbl_ln, &tbl_ls, &tbl_hn, &tbl_hs,
@@ -290,14 +290,14 @@ void gf16_shuffle2x_mul_128_sve2(const void *HEDLEY_RESTRICT scratch, void* dst,
 
 void gf16_shuffle2x_muladd_128_sve2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t val, void *HEDLEY_RESTRICT mutScratch) {
 	UNUSED(mutScratch);
-#if defined(__ARM_FEATURE_SVE2)
+#if defined(__ARM_FEATURE_SVE2) && !defined(PARPAR_SLIM_GF16)
 	gf16_muladd_single(scratch, &gf16_shuffle2x_muladd_x_sve2, dst, src, len, val);
 #else
 	UNUSED(scratch); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(val);
 #endif
 }
 
-#if defined(__ARM_FEATURE_SVE2)
+#if defined(__ARM_FEATURE_SVE2) && !defined(PARPAR_SLIM_GF16)
 GF16_MULADD_MULTI_FUNCS(gf16_shuffle2x, _128_sve2, gf16_shuffle2x_muladd_x_sve2, 6, svcntb(), 0, (void)0)
 #else
 GF16_MULADD_MULTI_FUNCS_STUB(gf16_shuffle2x, _128_sve2)
@@ -307,14 +307,14 @@ GF16_MULADD_MULTI_FUNCS_STUB(gf16_shuffle2x, _128_sve2)
 // checksum stuff
 #include "gf16_checksum_sve.h"
 
-#if defined(__ARM_FEATURE_SVE2)
+#if defined(__ARM_FEATURE_SVE2) && !defined(PARPAR_SLIM_GF16)
 GF_PREPARE_PACKED_FUNCS(gf16_shuffle2x, _sve, svcntb(), gf16_prepare_half_block_sve, gf16_prepare_half_blocku_sve, 6, (void)0, svint16_t checksum = svdup_n_s16(0), gf16_checksum_block_sve, gf16_checksum_blocku_sve, gf16_checksum_exp_sve, gf16_checksum_prepare_sve, 16)
 #else
 GF_PREPARE_PACKED_FUNCS_STUB(gf16_shuffle2x, _sve)
 #endif
 
 
-#ifdef __ARM_FEATURE_SVE2
+#if defined(__ARM_FEATURE_SVE2) && !defined(PARPAR_SLIM_GF16)
 GF_FINISH_PACKED_FUNCS(gf16_shuffle2x, _sve, svcntb(), gf16_prepare_half_block_sve, gf16_finish_half_blocku_sve, 1, (void)0, gf16_checksum_block_sve, gf16_checksum_blocku_sve, gf16_checksum_exp_sve, NULL, 16)
 #else
 GF_FINISH_PACKED_FUNCS_STUB(gf16_shuffle2x, _sve)

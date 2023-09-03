@@ -309,7 +309,7 @@ HEDLEY_CONST size_t gf16_lookup_stride() {
 }
 
 
-
+#if !defined(PARPAR_SLIM_GF16)
 struct gf16_lookup3_tables {
 	uint16_t table1[2048]; // bits  0-10
 	uint32_t table2[1024]; // bits 11-20
@@ -392,9 +392,11 @@ static HEDLEY_ALWAYS_INLINE void calc_3table(uint16_t coefficient, struct gf16_l
 		}
 	}
 }
+#endif
 
 void gf16_lookup3_mul(const void *HEDLEY_RESTRICT scratch, void* dst, const void* src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch) {
 	UNUSED(scratch); UNUSED(mutScratch);
+#if !defined(PARPAR_SLIM_GF16)
 	struct gf16_lookup3_tables lookup;
 	calc_3table(coefficient, &lookup);
 	
@@ -426,10 +428,14 @@ void gf16_lookup3_mul(const void *HEDLEY_RESTRICT scratch, void* dst, const void
 			);
 		}
 	}
+#else
+	UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficient);
+#endif
 }
 
 void gf16_lookup3_muladd(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch) {
 	UNUSED(scratch); UNUSED(mutScratch);
+#if !defined(PARPAR_SLIM_GF16)
 	struct gf16_lookup3_tables lookup;
 	calc_3table(coefficient, &lookup);
 	
@@ -461,10 +467,13 @@ void gf16_lookup3_muladd(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTR
 			);
 		}
 	}
+#else
+	UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficient);
+#endif
 }
 
 
-
+#if !defined(PARPAR_SLIM_GF16)
 struct gf16_lookup2_tables {
 	uint16_t table1[2048]; // bits  0-10 & 16-26
 	uint32_t table2[1024]; // bits 11-15 + 27-31
@@ -523,11 +532,12 @@ static HEDLEY_ALWAYS_INLINE void calc_2table(uint16_t coefficient, struct gf16_l
 		}
 	}
 }
-
+#endif
 
 unsigned gf16_lookup3_muladd_multi_packed(const void *HEDLEY_RESTRICT scratch, unsigned packRegions, unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch) {
 	UNUSED(scratch); UNUSED(packRegions); UNUSED(mutScratch);
 	
+#if !defined(PARPAR_SLIM_GF16)
 	uint8_t* _dst = (uint8_t*)dst + len;
 	uint8_t* _src = (uint8_t*)src;
 	for(unsigned region=0; region<regions; region++) {
@@ -561,6 +571,9 @@ unsigned gf16_lookup3_muladd_multi_packed(const void *HEDLEY_RESTRICT scratch, u
 			}
 		}
 	}
+#else
+	UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficients);
+#endif
 	return regions;
 }
 
@@ -613,6 +626,12 @@ void gf16_copy_blocku(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src
 	memcpy(dst, src, len);
 }
 
+
+GF_PREPARE_PACKED_CKSUM_FUNCS(gf16_lookup, _generic, gf16_lookup_stride(), gf16_lookup_copy_block, gf16_lookup_prepare_blocku, 1, (void)0, uintptr_t checksum = 0, gf16_checksum_block_generic, gf16_checksum_blocku_generic, gf16_checksum_exp_generic, gf16_lookup_checksum_prepare, gf16_lookup_stride())
+GF_FINISH_PACKED_FUNCS(gf16_lookup, _generic, gf16_lookup_stride(), gf16_lookup_copy_block, gf16_copy_blocku, 1, (void)0, gf16_checksum_block_generic, gf16_checksum_blocku_generic, gf16_checksum_exp_generic, gf16_lookup_checksum_inline_finish, gf16_lookup_stride())
+
+
+#if !defined(PARPAR_SLIM_GF16)
 static HEDLEY_ALWAYS_INLINE void gf16_lookup3_prepare_block(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src) {
 	// pack bits so that we have: 0...10,16...26,11...15,27...31
 	if(sizeof(uintptr_t) >= 8) {
@@ -634,8 +653,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_lookup3_checksum_prepare(void *HEDLEY_REST
 	memset((char*)dst+gf16_lookup3_stride(), 0, blockLen-gf16_lookup3_stride());
 }
 
-
-GF_PREPARE_PACKED_CKSUM_FUNCS(gf16_lookup, _generic, gf16_lookup_stride(), gf16_lookup_copy_block, gf16_lookup_prepare_blocku, 1, (void)0, uintptr_t checksum = 0, gf16_checksum_block_generic, gf16_checksum_blocku_generic, gf16_checksum_exp_generic, gf16_lookup_checksum_prepare, gf16_lookup_stride())
 GF_PREPARE_PACKED_FUNCS(gf16_lookup3, _generic, gf16_lookup3_stride(), gf16_lookup3_prepare_block, gf16_lookup3_prepare_blocku, 1, (void)0, uintptr_t checksum = 0, gf16_checksum_block_generic, gf16_checksum_blocku_generic, gf16_checksum_exp_generic, gf16_lookup3_checksum_prepare, gf16_lookup3_stride())
-
-GF_FINISH_PACKED_FUNCS(gf16_lookup, _generic, gf16_lookup_stride(), gf16_lookup_copy_block, gf16_copy_blocku, 1, (void)0, gf16_checksum_block_generic, gf16_checksum_blocku_generic, gf16_checksum_exp_generic, gf16_lookup_checksum_inline_finish, gf16_lookup_stride())
+#else
+GF_PREPARE_PACKED_FUNCS_STUB(gf16_lookup3, _generic)
+#endif

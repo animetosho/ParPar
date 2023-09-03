@@ -172,7 +172,7 @@ GF16_MULADD_MULTI_FUNCS_STUB(gf16_shuffle, _avx512)
 #endif
 
 
-#if defined(_AVAILABLE)
+#if defined(_AVAILABLE) && !defined(PARPAR_SLIM_GF16)
 static HEDLEY_ALWAYS_INLINE void gf16_shuffle2x_avx512_round1(
 	__m512i* src, __m512i* result, __m512i* swapped,
 	__m512i shufNormLo, __m512i shufNormHi, __m512i shufSwapLo, __m512i shufSwapHi
@@ -333,7 +333,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle2x_muladd_x_avx512(
 #endif // defined(_AVAILABLE)
 
 
-#if defined(_AVAILABLE) && defined(PLATFORM_AMD64)
+#if defined(_AVAILABLE) && !defined(PARPAR_SLIM_GF16) && defined(PLATFORM_AMD64)
 GF16_MULADD_MULTI_FUNCS(gf16_shuffle2x, _avx512, gf16_shuffle2x_muladd_x_avx512, 6, sizeof(__m512i), 0, _mm256_zeroupper())
 #else
 GF16_MULADD_MULTI_FUNCS_STUB(gf16_shuffle2x, _avx512)
@@ -342,7 +342,7 @@ GF16_MULADD_MULTI_FUNCS_STUB(gf16_shuffle2x, _avx512)
 
 void gf16_shuffle2x_muladd_avx512(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t val, void *HEDLEY_RESTRICT mutScratch) {
 	UNUSED(mutScratch);
-#ifdef _AVAILABLE
+#if defined(_AVAILABLE) && !defined(PARPAR_SLIM_GF16)
 	gf16_muladd_single(scratch, &gf16_shuffle2x_muladd_x_avx512, dst, src, len, val);
 	_mm256_zeroupper();
 #else

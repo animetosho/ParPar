@@ -3,14 +3,18 @@
 #include "gf16_xor_common.h"
 #undef _GF16_XORJIT_COPY_ALIGN
 
-#if defined(__AVX512BW__) && defined(__AVX512VL__) && defined(PLATFORM_AMD64)
+#if defined(__AVX512BW__) && defined(__AVX512VL__) && defined(PLATFORM_AMD64) && !defined(PARPAR_SLIM_GF16)
+# define _AVAILABLE
+#endif
+
+#ifdef _AVAILABLE
 int gf16_xor_available_avx512 = 1;
 #else
 int gf16_xor_available_avx512 = 0;
 #endif
 
 
-#if defined(__AVX512BW__) && defined(__AVX512VL__) && defined(PLATFORM_AMD64)
+#ifdef _AVAILABLE
 static size_t xor_write_init_jit(uint8_t *jitCode) {
 	uint8_t *jitCodeStart = jitCode;
 	jitCode += _jit_add_i(jitCode, AX, 1024);
@@ -758,10 +762,10 @@ static HEDLEY_ALWAYS_INLINE void gf16_xor_jit_mul_avx512_base(const void *HEDLEY
 	_mm256_zeroupper();
 }
 
-#endif /* defined(__AVX512BW__) && defined(__AVX512VL__) && defined(PLATFORM_AMD64) */
+#endif /* defined(_AVAILABLE) */
 
 void gf16_xor_jit_mul_avx512(const void *HEDLEY_RESTRICT scratch, void* dst, const void* src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch) {
-#if defined(__AVX512BW__) && defined(__AVX512VL__) && defined(PLATFORM_AMD64)
+#ifdef _AVAILABLE
 	if(coefficient == 0) {
 		memset(dst, 0, len);
 		return;
@@ -773,7 +777,7 @@ void gf16_xor_jit_mul_avx512(const void *HEDLEY_RESTRICT scratch, void* dst, con
 }
 
 void gf16_xor_jit_muladd_avx512(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch) {
-#if defined(__AVX512BW__) && defined(__AVX512VL__) && defined(PLATFORM_AMD64)
+#ifdef _AVAILABLE
 	if(coefficient == 0) return;
 	gf16_xor_jit_mul_avx512_base(scratch, dst, src, len, coefficient, mutScratch, XORDEP_JIT_MODE_MULADD, 0, NULL);
 #else
@@ -782,7 +786,7 @@ void gf16_xor_jit_muladd_avx512(const void *HEDLEY_RESTRICT scratch, void *HEDLE
 }
 
 void gf16_xor_jit_muladd_prefetch_avx512(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch, const void *HEDLEY_RESTRICT prefetch) {
-#if defined(__AVX512BW__) && defined(__AVX512VL__) && defined(PLATFORM_AMD64)
+#ifdef _AVAILABLE
 	if(coefficient == 0) return;
 	gf16_xor_jit_mul_avx512_base(scratch, dst, src, len, coefficient, mutScratch, XORDEP_JIT_MODE_MULADD, _MM_HINT_T1, prefetch);
 #else
@@ -795,7 +799,7 @@ void gf16_xor_jit_muladd_prefetch_avx512(const void *HEDLEY_RESTRICT scratch, vo
 // other registers used (hence 10 supported): dest (0), end point (1), SP (4), one source (3), R12/R13 is avoided due to different encoding length; GCC doesn't like overriding BP (5) so skip that too
 
 void gf16_xor_jit_muladd_multi_avx512(const void *HEDLEY_RESTRICT scratch, unsigned regions, size_t offset, void *HEDLEY_RESTRICT dst, const void* const*HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch) {
-#if defined(__AVX512BW__) && defined(__AVX512VL__) && defined(PLATFORM_AMD64)
+#ifdef _AVAILABLE
 	const struct gf16_xor_scratch *HEDLEY_RESTRICT info = (const struct gf16_xor_scratch*)scratch;
 	jit_wx_pair* jit = (jit_wx_pair*)mutScratch;
 	
@@ -900,7 +904,7 @@ void gf16_xor_jit_muladd_multi_avx512(const void *HEDLEY_RESTRICT scratch, unsig
 }
 
 void gf16_xor_jit_muladd_multi_packed_avx512(const void *HEDLEY_RESTRICT scratch, unsigned packRegions, unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch) {
-#if defined(__AVX512BW__) && defined(__AVX512VL__) && defined(PLATFORM_AMD64)
+#ifdef _AVAILABLE
 	const struct gf16_xor_scratch *HEDLEY_RESTRICT info = (const struct gf16_xor_scratch*)scratch;
 	jit_wx_pair* jit = (jit_wx_pair*)mutScratch;
 	
@@ -1009,7 +1013,7 @@ void gf16_xor_jit_muladd_multi_packed_avx512(const void *HEDLEY_RESTRICT scratch
 // TODO: gf16_xor_jit_muladd_multi_packpf_avx512  if bored enough
 
 
-#if defined(__AVX512BW__) && defined(__AVX512VL__) && defined(PLATFORM_AMD64)
+#ifdef _AVAILABLE
 static HEDLEY_ALWAYS_INLINE void gf16_xor_finish_bit_extract(uint64_t* dst, __m512i src) {
 	__m512i lo_nibble_test = _mm512_set_epi32(
 		0x08080808, 0x08080808, 0x08080808, 0x08080808,
@@ -1175,12 +1179,10 @@ void gf16_xor_finish_copy_blocku_avx512(void *HEDLEY_RESTRICT dst, const void* H
 #define _FNSUFFIX _avx512
 #define _MM_END _mm256_zeroupper();
 
-#if defined(__AVX512BW__) && defined(__AVX512VL__) && defined(PLATFORM_AMD64)
-# define _AVAILABLE
+#ifdef _AVAILABLE
 # include "gf16_checksum_x86.h"
 #endif
 #include "gf16_xor_common_funcs.h"
-#undef _AVAILABLE
 
 #undef MWORD_SIZE
 #undef _mword
@@ -1190,7 +1192,7 @@ void gf16_xor_finish_copy_blocku_avx512(void *HEDLEY_RESTRICT dst, const void* H
 #undef _MM_END
 
 
-#if defined(__AVX512BW__) && defined(__AVX512VL__) && defined(PLATFORM_AMD64)
+#ifdef _AVAILABLE
 GF_FINISH_PACKED_FUNCS(gf16_xor, _avx512, sizeof(__m512i)*16, gf16_xor_finish_copy_block_avx512, gf16_xor_finish_copy_blocku_avx512, 1, _mm256_zeroupper(), gf16_checksum_block_avx512, gf16_checksum_blocku_avx512, gf16_checksum_exp_avx512, &gf16_xor_finish_block_avx512, sizeof(__m512i))
 #else
 GF_FINISH_PACKED_FUNCS_STUB(gf16_xor, _avx512)
@@ -1198,7 +1200,7 @@ GF_FINISH_PACKED_FUNCS_STUB(gf16_xor, _avx512)
 
 
 void* gf16_xor_jit_init_avx512(int polynomial, int jitOptStrat) {
-#if defined(__AVX512BW__) && defined(__AVX512VL__) && defined(PLATFORM_AMD64)
+#ifdef _AVAILABLE
 	struct gf16_xor_scratch* ret;
 	uint8_t tmpCode[XORDEP_JIT_CODE_SIZE];
 	
@@ -1215,7 +1217,7 @@ void* gf16_xor_jit_init_avx512(int polynomial, int jitOptStrat) {
 }
 
 void* gf16_xor_jit_init_mut_avx512() {
-#if defined(__AVX512BW__) && defined(__AVX512VL__) && defined(PLATFORM_AMD64)
+#ifdef _AVAILABLE
 	jit_wx_pair *jitCode = jit_alloc(XORDEP_JIT_SIZE*2);
 	if(!jitCode) return NULL;
 	xor_write_init_jit(jitCode->w);

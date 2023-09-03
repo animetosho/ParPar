@@ -2,7 +2,7 @@
 #include "gf16_shuffle_x86_common.h"
 
 
-#ifdef _AVAILABLE
+#if defined(_AVAILABLE) && !defined(PARPAR_SLIM_GF16)
 # include "gf16_checksum_x86.h"
 static HEDLEY_ALWAYS_INLINE void _FN(gf16_shuffle2x_prepare_block)(void* dst, const void* src) {
 	_mword data = _MMI(loadu)((_mword*)src);
@@ -92,7 +92,7 @@ static HEDLEY_ALWAYS_INLINE void _FN(gf16_shuffle2x_finish_copy_blocku)(void *HE
 #endif
 
 void _FN(gf16_shuffle2x_prepare)(void* dst, const void* src, size_t srcLen) {
-#ifdef _AVAILABLE
+#if defined(_AVAILABLE) && !defined(PARPAR_SLIM_GF16)
 	gf16_prepare(dst, src, srcLen, sizeof(_mword), &_FN(gf16_shuffle2x_prepare_block), &_FN(gf16_shuffle2x_prepare_blocku));
 	_MM_END
 #else
@@ -100,7 +100,7 @@ void _FN(gf16_shuffle2x_prepare)(void* dst, const void* src, size_t srcLen) {
 #endif
 }
 
-#ifdef _AVAILABLE
+#if defined(_AVAILABLE) && !defined(PARPAR_SLIM_GF16)
 # ifdef PLATFORM_AMD64
 GF_PREPARE_PACKED_FUNCS(gf16_shuffle2x, _FNSUFFIX, sizeof(_mword), _FN(gf16_shuffle2x_prepare_block), _FN(gf16_shuffle2x_prepare_blocku), 2 + (MWORD_SIZE==64)*4, _MM_END, _mword checksum = _MMI(setzero)(), _FN(gf16_checksum_block), _FN(gf16_checksum_blocku), _FN(gf16_checksum_exp), _FN(gf16_checksum_prepare), sizeof(_mword))
 # else
@@ -111,7 +111,7 @@ GF_PREPARE_PACKED_FUNCS_STUB(gf16_shuffle2x, _FNSUFFIX)
 #endif
 
 void _FN(gf16_shuffle2x_finish)(void *HEDLEY_RESTRICT dst, size_t len) {
-#ifdef _AVAILABLE
+#if defined(_AVAILABLE) && !defined(PARPAR_SLIM_GF16)
 	gf16_finish(dst, len, sizeof(_mword), &_FN(gf16_shuffle2x_finish_block));
 	_MM_END
 #else
@@ -119,14 +119,14 @@ void _FN(gf16_shuffle2x_finish)(void *HEDLEY_RESTRICT dst, size_t len) {
 #endif
 }
 
-#ifdef _AVAILABLE
+#if defined(_AVAILABLE) && !defined(PARPAR_SLIM_GF16)
 GF_FINISH_PACKED_FUNCS(gf16_shuffle2x, _FNSUFFIX, sizeof(_mword), _FN(gf16_shuffle2x_finish_copy_block), _FN(gf16_shuffle2x_finish_copy_blocku), 1, _MM_END, _FN(gf16_checksum_block), _FN(gf16_checksum_blocku), _FN(gf16_checksum_exp), &_FN(gf16_shuffle2x_finish_block), sizeof(_mword))
 #else
 GF_FINISH_PACKED_FUNCS_STUB(gf16_shuffle2x, _FNSUFFIX)
 #endif
 
 
-#ifdef _AVAILABLE
+#if defined(_AVAILABLE) && !defined(PARPAR_SLIM_GF16)
 void _FN(gf16_shuffle2x_setup_vec)(const void *HEDLEY_RESTRICT scratch, uint16_t val, _mword* shufNormLo, _mword* shufSwapLo, _mword* shufNormHi, _mword* shufSwapHi) {
 	__m128i prodLo0, prodHi0, prodLo1, prodHi1, prodLo2, prodHi2, prodLo3, prodHi3;
 	__m128i pd0, pd1;
@@ -162,7 +162,7 @@ void _FN(gf16_shuffle2x_setup_vec)(const void *HEDLEY_RESTRICT scratch, uint16_t
 
 void _FN(gf16_shuffle2x_mul)(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t val, void *HEDLEY_RESTRICT mutScratch) {
 	UNUSED(mutScratch);
-#ifdef _AVAILABLE
+#if defined(_AVAILABLE) && !defined(PARPAR_SLIM_GF16)
 	_mword shufNormLo, shufSwapLo, shufNormHi, shufSwapHi;
 	_FN(gf16_shuffle2x_setup_vec)(scratch, val, &shufNormLo, &shufSwapLo, &shufNormHi, &shufSwapHi);
 	

@@ -242,7 +242,7 @@ void* gf16_affine_init_gfni(int polynomial) {
 
 
 
-#if defined(__GFNI__) && defined(__SSSE3__)
+#if defined(__GFNI__) && defined(__SSSE3__) && !defined(PARPAR_SLIM_GF16)
 static HEDLEY_ALWAYS_INLINE void gf16_affine2x_muladd_x_gfni(
 	const void *HEDLEY_RESTRICT scratch,
 	uint8_t *HEDLEY_RESTRICT _dst, const unsigned srcScale,
@@ -364,11 +364,11 @@ static HEDLEY_ALWAYS_INLINE void gf16_affine2x_muladd_x_gfni(
 		}
 	}
 }
-#endif /*defined(__GFNI__) && defined(__SSSE3__)*/
+#endif /*defined(__GFNI__) && defined(__SSSE3__) && !defined(PARPAR_SLIM_GF16)*/
 
 void gf16_affine2x_mul_gfni(const void *HEDLEY_RESTRICT scratch, void* dst, const void* src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch) {
 	UNUSED(mutScratch);
-#if defined(__GFNI__) && defined(__SSSE3__)
+#if defined(__GFNI__) && defined(__SSSE3__) && !defined(PARPAR_SLIM_GF16)
 	__m128i matNorm, matSwap;
 	gf16_affine_load_matrix(scratch, coefficient, &matNorm, &matSwap);
 	
@@ -390,7 +390,7 @@ void gf16_affine2x_mul_gfni(const void *HEDLEY_RESTRICT scratch, void* dst, cons
 
 void gf16_affine2x_muladd_gfni(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch) {
 	UNUSED(mutScratch);
-#if defined(__GFNI__) && defined(__SSSE3__)
+#if defined(__GFNI__) && defined(__SSSE3__) && !defined(PARPAR_SLIM_GF16)
 	gf16_muladd_single(scratch, &gf16_affine2x_muladd_x_gfni, dst, src, len, coefficient);
 #else
 	UNUSED(scratch); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficient);
@@ -399,7 +399,7 @@ void gf16_affine2x_muladd_gfni(const void *HEDLEY_RESTRICT scratch, void *HEDLEY
 
 
 
-#if defined(__GFNI__) && defined(__SSSE3__)
+#if defined(__GFNI__) && defined(__SSSE3__) && !defined(PARPAR_SLIM_GF16)
 # ifdef PLATFORM_AMD64
 GF16_MULADD_MULTI_FUNCS(gf16_affine2x, _gfni, gf16_affine2x_muladd_x_gfni, 6, sizeof(__m128i), 0, (void)0)
 # else

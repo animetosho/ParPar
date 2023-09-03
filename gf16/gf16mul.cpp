@@ -728,7 +728,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			
 			METHOD_REQUIRES(gf16_available_neon && available)
 			
-			// use Shuffle for single region multiplies, because it's faster
+			// use Shuffle for single region multiplies, because it's faster (NOTE: disabled for slim GF16 build)
 			scratch = gf16_shuffle_init_arm(GF16_POLYNOMIAL);
 			if(scratch) {
 				_mul = &gf16_shuffle_mul_neon;
@@ -1376,7 +1376,7 @@ Galois16Methods Galois16Mul::default_method(size_t regionSizeHint, unsigned inpu
 			return GF16_SHUFFLE_AVX2;
 	}
 	if(gf16_affine_available_gfni && caps.hasGFNI && gf16_shuffle_available_ssse3 && caps.hasSSSE3)
-		return GF16_AFFINE2X_GFNI; // this should beat XOR-JIT; even seems to generally beat Shuffle2x AVX2
+		return GF16_AFFINE_GFNI; // this should beat XOR-JIT; even seems to generally beat Shuffle2x AVX2
 	if(!caps.isEmulated && regionSizeHint > caps.propPrefShuffleThresh && !forInvert) {
 		// TODO: if only a few recovery slices being made (e.g. 3), prefer shuffle
 		//if(gf16_xor_available_avx && caps.hasAVX && caps.canMemWX)
@@ -1394,24 +1394,36 @@ Galois16Methods Galois16Mul::default_method(size_t regionSizeHint, unsigned inpu
 #ifdef PLATFORM_ARM
 	const GF16CpuCap caps(true);
 	if(caps.hasSVE2) {
+# ifdef PARPAR_SLIM_GF16
+		return GF16_CLMUL_SVE2;
+# else
 		if(gf16_sve_get_size() >= 64)
 			return GF16_SHUFFLE_512_SVE2;
 		return inputs > 3 ? GF16_CLMUL_SVE2 : GF16_SHUFFLE_128_SVE2;
+# endif
 	}
 	if(caps.hasSVE && gf16_sve_get_size() > 16)
 		return GF16_SHUFFLE_128_SVE;
 # ifdef __aarch64__
 	if(gf16_available_neon_sha3 && caps.hasSHA3)
+#  if PARPAR_SLIM_GF16
+		return GF16_CLMUL_SHA3;
+#  else
 		return inputs > 3 ? GF16_CLMUL_SHA3 : GF16_SHUFFLE_NEON;
+#  endif
 # endif
 	if(gf16_available_neon && caps.hasNEON)
 		return
-# ifdef __aarch64__
-			inputs > 3
+# if PARPAR_SLIM_GF16
+		GF16_CLMUL_NEON;
 # else
+#  ifdef __aarch64__
+			inputs > 3
+#  else
 			inputs > 1
-# endif
+#  endif
 			? GF16_CLMUL_NEON : GF16_SHUFFLE_NEON;
+# endif
 #endif
 #ifdef __riscv_
 	const GF16CpuCap caps(true);
@@ -1428,8 +1440,10 @@ std::vector<Galois16Methods> Galois16Mul::availableMethods(bool checkCpuid) {
 	UNUSED(checkCpuid);
 	std::vector<Galois16Methods> ret;
 	ret.push_back(GF16_LOOKUP);
+	#if !defined(PARPAR_SLIM_GF16)
 	if(gf16_lookup3_stride())
 		ret.push_back(GF16_LOOKUP3);
+	#endif
 	
 #ifdef PLATFORM_X86
 	const GF16CpuCap caps(checkCpuid);
@@ -1439,11 +1453,15 @@ std::vector<Galois16Methods> Galois16Mul::availableMethods(bool checkCpuid) {
 		ret.push_back(GF16_SHUFFLE_AVX);
 	if(gf16_shuffle_available_avx2 && caps.hasAVX2) {
 		ret.push_back(GF16_SHUFFLE_AVX2);
+		#if !defined(PARPAR_SLIM_GF16)
 		ret.push_back(GF16_SHUFFLE2X_AVX2);
+		#endif
 	}
 	if(gf16_shuffle_available_avx512 && caps.hasAVX512VLBW) {
 		ret.push_back(GF16_SHUFFLE_AVX512);
+		#if !defined(PARPAR_SLIM_GF16)
 		ret.push_back(GF16_SHUFFLE2X_AVX512);
+		#endif
 	}
 	if(gf16_shuffle_available_vbmi && caps.hasAVX512VBMI) {
 		ret.push_back(GF16_SHUFFLE_VBMI);
@@ -1452,21 +1470,29 @@ std::vector<Galois16Methods> Galois16Mul::availableMethods(bool checkCpuid) {
 	if(caps.hasGFNI) {
 		if(gf16_affine_available_gfni && gf16_shuffle_available_ssse3 && caps.hasSSSE3) {
 			ret.push_back(GF16_AFFINE_GFNI);
+			#if !defined(PARPAR_SLIM_GF16)
 			ret.push_back(GF16_AFFINE2X_GFNI);
+			#endif
 		}
 		if(gf16_affine_available_avx2 && gf16_shuffle_available_avx2 && caps.hasAVX2) {
 			ret.push_back(GF16_AFFINE_AVX2);
+			#if !defined(PARPAR_SLIM_GF16)
 			ret.push_back(GF16_AFFINE2X_AVX2);
+			#endif
 		}
 		if(gf16_affine_available_avx512 && gf16_shuffle_available_avx512 && caps.hasAVX512VLBW) {
 			ret.push_back(GF16_AFFINE_AVX512);
+			#if !defined(PARPAR_SLIM_GF16)
 			ret.push_back(GF16_AFFINE2X_AVX512);
+			#endif
 		}
 	}
 	
 	if(gf16_xor_available_sse2 && caps.hasSSE2) {
 		ret.push_back(GF16_XOR_SSE2);
+		#if !defined(PARPAR_SLIM_GF16)
 		ret.push_back(GF16_LOOKUP_SSE2);
+		#endif
 	}
 	if(caps.canMemWX) {
 		if(gf16_xor_available_sse2 && caps.hasSSE2)
@@ -1482,7 +1508,9 @@ std::vector<Galois16Methods> Galois16Mul::availableMethods(bool checkCpuid) {
 #ifdef PLATFORM_ARM
 	const GF16CpuCap caps(checkCpuid);
 	if(gf16_available_neon && caps.hasNEON) {
+		#if !defined(PARPAR_SLIM_GF16)
 		ret.push_back(GF16_SHUFFLE_NEON);
+		#endif
 		ret.push_back(GF16_CLMUL_NEON);
 	}
 	if(gf16_available_neon_sha3 && caps.hasSHA3) {
@@ -1491,12 +1519,14 @@ std::vector<Galois16Methods> Galois16Mul::availableMethods(bool checkCpuid) {
 	if(gf16_available_sve && caps.hasSVE)
 		ret.push_back(GF16_SHUFFLE_128_SVE);
 	if(gf16_available_sve2 && caps.hasSVE2) {
-		ret.push_back(GF16_SHUFFLE_128_SVE2);
 		ret.push_back(GF16_CLMUL_SVE2);
+		#if !defined(PARPAR_SLIM_GF16)
+		ret.push_back(GF16_SHUFFLE_128_SVE2);
 		if(gf16_sve_get_size() >= 32)
 			ret.push_back(GF16_SHUFFLE2X_128_SVE2);
 		if(gf16_sve_get_size() >= 64)
 			ret.push_back(GF16_SHUFFLE_512_SVE2);
+		#endif
 	}
 #endif
 #ifdef __riscv
