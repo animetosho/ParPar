@@ -355,7 +355,8 @@ typedef unsigned int cl_GLenum;
  */
 
 /* Define basic vector types */
-#if defined( __VEC__ )
+// disabled Altivec support as it causes unknown build issues [https://github.com/animetosho/par2cmdline-turbo/issues/18]; can't seem to reproduce, but it's not really necessary anyway
+#if defined( __VEC__ ) && 0
    #include <altivec.h>   /* may be omitted depending on compiler. AltiVec spec provides no way to detect whether the header is required. */
    typedef vector unsigned char     __cl_uchar16;
    typedef vector signed char       __cl_char16;
