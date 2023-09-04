@@ -66,7 +66,11 @@ ALIGN_TO(64, static char load_mask[64]) = {
 #endif
 
 // load part of a vector, zeroing out remaining bytes
-static inline _mword partial_load(const void* ptr, size_t bytes) {
+static inline _mword partial_load(const void* ptr, size_t bytes)
+#if HEDLEY_HAS_ATTRIBUTE(no_sanitize)
+	__attribute__((no_sanitize("address"))) // suppress 'heap-buffer-overflow' due to possibly reading past the end of the buffer; as it's an aligned load, it'll never actually cause a fault
+#endif
+{
 #if MWORD_SIZE == 64
 	// AVX512 is easy - masked load does the trick
 	return _mm512_maskz_loadu_epi8((1ULL<<bytes)-1, ptr);
