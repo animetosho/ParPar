@@ -116,7 +116,7 @@ jobs:
         id: py
         with:
           python-version: '3.9' # workaround "cannot import name 'Mapping' from 'collections'" error
-      - uses: junelife/gha-ubuntu-cross@v4
+      - uses: junelife/gha-ubuntu-cross@v6
         with:
           arch: arm64
       - name: Get release
@@ -171,7 +171,7 @@ jobs:
 #        id: py
 #        with:
 #          python-version: '3.9' # workaround "cannot import name 'Mapping' from 'collections'" error
-#      - uses: junelife/gha-ubuntu-cross@v4
+#      - uses: junelife/gha-ubuntu-cross@v6
 #        with:
 #          arch: armhf
 #      - uses: ryankurte/action-apt@v0.3.0
