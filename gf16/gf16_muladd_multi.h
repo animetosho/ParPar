@@ -79,7 +79,7 @@ typedef void (*const fMuladdPF)
 );
 
 // suppress UBSan warning about adding to a NULL pointer; `coefficients` can be NULL from gf_add*, but it's never used there, and it's annoying to have to check and branch on these
-#if defined(__clang__)
+#if defined(__clang__) && HEDLEY_HAS_ATTRIBUTE(no_sanitize)
 # define IGNORE_NULL_ADD __attribute__((no_sanitize("pointer-overflow")))
 #else
 # define IGNORE_NULL_ADD
