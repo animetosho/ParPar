@@ -22,7 +22,6 @@
 # include "hasher_md5mb_stub.h"
 #endif
 
-#undef HasherInput
 #undef MD5Multi
 #undef _FNMD5mb2
 #define MD5Multi MD5Multi2_SSE

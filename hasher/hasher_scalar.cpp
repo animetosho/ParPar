@@ -24,10 +24,6 @@
 #include "hasher_md5mb_base.h"
 
 
-#undef HasherInput
-#undef MD5SingleVer
-#undef MD5CRC
-#undef CRC32Impl
 #undef MD5Multi
 #undef _FNMD5mb2
 #define MD5Multi MD5Multi2_Scalar

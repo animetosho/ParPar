@@ -31,8 +31,6 @@
 # include "hasher_md5crc_stub.h"
 #endif
 
-#undef HasherInput
-#undef _FNMD5x2
 #undef MD5CRC
 #undef _FNMD5
 #undef CRC32Impl

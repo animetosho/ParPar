@@ -20,10 +20,6 @@
 # include "hasher_md5crc_stub.h"
 #endif
 
-#undef MD5SingleVer
-#undef MD5CRC
-#undef HasherInput
-
 
 #define MD5Multi MD5Multi_AVX512_128
 #define _FNMD5mb(f) f##_avx512_128
