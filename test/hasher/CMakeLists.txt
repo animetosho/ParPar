@@ -63,6 +63,9 @@ set(HASHER_C_SOURCES
 
 set(HASHER_CPP_SOURCES
 	${HASHER_DIR}/hasher.cpp
+	${HASHER_DIR}/hasher_input.cpp
+	${HASHER_DIR}/hasher_md5crc.cpp
+	${HASHER_DIR}/hasher_md5mb.cpp
 	${HASHER_DIR}/hasher_armcrc.cpp
 	${HASHER_DIR}/hasher_avx2.cpp
 	${HASHER_DIR}/hasher_avx512.cpp

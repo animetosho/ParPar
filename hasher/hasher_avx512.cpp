@@ -18,9 +18,9 @@
 
 #ifdef __AVX512F__
 # include "md5mb-sse.h"
-# include "hasher_base.h"
+# include "hasher_md5mb_base.h"
 #else
-# include "hasher_stub.h"
+# include "hasher_md5mb_stub.h"
 #endif
 
 
@@ -32,7 +32,7 @@
 #define md5mb_interleave 2
 
 #ifdef __AVX512F__
-# include "hasher_base.h"
+# include "hasher_md5mb_base.h"
 #else
-# include "hasher_stub.h"
+# include "hasher_md5mb_stub.h"
 #endif

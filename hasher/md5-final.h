@@ -1,6 +1,8 @@
 #ifndef __MD5_FINAL
 #define __MD5_FINAL
 
+#include "../src/hedley.h"
+
 #ifdef __cplusplus
 extern "C"
 #endif

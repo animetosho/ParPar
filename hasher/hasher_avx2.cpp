@@ -11,9 +11,9 @@
 
 #ifdef __AVX2__
 # include "md5mb-sse.h"
-# include "hasher_base.h"
+# include "hasher_md5mb_base.h"
 #else
-# include "hasher_stub.h"
+# include "hasher_md5mb_stub.h"
 #endif
 
 #undef MD5Multi
@@ -23,7 +23,7 @@
 #define md5mb_interleave 2
 
 #ifdef __AVX2__
-# include "hasher_base.h"
+# include "hasher_md5mb_base.h"
 #else
-# include "hasher_stub.h"
+# include "hasher_md5mb_stub.h"
 #endif

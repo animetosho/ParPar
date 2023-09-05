@@ -23,7 +23,7 @@
 #if (defined(__ARM_FEATURE_CRC32) && defined(__ARM_NEON)) || (defined(_M_ARM64) && !defined(__clang__)) // MSVC doesn't support CRC for ARM32
 # include "crc_arm.h"
 # include "md5x2-neon.h"
-# include "hasher_base.h"
+# include "hasher_input_base.h"
 #else
-# include "hasher_stub.h"
+# include "hasher_input_stub.h"
 #endif

@@ -19,7 +19,9 @@
 #define md5mb_alignment md5mb_alignment_scalar
 #define CLEAR_VEC (void)0
 
-#include "hasher_base.h"
+#include "hasher_input_base.h"
+#include "hasher_md5crc_base.h"
+#include "hasher_md5mb_base.h"
 
 
 #undef HasherInput
@@ -32,4 +34,4 @@
 #define _FNMD5mb2(f) f##2_scalar
 #define md5mb_interleave 2
 
-#include "hasher_base.h"
+#include "hasher_md5mb_base.h"

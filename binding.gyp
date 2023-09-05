@@ -84,7 +84,7 @@
       "target_name": "hasher",
       "type": "static_library",
       "defines": ["NDEBUG"],
-      "sources": ["hasher/hasher.cpp", "hasher/hasher_scalar.cpp"],
+      "sources": ["hasher/hasher.cpp", "hasher/hasher_input.cpp", "hasher/hasher_md5mb.cpp", "hasher/hasher_scalar.cpp"],
       "dependencies": ["hasher_c"],
       "cxxflags": ["-std=c++11"],
       "cflags!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"],

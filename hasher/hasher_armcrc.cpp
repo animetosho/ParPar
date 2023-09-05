@@ -35,7 +35,9 @@ HEDLEY_WARNING("CRC32 acceleration has been disabled due to missing arm_acle.h")
 # include "crc_arm.h"
 # include "md5x2-scalar.h"
 # include "md5-scalar.h"
-# include "hasher_base.h"
+# include "hasher_input_base.h"
+# include "hasher_md5crc_base.h"
 #else
-# include "hasher_stub.h"
+# include "hasher_input_stub.h"
+# include "hasher_md5crc_stub.h"
 #endif
