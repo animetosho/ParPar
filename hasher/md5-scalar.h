@@ -3,7 +3,7 @@
 #include "../src/platform.h"
 #include "../src/stdint.h"
 
-#if (defined(__GNUC__) || defined(__clang__)) && defined(PLATFORM_X86) && defined(__OPTIMIZE__)
+#if (defined(__GNUC__) || defined(__clang__)) && defined(PLATFORM_X86) && defined(__OPTIMIZE__) && (!defined(HEDLEY_GCC_VERSION) || !defined(HAS_UBSAN))
 # define MD5_USE_ASM
 # ifdef PLATFORM_AMD64
 #  define MD5_HAS_NOLEA 1

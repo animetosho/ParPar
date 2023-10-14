@@ -1,6 +1,7 @@
 {
   "variables": {
-    "enable_native_tuning%": 1
+    "enable_native_tuning%": 1,
+    "enable_sanitizer%": 0
   },
   "target_defaults": {
     "conditions": [
@@ -8,7 +9,7 @@
         "msvs_settings": {"VCCLCompilerTool": {"EnableEnhancedInstructionSet": "2"}}
       }],
       ['OS!="win" and enable_native_tuning!=0', {
-        "variables": {"supports_native%": "<!(<!(echo ${CXX_target:-${CXX:-c++}}) -MM -E src/gf.cc -march=native 2>/dev/null || true)"},
+        "variables": {"supports_native%": "<!(<!(echo ${CXX_target:-${CXX:-c++}}) -MM -E hasher/hasher.cpp -march=native 2>/dev/null || true)"},
         "conditions": [
           ['supports_native!=""', {
             "cflags": ["-march=native"],
@@ -25,22 +26,34 @@
         "conditions": [
           ['missing_memalign!=""', {
             "cflags_c": ["-D_POSIX_C_SOURCE=200112L"],
+          }],
+          ['enable_sanitizer!=1', {
+            "configurations": {"Release": {
+              "cflags": ["-fomit-frame-pointer"],
+              "cxxflags": ["-fomit-frame-pointer"],
+              "xcode_settings": {
+                "OTHER_CFLAGS": ["-fomit-frame-pointer"],
+                "OTHER_CXXFLAGS": ["-fomit-frame-pointer"]
+              }
+            }},
+            "cxxflags": ["-std=c++11"]
+          }, {
+            "cflags": ["-fno-omit-frame-pointer", "-fsanitize=address", "-fsanitize=undefined"],
+            "cxxflags": ["-fno-omit-frame-pointer", "-fsanitize=address", "-fsanitize=undefined", "-std=c++17"],
+            "ldflags": ["-fsanitize=address", "-fsanitize=undefined"],
+            "defines": ["HAS_UBSAN"],
+            "xcode_settings": {
+              "OTHER_CFLAGS": ["-fno-omit-frame-pointer", "-fsanitize=address", "-fsanitize=undefined"],
+              "OTHER_CXXFLAGS": ["-fno-omit-frame-pointer", "-fsanitize=address", "-fsanitize=undefined"],
+              "OTHER_LDFLAGS": ["-fsanitize=address", "-fsanitize=undefined"]
+            }
           }]
         ]
-      }]
+      }],
     ],
     "cflags_c": ["-std=c99", "-D_DARWIN_C_SOURCE", "-D_GNU_SOURCE", "-D_DEFAULT_SOURCE"],
-    "cxxflags": ["-std=c++11"],
     "defines": ["PARPAR_ENABLE_HASHER_MULTIMD5"],
-    "msvs_settings": {"VCCLCompilerTool": {"Optimization": "MaxSpeed"}},
-    "configurations": {"Release": {
-      "cflags": ["-fomit-frame-pointer"],
-      "cxxflags": ["-fomit-frame-pointer"],
-      "xcode_settings": {
-        "OTHER_CFLAGS": ["-fomit-frame-pointer"],
-        "OTHER_CXXFLAGS": ["-fomit-frame-pointer"]
-      }
-    }}
+    "msvs_settings": {"VCCLCompilerTool": {"Optimization": "MaxSpeed"}}
   },
   "targets": [
     {
@@ -56,8 +69,6 @@
       "cflags_cc!": ["-fno-exceptions"],
       "defines": ["USE_LIBUV"],
       "cflags": ["-fexceptions"],
-      "cxxflags": ["-fexceptions", "-std=c++11"],
-      "cflags_cc": ["-fexceptions"],
       "xcode_settings": {
         "OTHER_CFLAGS!": ["-fno-exceptions"],
         "OTHER_CXXFLAGS!": ["-fno-exceptions"],
@@ -65,7 +76,28 @@
         "OTHER_CXXFLAGS": ["-fexceptions"],
         "GCC_ENABLE_CPP_EXCEPTIONS": "YES"
       },
-      "msvs_settings": {"VCCLCompilerTool": {"ExceptionHandling": "1"}}
+      "msvs_settings": {"VCCLCompilerTool": {"ExceptionHandling": "1"}},
+      "conditions": [
+        ['enable_sanitizer==1', {
+          "variables": {
+            "supports_libasan%": "<!(<!(echo ${CXX_target:-${CXX:-c++}}) -MM -E hasher/hasher.cpp -static-libasan 2>/dev/null || true)",
+            "supports_libsan%": "<!(<!(echo ${CXX_target:-${CXX:-c++}}) -MM -E hasher/hasher.cpp -static-libsan 2>/dev/null || true)"
+          },
+          "conditions": [
+            ['supports_libasan!=""', {
+              "libraries": ["-static-libasan"]
+            }],
+            ['supports_libsan!=""', {
+              "libraries": ["-static-libsan"]
+            }]
+          ],
+          "cflags_cc": ["-fexceptions", "-std=c++17"],
+          "cxxflags": ["-fexceptions", "-std=c++17"]
+        }, {
+          "cflags_cc": ["-fexceptions", "-std=c++11"],
+          "cxxflags": ["-fexceptions", "-std=c++11"]
+        }]
+      ]
     },
     {
       "target_name": "parpar_gf_c",
