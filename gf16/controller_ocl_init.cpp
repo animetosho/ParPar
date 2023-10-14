@@ -990,10 +990,10 @@ static inline size_t round_down_pow2(size_t v) {
 #ifdef _MSC_VER
 	unsigned long idx;
 	_BitScanReverse(&idx, v);
-	return v & (1 << idx);
+	return 1 << idx;
 #else
 	int idx = __builtin_clzl(v);
-	return v & (1 << ((sizeof(unsigned long)-1) ^ idx));
+	return 1 << ((sizeof(unsigned long)-1) ^ idx);
 #endif
 	*/
 }
@@ -1477,7 +1477,7 @@ bool PAR2ProcOCL::setup_kernels(Galois16OCLMethods method, unsigned targetInputB
 		tmpStream << kernelCode << "\n";
 		
 		std::string tmpSource = tmpStream.str();
-		cl::Program program(context, cl::Program::Sources(1, std::make_pair(tmpSource.data(), tmpSource.length())));
+		cl::Program program(context, cl::Program::Sources{tmpStream.str()});
 		try {
 			program.build(std::vector<cl::Device>(1, device), paramsDump);
 		} catch(cl::Error const& err) {
@@ -1533,8 +1533,7 @@ bool PAR2ProcOCL::setup_kernels(Galois16OCLMethods method, unsigned targetInputB
 	sourceStream << kernelCode;
 	
 	
-	std::string tmpSource = sourceStream.str();
-	cl::Program::Sources sources(cl::Program::Sources(1, std::make_pair(tmpSource.data(), tmpSource.length())));
+	cl::Program::Sources sources{sourceStream.str()};
 	
 	// compile OpenCL kernel
 	cl::Program program(context, sources);

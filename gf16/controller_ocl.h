@@ -1,13 +1,17 @@
 #ifndef __GF16_CONTROLLER_OCL
 #define __GF16_CONTROLLER_OCL
 
-#define __CL_ENABLE_EXCEPTIONS
-#define CL_USE_DEPRECATED_OPENCL_1_2_APIS
-#define CL_USE_DEPRECATED_OPENCL_2_0_APIS
+#define CL_HPP_ENABLE_EXCEPTIONS
+#define CL_HPP_TARGET_OPENCL_VERSION 120
+#define CL_HPP_MINIMUM_OPENCL_VERSION 110
+#define CL_HPP_CL_1_2_DEFAULT_BUILD
+#define CL_TARGET_OPENCL_VERSION 120
+#define CL_USE_DEPRECATED_OPENCL_1_1_APIS
 
 #include "controller.h"
 #include "threadqueue.h" // must be placed before CL/cl.hpp for some reason
-#include <CL/cl.hpp>
+#include <cl.h> // must be included before the C++ header
+#include <CL/opencl.hpp>
 #include "gf16mul.h"
 #include <memory>
 
