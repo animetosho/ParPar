@@ -519,12 +519,6 @@
 #error Visual studio 2013 or another C++11-supporting compiler required
 #endif
 
-#if defined(__APPLE__) || defined(__MACOSX)
-#include <OpenCL/opencl.h>
-#else
-#include <CL/opencl.h>
-#endif // !__APPLE__
-
 #if (__cplusplus >= 201103L || _MSVC_LANG >= 201103L )
 #define CL_HPP_NOEXCEPT_ noexcept
 #else
@@ -1270,6 +1264,10 @@ inline cl_int getInfoHelper(Func f, cl_uint name, T* param, int, typename T::cl_
     }
     return CL_SUCCESS;
 }
+
+#ifndef CL_DEVICE_HALF_FP_CONFIG // without requiring cl_ext.h
+#define CL_DEVICE_HALF_FP_CONFIG 0x1033
+#endif
 
 #define CL_HPP_PARAM_NAME_INFO_1_0_(F) \
     F(cl_platform_info, CL_PLATFORM_PROFILE, string) \
@@ -2432,7 +2430,7 @@ public:
     cl_int getInfo(cl_device_info name, T* param) const
     {
         return detail::errHandler(
-            detail::getInfo(&::clGetDeviceInfo, object_, name, param),
+            detail::getInfo(::clGetDeviceInfo, object_, name, param),
             __GET_DEVICE_INFO_ERR);
     }
 
@@ -2768,7 +2766,7 @@ public:
     cl_int getInfo(cl_platform_info name, T* param) const
     {
         return detail::errHandler(
-            detail::getInfo(&::clGetPlatformInfo, object_, name, param),
+            detail::getInfo(::clGetPlatformInfo, object_, name, param),
             __GET_PLATFORM_INFO_ERR);
     }
 
@@ -3306,7 +3304,7 @@ public:
     cl_int getInfo(cl_context_info name, T* param) const
     {
         return detail::errHandler(
-            detail::getInfo(&::clGetContextInfo, object_, name, param),
+            detail::getInfo(::clGetContextInfo, object_, name, param),
             __GET_CONTEXT_INFO_ERR);
     }
 
@@ -3472,7 +3470,7 @@ public:
     cl_int getInfo(cl_event_info name, T* param) const
     {
         return detail::errHandler(
-            detail::getInfo(&::clGetEventInfo, object_, name, param),
+            detail::getInfo(::clGetEventInfo, object_, name, param),
             __GET_EVENT_INFO_ERR);
     }
 
@@ -3495,7 +3493,7 @@ public:
     cl_int getProfilingInfo(cl_profiling_info name, T* param) const
     {
         return detail::errHandler(detail::getInfo(
-            &::clGetEventProfilingInfo, object_, name, param),
+            ::clGetEventProfilingInfo, object_, name, param),
             __GET_EVENT_PROFILE_INFO_ERR);
     }
 
@@ -3661,7 +3659,7 @@ public:
     cl_int getInfo(cl_mem_info name, T* param) const
     {
         return detail::errHandler(
-            detail::getInfo(&::clGetMemObjectInfo, object_, name, param),
+            detail::getInfo(::clGetMemObjectInfo, object_, name, param),
             __GET_MEM_OBJECT_INFO_ERR);
     }
 
@@ -4390,146 +4388,6 @@ public:
 };
 #endif
 
-/*! \brief Class interface for GL Buffer Memory Objects.
- *
- *  This is provided to facilitate interoperability with OpenGL.
- * 
- *  See Memory for details about copy semantics, etc.
- * 
- *  \see Memory
- */
-class BufferGL : public Buffer
-{
-public:
-    /*! \brief Constructs a BufferGL in a specified context, from a given
-     *         GL buffer.
-     *
-     *  Wraps clCreateFromGLBuffer().
-     */
-    BufferGL(
-        const Context& context,
-        cl_mem_flags flags,
-        cl_GLuint bufobj,
-        cl_int * err = nullptr)
-    {
-        cl_int error;
-        object_ = ::clCreateFromGLBuffer(
-            context(),
-            flags,
-            bufobj,
-            &error);
-
-        detail::errHandler(error, __CREATE_GL_BUFFER_ERR);
-        if (err != nullptr) {
-            *err = error;
-        }
-    }
-
-    //! \brief Default constructor - initializes to nullptr.
-    BufferGL() : Buffer() { }
-
-    /*! \brief Constructor from cl_mem - takes ownership.
-     *
-     * \param retainObject will cause the constructor to retain its cl object.
-     *                     Defaults to false to maintain compatibility with
-     *                     earlier versions.
-     *  See Memory for further details.
-     */
-    explicit BufferGL(const cl_mem& buffer, bool retainObject = false) :
-        Buffer(buffer, retainObject) { }
-
-    /*! \brief Assignment from cl_mem - performs shallow copy.
-     *
-     *  See Memory for further details.
-     */
-    BufferGL& operator = (const cl_mem& rhs)
-    {
-        Buffer::operator=(rhs);
-        return *this;
-    }
-
-
-    //! \brief Wrapper for clGetGLObjectInfo().
-    cl_int getObjectInfo(
-        cl_gl_object_type *type,
-        cl_GLuint * gl_object_name)
-    {
-        return detail::errHandler(
-            ::clGetGLObjectInfo(object_,type,gl_object_name),
-            __GET_GL_OBJECT_INFO_ERR);
-    }
-};
-
-/*! \brief Class interface for GL Render Buffer Memory Objects.
- *
- *  This is provided to facilitate interoperability with OpenGL.
- * 
- *  See Memory for details about copy semantics, etc.
- * 
- *  \see Memory
- */
-class BufferRenderGL : public Buffer
-{
-public:
-    /*! \brief Constructs a BufferRenderGL in a specified context, from a given
-     *         GL Renderbuffer.
-     *
-     *  Wraps clCreateFromGLRenderbuffer().
-     */
-    BufferRenderGL(
-        const Context& context,
-        cl_mem_flags flags,
-        cl_GLuint bufobj,
-        cl_int * err = nullptr)
-    {
-        cl_int error;
-        object_ = ::clCreateFromGLRenderbuffer(
-            context(),
-            flags,
-            bufobj,
-            &error);
-
-        detail::errHandler(error, __CREATE_GL_RENDER_BUFFER_ERR);
-        if (err != nullptr) {
-            *err = error;
-        }
-    }
-
-    //! \brief Default constructor - initializes to nullptr.
-    BufferRenderGL() : Buffer() { }
-
-    /*! \brief Constructor from cl_mem - takes ownership.
-     *
-     * \param retainObject will cause the constructor to retain its cl object.
-     *                     Defaults to false to maintain compatibility with 
-     *                     earlier versions.
-     *  See Memory for further details.
-     */
-    explicit BufferRenderGL(const cl_mem& buffer, bool retainObject = false) :
-        Buffer(buffer, retainObject) { }
-
-    /*! \brief Assignment from cl_mem - performs shallow copy.
-     *
-     *  See Memory for further details.
-     */
-    BufferRenderGL& operator = (const cl_mem& rhs)
-    {
-        Buffer::operator=(rhs);
-        return *this;
-    }
-
-
-    //! \brief Wrapper for clGetGLObjectInfo().
-    cl_int getObjectInfo(
-        cl_gl_object_type *type,
-        cl_GLuint * gl_object_name)
-    {
-        return detail::errHandler(
-            ::clGetGLObjectInfo(object_,type,gl_object_name),
-            __GET_GL_OBJECT_INFO_ERR);
-    }
-};
-
 /*! \brief C++ base class for Image Memory objects.
  *
  *  See Memory for details about copy semantics, etc.
@@ -4569,7 +4427,7 @@ public:
     cl_int getImageInfo(cl_image_info name, T* param) const
     {
         return detail::errHandler(
-            detail::getInfo(&::clGetImageInfo, object_, name, param),
+            detail::getInfo(::clGetImageInfo, object_, name, param),
             __GET_IMAGE_INFO_ERR);
     }
     
@@ -4984,76 +4842,6 @@ public:
 };
 
 
-#if defined(CL_USE_DEPRECATED_OPENCL_1_1_APIS)
-/*! \brief Class interface for GL 2D Image Memory objects.
- *
- *  This is provided to facilitate interoperability with OpenGL.
- * 
- *  See Memory for details about copy semantics, etc.
- * 
- *  \see Memory
- *  \note Deprecated for OpenCL 1.2. Please use ImageGL instead.
- */
-class CL_API_PREFIX__VERSION_1_1_DEPRECATED Image2DGL : public Image2D 
-{
-public:
-    /*! \brief Constructs an Image2DGL in a specified context, from a given
-     *         GL Texture.
-     *
-     *  Wraps clCreateFromGLTexture2D().
-     */
-    Image2DGL(
-        const Context& context,
-        cl_mem_flags flags,
-        cl_GLenum target,
-        cl_GLint  miplevel,
-        cl_GLuint texobj,
-        cl_int * err = nullptr)
-    {
-        cl_int error;
-        object_ = ::clCreateFromGLTexture2D(
-            context(),
-            flags,
-            target,
-            miplevel,
-            texobj,
-            &error);
-
-        detail::errHandler(error, __CREATE_GL_TEXTURE_2D_ERR);
-        if (err != nullptr) {
-            *err = error;
-        }
-
-    }
-    
-    //! \brief Default constructor - initializes to nullptr.
-    Image2DGL() : Image2D() { }
-
-    /*! \brief Constructor from cl_mem - takes ownership.
-     *
-     * \param retainObject will cause the constructor to retain its cl object.
-     *                     Defaults to false to maintain compatibility with
-     *                     earlier versions.
-     *  See Memory for further details.
-     */
-    explicit Image2DGL(const cl_mem& image, bool retainObject = false) : 
-        Image2D(image, retainObject) { }
-
-    /*! \brief Assignment from cl_mem - performs shallow copy.
-     *c
-     *  See Memory for further details.
-     */
-    Image2DGL& operator = (const cl_mem& rhs)
-    {
-        Image2D::operator=(rhs);
-        return *this;
-    }
-
-
-
-} CL_API_SUFFIX__VERSION_1_1_DEPRECATED;
-#endif // CL_USE_DEPRECATED_OPENCL_1_1_APIS
-
 #if CL_HPP_TARGET_OPENCL_VERSION >= 120
 /*! \class Image2DArray
  * \brief Image interface for arrays of 2D images.
@@ -5222,126 +5010,6 @@ public:
 
 };
 
-#if defined(CL_USE_DEPRECATED_OPENCL_1_1_APIS)
-/*! \brief Class interface for GL 3D Image Memory objects.
- *
- *  This is provided to facilitate interoperability with OpenGL.
- * 
- *  See Memory for details about copy semantics, etc.
- * 
- *  \see Memory
- */
-class Image3DGL : public Image3D
-{
-public:
-    /*! \brief Constructs an Image3DGL in a specified context, from a given
-     *         GL Texture.
-     *
-     *  Wraps clCreateFromGLTexture3D().
-     */
-    Image3DGL(
-        const Context& context,
-        cl_mem_flags flags,
-        cl_GLenum target,
-        cl_GLint  miplevel,
-        cl_GLuint texobj,
-        cl_int * err = nullptr)
-    {
-        cl_int error;
-        object_ = ::clCreateFromGLTexture3D(
-            context(),
-            flags,
-            target,
-            miplevel,
-            texobj,
-            &error);
-
-        detail::errHandler(error, __CREATE_GL_TEXTURE_3D_ERR);
-        if (err != nullptr) {
-            *err = error;
-        }
-    }
-
-    //! \brief Default constructor - initializes to nullptr.
-    Image3DGL() : Image3D() { }
-
-    /*! \brief Constructor from cl_mem - takes ownership.
-     *
-     * \param retainObject will cause the constructor to retain its cl object.
-     *                     Defaults to false to maintain compatibility with
-     *                     earlier versions.
-     *  See Memory for further details.
-     */
-    explicit Image3DGL(const cl_mem& image, bool retainObject = false) : 
-        Image3D(image, retainObject) { }
-
-    /*! \brief Assignment from cl_mem - performs shallow copy.
-     *
-     *  See Memory for further details.
-     */
-    Image3DGL& operator = (const cl_mem& rhs)
-    {
-        Image3D::operator=(rhs);
-        return *this;
-    }
-
-};
-#endif // CL_USE_DEPRECATED_OPENCL_1_1_APIS
-
-#if CL_HPP_TARGET_OPENCL_VERSION >= 120
-/*! \class ImageGL
- * \brief general image interface for GL interop.
- * We abstract the 2D and 3D GL images into a single instance here
- * that wraps all GL sourced images on the grounds that setup information
- * was performed by OpenCL anyway.
- */
-class ImageGL : public Image
-{
-public:
-    ImageGL(
-        const Context& context,
-        cl_mem_flags flags,
-        cl_GLenum target,
-        cl_GLint  miplevel,
-        cl_GLuint texobj,
-        cl_int * err = nullptr)
-    {
-        cl_int error;
-        object_ = ::clCreateFromGLTexture(
-            context(), 
-            flags, 
-            target,
-            miplevel,
-            texobj,
-            &error);
-
-        detail::errHandler(error, __CREATE_GL_TEXTURE_ERR);
-        if (err != nullptr) {
-            *err = error;
-        }
-    }
-
-    ImageGL() : Image() { }
-    
-    /*! \brief Constructor from cl_mem - takes ownership.
-     *
-     * \param retainObject will cause the constructor to retain its cl object.
-     *                     Defaults to false to maintain compatibility with
-     *                     earlier versions.
-     *  See Memory for further details.
-     */
-    explicit ImageGL(const cl_mem& image, bool retainObject = false) : 
-        Image(image, retainObject) { }
-
-    ImageGL& operator = (const cl_mem& rhs)
-    {
-        Image::operator=(rhs);
-        return *this;
-    }
-
-};
-#endif // CL_HPP_TARGET_OPENCL_VERSION >= 120
-
 
 
 #if CL_HPP_TARGET_OPENCL_VERSION >= 200
@@ -5437,7 +5105,7 @@ public:
     cl_int getInfo(cl_pipe_info name, T* param) const
     {
         return detail::errHandler(
-            detail::getInfo(&::clGetPipeInfo, object_, name, param),
+            detail::getInfo(::clGetPipeInfo, object_, name, param),
             __GET_PIPE_INFO_ERR);
     }
 
@@ -5544,7 +5212,7 @@ public:
     cl_int getInfo(cl_sampler_info name, T* param) const
     {
         return detail::errHandler(
-            detail::getInfo(&::clGetSamplerInfo, object_, name, param),
+            detail::getInfo(::clGetSamplerInfo, object_, name, param),
             __GET_SAMPLER_INFO_ERR);
     }
 
@@ -5752,7 +5420,7 @@ public:
     cl_int getInfo(cl_kernel_info name, T* param) const
     {
         return detail::errHandler(
-            detail::getInfo(&::clGetKernelInfo, object_, name, param),
+            detail::getInfo(::clGetKernelInfo, object_, name, param),
             __GET_KERNEL_INFO_ERR);
     }
 
@@ -5774,7 +5442,7 @@ public:
     cl_int getArgInfo(cl_uint argIndex, cl_kernel_arg_info name, T* param) const
     {
         return detail::errHandler(
-            detail::getInfo(&::clGetKernelArgInfo, object_, argIndex, name, param),
+            detail::getInfo(::clGetKernelArgInfo, object_, argIndex, name, param),
             __GET_KERNEL_ARG_INFO_ERR);
     }
 
@@ -5798,7 +5466,7 @@ public:
     {
         return detail::errHandler(
             detail::getInfo(
-                &::clGetKernelWorkGroupInfo, object_, device(), name, param),
+                ::clGetKernelWorkGroupInfo, object_, device(), name, param),
                 __GET_KERNEL_WORK_GROUP_INFO_ERR);
     }
 
@@ -6523,7 +6191,7 @@ public:
     cl_int getInfo(cl_program_info name, T* param) const
     {
         return detail::errHandler(
-            detail::getInfo(&::clGetProgramInfo, object_, name, param),
+            detail::getInfo(::clGetProgramInfo, object_, name, param),
             __GET_PROGRAM_INFO_ERR);
     }
 
@@ -6546,7 +6214,7 @@ public:
     {
         return detail::errHandler(
             detail::getInfo(
-                &::clGetProgramBuildInfo, object_, device(), name, param),
+                ::clGetProgramBuildInfo, object_, device(), name, param),
                 __GET_PROGRAM_BUILD_INFO_ERR);
     }
 
@@ -6793,7 +6461,7 @@ inline cl_int cl::Program::getInfo(cl_program_info name, vector<vector<unsigned 
         }
 
         return detail::errHandler(
-            detail::getInfo(&::clGetProgramInfo, object_, name, param),
+            detail::getInfo(::clGetProgramInfo, object_, name, param),
             __GET_PROGRAM_INFO_ERR);
     }
 
@@ -7371,7 +7039,7 @@ public:
     {
         return detail::errHandler(
             detail::getInfo(
-                &::clGetCommandQueueInfo, object_, name, param),
+                ::clGetCommandQueueInfo, object_, name, param),
                 __GET_COMMAND_QUEUE_INFO_ERR);
     }
 
@@ -8618,50 +8286,6 @@ public:
     }
 #endif // defined(CL_USE_DEPRECATED_OPENCL_1_1_APIS)
 
-    cl_int enqueueAcquireGLObjects(
-         const vector<Memory>* mem_objects = nullptr,
-         const vector<Event>* events = nullptr,
-         Event* event = nullptr) const
-     {
-        cl_event tmp;
-        cl_int err = detail::errHandler(
-             ::clEnqueueAcquireGLObjects(
-                 object_,
-                 (mem_objects != nullptr) ? (cl_uint) mem_objects->size() : 0,
-                 (mem_objects != nullptr && mem_objects->size() > 0) ? (const cl_mem *) &mem_objects->front(): nullptr,
-                 (events != nullptr) ? (cl_uint) events->size() : 0,
-                 (events != nullptr && events->size() > 0) ? (cl_event*) &events->front() : nullptr,
-                 (event != nullptr) ? &tmp : nullptr),
-             __ENQUEUE_ACQUIRE_GL_ERR);
-
-        if (event != nullptr && err == CL_SUCCESS)
-            *event = tmp;
-
-        return err;
-     }
-
-    cl_int enqueueReleaseGLObjects(
-         const vector<Memory>* mem_objects = nullptr,
-         const vector<Event>* events = nullptr,
-         Event* event = nullptr) const
-     {
-        cl_event tmp;
-        cl_int err = detail::errHandler(
-             ::clEnqueueReleaseGLObjects(
-                 object_,
-                 (mem_objects != nullptr) ? (cl_uint) mem_objects->size() : 0,
-                 (mem_objects != nullptr && mem_objects->size() > 0) ? (const cl_mem *) &mem_objects->front(): nullptr,
-                 (events != nullptr) ? (cl_uint) events->size() : 0,
-                 (events != nullptr && events->size() > 0) ? (cl_event*) &events->front() : nullptr,
-                 (event != nullptr) ? &tmp : nullptr),
-             __ENQUEUE_RELEASE_GL_ERR);
-
-        if (event != nullptr && err == CL_SUCCESS)
-            *event = tmp;
-
-        return err;
-     }
-
 #if defined (CL_HPP_USE_DX_INTEROP)
 typedef CL_API_ENTRY cl_int (CL_API_CALL *PFN_clEnqueueAcquireD3D10ObjectsKHR)(
     cl_command_queue command_queue, cl_uint num_objects,
@@ -8964,7 +8588,7 @@ public:
     {
         return detail::errHandler(
             detail::getInfo(
-            &::clGetCommandQueueInfo, object_, name, param),
+            ::clGetCommandQueueInfo, object_, name, param),
             __GET_COMMAND_QUEUE_INFO_ERR);
     }
 
