@@ -22,8 +22,15 @@
         ]
       }],
       ['OS!="win"', {
-        "variables": {"missing_memalign%": "<!(<!(echo ${CC_target:-${CC:-cc}}) -c src/test_alignalloc.c -o /dev/null -Werror 2>/dev/null || echo failed)"},
+        "variables": {
+          "missing_memalign%": "<!(<!(echo ${CC_target:-${CC:-cc}}) -c src/test_alignalloc.c -o /dev/null -Werror 2>/dev/null || echo failed)",
+          "supports_cpp14%": "<!(<!(echo ${CXX_target:-${CXX:-c++}}) -MM -E hasher/hasher.cpp -std=c++14 2>/dev/null || true)"
+        },
         "conditions": [
+          ['supports_cpp14!=""',
+            {"variables": {"cpp_std": "c++14"}},
+            {"variables": {"cpp_std": "c++11"}}
+          ],
           ['missing_memalign!=""', {
             "cflags_c": ["-D_POSIX_C_SOURCE=200112L"],
           }],
@@ -36,7 +43,7 @@
                 "OTHER_CXXFLAGS": ["-fomit-frame-pointer"]
               }
             }},
-            "cxxflags": ["-std=c++11"]
+            "cxxflags": ["-std=>(cpp_std)"]
           }, {
             "cflags": ["-fno-omit-frame-pointer", "-fsanitize=address", "-fsanitize=undefined"],
             "cxxflags": ["-fno-omit-frame-pointer", "-fsanitize=address", "-fsanitize=undefined", "-std=c++17"],
@@ -94,8 +101,8 @@
           "cflags_cc": ["-fexceptions", "-std=c++17"],
           "cxxflags": ["-fexceptions", "-std=c++17"]
         }, {
-          "cflags_cc": ["-fexceptions", "-std=c++11"],
-          "cxxflags": ["-fexceptions", "-std=c++11"]
+          "cflags_cc": ["-fexceptions", "-std=>(cpp_std)"],
+          "cxxflags": ["-fexceptions", "-std=>(cpp_std)"]
         }]
       ]
     },
