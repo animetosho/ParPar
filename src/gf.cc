@@ -902,7 +902,7 @@ private:
 	int queueCount;
 	
 	std::unique_ptr<MessageThread> thread;
-	uv_async_t threadSignal;
+	std::unique_ptr<uv_async_t> threadSignal;
 	ThreadMessageQueue<struct input_work_data*> hashesDone;
 	
 	struct input_blockHash bh;
@@ -949,7 +949,7 @@ protected:
 			
 			// signal main thread that hashing has completed
 			data->self->hashesDone.push(data);
-			uv_async_send(&(data->self->threadSignal));
+			uv_async_send(data->self->threadSignal.get());
 		}
 	}
 	void after_process() {
@@ -1006,7 +1006,9 @@ protected:
 		hasher->destroy();
 		if(thread != nullptr)
 			HasherInputThreadPool.push_back(thread.release());
-		uv_close(reinterpret_cast<uv_handle_t*>(&threadSignal), nullptr);
+		uv_close(reinterpret_cast<uv_handle_t*>(threadSignal.release()), [](uv_handle_t* handle) {
+			delete handle;
+		});
 		hasher = nullptr;
 		
 		PERSIST_CLEAR(ifscData);
@@ -1040,14 +1042,15 @@ protected:
 	
 	explicit HasherInput(uv_loop_t* _loop) : ObjectWrap(), loop(_loop), queueCount(0), thread(nullptr) {
 		hasher = HasherInput_Create();
-		uv_async_init(loop, &threadSignal, [](uv_async_t *handle
+		threadSignal.reset(new uv_async_t());
+		uv_async_init(loop, threadSignal.get(), [](uv_async_t *handle
 #if UV_VERSION_MAJOR < 1
 			, int
 #endif
 		) {
 			static_cast<HasherInput*>(handle->data)->after_process();
 		});
-		threadSignal.data = static_cast<void*>(this);
+		threadSignal->data = static_cast<void*>(this);
 	}
 	
 	~HasherInput() {

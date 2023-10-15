@@ -1,6 +1,7 @@
 #ifndef __THREADQUEUE_H__
 #define __THREADQUEUE_H__
 
+#include <memory>
 #ifdef USE_LIBUV
 # include <uv.h>
 # define thread_t uv_thread_t
@@ -21,7 +22,6 @@
 # define thread_create(t, f, a) t = std::thread(f, a)
 # define thread_join(t) t.join()
 # include <mutex>
-# include <memory>
 # define mutex_t std::unique_ptr<std::mutex>
 # define mutex_init(m) m = std::unique_ptr<std::mutex>(new std::mutex())
 # define mutex_destroy(m)
@@ -149,7 +149,7 @@ struct tnqCloseWrap {
 template<class P>
 class ThreadNotifyQueue {
 	ThreadMessageQueue<void*> q;
-	uv_async_t a;
+	std::unique_ptr<uv_async_t> a;
 	P* o;
 	void (P::*cb)(void*);
 	
@@ -165,30 +165,34 @@ class ThreadNotifyQueue {
 	}
 public:
 	explicit ThreadNotifyQueue(uv_loop_t* loop, P* object, void (P::*callback)(void*)) {
-		uv_async_init(loop, &a, notified);
-		a.data = static_cast<void*>(this);
+		a.reset(new uv_async_t());
+		uv_async_init(loop, a.get(), notified);
+		a->data = static_cast<void*>(this);
 		cb = callback;
 		o = object;
 	}
 	
 	void notify(void* item) {
 		q.push(item);
-		uv_async_send(&a);
+		uv_async_send(a.get());
 	}
 	
 	void close(void* data, void(*closeCb)(void*)) {
 		auto* d = new tnqCloseWrap;
 		d->cb = closeCb;
 		d->data = data;
-		a.data = d;
-		uv_close(reinterpret_cast<uv_handle_t*>(&a), [](uv_handle_t* handle) {
+		a->data = d;
+		uv_close(reinterpret_cast<uv_handle_t*>(a.release()), [](uv_handle_t* handle) {
 			auto* d = static_cast<tnqCloseWrap*>(handle->data);
 			d->cb(d->data);
 			delete d;
+			delete handle;
 		});
 	}
 	void close() {
-		uv_close(reinterpret_cast<uv_handle_t*>(&a), nullptr);
+		uv_close(reinterpret_cast<uv_handle_t*>(a.release()), [](uv_handle_t* handle) {
+			delete handle;
+		});
 	}
 };
 #endif
