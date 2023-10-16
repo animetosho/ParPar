@@ -704,6 +704,7 @@ var inputFiles = argv._;
 		
 		var currentState = 'Initializing';
 		var currentSlice = 0, currentSliceFrac = 0;
+		var curPassSlice = 0;
 		var recSlicesWritten = 0, prgLastRecFileSlices = 0, recSlicesWrittenFrac = 0;
 		var progressWriteFactor = g.opts.recoverySlices ? (Math.pow(g.opts.recoverySlices, -0.3)) : 0; // scale down how much slice writing contributes, based on the number of recovery being generated
 		var progressInterval;
@@ -722,6 +723,7 @@ var inputFiles = argv._;
 				print_json('processing_info', {
 					input_size: g.totalSize,
 					input_slices: g.inputSlices,
+					input_chunks: g.totalNumInputChunks(),
 					input_files: info.length,
 					recovery_slices: g.opts.recoverySlices,
 					slice_size: g.opts.sliceSize,
@@ -766,21 +768,21 @@ var inputFiles = argv._;
 		}
 		if(argv.progress != 'none') {
 			// progress is based off:
-			// - the number of input slices and how many passes we need to go over them
+			// - the number of input chunks and how many passes we need to go over them
 			// - the number of output slices and how many times they need to be written to; as this is expected to be faster than main processing, scale it down
 			// - the overhead of hashing the first pass; also scale this down
-			var totalProgress = g.chunks * g.passes * (g.inputSlices + g.opts.recoverySlices*progressWriteFactor);
+			var totalProgress = g.totalNumInputChunks()*g.passes + g.chunks*g.opts.recoverySlices*progressWriteFactor;
+			var progressWriteFactorPerPass = progressWriteFactor / g.passes; // each pass doesn't write a full set of recovery, but it's easier to pretend that it does; to properly scale the progress, we fudge things by scaling the factor down
 			var hashFactor = g.chunks * progressWriteFactor;
 			totalProgress += hashFactor * g.inputSlices; // add hashing overhead
 			if(totalProgress) {
 				progressInterval = setInterval(function() {
-					var currentProgress = currentSlice+currentSliceFrac + (recSlicesWritten+recSlicesWrittenFrac)*progressWriteFactor;
+					var currentProgress = currentSlice+currentSliceFrac + (recSlicesWritten+recSlicesWrittenFrac)*progressWriteFactorPerPass;
 					if(g.passNum == 0 && g.passChunkNum == 0)
 						currentProgress += hashFactor * (currentSlice+currentSliceFrac);
 					else
 						currentProgress += hashFactor * g.inputSlices;
 					var perc = Math.floor(currentProgress / totalProgress *10000)/100;
-					var curPassSlice = currentSlice - ((g.passNum * g.chunks + g.passChunkNum) * g.inputSlices);
 					writeProgress({
 						state: currentState,
 						progress_percent : Math.min(perc, 99.99),
@@ -854,6 +856,7 @@ var inputFiles = argv._;
 				currentState = 'Calculating';
 			if(event == 'processing_slice') {
 				currentSlice++;
+				curPassSlice++;
 				currentSliceFrac = 0;
 			}
 			if(event == 'processing_slice_part') {
@@ -873,12 +876,13 @@ var inputFiles = argv._;
 				recSlicesWritten += prgLastRecFileSlices;
 				prgLastRecFileSlices = 0;
 				recSlicesWrittenFrac = 0;
+				curPassSlice = 0;
 			}
 			if(event == 'closing_files')
 				currentState = 'Finalizing';
 			if(argv.json) {
 				if(event == 'begin_chunk_pass')
-					print_json('begin_subpass', {pass: arg1, subpass: arg2});
+					print_json('begin_subpass', {pass: arg1, subpass: arg2, input_chunks: g.numChunksThisChunkPass()});
 				if(event == 'chunk_pass_complete')
 					print_json('end_subpass', {pass: arg1, subpass: arg2});
 				if(event == 'chunk_pass_write')
