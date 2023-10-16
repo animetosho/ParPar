@@ -687,7 +687,29 @@ var inputFiles = argv._;
 
 	// TODO: sigint not respected?
 
-	ParPar.fileInfo(inputFiles, argv.recurse, argv['skip-symlinks'], function(err, info) {
+	var progressInterval;
+	var scanningResults = [];
+	if(!argv.quiet) {
+		if(argv.json)
+			print_json('scanning_input');
+		else
+			process.stderr.write('Scanning input file(s)...\r');
+		progressInterval = setInterval(function() {
+			var numScanned = scanningResults.length;
+			if(numScanned < 1) return;
+			if(argv.json)
+				print_json('scanning_progress', {num_scanned: numScanned});
+			else
+				process.stderr.write('Scanning input file(s)... (' + numScanned + ' scanned)\r');
+		}, 200);
+	}
+	
+	scanningResults = ParPar.fileInfo(inputFiles, argv.recurse, argv['skip-symlinks'], argv.chunkReadThreads, function(err, info) {
+		if(progressInterval) {
+			clearInterval(progressInterval);
+			progressInterval = null;
+		}
+		
 		if(!err && info.length == 0)
 			err = 'No input files found.';
 		if(err) {
@@ -707,7 +729,6 @@ var inputFiles = argv._;
 		var curPassSlice = 0;
 		var recSlicesWritten = 0, prgLastRecFileSlices = 0, recSlicesWrittenFrac = 0;
 		var progressWriteFactor = g.opts.recoverySlices ? (Math.pow(g.opts.recoverySlices, -0.3)) : 0; // scale down how much slice writing contributes, based on the number of recovery being generated
-		var progressInterval;
 		if(!argv.quiet) {
 			var pluralDisp = function(n, unit, suffix) {
 				suffix = suffix || 's';
