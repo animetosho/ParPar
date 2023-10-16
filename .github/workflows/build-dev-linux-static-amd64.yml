@@ -10,6 +10,7 @@ jobs:
       BUILD_ARCH: x64
       BUILD_LOGLEVEL: verbose
       BUILD_STATIC: '--fully-static'
+      BUILD_NO_LTO: 1   # the MUSL setup doesn't support linker plugins
     steps:
       - uses: actions/setup-python@v4
         id: py
