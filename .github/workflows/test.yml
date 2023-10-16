@@ -34,9 +34,9 @@ jobs:
       
       # test SSE2-only to see if CPUID checking works
       - run: |
-          Invoke-Expression "$env:SDE_PATH\sde.exe -p4 -- test/gf16/build/${{ matrix.config }}/test.exe"
-          Invoke-Expression "$env:SDE_PATH\sde.exe -p4 -- test/gf16/build/${{ matrix.config }}/test-pmul.exe"
-          Invoke-Expression "$env:SDE_PATH\sde.exe -p4 -- test/hasher/build/${{ matrix.config }}/test.exe"
+          Invoke-Expression "$env:SDE_PATH\sde.exe -p4p -- test/gf16/build/${{ matrix.config }}/test.exe"
+          Invoke-Expression "$env:SDE_PATH\sde.exe -p4p -- test/gf16/build/${{ matrix.config }}/test-pmul.exe"
+          Invoke-Expression "$env:SDE_PATH\sde.exe -p4p -- test/hasher/build/${{ matrix.config }}/test.exe"
         if: ${{ matrix.config == 'Release' && matrix.arch == 'x64' && matrix.compiler == 'ClangCL' }}
       # TODO: XOP tests for hasher?
   
