@@ -8,16 +8,32 @@ Unless otherwise specified, all options take one parameter.
 
 PAR2 Options:
 
-  -s,  --input-slices        Slice/block size or number of input slices/blocks.
-                             To specify exact slice size, append a size suffix
-                             to the number. Examples:
-                                 `-s1000`: selects a slice size so that there
-                                           are 1000 input slices. Note that
+  -s,  --input-slices        Number of input slices/blocks. You can append a
+                             suffix to auto-calculate this, as in the following
+                             examples:
+                                 `-s2000`: selects a slice size so that there
+                                           are 2000 input slices. Note that
                                            ParPar will error if it cannot
                                            select a slice size which satisfies
-                                           this condition exactly
+                                           this condition exactly.
+                                           `-s2000` is par2cmdline's default
                                  `-s1M`: sets the slice size to 1 megabyte
                                  `-s1024B`: set the slice size to 1 kilobyte
+                                 `-s0.5l`: slice size is half the size of the
+                                           largest file
+                                 `-s2s`: slice size equals the size of the two
+                                         smallest files
+                                 `-s0.6w`: slice size equals `total_size**0.6`,
+                                           where ** denotes power
+                                           (also implies that there are
+                                           `total_size**0.4` input slices)
+                                 `-s1.5o`: number of input slices equals the
+                                           logarithm base 1.5 of the total
+                                           input size
+                             The 'l', 's', 'w' and 'o' suffixes can be followed
+                             by a scale factor, e.g. `-s0.5w*10` sets slice
+                             size to `sqrt(total_size)*10` (which is
+                             equivalent to par2j's default)
                              This option must be specified.
        --min-input-slices    Enables the number of slices to be automatically
                              scaled if it falls below this value. This can be

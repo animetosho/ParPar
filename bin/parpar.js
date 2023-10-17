@@ -522,8 +522,6 @@ var inputFiles = argv._;
 					error('Invalid value specified for `'+arg+'`');
 				return {unit: 'ratio', value: n/100};
 			} else if(['l','L','s','S','w','W','o','O','n','N'].indexOf(m[2][0]) >= 0) {
-				if(!isRec)
-					error('Invalid value specified for `'+arg+'`');
 				var scale = 1;
 				if(m[2].length > 2) {
 					scale = +(m[2].substring(2));
@@ -590,18 +588,16 @@ var inputFiles = argv._;
 	});
 
 	var inputSliceDef = parseSizeOrNum('input-slices', null, ppo.sliceSizeMultiple);
-	var inputSliceCount = inputSliceDef.unit == 'count' ? -inputSliceDef.value : inputSliceDef.value;
-	if(inputSliceCount < -32768) // capture potentially common mistake
-		error('Invalid number (>32768) of input slices requested. Perhaps you meant `' + cliFormat('1', '--input-slices=' + (-inputSliceCount) + 'b') + '` instead?');
+	if(inputSliceDef.unit == 'count' && inputSliceDef.value > 32768) // capture potentially common mistake
+		error('Invalid number (>32768) of input slices requested. Perhaps you meant `' + cliFormat('1', '--input-slices=' + inputSliceDef.value + 'b') + '` instead?');
 
 	['min', 'max'].forEach(function(e) {
 		var k = e + '-input-slices';
 		if(k in argv) {
-			var v = parseSizeOrNum(k, null, ppo.sliceSizeMultiple);
-			ppo[e + 'SliceSize'] = v.unit == 'count' ? -v.value : v.value;
+			ppo[e + 'SliceSize'] = parseSizeOrNum(k, null, ppo.sliceSizeMultiple);
 		}
 	});
-	if(inputSliceDef.unit == 'bytes' && !('slice-size-multiple' in argv) && (!('min-input-slices' in argv) || ppo.minSliceSize == inputSliceCount)) {
+	if(inputSliceDef.unit == 'bytes' && !('slice-size-multiple' in argv) && (!('min-input-slices' in argv) || (ppo.minSliceSize.unit == 'bytes' && ppo.minSliceSize.value == inputSliceDef.value))) {
 		ppo.sliceSizeMultiple = inputSliceDef.value;
 	}
 	
@@ -719,7 +715,7 @@ var inputFiles = argv._;
 		
 		var g;
 		try {
-			g = new ParPar.PAR2Gen(info, inputSliceCount, ppo);
+			g = new ParPar.PAR2Gen(info, inputSliceDef, ppo);
 		} catch(x) {
 			error(x.message);
 		}
