@@ -156,6 +156,7 @@ struct CallbackWrapper {
 #if NODE_VERSION_AT_LEAST(0, 11, 0)
 	void attachCallback(Isolate* _isolate, const Local<Value>& callback) {
 		isolate = _isolate;
+		HANDLE_SCOPE;
 		Local<Object> obj = NEW_OBJ(Object);
 		SET_OBJ(obj, "ondone", callback);
 		obj_.Reset(ISOLATE obj);
@@ -165,6 +166,7 @@ struct CallbackWrapper {
 	}
 #else
 	void attachCallback(const Local<Value>& callback) {
+		HANDLE_SCOPE;
 		obj_ = Persistent<Object>::New(NEW_OBJ(Object));
 		obj_->Set(NEW_STRING("ondone"), callback);
 		//SetActiveDomain(obj_); // never set in node_zlib.cc - perhaps domains aren't that important?
@@ -185,10 +187,11 @@ struct CallbackWrapper {
 	void attachValue(const Local<Value>& val) {
 		PERSIST_VALUE(value, val);
 	}
-	void call(int argc, Local<Value>* argv) {
+	void _call(int argc, Local<Value>* argv, const HandleScope&) {
 #if NODE_VERSION_AT_LEAST(0, 11, 0)
 		Local<Object> obj = Local<Object>::New(isolate, obj_);
 # if NODE_VERSION_AT_LEAST(10, 0, 0)
+		// TODO: properly support async_context
 		node::async_context ac;
 		memset(&ac, 0, sizeof(ac));
 		node::MakeCallback(isolate, obj, "ondone", argc, argv, ac);
@@ -202,14 +205,14 @@ struct CallbackWrapper {
 	
 	inline void call() {
 		HANDLE_SCOPE;
-		call(0, nullptr);
+		_call(0, nullptr, scope);
 	}
-	inline void call(const HandleScope&) {
-		call(0, nullptr);
+	inline void call(const HandleScope& scope) {
+		_call(0, nullptr, scope);
 	}
-	inline void call(std::initializer_list<Local<Value>> args) {
+	inline void call(const HandleScope& scope, std::initializer_list<Local<Value>> args) {
 		std::vector<Local<Value>> argList(args);
-		call(argList.size(), argList.data());
+		_call(argList.size(), argList.data(), scope);
 	}
 };
 
@@ -606,10 +609,10 @@ protected:
 				HANDLE_SCOPE;
 #if NODE_VERSION_AT_LEAST(0, 11, 0)
 				Local<Value> buffer = Local<Value>::New(cb->isolate, cb->value);
-				cb->call({ Integer::New(cb->isolate, idx), buffer });
+				cb->call(scope, { Integer::New(cb->isolate, idx), buffer });
 #else
 				Local<Value> buffer = Local<Value>::New(cb->value);
-				cb->call({ Integer::New(idx), buffer });
+				cb->call(scope, { Integer::New(idx), buffer });
 #endif
 				delete cb;
 			}
@@ -681,12 +684,12 @@ protected:
 				HANDLE_SCOPE;
 #if NODE_VERSION_AT_LEAST(0, 11, 0)
 				Local<Value> buffer = Local<Value>::New(cb->isolate, cb->value);
-				cb->call({ Integer::New(cb->isolate, idx), Boolean::New(cb->isolate, cksumValid), buffer });
+				cb->call(scope, { Integer::New(cb->isolate, idx), Boolean::New(cb->isolate, cksumValid), buffer });
 #else
 				Local<Value> buffer = Local<Value>::New(cb->value);
 				Local<Value> _idx = Local<Value>::New(Integer::New(idx));
 				Local<Value> _cksumValid = Local<Value>::New(Boolean::New(cksumValid));
-				cb->call({ _idx, _cksumValid, buffer });
+				cb->call(scope, { _idx, _cksumValid, buffer });
 #endif
 				delete cb;
 			}
@@ -711,10 +714,10 @@ protected:
 			if(progressCb.hasCallback) {
 #if NODE_VERSION_AT_LEAST(0, 11, 0)
 				HandleScope scope(progressCb.isolate);
-				progressCb.call({ Integer::New(progressCb.isolate, numInputs) });
+				progressCb.call(scope, { Integer::New(progressCb.isolate, numInputs) });
 #else
 				HandleScope scope;
-				progressCb.call({ Integer::New(numInputs) });
+				progressCb.call(scope, { Integer::New(numInputs) });
 #endif
 			}
 		});
