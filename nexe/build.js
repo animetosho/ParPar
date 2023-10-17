@@ -40,7 +40,10 @@ const copyRecursiveSync = function(src, dest) {
 
 
 // create embeddable help
-fs.writeFileSync('../bin/help.json', JSON.stringify(fs.readFileSync('../help.txt').toString()));
+fs.writeFileSync('../bin/help.json', JSON.stringify({
+	full: fs.readFileSync('../help-full.txt').toString(),
+	short: fs.readFileSync('../help.txt').toString()
+}));
 
 // bundle into a single JS file
 // TODO: maybe explore copying all files instead, instead of bundling

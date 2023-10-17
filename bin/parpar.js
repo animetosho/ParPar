@@ -9,7 +9,7 @@ var cliFormat = process.stderr.isTTY ? function(code, msg) {
 } : function(code, msg) { return msg; };
 var error = function(msg) {
 	console.error(msg);
-	console.error('Enter `' + cliFormat('1', 'parpar --help') + '` for usage information');
+	console.error('Enter `' + cliFormat('1', 'parpar --help') + '` or `' + cliFormat('1', 'parpar --help-full') + '` for usage information');
 	process.exit(1);
 };
 var print_json = function(type, obj) {
@@ -269,6 +269,9 @@ var opts = {
 		alias: '?',
 		type: 'bool'
 	},
+	'help-full': {
+		type: 'bool'
+	},
 	'quiet': {
 		alias: 'q',
 		type: 'bool'
@@ -313,13 +316,13 @@ if(!argv['skip-self-check']) {
 }
 }}*/
 
-if(argv.help) {
+if(argv.help || argv['help-full']) {
 	var helpText;
 	try {
-		helpText = require('./help.json');
+		helpText = require('./help.json')[argv['help-full'] ? 'full':'short'];
 	} catch(x) {
 		// use eval to prevent nexe trying to detect the variable
-		helpText = fs.readFileSync(eval('__'+'dirname') + '/../help.txt').toString();
+		helpText = fs.readFileSync(eval('__'+'dirname') + '/../help' + (argv['help-full'] ? '-full':'') + '.txt').toString();
 	}
 	console.error(helpText.replace(/^ParPar(\r?\n)/, 'ParPar v' + require('../package.json').version + '$1'));
 	process.exit(0);
