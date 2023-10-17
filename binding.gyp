@@ -101,8 +101,10 @@
           "cflags_cc": ["-fexceptions", "-std=c++17"],
           "cxxflags": ["-fexceptions", "-std=c++17"]
         }, {
-          "cflags_cc": ["-fexceptions", "-std=>(cpp_std)"],
-          "cxxflags": ["-fexceptions", "-std=>(cpp_std)"]
+          "conditions": [['OS!="win"', {
+            "cflags_cc": ["-fexceptions", "-std=>(cpp_std)"],
+            "cxxflags": ["-fexceptions", "-std=>(cpp_std)"]
+          }]]
         }]
       ]
     },
