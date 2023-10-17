@@ -1241,6 +1241,14 @@ FUNC(SetHasherOutput) {
 	RETURN_UNDEF;
 }
 
+FUNC(HasherInputMethod) {
+	FUNC_START;
+	RETURN_VAL(NEW_STRING(hasherInput_methodName()));
+}
+FUNC(HasherOutputMethod) {
+	FUNC_START;
+	RETURN_VAL(NEW_STRING(hasherMD5Multi_methodName()));
+}
 
 
 void parpar_gf_init(
@@ -1276,10 +1284,10 @@ void parpar_gf_init(
 	
 	NODE_SET_METHOD(target, "set_HasherInput", SetHasherInput);
 	NODE_SET_METHOD(target, "set_HasherOutput", SetHasherOutput);
+	NODE_SET_METHOD(target, "hasherInput_method", HasherInputMethod);
+	NODE_SET_METHOD(target, "hasherOutput_method", HasherOutputMethod);
 	
 	setup_hasher();
-	SET_OBJ(target, "hasherInput_method", NEW_STRING(hasherInput_methodName()));
-	SET_OBJ(target, "hasherOutput_method", NEW_STRING(hasherMD5Multi_methodName()));
 }
 
 NODE_MODULE(parpar_gf, parpar_gf_init);
