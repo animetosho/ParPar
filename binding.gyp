@@ -28,8 +28,8 @@
         },
         "conditions": [
           ['supports_cpp14!=""',
-            {"variables": {"cpp_std": "c++14"}},
-            {"variables": {"cpp_std": "c++11"}}
+            {"variables": {"cpp_std": ""}},  # use node's default (later versions need C++17 etc)
+            {"variables": {"cpp_std": "-std=c++11"}}
           ],
           ['missing_memalign!=""', {
             "cflags_c": ["-D_POSIX_C_SOURCE=200112L"],
@@ -43,7 +43,7 @@
                 "OTHER_CXXFLAGS": ["-fomit-frame-pointer"]
               }
             }},
-            "cxxflags": ["-std=>(cpp_std)"]
+            "cxxflags": [">(cpp_std)"]
           }, {
             "cflags": ["-fno-omit-frame-pointer", "-fsanitize=address", "-fsanitize=undefined"],
             "cxxflags": ["-fno-omit-frame-pointer", "-fsanitize=address", "-fsanitize=undefined", "-std=c++17"],
@@ -102,8 +102,8 @@
           "cxxflags": ["-fexceptions", "-std=c++17"]
         }, {
           "conditions": [['OS!="win"', {
-            "cflags_cc": ["-fexceptions", "-std=>(cpp_std)"],
-            "cxxflags": ["-fexceptions", "-std=>(cpp_std)"]
+            "cflags_cc": ["-fexceptions", ">(cpp_std)"],
+            "cxxflags": ["-fexceptions", ">(cpp_std)"]
           }]]
         }]
       ]
