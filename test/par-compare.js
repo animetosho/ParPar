@@ -581,7 +581,10 @@ async.timesSeries(allTests.length, function(testNum, cb) {
 	timePP = Date.now();
 	proc.execFile(exeNode, execArgs, function(err, stdout, stderr) {
 		timePP = Date.now() - timePP;
-		if(err) throw err;
+		if(err) {
+			console.error('Error info: ', err);
+			throw err;
+		}
 		
 		var outs = findFiles(tmpDir, /^testout\.vol/);
 		//if(!outs.length || fs.statSync(tmpDir + outs[0]).size < 1)
