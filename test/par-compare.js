@@ -583,6 +583,8 @@ async.timesSeries(allTests.length, function(testNum, cb) {
 		timePP = Date.now() - timePP;
 		if(err) {
 			console.error('Error info: ', err);
+			process.stdout.write(stdout);
+			process.stderr.write(stderr);
 			throw err;
 		}
 		
