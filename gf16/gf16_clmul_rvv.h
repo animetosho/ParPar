@@ -15,6 +15,20 @@ static vuint64m1_t RV(vclmul_vx_u64m1)(vuint64m1_t v, uint64_t x, size_t vl) {
 	}
 	return RV(vle64_v_u64m1)(t, evl);
 }
+static vuint64m1_t RV(vclmul_vv_u64m1)(vuint64m1_t v, vuint64m1_t v2, size_t vl) {
+	size_t evl = RV(vsetvl_e64m1)(vl);
+	uint64_t t[evl];
+	uint64_t t2[evl];
+	RV(vse64_v_u64m1)(t, v, evl);
+	RV(vse64_v_u64m1)(t2, v2, evl);
+	for(size_t i=0; i<evl; i++) {
+		__asm__("clmul %0, %0, %1\n"
+			: "+r"(t[i])
+			: "r"(t2[i])
+			:);
+	}
+	return RV(vle64_v_u64m1)(t, evl);
+}
 
 #elif defined(__RVV_LE) && defined(__riscv_zvbc) && defined(__riscv_v_intrinsic) && __riscv_v_intrinsic>=12000
 # if (defined(__clang__) && __clang_major__>=18)
@@ -29,6 +43,15 @@ HEDLEY_NEVER_INLINE static vuint64m1_t RV(vclmul_vx_u64m1)(vuint64m1_t v, uint64
 			 "vclmul.vx %0,%1,%2\n"
 		: "=vr"(d)
 		: "vr"(v), "r"(x), "r"(vl)
+		: /* No clobbers */);
+	return d;
+}
+HEDLEY_NEVER_INLINE static vuint64m1_t RV(vclmul_vv_u64m1)(vuint64m1_t v, vuint64m1_t v2, size_t vl) {
+	vuint64m1_t d;
+	__asm__ ("vsetivli zero, %3, e64, m1, ta, ma\n"
+			 "vclmul.vv %0,%1,%2\n"
+		: "=vr"(d)
+		: "vr"(v), "vr"(v2), "r"(vl)
 		: /* No clobbers */);
 	return d;
 }
@@ -58,9 +81,9 @@ static HEDLEY_ALWAYS_INLINE vuint16m1_t gf16_clmul_rvv_reduction(vuint64m1_t ra,
 	vuint16m1_t qa16 = RV(vreinterpret_v_u64m1_u16m1)(qa);
 	vuint16m1_t qb16 = RV(vreinterpret_v_u64m1_u16m1)(qb);
 #if defined(__riscv_v_intrinsic) && __riscv_v_intrinsic >= 13000
-	vbool16_t alt = RV(vreinterpret_b16)(RV(vmv_v_x_u16m1)(0xaa, vl));
+	vbool16_t alt = RV(vreinterpret_b16)(RV(vmv_v_x_u8m1)(0xaa, vl));
 #else
-	vuint16m1_t altTmp = RV(vmv_v_x_u16m1)(0xaa, vl);
+	vuint8m1_t altTmp = RV(vmv_v_x_u8m1)(0xaa, vl);
 	vbool16_t alt = *(vbool16_t*)(&altTmp);
 #endif
 #if defined(__riscv_v_intrinsic) && __riscv_v_intrinsic >= 11000

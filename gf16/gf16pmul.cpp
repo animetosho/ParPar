@@ -83,6 +83,16 @@ void setup_pmul() {
 		gf16pmul_blocklen = 32;
 	}
 #endif
+#ifdef __riscv
+	if(!CPU_HAS_VECTOR || !CPU_HAS_GC || 1) gf16pmul_available_rvv = 0;
+	
+	if(gf16pmul_available_rvv) {
+		gf16pmul = &gf16pmul_rvv;
+		gf16pmul_method = GF16PMUL_RVV;
+		gf16pmul_alignment = gf16pmul_rvv_width();
+		gf16pmul_blocklen = gf16pmul_alignment;
+	}
+#endif
 }
 
 const char* gf16pmul_methodName(Galois16PointMulMethods method) {
@@ -93,7 +103,8 @@ const char* gf16pmul_methodName(Galois16PointMulMethods method) {
 		"VPCLMUL",
 		"VPCLMUL+GFNI",
 		"NEON",
-		"SVE2"
+		"SVE2",
+		"RVV+Zvbc"
 	};
 	
 	return names[(int)method];

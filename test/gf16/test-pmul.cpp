@@ -71,6 +71,10 @@ int main(int argc, char** argv) {
 		funcs.push_back({
 			GF16PMUL_SVE2, &gf16pmul_sve2, gf16pmul_sve2_width()*2
 		});
+	if(gf16pmul_available_rvv)
+		funcs.push_back({
+			GF16PMUL_RVV, &gf16pmul_rvv, gf16pmul_rvv_width()
+		});
 	
 	for(int seed : seeds) {
 		// generate source regions + ref

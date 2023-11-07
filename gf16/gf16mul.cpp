@@ -1455,7 +1455,7 @@ Galois16Methods Galois16Mul::default_method(size_t regionSizeHint, unsigned inpu
 			? GF16_CLMUL_NEON : GF16_SHUFFLE_NEON;
 # endif
 #endif
-#ifdef __riscv_
+#ifdef __riscv
 	const GF16CpuCap caps(true);
 	if(caps.hasVector && gf16_available_rvv && gf16_rvv_get_size() >= 16) {
 		if(caps.hasZvbc && gf16_available_rvv_zvbc)

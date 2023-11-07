@@ -11,7 +11,8 @@ enum Galois16PointMulMethods {
 	GF16PMUL_VPCLMUL,
 	GF16PMUL_VPCLMUL_GFNI,
 	GF16PMUL_NEON,
-	GF16PMUL_SVE2
+	GF16PMUL_SVE2,
+	GF16PMUL_RVV
 };
 
 // TODO: consider multi-dest
@@ -38,10 +39,12 @@ _PMUL_DECL(vpclmul);
 _PMUL_DECL(vpclgfni);
 _PMUL_DECL(neon);
 _PMUL_DECL(sve2);
+_PMUL_DECL(rvv);
 
 #undef _PMUL_DECL
 
 unsigned gf16pmul_sve2_width();
+unsigned gf16pmul_rvv_width();
 
 HEDLEY_END_C_DECLS
 
