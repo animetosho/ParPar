@@ -314,6 +314,7 @@ CPU Tuning Options:
                                  clmul-sve2: SVE2 variant of clmul-neon
                              RISC-V only choices:
                                  shuffle128-rvv: RISC-V Vector variant of shuffle128-sve2
+                                 clmul-rvv: RISC-V Zvbc variant of clmul-sve2
                              Default is auto-detected.
        --loop-tile-size      Target size used for loop tiling optimisation.
                              Default is 0 (auto-detected)

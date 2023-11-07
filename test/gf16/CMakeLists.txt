@@ -87,6 +87,7 @@ set(GF16_C_SOURCES
 	${GF16_DIR}/gf16_clmul_neon.c
 	${GF16_DIR}/gf16_clmul_sha3.c
 	${GF16_DIR}/gf16_clmul_sve2.c
+	${GF16_DIR}/gf16_clmul_rvv.c
 	${GF16_DIR}/gf16_lookup.c
 	${GF16_DIR}/gf16_lookup_sse2.c
 	${GF16_DIR}/gf16_shuffle_avx.c
@@ -310,6 +311,11 @@ if(NOT MSVC OR CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
 			set_source_files_properties(${GF16_DIR}/gf_add_rvv.c PROPERTIES COMPILE_OPTIONS -march=rv64gcv)
 			set_source_files_properties(${GF16_DIR}/gf16_cksum_rvv.c PROPERTIES COMPILE_OPTIONS -march=rv64gcv)
 			set_source_files_properties(${GF16_DIR}/gf16_shuffle128_rvv.c PROPERTIES COMPILE_OPTIONS -march=rv64gcv)
+			
+			CHECK_CXX_COMPILER_FLAG("-march=rv64gcv_zvbc1" COMPILER_SUPPORTS_RVV_ZVBC)
+			if(COMPILER_SUPPORTS_RVV_ZVBC)
+				set_source_files_properties(${GF16_DIR}/gf16_clmul_rvv.c PROPERTIES COMPILE_OPTIONS -march=rv64gcv_zvbc1)
+			endif()
 		endif()
 	endif()
 	if(IS_RISCV32)
@@ -318,6 +324,11 @@ if(NOT MSVC OR CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
 			set_source_files_properties(${GF16_DIR}/gf_add_rvv.c PROPERTIES COMPILE_OPTIONS -march=rv32gcv)
 			set_source_files_properties(${GF16_DIR}/gf16_cksum_rvv.c PROPERTIES COMPILE_OPTIONS -march=rv32gcv)
 			set_source_files_properties(${GF16_DIR}/gf16_shuffle128_rvv.c PROPERTIES COMPILE_OPTIONS -march=rv32gcv)
+			
+			CHECK_CXX_COMPILER_FLAG("-march=rv32gcv_zvbc1" COMPILER_SUPPORTS_RVV_ZVBC)
+			if(COMPILER_SUPPORTS_RVV_ZVBC)
+				set_source_files_properties(${GF16_DIR}/gf16_clmul_rvv.c PROPERTIES COMPILE_OPTIONS -march=rv32gcv_zvbc1)
+			endif()
 		endif()
 	endif()
 endif()

@@ -16,39 +16,45 @@ static HEDLEY_ALWAYS_INLINE void gf_add_x_rvv(
 	
 	unsigned vecStride = (unsigned)((uintptr_t)scratch); // abuse this otherwise unused variable
 	
-	if(vecStride == 2) { // only support a vecStride of 2 for now (may eventually support 1 for CLMul)
-		size_t vl = RV(vsetvlmax_e8m2)();
-		for(intptr_t ptr = -(intptr_t)len; ptr; ptr += vl) {
-			vuint8m2_t data = RV(vle8_v_u8m2)(_dst+ptr, vl);
-			
-			#define XOR_LOAD(n) \
-				if(srcCount >= n) \
-					data = RV(vxor_vv_u8m2)(data, RV(vle8_v_u8m2)(_src##n+ptr*srcScale, vl), vl)
-			XOR_LOAD(1);
-			XOR_LOAD(2);
-			XOR_LOAD(3);
-			XOR_LOAD(4);
-			XOR_LOAD(5);
-			XOR_LOAD(6);
-			XOR_LOAD(7);
-			XOR_LOAD(8);
-			XOR_LOAD(9);
-			XOR_LOAD(10);
-			XOR_LOAD(11);
-			XOR_LOAD(12);
-			XOR_LOAD(13);
-			XOR_LOAD(14);
-			XOR_LOAD(15);
-			XOR_LOAD(16);
-			XOR_LOAD(17);
-			XOR_LOAD(18);
-			#undef XOR_LOAD
-			
-			RV(vse8_v_u8m2)(_dst+ptr, data, vl);
-			
-			UNUSED(doPrefetch); UNUSED(_pf);
+	#define XOR_LOAD(n, lmul) \
+		if(srcCount >= n) \
+			data = RV(vxor_vv_u8m ## lmul)(data, RV(vle8_v_u8m ## lmul)(_src##n+ptr*srcScale, vl), vl)
+	#define DO_ADD(lmul) \
+		size_t vl = RV(vsetvlmax_e8m ## lmul)(); \
+		for(intptr_t ptr = -(intptr_t)len; ptr; ptr += vl) { \
+			vuint8m ## lmul ## _t data = RV(vle8_v_u8m ## lmul)(_dst+ptr, vl); \
+			 \
+			XOR_LOAD(1, lmul); \
+			XOR_LOAD(2, lmul); \
+			XOR_LOAD(3, lmul); \
+			XOR_LOAD(4, lmul); \
+			XOR_LOAD(5, lmul); \
+			XOR_LOAD(6, lmul); \
+			XOR_LOAD(7, lmul); \
+			XOR_LOAD(8, lmul); \
+			XOR_LOAD(9, lmul); \
+			XOR_LOAD(10, lmul); \
+			XOR_LOAD(11, lmul); \
+			XOR_LOAD(12, lmul); \
+			XOR_LOAD(13, lmul); \
+			XOR_LOAD(14, lmul); \
+			XOR_LOAD(15, lmul); \
+			XOR_LOAD(16, lmul); \
+			XOR_LOAD(17, lmul); \
+			XOR_LOAD(18, lmul); \
+			 \
+			RV(vse8_v_u8m ## lmul)(_dst+ptr, data, vl); \
 		}
+	
+	UNUSED(doPrefetch); UNUSED(_pf);
+	if(vecStride == 2) { // shuffle
+		DO_ADD(2)
+	} else { // clmul
+		assert(vecStride == 1);
+		DO_ADD(1)
 	}
+	#undef XOR_LOAD
+	#undef DO_ADD
 }
 #endif
 
@@ -79,5 +85,6 @@ void gf_add_multi_packpf_v##vs##i##il##_rvv(unsigned packedRegions, unsigned reg
 #endif
 
 PACKED_FUNC(2, 3, 12)
+PACKED_FUNC(1, 12, 12)
 
 #undef PACKED_FUNC

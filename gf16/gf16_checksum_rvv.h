@@ -74,6 +74,14 @@ static HEDLEY_ALWAYS_INLINE void gf16_checksum_exp_rvv(void *HEDLEY_RESTRICT che
 	}
 	*(vint16m1_t*)checksum = res;
 }
+
+static HEDLEY_ALWAYS_INLINE void gf16_checksum_prepare_rvv(void *HEDLEY_RESTRICT dst, void *HEDLEY_RESTRICT checksum, const size_t blockLen, gf16_transform_block_rst prepareBlock) {
+	int16_t tmp[blockLen/2];
+	memset(tmp, 0, blockLen);
+	RV(vse16_v_i16m1)(tmp, *(vint16m1_t*)checksum, RV(vsetvlmax_e16m1)());
+	
+	prepareBlock(dst, tmp);
+}
 #endif
 
 #endif

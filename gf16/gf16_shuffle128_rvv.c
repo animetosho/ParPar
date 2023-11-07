@@ -233,14 +233,6 @@ static HEDLEY_ALWAYS_INLINE void gf16_finish_blocku_rvv(void *HEDLEY_RESTRICT ds
 	RV(vse8_v_u8m2)((uint8_t*)dst, RV(vle8_v_u8m2)((const uint8_t*)src, vl), vl);
 }
 
-static HEDLEY_ALWAYS_INLINE void gf16_checksum_prepare_rvv(void *HEDLEY_RESTRICT dst, void *HEDLEY_RESTRICT checksum, const size_t blockLen, gf16_transform_block_rst prepareBlock) {
-	int16_t tmp[blockLen/2];
-	memset(tmp, 0, blockLen);
-	RV(vse16_v_i16m1)(tmp, *(vint16m1_t*)checksum, RV(vsetvlmax_e16m1)());
-	
-	prepareBlock(dst, tmp);
-}
-
 #include "gf16_checksum_rvv.h"
 
 // TODO: should align be width of the vector, instead of 16?

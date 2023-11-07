@@ -16,6 +16,7 @@
 FUNCS(neon);
 FUNCS(sha3);
 FUNCS(sve2);
+FUNCS(rvv);
 
 #undef FUNCS
 
@@ -26,8 +27,16 @@ FUNCS(sve2);
 
 FUNCS(neon);
 FUNCS(sve2);
+FUNCS(rvv);
 
 #undef FUNCS
 
+void gf16_clmul_finish_packed_rvv(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t sliceLen, unsigned numOutputs, unsigned outputNum, size_t chunkLen);
+int gf16_clmul_finish_packed_cksum_rvv(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t sliceLen, unsigned numOutputs, unsigned outputNum, size_t chunkLen);
+int gf16_clmul_finish_partial_packsum_rvv(void *HEDLEY_RESTRICT dst, void *HEDLEY_RESTRICT src, size_t sliceLen, unsigned numOutputs, unsigned outputNum, size_t chunkLen, size_t partOffset, size_t partLen);
+
+
+
 int gf16_clmul_init_arm(int polynomial);
 extern int gf16_available_neon_sha3;
+extern int gf16_available_rvv_zvbc;
