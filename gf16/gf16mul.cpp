@@ -222,7 +222,7 @@ struct GF16CpuCap {
 	GF16CpuCap(bool detect) : hasVector(true), hasZvbc(true) {
 		if(!detect) return;
 		hasVector = CPU_HAS_VECTOR && CPU_HAS_GC;
-		hasZvbc = hasVector && false;
+		hasZvbc = hasVector && CPU_HAS_Zvbc;
 	}
 };
 #endif

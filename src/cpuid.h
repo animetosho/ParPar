@@ -157,14 +157,19 @@ static unsigned long getauxval(unsigned long cap) {
 #    include <asm/hwcap.h>
 #   endif
 #  endif
+#  if __has_include(<asm/hwprobe.h>)
+#   include <asm/hwprobe.h>
+#  endif
 # endif
 
 # ifdef PARPAR_SKIP_AUX_CHECK
 #  define CPU_HAS_GC true
 #  define CPU_HAS_VECTOR true
+#  define CPU_HAS_Zvbc true
 # else
 #  define CPU_HAS_GC false
 #  define CPU_HAS_VECTOR false
+#  define CPU_HAS_Zvbc false
 
 #  if defined(AT_HWCAP)
 #   undef CPU_HAS_GC
@@ -172,6 +177,19 @@ static unsigned long getauxval(unsigned long cap) {
 #   undef CPU_HAS_VECTOR
 #   define CPU_HAS_VECTOR (getauxval(AT_HWCAP) & (1 << ('V'-'A')))
 #  endif
+# endif
+# if defined(RISCV_HWPROBE_EXT_ZVBC) && defined(RISCV_HWPROBE_KEY_IMA_EXT_0)
+#  undef CPU_HAS_Zvbc
+static uint64_t pp_hwprobe(uint64_t k) {
+	struct riscv_hwprobe p;
+	p.key = k;
+	if(sys_riscv_hwprobe(&p, 1, 0, NULL, 0)) return 0;
+	return p.value;
+}
+#  define CPU_HAS_Zvbc (pp_hwprobe(RISCV_HWPROBE_KEY_IMA_EXT_0) & RISCV_HWPROBE_EXT_ZVBC)
+# elif defined(RISCV_ISA_EXT_ZVBC)
+#  undef CPU_HAS_Zvbc
+#  define CPU_HAS_Zvbc (getauxval(AT_HWCAP) & (1 << RISCV_ISA_EXT_ZVBC))
 # endif
 
 #endif

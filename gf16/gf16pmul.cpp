@@ -84,7 +84,7 @@ void setup_pmul() {
 	}
 #endif
 #ifdef __riscv
-	if(!CPU_HAS_VECTOR || !CPU_HAS_GC || 1) gf16pmul_available_rvv = 0;
+	if(!CPU_HAS_VECTOR || !CPU_HAS_GC || !CPU_HAS_Zvbc) gf16pmul_available_rvv = 0;
 	
 	if(gf16pmul_available_rvv) {
 		gf16pmul = &gf16pmul_rvv;
