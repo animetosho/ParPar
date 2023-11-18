@@ -178,7 +178,7 @@ std::vector<HasherInputMethods> hasherInput_availableMethods(bool checkCpuid) {
 	return ret;
 }
 #ifdef PARPAR_ENABLE_HASHER_MD5CRC
-std::vector<MD5CRCMethods> hasherMD5CRC_availableMethods(bool checkCpuid) {
+std::vector<MD5CRCMethods> hasherMD5CRC_availableMethods(bool checkCpuid, int types) {
 	(void)checkCpuid;
 	std::vector<MD5CRCMethods> ret;
 	ret.push_back(MD5CRCMETH_SCALAR);
@@ -186,19 +186,19 @@ std::vector<MD5CRCMethods> hasherMD5CRC_availableMethods(bool checkCpuid) {
 #ifdef PLATFORM_X86
 	const HasherCpuCap caps(checkCpuid);
 	if(caps.hasClMul) {
-		if(caps.hasAVX512VLBW && MD5CRC_isAvailable_AVX512)
+		if(caps.hasAVX512VLBW && MD5CRC_isAvailable_AVX512 && (types & HASHER_MD5CRC_TYPE_MD5))
 			ret.push_back(MD5CRCMETH_AVX512);
-		if(MD5CRC_isAvailable_NoLEA)
+		if(MD5CRC_isAvailable_NoLEA && (types & HASHER_MD5CRC_TYPE_MD5))
 			ret.push_back(MD5CRCMETH_NOLEA);
-		if(caps.hasBMI1 && MD5CRC_isAvailable_BMI1)
+		if(caps.hasBMI1 && MD5CRC_isAvailable_BMI1 && (types & HASHER_MD5CRC_TYPE_MD5))
 			ret.push_back(MD5CRCMETH_BMI1);
-		if(MD5CRC_isAvailable_ClMul)
+		if(MD5CRC_isAvailable_ClMul && (types & HASHER_MD5CRC_TYPE_CRC))
 			ret.push_back(MD5CRCMETH_PCLMUL);
 	}
 #endif
 #ifdef PLATFORM_ARM
 	const HasherCpuCap caps(checkCpuid);
-	if(caps.hasCRC && MD5CRC_isAvailable_ARMCRC)
+	if(caps.hasCRC && MD5CRC_isAvailable_ARMCRC && (types & HASHER_MD5CRC_TYPE_CRC))
 		ret.push_back(MD5CRCMETH_ARMCRC);
 #endif
 	

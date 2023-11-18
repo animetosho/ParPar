@@ -47,6 +47,10 @@ public:
 		for(unsigned i=0; i<ctx.size(); i++)
 			ctx[i]->reset();
 	}
+	
+	inline IMD5Multi* _getFirstCtx() const { // only used for testing
+		return ctx[0];
+	}
 };
 
 #endif /* __HASHER_MULTIMD5_H */

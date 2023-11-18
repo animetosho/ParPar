@@ -5,7 +5,9 @@ void setup_hasher();
 
 #ifdef PARPAR_ENABLE_HASHER_MD5CRC
 #include "hasher_md5crc.h"
-std::vector<MD5CRCMethods> hasherMD5CRC_availableMethods(bool checkCpuid);
+#define HASHER_MD5CRC_TYPE_MD5 1
+#define HASHER_MD5CRC_TYPE_CRC 2
+std::vector<MD5CRCMethods> hasherMD5CRC_availableMethods(bool checkCpuid, int types=HASHER_MD5CRC_TYPE_MD5|HASHER_MD5CRC_TYPE_CRC);
 #endif
 
 #include "hasher_input.h"

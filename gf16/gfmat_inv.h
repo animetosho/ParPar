@@ -6,7 +6,7 @@
 #include "../src/stdint.h"
 
 #ifdef PARPAR_INVERT_SUPPORT
-#include "../src/platform.h"
+#include "../src/platform.h"  // for _LE16
 const unsigned PP_INVERT_MAX_MULTI_ROWS = 6; // process up to 6 rows in a multi-mul call
 
 
