@@ -19,6 +19,23 @@ int PAR2ProcOCL::load_runtime() {
 	return 0;
 }
 
+static int parse_ocl_version(const std::string& ver) {
+	// OpenCL gives the string "OpenCL x.y [extra]"
+	const char* p = ver.c_str() + 7;
+	int major = 0, minor = 0;
+	int* majmin = &major;
+	while(1) {
+		if(*p == '.')
+			majmin = &minor;
+		else if(*p >= '0' && *p <= '9') {
+			*majmin *= 10;
+			*majmin += *p - '0';
+		} else break;
+		p++;
+	}
+	// note that we assume 1.20 is newer than 1.2, i.e. not interpreted as a floating point value
+	return major * 1000 + minor;
+}
 
 PAR2ProcOCL::PAR2ProcOCL(IF_LIBUV(uv_loop_t* _loop,) int platformId, int deviceId, int stagingAreas)
 : IPAR2ProcBackend(IF_LIBUV(_loop)), staging(stagingAreas), allocatedSliceSize(0), transferThread(PAR2ProcOCL::transfer_slice) {
@@ -52,6 +69,12 @@ PAR2ProcOCL::PAR2ProcOCL(IF_LIBUV(uv_loop_t* _loop,) int platformId, int deviceI
 	
 	queueEvents.reserve(2);
 	_deviceId = deviceId;
+	
+	oclDevVersion = parse_ocl_version(device.getInfo<CL_DEVICE_VERSION>());
+	
+	cl::Platform platform;
+	getPlatform(platform, platformId);
+	oclPlatVersion = parse_ocl_version(platform.getInfo<CL_PLATFORM_VERSION>());
 }
 
 PAR2ProcOCL::~PAR2ProcOCL() {
@@ -238,6 +261,7 @@ struct transfer_data_ocl {
 	size_t srcLen;
 	unsigned submitInBufs;
 	unsigned inBufId;
+	int oclPlatVersion;
 	NOTIFY_DECL(cbPrep, promPrep);
 	
 	// finish specific
@@ -279,7 +303,7 @@ void PAR2ProcOCL::transfer_slice(ThreadMessageQueue<void*>& q) {
 			NOTIFY_DONE(data, _queueRecv, data->promOut, data->cksumSuccess);
 		} else {
 			if(data->local) {
-				void* remote = data->parent->queue.enqueueMapBuffer(*(data->remote), CL_TRUE, CL_MAP_WRITE_INVALIDATE_REGION, data->remoteOffset, data->totalLen);
+				void* remote = data->parent->queue.enqueueMapBuffer(*(data->remote), CL_TRUE, data->oclPlatVersion>=1002 ? CL_MAP_WRITE_INVALIDATE_REGION : CL_MAP_WRITE, data->remoteOffset, data->totalLen);
 				data->gf->copy_cksum(remote, data->local, data->srcLen, data->sliceLen);
 				data->parent->queue.enqueueUnmapMemObject(*(data->remote), remote);
 			}
@@ -320,6 +344,7 @@ FUTURE_RETURN_T PAR2ProcOCL::_addInput(const void* buffer, size_t size, T inputN
 	data->sliceLen = sliceSize;
 	data->totalLen = sliceSizeCksum;
 	data->gf = gf.get();
+	data->oclPlatVersion = oclPlatVersion;
 	IF_LIBUV(data->cbPrep = cb);
 	
 	currentStagingInputs++;
@@ -366,7 +391,7 @@ void PAR2ProcOCL::dummyInput(uint16_t inputNum, bool flush) {
 }
 
 bool PAR2ProcOCL::fillInput(const void* buffer) {
-	void* remote = queue.enqueueMapBuffer(staging[currentStagingArea].input, CL_TRUE, CL_MAP_WRITE_INVALIDATE_REGION, currentStagingInputs * sliceSizeAligned, sliceSizeAligned);
+	void* remote = queue.enqueueMapBuffer(staging[currentStagingArea].input, CL_TRUE, oclPlatVersion>=1002 ? CL_MAP_WRITE_INVALIDATE_REGION : CL_MAP_WRITE, currentStagingInputs * sliceSizeAligned, sliceSizeAligned);
 	gf->copy_cksum(remote, buffer, sliceSize, sliceSize);
 	queue.enqueueUnmapMemObject(staging[currentStagingArea].input, remote);
 	
@@ -410,6 +435,7 @@ void PAR2ProcOCL::flush() {
 	data->submitInBufs = currentStagingInputs;
 	data->inBufId = currentStagingArea;
 	data->gf = gf.get();
+	data->oclPlatVersion = oclPlatVersion;
 	
 	stagingActiveCount_inc();
 	staging[currentStagingArea].setIsActive(true); // lock this buffer until processing is complete
@@ -448,6 +474,7 @@ FUTURE_RETURN_BOOL_T PAR2ProcOCL::getOutput(unsigned index, void* output  IF_LIB
 	data->sliceLen = sliceSize;
 	data->totalLen = sliceSizeAligned;
 	data->gf = gf.get();
+	data->oclPlatVersion = oclPlatVersion;
 	data->local = output;
 #ifdef USE_LIBUV
 	data->cbOut = cb;

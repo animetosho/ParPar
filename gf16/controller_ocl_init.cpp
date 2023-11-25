@@ -1559,20 +1559,22 @@ bool PAR2ProcOCL::setup_kernels(Galois16OCLMethods method, unsigned targetInputB
 	kernelMulAdd = cl::Kernel(program, "gf16_ocl_kernel");
 	
 	
-	// TODO: check if supports CPU shared memory and use host mem instead?
-	// should probably check for dedicated memory to determine if transferring is needed
+	cl_mem_flags bufferFlags = CL_MEM_READ_ONLY | CL_MEM_ALLOC_HOST_PTR;
+	if(oclPlatVersion >= 1002)
+		bufferFlags |= CL_MEM_HOST_WRITE_ONLY;
 	for(auto& area : staging) {
-		area.input = cl::Buffer(context, CL_MEM_READ_ONLY | CL_MEM_ALLOC_HOST_PTR, inputBatchSize*sliceSizeAligned);
+		area.input = cl::Buffer(context, bufferFlags, inputBatchSize*sliceSizeAligned);
 		if(coeffType != GF16OCL_COEFF_NORMAL) {
-			area.coeffs = cl::Buffer(context, CL_MEM_READ_ONLY | CL_MEM_ALLOC_HOST_PTR, inputBatchSize*sizeof(uint16_t));
+			area.coeffs = cl::Buffer(context, bufferFlags, inputBatchSize*sizeof(uint16_t));
 			area.procCoeffs.resize(inputBatchSize);
 		} else {
-			area.coeffs = cl::Buffer(context, CL_MEM_READ_ONLY | CL_MEM_ALLOC_HOST_PTR, inputBatchSize*numOutputs*sizeof(uint16_t));
+			area.coeffs = cl::Buffer(context, bufferFlags, inputBatchSize*numOutputs*sizeof(uint16_t));
 			area.procCoeffs.resize(inputBatchSize*numOutputs);
 		}
 	}
+	// TODO: check if supports CPU shared memory and use host mem (CL_MEM_USE_HOST_PTR) instead? avoids a transfer when retrieving output; downside is that currently our API works by the caller supplying a buffer to write into, so would be a big change
 	// TODO: need to consider CL_DEVICE_MAX_MEM_ALLOC_SIZE and perhaps break this into multiple allocations
-	buffer_output = cl::Buffer(context, CL_MEM_READ_WRITE, numOutputs*sliceSizeAligned);
+	buffer_output = cl::Buffer(context, CL_MEM_READ_WRITE | (oclPlatVersion>=1002 ? CL_MEM_HOST_READ_ONLY : 0), numOutputs*sliceSizeAligned);
 	
 	workGroupRange = cl::NDRange(wgSize, 1);
 	
@@ -1584,9 +1586,11 @@ bool PAR2ProcOCL::setup_kernels(Galois16OCLMethods method, unsigned targetInputB
 	kernelMulAdd.setArg(0, buffer_output);
 	
 	extra_buffers.clear();
+	cl_mem_flags transBufferFlags = CL_MEM_READ_ONLY;
+	if(oclPlatVersion >= 1002) transBufferFlags |= CL_MEM_HOST_WRITE_ONLY;
 	
 	if(coeffType == GF16OCL_COEFF_LOG) {
-		buffer_outExp = cl::Buffer(context, CL_MEM_READ_ONLY | CL_MEM_ALLOC_HOST_PTR, numOutputs*sizeof(uint16_t));
+		buffer_outExp = cl::Buffer(context, transBufferFlags | CL_MEM_ALLOC_HOST_PTR, numOutputs*sizeof(uint16_t));
 		kernelMul.setArg(3, buffer_outExp);
 		kernelMulAdd.setArg(3, buffer_outExp);
 		kernelMulLast.setArg(4, buffer_outExp);
@@ -1596,7 +1600,7 @@ bool PAR2ProcOCL::setup_kernels(Galois16OCLMethods method, unsigned targetInputB
 	}
 	// if we couldn't embed log tables directly into the source, transfer them now
 	if(tblLog) {
-		const cl::Buffer bufLog(context, CL_MEM_READ_ONLY, tblLogSize*2);
+		const cl::Buffer bufLog(context, transBufferFlags, tblLogSize*2);
 		extra_buffers.push_back(bufLog);
 		kernelMul.setArg(4, bufLog);
 		kernelMulAdd.setArg(4, bufLog);
@@ -1604,7 +1608,7 @@ bool PAR2ProcOCL::setup_kernels(Galois16OCLMethods method, unsigned targetInputB
 		kernelMulAddLast.setArg(5, bufLog);
 		
 		if(tblAntiLog) {
-			extra_buffers.push_back(cl::Buffer(context, CL_MEM_READ_ONLY, tblAntiLogSize*2));
+			extra_buffers.push_back(cl::Buffer(context, transBufferFlags, tblAntiLogSize*2));
 			const cl::Buffer& bufALog = extra_buffers.back();
 			kernelMul.setArg(5, bufALog);
 			kernelMulAdd.setArg(5, bufALog);

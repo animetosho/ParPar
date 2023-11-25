@@ -130,6 +130,8 @@ class PAR2ProcOCL : public IPAR2ProcBackend {
 	size_t bytesPerGroup;
 	size_t wgSize;
 	unsigned outputsPerGroup;
+	int oclPlatVersion; // = major*1000 + minor
+	int oclDevVersion;
 	
 	std::unique_ptr<Galois16Mul> gf;
 	Galois16Methods gfMethod;
