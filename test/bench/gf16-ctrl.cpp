@@ -431,7 +431,7 @@ int main(int argc, char** argv) {
 					if(val == "lookup_half") return GF16OCL_LOOKUP_HALF;
 					if(val == "lookup_nocache") return GF16OCL_LOOKUP_NOCACHE;
 					if(val == "lookup_half_nocache") return GF16OCL_LOOKUP_HALF_NOCACHE;
-					if(val == "lookup2x") return GF16OCL_LOOKUP2X;
+					if(val == "lookup_grp2") return GF16OCL_LOOKUP_GRP2;
 					if(val == "shuffle") return GF16OCL_SHUFFLE;
 					//if(val == "shuffle2") return GF16OCL_SHUFFLE2;
 					if(val == "log") return GF16OCL_LOG;

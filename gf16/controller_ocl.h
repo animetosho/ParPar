@@ -22,6 +22,7 @@ enum Galois16OCLMethods {
 	GF16OCL_LOOKUP_HALF,
 	GF16OCL_LOOKUP_NOCACHE,
 	GF16OCL_LOOKUP_HALF_NOCACHE,
+	GF16OCL_LOOKUP_GRP2,
 	GF16OCL_SHUFFLE,
 	//GF16OCL_SHUFFLE2, // not implemented
 	GF16OCL_LOG,
@@ -39,6 +40,7 @@ static const char* Galois16OCLMethodsText[] = {
 	"Lookup Half",
 	"Lookup (NoCache)",
 	"Lookup Half (NoCache)",
+	"Lookup Group2",
 	"Shuffle",
 	//"Shuffle2",
 	"Log",

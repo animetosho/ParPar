@@ -343,6 +343,7 @@ OpenCL Options:
                                  lookup_half: `lookup` but halved table size
                                  lookup_nc: `lookup` without caching data
                                  lookup_half_nc: `lookup_half` and `lookup_nc`
+                                 lookup_grp2: `lookup` but table holds two results
                                  log: full log/exp table (2x 128KB) lookup
                                  log_small: `log` with 16.25KB exp table
                                  log_small2: `log_small` with 40KB log table
