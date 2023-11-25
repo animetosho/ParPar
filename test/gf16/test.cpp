@@ -344,7 +344,10 @@ int main(int argc, char** argv) {
 								int checksumResult = g.finish_packed_cksum(dst, tmp2, regionSize, 1, 0, regionSizeWithCksum);
 								if(memcmp(dst, ref, regionSize)) {
 									std::cout << "Prepare packed-cksum failure: " << g.info().name << ": srcLen=" << srcLen << ", srcLenLast=" << srcLenLast << ", chunkLen=" << chunkLen << ", inputPackSize=" << inputPackSize << std::endl;
-									display_mem_diff(ref, dst, regionSize/2);
+									int from = display_mem_diff(ref, dst, regionSize/2);
+									int to = (std::min)(from+16, (int)regionSize/2);
+									std::cout << std::endl << "Accum-dst:" << std::endl;
+									print_mem_region(tmp2, from, to);
 									return 1;
 								}
 								if(!checksumResult) {

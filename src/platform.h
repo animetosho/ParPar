@@ -59,13 +59,13 @@
 # define _LE64(x) (x)
 #endif
 
-# ifdef _M_ARM64
+#ifdef _M_ARM64
 	#define __ARM_NEON 1
 	#define __aarch64__ 1
-# endif
-# if defined(_M_ARM)
+#endif
+#if defined(_M_ARM)
 	#define __ARM_NEON 1
-# endif
+#endif
 
 #if defined(_MSC_VER) && !defined(__clang__)
 
