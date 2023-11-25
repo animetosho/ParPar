@@ -27,6 +27,7 @@
   "scripts": {
     "install": "node-gyp rebuild"
   },
+  "type": "commonjs",
   "pkg": {
     "assets": "help*.txt"
   },
