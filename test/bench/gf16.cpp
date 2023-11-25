@@ -478,9 +478,10 @@ int main(int argc, char** argv) {
 				oclMethods = vector_from_comma_list<Galois16OCLMethods>(argv[i] + 2, [=](const std::string& val) -> Galois16OCLMethods {
 					if(val == "lookup") return GF16OCL_LOOKUP;
 					if(val == "lookup_half") return GF16OCL_LOOKUP_HALF;
-					if(val == "lookup_nocache") return GF16OCL_LOOKUP_NOCACHE;
-					if(val == "lookup_half_nocache") return GF16OCL_LOOKUP_HALF_NOCACHE;
+					if(val == "lookup_nc") return GF16OCL_LOOKUP_NOCACHE;
+					if(val == "lookup_half_nc") return GF16OCL_LOOKUP_HALF_NOCACHE;
 					if(val == "lookup_grp2") return GF16OCL_LOOKUP_GRP2;
+					if(val == "lookup_grp2_nc") return GF16OCL_LOOKUP_GRP2_NOCACHE;
 					if(val == "shuffle") return GF16OCL_SHUFFLE;
 					//if(val == "shuffle2") return GF16OCL_SHUFFLE2;
 					if(val == "log") return GF16OCL_LOG;

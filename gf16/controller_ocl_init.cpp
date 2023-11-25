@@ -336,7 +336,7 @@ STRINGIFY(
 		uint val_h = (val>>8) | 0x1000100;
 		return (uint2)(
 			table[val & 0xff] ^ table[val_h & 0x1ff],
-			table[(val>>16) & 0xff] ^ table[(val_h>>16) & 0x1ff]
+			table[(val>>16) & 0xff] ^ table[val_h>>16]
 		);
 	}
 	) "\n#endif\n" STRINGIFY(
@@ -1051,35 +1051,80 @@ STRINGIFY(
 		const memsize_t globalCol = get_local_id(0) + get_group_id(0)*COL_GROUP_SIZE*COL_GROUP_ITERS;
 		
 		// TODO: defer looping to lut_generate (also avoids unnecessary barriers)
-		) "\n#pragma unroll\n" STRINGIFY(
-		for (ushort o = 0; o < numOutputs; o++) {
-			LUT_GENERATE(LUT_REF(lut_table, o*SUBMIT_INPUTS), coeff + COBUF_REF(outBlk+o, 0u), _numInputs);
-		}
+		) "\n#ifdef WRITE_GRP2\n" STRINGIFY(
+			) "\n#pragma unroll\n" STRINGIFY(
+			for (ushort o = 0; o < numOutputs-1; o+=2) {
+				LUT_GENERATE_X2(LUT_REF_X2(lut_table, o*SUBMIT_INPUTS/2), coeff + COBUF_REF(outBlk+o, 0u), _numInputs);
+			}
+			if(numOutputs & 1) {
+				LUT_GENERATE(LUT_REF(lut_table, (numOutputs-1)*SUBMIT_INPUTS), coeff + COBUF_REF(outBlk+(numOutputs-1), 0u), _numInputs);
+			}
+		) "\n#else\n" STRINGIFY(
+			) "\n#pragma unroll\n" STRINGIFY(
+			for (ushort o = 0; o < numOutputs; o++) {
+				LUT_GENERATE(LUT_REF(lut_table, o*SUBMIT_INPUTS), coeff + COBUF_REF(outBlk+o, 0u), _numInputs);
+			}
+		) "\n#endif\n" STRINGIFY(
 		
 		__global val_t* dstBase = dst + WBUF_REF(outBlk, len, globalCol);
 		__global const val_t* srcBase = src + globalCol;
 		for(nat_uint iter=0; iter<COL_GROUP_ITERS; iter++) {
-			val_t result[OUTPUT_GROUPING];
 			val_t val = READ_SRC(srcBase, 0u);
-			) "\n#pragma unroll\n" STRINGIFY(
-			for (ushort o = 0; o < numOutputs; o++) {
-				result[o] = LUT_MULTIPLY(LUT_REF(lut_table, o*SUBMIT_INPUTS), val);
-			}
+			) "\n#ifdef WRITE_GRP2\n" STRINGIFY(
+				uint2 result[OUTPUT_GROUPING/2];
+				uint resultLast;
+				) "\n#pragma unroll\n" STRINGIFY(
+				for (ushort o = 0; o < numOutputs/2; o++) {
+					result[o] = LUT_MULTIPLY_X2(LUT_REF_X2(lut_table, o*SUBMIT_INPUTS), val);
+				}
+				if(numOutputs & 1)
+					resultLast = LUT_MULTIPLY(LUT_REF(lut_table, (numOutputs-1)*SUBMIT_INPUTS), val);
+			) "\n#else\n" STRINGIFY(
+				val_t result[OUTPUT_GROUPING];
+				) "\n#pragma unroll\n" STRINGIFY(
+				for (ushort o = 0; o < numOutputs; o++) {
+					result[o] = LUT_MULTIPLY(LUT_REF(lut_table, o*SUBMIT_INPUTS), val);
+				}
+			) "\n#endif\n" STRINGIFY(
+			
 			__global const val_t* srcIterBase = srcBase;
 			for (ushort i = 1; i < _numInputs; i++) {
 				srcIterBase += len;
 				val = READ_SRC(srcIterBase, 0u);
-				) "\n#pragma unroll\n" STRINGIFY(
-				for (ushort o = 0; o < numOutputs; o++) {
-					result[o] ^= LUT_MULTIPLY(LUT_REF(lut_table, o*SUBMIT_INPUTS+i), val);
-				}
+				) "\n#ifdef WRITE_GRP2\n" STRINGIFY(
+					) "\n#pragma unroll\n" STRINGIFY(
+					for (ushort o = 0; o < numOutputs/2; o++) {
+						result[o] ^= LUT_MULTIPLY_X2(LUT_REF_X2(lut_table, o*SUBMIT_INPUTS+i), val);
+					}
+					if(numOutputs & 1)
+						resultLast ^= LUT_MULTIPLY(LUT_REF(lut_table, (numOutputs-1)*SUBMIT_INPUTS+i), val);
+				) "\n#else\n" STRINGIFY(
+					) "\n#pragma unroll\n" STRINGIFY(
+					for (ushort o = 0; o < numOutputs; o++) {
+						result[o] ^= LUT_MULTIPLY(LUT_REF(lut_table, o*SUBMIT_INPUTS+i), val);
+					}
+				) "\n#endif\n" STRINGIFY(
 			}
 			__global val_t* dstIterBase = dstBase;
-			) "\n#pragma unroll\n" STRINGIFY(
-			for (ushort o = 0; o < numOutputs; o++) {
-				WRITE_DST(dstIterBase, 0u, result[o]);
-				dstIterBase += len;
-			}
+			) "\n#ifdef WRITE_GRP2\n" STRINGIFY(
+				) "\n#pragma unroll\n" STRINGIFY(
+				for (ushort o = 0; o < numOutputs/2; o++) {
+					uint result1 = upsample((ushort)(result[o][1] & 0xffff), (ushort)(result[o][0] & 0xffff));
+					uint result2 = upsample((ushort)(result[o][1] >> 16), (ushort)(result[o][0] >> 16));
+					WRITE_DST(dstIterBase, 0u, result1);
+					WRITE_DST(dstIterBase, len, result2);
+					dstIterBase += len*2;
+				}
+				if(numOutputs & 1) {
+					WRITE_DST(dstIterBase, 0u, resultLast);
+				}
+			) "\n#else\n" STRINGIFY(
+				) "\n#pragma unroll\n" STRINGIFY(
+				for (ushort o = 0; o < numOutputs; o++) {
+					WRITE_DST(dstIterBase, 0u, result[o]);
+					dstIterBase += len;
+				}
+			) "\n#endif\n" STRINGIFY(
 			
 			srcBase += COL_GROUP_SIZE;
 			dstBase += COL_GROUP_SIZE;
@@ -1099,7 +1144,12 @@ const static char _ocl_kernel_lut[] = STRINGIFY({
 		) "\n#endif\n" STRINGIFY(
 	) "\n#endif\n" STRINGIFY(
 	
-	LUT_DECLARATION(lut_table, SUBMIT_INPUTS*OUTPUT_GROUPING);
+	) "\n#ifdef WRITE_GRP2\n" STRINGIFY(
+		LUT_DECLARATION_X2(lut_table, SUBMIT_INPUTS*OUTPUT_GROUPING/2);
+	) "\n#else\n" STRINGIFY(
+		LUT_DECLARATION(lut_table, SUBMIT_INPUTS*OUTPUT_GROUPING);
+	) "\n#endif\n" STRINGIFY(
+	
 	if(!isPartialOutputsThread) {
 		) "\n#if OUTPUTS_PER_THREAD > OUTPUT_GROUPING\n" STRINGIFY(
 		for (; outBlk < OUTPUTS_PER_THREAD - OUTPUT_GROUPING + 1; outBlk += OUTPUT_GROUPING) {
@@ -1185,7 +1235,7 @@ GF16OCL_MethodInfo PAR2ProcOCL::info(Galois16OCLMethods method) {
 	break;
 	case GF16OCL_LOOKUP_GRP2:
 		ret.usesOutGrouping = false;
-		ret.idealInBatch = 3; // TODO: tweak these
+		ret.idealInBatch = 4;
 		ret.idealIters = 2;
 	break;
 	case GF16OCL_LOOKUP:
@@ -1198,6 +1248,10 @@ GF16OCL_MethodInfo PAR2ProcOCL::info(Galois16OCLMethods method) {
 	case GF16OCL_LOOKUP_HALF_NOCACHE:
 		ret.idealInBatch = 4;
 		ret.idealIters = 8; // generally little reason not to do multiple iters
+	break;
+	case GF16OCL_LOOKUP_GRP2_NOCACHE:
+		ret.idealInBatch = 6;
+		ret.idealIters = 2;
 	break;
 	default: break; // prevent compiler warning
 	}
@@ -1359,9 +1413,11 @@ bool PAR2ProcOCL::setup_kernels(Galois16OCLMethods method, unsigned targetInputB
 	case GF16OCL_LOOKUP_NOCACHE:
 	case GF16OCL_LOOKUP_HALF_NOCACHE:
 	case GF16OCL_LOOKUP_GRP2:
+	case GF16OCL_LOOKUP_GRP2_NOCACHE:
 	default:
-		if(method == GF16OCL_LOOKUP_GRP2) {
-			outputsPerThread += outputsPerThread & 1; // outputsPerThread must be a multiple of two
+		if(method == GF16OCL_LOOKUP_GRP2 || method == GF16OCL_LOOKUP_GRP2_NOCACHE) {
+			if(method == GF16OCL_LOOKUP_GRP2)
+				outputsPerThread += outputsPerThread & 1; // outputsPerThread must be a multiple of two
 			sourceStream << "#define WRITE_GRP2 1\n";
 			infoShortVecSize = 2; // only supported on 32b
 			// recompute the two variables dependent on infoShortVecSize
@@ -1369,7 +1425,7 @@ bool PAR2ProcOCL::setup_kernels(Galois16OCLMethods method, unsigned targetInputB
 			sizePerWorkGroup = threadWordSize * wgSize;
 		}
 		
-		if(method == GF16OCL_LOOKUP_NOCACHE || method == GF16OCL_LOOKUP_HALF_NOCACHE) {
+		if(method == GF16OCL_LOOKUP_NOCACHE || method == GF16OCL_LOOKUP_HALF_NOCACHE || method == GF16OCL_LOOKUP_GRP2_NOCACHE) {
 			unsigned tables = (unsigned)(deviceLocalSize / (method == GF16OCL_LOOKUP_HALF_NOCACHE ? 512 : 1024));
 			if(tables >= 96)
 				inputBatchSize = 8;
@@ -1381,6 +1437,9 @@ bool PAR2ProcOCL::setup_kernels(Galois16OCLMethods method, unsigned targetInputB
 				inputBatchSize = 2;
 			outputsPerGroup = tables / inputBatchSize;
 			if(outputsPerGroup > 16) outputsPerGroup = 16;
+			if(method == GF16OCL_LOOKUP_GRP2_NOCACHE && outputsPerGroup > 1) {
+				outputsPerGroup &= ~1; // must be a multiple of 2 if outputs are written in pairs
+			}
 			
 			if(targetInputBatch) inputBatchSize = targetInputBatch;
 			kernelCode = _ocl_kernel_lut;
@@ -1451,7 +1510,7 @@ bool PAR2ProcOCL::setup_kernels(Galois16OCLMethods method, unsigned targetInputB
 			if(wgSize < minWgSize) wgSize = minWgSize;
 		}
 	}
-	if(method == GF16OCL_LOOKUP || method == GF16OCL_LOOKUP_HALF || method == GF16OCL_LOOKUP_NOCACHE || method == GF16OCL_LOOKUP_HALF_NOCACHE || method == GF16OCL_LOOKUP_GRP2) {
+	if(method == GF16OCL_LOOKUP || method == GF16OCL_LOOKUP_HALF || method == GF16OCL_LOOKUP_NOCACHE || method == GF16OCL_LOOKUP_HALF_NOCACHE || method == GF16OCL_LOOKUP_GRP2 || method == GF16OCL_LOOKUP_GRP2_NOCACHE) {
 		// lookup method assumes workgroup is a power of two
 		wgSize = round_down_pow2(wgSize);
 	}
