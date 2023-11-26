@@ -298,24 +298,47 @@ STRINGIFY(
 			prod ^= SHIFT_TOP_BIT(a) & coeffPair;
 		}
 		
+		uint coeff2Pair = ((coeffPair + coeffPair) & ~VECT_ONE) ^ SPREAD_POLY(coeffPair);
 		table[val] = prod;
 		table[val+1] = prod ^ coeffPair;
+		table[val+2] = prod ^ coeff2Pair;
+		table[val+3] = prod ^ coeff2Pair ^ coeffPair;
 		
-		// multiply prod by 256
+		uint coeff512Pair = ((coeff256Pair + coeff256Pair) & ~VECT_ONE) ^ SPREAD_POLY(coeff256Pair);
 		uint prod256 = lh_mul256_x2(prod);
 		table[val + 256] = prod256;
 		table[val + 257] = prod256 ^ coeff256Pair;
+		table[val + 258] = prod256 ^ coeff512Pair;
+		table[val + 259] = prod256 ^ coeff512Pair ^ coeff256Pair;
+		
+		/* dynamic number of entries idea:
+		for(int i=0; i<numEnt; i++) {
+			table[val+i] = prod;
+			table[val+i + 256] = prod256;
+		}
+		uint _coeffPair = coeffPair;
+		uint _coeff256Pair = coeff256Pair;
+		for(int b=1; b<numEnt; b<<=1) {
+			for(int i=b; i<numEnt; i+=b<<1)
+				for(int j=0; j<b; j++) {
+					table[val+i+j] ^= _coeffPair;
+					table[val+i+j + 256] ^= _coeff256Pair;
+				}
+			_coeffPair = ((_coeffPair + _coeffPair) & ~VECT_ONE) ^ SPREAD_POLY(_coeffPair);
+			_coeff256Pair = ((_coeff256Pair + _coeff256Pair) & ~VECT_ONE) ^ SPREAD_POLY(_coeff256Pair);
+		}
+		*/
 	}
 	
 	void compute_lhtable_x2(__local nat_uint* table, __global const ushort* restrict coeffs, const ushort numInputs) {
 		barrier(CLK_LOCAL_MEM_FENCE);
 		
-		const nat_uint localOffset = get_local_id(0)*2;
+		const nat_uint localOffset = get_local_id(0)*4;
 		
 		// assume workgroup size is a power of 2
-		) "\n#if COL_GROUP_SIZE*2 > 256\n" STRINGIFY(
+		) "\n#if COL_GROUP_SIZE*4 > 256\n" STRINGIFY(
 		// process multiple coefficients at a time
-		for(nat_uint coeffBase=0; coeffBase<numInputs; coeffBase+=(COL_GROUP_SIZE*2/256)) {
+		for(nat_uint coeffBase=0; coeffBase<numInputs; coeffBase+=(COL_GROUP_SIZE*4/256)) {
 			const nat_uint coeffI = coeffBase + localOffset/256;
 			if(coeffI < numInputs) {
 				const ushort coeffA = coeffs[COBUF_REF(0, coeffI)];
@@ -340,7 +363,7 @@ STRINGIFY(
 			const uint coeff256Pair = lh_mul256_x2(coeffPair);
 			__local nat_uint* nat_table = table + coeffI*512;
 			) "\n#pragma unroll\n" STRINGIFY(
-			for(nat_uint valI=0; valI<256; valI+=COL_GROUP_SIZE*2) {
+			for(nat_uint valI=0; valI<256; valI+=COL_GROUP_SIZE*4) {
 				gf16_multiply_write_lh_x2(nat_table, valI + localOffset, coeffPair, coeff256Pair);
 			}
 		}
