@@ -48,18 +48,21 @@ const static char _ocl_defines[] =
 "#endif\n"
 "#if VECT_WIDTH == 1\n"
 " #define VECT_ONE 0x0001u\n"
+" #define SPREAD_POLY(v) (((short)(v) >> 15) & GF16_POLYNOMIAL)\n"
 " #define nat_ushort4 ushort4\n"
 " #define nat_uint ushort\n"
 " #define nat_int short\n"
 " #define NAT_BITS 16\n"
 "#elif VECT_WIDTH == 2\n"
 " #define VECT_ONE 0x00010001ul\n"
+" #define SPREAD_POLY(v) mul24(((v) >> 15) & VECT_ONE, GF16_POLYNOMIAL & 0xffff)\n"
 " #define nat_ushort4 uint2\n"
 " #define nat_uint uint\n"
 " #define nat_int int\n"
 " #define NAT_BITS 32\n"
 "#elif VECT_WIDTH == 4 || VECT_WIDTH == 8\n"
 " #define VECT_ONE (ulong)0x0001000100010001ull\n" // Nvidia driver on Linux for 8400GS seems to need the explicit ulong cast
+" #define SPREAD_POLY(v) ((((v) >> 15) & VECT_ONE) * (GF16_POLYNOMIAL & 0xffff))\n"
 " #define nat_ushort4 ulong\n"
 " #define nat_uint ulong\n"
 " #define nat_int long\n"
@@ -101,7 +104,7 @@ const static char _ocl_method_by2[] =
 		val_t res = SHIFT_TOP_BIT(btmp) & a;
 		) "\n#pragma unroll\n" STRINGIFY(
 		for(int i=0; i<15; i++) {
-			val_t poly = ((res >> 15) & VECT_ONE) * (GF16_POLYNOMIAL & 0xffff);
+			val_t poly = SPREAD_POLY(res);
 			res = ((res + res) & ~VECT_ONE) ^ poly;
 			btmp <<= 1;
 			res ^= SHIFT_TOP_BIT(btmp) & a;
@@ -128,9 +131,22 @@ STRINGIFY(
 	// always writes 4 entries to table
 	// requires val < 256 (used for lhtable calculation)
 	void gf16_multiply_write_lh(__local nat_uint* table, nat_uint val, nat_uint coeff, nat_ushort4 coeff256) {
+		nat_int b = coeff << (NAT_BITS - 16);
+		) "\n#if VECT_WIDTH >= 2\n" STRINGIFY(
+		
+		nat_uint prod = 0;
+		// do a clmul, then use a lookup to do the reduction
+		) "\n#pragma unroll\n" STRINGIFY(
+		for(uint i=1; i<256; i<<=1)
+			prod ^= mul24((uint)(val & i), (uint)coeff);
+		prod ^= mul256poly[prod >> 16];
+		// align to top to be compatible with old code (also conveniently discards upper bits)
+		prod <<= NAT_BITS - 16;
+		
+		) "\n#else\n" STRINGIFY(
+		
 		// align a and b to the top so that the top-bit can be replicated with a single arithmetic right-shift
 		nat_int a = val << (NAT_BITS - 8);
-		nat_int b = coeff << (NAT_BITS - 16);
 		nat_int prod = SHIFT_TOP_BIT(a) & b;
 		) "\n#pragma unroll\n" STRINGIFY(
 		for(int i=0; i<7; i++) {
@@ -139,6 +155,8 @@ STRINGIFY(
 			a <<= 1;
 			prod ^= SHIFT_TOP_BIT(a) & b;
 		}
+		
+		) "\n#endif\n" STRINGIFY(
 		
 		// multiply b by 2 (aligned to top)
 		nat_uint b2 = (b << 1) ^ (SHIFT_TOP_BIT(b) & ((nat_uint)(GF16_POLYNOMIAL & 0xffff) << (NAT_BITS-16)));
@@ -274,7 +292,7 @@ STRINGIFY(
 		uint prod = SHIFT_TOP_BIT(a) & coeffPair;
 		) "\n#pragma unroll\n" STRINGIFY(
 		for(int i=0; i<7; i++) {
-			uint poly = ((prod >> 15) & VECT_ONE) * (GF16_POLYNOMIAL & 0xffff);
+			uint poly = SPREAD_POLY(prod);
 			prod = ((prod + prod) & ~VECT_ONE) ^ poly;
 			a <<= 1;
 			prod ^= SHIFT_TOP_BIT(a) & coeffPair;
@@ -355,8 +373,19 @@ STRINGIFY(
 	// as gf16_multiply_write_lh, but doesn't write 256x entries
 	void gf16_multiply_write_ll(__local nat_uint* table, nat_uint val, nat_uint coeff) {
 		// align a and b to the top so that the top-bit can be replicated with a single arithmetic right-shift
-		nat_int a = val << (NAT_BITS - 8);
 		nat_int b = coeff << (NAT_BITS - 16);
+		) "\n#if VECT_WIDTH >= 2\n" STRINGIFY(
+		
+		nat_uint prod = 0;
+		) "\n#pragma unroll\n" STRINGIFY(
+		for(uint i=1; i<256; i<<=1)
+			prod ^= mul24((uint)(val & i), (uint)coeff);
+		prod ^= mul256poly[prod >> 16];
+		prod <<= NAT_BITS - 16;
+		
+		) "\n#else\n" STRINGIFY(
+		
+		nat_int a = val << (NAT_BITS - 8);
 		nat_int prod = SHIFT_TOP_BIT(a) & b;
 		) "\n#pragma unroll\n" STRINGIFY(
 		for(int i=0; i<7; i++) {
@@ -365,6 +394,8 @@ STRINGIFY(
 			a <<= 1;
 			prod ^= SHIFT_TOP_BIT(a) & b;
 		}
+		
+		) "\n#endif\n" STRINGIFY(
 		
 		// multiply by 2 (aligned to top)
 		nat_uint b2 = (b << 1) ^ (SHIFT_TOP_BIT(b) & ((nat_uint)(GF16_POLYNOMIAL & 0xffff) << (NAT_BITS-16)));
