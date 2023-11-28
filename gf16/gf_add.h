@@ -11,7 +11,7 @@ void gf_add_multi_sve2(unsigned regions, size_t offset, void *HEDLEY_RESTRICT ds
 void gf_add_multi_rvv(unsigned regions, size_t offset, void *HEDLEY_RESTRICT dst, const void* const*HEDLEY_RESTRICT src, size_t len);
 
 
-#define FUNCS(v) \
+#define FUNCS(f) \
 	void gf_add_multi_packed_##f(unsigned packRegions, unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len); \
 	void gf_add_multi_packpf_##f(unsigned packRegions, unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, const void* HEDLEY_RESTRICT prefetchIn, const void* HEDLEY_RESTRICT prefetchOut)
 

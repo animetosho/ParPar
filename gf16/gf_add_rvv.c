@@ -76,7 +76,7 @@ void gf_add_multi_packpf_v##vs##i##il##_rvv(unsigned packedRegions, unsigned reg
 	gf16_muladd_multi_packpf((void*)vs, &gf_add_x_rvv, il, it, packedRegions, regions, dst, src, len, RV(vsetvlmax_e8m1)()*vs, NULL, vs>1, prefetchIn, prefetchOut); \
 }
 #else
-# define PACKED_FUNC(...) PACKED_STUB(rvv, __VA_ARGS__)
+# define PACKED_FUNC(vs, il, it) PACKED_STUB(rvv, vs, il, it)
 #endif
 
 PACKED_FUNC(2, 3, 12)

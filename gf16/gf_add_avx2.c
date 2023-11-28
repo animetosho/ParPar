@@ -41,7 +41,7 @@ void gf_add_multi_packpf_v##vs##i##il##_avx2(unsigned packedRegions, unsigned re
 	_mm256_zeroupper(); \
 }
 #else
-# define PACKED_FUNC(...) PACKED_STUB(avx2, __VA_ARGS__)
+# define PACKED_FUNC(vs, il, it) PACKED_STUB(avx2, vs, il, it)
 #endif
 
 PACKED_FUNC_NOTSLIM(avx2, 1, 2, 8)

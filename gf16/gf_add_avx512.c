@@ -44,7 +44,7 @@ void gf_add_multi_packpf_v##vs##i##il##_avx512(unsigned packedRegions, unsigned 
 }
 
 #else
-# define PACKED_FUNC(...) PACKED_STUB(avx512, __VA_ARGS__)
+# define PACKED_FUNC(vs, il, it) PACKED_STUB(avx512, vs, il, it)
 #endif
 
 #ifdef PLATFORM_AMD64

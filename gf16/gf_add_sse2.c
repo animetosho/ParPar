@@ -39,16 +39,16 @@ void gf_add_multi_packpf_v##vs##i##il##_sse2(unsigned packedRegions, unsigned re
 	gf16_muladd_multi_packpf((void*)vs, &gf_add_x_sse2, il, it, packedRegions, regions, dst, src, len, sizeof(__m128i)*vs, NULL, vs>1, prefetchIn, prefetchOut); \
 }
 #else
-# define PACKED_FUNC(...) PACKED_STUB(sse2, __VA_ARGS__)
+# define PACKED_FUNC(vs, il, it) PACKED_STUB(sse2, vs, il, it)
 #endif
 
 #ifdef PLATFORM_AMD64
 PACKED_FUNC_NOTSLIM(sse2, 1, 6, 18)
+PACKED_FUNC(2, 3, 12)
 #else
 PACKED_FUNC_NOTSLIM(sse2, 1, 2, 8)
 #endif
 PACKED_FUNC(2, 1, 4)
-PACKED_FUNC(2, 3, 12)
 PACKED_FUNC(16, 1, 4)
 
 #undef PACKED_FUNC

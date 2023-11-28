@@ -8,7 +8,7 @@ void gf_add_multi_packpf_v##vs##i##il##_##suf(unsigned packedRegions, unsigned r
 }
 
 #ifndef PARPAR_SLIM_GF16
-# define PACKED_FUNC_NOTSLIM(suf, ...) PACKED_FUNC(__VA_ARGS__)
+# define PACKED_FUNC_NOTSLIM(suf, vs, il, it) PACKED_FUNC(vs, il, it)
 #else
 # define PACKED_FUNC_NOTSLIM PACKED_STUB
 #endif

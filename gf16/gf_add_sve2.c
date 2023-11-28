@@ -65,7 +65,7 @@ void gf_add_multi_packpf_v##vs##i##il##_sve2(unsigned packedRegions, unsigned re
 	gf16_muladd_multi_packpf((void*)vs, &gf_add_x_sve2, il, it, packedRegions, regions, dst, src, len, svcntb()*vs, NULL, vs>1, prefetchIn, prefetchOut); \
 }
 #else
-# define PACKED_FUNC(...) PACKED_STUB(sve2, __VA_ARGS__)
+# define PACKED_FUNC(vs, il, it) PACKED_STUB(sve2, vs, il, it)
 #endif
 
 PACKED_FUNC_NOTSLIM(sve2, 1, 6, 18)
