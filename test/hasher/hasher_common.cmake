@@ -36,6 +36,7 @@ set(HASHER_CPP_SOURCES
 	${HASHER_DIR}/hasher_sse.cpp
 	${HASHER_DIR}/hasher_sve2.cpp
 	${HASHER_DIR}/hasher_xop.cpp
+	${HASHER_DIR}/tables.cpp
 )
 
 include_directories(${HASHER_DIR})
