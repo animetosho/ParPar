@@ -144,9 +144,9 @@ struct gf16_xor_scratch {
 
 
 #ifdef __SSE2__
-typedef void*(*gf16_xorjit_write_func)(const struct gf16_xor_scratch *HEDLEY_RESTRICT scratch, uint8_t *HEDLEY_RESTRICT jitptr, uint16_t val, const int xor, const int prefetch);
-static HEDLEY_ALWAYS_INLINE void gf16_xorjit_write_jit(const void *HEDLEY_RESTRICT scratch, uint16_t coefficient, jit_wx_pair* jit, const int mode, const int prefetch, gf16_xorjit_write_func writeFunc) {
-	const struct gf16_xor_scratch *HEDLEY_RESTRICT info = (const struct gf16_xor_scratch*)scratch;
+typedef void*(*gf16_xorjit_write_func)(const void *HEDLEY_RESTRICT scratch, uint8_t *HEDLEY_RESTRICT jitptr, uint16_t val, const int xor, const int prefetch);
+static HEDLEY_ALWAYS_INLINE void gf16_xorjit_write_jit(const void* scratch, uint16_t coefficient, jit_wx_pair* jit, const int mode, const int prefetch, gf16_xorjit_write_func writeFunc, const void* funcScratch) {
+	const struct gf16_xor_scratch* info = (const struct gf16_xor_scratch*)scratch;
 	uint8_t* jitWPtr = (uint8_t*)jit->w;
 	uint8_t* jitptr;
 	if(mode == XORDEP_JIT_MODE_MUL_INSITU) {
@@ -172,7 +172,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_xorjit_write_jit(const void *HEDLEY_RESTRI
 		else
 			jitptr = jitTemp;
 		
-		jitptr = writeFunc(info, jitptr, coefficient, mode, prefetch);
+		jitptr = writeFunc(funcScratch, jitptr, coefficient, mode, prefetch);
 		write32(jitptr, (int32_t)((intptr_t)jitTemp - copyOffset - (intptr_t)jitptr -4));
 		jitptr[4] = 0xC3; /* ret */
 		jitptr += 5;
@@ -219,7 +219,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_xorjit_write_jit(const void *HEDLEY_RESTRI
 			for(int i=0; i<XORDEP_JIT_CODE_SIZE; i+=64)
 				jitptr[i] = 0;
 		}
-		jitptr = writeFunc(info, jitptr, coefficient, mode, prefetch);
+		jitptr = writeFunc(funcScratch, jitptr, coefficient, mode, prefetch);
 		write32(jitptr, (int32_t)(jitWPtr - jitptr -4));
 		jitptr[4] = 0xC3; /* ret */
 	}

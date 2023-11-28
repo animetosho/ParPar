@@ -368,7 +368,8 @@ static HEDLEY_ALWAYS_INLINE int xor_avx512_merge_part(uint8_t *HEDLEY_RESTRICT j
 }
 
 
-static inline void* xor_write_jit_avx512(const struct gf16_xor_scratch *HEDLEY_RESTRICT scratch, uint8_t *HEDLEY_RESTRICT jitptr, uint16_t val, const int mode, const int prefetch) {
+static inline void* xor_write_jit_avx512(const void *HEDLEY_RESTRICT _scratch, uint8_t *HEDLEY_RESTRICT jitptr, uint16_t val, const int mode, const int prefetch) {
+	const struct gf16_xor_scratch *HEDLEY_RESTRICT scratch = (const struct gf16_xor_scratch*)_scratch;
 	uint_fast32_t bit;
 	
 	__m256i depmask = _mm256_load_si256((__m256i*)scratch->deps + (val & 0xf)*4);
@@ -749,7 +750,7 @@ static void* xor_write_jit_avx512_multi(const struct gf16_xor_scratch *HEDLEY_RE
 
 static HEDLEY_ALWAYS_INLINE void gf16_xor_jit_mul_avx512_base(const void *HEDLEY_RESTRICT scratch, void* dst, const void* src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch, const int mode, const int doPrefetch, const void *HEDLEY_RESTRICT prefetch) {
 	jit_wx_pair* jit = (jit_wx_pair*)mutScratch;
-	gf16_xorjit_write_jit(scratch, coefficient, jit, mode, doPrefetch, &xor_write_jit_avx512);
+	gf16_xorjit_write_jit(scratch, coefficient, jit, mode, doPrefetch, &xor_write_jit_avx512, scratch);
 	
 	gf16_xor512_jit_stub(
 		(intptr_t)dst - 1024,

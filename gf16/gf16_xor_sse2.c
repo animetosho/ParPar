@@ -28,43 +28,43 @@ static HEDLEY_ALWAYS_INLINE size_t _jit_xorps_mod(uint8_t* jit, uint8_t xreg, ui
 	return p+4;
 }
 
-/* code lookup tables for XOR-JIT; align to 64 to maximize cache line usage */
-// TODO: for 32-bit, consider interleaving register sourced items more
-ALIGN_TO(64, __m128i xor_jit_clut_code1[64]);
-ALIGN_TO(64, __m128i xor_jit_clut_code2[64]);
+struct gf16_xor_jit_scratch_sse2 {
+	/* code lookup tables for XOR-JIT; should align to 64 to maximize cache line usage */
+	// TODO: for 32-bit, consider interleaving register sourced items more
+	ALIGN_TO(16, __m128i clut_code1[64]);
+	ALIGN_TO(16, __m128i clut_code2[64]);
 #ifdef PLATFORM_AMD64
-ALIGN_TO(64, __m128i xor_jit_clut_code3[16]);
-ALIGN_TO(64, __m128i xor_jit_clut_code4[64]);
+	ALIGN_TO(16, __m128i clut_code3[16]);
+	ALIGN_TO(16, __m128i clut_code4[64]);
 #else
-ALIGN_TO(64, __m128i xor_jit_clut_code3[64]);
-ALIGN_TO(64, __m128i xor_jit_clut_code4[16]);
+	ALIGN_TO(16, __m128i clut_code3[64]);
+	ALIGN_TO(16, __m128i clut_code4[16]);
 #endif
-ALIGN_TO(64, __m128i xor_jit_clut_code5[64]);
-ALIGN_TO(64, __m128i xor_jit_clut_code6[16]);
-ALIGN_TO(64, uint16_t xor_jit_clut_info_mem[64]);
-ALIGN_TO(64, uint16_t xor_jit_clut_info_reg[64]);
+	ALIGN_TO(16, __m128i clut_code5[64]);
+	ALIGN_TO(16, __m128i clut_code6[16]);
+	ALIGN_TO(16, uint16_t clut_info_mem[64]);
+	ALIGN_TO(16, uint16_t clut_info_reg[64]);
+	
+	ALIGN_TO(16, __m128i clut_nocomm[8*16]);
+	ALIGN_TO(16, uint16_t clut_ncinfo_mem[15]);
+	ALIGN_TO(16, uint16_t clut_ncinfo_rm[15]);
+	ALIGN_TO(16, uint16_t clut_ncinfo_reg[15]);
+	
+	struct gf16_xor_scratch s;
+};
 
 // seems like the no-common optimisation isn't worth it, so disable it by default
 #define XORDEP_DISABLE_NO_COMMON 1
-ALIGN_TO(64, __m128i xor_jit_clut_nocomm[8*16]);
-ALIGN_TO(16, uint16_t xor_jit_clut_ncinfo_mem[15]);
-ALIGN_TO(16, uint16_t xor_jit_clut_ncinfo_rm[15]);
-ALIGN_TO(16, uint16_t xor_jit_clut_ncinfo_reg[15]);
 
-static int xor_jit_created = 0;
-
-static void gf16_xor_create_jit_lut_sse2(void) {
+static void gf16_xor_create_jit_lut_sse2(struct gf16_xor_jit_scratch_sse2* scratch) {
 	int i, j;
 	
-	if(xor_jit_created) return;
-	xor_jit_created = 1;
-	
-	memset(xor_jit_clut_code1, 0, sizeof(xor_jit_clut_code1));
-	memset(xor_jit_clut_code2, 0, sizeof(xor_jit_clut_code2));
-	memset(xor_jit_clut_code3, 0, sizeof(xor_jit_clut_code3));
-	memset(xor_jit_clut_code4, 0, sizeof(xor_jit_clut_code4));
-	memset(xor_jit_clut_code5, 0, sizeof(xor_jit_clut_code5));
-	memset(xor_jit_clut_code6, 0, sizeof(xor_jit_clut_code6));
+	memset(scratch->clut_code1, 0, sizeof(scratch->clut_code1));
+	memset(scratch->clut_code2, 0, sizeof(scratch->clut_code2));
+	memset(scratch->clut_code3, 0, sizeof(scratch->clut_code3));
+	memset(scratch->clut_code4, 0, sizeof(scratch->clut_code4));
+	memset(scratch->clut_code5, 0, sizeof(scratch->clut_code5));
+	memset(scratch->clut_code6, 0, sizeof(scratch->clut_code6));
 	
 	
 	/* XOR pairs/triples from memory */
@@ -81,12 +81,12 @@ static void gf16_xor_create_jit_lut_sse2(void) {
 		int posM[4] = {0, 0, 0, 0};
 		int posR[4] = {0, 0, 0, 0};
 		uint8_t* pC[6] = {
-			(uint8_t*)(xor_jit_clut_code1 + i),
-			(uint8_t*)(xor_jit_clut_code2 + i),
-			i < (int)(sizeof(xor_jit_clut_code3)/sizeof(*xor_jit_clut_code3)) ? (uint8_t*)(xor_jit_clut_code3 + i) : NULL,
-			i < (int)(sizeof(xor_jit_clut_code4)/sizeof(*xor_jit_clut_code4)) ? (uint8_t*)(xor_jit_clut_code4 + i) : NULL,
-			(uint8_t*)(xor_jit_clut_code5 + i),
-			i < (int)(sizeof(xor_jit_clut_code6)/sizeof(*xor_jit_clut_code6)) ? (uint8_t*)(xor_jit_clut_code6 + i) : NULL
+			(uint8_t*)(scratch->clut_code1 + i),
+			(uint8_t*)(scratch->clut_code2 + i),
+			i < (int)(sizeof(scratch->clut_code3)/sizeof(*scratch->clut_code3)) ? (uint8_t*)(scratch->clut_code3 + i) : NULL,
+			i < (int)(sizeof(scratch->clut_code4)/sizeof(*scratch->clut_code4)) ? (uint8_t*)(scratch->clut_code4 + i) : NULL,
+			(uint8_t*)(scratch->clut_code5 + i),
+			i < (int)(sizeof(scratch->clut_code6)/sizeof(*scratch->clut_code6)) ? (uint8_t*)(scratch->clut_code6 + i) : NULL
 		};
 		
 		for(j=0; j<3; j++) {
@@ -153,12 +153,12 @@ static void gf16_xor_create_jit_lut_sse2(void) {
 			m >>= 2;
 		}
 		
-		xor_jit_clut_info_mem[i] = posM[0] | (posM[1] << 4) | (posM[2] << 8) | (posM[3] << 12);
-		xor_jit_clut_info_reg[i] = posR[0] | (posR[1] << 4) | (posR[2] << 8) | (posR[3] << 12);
+		scratch->clut_info_mem[i] = posM[0] | (posM[1] << 4) | (posM[2] << 8) | (posM[3] << 12);
+		scratch->clut_info_reg[i] = posR[0] | (posR[1] << 4) | (posR[2] << 8) | (posR[3] << 12);
 	}
 	
 #ifndef XORDEP_DISABLE_NO_COMMON
-	memset(xor_jit_clut_nocomm, 0, sizeof(xor_jit_clut_code6));
+	memset(scratch->clut_nocomm, 0, sizeof(scratch->clut_code6));
 	// handle cases of no common-mask optimisation
 	for(i=0; i<15 /* not 16 */; i++) {
 		// since we can only fit 2 pairs in an XMM register, cannot do 6 bit lookups
@@ -169,7 +169,7 @@ static void gf16_xor_create_jit_lut_sse2(void) {
 		int posRM[3] = {0, 0, 0};
 		uint8_t* pC[8];
 		for(k=0; k<8; k++) {
-			pC[k] = (uint8_t*)(xor_jit_clut_nocomm + i + k*16);
+			pC[k] = (uint8_t*)(scratch->clut_nocomm + i + k*16);
 		}
 		
 		
@@ -235,9 +235,9 @@ static void gf16_xor_create_jit_lut_sse2(void) {
 			m >>= 2;
 		}
 		
-		xor_jit_clut_ncinfo_mem[i] = posM[0] | (posM[1] << 8) | (posM[2] << 12);
-		xor_jit_clut_ncinfo_reg[i] = posR[0] | (posR[1] << 8) | (posR[2] << 12);
-		xor_jit_clut_ncinfo_rm[i] = posRM[0] | (posRM[1] << 8) | (posRM[2] << 12);
+		scratch->clut_ncinfo_mem[i] = posM[0] | (posM[1] << 8) | (posM[2] << 12);
+		scratch->clut_ncinfo_reg[i] = posR[0] | (posR[1] << 8) | (posR[2] << 12);
+		scratch->clut_ncinfo_rm[i] = posRM[0] | (posRM[1] << 8) | (posRM[2] << 12);
 		
 	}
 #endif
@@ -271,12 +271,12 @@ static HEDLEY_ALWAYS_INLINE void STOREU_XMM(void* dest, __m128i xmm) {
 	#define CMOV(c, d, s) if(c) (d) = (s)
 #endif
 
-static HEDLEY_ALWAYS_INLINE uint_fast16_t xor_jit_bitpair3(uint8_t* dest, uint_fast32_t mask, __m128i* tCode, uint16_t* tInfo, intptr_t* posC, long* movC, uint_fast8_t isR64) {
+static HEDLEY_ALWAYS_INLINE uint_fast16_t xor_jit_bitpair3(uint8_t* dest, uint_fast32_t mask, const __m128i* tCode, const uint16_t* tInfo, intptr_t* posC, long* movC, uint_fast8_t isR64) {
 	uint_fast16_t info = tInfo[mask>>1];
 	intptr_t pC = info >> 12;
 	
 	// copy code segment
-	STOREU_XMM(dest, _mm_load_si128((__m128i*)((uint64_t*)tCode + mask)));
+	STOREU_XMM(dest, _mm_load_si128((__m128i*)((const uint64_t*)tCode + mask)));
 	
 	// handle conditional move for common mask (since it's always done)
 	CMOV(*movC, *posC, pC+isR64);
@@ -315,18 +315,19 @@ static HEDLEY_ALWAYS_INLINE uint_fast16_t xor_jit_bitpair3_nc_noxor(uint8_t* des
 
 
 
-static inline void* xor_write_jit_sse(const struct gf16_xor_scratch *HEDLEY_RESTRICT scratch, uint8_t *HEDLEY_RESTRICT jitptr, uint16_t val, const int mode, const int prefetch) {
+static inline void* xor_write_jit_sse(const void *HEDLEY_RESTRICT _scratch, uint8_t *HEDLEY_RESTRICT jitptr, uint16_t val, const int mode, const int prefetch) {
+	const struct gf16_xor_jit_scratch_sse2 *HEDLEY_RESTRICT scratch = (const struct gf16_xor_jit_scratch_sse2*)_scratch;
 	uint_fast32_t bit;
 	ALIGN_TO(16, uint32_t lumask[8]);
 	
-	__m128i depmask1 = _mm_load_si128((__m128i*)(scratch->deps + ((val & 0xf) << 7)));
-	__m128i depmask2 = _mm_load_si128((__m128i*)(scratch->deps + ((val & 0xf) << 7)) +1);
-	depmask1 = _mm_xor_si128(depmask1, _mm_load_si128((__m128i*)(scratch->deps + ((val << 3) & 0x780)) + 1*2));
-	depmask2 = _mm_xor_si128(depmask2, _mm_load_si128((__m128i*)(scratch->deps + ((val << 3) & 0x780)) + 1*2 +1));
-	depmask1 = _mm_xor_si128(depmask1, _mm_load_si128((__m128i*)(scratch->deps + ((val >> 1) & 0x780)) + 2*2));
-	depmask2 = _mm_xor_si128(depmask2, _mm_load_si128((__m128i*)(scratch->deps + ((val >> 1) & 0x780)) + 2*2 +1));
-	depmask1 = _mm_xor_si128(depmask1, _mm_load_si128((__m128i*)(scratch->deps + ((val >> 5) & 0x780)) + 3*2));
-	depmask2 = _mm_xor_si128(depmask2, _mm_load_si128((__m128i*)(scratch->deps + ((val >> 5) & 0x780)) + 3*2 +1));
+	__m128i depmask1 = _mm_load_si128((__m128i*)(scratch->s.deps + ((val & 0xf) << 7)));
+	__m128i depmask2 = _mm_load_si128((__m128i*)(scratch->s.deps + ((val & 0xf) << 7)) +1);
+	depmask1 = _mm_xor_si128(depmask1, _mm_load_si128((__m128i*)(scratch->s.deps + ((val << 3) & 0x780)) + 1*2));
+	depmask2 = _mm_xor_si128(depmask2, _mm_load_si128((__m128i*)(scratch->s.deps + ((val << 3) & 0x780)) + 1*2 +1));
+	depmask1 = _mm_xor_si128(depmask1, _mm_load_si128((__m128i*)(scratch->s.deps + ((val >> 1) & 0x780)) + 2*2));
+	depmask2 = _mm_xor_si128(depmask2, _mm_load_si128((__m128i*)(scratch->s.deps + ((val >> 1) & 0x780)) + 2*2 +1));
+	depmask1 = _mm_xor_si128(depmask1, _mm_load_si128((__m128i*)(scratch->s.deps + ((val >> 5) & 0x780)) + 3*2));
+	depmask2 = _mm_xor_si128(depmask2, _mm_load_si128((__m128i*)(scratch->s.deps + ((val >> 5) & 0x780)) + 3*2 +1));
 	
 	_mm_store_si128((__m128i*)(lumask), depmask1);
 	_mm_store_si128((__m128i*)(lumask + 4), depmask2);
@@ -507,8 +508,8 @@ static inline void* xor_write_jit_sse(const struct gf16_xor_scratch *HEDLEY_REST
 			
 			if(no_common_mask & 1) {
 				#define PROC_BITPAIR(n, inf, m) \
-					STOREU_XMM(jitptr, _mm_load_si128((__m128i*)((uint64_t*)xor_jit_clut_nocomm + (n<<5) + ((m) & (0xF<<1))))); \
-					jitptr += ((uint8_t*)(xor_jit_clut_ncinfo_ ##inf))[(m) & (0xF<<1)]; \
+					STOREU_XMM(jitptr, _mm_load_si128((__m128i*)((uint64_t*)scratch->clut_nocomm + (n<<5) + ((m) & (0xF<<1))))); \
+					jitptr += ((uint8_t*)(scratch->clut_ncinfo_ ##inf))[(m) & (0xF<<1)]; \
 					mask >>= 4
 				
 				PROC_BITPAIR(0, mem, mask<<1);
@@ -533,7 +534,7 @@ static inline void* xor_write_jit_sse(const struct gf16_xor_scratch *HEDLEY_REST
 				#undef PROC_BITPAIR
 			} else {
 				#define PROC_BITPAIR(n, bits, inf, m, r64) \
-					jitptr += xor_jit_bitpair3(jitptr, (m) & ((2<<bits)-2), xor_jit_clut_code ##n, xor_jit_clut_info_ ##inf, &posC, &movC, r64) & 0xF; \
+					jitptr += xor_jit_bitpair3(jitptr, (m) & ((2<<bits)-2), scratch->clut_code ##n, scratch->clut_info_ ##inf, &posC, &movC, r64) & 0xF; \
 					mask >>= bits
 				PROC_BITPAIR(1, 6, mem, mask<<1, 0);
 				mask <<= 1;
@@ -579,8 +580,8 @@ static inline void* xor_write_jit_sse(const struct gf16_xor_scratch *HEDLEY_REST
 			
 			if(no_common_mask & 1) {
 				#define PROC_BITPAIR(n, inf, m, r64) \
-					STOREU_XMM(jitptr, _mm_load_si128((__m128i*)((uint64_t*)xor_jit_clut_nocomm + (n<<5) + ((m) & (0xF<<1))))); \
-					jitptr += xor_jit_bitpair3_nc_noxor(jitptr, xor_jit_clut_ncinfo_ ##inf[((m) & (0xF<<1))>>1], &pos1, &mov1, &pos2, &mov2, r64); \
+					STOREU_XMM(jitptr, _mm_load_si128((__m128i*)((uint64_t*)scratch->clut_nocomm + (n<<5) + ((m) & (0xF<<1))))); \
+					jitptr += xor_jit_bitpair3_nc_noxor(jitptr, scratch->clut_ncinfo_ ##inf[((m) & (0xF<<1))>>1], &pos1, &mov1, &pos2, &mov2, r64); \
 					mask >>= 4
 
 				PROC_BITPAIR(0, mem, mask<<1, 0);
@@ -607,7 +608,7 @@ static inline void* xor_write_jit_sse(const struct gf16_xor_scratch *HEDLEY_REST
 				jitptr[pos2 + mov2] = 0x6F; // PXOR -> MOVDQA
 			} else {
 				#define PROC_BITPAIR(n, bits, inf, m, r64) \
-					jitptr += xor_jit_bitpair3_noxor(jitptr, xor_jit_bitpair3(jitptr, (m) & ((2<<bits)-2), xor_jit_clut_code ##n, xor_jit_clut_info_ ##inf, &posC, &movC, r64), &pos1, &mov1, &pos2, &mov2, r64); \
+					jitptr += xor_jit_bitpair3_noxor(jitptr, xor_jit_bitpair3(jitptr, (m) & ((2<<bits)-2), scratch->clut_code ##n, scratch->clut_info_ ##inf, &posC, &movC, r64), &pos1, &mov1, &pos2, &mov2, r64); \
 					mask >>= bits
 				PROC_BITPAIR(1, 6, mem, mask<<1, 0);
 				mask <<= 1;
@@ -671,7 +672,7 @@ static inline void* xor_write_jit_sse(const struct gf16_xor_scratch *HEDLEY_REST
 
 static HEDLEY_ALWAYS_INLINE void gf16_xor_jit_mul_sse2_base(const void *HEDLEY_RESTRICT scratch, void* dst, const void* src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch, const int mode, const int doPrefetch, const void *HEDLEY_RESTRICT prefetch) {
 	jit_wx_pair* jit = (jit_wx_pair*)mutScratch;
-	gf16_xorjit_write_jit(scratch, coefficient, jit, mode, doPrefetch, &xor_write_jit_sse);
+	gf16_xorjit_write_jit(&(((struct gf16_xor_jit_scratch_sse2*)scratch)->s), coefficient, jit, mode, doPrefetch, &xor_write_jit_sse, scratch);
 	
 	// exec
 	/* adding 128 to the destination pointer allows the register offset to be coded in 1 byte
@@ -733,6 +734,10 @@ void gf16_xor_jit_muladd_prefetch_sse2(const void *HEDLEY_RESTRICT scratch, void
 }
 
 #ifdef __SSE2__
+struct gf16_xor_tables {
+	ALIGN_TO(16, __m128 deps[8*16]);
+	uint64_t BitsIndexTable[256];
+};
 static const unsigned char BitsSetTable256[256] = 
 {
 #   define B2(n) n,     n+1,     n+1,     n+2
@@ -740,30 +745,18 @@ static const unsigned char BitsSetTable256[256] =
 #   define B6(n) B4(n), B4(n+1), B4(n+1), B4(n+2)
     B6(0), B6(1), B6(1), B6(2)
 };
-static const uint64_t BitsIndexTable[256] = {
-/* table can be generated with this C program:
-#include <stdio.h>
-int main(void) {
-	for(int i=0;i<256;i++) {
-		long long n=0, j=8;
-		while(j--) if(i & (1<<j)) n=(n<<8)|(j<<4);
-		printf("0x%llxULL,", n);
-	} return 0;
-}
-*/
-	0x0ULL,0x0ULL,0x10ULL,0x1000ULL,0x20ULL,0x2000ULL,0x2010ULL,0x201000ULL,0x30ULL,0x3000ULL,0x3010ULL,0x301000ULL,0x3020ULL,0x302000ULL,0x302010ULL,0x30201000ULL,0x40ULL,0x4000ULL,0x4010ULL,0x401000ULL,0x4020ULL,0x402000ULL,0x402010ULL,0x40201000ULL,0x4030ULL,0x403000ULL,0x403010ULL,0x40301000ULL,0x403020ULL,0x40302000ULL,0x40302010ULL,0x4030201000ULL,0x50ULL,0x5000ULL,0x5010ULL,0x501000ULL,0x5020ULL,0x502000ULL,0x502010ULL,0x50201000ULL,0x5030ULL,0x503000ULL,0x503010ULL,0x50301000ULL,0x503020ULL,0x50302000ULL,0x50302010ULL,0x5030201000ULL,0x5040ULL,0x504000ULL,0x504010ULL,0x50401000ULL,0x504020ULL,0x50402000ULL,0x50402010ULL,0x5040201000ULL,0x504030ULL,0x50403000ULL,0x50403010ULL,0x5040301000ULL,0x50403020ULL,0x5040302000ULL,0x5040302010ULL,0x504030201000ULL,0x60ULL,0x6000ULL,0x6010ULL,0x601000ULL,0x6020ULL,0x602000ULL,0x602010ULL,0x60201000ULL,0x6030ULL,0x603000ULL,0x603010ULL,0x60301000ULL,0x603020ULL,0x60302000ULL,0x60302010ULL,0x6030201000ULL,0x6040ULL,0x604000ULL,0x604010ULL,0x60401000ULL,0x604020ULL,0x60402000ULL,0x60402010ULL,0x6040201000ULL,0x604030ULL,0x60403000ULL,0x60403010ULL,0x6040301000ULL,0x60403020ULL,0x6040302000ULL,0x6040302010ULL,0x604030201000ULL,0x6050ULL,0x605000ULL,0x605010ULL,0x60501000ULL,0x605020ULL,0x60502000ULL,0x60502010ULL,0x6050201000ULL,0x605030ULL,0x60503000ULL,0x60503010ULL,0x6050301000ULL,0x60503020ULL,0x6050302000ULL,0x6050302010ULL,0x605030201000ULL,0x605040ULL,0x60504000ULL,0x60504010ULL,0x6050401000ULL,0x60504020ULL,0x6050402000ULL,0x6050402010ULL,0x605040201000ULL,0x60504030ULL,0x6050403000ULL,0x6050403010ULL,0x605040301000ULL,0x6050403020ULL,0x605040302000ULL,0x605040302010ULL,0x60504030201000ULL,0x70ULL,0x7000ULL,0x7010ULL,0x701000ULL,0x7020ULL,0x702000ULL,0x702010ULL,0x70201000ULL,0x7030ULL,0x703000ULL,0x703010ULL,0x70301000ULL,0x703020ULL,0x70302000ULL,0x70302010ULL,0x7030201000ULL,0x7040ULL,0x704000ULL,0x704010ULL,0x70401000ULL,0x704020ULL,0x70402000ULL,0x70402010ULL,0x7040201000ULL,0x704030ULL,0x70403000ULL,0x70403010ULL,0x7040301000ULL,0x70403020ULL,0x7040302000ULL,0x7040302010ULL,0x704030201000ULL,0x7050ULL,0x705000ULL,0x705010ULL,0x70501000ULL,0x705020ULL,0x70502000ULL,0x70502010ULL,0x7050201000ULL,0x705030ULL,0x70503000ULL,0x70503010ULL,0x7050301000ULL,0x70503020ULL,0x7050302000ULL,0x7050302010ULL,0x705030201000ULL,0x705040ULL,0x70504000ULL,0x70504010ULL,0x7050401000ULL,0x70504020ULL,0x7050402000ULL,0x7050402010ULL,0x705040201000ULL,0x70504030ULL,0x7050403000ULL,0x7050403010ULL,0x705040301000ULL,0x7050403020ULL,0x705040302000ULL,0x705040302010ULL,0x70504030201000ULL,0x7060ULL,0x706000ULL,0x706010ULL,0x70601000ULL,0x706020ULL,0x70602000ULL,0x70602010ULL,0x7060201000ULL,0x706030ULL,0x70603000ULL,0x70603010ULL,0x7060301000ULL,0x70603020ULL,0x7060302000ULL,0x7060302010ULL,0x706030201000ULL,0x706040ULL,0x70604000ULL,0x70604010ULL,0x7060401000ULL,0x70604020ULL,0x7060402000ULL,0x7060402010ULL,0x706040201000ULL,0x70604030ULL,0x7060403000ULL,0x7060403010ULL,0x706040301000ULL,0x7060403020ULL,0x706040302000ULL,0x706040302010ULL,0x70604030201000ULL,0x706050ULL,0x70605000ULL,0x70605010ULL,0x7060501000ULL,0x70605020ULL,0x7060502000ULL,0x7060502010ULL,0x706050201000ULL,0x70605030ULL,0x7060503000ULL,0x7060503010ULL,0x706050301000ULL,0x7060503020ULL,0x706050302000ULL,0x706050302010ULL,0x70605030201000ULL,0x70605040ULL,0x7060504000ULL,0x7060504010ULL,0x706050401000ULL,0x7060504020ULL,0x706050402000ULL,0x706050402010ULL,0x70605040201000ULL,0x7060504030ULL,0x706050403000ULL,0x706050403010ULL,0x70605040301000ULL,0x706050403020ULL,0x70605040302000ULL,0x70605040302010ULL,0x7060504030201000ULL
-};
 
-static HEDLEY_ALWAYS_INLINE void gf16_xor_write_deptable(intptr_t *HEDLEY_RESTRICT deptable, uint_fast32_t *HEDLEY_RESTRICT counts, const uint8_t *HEDLEY_RESTRICT scratch, uint16_t val, uintptr_t dstSrcOffset) {
+static HEDLEY_ALWAYS_INLINE void gf16_xor_write_deptable(intptr_t *HEDLEY_RESTRICT deptable, uint_fast32_t *HEDLEY_RESTRICT counts, const struct gf16_xor_tables *HEDLEY_RESTRICT scratch, uint16_t val, uintptr_t dstSrcOffset) {
 	ALIGN_TO(16, uint16_t tmp_depmask[16]);
-	__m128i depmask1 = _mm_load_si128((__m128i*)(scratch + ((val & 0xf) << 7)));
-	__m128i depmask2 = _mm_load_si128((__m128i*)(scratch + ((val & 0xf) << 7)) +1);
-	depmask1 = _mm_xor_si128(depmask1, _mm_load_si128((__m128i*)(scratch + ((val << 3) & 0x780)) + 1*2));
-	depmask2 = _mm_xor_si128(depmask2, _mm_load_si128((__m128i*)(scratch + ((val << 3) & 0x780)) + 1*2 +1));
-	depmask1 = _mm_xor_si128(depmask1, _mm_load_si128((__m128i*)(scratch + ((val >> 1) & 0x780)) + 2*2));
-	depmask2 = _mm_xor_si128(depmask2, _mm_load_si128((__m128i*)(scratch + ((val >> 1) & 0x780)) + 2*2 +1));
-	depmask1 = _mm_xor_si128(depmask1, _mm_load_si128((__m128i*)(scratch + ((val >> 5) & 0x780)) + 3*2));
-	depmask2 = _mm_xor_si128(depmask2, _mm_load_si128((__m128i*)(scratch + ((val >> 5) & 0x780)) + 3*2 +1));
+	const uint8_t* deps = (const uint8_t*)(scratch->deps);
+	__m128i depmask1 = _mm_load_si128((__m128i*)(deps + ((val & 0xf) << 7)));
+	__m128i depmask2 = _mm_load_si128((__m128i*)(deps + ((val & 0xf) << 7)) +1);
+	depmask1 = _mm_xor_si128(depmask1, _mm_load_si128((__m128i*)(deps + ((val << 3) & 0x780)) + 1*2));
+	depmask2 = _mm_xor_si128(depmask2, _mm_load_si128((__m128i*)(deps + ((val << 3) & 0x780)) + 1*2 +1));
+	depmask1 = _mm_xor_si128(depmask1, _mm_load_si128((__m128i*)(deps + ((val >> 1) & 0x780)) + 2*2));
+	depmask2 = _mm_xor_si128(depmask2, _mm_load_si128((__m128i*)(deps + ((val >> 1) & 0x780)) + 2*2 +1));
+	depmask1 = _mm_xor_si128(depmask1, _mm_load_si128((__m128i*)(deps + ((val >> 5) & 0x780)) + 3*2));
+	depmask2 = _mm_xor_si128(depmask2, _mm_load_si128((__m128i*)(deps + ((val >> 5) & 0x780)) + 3*2 +1));
 	
 	
 	/* generate needed tables */
@@ -772,10 +765,10 @@ static HEDLEY_ALWAYS_INLINE void gf16_xor_write_deptable(intptr_t *HEDLEY_RESTRI
 	for(int bit=0; bit<16; bit++) {
 		uint_fast32_t cnt = BitsSetTable256[tmp_depmask[bit] & 0xff];
 		
-		__m128i idx = _mm_loadl_epi64((__m128i*)(BitsIndexTable + (tmp_depmask[bit] & 0xff)));
+		__m128i idx = _mm_loadl_epi64((__m128i*)(scratch->BitsIndexTable + (tmp_depmask[bit] & 0xff)));
 		__m128i idx2 = _mm_or_si128(
 			_mm_set1_epi8(8U<<4),
-			_mm_loadl_epi64((__m128i*)(BitsIndexTable + (tmp_depmask[bit] >> 8)))
+			_mm_loadl_epi64((__m128i*)(scratch->BitsIndexTable + (tmp_depmask[bit] >> 8)))
 		);
 		counts[bit] = cnt + BitsSetTable256[tmp_depmask[bit] >> 8] -1;
 		if(sizeof(uintptr_t) == 8) {
@@ -822,13 +815,13 @@ static HEDLEY_ALWAYS_INLINE void gf16_xor_write_deptable(intptr_t *HEDLEY_RESTRI
 		/* for storing as byte indicies; we do the full expansion above because it saves a register in the main loop
 		_mm_storel_epi64(
 			(__m128i*)(deptable + bit*16),
-			_mm_loadl_epi64((__m128i*)(BitsIndexTable + (tmp_depmask[bit] & 0xff)))
+			_mm_loadl_epi64((__m128i*)(scratch->BitsIndexTable + (tmp_depmask[bit] & 0xff)))
 		);
 		_mm_storel_epi64(
 			(__m128i*)(deptable + bit*16 + cnt),
 			_mm_or_si128(
 				_mm_set1_epi8(8<<4),
-				_mm_loadl_epi64((__m128i*)(BitsIndexTable + (tmp_depmask[bit] >> 8)))
+				_mm_loadl_epi64((__m128i*)(scratch->BitsIndexTable + (tmp_depmask[bit] >> 8)))
 			)
 		);
 		*/
@@ -895,7 +888,7 @@ void gf16_xor_mul_sse2(const void *HEDLEY_RESTRICT scratch, void* dst, const voi
 		// for in-situ mul, write to a temp block and copy back
 		ALIGN_TO(16, uint8_t tmp[256]);
 		__m128i* _tmp = (__m128i*)tmp;
-		gf16_xor_write_deptable(deptable, counts, (uint8_t*)scratch, val, 0);
+		gf16_xor_write_deptable(deptable, counts, (const struct gf16_xor_tables*)scratch, val, 0);
 		for(intptr_t ptr = -(intptr_t)len; ptr; ptr += sizeof(__m128i)*16) {
 			uint8_t* p = _dst + ptr;
 			gf16_xor_mul_block_sse2(p, tmp, counts, deptable);
@@ -904,7 +897,7 @@ void gf16_xor_mul_sse2(const void *HEDLEY_RESTRICT scratch, void* dst, const voi
 			}
 		}
 	} else {
-		gf16_xor_write_deptable(deptable, counts, (uint8_t*)scratch, val, (uintptr_t)src - (uintptr_t)dst);
+		gf16_xor_write_deptable(deptable, counts, (const struct gf16_xor_tables*)scratch, val, (uintptr_t)src - (uintptr_t)dst);
 		
 		for(intptr_t ptr = -(intptr_t)len; ptr; ptr += sizeof(__m128i)*16) {
 			gf16_xor_mul_block_sse2(_dst + ptr, _dst + ptr, counts, deptable);
@@ -924,7 +917,7 @@ void gf16_xor_muladd_sse2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_REST
 	ALIGN_TO(16, intptr_t deptable[256]);
 	uint8_t* _dst = (uint8_t*)dst + len;
 
-	gf16_xor_write_deptable(deptable, counts, (uint8_t*)scratch, val, (uintptr_t)src - (uintptr_t)dst);
+	gf16_xor_write_deptable(deptable, counts, (const struct gf16_xor_tables*)scratch, val, (uintptr_t)src - (uintptr_t)dst);
 	
 	for(intptr_t ptr = -(intptr_t)len; ptr; ptr += sizeof(__m128i)*16) {
 		uint8_t* p = _dst + ptr;
@@ -1243,16 +1236,16 @@ static void xor_write_init_jit(uint8_t *jitCodeNorm, uint8_t *jitCodeInsitu, uin
 
 void* gf16_xor_jit_init_sse2(int polynomial, int jitOptStrat) {
 #ifdef __SSE2__
-	struct gf16_xor_scratch* ret;
+	struct gf16_xor_jit_scratch_sse2* ret;
 	uint8_t tmpCode[XORDEP_JIT_CODE_SIZE];
 	
-	ALIGN_ALLOC(ret, sizeof(struct gf16_xor_scratch), 16);
-	gf16_bitdep_init128(ret->deps, polynomial, GF16_BITDEP_INIT128_GEN_XORJIT);
+	ALIGN_ALLOC(ret, sizeof(struct gf16_xor_jit_scratch_sse2), 64); // align to 16 required, 64 might better use cachelines
+	gf16_bitdep_init128(ret->s.deps, polynomial, GF16_BITDEP_INIT128_GEN_XORJIT);
 	
-	gf16_xor_create_jit_lut_sse2();
+	gf16_xor_create_jit_lut_sse2(ret);
 	
-	ret->jitOptStrat = jitOptStrat;
-	xor_write_init_jit(tmpCode, tmpCode, &(ret->codeStart), &(ret->codeStartInsitu));
+	ret->s.jitOptStrat = jitOptStrat;
+	xor_write_init_jit(tmpCode, tmpCode, &(ret->s.codeStart), &(ret->s.codeStartInsitu));
 	return ret;
 #else
 	UNUSED(polynomial); UNUSED(jitOptStrat);
@@ -1310,9 +1303,18 @@ uint16_t gf16_xor64_replace_word(void* data, size_t index, uint16_t newValue) {
 
 void* gf16_xor_init_sse2(int polynomial) {
 #ifdef __SSE2__
-	void* ret;
-	ALIGN_ALLOC(ret, sizeof(__m128i)*8*16, 16);
-	gf16_bitdep_init128(ret, polynomial, GF16_BITDEP_INIT128_GEN_XOR);
+	struct gf16_xor_tables* ret;
+	ALIGN_ALLOC(ret, sizeof(struct gf16_xor_tables), 16);
+	gf16_bitdep_init128(ret->deps, polynomial, GF16_BITDEP_INIT128_GEN_XOR);
+	
+	for(int i=0; i<256; i++) {
+		uint64_t n=0;
+		int j=8;
+		while(j--)
+			if(i & (1<<j))
+				n = (n<<8)|(j<<4);
+		ret->BitsIndexTable[i] = n;
+	}
 	return ret;
 #else
 	UNUSED(polynomial);
