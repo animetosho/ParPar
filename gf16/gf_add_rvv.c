@@ -1,5 +1,6 @@
 #include "gf16_rvv_common.h"
 #include "gf16_muladd_multi.h"
+#include "gf_add_common.h"
 
 #ifdef __riscv_vector
 
@@ -75,13 +76,7 @@ void gf_add_multi_packpf_v##vs##i##il##_rvv(unsigned packedRegions, unsigned reg
 	gf16_muladd_multi_packpf((void*)vs, &gf_add_x_rvv, il, it, packedRegions, regions, dst, src, len, RV(vsetvlmax_e8m1)()*vs, NULL, vs>1, prefetchIn, prefetchOut); \
 }
 #else
-# define PACKED_FUNC(vs, il, it) \
-void gf_add_multi_packed_v##vs##i##il##_rvv(unsigned packedRegions, unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len) { \
-	UNUSED(packedRegions); UNUSED(regions); UNUSED(dst); UNUSED(src); UNUSED(len); \
-} \
-void gf_add_multi_packpf_v##vs##i##il##_rvv(unsigned packedRegions, unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, const void* HEDLEY_RESTRICT prefetchIn, const void* HEDLEY_RESTRICT prefetchOut) { \
-	UNUSED(packedRegions); UNUSED(regions); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(prefetchIn); UNUSED(prefetchOut); \
-}
+# define PACKED_FUNC(...) PACKED_STUB(rvv, __VA_ARGS__)
 #endif
 
 PACKED_FUNC(2, 3, 12)

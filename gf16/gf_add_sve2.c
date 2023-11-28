@@ -1,5 +1,6 @@
 #include "gf16_sve_common.h"
 #include "gf16_muladd_multi.h"
+#include "gf_add_common.h"
 
 #ifdef __ARM_FEATURE_SVE2
 
@@ -64,18 +65,12 @@ void gf_add_multi_packpf_v##vs##i##il##_sve2(unsigned packedRegions, unsigned re
 	gf16_muladd_multi_packpf((void*)vs, &gf_add_x_sve2, il, it, packedRegions, regions, dst, src, len, svcntb()*vs, NULL, vs>1, prefetchIn, prefetchOut); \
 }
 #else
-# define PACKED_FUNC(vs, il, it) \
-void gf_add_multi_packed_v##vs##i##il##_sve2(unsigned packedRegions, unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len) { \
-	UNUSED(packedRegions); UNUSED(regions); UNUSED(dst); UNUSED(src); UNUSED(len); \
-}\
-void gf_add_multi_packpf_v##vs##i##il##_sve2(unsigned packedRegions, unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, const void* HEDLEY_RESTRICT prefetchIn, const void* HEDLEY_RESTRICT prefetchOut) { \
-	UNUSED(packedRegions); UNUSED(regions); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(prefetchIn); UNUSED(prefetchOut); \
-}
+# define PACKED_FUNC(...) PACKED_STUB(sve2, __VA_ARGS__)
 #endif
 
-PACKED_FUNC(1, 6, 18)
-PACKED_FUNC(2, 3, 12)
-PACKED_FUNC(2, 4, 12)
+PACKED_FUNC_NOTSLIM(sve2, 1, 6, 18)
+PACKED_FUNC_NOTSLIM(sve2, 2, 3, 12)
+PACKED_FUNC_NOTSLIM(sve2, 2, 4, 12)
 PACKED_FUNC(2, 8, 16)
 
 #undef PACKED_FUNC

@@ -1198,6 +1198,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 				*/
 				case GF16_XOR_JIT_AVX2:
 					METHOD_REQUIRES(gf16_xor_available_avx2)
+#ifdef PLATFORM_AMD64
 					scratch = gf16_xor_jit_init_avx2(GF16_POLYNOMIAL, jitOptStrat);
 					_mul = &gf16_xor_jit_mul_avx2;
 					_mul_add = &gf16_xor_jit_muladd_avx2;
@@ -1216,8 +1217,10 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 					copy_cksum = &gf16_cksum_copy_avx2;
 					copy_cksum_check = &gf16_cksum_copy_check_avx2;
 					replace_word = gf16_xor32_replace_word;
+#endif
 				break;
 				case GF16_XOR_JIT_AVX512:
+#ifdef PLATFORM_AMD64
 					METHOD_REQUIRES(gf16_xor_available_avx512)
 					scratch = gf16_xor_jit_init_avx512(GF16_POLYNOMIAL, jitOptStrat);
 					_mul = &gf16_xor_jit_mul_avx512;
@@ -1239,6 +1242,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 					copy_cksum = &gf16_cksum_copy_avx512;
 					copy_cksum_check = &gf16_cksum_copy_check_avx512;
 					replace_word = gf16_xor64_replace_word;
+#endif
 				break;
 				default: break; // for pedantic compilers
 			}
@@ -1259,6 +1263,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			copy_cksum_check = &gf16_cksum_copy_check_sse2;
 		break;
 		
+#ifndef PARPAR_SLIM_GF16
 		case GF16_LOOKUP3:
 			_mul = &gf16_lookup3_mul;
 			_mul_add = &gf16_lookup3_muladd;
@@ -1274,6 +1279,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			if(gf16_lookup3_stride())
 				break;
 			// else fallthrough
+#endif
 		case GF16_LOOKUP:
 		default:
 			_mul = &gf16_lookup_mul;

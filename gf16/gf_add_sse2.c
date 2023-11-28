@@ -1,5 +1,6 @@
 #include "gf16_global.h"
 #include "../src/platform.h"
+#include "gf_add_common.h"
 
 #define _mword __m128i
 #define _MM(f) _mm_ ## f
@@ -38,17 +39,14 @@ void gf_add_multi_packpf_v##vs##i##il##_sse2(unsigned packedRegions, unsigned re
 	gf16_muladd_multi_packpf((void*)vs, &gf_add_x_sse2, il, it, packedRegions, regions, dst, src, len, sizeof(__m128i)*vs, NULL, vs>1, prefetchIn, prefetchOut); \
 }
 #else
-# define PACKED_FUNC(vs, il, it) \
-void gf_add_multi_packed_v##vs##i##il##_sse2(unsigned packedRegions, unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len) { \
-	UNUSED(packedRegions); UNUSED(regions); UNUSED(dst); UNUSED(src); UNUSED(len); \
-} \
-void gf_add_multi_packpf_v##vs##i##il##_sse2(unsigned packedRegions, unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, const void* HEDLEY_RESTRICT prefetchIn, const void* HEDLEY_RESTRICT prefetchOut) { \
-	UNUSED(packedRegions); UNUSED(regions); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(prefetchIn); UNUSED(prefetchOut); \
-}
+# define PACKED_FUNC(...) PACKED_STUB(sse2, __VA_ARGS__)
 #endif
 
-PACKED_FUNC(1, 2, 8)
-PACKED_FUNC(1, 6, 18)
+#ifdef PLATFORM_AMD64
+PACKED_FUNC_NOTSLIM(sse2, 1, 6, 18)
+#else
+PACKED_FUNC_NOTSLIM(sse2, 1, 2, 8)
+#endif
 PACKED_FUNC(2, 1, 4)
 PACKED_FUNC(2, 3, 12)
 PACKED_FUNC(16, 1, 4)
