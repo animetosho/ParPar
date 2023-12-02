@@ -59,7 +59,7 @@
       }],
     ],
     "cflags_c": ["-std=c99", "-D_DARWIN_C_SOURCE", "-D_GNU_SOURCE", "-D_DEFAULT_SOURCE"],
-    "defines": ["PARPAR_ENABLE_HASHER_MULTIMD5"],
+    "defines": ["PARPAR_ENABLE_HASHER_MULTIMD5", "PARPAR_OPENCL_SUPPORT"],
     "msvs_settings": {"VCCLCompilerTool": {"Optimization": "MaxSpeed"}}
   },
   "targets": [

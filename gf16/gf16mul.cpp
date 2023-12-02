@@ -512,6 +512,21 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 		setupMethod(_method == GF16_AUTO ? GF16_LOOKUP : GF16_AUTO); \
 		return; \
 	}
+	#ifdef PARPAR_INVERT_SUPPORT
+		#define SET_FOR_INVERT(var, fn) var = &fn
+	#else
+		#define SET_FOR_INVERT(var, fn) (void)0
+	#endif
+	#ifdef PARPAR_INCLUDE_BASIC_OPS
+		#define SET_BASIC_OP(var, fn) var = &fn
+	#else
+		#define SET_BASIC_OP(var, fn) (void)0
+	#endif
+	#ifdef PARPAR_OPENCL_SUPPORT
+		#define SET_FOR_OPENCL(var, fn) var = &fn
+	#else
+		#define SET_FOR_OPENCL(var, fn) (void)0
+	#endif
 	
 	switch(method) {
 		case GF16_SHUFFLE_AVX512:
@@ -524,93 +539,93 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 				case GF16_SHUFFLE_SSSE3:
 					METHOD_REQUIRES(gf16_shuffle_available_ssse3 && scratch)
 					
-					_mul = &gf16_shuffle_mul_ssse3;
+					SET_FOR_INVERT(_mul, gf16_shuffle_mul_ssse3);
 					_mul_add = &gf16_shuffle_muladd_ssse3;
 					_mul_add_pf = &gf16_shuffle_muladd_prefetch_ssse3;
-					add_multi = &gf_add_multi_sse2;
-					add_multi_packed = &gf_add_multi_packed_v2i1_sse2;
+					SET_BASIC_OP(add_multi, gf_add_multi_sse2);
+					SET_BASIC_OP(add_multi_packed, gf_add_multi_packed_v2i1_sse2);
 					add_multi_packpf = &gf_add_multi_packpf_v2i1_sse2;
-					prepare = &gf16_shuffle_prepare_ssse3;
-					prepare_packed = &gf16_shuffle_prepare_packed_ssse3;
+					SET_FOR_INVERT(prepare, gf16_shuffle_prepare_ssse3);
+					SET_BASIC_OP(prepare_packed, gf16_shuffle_prepare_packed_ssse3);
 					prepare_packed_cksum = &gf16_shuffle_prepare_packed_cksum_ssse3;
 					prepare_partial_packsum = &gf16_shuffle_prepare_partial_packsum_ssse3;
-					finish = &gf16_shuffle_finish_ssse3;
-					finish_packed = &gf16_shuffle_finish_packed_ssse3;
+					SET_FOR_INVERT(finish, gf16_shuffle_finish_ssse3);
+					SET_BASIC_OP(finish_packed, gf16_shuffle_finish_packed_ssse3);
 					finish_packed_cksum = &gf16_shuffle_finish_packed_cksum_ssse3;
 					finish_partial_packsum = &gf16_shuffle_finish_partial_packsum_ssse3;
-					copy_cksum = &gf16_cksum_copy_sse2;
-					copy_cksum_check = &gf16_cksum_copy_check_sse2;
-					replace_word = &gf16_shuffle16_replace_word;
+					SET_FOR_OPENCL(copy_cksum, gf16_cksum_copy_sse2);
+					SET_FOR_OPENCL(copy_cksum_check, gf16_cksum_copy_check_sse2);
+					SET_FOR_INVERT(replace_word, gf16_shuffle16_replace_word);
 				break;
 				case GF16_SHUFFLE_AVX:
 					METHOD_REQUIRES(gf16_shuffle_available_avx && scratch)
-					_mul = &gf16_shuffle_mul_avx;
+					SET_FOR_INVERT(_mul, gf16_shuffle_mul_avx);
 					_mul_add = &gf16_shuffle_muladd_avx;
 					_mul_add_pf = &gf16_shuffle_muladd_prefetch_avx;
-					add_multi = &gf_add_multi_sse2;
-					add_multi_packed = &gf_add_multi_packed_v2i1_sse2;
+					SET_BASIC_OP(add_multi, gf_add_multi_sse2);
+					SET_BASIC_OP(add_multi_packed, gf_add_multi_packed_v2i1_sse2);
 					add_multi_packpf = &gf_add_multi_packpf_v2i1_sse2;
-					prepare = &gf16_shuffle_prepare_avx;
-					prepare_packed = &gf16_shuffle_prepare_packed_avx;
+					SET_FOR_INVERT(prepare, gf16_shuffle_prepare_avx);
+					SET_BASIC_OP(prepare_packed, gf16_shuffle_prepare_packed_avx);
 					prepare_packed_cksum = &gf16_shuffle_prepare_packed_cksum_avx;
 					prepare_partial_packsum = &gf16_shuffle_prepare_partial_packsum_avx;
-					finish = &gf16_shuffle_finish_avx;
-					finish_packed = &gf16_shuffle_finish_packed_avx;
+					SET_FOR_INVERT(finish, gf16_shuffle_finish_avx);
+					SET_BASIC_OP(finish_packed, gf16_shuffle_finish_packed_avx);
 					finish_packed_cksum = &gf16_shuffle_finish_packed_cksum_avx;
 					finish_partial_packsum = &gf16_shuffle_finish_partial_packsum_avx;
-					copy_cksum = &gf16_cksum_copy_sse2;
-					copy_cksum_check = &gf16_cksum_copy_check_sse2;
-					replace_word = &gf16_shuffle16_replace_word;
+					SET_FOR_OPENCL(copy_cksum, gf16_cksum_copy_sse2);
+					SET_FOR_OPENCL(copy_cksum_check, gf16_cksum_copy_check_sse2);
+					SET_FOR_INVERT(replace_word, gf16_shuffle16_replace_word);
 				break;
 				case GF16_SHUFFLE_AVX2:
 					METHOD_REQUIRES(gf16_shuffle_available_avx2 && scratch)
-					_mul = &gf16_shuffle_mul_avx2;
+					SET_FOR_INVERT(_mul, gf16_shuffle_mul_avx2);
 					_mul_add = &gf16_shuffle_muladd_avx2;
 					_mul_add_pf = &gf16_shuffle_muladd_prefetch_avx2;
-					add_multi = &gf_add_multi_avx2;
-					add_multi_packed = &gf_add_multi_packed_v2i1_avx2;
+					SET_BASIC_OP(add_multi, gf_add_multi_avx2);
+					SET_BASIC_OP(add_multi_packed, gf_add_multi_packed_v2i1_avx2);
 					add_multi_packpf = &gf_add_multi_packpf_v2i1_avx2;
-					prepare = &gf16_shuffle_prepare_avx2;
-					prepare_packed = &gf16_shuffle_prepare_packed_avx2;
+					SET_FOR_INVERT(prepare, gf16_shuffle_prepare_avx2);
+					SET_BASIC_OP(prepare_packed, gf16_shuffle_prepare_packed_avx2);
 					prepare_packed_cksum = &gf16_shuffle_prepare_packed_cksum_avx2;
 					prepare_partial_packsum = &gf16_shuffle_prepare_partial_packsum_avx2;
-					finish = &gf16_shuffle_finish_avx2;
-					finish_packed = &gf16_shuffle_finish_packed_avx2;
+					SET_FOR_INVERT(finish, gf16_shuffle_finish_avx2);
+					SET_BASIC_OP(finish_packed, gf16_shuffle_finish_packed_avx2);
 					finish_packed_cksum = &gf16_shuffle_finish_packed_cksum_avx2;
 					finish_partial_packsum = &gf16_shuffle_finish_partial_packsum_avx2;
-					copy_cksum = &gf16_cksum_copy_avx2;
-					copy_cksum_check = &gf16_cksum_copy_check_avx2;
-					replace_word = &gf16_shuffle32_replace_word;
+					SET_FOR_OPENCL(copy_cksum, gf16_cksum_copy_avx2);
+					SET_FOR_OPENCL(copy_cksum_check, gf16_cksum_copy_check_avx2);
+					SET_FOR_INVERT(replace_word, gf16_shuffle32_replace_word);
 				break;
 				case GF16_SHUFFLE_AVX512:
 					METHOD_REQUIRES(gf16_shuffle_available_avx512 && scratch)
-					_mul = &gf16_shuffle_mul_avx512;
+					SET_FOR_INVERT(_mul, gf16_shuffle_mul_avx512);
 					_mul_add = &gf16_shuffle_muladd_avx512;
 					_mul_add_pf = &gf16_shuffle_muladd_prefetch_avx512;
-					add_multi = &gf_add_multi_avx512;
+					SET_BASIC_OP(add_multi, gf_add_multi_avx512);
 					#ifdef PLATFORM_AMD64
 					// if 32 registers are available, can do multi-region
-					_mul_add_multi = &gf16_shuffle_muladd_multi_avx512;
-					_mul_add_multi_stridepf = &gf16_shuffle_muladd_multi_stridepf_avx512;
+					SET_FOR_INVERT(_mul_add_multi, gf16_shuffle_muladd_multi_avx512);
+					SET_FOR_INVERT(_mul_add_multi_stridepf, gf16_shuffle_muladd_multi_stridepf_avx512);
 					_mul_add_multi_packed = &gf16_shuffle_muladd_multi_packed_avx512;
 					_mul_add_multi_packpf = &gf16_shuffle_muladd_multi_packpf_avx512;
-					add_multi_packed = &gf_add_multi_packed_v2i3_avx512;
+					SET_BASIC_OP(add_multi_packed, gf_add_multi_packed_v2i3_avx512);
 					add_multi_packpf = &gf_add_multi_packpf_v2i3_avx512;
 					#else
-					add_multi_packed = &gf_add_multi_packed_v2i1_avx512;
+					SET_BASIC_OP(add_multi_packed, gf_add_multi_packed_v2i1_avx512);
 					add_multi_packpf = &gf_add_multi_packpf_v2i1_avx512;
 					#endif
-					prepare = &gf16_shuffle_prepare_avx512;
-					prepare_packed = &gf16_shuffle_prepare_packed_avx512;
+					SET_FOR_INVERT(prepare, gf16_shuffle_prepare_avx512);
+					SET_BASIC_OP(prepare_packed, gf16_shuffle_prepare_packed_avx512);
 					prepare_packed_cksum = &gf16_shuffle_prepare_packed_cksum_avx512;
 					prepare_partial_packsum = &gf16_shuffle_prepare_partial_packsum_avx512;
-					finish = &gf16_shuffle_finish_avx512;
-					finish_packed = &gf16_shuffle_finish_packed_avx512;
+					SET_FOR_INVERT(finish, gf16_shuffle_finish_avx512);
+					SET_BASIC_OP(finish_packed, gf16_shuffle_finish_packed_avx512);
 					finish_packed_cksum = &gf16_shuffle_finish_packed_cksum_avx512;
 					finish_partial_packsum = &gf16_shuffle_finish_partial_packsum_avx512;
-					copy_cksum = &gf16_cksum_copy_avx512;
-					copy_cksum_check = &gf16_cksum_copy_check_avx512;
-					replace_word = &gf16_shuffle64_replace_word;
+					SET_FOR_OPENCL(copy_cksum, gf16_cksum_copy_avx512);
+					SET_FOR_OPENCL(copy_cksum_check, gf16_cksum_copy_check_avx512);
+					SET_FOR_INVERT(replace_word, gf16_shuffle64_replace_word);
 				break;
 				default: break; // for pedantic compilers
 			}
@@ -618,117 +633,117 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 		case GF16_SHUFFLE_VBMI:
 			scratch = gf16_shuffle_init_vbmi(GF16_POLYNOMIAL);
 			METHOD_REQUIRES(gf16_shuffle_available_vbmi && scratch)
-			_mul = &gf16_shuffle_mul_vbmi;
+			SET_FOR_INVERT(_mul, gf16_shuffle_mul_vbmi);
 			_mul_add = &gf16_shuffle_muladd_vbmi;
 			_mul_add_pf = &gf16_shuffle_muladd_prefetch_vbmi;
-			add_multi = &gf_add_multi_avx512;
+			SET_BASIC_OP(add_multi, gf_add_multi_avx512);
 			#ifdef PLATFORM_AMD64
-			_mul_add_multi = &gf16_shuffle_muladd_multi_vbmi;
-			_mul_add_multi_stridepf = &gf16_shuffle_muladd_multi_stridepf_vbmi;
+			SET_FOR_INVERT(_mul_add_multi, gf16_shuffle_muladd_multi_vbmi);
+			SET_FOR_INVERT(_mul_add_multi_stridepf, gf16_shuffle_muladd_multi_stridepf_vbmi);
 			_mul_add_multi_packed = &gf16_shuffle_muladd_multi_packed_vbmi;
 			_mul_add_multi_packpf = &gf16_shuffle_muladd_multi_packpf_vbmi;
-			add_multi_packed = &gf_add_multi_packed_v2i4_avx512;
+			SET_BASIC_OP(add_multi_packed, gf_add_multi_packed_v2i4_avx512);
 			add_multi_packpf = &gf_add_multi_packpf_v2i4_avx512;
 			#else
-			add_multi_packed = &gf_add_multi_packed_v2i1_avx512;
+			SET_BASIC_OP(add_multi_packed, gf_add_multi_packed_v2i1_avx512);
 			add_multi_packpf = &gf_add_multi_packpf_v2i1_avx512;
 			#endif
-			prepare = &gf16_shuffle_prepare_avx512;
-			prepare_packed = &gf16_shuffle_prepare_packed_vbmi;
+			SET_FOR_INVERT(prepare, gf16_shuffle_prepare_avx512);
+			SET_BASIC_OP(prepare_packed, gf16_shuffle_prepare_packed_vbmi);
 			prepare_packed_cksum = &gf16_shuffle_prepare_packed_cksum_vbmi;
 			prepare_partial_packsum = &gf16_shuffle_prepare_partial_packsum_vbmi;
-			finish = &gf16_shuffle_finish_avx512;
-			finish_packed = &gf16_shuffle_finish_packed_avx512;
+			SET_FOR_INVERT(finish, gf16_shuffle_finish_avx512);
+			SET_BASIC_OP(finish_packed, gf16_shuffle_finish_packed_avx512);
 			finish_packed_cksum = &gf16_shuffle_finish_packed_cksum_avx512;
 			finish_partial_packsum = &gf16_shuffle_finish_partial_packsum_avx512;
-			copy_cksum = &gf16_cksum_copy_avx512;
-			copy_cksum_check = &gf16_cksum_copy_check_avx512;
-			replace_word = &gf16_shuffle64_replace_word;
+			SET_FOR_OPENCL(copy_cksum, gf16_cksum_copy_avx512);
+			SET_FOR_OPENCL(copy_cksum_check, gf16_cksum_copy_check_avx512);
+			SET_FOR_INVERT(replace_word, gf16_shuffle64_replace_word);
 		break;
 		case GF16_SHUFFLE2X_AVX512:
 			scratch = gf16_shuffle_init_x86(GF16_POLYNOMIAL);
 			METHOD_REQUIRES(gf16_shuffle_available_avx512 && scratch)
-			_mul = &gf16_shuffle2x_mul_avx512;
+			SET_FOR_INVERT(_mul, gf16_shuffle2x_mul_avx512);
 			_mul_add = &gf16_shuffle2x_muladd_avx512;
-			add_multi = &gf_add_multi_avx512;
+			SET_BASIC_OP(add_multi, gf_add_multi_avx512);
 			#ifdef PLATFORM_AMD64
-			_mul_add_multi = &gf16_shuffle2x_muladd_multi_avx512;
-			_mul_add_multi_stridepf = &gf16_shuffle2x_muladd_multi_stridepf_avx512;
+			SET_FOR_INVERT(_mul_add_multi, gf16_shuffle2x_muladd_multi_avx512);
+			SET_FOR_INVERT(_mul_add_multi_stridepf, gf16_shuffle2x_muladd_multi_stridepf_avx512);
 			_mul_add_multi_packed = &gf16_shuffle2x_muladd_multi_packed_avx512;
 			_mul_add_multi_packpf = &gf16_shuffle2x_muladd_multi_packpf_avx512;
-			add_multi_packed = &gf_add_multi_packed_v1i6_avx512;
+			SET_BASIC_OP(add_multi_packed, gf_add_multi_packed_v1i6_avx512);
 			add_multi_packpf = &gf_add_multi_packpf_v1i6_avx512;
 			#else
-			add_multi_packed = &gf_add_multi_packed_v1i1_avx512;
+			SET_BASIC_OP(add_multi_packed, gf_add_multi_packed_v1i1_avx512);
 			add_multi_packpf = &gf_add_multi_packpf_v1i1_avx512;
 			#endif
-			prepare = &gf16_shuffle2x_prepare_avx512;
-			prepare_packed = &gf16_shuffle2x_prepare_packed_avx512;
+			SET_FOR_INVERT(prepare, gf16_shuffle2x_prepare_avx512);
+			SET_BASIC_OP(prepare_packed, gf16_shuffle2x_prepare_packed_avx512);
 			prepare_packed_cksum = &gf16_shuffle2x_prepare_packed_cksum_avx512;
 			prepare_partial_packsum = &gf16_shuffle2x_prepare_partial_packsum_avx512;
-			finish = &gf16_shuffle2x_finish_avx512;
-			finish_packed = &gf16_shuffle2x_finish_packed_avx512;
+			SET_FOR_INVERT(finish, gf16_shuffle2x_finish_avx512);
+			SET_BASIC_OP(finish_packed, gf16_shuffle2x_finish_packed_avx512);
 			finish_packed_cksum = &gf16_shuffle2x_finish_packed_cksum_avx512;
 			finish_partial_packsum = &gf16_shuffle2x_finish_partial_packsum_avx512;
-			copy_cksum = &gf16_cksum_copy_avx512;
-			copy_cksum_check = &gf16_cksum_copy_check_avx512;
-			replace_word = &gf16_shuffle2x32_replace_word;
+			SET_FOR_OPENCL(copy_cksum, gf16_cksum_copy_avx512);
+			SET_FOR_OPENCL(copy_cksum_check, gf16_cksum_copy_check_avx512);
+			SET_FOR_INVERT(replace_word, gf16_shuffle2x32_replace_word);
 		break;
 		case GF16_SHUFFLE2X_AVX2:
 			scratch = gf16_shuffle_init_x86(GF16_POLYNOMIAL);
 			METHOD_REQUIRES(gf16_shuffle_available_avx2 && scratch)
-			_mul = &gf16_shuffle2x_mul_avx2;
+			SET_FOR_INVERT(_mul, gf16_shuffle2x_mul_avx2);
 			_mul_add = &gf16_shuffle2x_muladd_avx2;
-			add_multi = &gf_add_multi_avx2;
+			SET_BASIC_OP(add_multi, gf_add_multi_avx2);
 			#ifdef PLATFORM_AMD64
-			_mul_add_multi = &gf16_shuffle2x_muladd_multi_avx2;
-			_mul_add_multi_stridepf = &gf16_shuffle2x_muladd_multi_stridepf_avx2;
+			SET_FOR_INVERT(_mul_add_multi, gf16_shuffle2x_muladd_multi_avx2);
+			SET_FOR_INVERT(_mul_add_multi_stridepf, gf16_shuffle2x_muladd_multi_stridepf_avx2);
 			_mul_add_multi_packed = &gf16_shuffle2x_muladd_multi_packed_avx2;
 			_mul_add_multi_packpf = &gf16_shuffle2x_muladd_multi_packpf_avx2;
-			add_multi_packed = &gf_add_multi_packed_v1i2_avx2;
+			SET_BASIC_OP(add_multi_packed, gf_add_multi_packed_v1i2_avx2);
 			add_multi_packpf = &gf_add_multi_packpf_v1i2_avx2;
 			#else
-			add_multi_packed = &gf_add_multi_packed_v1i1_avx2;
+			SET_BASIC_OP(add_multi_packed, gf_add_multi_packed_v1i1_avx2);
 			add_multi_packpf = &gf_add_multi_packpf_v1i1_avx2;
 			#endif
-			prepare = &gf16_shuffle2x_prepare_avx2;
-			prepare_packed = &gf16_shuffle2x_prepare_packed_avx2;
+			SET_FOR_INVERT(prepare, gf16_shuffle2x_prepare_avx2);
+			SET_BASIC_OP(prepare_packed, gf16_shuffle2x_prepare_packed_avx2);
 			prepare_packed_cksum = &gf16_shuffle2x_prepare_packed_cksum_avx2;
 			prepare_partial_packsum = &gf16_shuffle2x_prepare_partial_packsum_avx2;
-			finish = &gf16_shuffle2x_finish_avx2;
-			finish_packed = &gf16_shuffle2x_finish_packed_avx2;
+			SET_FOR_INVERT(finish, gf16_shuffle2x_finish_avx2);
+			SET_BASIC_OP(finish_packed, gf16_shuffle2x_finish_packed_avx2);
 			finish_packed_cksum = &gf16_shuffle2x_finish_packed_cksum_avx2;
 			finish_partial_packsum = &gf16_shuffle2x_finish_partial_packsum_avx2;
-			copy_cksum = &gf16_cksum_copy_avx2;
-			copy_cksum_check = &gf16_cksum_copy_check_avx2;
-			replace_word = &gf16_shuffle2x16_replace_word;
+			SET_FOR_OPENCL(copy_cksum, gf16_cksum_copy_avx2);
+			SET_FOR_OPENCL(copy_cksum_check, gf16_cksum_copy_check_avx2);
+			SET_FOR_INVERT(replace_word, gf16_shuffle2x16_replace_word);
 		break;
 		
 		case GF16_SHUFFLE_NEON:
 			scratch = gf16_shuffle_init_arm(GF16_POLYNOMIAL);
 			
 			METHOD_REQUIRES(gf16_available_neon && scratch)
-			_mul = &gf16_shuffle_mul_neon;
+			SET_FOR_INVERT(_mul, gf16_shuffle_mul_neon);
 			_mul_add = &gf16_shuffle_muladd_neon;
-			add_multi = &gf_add_multi_neon;
+			SET_BASIC_OP(add_multi, gf_add_multi_neon);
 			#ifdef __aarch64__
 			// enable only if 32 registers available
-			_mul_add_multi = &gf16_shuffle_muladd_multi_neon;
-			_mul_add_multi_stridepf = &gf16_shuffle_muladd_multi_stridepf_neon;
+			SET_FOR_INVERT(_mul_add_multi, gf16_shuffle_muladd_multi_neon);
+			SET_FOR_INVERT(_mul_add_multi_stridepf, gf16_shuffle_muladd_multi_stridepf_neon);
 			_mul_add_multi_packed = &gf16_shuffle_muladd_multi_packed_neon;
 			// TODO: on Cortex A53, prefetching seems to be slower, so disabled for now
 			//_mul_add_multi_packpf = &gf16_shuffle_muladd_multi_packpf_neon;
-			prepare_packed = &gf16_shuffle_prepare_packed_neon;
+			SET_BASIC_OP(prepare_packed, gf16_shuffle_prepare_packed_neon);
 			#endif
-			add_multi_packed = &gf_add_multi_packed_shuffle_neon;
+			SET_BASIC_OP(add_multi_packed, gf_add_multi_packed_shuffle_neon);
 			add_multi_packpf = &gf_add_multi_packpf_shuffle_neon;
 			prepare_packed_cksum = &gf16_shuffle_prepare_packed_cksum_neon;
 			prepare_partial_packsum = &gf16_shuffle_prepare_partial_packsum_neon;
-			finish_packed = &gf16_shuffle_finish_packed_neon;
+			SET_BASIC_OP(finish_packed, gf16_shuffle_finish_packed_neon);
 			finish_packed_cksum = &gf16_shuffle_finish_packed_cksum_neon;
 			finish_partial_packsum = &gf16_shuffle_finish_partial_packsum_neon;
-			copy_cksum = &gf16_cksum_copy_neon;
-			copy_cksum_check = &gf16_cksum_copy_check_neon;
+			SET_FOR_OPENCL(copy_cksum, gf16_cksum_copy_neon);
+			SET_FOR_OPENCL(copy_cksum_check, gf16_cksum_copy_check_neon);
 		break;
 		
 		case GF16_CLMUL_NEON: {
@@ -739,28 +754,28 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			// use Shuffle for single region multiplies, because it's faster (NOTE: disabled for slim GF16 build)
 			scratch = gf16_shuffle_init_arm(GF16_POLYNOMIAL);
 			if(scratch) {
-				_mul = &gf16_shuffle_mul_neon;
+				SET_FOR_INVERT(_mul, gf16_shuffle_mul_neon);
 				_mul_add = &gf16_shuffle_muladd_neon;
 			} else {
-				_mul = &gf16_clmul_mul_neon;
+				SET_FOR_INVERT(_mul, gf16_clmul_mul_neon);
 				_mul_add = &gf16_clmul_muladd_neon;
 			}
-			_mul_add_multi = &gf16_clmul_muladd_multi_neon;
-			_mul_add_multi_stridepf = &gf16_clmul_muladd_multi_stridepf_neon;
+			SET_FOR_INVERT(_mul_add_multi, gf16_clmul_muladd_multi_neon);
+			SET_FOR_INVERT(_mul_add_multi_stridepf, gf16_clmul_muladd_multi_stridepf_neon);
 			_mul_add_multi_packed = &gf16_clmul_muladd_multi_packed_neon;
-			add_multi = &gf_add_multi_neon;
-			add_multi_packed = &gf_add_multi_packed_clmul_neon;
+			SET_BASIC_OP(add_multi, gf_add_multi_neon);
+			SET_BASIC_OP(add_multi_packed, gf_add_multi_packed_clmul_neon);
 			add_multi_packpf = &gf_add_multi_packpf_clmul_neon;
 			// TODO: on Cortex A53, prefetching seems to be slower, so disabled for now
 			//_mul_add_multi_packpf = &gf16_clmul_muladd_multi_packpf_neon;
-			prepare_packed = &gf16_clmul_prepare_packed_neon;
+			SET_BASIC_OP(prepare_packed, gf16_clmul_prepare_packed_neon);
 			prepare_packed_cksum = &gf16_clmul_prepare_packed_cksum_neon;
 			prepare_partial_packsum = &gf16_clmul_prepare_partial_packsum_neon;
-			finish_packed = &gf16_shuffle_finish_packed_neon;
+			SET_BASIC_OP(finish_packed, gf16_shuffle_finish_packed_neon);
 			finish_packed_cksum = &gf16_shuffle_finish_packed_cksum_neon; // re-use shuffle routine
 			finish_partial_packsum = &gf16_shuffle_finish_partial_packsum_neon;
-			copy_cksum = &gf16_cksum_copy_neon;
-			copy_cksum_check = &gf16_cksum_copy_check_neon;
+			SET_FOR_OPENCL(copy_cksum, gf16_cksum_copy_neon);
+			SET_FOR_OPENCL(copy_cksum_check, gf16_cksum_copy_check_neon);
 		} break;
 		
 		case GF16_CLMUL_SHA3: {
@@ -769,27 +784,27 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			
 			scratch = gf16_shuffle_init_arm(GF16_POLYNOMIAL);
 			if(scratch) {
-				_mul = &gf16_shuffle_mul_neon;
+				SET_FOR_INVERT(_mul, gf16_shuffle_mul_neon);
 				_mul_add = &gf16_shuffle_muladd_neon;
 			} else {
-				_mul = &gf16_clmul_mul_sha3;
+				SET_FOR_INVERT(_mul, gf16_clmul_mul_sha3);
 				_mul_add = &gf16_clmul_muladd_sha3;
 			}
-			_mul_add_multi = &gf16_clmul_muladd_multi_sha3;
-			_mul_add_multi_stridepf = &gf16_clmul_muladd_multi_stridepf_sha3;
+			SET_FOR_INVERT(_mul_add_multi, gf16_clmul_muladd_multi_sha3);
+			SET_FOR_INVERT(_mul_add_multi_stridepf, gf16_clmul_muladd_multi_stridepf_sha3);
 			_mul_add_multi_packed = &gf16_clmul_muladd_multi_packed_sha3;
-			add_multi = &gf_add_multi_neon;
-			add_multi_packed = &gf_add_multi_packed_clmul_neon;
+			SET_BASIC_OP(add_multi, gf_add_multi_neon);
+			SET_BASIC_OP(add_multi_packed, gf_add_multi_packed_clmul_neon);
 			add_multi_packpf = &gf_add_multi_packpf_clmul_neon;
 			_mul_add_multi_packpf = &gf16_clmul_muladd_multi_packpf_sha3;
-			prepare_packed = &gf16_clmul_prepare_packed_neon;
+			SET_BASIC_OP(prepare_packed, gf16_clmul_prepare_packed_neon);
 			prepare_packed_cksum = &gf16_clmul_prepare_packed_cksum_neon;
 			prepare_partial_packsum = &gf16_clmul_prepare_partial_packsum_neon;
-			finish_packed = &gf16_shuffle_finish_packed_neon;
+			SET_BASIC_OP(finish_packed, gf16_shuffle_finish_packed_neon);
 			finish_packed_cksum = &gf16_shuffle_finish_packed_cksum_neon; // re-use shuffle routine
 			finish_partial_packsum = &gf16_shuffle_finish_partial_packsum_neon;
-			copy_cksum = &gf16_cksum_copy_neon;
-			copy_cksum_check = &gf16_cksum_copy_check_neon;
+			SET_FOR_OPENCL(copy_cksum, gf16_cksum_copy_neon);
+			SET_FOR_OPENCL(copy_cksum_check, gf16_cksum_copy_check_neon);
 		} break;
 		
 		case GF16_SHUFFLE_128_SVE:
@@ -797,67 +812,67 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			
 			scratch = gf16_shuffle_init_128_sve(GF16_POLYNOMIAL);
 			
-			_mul = &gf16_shuffle_mul_128_sve;
+			SET_FOR_INVERT(_mul, gf16_shuffle_mul_128_sve);
 			_mul_add = &gf16_shuffle_muladd_128_sve;
-			_mul_add_multi = &gf16_shuffle_muladd_multi_128_sve;
-			_mul_add_multi_stridepf = &gf16_shuffle_muladd_multi_stridepf_128_sve;
+			SET_FOR_INVERT(_mul_add_multi, gf16_shuffle_muladd_multi_128_sve);
+			SET_FOR_INVERT(_mul_add_multi_stridepf, gf16_shuffle_muladd_multi_stridepf_128_sve);
 			_mul_add_multi_packed = &gf16_shuffle_muladd_multi_packed_128_sve;
 			//_mul_add_multi_packpf = &gf16_shuffle_muladd_multi_packpf_128_sve;
-			add_multi = &gf_add_multi_sve;
-			add_multi_packed = &gf_add_multi_packed_sve;
+			SET_BASIC_OP(add_multi, gf_add_multi_sve);
+			SET_BASIC_OP(add_multi_packed, gf_add_multi_packed_sve);
 			add_multi_packpf = &gf_add_multi_packpf_sve;
-			prepare_packed = &gf16_shuffle_prepare_packed_sve;
+			SET_BASIC_OP(prepare_packed, gf16_shuffle_prepare_packed_sve);
 			prepare_packed_cksum = &gf16_shuffle_prepare_packed_cksum_sve;
 			prepare_partial_packsum = &gf16_shuffle_prepare_partial_packsum_sve;
-			finish_packed = &gf16_shuffle_finish_packed_sve;
+			SET_BASIC_OP(finish_packed, gf16_shuffle_finish_packed_sve);
 			finish_packed_cksum = &gf16_shuffle_finish_packed_cksum_sve;
 			finish_partial_packsum = &gf16_shuffle_finish_partial_packsum_sve;
-			copy_cksum = &gf16_cksum_copy_sve;
-			copy_cksum_check = &gf16_cksum_copy_check_sve;
+			SET_FOR_OPENCL(copy_cksum, gf16_cksum_copy_sve);
+			SET_FOR_OPENCL(copy_cksum_check, gf16_cksum_copy_check_sve);
 		break;
 		
 		case GF16_SHUFFLE_128_SVE2:
 			METHOD_REQUIRES(gf16_available_sve2)
 			
-			_mul = &gf16_shuffle_mul_128_sve2;
+			SET_FOR_INVERT(_mul, gf16_shuffle_mul_128_sve2);
 			_mul_add = &gf16_shuffle_muladd_128_sve2;
-			_mul_add_multi = &gf16_shuffle_muladd_multi_128_sve2;
-			_mul_add_multi_stridepf = &gf16_shuffle_muladd_multi_stridepf_128_sve2;
+			SET_FOR_INVERT(_mul_add_multi, gf16_shuffle_muladd_multi_128_sve2);
+			SET_FOR_INVERT(_mul_add_multi_stridepf, gf16_shuffle_muladd_multi_stridepf_128_sve2);
 			_mul_add_multi_packed = &gf16_shuffle_muladd_multi_packed_128_sve2;
 			//_mul_add_multi_packpf = &gf16_shuffle_muladd_multi_packpf_128_sve2;
-			add_multi = &gf_add_multi_sve2;
-			add_multi_packed = &gf_add_multi_packed_v2i3_sve2;
+			SET_BASIC_OP(add_multi, gf_add_multi_sve2);
+			SET_BASIC_OP(add_multi_packed, gf_add_multi_packed_v2i3_sve2);
 			add_multi_packpf = &gf_add_multi_packpf_v2i3_sve2;
-			prepare_packed = &gf16_shuffle_prepare_packed_sve;
+			SET_BASIC_OP(prepare_packed, gf16_shuffle_prepare_packed_sve);
 			prepare_packed_cksum = &gf16_shuffle_prepare_packed_cksum_sve;
 			prepare_partial_packsum = &gf16_shuffle_prepare_partial_packsum_sve;
-			finish_packed = &gf16_shuffle_finish_packed_sve;
+			SET_BASIC_OP(finish_packed, gf16_shuffle_finish_packed_sve);
 			finish_packed_cksum = &gf16_shuffle_finish_packed_cksum_sve;
 			finish_partial_packsum = &gf16_shuffle_finish_partial_packsum_sve;
-			copy_cksum = &gf16_cksum_copy_sve;
-			copy_cksum_check = &gf16_cksum_copy_check_sve;
+			SET_FOR_OPENCL(copy_cksum, gf16_cksum_copy_sve);
+			SET_FOR_OPENCL(copy_cksum_check, gf16_cksum_copy_check_sve);
 		break;
 		
 		case GF16_SHUFFLE2X_128_SVE2:
 			METHOD_REQUIRES(gf16_available_sve2 && gf16_sve_get_size() >= 32)
 			
-			_mul = &gf16_shuffle2x_mul_128_sve2;
+			SET_FOR_INVERT(_mul, gf16_shuffle2x_mul_128_sve2);
 			_mul_add = &gf16_shuffle2x_muladd_128_sve2;
-			_mul_add_multi = &gf16_shuffle2x_muladd_multi_128_sve2;
-			_mul_add_multi_stridepf = &gf16_shuffle2x_muladd_multi_stridepf_128_sve2;
+			SET_FOR_INVERT(_mul_add_multi, gf16_shuffle2x_muladd_multi_128_sve2);
+			SET_FOR_INVERT(_mul_add_multi_stridepf, gf16_shuffle2x_muladd_multi_stridepf_128_sve2);
 			_mul_add_multi_packed = &gf16_shuffle2x_muladd_multi_packed_128_sve2;
 			//_mul_add_multi_packpf = &gf16_shuffle2x_muladd_multi_packpf_128_sve2;
-			add_multi = &gf_add_multi_sve2;
-			add_multi_packed = &gf_add_multi_packed_v1i6_sve2;
+			SET_BASIC_OP(add_multi, gf_add_multi_sve2);
+			SET_BASIC_OP(add_multi_packed, gf_add_multi_packed_v1i6_sve2);
 			add_multi_packpf = &gf_add_multi_packpf_v1i6_sve2;
-			prepare_packed = &gf16_shuffle2x_prepare_packed_sve;
+			SET_BASIC_OP(prepare_packed, gf16_shuffle2x_prepare_packed_sve);
 			prepare_packed_cksum = &gf16_shuffle2x_prepare_packed_cksum_sve;
 			prepare_partial_packsum = &gf16_shuffle2x_prepare_partial_packsum_sve;
-			finish_packed = &gf16_shuffle2x_finish_packed_sve;
+			SET_BASIC_OP(finish_packed, gf16_shuffle2x_finish_packed_sve);
 			finish_packed_cksum = &gf16_shuffle2x_finish_packed_cksum_sve;
 			finish_partial_packsum = &gf16_shuffle2x_finish_partial_packsum_sve;
-			copy_cksum = &gf16_cksum_copy_sve;
-			copy_cksum_check = &gf16_cksum_copy_check_sve;
+			SET_FOR_OPENCL(copy_cksum, gf16_cksum_copy_sve);
+			SET_FOR_OPENCL(copy_cksum_check, gf16_cksum_copy_check_sve);
 		break;
 		
 		case GF16_SHUFFLE_512_SVE2:
@@ -866,274 +881,274 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			
 			scratch = gf16_shuffle_init_512_sve(GF16_POLYNOMIAL);
 			
-			_mul = &gf16_shuffle_mul_512_sve2;
+			SET_FOR_INVERT(_mul, gf16_shuffle_mul_512_sve2);
 			_mul_add = &gf16_shuffle_muladd_512_sve2;
-			_mul_add_multi = &gf16_shuffle_muladd_multi_512_sve2;
-			_mul_add_multi_stridepf = &gf16_shuffle_muladd_multi_stridepf_512_sve2;
+			SET_FOR_INVERT(_mul_add_multi, gf16_shuffle_muladd_multi_512_sve2);
+			SET_FOR_INVERT(_mul_add_multi_stridepf, gf16_shuffle_muladd_multi_stridepf_512_sve2);
 			_mul_add_multi_packed = &gf16_shuffle_muladd_multi_packed_512_sve2;
 			//_mul_add_multi_packpf = &gf16_shuffle_muladd_multi_packpf_512_sve2;
-			add_multi = &gf_add_multi_sve2;
-			add_multi_packed = &gf_add_multi_packed_v2i4_sve2;
+			SET_BASIC_OP(add_multi, gf_add_multi_sve2);
+			SET_BASIC_OP(add_multi_packed, gf_add_multi_packed_v2i4_sve2);
 			add_multi_packpf = &gf_add_multi_packpf_v2i4_sve2;
-			prepare_packed = &gf16_shuffle_prepare_packed_512_sve2;
+			SET_BASIC_OP(prepare_packed, gf16_shuffle_prepare_packed_512_sve2);
 			prepare_packed_cksum = &gf16_shuffle_prepare_packed_cksum_512_sve2;
 			prepare_partial_packsum = &gf16_shuffle_prepare_partial_packsum_512_sve2;
-			finish_packed = &gf16_shuffle_finish_packed_sve;
+			SET_BASIC_OP(finish_packed, gf16_shuffle_finish_packed_sve);
 			finish_packed_cksum = &gf16_shuffle_finish_packed_cksum_sve;
 			finish_partial_packsum = &gf16_shuffle_finish_partial_packsum_sve;
-			copy_cksum = &gf16_cksum_copy_sve;
-			copy_cksum_check = &gf16_cksum_copy_check_sve;
+			SET_FOR_OPENCL(copy_cksum, gf16_cksum_copy_sve);
+			SET_FOR_OPENCL(copy_cksum_check, gf16_cksum_copy_check_sve);
 		break;
 
 		case GF16_CLMUL_SVE2:
 			METHOD_REQUIRES(gf16_available_sve2)
 			
 			// single region multiplies (_mul/add) use Shuffle-128 instead
-			_mul = &gf16_shuffle_mul_128_sve2;
+			SET_FOR_INVERT(_mul, gf16_shuffle_mul_128_sve2);
 			_mul_add = &gf16_shuffle_muladd_128_sve2;
-			_mul_add_multi = &gf16_clmul_muladd_multi_sve2;
-			_mul_add_multi_stridepf = &gf16_clmul_muladd_multi_stridepf_sve2;
+			SET_FOR_INVERT(_mul_add_multi, gf16_clmul_muladd_multi_sve2);
+			SET_FOR_INVERT(_mul_add_multi_stridepf, gf16_clmul_muladd_multi_stridepf_sve2);
 			_mul_add_multi_packed = &gf16_clmul_muladd_multi_packed_sve2;
 			//_mul_add_multi_packpf = &gf16_clmul_muladd_multi_packpf_sve2;
-			add_multi = &gf_add_multi_sve2;
-			add_multi_packed = &gf_add_multi_packed_v2i8_sve2;
+			SET_BASIC_OP(add_multi, gf_add_multi_sve2);
+			SET_BASIC_OP(add_multi_packed, gf_add_multi_packed_v2i8_sve2);
 			add_multi_packpf = &gf_add_multi_packpf_v2i8_sve2;
-			prepare_packed = &gf16_clmul_prepare_packed_sve2;
+			SET_BASIC_OP(prepare_packed, gf16_clmul_prepare_packed_sve2);
 			prepare_packed_cksum = &gf16_clmul_prepare_packed_cksum_sve2;
 			prepare_partial_packsum = &gf16_clmul_prepare_partial_packsum_sve2;
-			finish_packed = &gf16_shuffle_finish_packed_sve;
+			SET_BASIC_OP(finish_packed, gf16_shuffle_finish_packed_sve);
 			finish_packed_cksum = &gf16_shuffle_finish_packed_cksum_sve; // reuse shuffle
 			finish_partial_packsum = &gf16_shuffle_finish_partial_packsum_sve;
-			copy_cksum = &gf16_cksum_copy_sve;
-			copy_cksum_check = &gf16_cksum_copy_check_sve;
+			SET_FOR_OPENCL(copy_cksum, gf16_cksum_copy_sve);
+			SET_FOR_OPENCL(copy_cksum_check, gf16_cksum_copy_check_sve);
 		break;
 		
 		case GF16_SHUFFLE_128_RVV:
 			scratch = gf16_shuffle_init_128_rvv(GF16_POLYNOMIAL);
 			METHOD_REQUIRES(gf16_available_rvv)
 			
-			_mul = &gf16_shuffle_mul_128_rvv;
+			SET_FOR_INVERT(_mul, gf16_shuffle_mul_128_rvv);
 			_mul_add = &gf16_shuffle_muladd_128_rvv;
-			_mul_add_multi = &gf16_shuffle_muladd_multi_128_rvv;
-			_mul_add_multi_stridepf = &gf16_shuffle_muladd_multi_stridepf_128_rvv;
+			SET_FOR_INVERT(_mul_add_multi, gf16_shuffle_muladd_multi_128_rvv);
+			SET_FOR_INVERT(_mul_add_multi_stridepf, gf16_shuffle_muladd_multi_stridepf_128_rvv);
 			_mul_add_multi_packed = &gf16_shuffle_muladd_multi_packed_128_rvv;
 			//_mul_add_multi_packpf = &gf16_shuffle_muladd_multi_packpf_128_rvv;
-			add_multi = &gf_add_multi_rvv;
-			add_multi_packed = &gf_add_multi_packed_v2i3_rvv;
+			SET_BASIC_OP(add_multi, gf_add_multi_rvv);
+			SET_BASIC_OP(add_multi_packed, gf_add_multi_packed_v2i3_rvv);
 			add_multi_packpf = &gf_add_multi_packpf_v2i3_rvv;
-			prepare_packed = &gf16_shuffle_prepare_packed_rvv;
+			SET_BASIC_OP(prepare_packed, gf16_shuffle_prepare_packed_rvv);
 			prepare_packed_cksum = &gf16_shuffle_prepare_packed_cksum_rvv;
 			prepare_partial_packsum = &gf16_shuffle_prepare_partial_packsum_rvv;
-			finish_packed = &gf16_shuffle_finish_packed_rvv;
+			SET_BASIC_OP(finish_packed, gf16_shuffle_finish_packed_rvv);
 			finish_packed_cksum = &gf16_shuffle_finish_packed_cksum_rvv;
 			finish_partial_packsum = &gf16_shuffle_finish_partial_packsum_rvv;
-			copy_cksum = &gf16_cksum_copy_rvv;
-			copy_cksum_check = &gf16_cksum_copy_check_rvv;
+			SET_FOR_OPENCL(copy_cksum, gf16_cksum_copy_rvv);
+			SET_FOR_OPENCL(copy_cksum_check, gf16_cksum_copy_check_rvv);
 		break;
 		
 		case GF16_CLMUL_RVV:
 			METHOD_REQUIRES(gf16_available_rvv_zvbc)
 			
-			_mul = &gf16_clmul_mul_rvv;
+			SET_FOR_INVERT(_mul, gf16_clmul_mul_rvv);
 			_mul_add = &gf16_clmul_muladd_rvv;
-			_mul_add_multi = &gf16_clmul_muladd_multi_rvv;
-			_mul_add_multi_stridepf = &gf16_clmul_muladd_multi_stridepf_rvv;
+			SET_FOR_INVERT(_mul_add_multi, gf16_clmul_muladd_multi_rvv);
+			SET_FOR_INVERT(_mul_add_multi_stridepf, gf16_clmul_muladd_multi_stridepf_rvv);
 			_mul_add_multi_packed = &gf16_clmul_muladd_multi_packed_rvv;
 			//_mul_add_multi_packpf = &gf16_clmul_muladd_multi_packpf_rvv;
-			add_multi = &gf_add_multi_rvv;
-			add_multi_packed = &gf_add_multi_packed_v1i12_rvv;
+			SET_BASIC_OP(add_multi, gf_add_multi_rvv);
+			SET_BASIC_OP(add_multi_packed, gf_add_multi_packed_v1i12_rvv);
 			add_multi_packpf = &gf_add_multi_packpf_v1i12_rvv;
-			prepare_packed = &gf16_clmul_prepare_packed_rvv;
+			SET_BASIC_OP(prepare_packed, gf16_clmul_prepare_packed_rvv);
 			prepare_packed_cksum = &gf16_clmul_prepare_packed_cksum_rvv;
 			prepare_partial_packsum = &gf16_clmul_prepare_partial_packsum_rvv;
-			finish_packed = &gf16_clmul_finish_packed_rvv;
+			SET_BASIC_OP(finish_packed, gf16_clmul_finish_packed_rvv);
 			finish_packed_cksum = &gf16_clmul_finish_packed_cksum_rvv;
 			finish_partial_packsum = &gf16_clmul_finish_partial_packsum_rvv;
-			copy_cksum = &gf16_cksum_copy_rvv;
-			copy_cksum_check = &gf16_cksum_copy_check_rvv;
+			SET_FOR_OPENCL(copy_cksum, gf16_cksum_copy_rvv);
+			SET_FOR_OPENCL(copy_cksum_check, gf16_cksum_copy_check_rvv);
 		break;
 		
 		case GF16_AFFINE_AVX512:
 			scratch = gf16_affine_init_avx2(GF16_POLYNOMIAL);
 			METHOD_REQUIRES(gf16_affine_available_avx512 && gf16_shuffle_available_avx512)
-			_mul = &gf16_affine_mul_avx512;
+			SET_FOR_INVERT(_mul, gf16_affine_mul_avx512);
 			_mul_add = &gf16_affine_muladd_avx512;
 			_mul_add_pf = &gf16_affine_muladd_prefetch_avx512;
-			add_multi = &gf_add_multi_avx512;
+			SET_BASIC_OP(add_multi, gf_add_multi_avx512);
 			#ifdef PLATFORM_AMD64
-			_mul_add_multi = &gf16_affine_muladd_multi_avx512;
-			_mul_add_multi_stridepf = &gf16_affine_muladd_multi_stridepf_avx512;
+			SET_FOR_INVERT(_mul_add_multi, gf16_affine_muladd_multi_avx512);
+			SET_FOR_INVERT(_mul_add_multi_stridepf, gf16_affine_muladd_multi_stridepf_avx512);
 			_mul_add_multi_packed = &gf16_affine_muladd_multi_packed_avx512;
 			_mul_add_multi_packpf = &gf16_affine_muladd_multi_packpf_avx512;
-			add_multi_packed = &gf_add_multi_packed_v2i6_avx512;
+			SET_BASIC_OP(add_multi_packed, gf_add_multi_packed_v2i6_avx512);
 			add_multi_packpf = &gf_add_multi_packpf_v2i6_avx512;
 			#else
-			add_multi_packed = &gf_add_multi_packed_v2i1_avx512;
+			SET_BASIC_OP(add_multi_packed, gf_add_multi_packed_v2i1_avx512);
 			add_multi_packpf = &gf_add_multi_packpf_v2i1_avx512;
 			#endif
-			prepare = &gf16_shuffle_prepare_avx512;
-			prepare_packed = &gf16_affine_prepare_packed_avx512;
+			SET_FOR_INVERT(prepare, gf16_shuffle_prepare_avx512);
+			SET_BASIC_OP(prepare_packed, gf16_affine_prepare_packed_avx512);
 			prepare_packed_cksum = &gf16_affine_prepare_packed_cksum_avx512;
 			prepare_partial_packsum = &gf16_affine_prepare_partial_packsum_avx512;
-			finish = &gf16_shuffle_finish_avx512;
-			finish_packed = &gf16_shuffle_finish_packed_avx512;
+			SET_FOR_INVERT(finish, gf16_shuffle_finish_avx512);
+			SET_BASIC_OP(finish_packed, gf16_shuffle_finish_packed_avx512);
 			finish_packed_cksum = &gf16_shuffle_finish_packed_cksum_avx512;
 			finish_partial_packsum = &gf16_shuffle_finish_partial_packsum_avx512;
-			copy_cksum = &gf16_cksum_copy_avx512;
-			copy_cksum_check = &gf16_cksum_copy_check_avx512;
-			replace_word = &gf16_shuffle64_replace_word;
+			SET_FOR_OPENCL(copy_cksum, gf16_cksum_copy_avx512);
+			SET_FOR_OPENCL(copy_cksum_check, gf16_cksum_copy_check_avx512);
+			SET_FOR_INVERT(replace_word, gf16_shuffle64_replace_word);
 		break;
 		
 		case GF16_AFFINE_AVX2:
 			scratch = gf16_affine_init_avx2(GF16_POLYNOMIAL);
 			METHOD_REQUIRES(gf16_affine_available_avx2 && gf16_shuffle_available_avx2)
-			_mul = &gf16_affine_mul_avx2;
+			SET_FOR_INVERT(_mul, gf16_affine_mul_avx2);
 			_mul_add = &gf16_affine_muladd_avx2;
 			_mul_add_pf = &gf16_affine_muladd_prefetch_avx2;
-			add_multi = &gf_add_multi_avx2;
+			SET_BASIC_OP(add_multi, gf_add_multi_avx2);
 			#ifdef PLATFORM_AMD64
-			_mul_add_multi = &gf16_affine_muladd_multi_avx2;
-			_mul_add_multi_stridepf = &gf16_affine_muladd_multi_stridepf_avx2;
+			SET_FOR_INVERT(_mul_add_multi, gf16_affine_muladd_multi_avx2);
+			SET_FOR_INVERT(_mul_add_multi_stridepf, gf16_affine_muladd_multi_stridepf_avx2);
 			_mul_add_multi_packed = &gf16_affine_muladd_multi_packed_avx2;
 			_mul_add_multi_packpf = &gf16_affine_muladd_multi_packpf_avx2;
-			add_multi_packed = &gf_add_multi_packed_v2i3_avx2;
+			SET_BASIC_OP(add_multi_packed, gf_add_multi_packed_v2i3_avx2);
 			add_multi_packpf = &gf_add_multi_packpf_v2i3_avx2;
 			#else
-			add_multi_packed = &gf_add_multi_packed_v2i1_avx2;
+			SET_BASIC_OP(add_multi_packed, gf_add_multi_packed_v2i1_avx2);
 			add_multi_packpf = &gf_add_multi_packpf_v2i1_avx2;
 			#endif
-			prepare = &gf16_shuffle_prepare_avx2;
-			prepare_packed = &gf16_affine_prepare_packed_avx2;
+			SET_FOR_INVERT(prepare, gf16_shuffle_prepare_avx2);
+			SET_BASIC_OP(prepare_packed, gf16_affine_prepare_packed_avx2);
 			prepare_packed_cksum = &gf16_affine_prepare_packed_cksum_avx2;
 			prepare_partial_packsum = &gf16_affine_prepare_partial_packsum_avx2;
-			finish = &gf16_shuffle_finish_avx2;
-			finish_packed = &gf16_shuffle_finish_packed_avx2;
+			SET_FOR_INVERT(finish, gf16_shuffle_finish_avx2);
+			SET_BASIC_OP(finish_packed, gf16_shuffle_finish_packed_avx2);
 			finish_packed_cksum = &gf16_shuffle_finish_packed_cksum_avx2;
 			finish_partial_packsum = &gf16_shuffle_finish_partial_packsum_avx2;
-			copy_cksum = &gf16_cksum_copy_avx2;
-			copy_cksum_check = &gf16_cksum_copy_check_avx2;
-			replace_word = &gf16_shuffle32_replace_word;
+			SET_FOR_OPENCL(copy_cksum, gf16_cksum_copy_avx2);
+			SET_FOR_OPENCL(copy_cksum_check, gf16_cksum_copy_check_avx2);
+			SET_FOR_INVERT(replace_word, gf16_shuffle32_replace_word);
 		break;
 		
 		case GF16_AFFINE_GFNI:
 			scratch = gf16_affine_init_gfni(GF16_POLYNOMIAL);
 			METHOD_REQUIRES(gf16_affine_available_gfni && gf16_shuffle_available_ssse3)
-			_mul = &gf16_affine_mul_gfni;
+			SET_FOR_INVERT(_mul, gf16_affine_mul_gfni);
 			_mul_add = &gf16_affine_muladd_gfni;
 			_mul_add_pf = &gf16_affine_muladd_prefetch_gfni;
-			add_multi = &gf_add_multi_sse2;
+			SET_BASIC_OP(add_multi, gf_add_multi_sse2);
 			#ifdef PLATFORM_AMD64
-			_mul_add_multi = &gf16_affine_muladd_multi_gfni;
-			_mul_add_multi_stridepf = &gf16_affine_muladd_multi_stridepf_gfni;
+			SET_FOR_INVERT(_mul_add_multi, gf16_affine_muladd_multi_gfni);
+			SET_FOR_INVERT(_mul_add_multi_stridepf, gf16_affine_muladd_multi_stridepf_gfni);
 			_mul_add_multi_packed = &gf16_affine_muladd_multi_packed_gfni;
 			_mul_add_multi_packpf = &gf16_affine_muladd_multi_packpf_gfni;
-			add_multi_packed = &gf_add_multi_packed_v2i3_sse2;
+			SET_BASIC_OP(add_multi_packed, gf_add_multi_packed_v2i3_sse2);
 			add_multi_packpf = &gf_add_multi_packpf_v2i3_sse2;
 			#else
-			add_multi_packed = &gf_add_multi_packed_v2i1_sse2;
+			SET_BASIC_OP(add_multi_packed, gf_add_multi_packed_v2i1_sse2);
 			add_multi_packpf = &gf_add_multi_packpf_v2i1_sse2;
 			#endif
-			prepare = &gf16_shuffle_prepare_ssse3;
-			prepare_packed = &gf16_affine_prepare_packed_gfni;
+			SET_FOR_INVERT(prepare, gf16_shuffle_prepare_ssse3);
+			SET_BASIC_OP(prepare_packed, gf16_affine_prepare_packed_gfni);
 			prepare_packed_cksum = &gf16_affine_prepare_packed_cksum_gfni;
 			prepare_partial_packsum = &gf16_affine_prepare_partial_packsum_gfni;
-			finish = &gf16_shuffle_finish_ssse3;
-			finish_packed = &gf16_shuffle_finish_packed_ssse3;
+			SET_FOR_INVERT(finish, gf16_shuffle_finish_ssse3);
+			SET_BASIC_OP(finish_packed, gf16_shuffle_finish_packed_ssse3);
 			finish_packed_cksum = &gf16_shuffle_finish_packed_cksum_ssse3;
 			finish_partial_packsum = &gf16_shuffle_finish_partial_packsum_ssse3;
-			copy_cksum = &gf16_cksum_copy_sse2;
-			copy_cksum_check = &gf16_cksum_copy_check_sse2;
-			replace_word = &gf16_shuffle16_replace_word;
+			SET_FOR_OPENCL(copy_cksum, gf16_cksum_copy_sse2);
+			SET_FOR_OPENCL(copy_cksum_check, gf16_cksum_copy_check_sse2);
+			SET_FOR_INVERT(replace_word, gf16_shuffle16_replace_word);
 		break;
 		
 		case GF16_AFFINE2X_AVX512:
 			scratch = gf16_affine_init_avx2(GF16_POLYNOMIAL);
 			METHOD_REQUIRES(gf16_affine_available_avx512 && gf16_shuffle_available_avx512)
-			_mul = &gf16_affine2x_mul_avx512;
+			SET_FOR_INVERT(_mul, gf16_affine2x_mul_avx512);
 			_mul_add = &gf16_affine2x_muladd_avx512;
-			_mul_add_multi = &gf16_affine2x_muladd_multi_avx512;
-			_mul_add_multi_stridepf = &gf16_affine2x_muladd_multi_stridepf_avx512;
+			SET_FOR_INVERT(_mul_add_multi, gf16_affine2x_muladd_multi_avx512);
+			SET_FOR_INVERT(_mul_add_multi_stridepf, gf16_affine2x_muladd_multi_stridepf_avx512);
 			_mul_add_multi_packed = &gf16_affine2x_muladd_multi_packed_avx512;
 			_mul_add_multi_packpf = &gf16_affine2x_muladd_multi_packpf_avx512;
-			add_multi = &gf_add_multi_avx512;
+			SET_BASIC_OP(add_multi, gf_add_multi_avx512);
 			#ifdef PLATFORM_AMD64
-			add_multi_packed = &gf_add_multi_packed_v1i12_avx512;
+			SET_BASIC_OP(add_multi_packed, gf_add_multi_packed_v1i12_avx512);
 			add_multi_packpf = &gf_add_multi_packpf_v1i12_avx512;
 			#else
-			add_multi_packed = &gf_add_multi_packed_v1i2_avx512;
+			SET_BASIC_OP(add_multi_packed, gf_add_multi_packed_v1i2_avx512);
 			add_multi_packpf = &gf_add_multi_packpf_v1i2_avx512;
 			#endif
-			prepare = &gf16_affine2x_prepare_avx512;
-			prepare_packed = &gf16_affine2x_prepare_packed_avx512;
+			SET_FOR_INVERT(prepare, gf16_affine2x_prepare_avx512);
+			SET_BASIC_OP(prepare_packed, gf16_affine2x_prepare_packed_avx512);
 			prepare_packed_cksum = &gf16_affine2x_prepare_packed_cksum_avx512;
 			prepare_partial_packsum = &gf16_affine2x_prepare_partial_packsum_avx512;
-			finish = &gf16_affine2x_finish_avx512;
-			finish_packed = &gf16_affine2x_finish_packed_avx512;
+			SET_FOR_INVERT(finish, gf16_affine2x_finish_avx512);
+			SET_BASIC_OP(finish_packed, gf16_affine2x_finish_packed_avx512);
 			finish_packed_cksum = &gf16_affine2x_finish_packed_cksum_avx512;
 			finish_partial_packsum = &gf16_affine2x_finish_partial_packsum_avx512;
-			copy_cksum = &gf16_cksum_copy_avx512;
-			copy_cksum_check = &gf16_cksum_copy_check_avx512;
-			replace_word = &gf16_affine2x_replace_word;
+			SET_FOR_OPENCL(copy_cksum, gf16_cksum_copy_avx512);
+			SET_FOR_OPENCL(copy_cksum_check, gf16_cksum_copy_check_avx512);
+			SET_FOR_INVERT(replace_word, gf16_affine2x_replace_word);
 		break;
 		
 		case GF16_AFFINE2X_AVX2:
 			scratch = gf16_affine_init_avx2(GF16_POLYNOMIAL);
 			METHOD_REQUIRES(gf16_affine_available_avx2 && gf16_shuffle_available_avx2)
-			_mul = &gf16_affine2x_mul_avx2;
+			SET_FOR_INVERT(_mul, gf16_affine2x_mul_avx2);
 			_mul_add = &gf16_affine2x_muladd_avx2;
-			_mul_add_multi = &gf16_affine2x_muladd_multi_avx2;
-			_mul_add_multi_stridepf = &gf16_affine2x_muladd_multi_stridepf_avx2;
+			SET_FOR_INVERT(_mul_add_multi, gf16_affine2x_muladd_multi_avx2);
+			SET_FOR_INVERT(_mul_add_multi_stridepf, gf16_affine2x_muladd_multi_stridepf_avx2);
 			_mul_add_multi_packed = &gf16_affine2x_muladd_multi_packed_avx2;
 			_mul_add_multi_packpf = &gf16_affine2x_muladd_multi_packpf_avx2;
-			add_multi = &gf_add_multi_avx2;
+			SET_BASIC_OP(add_multi, gf_add_multi_avx2);
 			#ifdef PLATFORM_AMD64
-			add_multi_packed = &gf_add_multi_packed_v1i6_avx2;
+			SET_BASIC_OP(add_multi_packed, gf_add_multi_packed_v1i6_avx2);
 			add_multi_packpf = &gf_add_multi_packpf_v1i6_avx2;
 			#else
-			add_multi_packed = &gf_add_multi_packed_v1i2_avx2;
+			SET_BASIC_OP(add_multi_packed, gf_add_multi_packed_v1i2_avx2);
 			add_multi_packpf = &gf_add_multi_packpf_v1i2_avx2;
 			#endif
-			prepare = &gf16_affine2x_prepare_avx2;
-			prepare_packed = &gf16_affine2x_prepare_packed_avx2;
+			SET_FOR_INVERT(prepare, gf16_affine2x_prepare_avx2);
+			SET_BASIC_OP(prepare_packed, gf16_affine2x_prepare_packed_avx2);
 			prepare_packed_cksum = &gf16_affine2x_prepare_packed_cksum_avx2;
 			prepare_partial_packsum = &gf16_affine2x_prepare_partial_packsum_avx2;
-			finish = &gf16_affine2x_finish_avx2;
-			finish_packed = &gf16_affine2x_finish_packed_avx2;
+			SET_FOR_INVERT(finish, gf16_affine2x_finish_avx2);
+			SET_BASIC_OP(finish_packed, gf16_affine2x_finish_packed_avx2);
 			finish_packed_cksum = &gf16_affine2x_finish_packed_cksum_avx2;
 			finish_partial_packsum = &gf16_affine2x_finish_partial_packsum_avx2;
-			copy_cksum = &gf16_cksum_copy_avx2;
-			copy_cksum_check = &gf16_cksum_copy_check_avx2;
-			replace_word = &gf16_affine2x_replace_word;
+			SET_FOR_OPENCL(copy_cksum, gf16_cksum_copy_avx2);
+			SET_FOR_OPENCL(copy_cksum_check, gf16_cksum_copy_check_avx2);
+			SET_FOR_INVERT(replace_word, gf16_affine2x_replace_word);
 		break;
 		
 		case GF16_AFFINE2X_GFNI:
 			scratch = gf16_affine_init_gfni(GF16_POLYNOMIAL);
 			METHOD_REQUIRES(gf16_affine_available_gfni && gf16_shuffle_available_ssse3)
-			_mul = &gf16_affine2x_mul_gfni;
+			SET_FOR_INVERT(_mul, gf16_affine2x_mul_gfni);
 			_mul_add = &gf16_affine2x_muladd_gfni;
-			_mul_add_multi = &gf16_affine2x_muladd_multi_gfni;
-			_mul_add_multi_stridepf = &gf16_affine2x_muladd_multi_stridepf_gfni;
+			SET_FOR_INVERT(_mul_add_multi, gf16_affine2x_muladd_multi_gfni);
+			SET_FOR_INVERT(_mul_add_multi_stridepf, gf16_affine2x_muladd_multi_stridepf_gfni);
 			_mul_add_multi_packed = &gf16_affine2x_muladd_multi_packed_gfni;
 			_mul_add_multi_packpf = &gf16_affine2x_muladd_multi_packpf_gfni;
-			add_multi = &gf_add_multi_sse2;
+			SET_BASIC_OP(add_multi, gf_add_multi_sse2);
 			#ifdef PLATFORM_AMD64
-			add_multi_packed = &gf_add_multi_packed_v1i6_sse2;
+			SET_BASIC_OP(add_multi_packed, gf_add_multi_packed_v1i6_sse2);
 			add_multi_packpf = &gf_add_multi_packpf_v1i6_sse2;
 			#else
-			add_multi_packed = &gf_add_multi_packed_v1i2_sse2;
+			SET_BASIC_OP(add_multi_packed, gf_add_multi_packed_v1i2_sse2);
 			add_multi_packpf = &gf_add_multi_packpf_v1i2_sse2;
 			#endif
-			prepare = &gf16_affine2x_prepare_gfni;
-			prepare_packed = &gf16_affine2x_prepare_packed_gfni;
+			SET_FOR_INVERT(prepare, gf16_affine2x_prepare_gfni);
+			SET_BASIC_OP(prepare_packed, gf16_affine2x_prepare_packed_gfni);
 			prepare_packed_cksum = &gf16_affine2x_prepare_packed_cksum_gfni;
 			prepare_partial_packsum = &gf16_affine2x_prepare_partial_packsum_gfni;
-			finish = &gf16_affine2x_finish_gfni;
-			finish_packed = &gf16_affine2x_finish_packed_gfni;
+			SET_FOR_INVERT(finish, gf16_affine2x_finish_gfni);
+			SET_BASIC_OP(finish_packed, gf16_affine2x_finish_packed_gfni);
 			finish_packed_cksum = &gf16_affine2x_finish_packed_cksum_gfni;
 			finish_partial_packsum = &gf16_affine2x_finish_partial_packsum_gfni;
-			copy_cksum = &gf16_cksum_copy_sse2;
-			copy_cksum_check = &gf16_cksum_copy_check_sse2;
-			replace_word = &gf16_affine2x_replace_word;
+			SET_FOR_OPENCL(copy_cksum, gf16_cksum_copy_sse2);
+			SET_FOR_OPENCL(copy_cksum_check, gf16_cksum_copy_check_sse2);
+			SET_FOR_INVERT(replace_word, gf16_affine2x_replace_word);
 		break;
 		
 		case GF16_XOR_JIT_AVX512:
@@ -1150,98 +1165,98 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 					METHOD_REQUIRES(gf16_xor_available_sse2)
 					if(method == GF16_XOR_SSE2) {
 						scratch = gf16_xor_init_sse2(GF16_POLYNOMIAL);
-						_mul = &gf16_xor_mul_sse2;
+						SET_FOR_INVERT(_mul, gf16_xor_mul_sse2);
 						_mul_add = &gf16_xor_muladd_sse2;
 					} else {
 						scratch = gf16_xor_jit_init_sse2(GF16_POLYNOMIAL, jitOptStrat);
-						_mul = &gf16_xor_jit_mul_sse2;
+						SET_FOR_INVERT(_mul, gf16_xor_jit_mul_sse2);
 						_mul_add = &gf16_xor_jit_muladd_sse2;
 						_mul_add_pf = &gf16_xor_jit_muladd_prefetch_sse2;
 					}
-					add_multi = &gf_add_multi_sse2;
-					add_multi_packed = &gf_add_multi_packed_v16i1_sse2;
+					SET_BASIC_OP(add_multi, gf_add_multi_sse2);
+					SET_BASIC_OP(add_multi_packed, gf_add_multi_packed_v16i1_sse2);
 					add_multi_packpf = &gf_add_multi_packpf_v16i1_sse2;
-					prepare = &gf16_xor_prepare_sse2;
-					prepare_packed = &gf16_xor_prepare_packed_sse2;
+					SET_FOR_INVERT(prepare, gf16_xor_prepare_sse2);
+					SET_BASIC_OP(prepare_packed, gf16_xor_prepare_packed_sse2);
 					prepare_packed_cksum = &gf16_xor_prepare_packed_cksum_sse2;
 					prepare_partial_packsum = &gf16_xor_prepare_partial_packsum_sse2;
-					finish = &gf16_xor_finish_sse2;
-					finish_packed = &gf16_xor_finish_packed_sse2;
+					SET_FOR_INVERT(finish, gf16_xor_finish_sse2);
+					SET_BASIC_OP(finish_packed, gf16_xor_finish_packed_sse2);
 					finish_packed_cksum = &gf16_xor_finish_packed_cksum_sse2;
 					finish_partial_packsum = &gf16_xor_finish_partial_packsum_sse2;
-					copy_cksum = &gf16_cksum_copy_sse2;
-					copy_cksum_check = &gf16_cksum_copy_check_sse2;
-					replace_word = gf16_xor16_replace_word;
+					SET_FOR_OPENCL(copy_cksum, gf16_cksum_copy_sse2);
+					SET_FOR_OPENCL(copy_cksum_check, gf16_cksum_copy_check_sse2);
+					SET_FOR_INVERT(replace_word, gf16_xor16_replace_word);
 				break;
 				/*
 				case GF16_XOR_JIT_AVX:
 					METHOD_REQUIRES(gf16_xor_available_avx)
 					scratch = gf16_xor_jit_init_sse2(GF16_POLYNOMIAL, jitOptStrat);
-					_mul = &gf16_xor_jit_mul_avx;
+					SET_FOR_INVERT(_mul, gf16_xor_jit_mul_avx);
 					_mul_add = &gf16_xor_jit_muladd_avx;
 					_mul_add_pf = &gf16_xor_jit_muladd_prefetch_avx;
-					add_multi = &gf_add_multi_sse2;
-					add_multi_packed = &gf_add_multi_packed_v16i1_sse2;
+					SET_BASIC_OP(add_multi, gf_add_multi_sse2);
+					SET_BASIC_OP(add_multi_packed, gf_add_multi_packed_v16i1_sse2);
 					add_multi_packpf = &gf_add_multi_packpf_v16i1_sse2;
-					prepare = &gf16_xor_prepare_avx;
-					prepare_packed = &gf16_xor_prepare_packed_avx;
+					SET_FOR_INVERT(prepare, gf16_xor_prepare_avx);
+					SET_BASIC_OP(prepare_packed, gf16_xor_prepare_packed_avx);
 					prepare_packed_cksum = &gf16_xor_prepare_packed_cksum_avx;
 					prepare_partial_packsum = &gf16_xor_prepare_partial_packsum_avx;
-					finish = &gf16_xor_finish_avx;
-					finish_packed = &gf16_xor_finish_packed_avx;
+					SET_FOR_INVERT(finish, gf16_xor_finish_avx);
+					SET_BASIC_OP(finish_packed, gf16_xor_finish_packed_avx);
 					finish_packed_cksum = &gf16_xor_finish_packed_cksum_avx;
 					finish_partial_packsum = &gf16_xor_finish_partial_packsum_avx;
-					copy_cksum = &gf16_cksum_copy_sse2;
-					copy_cksum_check = &gf16_cksum_copy_check_sse2;
-					replace_word = gf16_xor16_replace_word;
+					SET_FOR_OPENCL(copy_cksum, gf16_cksum_copy_sse2);
+					SET_FOR_OPENCL(copy_cksum_check, gf16_cksum_copy_check_sse2);
+					SET_FOR_INVERT(replace_word, gf16_xor16_replace_word);
 				break;
 				*/
 				case GF16_XOR_JIT_AVX2:
 					METHOD_REQUIRES(gf16_xor_available_avx2)
 #ifdef PLATFORM_AMD64
 					scratch = gf16_xor_jit_init_avx2(GF16_POLYNOMIAL, jitOptStrat);
-					_mul = &gf16_xor_jit_mul_avx2;
+					SET_FOR_INVERT(_mul, gf16_xor_jit_mul_avx2);
 					_mul_add = &gf16_xor_jit_muladd_avx2;
 					_mul_add_pf = &gf16_xor_jit_muladd_prefetch_avx2;
-					add_multi = &gf_add_multi_avx2;
-					add_multi_packed = &gf_add_multi_packed_v16i1_avx2;
+					SET_BASIC_OP(add_multi, gf_add_multi_avx2);
+					SET_BASIC_OP(add_multi_packed, gf_add_multi_packed_v16i1_avx2);
 					add_multi_packpf = &gf_add_multi_packpf_v16i1_avx2;
-					prepare = &gf16_xor_prepare_avx2;
-					prepare_packed = &gf16_xor_prepare_packed_avx2;
+					SET_FOR_INVERT(prepare, gf16_xor_prepare_avx2);
+					SET_BASIC_OP(prepare_packed, gf16_xor_prepare_packed_avx2);
 					prepare_packed_cksum = &gf16_xor_prepare_packed_cksum_avx2;
 					prepare_partial_packsum = &gf16_xor_prepare_partial_packsum_avx2;
-					finish = &gf16_xor_finish_avx2;
-					finish_packed = &gf16_xor_finish_packed_avx2;
+					SET_FOR_INVERT(finish, gf16_xor_finish_avx2);
+					SET_BASIC_OP(finish_packed, gf16_xor_finish_packed_avx2);
 					finish_packed_cksum = &gf16_xor_finish_packed_cksum_avx2;
 					finish_partial_packsum = &gf16_xor_finish_partial_packsum_avx2;
-					copy_cksum = &gf16_cksum_copy_avx2;
-					copy_cksum_check = &gf16_cksum_copy_check_avx2;
-					replace_word = gf16_xor32_replace_word;
+					SET_FOR_OPENCL(copy_cksum, gf16_cksum_copy_avx2);
+					SET_FOR_OPENCL(copy_cksum_check, gf16_cksum_copy_check_avx2);
+					SET_FOR_INVERT(replace_word, gf16_xor32_replace_word);
 #endif
 				break;
 				case GF16_XOR_JIT_AVX512:
 #ifdef PLATFORM_AMD64
 					METHOD_REQUIRES(gf16_xor_available_avx512)
 					scratch = gf16_xor_jit_init_avx512(GF16_POLYNOMIAL, jitOptStrat);
-					_mul = &gf16_xor_jit_mul_avx512;
+					SET_FOR_INVERT(_mul, gf16_xor_jit_mul_avx512);
 					_mul_add = &gf16_xor_jit_muladd_avx512;
 					_mul_add_pf = &gf16_xor_jit_muladd_prefetch_avx512;
-					_mul_add_multi = &gf16_xor_jit_muladd_multi_avx512;
+					SET_FOR_INVERT(_mul_add_multi, gf16_xor_jit_muladd_multi_avx512);
 					_mul_add_multi_packed = &gf16_xor_jit_muladd_multi_packed_avx512;
-					add_multi = &gf_add_multi_avx512;
-					add_multi_packed = &gf_add_multi_packed_v16i6_avx512;
+					SET_BASIC_OP(add_multi, gf_add_multi_avx512);
+					SET_BASIC_OP(add_multi_packed, gf_add_multi_packed_v16i6_avx512);
 					add_multi_packpf = &gf_add_multi_packpf_v16i6_avx512;
-					prepare = &gf16_xor_prepare_avx512;
-					prepare_packed = &gf16_xor_prepare_packed_avx512;
+					SET_FOR_INVERT(prepare, gf16_xor_prepare_avx512);
+					SET_BASIC_OP(prepare_packed, gf16_xor_prepare_packed_avx512);
 					prepare_packed_cksum = &gf16_xor_prepare_packed_cksum_avx512;
 					prepare_partial_packsum = &gf16_xor_prepare_partial_packsum_avx512;
-					finish = &gf16_xor_finish_avx512;
-					finish_packed = &gf16_xor_finish_packed_avx512;
+					SET_FOR_INVERT(finish, gf16_xor_finish_avx512);
+					SET_BASIC_OP(finish_packed, gf16_xor_finish_packed_avx512);
 					finish_packed_cksum = &gf16_xor_finish_packed_cksum_avx512;
 					finish_partial_packsum = &gf16_xor_finish_partial_packsum_avx512;
-					copy_cksum = &gf16_cksum_copy_avx512;
-					copy_cksum_check = &gf16_cksum_copy_check_avx512;
-					replace_word = gf16_xor64_replace_word;
+					SET_FOR_OPENCL(copy_cksum, gf16_cksum_copy_avx512);
+					SET_FOR_OPENCL(copy_cksum_check, gf16_cksum_copy_check_avx512);
+					SET_FOR_INVERT(replace_word, gf16_xor64_replace_word);
 #endif
 				break;
 				default: break; // for pedantic compilers
@@ -1252,28 +1267,28 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 		} break;
 		
 		case GF16_LOOKUP_SSE2:
-			_mul = &gf16_lookup_mul_sse2;
+			SET_FOR_INVERT(_mul, gf16_lookup_mul_sse2);
 			_mul_add = &gf16_lookup_muladd_sse2;
 			prepare_packed_cksum = &gf16_lookup_prepare_packed_cksum_sse2;
 			prepare_partial_packsum = &gf16_lookup_prepare_partial_packsum_sse2;
-			finish_packed = &gf16_lookup_finish_packed_sse2;
+			SET_BASIC_OP(finish_packed, gf16_lookup_finish_packed_sse2);
 			finish_packed_cksum = &gf16_lookup_finish_packed_cksum_sse2;
 			finish_partial_packsum = &gf16_lookup_finish_partial_packsum_sse2;
-			copy_cksum = &gf16_cksum_copy_sse2;
-			copy_cksum_check = &gf16_cksum_copy_check_sse2;
+			SET_FOR_OPENCL(copy_cksum, gf16_cksum_copy_sse2);
+			SET_FOR_OPENCL(copy_cksum_check, gf16_cksum_copy_check_sse2);
 		break;
 		
 #ifndef PARPAR_SLIM_GF16
 		case GF16_LOOKUP3:
-			_mul = &gf16_lookup3_mul;
+			SET_FOR_INVERT(_mul, gf16_lookup3_mul);
 			_mul_add = &gf16_lookup3_muladd;
 			_mul_add_multi_packed = &gf16_lookup3_muladd_multi_packed;
-			add_multi_packed = &gf_add_multi_packed_lookup3;
+			SET_BASIC_OP(add_multi_packed, gf_add_multi_packed_lookup3);
 			add_multi_packpf = &gf_add_multi_packpf_lookup3;
-			prepare_packed = &gf16_lookup3_prepare_packed_generic;
+			SET_BASIC_OP(prepare_packed, gf16_lookup3_prepare_packed_generic);
 			prepare_packed_cksum = &gf16_lookup3_prepare_packed_cksum_generic;
 			prepare_partial_packsum = &gf16_lookup3_prepare_partial_packsum_generic;
-			finish_packed = &gf16_lookup_finish_packed_generic;
+			SET_BASIC_OP(finish_packed, gf16_lookup_finish_packed_generic);
 			finish_packed_cksum = &gf16_lookup_finish_packed_cksum_generic;
 			finish_partial_packsum = &gf16_lookup_finish_partial_packsum_generic;
 			if(gf16_lookup3_stride())
@@ -1282,42 +1297,57 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 #endif
 		case GF16_LOOKUP:
 		default:
-			_mul = &gf16_lookup_mul;
+			SET_FOR_INVERT(_mul, gf16_lookup_mul);
 			_mul_add = &gf16_lookup_muladd;
+#ifdef PARPAR_POW_SUPPORT
 			_pow_add = &gf16_lookup_powadd;
+#endif
 			prepare_packed_cksum = &gf16_lookup_prepare_packed_cksum_generic;
 			prepare_partial_packsum = &gf16_lookup_prepare_partial_packsum_generic;
-			finish_packed = &gf16_lookup_finish_packed_generic;
+			SET_BASIC_OP(finish_packed, gf16_lookup_finish_packed_generic);
 			finish_packed_cksum = &gf16_lookup_finish_packed_cksum_generic;
 			finish_partial_packsum = &gf16_lookup_finish_partial_packsum_generic;
 		break;
 	}
 	#undef METHOD_REQUIRES
+	#undef SET_FOR_INVERT
+	#undef SET_BASIC_OP
+	#undef SET_FOR_OPENCL
 	
 	_info = info(method);
 }
 
 Galois16Mul::Galois16Mul(Galois16Methods method) {
 	scratch = NULL;
+#ifdef PARPAR_INVERT_SUPPORT
 	prepare = &Galois16Mul::_prepare_none;
-	prepare_packed = &Galois16Mul::_prepare_packed_none;
 	finish = &Galois16Mul::_finish_none;
-	finish_packed = NULL;
 	replace_word = &Galois16Mul::_replace_word;
+#endif
 	
 	_mul_add_pf = NULL;
+#ifdef PARPAR_INCLUDE_BASIC_OPS
+	prepare_packed = &Galois16Mul::_prepare_packed_none;
+	finish_packed = NULL;
 	add_multi = &gf_add_multi_generic;
 	add_multi_packed = &gf_add_multi_packed_generic;
+#endif
 	add_multi_packpf = &gf_add_multi_packpf_generic;
+#ifdef PARPAR_INVERT_SUPPORT
 	_mul_add_multi = NULL;
 	_mul_add_multi_stridepf = NULL;
+#endif
 	_mul_add_multi_packed = NULL;
 	_mul_add_multi_packpf = NULL;
+#ifdef PARPAR_OPENCL_SUPPORT
 	copy_cksum = &gf16_cksum_copy_generic;
 	copy_cksum_check = &gf16_cksum_copy_check_generic;
+#endif
 	
+#ifdef PARPAR_POW_SUPPORT
 	_pow = NULL;
 	_pow_add = NULL;
+#endif
 	
 	setupMethod(method);
 }
@@ -1332,30 +1362,40 @@ void Galois16Mul::move(Galois16Mul& other) {
 	scratch = other.scratch;
 	other.scratch = NULL;
 	
+#ifdef PARPAR_INVERT_SUPPORT
 	prepare = other.prepare;
+	finish = other.finish;
+	replace_word = other.replace_word;
+#endif
+#ifdef PARPAR_INCLUDE_BASIC_OPS
 	prepare_packed = other.prepare_packed;
+	finish_packed = other.finish_packed;
+	add_multi = other.add_multi;
+	add_multi_packed = other.add_multi_packed;
+#endif
 	prepare_packed_cksum = other.prepare_packed_cksum;
 	prepare_partial_packsum = other.prepare_partial_packsum;
-	finish = other.finish;
-	finish_packed = other.finish_packed;
 	finish_packed_cksum = other.finish_packed_cksum;
 	finish_partial_packsum = other.finish_partial_packsum;
 	_info = other._info;
-	_mul = other._mul;
-	add_multi = other.add_multi;
-	add_multi_packed = other.add_multi_packed;
 	add_multi_packpf = other.add_multi_packpf;
 	_mul_add = other._mul_add;
 	_mul_add_pf = other._mul_add_pf;
+#ifdef PARPAR_INVERT_SUPPORT
+	_mul = other._mul;
 	_mul_add_multi = other._mul_add_multi;
 	_mul_add_multi_stridepf = other._mul_add_multi_stridepf;
+#endif
 	_mul_add_multi_packed = other._mul_add_multi_packed;
 	_mul_add_multi_packpf = other._mul_add_multi_packpf;
+#ifdef PARPAR_POW_SUPPORT
 	_pow = other._pow;
 	_pow_add = other._pow_add;
+#endif
+#ifdef PARPAR_OPENCL_SUPPORT
 	copy_cksum = other.copy_cksum;
 	copy_cksum_check = other.copy_cksum_check;
-	replace_word = other.replace_word;
+#endif
 }
 #endif
 

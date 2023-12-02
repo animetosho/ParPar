@@ -124,6 +124,9 @@ if(NOT MSVC)
 endif()
 
 add_compile_definitions(PARPAR_INVERT_SUPPORT=1)
+add_compile_definitions(PARPAR_OPENCL_SUPPORT=1)  # enables OpenCL support functions (unrelated to actual OpenCL support)
+add_compile_definitions(PARPAR_INCLUDE_BASIC_OPS=1)
+add_compile_definitions(PARPAR_POW_SUPPORT=1)
 
 if(MSVC)
 	if(IS_X86)

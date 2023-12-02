@@ -120,13 +120,17 @@ private:
 	void* scratch;
 	Galois16MethodInfo _info;
 	
-	Galois16MulFunc _mul;
 	Galois16MulRstFunc _mul_add;
 	Galois16MulPfFunc _mul_add_pf;
+#ifdef PARPAR_POW_SUPPORT
 	Galois16PowFunc _pow;
 	Galois16PowFunc _pow_add;
+#endif
+#ifdef PARPAR_INVERT_SUPPORT
+	Galois16MulFunc _mul;
 	Galois16MulMultiFunc _mul_add_multi;
 	Galois16MulStridePfFunc _mul_add_multi_stridepf;
+#endif
 	Galois16MulPackedFunc _mul_add_multi_packed;
 	Galois16MulPackPfFunc _mul_add_multi_packpf;
 	
@@ -171,18 +175,22 @@ public:
 	}
 #endif
 	
+#ifdef PARPAR_INVERT_SUPPORT
 	inline bool needPrepare() const {
 		return prepare != &Galois16Mul::_prepare_none;
 	};
 	inline bool hasMultiMulAdd() const {
 		return _mul_add_multi != NULL;
 	};
+#endif
 	inline bool hasMultiMulAddPacked() const {
 		return _mul_add_multi_packed != NULL;
 	};
+#ifdef PARPAR_POW_SUPPORT
 	inline bool hasPowAdd() const {
 		return _pow_add != NULL;
 	};
+#endif
 	
 	static std::vector<Galois16Methods> availableMethods(bool checkCpuid);
 	static inline const char* methodToText(Galois16Methods m) {
@@ -202,24 +210,31 @@ public:
 		return (len + alignMask) & ~alignMask;
 	}
 	
+#ifdef PARPAR_INVERT_SUPPORT
 	Galois16MulTransform prepare;
-	Galois16MulTransformPacked prepare_packed;
-	Galois16MulTransformPacked prepare_packed_cksum;
-	Galois16MulTransformPackedPartial prepare_partial_packsum; // TODO: consider a nicer interface for this
 	Galois16MulUntransform finish;
-	Galois16MulUntransformPacked finish_packed;
-	Galois16MulUntransformPackedCksum finish_packed_cksum;
-	Galois16MulUntransformPackedCksumPartial finish_partial_packsum;
 	Galois16ReplaceWord replace_word;
+#endif
+#ifdef PARPAR_INCLUDE_BASIC_OPS
+	Galois16MulTransformPacked prepare_packed;
+	Galois16MulUntransformPacked finish_packed;
 	Galois16AddMultiFunc add_multi;
 	Galois16AddPackedFunc add_multi_packed;
+#endif
+	Galois16MulTransformPacked prepare_packed_cksum;
+	Galois16MulTransformPackedPartial prepare_partial_packsum; // TODO: consider a nicer interface for this
+	Galois16MulUntransformPackedCksum finish_packed_cksum;
+	Galois16MulUntransformPackedCksumPartial finish_partial_packsum;
 	Galois16AddPackPfFunc add_multi_packpf;
+#ifdef PARPAR_OPENCL_SUPPORT
 	Galois16CopyCksum copy_cksum;
 	Galois16CopyCksumCheck copy_cksum_check;
+#endif
 	
 	HEDLEY_MALLOC void* mutScratch_alloc() const;
 	void mutScratch_free(void* mutScratch) const;
 	
+#ifdef PARPAR_INVERT_SUPPORT
 	inline void mul(void* dst, const void* src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch) const {
 		assert(isMultipleOfStride(len));
 		assert(len > 0);
@@ -251,7 +266,9 @@ public:
 		else
 			_mul_add(scratch, dst, src, len, coefficient, mutScratch);
 	}
+#endif
 	
+#ifdef PARPAR_POW_SUPPORT
 	inline void pow(unsigned outputs, size_t offset, void **HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch) const {
 		assert(isMultipleOfStride(len));
 		assert(len > 0);
@@ -290,7 +307,9 @@ public:
 		if(HEDLEY_UNLIKELY(coefficient == 0)) return;
 		_pow_add(scratch, outputs, offset, dst, src, len, coefficient, mutScratch);
 	}
+#endif
 	
+#ifdef PARPAR_INVERT_SUPPORT
 	inline void mul_add_multi(unsigned regions, size_t offset, void *HEDLEY_RESTRICT dst, const void* const*HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch) const {
 		assert(isMultipleOfStride(len));
 		assert(len > 0);
@@ -329,6 +348,7 @@ public:
 			_mul_add(scratch, dst, (const uint8_t*)src+region*srcStride, len, coefficients[region], mutScratch);
 		}
 	}
+#endif
 	
 	inline void mul_add_multi_packed(unsigned packedRegions, unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch) const {
 		assert(isMultipleOfStride(len));
