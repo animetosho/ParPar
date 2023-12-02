@@ -1620,6 +1620,7 @@ std::vector<Galois16Methods> Galois16Mul::availableMethods(bool checkCpuid) {
 	return ret;
 }
 
+#ifdef PARPAR_INCLUDE_BASIC_OPS
 void Galois16Mul::_prepare_packed_none(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen, size_t sliceLen, unsigned inputPackSize, unsigned inputNum, size_t chunkLen) {
 	ASSUME(inputNum < inputPackSize);
 	ASSUME(srcLen <= sliceLen);
@@ -1660,4 +1661,4 @@ void Galois16Mul::_prepare_packed_none(void *HEDLEY_RESTRICT dst, const void *HE
 		memset((uint8_t*)dst + chunkStride * sliceFullChunks + remaining*inputNum, 0, remaining);
 	}
 }
-
+#endif

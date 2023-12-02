@@ -152,6 +152,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle_muladd_x_128_rvv(
 
 
 
+#ifdef PARPAR_INVERT_SUPPORT
 void gf16_shuffle_mul_128_rvv(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t val, void *HEDLEY_RESTRICT mutScratch) {
 	UNUSED(mutScratch);
 #if defined(__RVV_LE)
@@ -190,6 +191,7 @@ void gf16_shuffle_mul_128_rvv(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_
 	UNUSED(scratch); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(val);
 #endif
 }
+#endif
 
 void gf16_shuffle_muladd_128_rvv(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t val, void *HEDLEY_RESTRICT mutScratch) {
 	UNUSED(mutScratch);

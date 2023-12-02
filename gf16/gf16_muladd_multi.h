@@ -23,7 +23,8 @@
 	if(max < 17) UNUSED(_src17); \
 	if(max < 18) UNUSED(_src18)
 
-#define GF16_MULADD_MULTI_FUNCS(fnpre, fnsuf, xfn, procRegions, blocksize, pfFactor, finisher) \
+#ifdef PARPAR_INVERT_SUPPORT
+# define GF16_MULADD_MULTI_FUNCS(fnpre, fnsuf, xfn, procRegions, blocksize, pfFactor, finisher) \
 void TOKENPASTE3(fnpre, _muladd_multi, fnsuf)(const void *HEDLEY_RESTRICT scratch, unsigned regions, size_t offset, void *HEDLEY_RESTRICT dst, const void* const*HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch) { \
 	UNUSED(mutScratch); \
 	gf16_muladd_multi(scratch, &xfn, procRegions, regions, offset, dst, src, len, coefficients); \
@@ -44,8 +45,7 @@ void TOKENPASTE3(fnpre, _muladd_multi_packpf, fnsuf)(const void *HEDLEY_RESTRICT
 	gf16_muladd_multi_packpf(scratch, &xfn, procRegions, procRegions, packedRegions, regions, dst, src, len, blocksize, coefficients, pfFactor, prefetchIn, prefetchOut); \
 	finisher; \
 }
-
-#define GF16_MULADD_MULTI_FUNCS_STUB(fnpre, fnsuf) \
+# define GF16_MULADD_MULTI_FUNCS_STUB(fnpre, fnsuf) \
 void TOKENPASTE3(fnpre, _muladd_multi, fnsuf)(const void *HEDLEY_RESTRICT scratch, unsigned regions, size_t offset, void *HEDLEY_RESTRICT dst, const void* const*HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch) { \
 	UNUSED(mutScratch); \
 	UNUSED(scratch); UNUSED(regions); UNUSED(offset); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficients); \
@@ -62,6 +62,28 @@ void TOKENPASTE3(fnpre, _muladd_multi_packpf, fnsuf)(const void *HEDLEY_RESTRICT
 	UNUSED(mutScratch); \
 	UNUSED(scratch); UNUSED(packedRegions); UNUSED(regions); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficients); UNUSED(prefetchIn); UNUSED(prefetchOut); \
 }
+#else
+# define GF16_MULADD_MULTI_FUNCS(fnpre, fnsuf, xfn, procRegions, blocksize, pfFactor, finisher) \
+void TOKENPASTE3(fnpre, _muladd_multi_packed, fnsuf)(const void *HEDLEY_RESTRICT scratch, unsigned packedRegions, unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch) { \
+	UNUSED(mutScratch); \
+	gf16_muladd_multi_packed(scratch, &xfn, procRegions, procRegions, packedRegions, regions, dst, src, len, blocksize, coefficients); \
+	finisher; \
+} \
+void TOKENPASTE3(fnpre, _muladd_multi_packpf, fnsuf)(const void *HEDLEY_RESTRICT scratch, unsigned packedRegions, unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch, const void* HEDLEY_RESTRICT prefetchIn, const void* HEDLEY_RESTRICT prefetchOut) { \
+	UNUSED(mutScratch); \
+	gf16_muladd_multi_packpf(scratch, &xfn, procRegions, procRegions, packedRegions, regions, dst, src, len, blocksize, coefficients, pfFactor, prefetchIn, prefetchOut); \
+	finisher; \
+}
+# define GF16_MULADD_MULTI_FUNCS_STUB(fnpre, fnsuf) \
+void TOKENPASTE3(fnpre, _muladd_multi_packed, fnsuf)(const void *HEDLEY_RESTRICT scratch, unsigned packedRegions, unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch) { \
+	UNUSED(mutScratch); \
+	UNUSED(scratch); UNUSED(packedRegions); UNUSED(regions); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficients); \
+} \
+void TOKENPASTE3(fnpre, _muladd_multi_packpf, fnsuf)(const void *HEDLEY_RESTRICT scratch, unsigned packedRegions, unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch, const void* HEDLEY_RESTRICT prefetchIn, const void* HEDLEY_RESTRICT prefetchOut) { \
+	UNUSED(mutScratch); \
+	UNUSED(scratch); UNUSED(packedRegions); UNUSED(regions); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficients); UNUSED(prefetchIn); UNUSED(prefetchOut); \
+}
+#endif
 
 
 
@@ -113,6 +135,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_muladd_prefetch_single(const void *HEDLEY_
 
 #define REMAINING_CASES CASE(17); CASE(16); CASE(15); CASE(14); CASE(13); CASE(12); CASE(11); CASE(10); CASE( 9); CASE( 8); CASE( 7); CASE( 6); CASE( 5); CASE( 4); CASE( 3); CASE( 2); CASE( 1)
 
+#ifdef PARPAR_INVERT_SUPPORT
 static HEDLEY_ALWAYS_INLINE void gf16_muladd_multi(const void *HEDLEY_RESTRICT scratch, fMuladdPF muladd_pf, const unsigned interleave, unsigned regions, size_t offset, void *HEDLEY_RESTRICT dst, const void* const*HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients) IGNORE_NULL_ADD {
 	uint8_t* _dst = (uint8_t*)dst + offset + len;
 	
@@ -237,6 +260,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_muladd_multi_stridepf(const void *HEDLEY_R
 	}
 	#undef _SRC
 }
+#endif
 
 static HEDLEY_ALWAYS_INLINE void gf16_muladd_multi_packed(const void *HEDLEY_RESTRICT scratch, fMuladdPF muladd_pf, const unsigned interleave, unsigned regionsPerCall, unsigned inputPackSize, unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, size_t blockLen, const uint16_t *HEDLEY_RESTRICT coefficients) IGNORE_NULL_ADD {
 	ASSUME(regions <= inputPackSize);

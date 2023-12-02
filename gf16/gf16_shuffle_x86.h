@@ -10,6 +10,7 @@ int _FN(gf16_shuffle_available) = 1;
 int _FN(gf16_shuffle_available) = 0;
 #endif
 
+#ifdef PARPAR_INVERT_SUPPORT
 void _FN(gf16_shuffle_prepare)(void* dst, const void* src, size_t srcLen) {
 #ifdef _AVAILABLE
 	gf16_prepare(dst, src, srcLen, sizeof(_mword)*2, &_FN(gf16_shuffle_prepare_block), &_FN(gf16_shuffle_prepare_blocku));
@@ -18,6 +19,7 @@ void _FN(gf16_shuffle_prepare)(void* dst, const void* src, size_t srcLen) {
 	UNUSED(dst); UNUSED(src); UNUSED(srcLen);
 #endif
 }
+#endif
 
 #ifdef _AVAILABLE
 # if MWORD_SIZE==64 && defined(PLATFORM_AMD64)
@@ -30,6 +32,7 @@ GF_PREPARE_PACKED_FUNCS_STUB(gf16_shuffle, _FNSUFFIX)
 #endif
 
 
+#ifdef PARPAR_INVERT_SUPPORT
 void _FN(gf16_shuffle_finish)(void *HEDLEY_RESTRICT dst, size_t len) {
 #ifdef _AVAILABLE
 	gf16_finish(dst, len, sizeof(_mword)*2, &_FN(gf16_shuffle_finish_block));
@@ -38,6 +41,7 @@ void _FN(gf16_shuffle_finish)(void *HEDLEY_RESTRICT dst, size_t len) {
 	UNUSED(dst); UNUSED(len);
 #endif
 }
+#endif
 
 #ifdef _AVAILABLE
 GF_FINISH_PACKED_FUNCS(gf16_shuffle, _FNSUFFIX, sizeof(_mword)*2, _FN(gf16_shuffle_finish_copy_block), _FN(gf16_shuffle_finish_copy_blocku), 1, _MM_END, _FN(gf16_checksum_block), _FN(gf16_checksum_blocku), _FN(gf16_checksum_exp), &_FN(gf16_shuffle_finish_block), sizeof(_mword))
@@ -182,6 +186,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle_muladd_round(_mword* _dst, _mword*
 }
 #endif
 
+#ifdef PARPAR_INVERT_SUPPORT
 void _FN(gf16_shuffle_mul)(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t val, void *HEDLEY_RESTRICT mutScratch) {
 	UNUSED(mutScratch);
 #ifdef _AVAILABLE
@@ -225,6 +230,7 @@ void _FN(gf16_shuffle_mul)(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RES
 	UNUSED(scratch); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(val);
 #endif
 }
+#endif
 
 
 void _FN(gf16_shuffle_muladd)(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t val, void *HEDLEY_RESTRICT mutScratch) {

@@ -129,6 +129,7 @@ static HEDLEY_ALWAYS_INLINE void _FN(gf16_clmul_muladd_x)(
 
 
 
+#ifdef PARPAR_INVERT_SUPPORT
 void _FN(gf16_clmul_mul)(const void *HEDLEY_RESTRICT scratch, void* dst, const void* src, size_t len, uint16_t val, void *HEDLEY_RESTRICT mutScratch) {
 	UNUSED(mutScratch); UNUSED(scratch);
 #if defined(_AVAILABLE)
@@ -153,6 +154,7 @@ void _FN(gf16_clmul_mul)(const void *HEDLEY_RESTRICT scratch, void* dst, const v
 	UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(val);
 #endif
 }
+#endif
 
 
 void _FN(gf16_clmul_muladd)(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t val, void *HEDLEY_RESTRICT mutScratch) {

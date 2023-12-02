@@ -59,6 +59,7 @@ static HEDLEY_ALWAYS_INLINE void gf_add_x_rvv(
 }
 #endif
 
+#ifdef PARPAR_INCLUDE_BASIC_OPS
 void gf_add_multi_rvv(unsigned regions, size_t offset, void *HEDLEY_RESTRICT dst, const void* const*HEDLEY_RESTRICT src, size_t len) {
 #ifdef __riscv_vector
 	gf16_muladd_multi((void*)2, &gf_add_x_rvv, 4, regions, offset, dst, src, len, NULL);
@@ -66,15 +67,23 @@ void gf_add_multi_rvv(unsigned regions, size_t offset, void *HEDLEY_RESTRICT dst
 	UNUSED(regions); UNUSED(offset); UNUSED(dst); UNUSED(src); UNUSED(len);
 #endif
 }
+#endif
 
 #ifdef __riscv_vector
-# define PACKED_FUNC(vs, il, it) \
+# ifdef PARPAR_INCLUDE_BASIC_OPS
+#  define PACKED_FUNC(vs, il, it) \
 void gf_add_multi_packed_v##vs##i##il##_rvv(unsigned packedRegions, unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len) { \
 	gf16_muladd_multi_packed((void*)vs, &gf_add_x_rvv, il, it, packedRegions, regions, dst, src, len, RV(vsetvlmax_e8m1)()*vs, NULL); \
 } \
 void gf_add_multi_packpf_v##vs##i##il##_rvv(unsigned packedRegions, unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, const void* HEDLEY_RESTRICT prefetchIn, const void* HEDLEY_RESTRICT prefetchOut) { \
 	gf16_muladd_multi_packpf((void*)vs, &gf_add_x_rvv, il, it, packedRegions, regions, dst, src, len, RV(vsetvlmax_e8m1)()*vs, NULL, vs>1, prefetchIn, prefetchOut); \
 }
+# else
+#  define PACKED_FUNC(vs, il, it) \
+void gf_add_multi_packpf_v##vs##i##il##_rvv(unsigned packedRegions, unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, const void* HEDLEY_RESTRICT prefetchIn, const void* HEDLEY_RESTRICT prefetchOut) { \
+	gf16_muladd_multi_packpf((void*)vs, &gf_add_x_rvv, il, it, packedRegions, regions, dst, src, len, RV(vsetvlmax_e8m1)()*vs, NULL, vs>1, prefetchIn, prefetchOut); \
+}
+# endif
 #else
 # define PACKED_FUNC(vs, il, it) PACKED_STUB(rvv, vs, il, it)
 #endif

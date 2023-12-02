@@ -21,6 +21,7 @@
 #undef _FNSUFFIX
 #undef _MM_END
 
+#ifdef PARPAR_INVERT_SUPPORT
 static HEDLEY_ALWAYS_INLINE uint16_t gf16_shuffleX_replace_word(void* data, size_t index, uint16_t newValue, size_t width) {
 	uint8_t* base = (uint8_t*)data + (index & ~(width-1)) * 2;
 	unsigned pos = index & (width-1);
@@ -59,6 +60,7 @@ uint16_t gf16_shuffle2x16_replace_word(void* data, size_t index, uint16_t newVal
 uint16_t gf16_shuffle2x32_replace_word(void* data, size_t index, uint16_t newValue) {
 	return gf16_shuffle2X_replace_word(data, index, newValue, 32);
 }
+#endif
 
 
 void* gf16_shuffle_init_x86(int polynomial) {

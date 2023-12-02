@@ -703,6 +703,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_xor_jit_mul_sse2_base(const void *HEDLEY_R
 }
 #endif /* defined(__SSE2__) */
 
+#ifdef PARPAR_INVERT_SUPPORT
 void gf16_xor_jit_mul_sse2(const void *HEDLEY_RESTRICT scratch, void* dst, const void* src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch) {
 #ifdef __SSE2__
 	if(coefficient == 0) {
@@ -714,6 +715,7 @@ void gf16_xor_jit_mul_sse2(const void *HEDLEY_RESTRICT scratch, void* dst, const
 	UNUSED(scratch); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficient); UNUSED(mutScratch);
 #endif
 }
+#endif
 
 void gf16_xor_jit_muladd_sse2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch) {
 #ifdef __SSE2__
@@ -873,6 +875,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_xor_mul_block_sse2(const uint8_t* inP, uin
 }
 #endif
 
+#ifdef PARPAR_INVERT_SUPPORT
 void gf16_xor_mul_sse2(const void *HEDLEY_RESTRICT scratch, void* dst, const void* src, size_t len, uint16_t val, void *HEDLEY_RESTRICT mutScratch) {
 	UNUSED(mutScratch);
 #ifdef __SSE2__
@@ -907,6 +910,7 @@ void gf16_xor_mul_sse2(const void *HEDLEY_RESTRICT scratch, void* dst, const voi
 	UNUSED(scratch); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(val);
 #endif
 }
+#endif
 
 
 void gf16_xor_muladd_sse2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t val, void *HEDLEY_RESTRICT mutScratch) {
@@ -1272,6 +1276,7 @@ void gf16_xor_jit_uninit(void* scratch) {
 #endif
 }
 
+#ifdef PARPAR_INVERT_SUPPORT
 static HEDLEY_ALWAYS_INLINE uint16_t gf16_xorX_replace_word(void* data, size_t index, uint16_t newValue, size_t width) {
 	uint8_t* base = (uint8_t*)data + (index & ~(width*8-1)) * 2; // advance pointer to correct group
 	base += ((index >> 3) & (width-1)); // advance to correct byte
@@ -1299,6 +1304,7 @@ uint16_t gf16_xor32_replace_word(void* data, size_t index, uint16_t newValue) {
 uint16_t gf16_xor64_replace_word(void* data, size_t index, uint16_t newValue) {
 	return gf16_xorX_replace_word(data, index, newValue, 64);
 }
+#endif
 
 
 void* gf16_xor_init_sse2(int polynomial) {

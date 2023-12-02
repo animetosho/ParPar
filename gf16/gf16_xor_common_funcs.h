@@ -128,6 +128,7 @@ static HEDLEY_ALWAYS_INLINE void _FN(gf16_xor_prepare_blocku)(void* dst, const v
 
 
 
+#ifdef PARPAR_INVERT_SUPPORT
 void _FN(gf16_xor_prepare)(void* dst, const void* src, size_t srcLen) {
 #ifdef _AVAILABLE
 	if(dst == src) {
@@ -141,6 +142,7 @@ void _FN(gf16_xor_prepare)(void* dst, const void* src, size_t srcLen) {
 	UNUSED(dst); UNUSED(src); UNUSED(srcLen);
 #endif
 }
+#endif
 
 #ifdef _AVAILABLE
 # if MWORD_SIZE == 64
@@ -152,6 +154,7 @@ GF_PREPARE_PACKED_FUNCS(gf16_xor, _FNSUFFIX, sizeof(_mword)*16, _FN(gf16_xor_pre
 GF_PREPARE_PACKED_FUNCS_STUB(gf16_xor, _FNSUFFIX)
 #endif
 
+#ifdef PARPAR_INVERT_SUPPORT
 void _FN(gf16_xor_finish)(void *HEDLEY_RESTRICT dst, size_t len) {
 #ifdef _AVAILABLE
 	gf16_finish(dst, len, sizeof(_mword)*16, &_FN(gf16_xor_finish_block));
@@ -160,6 +163,7 @@ void _FN(gf16_xor_finish)(void *HEDLEY_RESTRICT dst, size_t len) {
 	UNUSED(dst); UNUSED(len);
 #endif
 }
+#endif
 
 
 

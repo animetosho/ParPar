@@ -131,6 +131,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_clmul_muladd_x_sve2(
 
 
 
+#ifdef PARPAR_INVERT_SUPPORT
 void gf16_clmul_mul_sve2(const void *HEDLEY_RESTRICT scratch, void* dst, const void* src, size_t len, uint16_t val, void *HEDLEY_RESTRICT mutScratch) {
 	UNUSED(mutScratch); UNUSED(scratch);
 #if defined(__ARM_FEATURE_SVE2)
@@ -148,6 +149,7 @@ void gf16_clmul_mul_sve2(const void *HEDLEY_RESTRICT scratch, void* dst, const v
 	UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(val);
 #endif
 }
+#endif
 
 void gf16_clmul_muladd_sve2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t val, void *HEDLEY_RESTRICT mutScratch) {
 	UNUSED(mutScratch);

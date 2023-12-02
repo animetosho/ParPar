@@ -382,6 +382,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle_muladd_x_vbmi(
 }
 #endif
 
+#ifdef PARPAR_INVERT_SUPPORT
 void gf16_shuffle_mul_vbmi(const void *HEDLEY_RESTRICT scratch, void* dst, const void* src, size_t len, uint16_t val, void *HEDLEY_RESTRICT mutScratch) {
 	UNUSED(mutScratch);
 #if defined(__AVX512VBMI__) && defined(__AVX512VL__)
@@ -415,6 +416,7 @@ void gf16_shuffle_mul_vbmi(const void *HEDLEY_RESTRICT scratch, void* dst, const
 	UNUSED(scratch); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(val);
 #endif
 }
+#endif
 
 void gf16_shuffle_muladd_vbmi(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t val, void *HEDLEY_RESTRICT mutScratch) {
 	UNUSED(mutScratch);

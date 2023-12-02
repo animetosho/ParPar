@@ -57,6 +57,7 @@ static HEDLEY_ALWAYS_INLINE __m512i gf16_affine_load2_matrix(const void *HEDLEY_
 #undef MWORD_SIZE
 
 
+#ifdef PARPAR_INVERT_SUPPORT
 void gf16_affine_mul_avx512(const void *HEDLEY_RESTRICT scratch, void* dst, const void* src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch) {
 	UNUSED(mutScratch);
 #if defined(__GFNI__) && defined(__AVX512BW__) && defined(__AVX512VL__)
@@ -118,3 +119,4 @@ void gf16_affine2x_mul_avx512(const void *HEDLEY_RESTRICT scratch, void* dst, co
 	UNUSED(scratch); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficient);
 #endif
 }
+#endif

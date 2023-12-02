@@ -91,6 +91,7 @@ static HEDLEY_ALWAYS_INLINE void _FN(gf16_shuffle2x_finish_copy_blocku)(void *HE
 }
 #endif
 
+#ifdef PARPAR_INVERT_SUPPORT
 void _FN(gf16_shuffle2x_prepare)(void* dst, const void* src, size_t srcLen) {
 #if defined(_AVAILABLE) && !defined(PARPAR_SLIM_GF16)
 	gf16_prepare(dst, src, srcLen, sizeof(_mword), &_FN(gf16_shuffle2x_prepare_block), &_FN(gf16_shuffle2x_prepare_blocku));
@@ -99,6 +100,7 @@ void _FN(gf16_shuffle2x_prepare)(void* dst, const void* src, size_t srcLen) {
 	UNUSED(dst); UNUSED(src); UNUSED(srcLen);
 #endif
 }
+#endif
 
 #if defined(_AVAILABLE) && !defined(PARPAR_SLIM_GF16)
 # ifdef PLATFORM_AMD64
@@ -110,6 +112,7 @@ GF_PREPARE_PACKED_FUNCS(gf16_shuffle2x, _FNSUFFIX, sizeof(_mword), _FN(gf16_shuf
 GF_PREPARE_PACKED_FUNCS_STUB(gf16_shuffle2x, _FNSUFFIX)
 #endif
 
+#ifdef PARPAR_INVERT_SUPPORT
 void _FN(gf16_shuffle2x_finish)(void *HEDLEY_RESTRICT dst, size_t len) {
 #if defined(_AVAILABLE) && !defined(PARPAR_SLIM_GF16)
 	gf16_finish(dst, len, sizeof(_mword), &_FN(gf16_shuffle2x_finish_block));
@@ -118,6 +121,7 @@ void _FN(gf16_shuffle2x_finish)(void *HEDLEY_RESTRICT dst, size_t len) {
 	UNUSED(dst); UNUSED(len);
 #endif
 }
+#endif
 
 #if defined(_AVAILABLE) && !defined(PARPAR_SLIM_GF16)
 GF_FINISH_PACKED_FUNCS(gf16_shuffle2x, _FNSUFFIX, sizeof(_mword), _FN(gf16_shuffle2x_finish_copy_block), _FN(gf16_shuffle2x_finish_copy_blocku), 1, _MM_END, _FN(gf16_checksum_block), _FN(gf16_checksum_blocku), _FN(gf16_checksum_exp), &_FN(gf16_shuffle2x_finish_block), sizeof(_mword))
@@ -160,6 +164,7 @@ void _FN(gf16_shuffle2x_setup_vec)(const void *HEDLEY_RESTRICT scratch, uint16_t
 }
 #endif
 
+#ifdef PARPAR_INVERT_SUPPORT
 void _FN(gf16_shuffle2x_mul)(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t val, void *HEDLEY_RESTRICT mutScratch) {
 	UNUSED(mutScratch);
 #if defined(_AVAILABLE) && !defined(PARPAR_SLIM_GF16)
@@ -201,3 +206,4 @@ void _FN(gf16_shuffle2x_mul)(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_R
 	UNUSED(scratch); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(val);
 #endif
 }
+#endif

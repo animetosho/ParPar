@@ -413,6 +413,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_xor_jit_mul_avx2_base(const void *HEDLEY_R
 }
 #endif /* defined(__AVX2__) && defined(PLATFORM_AMD64) */
 
+#ifdef PARPAR_INVERT_SUPPORT
 void gf16_xor_jit_mul_avx2(const void *HEDLEY_RESTRICT scratch, void* dst, const void* src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch) {
 #if defined(__AVX2__) && defined(PLATFORM_AMD64)
 	if(coefficient == 0) {
@@ -424,6 +425,7 @@ void gf16_xor_jit_mul_avx2(const void *HEDLEY_RESTRICT scratch, void* dst, const
 	UNUSED(scratch); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficient); UNUSED(mutScratch);
 #endif
 }
+#endif
 
 void gf16_xor_jit_muladd_avx2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch) {
 #if defined(__AVX2__) && defined(PLATFORM_AMD64)

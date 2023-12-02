@@ -310,6 +310,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle512_muladd_x_sve2(
 #endif /*defined(__ARM_FEATURE_SVE2) && !defined(PARPAR_SLIM_GF16)*/
 
 
+#ifdef PARPAR_INVERT_SUPPORT
 void gf16_shuffle_mul_512_sve2(const void *HEDLEY_RESTRICT scratch, void* dst, const void* src, size_t len, uint16_t val, void *HEDLEY_RESTRICT mutScratch) {
 	UNUSED(mutScratch);
 #if defined(__ARM_FEATURE_SVE2) && !defined(PARPAR_SLIM_GF16)
@@ -333,6 +334,7 @@ void gf16_shuffle_mul_512_sve2(const void *HEDLEY_RESTRICT scratch, void* dst, c
 	UNUSED(scratch); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(val);
 #endif
 }
+#endif
 
 void gf16_shuffle_muladd_512_sve2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t val, void *HEDLEY_RESTRICT mutScratch) {
 	UNUSED(mutScratch);

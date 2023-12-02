@@ -182,6 +182,7 @@ static HEDLEY_ALWAYS_INLINE void calc_table(uint16_t coefficient, uint16_t* lhta
 
 #endif
 
+#ifdef PARPAR_INVERT_SUPPORT
 void gf16_lookup_mul(const void *HEDLEY_RESTRICT scratch, void* dst, const void* src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch) {
 	UNUSED(scratch); UNUSED(mutScratch);
 	uint16_t lhtable[512];
@@ -214,6 +215,7 @@ void gf16_lookup_mul(const void *HEDLEY_RESTRICT scratch, void* dst, const void*
 		}
 	}
 }
+#endif
 
 void gf16_lookup_muladd(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch) {
 	UNUSED(scratch); UNUSED(mutScratch);
@@ -248,6 +250,7 @@ void gf16_lookup_muladd(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRI
 	}
 }
 
+#ifdef PARPAR_POW_SUPPORT
 void gf16_lookup_powadd(const void *HEDLEY_RESTRICT scratch, unsigned outputs, size_t offset, void **HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch) {
 	UNUSED(scratch); UNUSED(mutScratch);
 	uint16_t lhtable[512];
@@ -298,6 +301,7 @@ void gf16_lookup_powadd(const void *HEDLEY_RESTRICT scratch, unsigned outputs, s
 		}
 	}
 }
+#endif
 
 HEDLEY_CONST size_t gf16_lookup_stride() {
 	if(sizeof(uintptr_t) >= 8)
@@ -394,6 +398,7 @@ static HEDLEY_ALWAYS_INLINE void calc_3table(uint16_t coefficient, struct gf16_l
 }
 #endif
 
+#ifdef PARPAR_INVERT_SUPPORT
 void gf16_lookup3_mul(const void *HEDLEY_RESTRICT scratch, void* dst, const void* src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch) {
 	UNUSED(scratch); UNUSED(mutScratch);
 #if !defined(PARPAR_SLIM_GF16)
@@ -432,6 +437,7 @@ void gf16_lookup3_mul(const void *HEDLEY_RESTRICT scratch, void* dst, const void
 	UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficient);
 #endif
 }
+#endif
 
 void gf16_lookup3_muladd(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch) {
 	UNUSED(scratch); UNUSED(mutScratch);

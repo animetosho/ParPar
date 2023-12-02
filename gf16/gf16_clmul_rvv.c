@@ -78,6 +78,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_clmul_muladd_x_rvv(
 
 
 
+#ifdef PARPAR_INVERT_SUPPORT
 void gf16_clmul_mul_rvv(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t val, void *HEDLEY_RESTRICT mutScratch) {
 	UNUSED(mutScratch); UNUSED(scratch);
 #ifdef RISCV_ZVBC_INTRIN
@@ -96,6 +97,7 @@ void gf16_clmul_mul_rvv(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRI
 	UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(val);
 #endif
 }
+#endif
 
 void gf16_clmul_muladd_rvv(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t val, void *HEDLEY_RESTRICT mutScratch) {
 	UNUSED(mutScratch);

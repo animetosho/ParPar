@@ -1,4 +1,6 @@
 
+#ifdef PARPAR_OPENCL_SUPPORT
+
 #include <string.h>
 #include "gf16_global.h"
 
@@ -67,3 +69,5 @@ int _FN(gf16_cksum_copy_check)(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RES
 	return 0;
 }
 #endif
+
+#endif // defined(PARPAR_OPENCL_SUPPORT)
