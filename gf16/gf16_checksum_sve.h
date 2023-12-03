@@ -48,6 +48,24 @@ static HEDLEY_ALWAYS_INLINE void gf16_checksum_exp_sve(void *HEDLEY_RESTRICT che
 	}
 	*(svint16_t*)checksum = res;
 }
+
+static HEDLEY_ALWAYS_INLINE void gf16_ungrp2a_block_sve(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, const size_t blockLen) {
+	const uint16_t* _src = (const uint16_t*)src;
+	uint16_t* _dst = (uint16_t*)dst;
+	for(unsigned i=0; i<blockLen; i+=svcntb()) {
+		svuint16x2_t w = svld2_u16(svptrue_b16(), _src + i);
+		svst1_u16(svptrue_b16(), _dst + i/2, svget2(w, 0));
+	}
+}
+static HEDLEY_ALWAYS_INLINE void gf16_ungrp2b_block_sve(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, const size_t blockLen) {
+	const uint16_t* _src = (const uint16_t*)src;
+	uint16_t* _dst = (uint16_t*)dst;
+	for(unsigned i=0; i<blockLen; i+=svcntb()) {
+		svuint16x2_t w = svld2_u16(svptrue_b16(), _src + i);
+		svst1_u16(svptrue_b16(), _dst + i/2, svget2(w, 1));
+	}
+}
+
 #endif
 
 #endif

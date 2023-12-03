@@ -60,12 +60,62 @@ int _FN(gf16_cksum_copy_check)(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RES
 	return CKSUM_IS_ZERO(cksum);
 }
 
+int _FN(gf16_grp2_finish)(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, unsigned grp) {
+	assert(len % 2 == 0);
+	
+	const uint8_t* _src = (const uint8_t*)src;
+	uint8_t* _dst = (uint8_t*)dst;
+	cksum_t cksum;
+	{
+		uint8_t block[CKSUM_SIZE];
+		if(grp & 1)
+			_FN(gf16_ungrp2b_block)(block, _src + len*2, CKSUM_SIZE);
+		else
+			_FN(gf16_ungrp2a_block)(block, _src + len*2, CKSUM_SIZE);
+		LOAD_DATA(cksum, block);
+	}
+	
+	// rewind checksum
+	_FN(gf16_checksum_exp)(&cksum, gf16_exp(65535 - (((len+CKSUM_SIZE-1) / CKSUM_SIZE) % 65535)));
+	
+	if(len >= CKSUM_SIZE) {
+		if(grp & 1) {
+			for(size_t pos = 0; pos < (len-CKSUM_SIZE+1); pos += CKSUM_SIZE) {
+				_FN(gf16_ungrp2b_block)(_dst + pos, _src + pos*2, CKSUM_SIZE);
+				_FN(gf16_checksum_block)(_dst + pos, &cksum, CKSUM_SIZE, 0);
+			}
+		} else {
+			for(size_t pos = 0; pos < (len-CKSUM_SIZE+1); pos += CKSUM_SIZE) {
+				_FN(gf16_ungrp2a_block)(_dst + pos, _src + pos*2, CKSUM_SIZE);
+				_FN(gf16_checksum_block)(_dst + pos, &cksum, CKSUM_SIZE, 0);
+			}
+		}
+	}
+	
+	size_t remaining = len % CKSUM_SIZE;
+	size_t lenAligned = len - remaining;
+	if(remaining) {
+		const uint16_t* src16 = (const uint16_t*)(_src + lenAligned*2);
+		src16 += grp & 1;
+		for(unsigned i=0; i<remaining; i+=2) {
+			write16(_dst+lenAligned + i, read16(src16 + i));
+		}
+		_FN(gf16_checksum_blocku)(_dst+lenAligned, remaining, &cksum);
+	}
+	
+	return CKSUM_IS_ZERO(cksum);
+}
+
 #else
 void _FN(gf16_cksum_copy)(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen, size_t sliceLen) {
 	UNUSED(dst); UNUSED(src); UNUSED(srcLen); UNUSED(sliceLen);
 }
 int _FN(gf16_cksum_copy_check)(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len) {
 	UNUSED(dst); UNUSED(src); UNUSED(len);
+	return 0;
+}
+int _FN(gf16_grp2_finish)(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, unsigned grp) {
+	UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(grp);
 	return 0;
 }
 #endif

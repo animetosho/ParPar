@@ -93,4 +93,21 @@ static HEDLEY_ALWAYS_INLINE void gf16_checksum_prepare_neon(void *HEDLEY_RESTRIC
 #undef _X
 }
 
+static HEDLEY_ALWAYS_INLINE void gf16_ungrp2a_block_neon(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, const size_t blockLen) {
+	const uint16_t* _src = (const uint16_t*)src;
+	uint16_t* _dst = (uint16_t*)dst;
+	for(unsigned i=0; i<blockLen; i+=sizeof(uint16x8_t)) {
+		uint16x8x2_t w = vld2q_u16(_src + i);
+		vst1q_u16(_dst + i/2, w.val[0]);
+	}
+}
+static HEDLEY_ALWAYS_INLINE void gf16_ungrp2b_block_neon(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, const size_t blockLen) {
+	const uint16_t* _src = (const uint16_t*)src;
+	uint16_t* _dst = (uint16_t*)dst;
+	for(unsigned i=0; i<blockLen; i+=sizeof(uint16x8_t)) {
+		uint16x8x2_t w = vld2q_u16(_src + i);
+		vst1q_u16(_dst + i/2, w.val[1]);
+	}
+}
+
 #endif

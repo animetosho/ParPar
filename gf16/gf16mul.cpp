@@ -555,6 +555,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 					finish_partial_packsum = &gf16_shuffle_finish_partial_packsum_ssse3;
 					SET_FOR_OPENCL(copy_cksum, gf16_cksum_copy_sse2);
 					SET_FOR_OPENCL(copy_cksum_check, gf16_cksum_copy_check_sse2);
+					SET_FOR_OPENCL(finish_grp2_cksum, gf16_grp2_finish_sse2);
 					SET_FOR_INVERT(replace_word, gf16_shuffle16_replace_word);
 				break;
 				case GF16_SHUFFLE_AVX:
@@ -575,6 +576,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 					finish_partial_packsum = &gf16_shuffle_finish_partial_packsum_avx;
 					SET_FOR_OPENCL(copy_cksum, gf16_cksum_copy_sse2);
 					SET_FOR_OPENCL(copy_cksum_check, gf16_cksum_copy_check_sse2);
+					SET_FOR_OPENCL(finish_grp2_cksum, gf16_grp2_finish_sse2);
 					SET_FOR_INVERT(replace_word, gf16_shuffle16_replace_word);
 				break;
 				case GF16_SHUFFLE_AVX2:
@@ -595,6 +597,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 					finish_partial_packsum = &gf16_shuffle_finish_partial_packsum_avx2;
 					SET_FOR_OPENCL(copy_cksum, gf16_cksum_copy_avx2);
 					SET_FOR_OPENCL(copy_cksum_check, gf16_cksum_copy_check_avx2);
+					SET_FOR_OPENCL(finish_grp2_cksum, gf16_grp2_finish_avx2);
 					SET_FOR_INVERT(replace_word, gf16_shuffle32_replace_word);
 				break;
 				case GF16_SHUFFLE_AVX512:
@@ -625,6 +628,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 					finish_partial_packsum = &gf16_shuffle_finish_partial_packsum_avx512;
 					SET_FOR_OPENCL(copy_cksum, gf16_cksum_copy_avx512);
 					SET_FOR_OPENCL(copy_cksum_check, gf16_cksum_copy_check_avx512);
+					SET_FOR_OPENCL(finish_grp2_cksum, gf16_grp2_finish_avx512);
 					SET_FOR_INVERT(replace_word, gf16_shuffle64_replace_word);
 				break;
 				default: break; // for pedantic compilers
@@ -658,6 +662,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			finish_partial_packsum = &gf16_shuffle_finish_partial_packsum_avx512;
 			SET_FOR_OPENCL(copy_cksum, gf16_cksum_copy_avx512);
 			SET_FOR_OPENCL(copy_cksum_check, gf16_cksum_copy_check_avx512);
+			SET_FOR_OPENCL(finish_grp2_cksum, gf16_grp2_finish_avx512);
 			SET_FOR_INVERT(replace_word, gf16_shuffle64_replace_word);
 		break;
 		case GF16_SHUFFLE2X_AVX512:
@@ -687,6 +692,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			finish_partial_packsum = &gf16_shuffle2x_finish_partial_packsum_avx512;
 			SET_FOR_OPENCL(copy_cksum, gf16_cksum_copy_avx512);
 			SET_FOR_OPENCL(copy_cksum_check, gf16_cksum_copy_check_avx512);
+			SET_FOR_OPENCL(finish_grp2_cksum, gf16_grp2_finish_avx512);
 			SET_FOR_INVERT(replace_word, gf16_shuffle2x32_replace_word);
 		break;
 		case GF16_SHUFFLE2X_AVX2:
@@ -716,6 +722,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			finish_partial_packsum = &gf16_shuffle2x_finish_partial_packsum_avx2;
 			SET_FOR_OPENCL(copy_cksum, gf16_cksum_copy_avx2);
 			SET_FOR_OPENCL(copy_cksum_check, gf16_cksum_copy_check_avx2);
+			SET_FOR_OPENCL(finish_grp2_cksum, gf16_grp2_finish_avx2);
 			SET_FOR_INVERT(replace_word, gf16_shuffle2x16_replace_word);
 		break;
 		
@@ -744,6 +751,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			finish_partial_packsum = &gf16_shuffle_finish_partial_packsum_neon;
 			SET_FOR_OPENCL(copy_cksum, gf16_cksum_copy_neon);
 			SET_FOR_OPENCL(copy_cksum_check, gf16_cksum_copy_check_neon);
+			SET_FOR_OPENCL(finish_grp2_cksum, gf16_grp2_finish_neon);
 		break;
 		
 		case GF16_CLMUL_NEON: {
@@ -776,6 +784,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			finish_partial_packsum = &gf16_shuffle_finish_partial_packsum_neon;
 			SET_FOR_OPENCL(copy_cksum, gf16_cksum_copy_neon);
 			SET_FOR_OPENCL(copy_cksum_check, gf16_cksum_copy_check_neon);
+			SET_FOR_OPENCL(finish_grp2_cksum, gf16_grp2_finish_neon);
 		} break;
 		
 		case GF16_CLMUL_SHA3: {
@@ -805,6 +814,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			finish_partial_packsum = &gf16_shuffle_finish_partial_packsum_neon;
 			SET_FOR_OPENCL(copy_cksum, gf16_cksum_copy_neon);
 			SET_FOR_OPENCL(copy_cksum_check, gf16_cksum_copy_check_neon);
+			SET_FOR_OPENCL(finish_grp2_cksum, gf16_grp2_finish_neon);
 		} break;
 		
 		case GF16_SHUFFLE_128_SVE:
@@ -829,6 +839,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			finish_partial_packsum = &gf16_shuffle_finish_partial_packsum_sve;
 			SET_FOR_OPENCL(copy_cksum, gf16_cksum_copy_sve);
 			SET_FOR_OPENCL(copy_cksum_check, gf16_cksum_copy_check_sve);
+			SET_FOR_OPENCL(finish_grp2_cksum, gf16_grp2_finish_sve);
 		break;
 		
 		case GF16_SHUFFLE_128_SVE2:
@@ -851,6 +862,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			finish_partial_packsum = &gf16_shuffle_finish_partial_packsum_sve;
 			SET_FOR_OPENCL(copy_cksum, gf16_cksum_copy_sve);
 			SET_FOR_OPENCL(copy_cksum_check, gf16_cksum_copy_check_sve);
+			SET_FOR_OPENCL(finish_grp2_cksum, gf16_grp2_finish_sve);
 		break;
 		
 		case GF16_SHUFFLE2X_128_SVE2:
@@ -873,6 +885,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			finish_partial_packsum = &gf16_shuffle2x_finish_partial_packsum_sve;
 			SET_FOR_OPENCL(copy_cksum, gf16_cksum_copy_sve);
 			SET_FOR_OPENCL(copy_cksum_check, gf16_cksum_copy_check_sve);
+			SET_FOR_OPENCL(finish_grp2_cksum, gf16_grp2_finish_sve);
 		break;
 		
 		case GF16_SHUFFLE_512_SVE2:
@@ -898,6 +911,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			finish_partial_packsum = &gf16_shuffle_finish_partial_packsum_sve;
 			SET_FOR_OPENCL(copy_cksum, gf16_cksum_copy_sve);
 			SET_FOR_OPENCL(copy_cksum_check, gf16_cksum_copy_check_sve);
+			SET_FOR_OPENCL(finish_grp2_cksum, gf16_grp2_finish_sve);
 		break;
 
 		case GF16_CLMUL_SVE2:
@@ -921,6 +935,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			finish_partial_packsum = &gf16_shuffle_finish_partial_packsum_sve;
 			SET_FOR_OPENCL(copy_cksum, gf16_cksum_copy_sve);
 			SET_FOR_OPENCL(copy_cksum_check, gf16_cksum_copy_check_sve);
+			SET_FOR_OPENCL(finish_grp2_cksum, gf16_grp2_finish_sve);
 		break;
 		
 		case GF16_SHUFFLE_128_RVV:
@@ -944,6 +959,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			finish_partial_packsum = &gf16_shuffle_finish_partial_packsum_rvv;
 			SET_FOR_OPENCL(copy_cksum, gf16_cksum_copy_rvv);
 			SET_FOR_OPENCL(copy_cksum_check, gf16_cksum_copy_check_rvv);
+			SET_FOR_OPENCL(finish_grp2_cksum, gf16_grp2_finish_rvv);
 		break;
 		
 		case GF16_CLMUL_RVV:
@@ -966,6 +982,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			finish_partial_packsum = &gf16_clmul_finish_partial_packsum_rvv;
 			SET_FOR_OPENCL(copy_cksum, gf16_cksum_copy_rvv);
 			SET_FOR_OPENCL(copy_cksum_check, gf16_cksum_copy_check_rvv);
+			SET_FOR_OPENCL(finish_grp2_cksum, gf16_grp2_finish_rvv);
 		break;
 		
 		case GF16_AFFINE_AVX512:
@@ -996,6 +1013,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			finish_partial_packsum = &gf16_shuffle_finish_partial_packsum_avx512;
 			SET_FOR_OPENCL(copy_cksum, gf16_cksum_copy_avx512);
 			SET_FOR_OPENCL(copy_cksum_check, gf16_cksum_copy_check_avx512);
+			SET_FOR_OPENCL(finish_grp2_cksum, gf16_grp2_finish_avx512);
 			SET_FOR_INVERT(replace_word, gf16_shuffle64_replace_word);
 		break;
 		
@@ -1027,6 +1045,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			finish_partial_packsum = &gf16_shuffle_finish_partial_packsum_avx2;
 			SET_FOR_OPENCL(copy_cksum, gf16_cksum_copy_avx2);
 			SET_FOR_OPENCL(copy_cksum_check, gf16_cksum_copy_check_avx2);
+			SET_FOR_OPENCL(finish_grp2_cksum, gf16_grp2_finish_avx2);
 			SET_FOR_INVERT(replace_word, gf16_shuffle32_replace_word);
 		break;
 		
@@ -1058,6 +1077,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			finish_partial_packsum = &gf16_shuffle_finish_partial_packsum_ssse3;
 			SET_FOR_OPENCL(copy_cksum, gf16_cksum_copy_sse2);
 			SET_FOR_OPENCL(copy_cksum_check, gf16_cksum_copy_check_sse2);
+			SET_FOR_OPENCL(finish_grp2_cksum, gf16_grp2_finish_sse2);
 			SET_FOR_INVERT(replace_word, gf16_shuffle16_replace_word);
 		break;
 		
@@ -1088,6 +1108,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			finish_partial_packsum = &gf16_affine2x_finish_partial_packsum_avx512;
 			SET_FOR_OPENCL(copy_cksum, gf16_cksum_copy_avx512);
 			SET_FOR_OPENCL(copy_cksum_check, gf16_cksum_copy_check_avx512);
+			SET_FOR_OPENCL(finish_grp2_cksum, gf16_grp2_finish_avx512);
 			SET_FOR_INVERT(replace_word, gf16_affine2x_replace_word);
 		break;
 		
@@ -1118,6 +1139,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			finish_partial_packsum = &gf16_affine2x_finish_partial_packsum_avx2;
 			SET_FOR_OPENCL(copy_cksum, gf16_cksum_copy_avx2);
 			SET_FOR_OPENCL(copy_cksum_check, gf16_cksum_copy_check_avx2);
+			SET_FOR_OPENCL(finish_grp2_cksum, gf16_grp2_finish_avx2);
 			SET_FOR_INVERT(replace_word, gf16_affine2x_replace_word);
 		break;
 		
@@ -1148,6 +1170,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			finish_partial_packsum = &gf16_affine2x_finish_partial_packsum_gfni;
 			SET_FOR_OPENCL(copy_cksum, gf16_cksum_copy_sse2);
 			SET_FOR_OPENCL(copy_cksum_check, gf16_cksum_copy_check_sse2);
+			SET_FOR_OPENCL(finish_grp2_cksum, gf16_grp2_finish_sse2);
 			SET_FOR_INVERT(replace_word, gf16_affine2x_replace_word);
 		break;
 		
@@ -1186,6 +1209,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 					finish_partial_packsum = &gf16_xor_finish_partial_packsum_sse2;
 					SET_FOR_OPENCL(copy_cksum, gf16_cksum_copy_sse2);
 					SET_FOR_OPENCL(copy_cksum_check, gf16_cksum_copy_check_sse2);
+					SET_FOR_OPENCL(finish_grp2_cksum, gf16_grp2_finish_sse2);
 					SET_FOR_INVERT(replace_word, gf16_xor16_replace_word);
 				break;
 				/*
@@ -1208,6 +1232,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 					finish_partial_packsum = &gf16_xor_finish_partial_packsum_avx;
 					SET_FOR_OPENCL(copy_cksum, gf16_cksum_copy_sse2);
 					SET_FOR_OPENCL(copy_cksum_check, gf16_cksum_copy_check_sse2);
+					SET_FOR_OPENCL(finish_grp2_cksum, gf16_grp2_finish_sse2);
 					SET_FOR_INVERT(replace_word, gf16_xor16_replace_word);
 				break;
 				*/
@@ -1231,6 +1256,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 					finish_partial_packsum = &gf16_xor_finish_partial_packsum_avx2;
 					SET_FOR_OPENCL(copy_cksum, gf16_cksum_copy_avx2);
 					SET_FOR_OPENCL(copy_cksum_check, gf16_cksum_copy_check_avx2);
+					SET_FOR_OPENCL(finish_grp2_cksum, gf16_grp2_finish_avx2);
 					SET_FOR_INVERT(replace_word, gf16_xor32_replace_word);
 #endif
 				break;
@@ -1256,6 +1282,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 					finish_partial_packsum = &gf16_xor_finish_partial_packsum_avx512;
 					SET_FOR_OPENCL(copy_cksum, gf16_cksum_copy_avx512);
 					SET_FOR_OPENCL(copy_cksum_check, gf16_cksum_copy_check_avx512);
+					SET_FOR_OPENCL(finish_grp2_cksum, gf16_grp2_finish_avx512);
 					SET_FOR_INVERT(replace_word, gf16_xor64_replace_word);
 #endif
 				break;
@@ -1276,6 +1303,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			finish_partial_packsum = &gf16_lookup_finish_partial_packsum_sse2;
 			SET_FOR_OPENCL(copy_cksum, gf16_cksum_copy_sse2);
 			SET_FOR_OPENCL(copy_cksum_check, gf16_cksum_copy_check_sse2);
+			SET_FOR_OPENCL(finish_grp2_cksum, gf16_grp2_finish_sse2);
 		break;
 		
 #ifndef PARPAR_SLIM_GF16
@@ -1342,6 +1370,7 @@ Galois16Mul::Galois16Mul(Galois16Methods method) {
 #ifdef PARPAR_OPENCL_SUPPORT
 	copy_cksum = &gf16_cksum_copy_generic;
 	copy_cksum_check = &gf16_cksum_copy_check_generic;
+	finish_grp2_cksum = &gf16_grp2_finish_generic;
 #endif
 	
 #ifdef PARPAR_POW_SUPPORT
@@ -1395,6 +1424,7 @@ void Galois16Mul::move(Galois16Mul& other) {
 #ifdef PARPAR_OPENCL_SUPPORT
 	copy_cksum = other.copy_cksum;
 	copy_cksum_check = other.copy_cksum_check;
+	finish_grp2_cksum = other.finish_grp2_cksum;
 #endif
 }
 #endif

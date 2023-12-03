@@ -33,6 +33,7 @@ typedef void(*Galois16AddPackPfFunc) (unsigned packedRegions, unsigned regions, 
 
 typedef void(*Galois16CopyCksum) (void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen, size_t sliceLen);
 typedef int(*Galois16CopyCksumCheck) (void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len);
+typedef int(*Galois16UngrpCksumCheck) (void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, unsigned grp);
 
 
 enum Galois16Methods {
@@ -231,6 +232,7 @@ public:
 #ifdef PARPAR_OPENCL_SUPPORT
 	Galois16CopyCksum copy_cksum;
 	Galois16CopyCksumCheck copy_cksum_check;
+	Galois16UngrpCksumCheck finish_grp2_cksum;
 #endif
 	
 	HEDLEY_MALLOC void* mutScratch_alloc() const;

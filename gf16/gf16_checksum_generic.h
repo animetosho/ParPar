@@ -89,6 +89,36 @@ static HEDLEY_ALWAYS_INLINE void gf16_checksum_block_generic(const void *HEDLEY_
 	gf16_checksum_blocku_generic(src, blockLen, checksum);
 }
 
+static HEDLEY_ALWAYS_INLINE void gf16_ungrp2a_block_generic(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, const size_t blockLen) {
+	const uint16_t* _src = (const uint16_t*)src;
+	uint16_t* _dst = (uint16_t*)dst;
+	size_t remaining = blockLen;
+	while(remaining) {
+		if(sizeof(uintptr_t) >= 8) {
+			write64(_dst, read16(_src) |
+				((uintptr_t)read16(_src + 2) << 16) |
+				((uintptr_t)read16(_src + 4) << 32) |
+				((uintptr_t)read16(_src + 6) << 48));
+			remaining -= 8;
+			_src += 8;
+			_dst += 4;
+		} else if(sizeof(uintptr_t) >= 4) {
+			write32(_dst, read16(_src) | ((uintptr_t)read16(_src + 2) << 16));
+			remaining -= 4;
+			_src += 4;
+			_dst += 2;
+		} else {
+			write16(_dst, read16(_src));
+			remaining -= 2;
+			_src += 2;
+			_dst += 1;
+		}
+	}
+}
+static HEDLEY_ALWAYS_INLINE void gf16_ungrp2b_block_generic(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, const size_t blockLen) {
+	gf16_ungrp2a_block_generic(dst, (const uint16_t*)src + 1, blockLen);
+}
+
 static HEDLEY_ALWAYS_INLINE void gf16_checksum_exp_generic(void *HEDLEY_RESTRICT checksum, uint16_t exp) {
 	uint16_t coeff = exp;
 	

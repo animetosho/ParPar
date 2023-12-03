@@ -511,6 +511,52 @@ int main(int argc, char** argv) {
 					}
 				}
 			}
+			
+			std::cout << "Testing finish grp2..." << std::endl;
+			for(unsigned gi = 0; gi < gf.size(); gi++) {
+				const auto& g = gf[gi];
+				const std::vector<size_t> regionSizes{g.info().stride, g.info().stride-2, g.info().stride+2, REGION_SIZE, REGION_SIZE-2};
+				for(unsigned regionSize : regionSizes) {
+					if(verbose) std::cout << "  " << g.info().name << ": regionSize=" << regionSize << std::endl;
+					unsigned totalSize = regionSize + g.info().cksumSize;
+					g.copy_cksum(tmpM[0], srcM[0], regionSize, regionSize);
+					g.copy_cksum(tmpM[2], srcM[1], regionSize, regionSize);
+					// interleave to tmp2
+					memset(tmp2, seed&0xff, REGION_SIZE*2);
+					for(unsigned i=0; i<totalSize/2; i++) {
+						tmp2[i*2] = tmpM[0][i];
+						tmp2[i*2+1] = tmpM[2][i];
+					}
+					for(unsigned region=0; region<2; region++) {
+						memset(dst, seed&0xff, REGION_SIZE*2);
+						if(!g.finish_grp2_cksum(dst, tmp2, regionSize, region)) {
+							std::cout << "Finish grp2 checksum failure: " << g.info().name << " (regionSize=" << regionSize << ", region=" << region << ")" << std::endl;
+							std::cout << "Checksum:" << std::endl;
+							print_mem_region((uint16_t*)((uintptr_t)tmpM[region*2] + regionSize), 0, g.info().cksumSize/2);
+							if(regionSize <= g.info().stride*2) {
+								std::cout << "Src Data:" << std::endl;
+								print_mem_region(srcM[region], 0, (regionSize+1)/2);
+								std::cout << "Dst Data:" << std::endl;
+								print_mem_region(dst, 0, (regionSize+1)/2);
+							}
+							return 1;
+						}
+						if(memcmp(dst, srcM[region], regionSize)) {
+							std::cout << "Finish grp2 data failure: " << g.info().name << " (regionSize=" << regionSize << ", region=" << region << ")" << std::endl;
+							display_mem_diff(srcM[region], dst, regionSize/2);
+							return 1;
+						}
+						// check that it detects failure
+						tmp2[region] ^= 0x1111;
+						if(g.finish_grp2_cksum(dst, tmp2, regionSize, region)) {
+							std::cout << "Finish grp2 failed to detect checksum error: " << g.info().name << " (regionSize=" << regionSize << ", region=" << region << ")" << std::endl;
+							std::cout << "Checksum:" << std::endl;
+							print_mem_region((uint16_t*)((uintptr_t)tmpM[region*2] + regionSize), 0, g.info().cksumSize/2);
+							return 1;
+						}
+					}
+				}
+			}
 		}
 		
 		// test mul/mul_add
