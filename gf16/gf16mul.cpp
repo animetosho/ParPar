@@ -1321,8 +1321,8 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			finish_partial_packsum = &gf16_lookup_finish_partial_packsum_generic;
 			if(gf16_lookup3_stride())
 				break;
-			// else fallthrough
 #endif
+			// fallthrough
 		case GF16_LOOKUP:
 		default:
 			SET_FOR_INVERT(_mul, gf16_lookup_mul);
