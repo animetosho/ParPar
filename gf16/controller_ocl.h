@@ -142,6 +142,7 @@ class PAR2ProcOCL : public IPAR2ProcBackend {
 	MessageThread transferThread;
 	static void transfer_slice(ThreadMessageQueue<void*>& q);
 	
+	unsigned outputsInterleaved; // must be a power of 2
 	
 	// remembered setup params
 	Galois16OCLMethods _setupMethod;

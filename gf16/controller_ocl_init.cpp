@@ -952,6 +952,9 @@ STRINGIFY({
 		const nat_uint outputsThisThread = NUM_OUTPUTS;
 		const nat_uint outBase = 0;
 		__global val_t* dstBase = dst + colGlobal;
+		) "\n#ifdef WRITE_GRP2\n" STRINGIFY(
+			__global val_t* dstBase2 = dst + colGlobal*2;
+		) "\n#endif\n" STRINGIFY(
 	) "\n#else\n" STRINGIFY(
 		const nat_uint outBase = get_global_id(1) * OUTPUTS_PER_THREAD;
 		) "\n#if NUM_OUTPUTS % OUTPUTS_PER_THREAD == 0\n" STRINGIFY(
@@ -960,6 +963,9 @@ STRINGIFY({
 		const nat_uint outputsThisThread = (get_global_id(1)+1 == get_global_size(1) ? NUM_OUTPUTS % OUTPUTS_PER_THREAD : OUTPUTS_PER_THREAD);
 		) "\n#endif\n" STRINGIFY(
 		__global val_t* dstBase = dst + WBUF_REF(outBase, len, colGlobal);
+		) "\n#ifdef WRITE_GRP2\n" STRINGIFY(
+			__global val_t* dstBase2 = dst + WBUF_REF(outBase, len, colGlobal*2);
+		) "\n#endif\n" STRINGIFY(
 	) "\n#endif\n" STRINGIFY(
 	__global const val_t* srcBase = src + colGlobal;
 	
@@ -1031,12 +1037,8 @@ STRINGIFY({
 			) "\n#endif\n" STRINGIFY(
 		}
 		) "\n#ifdef WRITE_GRP2\n" STRINGIFY(
-			// de-interleave hack for now
-			// TODO: consider deferring this
-			uint result1 = upsample((ushort)(result[1] & 0xffff), (ushort)(result[0] & 0xffff));
-			uint result2 = upsample((ushort)(result[1] >> 16), (ushort)(result[0] >> 16));
-			WRITE_DST(dstBase, iterBase, result1);
-			WRITE_DST(dstBase, iterBase+len, result2);
+			WRITE_DST(dstBase2, iterBase*2, result[0]);
+			WRITE_DST(dstBase2, iterBase*2+1, result[1]);
 		) "\n#else\n" STRINGIFY(
 			WRITE_DST(dstBase, iterBase, result);
 		) "\n#endif\n" STRINGIFY(
@@ -1048,7 +1050,7 @@ STRINGIFY({
 	) "\n#ifdef WRITE_GRP2\n" STRINGIFY(
 		nat_uint output=2;
 		for(; output<outputsThisThread-1; output+=2) {
-			dstBase += len*2;
+			dstBase2 += len*2;
 			LUT_GENERATE_X2(lut_table_x2, coeff + COBUF_REF(outBase+output, 0u), numInputs);
 			for(nat_uint iter=0; iter<COL_GROUP_ITERS; iter++) {
 				uint iterBase = iter*COL_GROUP_SIZE;
@@ -1058,13 +1060,11 @@ STRINGIFY({
 				for (ushort input = 1; input < numInputs; input++) {
 					result ^= LUT_MULTIPLY_X2(LUT_REF_X2(lut_table, input), cache[input][colLocal + iterBase]);
 				}
-				uint result1 = upsample((ushort)(result[1] & 0xffff), (ushort)(result[0] & 0xffff));
-				uint result2 = upsample((ushort)(result[1] >> 16), (ushort)(result[0] >> 16));
-				WRITE_DST(dstBase, iterBase, result1);
-				WRITE_DST(dstBase, iterBase+len, result2);
+				WRITE_DST(dstBase2, iterBase*2, result[0]);
+				WRITE_DST(dstBase2, iterBase*2+1, result[1]);
 			}
 		}
-		dstBase += len;
+		dstBase += WBUF_REF(outputsThisThread-2, len, 0u);
 		if(outputsThisThread & 1)
 	) "\n#else\n" STRINGIFY(
 		for(nat_uint output=1; output<outputsThisThread; output++)
@@ -1120,7 +1120,12 @@ STRINGIFY(
 			}
 		) "\n#endif\n" STRINGIFY(
 		
-		__global val_t* dstBase = dst + WBUF_REF(outBlk, len, globalCol);
+		) "\n#ifdef WRITE_GRP2\n" STRINGIFY(
+			__global val_t* dstBase2 = dst + WBUF_REF(outBlk, len, globalCol*2);
+			__global val_t* dstBase = dst + WBUF_REF(outBlk + numOutputs -1, len, globalCol);
+		) "\n#else\n" STRINGIFY(
+			__global val_t* dstBase = dst + WBUF_REF(outBlk, len, globalCol);
+		) "\n#endif\n" STRINGIFY(
 		__global const val_t* srcBase = src + globalCol;
 		for(nat_uint iter=0; iter<COL_GROUP_ITERS; iter++) {
 			val_t val = READ_SRC(srcBase, 0u);
@@ -1159,20 +1164,20 @@ STRINGIFY(
 					}
 				) "\n#endif\n" STRINGIFY(
 			}
-			__global val_t* dstIterBase = dstBase;
 			) "\n#ifdef WRITE_GRP2\n" STRINGIFY(
+				__global val_t* dstIterBase2 = dstBase2;
 				) "\n#pragma unroll\n" STRINGIFY(
 				for (ushort o = 0; o < numOutputs/2; o++) {
-					uint result1 = upsample((ushort)(result[o][1] & 0xffff), (ushort)(result[o][0] & 0xffff));
-					uint result2 = upsample((ushort)(result[o][1] >> 16), (ushort)(result[o][0] >> 16));
-					WRITE_DST(dstIterBase, 0u, result1);
-					WRITE_DST(dstIterBase, len, result2);
-					dstIterBase += len*2;
+					WRITE_DST(dstIterBase2, 0u, result[o][0]);
+					WRITE_DST(dstIterBase2, 1u, result[o][1]);
+					dstIterBase2 += len*2;
 				}
 				if(numOutputs & 1) {
-					WRITE_DST(dstIterBase, 0u, resultLast);
+					WRITE_DST(dstBase, 0u, resultLast);
 				}
+				dstBase2 += COL_GROUP_SIZE*2;
 			) "\n#else\n" STRINGIFY(
+				__global val_t* dstIterBase = dstBase;
 				) "\n#pragma unroll\n" STRINGIFY(
 				for (ushort o = 0; o < numOutputs; o++) {
 					WRITE_DST(dstIterBase, 0u, result[o]);
@@ -1477,6 +1482,8 @@ bool PAR2ProcOCL::setup_kernels(Galois16OCLMethods method, unsigned targetInputB
 			// recompute the two variables dependent on infoShortVecSize
 			threadWordSize = infoShortVecSize*2;
 			sizePerWorkGroup = threadWordSize * wgSize;
+			
+			outputsInterleaved = 2;
 		}
 		
 		if(method == GF16OCL_LOOKUP_NOCACHE || method == GF16OCL_LOOKUP_HALF_NOCACHE || method == GF16OCL_LOOKUP_GRP2_NOCACHE) {

@@ -108,6 +108,8 @@ bool PAR2ProcOCL::init(Galois16OCLMethods method, unsigned targetInputBatch, uns
 	
 	sliceSizeCksum = sliceSize + gf->info().cksumSize;
 	
+	outputsInterleaved = 1;
+	
 	return true;
 }
 
@@ -272,6 +274,8 @@ struct transfer_data_ocl {
 	// finish specific
 	NOTIFY_BOOL_DECL(cbOut, promOut);
 	int cksumSuccess;
+	unsigned grpSize;
+	unsigned region;
 };
 
 
@@ -302,8 +306,13 @@ void PAR2ProcOCL::transfer_slice(ThreadMessageQueue<void*>& q) {
 	while((data = static_cast<struct transfer_data_ocl*>(q.pop())) != NULL) {
 		// TODO: consider doing a single mapping for the entire slice (if not, consider async mapping)
 		if(data->finish) {
-			void* remote = data->parent->queue.enqueueMapBuffer(*(data->remote), CL_TRUE, CL_MAP_READ, data->remoteOffset, data->totalLen);
-			data->cksumSuccess = data->gf->copy_cksum_check(data->local, remote, data->sliceLen);
+			void* remote = data->parent->queue.enqueueMapBuffer(*(data->remote), CL_TRUE, CL_MAP_READ, data->remoteOffset, data->totalLen*data->grpSize);
+			if(data->grpSize == 2) {
+				// TODO: look at a way to avoid unnecessary map/unmap calls
+				data->cksumSuccess = data->gf->finish_grp2_cksum(data->local, remote, data->sliceLen, data->region & (data->grpSize-1));
+			} else {
+				data->cksumSuccess = data->gf->copy_cksum_check(data->local, remote, data->sliceLen);
+			}
 			data->parent->queue.enqueueUnmapMemObject(*(data->remote), remote);
 			NOTIFY_DONE(data, _queueRecv, data->promOut, data->cksumSuccess);
 		} else {
@@ -481,6 +490,12 @@ FUTURE_RETURN_BOOL_T PAR2ProcOCL::getOutput(unsigned index, void* output  IF_LIB
 	data->gf = gf.get();
 	data->oclPlatVersion = oclPlatVersion;
 	data->local = output;
+	data->region = index;
+	data->grpSize = 1;
+	if(outputsInterleaved > 1 && index < ((unsigned)outputExponents.size() & ~(outputsInterleaved-1))) {
+		data->grpSize = outputsInterleaved;
+		data->remoteOffset = (index & ~(outputsInterleaved-1))*sliceSizeAligned;
+	}
 #ifdef USE_LIBUV
 	data->cbOut = cb;
 	pendingOutCallbacks++;
