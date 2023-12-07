@@ -17,7 +17,7 @@ static void run_bench(const struct benchProps& test) {
 	
 	std::vector<bool> inputValid(test.inputs, true);
 	std::vector<uint16_t> recovery(test.recovery);
-	for(int i=0; i<test.recovery; i++) {
+	for(unsigned i=0; i<test.recovery; i++) {
 		inputValid[i] = false;
 		recovery[i] = i;
 	}

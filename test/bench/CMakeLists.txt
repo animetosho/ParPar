@@ -9,7 +9,9 @@ include(../common.cmake)
 include(../gf16/gf16_common.cmake)
 include(../hasher/hasher_common.cmake)
 
-
+if(NOT MSVC)
+	add_compile_options(-Wno-format-security)
+endif()
 
 # binaries
 set(BENCH_DIR .)

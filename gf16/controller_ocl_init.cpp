@@ -1203,11 +1203,7 @@ const static char _ocl_kernel_lut[] = STRINGIFY({
 		) "\n#endif\n" STRINGIFY(
 	) "\n#endif\n" STRINGIFY(
 	
-	) "\n#ifdef WRITE_GRP2\n" STRINGIFY(
-		LUT_DECLARATION_X2(lut_table, SUBMIT_INPUTS*OUTPUT_GROUPING/2);
-	) "\n#else\n" STRINGIFY(
-		LUT_DECLARATION(lut_table, SUBMIT_INPUTS*OUTPUT_GROUPING);
-	) "\n#endif\n" STRINGIFY(
+	LUT_DECLARATION(lut_table, SUBMIT_INPUTS*OUTPUT_GROUPING);
 	
 	if(!isPartialOutputsThread) {
 		) "\n#if OUTPUTS_PER_THREAD > OUTPUT_GROUPING\n" STRINGIFY(
@@ -1500,6 +1496,7 @@ bool PAR2ProcOCL::setup_kernels(Galois16OCLMethods method, unsigned targetInputB
 			if(outputsPerGroup > 16) outputsPerGroup = 16;
 			if(method == GF16OCL_LOOKUP_GRP2_NOCACHE && outputsPerGroup > 1) {
 				outputsPerGroup &= ~1; // must be a multiple of 2 if outputs are written in pairs
+				targetGrouping &= ~1;
 			}
 			
 			if(targetInputBatch) inputBatchSize = targetInputBatch;

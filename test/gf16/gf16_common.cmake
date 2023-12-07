@@ -3,7 +3,6 @@ option(ENABLE_OCL "Enable OpenCL" OFF)
 option(SLIM_GF16 "Strip out GF16 kernels that are never automatically selected" OFF)
 
 if(ENABLE_OCL)
-	add_compile_definitions(ENABLE_OCL=1)
 	add_compile_definitions(PARPAR_LIBDL_SUPPORT=1)
 endif()
 if(USE_LIBUV)
