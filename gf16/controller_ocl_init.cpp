@@ -1779,10 +1779,10 @@ bool PAR2ProcOCL::setup_kernels(Galois16OCLMethods method, unsigned targetInputB
 		try {
 			program.build(std::vector<cl::Device>(1, device), paramsDump);
 		} catch(cl::Error const& err) {
+			printError("Build Error", err);
 			if(err.err() == CL_BUILD_PROGRAM_FAILURE || err.err() == CL_COMPILE_PROGRAM_FAILURE || err.err() == CL_LINK_PROGRAM_FAILURE) {
-				std::cerr << "OpenCL Build Failure: " << err.what() << "(" << err.err() << "); build log:" <<std::endl << program.getBuildInfo<CL_PROGRAM_BUILD_LOG>(device) << std::endl;
-			} else
-				std::cerr << "OpenCL Build Error: " << err.what() << "(" << err.err() << ")" << std::endl;
+				std::cerr << program.getBuildInfo<CL_PROGRAM_BUILD_LOG>(device) << std::endl;
+			}
 			if(tblLog) delete[] tblLog;
 			if(tblAntiLog) delete[] tblAntiLog;
 			return false;
@@ -1838,11 +1838,11 @@ bool PAR2ProcOCL::setup_kernels(Galois16OCLMethods method, unsigned targetInputB
 	try {
 		program.build(std::vector<cl::Device>(1, device), params);
 	} catch(cl::Error const& err) {
+		printError("Build Error", err);
 #ifndef GF16OCL_NO_OUTPUT
 		if(err.err() == CL_BUILD_PROGRAM_FAILURE || err.err() == CL_COMPILE_PROGRAM_FAILURE || err.err() == CL_LINK_PROGRAM_FAILURE) {
-			std::cerr << "OpenCL Build Failure: " << err.what() << "(" << err.err() << "); build log:" <<std::endl << program.getBuildInfo<CL_PROGRAM_BUILD_LOG>(device) << std::endl;
-		} else
-			std::cerr << "OpenCL Build Error: " << err.what() << "(" << err.err() << ")" << std::endl;
+			std::cerr << program.getBuildInfo<CL_PROGRAM_BUILD_LOG>(device) << std::endl;
+		}
 #endif
 		if(tblLog) delete[] tblLog;
 		if(tblAntiLog) delete[] tblAntiLog;
@@ -1923,6 +1923,17 @@ bool PAR2ProcOCL::setup_kernels(Galois16OCLMethods method, unsigned targetInputB
 			queue.enqueueWriteBuffer(bufLog, CL_TRUE, 0, tblLogSize*2, tblLog);
 			delete[] tblLog;
 		}
+	}
+	
+	
+	// for some implementations, errors don't show up during build, but do during execute, so try a dummy run
+	kernelMul.setArg(1, staging[0].input);
+	kernelMul.setArg(2, staging[0].coeffs);
+	try {
+		queue.enqueueNDRangeKernel(kernelMul, cl::NullRange, cl::NDRange(1), cl::NullRange);
+	} catch(cl::Error const& err) {
+		printError("Execute Error", err);
+		return false;
 	}
 	
 	return true;

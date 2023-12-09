@@ -169,6 +169,8 @@ class PAR2ProcOCL : public IPAR2ProcBackend {
 	void _notifyProc(void* _req) override;
 #endif
 	
+	static void printError(const char* where, cl::Error const& err);
+	
 	// disable copy constructor
 	PAR2ProcOCL(const PAR2ProcOCL&);
 	PAR2ProcOCL& operator=(const PAR2ProcOCL&);
