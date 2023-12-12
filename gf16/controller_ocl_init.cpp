@@ -1329,6 +1329,10 @@ bool PAR2ProcOCL::setup_kernels(Galois16OCLMethods method, unsigned targetInputB
 		infoShortVecSize = 4; // other than BY2, we currently only support vect-width=1,2,4
 	
 	wgSize = device.getInfo<CL_DEVICE_MAX_WORK_GROUP_SIZE>();
+	if(device.getInfo<CL_DEVICE_PREFERRED_VECTOR_WIDTH_CHAR>() == 1 && device.getInfo<CL_DEVICE_VENDOR_ID>() == 0x10de /*Nvidia*/ && wgSize > 32) {
+		// this size is too large for Nvidia cards; we'll assume their max width is ideal for 8-bit ints, so divide it by 4
+		wgSize /= infoShortVecSize*2;
+	}
 #ifdef OCL_PREFER_WORKGROUP_MULTIPLE
 	size_t wgSizeMultiple = getWGSize(context, device) * OCL_PREFER_WORKGROUP_MULTIPLE;
 	if(wgSizeMultiple && wgSizeMultiple < wgSize)
@@ -1930,7 +1934,7 @@ bool PAR2ProcOCL::setup_kernels(Galois16OCLMethods method, unsigned targetInputB
 	kernelMul.setArg(1, staging[0].input);
 	kernelMul.setArg(2, staging[0].coeffs);
 	try {
-		queue.enqueueNDRangeKernel(kernelMul, cl::NullRange, cl::NDRange(1), cl::NullRange);
+		queue.enqueueNDRangeKernel(kernelMul, cl::NullRange, workGroupRange, workGroupRange);
 	} catch(cl::Error const& err) {
 		printError("Execute Error", err);
 		return false;
