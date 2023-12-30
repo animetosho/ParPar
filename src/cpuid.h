@@ -121,15 +121,16 @@ static unsigned long getauxval(unsigned long cap) {
 #   endif
 #  elif defined(_WIN32)
 #   undef CPU_HAS_NEON
-#   undef CPU_HAS_ARMCRC
 #   define CPU_HAS_NEON (IsProcessorFeaturePresent(PF_ARM_NEON_INSTRUCTIONS_AVAILABLE))
+#   undef CPU_HAS_ARMCRC
 #   define CPU_HAS_ARMCRC (IsProcessorFeaturePresent(PF_ARM_V8_CRC32_INSTRUCTIONS_AVAILABLE))
 #  elif defined(__APPLE__)
 #   undef CPU_HAS_NEON
-#   undef CPU_HAS_ARMCRC
 #   define CPU_HAS_NEON (cpuHasFeature("hw.optional.neon"))
+#   undef CPU_HAS_ARMCRC
 #   define CPU_HAS_ARMCRC (cpuHasFeature("hw.optional.armv8_crc32"))
-#   define CPU_HAS_NEON_SHA3 (cpuHasFeature("hw.optional.armv8_2_sha3"))
+#   undef CPU_HAS_NEON_SHA3
+#   define CPU_HAS_NEON_SHA3 (cpuHasFeature("hw.optional.armv8_2_sha3") || cpuHasFeature("hw.optional.arm.FEAT_SHA3"))
 	static inline bool cpuHasFeature(const char* feature) {
 		int supported = 0;
 		size_t len = sizeof(supported);
