@@ -33,6 +33,17 @@
 # define CPU_MODEL_IS_GLM(model) ((model == 0x5C || model == 0x5F) || (model == 0x7A))
 //  Tremont
 # define CPU_MODEL_IS_TMT(model) (model == 0x86 || model == 0x96 || model == 0x9C)
+// Sandy Bridge to Cannonlake
+# define CPU_MODEL_IS_SNB_CNL(model) ( \
+	(model == 0x2A || model == 0x2D) /*Sandy Bridge*/ \
+	|| (model == 0x3A || model == 0x3E) /*Ivy Bridge*/ \
+	|| (model == 0x3C || model == 0x3F || model == 0x45 || model == 0x46) /*Haswell*/ \
+	|| (model == 0x3D || model == 0x47 || model == 0x4F || model == 0x56) /*Broadwell*/ \
+	|| (model == 0x4E || model == 0x5E || model == 0x8E || model == 0x9E || model == 0xA5 || model == 0xA6) /*Skylake*/ \
+	|| (model == 0x55) /*Skylake-X/Cascadelake/Cooper*/ \
+	|| (model == 0x66) /*Cannonlake*/ \
+	|| (model == 0x67) /*Skylake/Cannonlake?*/ \
+)
 
 // AMD Fam 14h (Bobcat) and 16h (Jaguar/Puma)
 # define CPU_FAMMDL_IS_AMDCAT(family, model) ((family == 0x5f && (model == 0 || model == 1 || model == 2)) || (family == 0x6f && (model == 0 || model == 0x10 || model == 0x20 || model == 0x30)))

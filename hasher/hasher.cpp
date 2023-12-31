@@ -27,11 +27,10 @@ struct HasherCpuCap {
 		// TODO: check perf on small cores
 		isLEASlow = false;
 		if(family == 6) {
-			isSmallCore = CPU_MODEL_IS_BNL_SLM(model);
 			// Goldmont also prefers SSE for 2xMD5; a wash on Gracemont, Tremont's preference is unknown
-			isSmallCore = isSmallCore || model == 0x5C || model == 0x5F || model == 0x7A;
+			isSmallCore = CPU_MODEL_IS_BNL_SLM(model) || CPU_MODEL_IS_GLM(model);
 			// Intel Sandy Bridge to Skylake has slow 3-component LEA
-			isLEASlow = (model == 0x2A || model == 0x2D || model == 0x3A || model == 0x3C || model == 0x3D || model == 0x3E || model == 0x3F || model == 0x45 || model == 0x46 || model == 0x47 || model == 0x4E || model == 0x4F || model == 0x55 || model == 0x56 || model == 0x5E || model == 0x66 || model == 0x67 || model == 0x8E || model == 0x9E || model == 0xA5 || model == 0xA6);
+			isLEASlow = CPU_MODEL_IS_SNB_CNL(model);
 		} else {
 			isSmallCore = CPU_FAMMDL_IS_AMDCAT(family, model);
 		}

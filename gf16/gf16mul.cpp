@@ -69,22 +69,16 @@ struct GF16CpuCap {
 				propPrefShuffleThresh = 8192;
 			}
 			
-			if((model == 0x1A || model == 0x1E || model == 0x2E) /*Nehalem*/
+			if((model == 0x1A || model == 0x1E || model == 0x1F || model == 0x2E) /*Nehalem*/
 			|| (model == 0x25 || model == 0x2C || model == 0x2F) /*Westmere*/
-			|| (model == 0x2A || model == 0x2D) /*Sandy Bridge*/
-			|| (model == 0x3A || model == 0x3E) /*Ivy Bridge*/
-			|| (model == 0x3C || model == 0x3F || model == 0x45 || model == 0x46) /*Haswell*/
-			|| (model == 0x3D || model == 0x47 || model == 0x4F || model == 0x56) /*Broadwell*/
-			|| (model == 0x4E || model == 0x5E || model == 0x8E || model == 0x9E || model == 0xA5 || model == 0xA6) /*Skylake*/
-			|| (model == 0x55) /*Skylake-X/Cascadelake/Cooper*/
-			|| (model == 0x66) /*Cannonlake*/
-			|| (model == 0x67) /*Skylake/Cannonlake?*/
+			|| CPU_MODEL_IS_SNB_CNL(model)
 			)
 				isICoreOld = true;
 			
 			if((model == 0x7E || model == 0x7D || model == 0x6A || model == 0x6C) // Icelake client/server
 			|| (model == 0xA7) // Rocketlake
-			|| (model == 0x8C || model == 0x8D || model == 0x8F) // Tigerlake/SapphireRapids
+			|| (model == 0x8C || model == 0x8D) // Tigerlake
+			|| (model == 0x8F || mode == 0xCF) // Sapphire/Emerald Rapids
 			)
 				isICoreNew = true;
 			
@@ -95,6 +89,7 @@ struct GF16CpuCap {
 			
 			if(CPU_MODEL_IS_GLM(model) || CPU_MODEL_IS_TMT(model))
 				isAtom = true;
+			// Gracemont and newer doesn't set isAtom, so Intel hybrid doesn't have any JIT tuning
 		}
 		if(CPU_FAMMDL_IS_AMDCAT(family, model)) {
 			/* Jaguar has a slow shuffle instruction and XOR is much faster; presumably the same for Bobcat/Puma */
