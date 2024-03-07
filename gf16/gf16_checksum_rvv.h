@@ -37,7 +37,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_checksum_blocku_rvv(const void *HEDLEY_RES
 	while(amount) {
 		size_t vl = RV(vsetvl_e8m1)(amount);
 		
-#if defined(__riscv_v_intrinsic) && __riscv_v_intrinsic >= 13000
+#ifdef __riscv_v_intrinsic
 		v8 = RV(vxor_vv_i8m1_tu)(v8, v8, RV(vle8_v_i8m1)(_src, vl), vl);
 #else
 		// emulate tail-undisturbed
@@ -61,7 +61,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_checksum_exp_rvv(void *HEDLEY_RESTRICT che
 	for(int i=0; i<15; i++) {
 		res = gf16_vec_mul2_rvv(res);
 		coeff = RV(vadd_vv_i16m1)(coeff, coeff, vl);
-#if defined(__riscv_v_intrinsic) && __riscv_v_intrinsic >= 13000
+#ifdef __riscv_v_intrinsic
 		res = RV(vxor_vv_i16m1_mu)
 #else
 		res = RV(vxor_vv_i16m1_m)

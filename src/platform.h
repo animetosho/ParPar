@@ -249,8 +249,8 @@ HEDLEY_WARNING("GFNI disabled on GCC < 10 due to incorrect GF2P8AFFINEQB operand
 # endif
 #endif
 
-#if defined(__riscv_vector) && defined(HEDLEY_GCC_VERSION) && !HEDLEY_GCC_VERSION_CHECK(13,0,0)
-// GCC added RVV intrinsics in GCC13
+#if defined(__riscv_vector) && defined(HEDLEY_GCC_VERSION) && !HEDLEY_GCC_VERSION_CHECK(14,0,0)
+// GCC added RVV intrinsics in GCC13, but GCC13 lacks segmented loads/stores
 # undef __riscv_vector
 #endif
 

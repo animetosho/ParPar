@@ -12,7 +12,7 @@ void gf16pmul_rvv(void *HEDLEY_RESTRICT dst, const void* src1, const void* src2,
 	const uint8_t* _src2 = (const uint8_t*)src2 + len;
 	uint8_t* _dst = (uint8_t*)dst + len;
 	
-#if defined(__riscv_v_intrinsic) && __riscv_v_intrinsic >= 13000
+#if defined(__riscv_v_intrinsic) && __riscv_v_intrinsic >= 12000
 	vbool32_t alt = RV(vreinterpret_b32)(RV(vmv_v_x_u8m1)(0xaa, vl));
 #else
 	vuint8m1_t altTmp = RV(vmv_v_x_u8m1)(0xaa, vl);
@@ -32,7 +32,7 @@ void gf16pmul_rvv(void *HEDLEY_RESTRICT dst, const void* src1, const void* src2,
 		vuint32m1_t rba = RV(vreinterpret_v_u64m1_u32m1)(RV(vclmul_vv_u64m1)(tmp1, tmp2, vl));
 		vuint32m1_t rbb = RV(vreinterpret_v_u64m1_u32m1)(RV(vclmul_vv_u64m1)(RV(vsrl_vx_u64m1)(tmp1, 32, vl), tmp2, vl));
 		
-#if defined(__riscv_v_intrinsic) && __riscv_v_intrinsic >= 11000
+#ifdef __riscv_v_intrinsic
 		vuint64m1_t ra = RV(vreinterpret_v_u32m1_u64m1)(RV(vmerge_vvm_u32m1)(raa, rab, alt, vl));
 		vuint64m1_t rb = RV(vreinterpret_v_u32m1_u64m1)(RV(vmerge_vvm_u32m1)(rba, rbb, alt, vl));
 #else

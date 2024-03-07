@@ -23,7 +23,7 @@ static HEDLEY_ALWAYS_INLINE vint16m1_t gf16_vec_mul2_rvv(vint16m1_t v) {
 	size_t vl = RV(vsetvlmax_e16m1)();
 	vbool16_t maskPoly = RV(vmslt_vx_i16m1_b16)(v, 0, vl);
 	v = RV(vadd_vv_i16m1)(v, v, vl);
-#if defined(__riscv_v_intrinsic) && __riscv_v_intrinsic >= 13000
+#ifdef __riscv_v_intrinsic
 	return RV(vxor_vx_i16m1_mu)
 #else
 	return RV(vxor_vx_i16m1_m)

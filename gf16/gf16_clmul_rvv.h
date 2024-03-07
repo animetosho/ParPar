@@ -80,13 +80,13 @@ static HEDLEY_ALWAYS_INLINE vuint16m1_t gf16_clmul_rvv_reduction(vuint64m1_t ra,
 	vuint16m1_t rb16 = RV(vreinterpret_v_u64m1_u16m1)(RV(vsll_vx_u64m1)(rb, 16, vl));
 	vuint16m1_t qa16 = RV(vreinterpret_v_u64m1_u16m1)(qa);
 	vuint16m1_t qb16 = RV(vreinterpret_v_u64m1_u16m1)(qb);
-#if defined(__riscv_v_intrinsic) && __riscv_v_intrinsic >= 13000
+#if defined(__riscv_v_intrinsic) && __riscv_v_intrinsic >= 12000
 	vbool16_t alt = RV(vreinterpret_b16)(RV(vmv_v_x_u8m1)(0xaa, vl));
 #else
 	vuint8m1_t altTmp = RV(vmv_v_x_u8m1)(0xaa, vl);
 	vbool16_t alt = *(vbool16_t*)(&altTmp);
 #endif
-#if defined(__riscv_v_intrinsic) && __riscv_v_intrinsic >= 11000
+#ifdef __riscv_v_intrinsic
 	vuint16m1_t r = RV(vmerge_vvm_u16m1)(ra16, rb16, alt, vl);
 	vuint16m1_t q = RV(vmerge_vvm_u16m1)(qa16, qb16, alt, vl);
 #else

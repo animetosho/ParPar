@@ -127,7 +127,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_prepare_blocku_rvv(void *HEDLEY_RESTRICT d
 	size_t vlmax = RV(vsetvlmax_e8m1)();
 	vuint8m1_t v = RV(vmv_v_x_u8m1)(0, vlmax);
 	size_t vl = RV(vsetvl_e8m1)(remaining);
-#if defined(__riscv_v_intrinsic) && __riscv_v_intrinsic >= 13000
+#ifdef __riscv_v_intrinsic
 	v = RV(vle8_v_u8m1_tu)(v, (const uint8_t*)src, vl);
 	RV(vse8_v_u8m1)((uint8_t*)dst, v, vlmax);
 #else
