@@ -171,6 +171,8 @@ static unsigned long getauxval(unsigned long cap) {
 #  endif
 #  if __has_include(<asm/hwprobe.h>)
 #   include <asm/hwprobe.h>
+#   include <asm/unistd.h>
+#   include <unistd.h>
 #  endif
 # endif
 
@@ -190,16 +192,17 @@ static unsigned long getauxval(unsigned long cap) {
 #   define CPU_HAS_VECTOR (getauxval(AT_HWCAP) & (1 << ('V'-'A')))
 #  endif
 # endif
-# if defined(RISCV_HWPROBE_EXT_ZVBC) && defined(RISCV_HWPROBE_KEY_IMA_EXT_0)
+# ifdef RISCV_HWPROBE_KEY_IMA_EXT_0
 #  undef CPU_HAS_Zvbc
 static uint64_t pp_hwprobe(uint64_t k) {
 	struct riscv_hwprobe p;
 	p.key = k;
-	if(sys_riscv_hwprobe(&p, 1, 0, NULL, 0)) return 0;
+	if(syscall(__NR_riscv_hwprobe, &p, 1, 0, NULL, 0)) return 0;
 	return p.value;
 }
-#  define CPU_HAS_Zvbc (pp_hwprobe(RISCV_HWPROBE_KEY_IMA_EXT_0) & RISCV_HWPROBE_EXT_ZVBC)
+#  define CPU_HAS_Zvbc (pp_hwprobe(RISCV_HWPROBE_KEY_IMA_EXT_0) & (1 << 18) /*RISCV_HWPROBE_EXT_ZVBC*/)
 # elif defined(RISCV_ISA_EXT_ZVBC)
+// TODO: RISCV_ISA_EXT_ZVBC is defined as 57 -> this doesn't work on RV32?
 #  undef CPU_HAS_Zvbc
 #  define CPU_HAS_Zvbc (getauxval(AT_HWCAP) & (1 << RISCV_ISA_EXT_ZVBC))
 # endif
