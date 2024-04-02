@@ -55,3 +55,8 @@
 # include "hasher_md5mb_stub.h"
 #endif
 
+#if defined(__AVX512VL__) && defined(__AVX512BW__) && !defined(__EVEX512__) && (defined(__AVX10_1__) || defined(__EVEX256__))
+bool hasher_avx10_compatible = true;
+#else
+bool hasher_avx10_compatible = false;
+#endif

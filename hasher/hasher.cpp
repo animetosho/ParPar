@@ -2,9 +2,13 @@
 #include "../src/cpuid.h"
 #include <string.h>
 
+#ifdef PLATFORM_X86
+extern bool hasher_avx10_compatible;
+#endif
+
 struct HasherCpuCap {
 #ifdef PLATFORM_X86
-	bool hasSSE2, hasClMul, hasXOP, hasBMI1, hasAVX2, hasAVX512F, hasAVX512VLBW;
+	bool hasSSE2, hasClMul, hasXOP, hasBMI1, hasAVX2, hasAVX512F, hasAVX512VLBW; // AVX512VL also represents AVX10
 	bool isSmallCore, isLEASlow, isVecRotSlow;
 	HasherCpuCap(bool detect) :
 		hasSSE2(true), hasClMul(true), hasXOP(true), hasBMI1(true), hasAVX2(true), hasAVX512F(true), hasAVX512VLBW(true),
@@ -49,6 +53,16 @@ struct HasherCpuCap {
 				if((xcr & 0xE0) == 0xE0) {
 					hasAVX512F = ((cpuInfoX[1] & 0x10000) == 0x10000);
 					hasAVX512VLBW = ((cpuInfoX[1] & 0xC0010100) == 0xC0010100); // AVX512VL + AVX512BW + AVX512F + BMI2
+					
+					if(hasher_avx10_compatible && !hasAVX512VLBW) {
+						// if compiled with AVX10, it can substitute AVX512VL
+						int cpuInfo2[4];
+						_cpuidX(cpuInfo2, 7, 1);
+						if(cpuInfo2[3] & 0x80000) {
+							_cpuidX(cpuInfo2, 0x24, 0);
+							hasAVX512VLBW = (cpuInfo2[1] & 0xff) >= 1 /* minimum AVX10.1 */ && cpuInfo2[1] & 0x20000; // AVX10/256
+						}
+					}
 				}
 			}
 		}
