@@ -298,9 +298,11 @@ CPU Tuning Options:
                                  shuffle2x-avx512: half width variant of shuffle-avx512
                                  affine-sse: split 2x 8-bit vector XOR dependencies (GFNI)
                                  affine-avx2: AVX2 + GFNI variant of above
+                                 affine-avx10: AVX10/256 + GFNI variant of above
                                  affine-avx512: AVX512BW + GFNI variant of above
                                  affine2x-sse: half width variant of affine-sse
                                  affine2x-avx2: half width variant of affine-avx2
+                                 affine2x-avx10: half width variant of affine-avx10
                                  affine2x-avx512: half width variant of affine-avx512
                              ARMv7/AArch64 only choices:
                                  shuffle-neon: NEON variant of shuffle-sse

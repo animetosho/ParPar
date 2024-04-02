@@ -19,6 +19,7 @@ int gf16_affine_available_avx2 = 1;
 int gf16_affine_available_avx2 = 0;
 #endif
 
+#define AFFINE2X_AMD64_INTERLEAVE 6
 #include "gf16_affine2x_x86.h"
 #ifdef _AVAILABLE
 # undef _AVAILABLE

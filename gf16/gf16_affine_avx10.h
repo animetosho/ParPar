@@ -7,6 +7,7 @@ int _FN(gf16_affine_available) = 1;
 int _FN(gf16_affine_available) = 0;
 #endif
 
+#define AFFINE2X_AMD64_INTERLEAVE 12
 #include "gf16_affine2x_x86.h"
 #include "gf16_muladd_multi.h"
 

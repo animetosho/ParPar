@@ -29,9 +29,11 @@ FUNCS(v1i6_avx2);
 FUNCS(v16i1_avx2);
 FUNCS(v1i6_avx512);
 FUNCS(v1i12_avx512);
+FUNCS(v1i12_avx10);
 FUNCS(v2i3_avx512);
 FUNCS(v2i4_avx512);
 FUNCS(v2i6_avx512);
+FUNCS(v2i6_avx10);
 FUNCS(v16i6_avx512);
 #else
 FUNCS(v1i2_sse2);

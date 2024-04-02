@@ -66,7 +66,7 @@
     {
       "target_name": "parpar_gf",
       "dependencies": [
-        "parpar_gf_c", "gf16", "gf16_generic", "gf16_sse2", "gf16_ssse3", "gf16_avx", "gf16_avx2", "gf16_avx512", "gf16_vbmi", "gf16_gfni", "gf16_gfni_avx2", "gf16_gfni_avx512", "gf16_neon", "gf16_sha3", "gf16_sve", "gf16_sve2", "gf16_rvv", "gf16_rvv_zvbc",
+        "parpar_gf_c", "gf16", "gf16_generic", "gf16_sse2", "gf16_ssse3", "gf16_avx", "gf16_avx2", "gf16_avx512", "gf16_vbmi", "gf16_gfni", "gf16_gfni_avx2", "gf16_gfni_avx512", "gf16_gfni_avx10", "gf16_neon", "gf16_sha3", "gf16_sve", "gf16_sve2", "gf16_rvv", "gf16_rvv_zvbc",
         "hasher", "hasher_sse2", "hasher_clmul", "hasher_xop", "hasher_bmi1", "hasher_avx2", "hasher_avx512", "hasher_avx512vl", "hasher_armcrc", "hasher_neon", "hasher_neoncrc", "hasher_sve2"
       ],
       "sources": ["src/gf.cc", "gf16/controller.cpp", "gf16/controller_cpu.cpp", "gf16/controller_ocl.cpp", "gf16/controller_ocl_init.cpp"],
@@ -809,6 +809,42 @@
         ['target_arch in "ia32 x64" and OS=="win"', {
           "msvs_settings": {
             "VCCLCompilerTool": {"AdditionalOptions": ["/arch:AVX512"], "EnableEnhancedInstructionSet": "0"}
+          }
+        }]
+      ]
+    },
+    {
+      "target_name": "gf16_gfni_avx10",
+      "type": "static_library",
+      "defines": ["NDEBUG"],
+      "sources": [
+        "gf16/gf16_affine_avx10.c",
+        "gf16/gf_add_avx10.c"
+      ],
+      "cflags": ["-Wno-unused-function", "-std=gnu99"],
+      "xcode_settings": {
+        "OTHER_CFLAGS": ["-Wno-unused-function"],
+        "OTHER_CFLAGS!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"]
+      },
+      "cflags!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"],
+      "msvs_settings": {"VCCLCompilerTool": {"BufferSecurityCheck": "false"}},
+      "conditions": [
+        ['target_arch in "ia32 x64" and OS!="win"', {
+          "variables": {"supports_gfni_avx10%": "<!(<!(echo ${CC_target:-${CC:-cc}}) -MM -E gf16/gf16_affine_avx10.c -mgfni -mavx512vl -mavx512bw -mno-evex512 2>/dev/null || true)"},
+          "conditions": [
+            ['supports_gfni_avx10!=""', {
+              "cflags": ["-mgfni", "-mavx512vl", "-mavx512bw", "-mno-evex512"],
+              "cxxflags": ["-mgfni", "-mavx512vl", "-mavx512bw", "-mno-evex512"],
+              "xcode_settings": {
+                "OTHER_CFLAGS": ["-mgfni", "-mavx512vl", "-mavx512bw", "-mno-evex512"],
+                "OTHER_CXXFLAGS": ["-mgfni", "-mavx512vl", "-mavx512bw", "-mno-evex512"],
+              }
+            }]
+          ]
+        }],
+        ['target_arch in "ia32 x64" and OS=="win"', {
+          "msvs_settings": {
+            "VCCLCompilerTool": {"AdditionalOptions": ["/arch:AVX2"], "EnableEnhancedInstructionSet": "0"}
           }
         }]
       ]

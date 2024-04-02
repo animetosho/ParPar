@@ -15,6 +15,7 @@ static HEDLEY_ALWAYS_INLINE void _FN(gf16_affine2x_prepare_blocku)(void* dst, co
 	_MMI(store)((_mword*)dst, data);
 }
 
+# ifndef _EXCLUDE_FINISH_FUNCS
 static HEDLEY_ALWAYS_INLINE void _FN(gf16_affine2x_finish_block)(void *HEDLEY_RESTRICT dst) {
 	_mword shuf = _MM(set_epi32)(
 #if MWORD_SIZE >= 64
@@ -60,9 +61,10 @@ static HEDLEY_ALWAYS_INLINE void _FN(gf16_affine2x_finish_copy_blocku)(void *HED
 	data = _MM(shuffle_epi8)(data, shuf);
 	partial_store((_mword*)dst, data, bytes);
 }
+# endif
 #endif
 
-#ifdef PARPAR_INVERT_SUPPORT
+#if defined(PARPAR_INVERT_SUPPORT) && !defined(_EXCLUDE_FINISH_FUNCS)
 void _FN(gf16_affine2x_prepare)(void* dst, const void* src, size_t srcLen) {
 #if defined(_AVAILABLE) && !defined(PARPAR_SLIM_GF16)
 	gf16_prepare(dst, src, srcLen, sizeof(_mword), &_FN(gf16_affine2x_prepare_block), &_FN(gf16_affine2x_prepare_blocku));
@@ -75,7 +77,7 @@ void _FN(gf16_affine2x_prepare)(void* dst, const void* src, size_t srcLen) {
 
 #if defined(_AVAILABLE) && !defined(PARPAR_SLIM_GF16)
 # ifdef PLATFORM_AMD64
-GF_PREPARE_PACKED_FUNCS(gf16_affine2x, _FNSUFFIX, sizeof(_mword), _FNPREP(gf16_affine2x_prepare_block), _FNPREP(gf16_affine2x_prepare_blocku), 6 + (MWORD_SIZE==64)*6, _MM_END, _mword checksum = _MMI(setzero)(), _FNPREP(gf16_checksum_block), _FNPREP(gf16_checksum_blocku), _FNPREP(gf16_checksum_exp), _FNPREP(gf16_checksum_prepare), sizeof(_mword))
+GF_PREPARE_PACKED_FUNCS(gf16_affine2x, _FNSUFFIX, sizeof(_mword), _FNPREP(gf16_affine2x_prepare_block), _FNPREP(gf16_affine2x_prepare_blocku), AFFINE2X_AMD64_INTERLEAVE, _MM_END, _mword checksum = _MMI(setzero)(), _FNPREP(gf16_checksum_block), _FNPREP(gf16_checksum_blocku), _FNPREP(gf16_checksum_exp), _FNPREP(gf16_checksum_prepare), sizeof(_mword))
 # else
 GF_PREPARE_PACKED_FUNCS(gf16_affine2x, _FNSUFFIX, sizeof(_mword), _FNPREP(gf16_affine2x_prepare_block), _FNPREP(gf16_affine2x_prepare_blocku), 2, _MM_END, _mword checksum = _MMI(setzero)(), _FNPREP(gf16_checksum_block), _FNPREP(gf16_checksum_blocku), _FNPREP(gf16_checksum_exp), _FNPREP(gf16_checksum_prepare), sizeof(_mword))
 # endif
@@ -84,6 +86,7 @@ GF_PREPARE_PACKED_FUNCS_STUB(gf16_affine2x, _FNSUFFIX)
 #endif
 
 
+#ifndef _EXCLUDE_FINISH_FUNCS
 #ifdef PARPAR_INVERT_SUPPORT
 void _FN(gf16_affine2x_finish)(void *HEDLEY_RESTRICT dst, size_t len) {
 #if defined(_AVAILABLE) && !defined(PARPAR_SLIM_GF16)
@@ -99,4 +102,5 @@ void _FN(gf16_affine2x_finish)(void *HEDLEY_RESTRICT dst, size_t len) {
 GF_FINISH_PACKED_FUNCS(gf16_affine2x, _FNSUFFIX, sizeof(_mword), _FN(gf16_affine2x_finish_copy_block), _FN(gf16_affine2x_finish_copy_blocku), 1, _MM_END, _FN(gf16_checksum_block), _FN(gf16_checksum_blocku), _FN(gf16_checksum_exp), &_FN(gf16_affine2x_finish_block), sizeof(_mword))
 #else
 GF_FINISH_PACKED_FUNCS_STUB(gf16_affine2x, _FNSUFFIX)
+#endif
 #endif

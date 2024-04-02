@@ -25,7 +25,7 @@ static HEDLEY_ALWAYS_INLINE void _FN(gf_add_x)(
 				if(srcCount == m) \
 					data = _MMI(xor)(data, _MMI(load)((_mword*)(_src##m+ptr*srcScale) + v)); \
 				else if(srcCount > m) \
-					data = _mm512_ternarylogic_epi32(data, \
+					data = _MM(ternarylogic_epi32)(data, \
 						_MMI(load)((_mword*)(_src##m+ptr*srcScale) + v), \
 						_MMI(load)((_mword*)(_src##n+ptr*srcScale) + v), \
 					0x96)

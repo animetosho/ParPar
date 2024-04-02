@@ -16,6 +16,7 @@ set(GF16_DIR ../../gf16)
 set(SRC_DIR ../../src)
 set(GF16_C_SOURCES
 	${GF16_DIR}/gf_add_avx2.c
+	${GF16_DIR}/gf_add_avx10.c
 	${GF16_DIR}/gf_add_avx512.c
 	${GF16_DIR}/gf_add_generic.c
 	${GF16_DIR}/gf_add_neon.c
@@ -24,6 +25,7 @@ set(GF16_C_SOURCES
 	${GF16_DIR}/gf_add_sve.c
 	${GF16_DIR}/gf_add_sve2.c
 	${GF16_DIR}/gf16_affine_avx2.c
+	${GF16_DIR}/gf16_affine_avx10.c
 	${GF16_DIR}/gf16_affine_avx512.c
 	${GF16_DIR}/gf16_affine_gfni.c
 	${GF16_DIR}/gf16_cksum_avx2.c
@@ -130,8 +132,10 @@ add_compile_definitions(PARPAR_POW_SUPPORT=1)
 if(MSVC)
 	if(IS_X86)
 		set_source_files_properties(${GF16_DIR}/gf_add_avx2.c PROPERTIES COMPILE_OPTIONS /arch:AVX2)
+		set_source_files_properties(${GF16_DIR}/gf_add_avx10.c PROPERTIES COMPILE_OPTIONS /arch:AVX2)
 		set_source_files_properties(${GF16_DIR}/gf_add_avx512.c PROPERTIES COMPILE_OPTIONS /arch:AVX512)
 		set_source_files_properties(${GF16_DIR}/gf16_affine_avx2.c PROPERTIES COMPILE_OPTIONS /arch:AVX2)
+		set_source_files_properties(${GF16_DIR}/gf16_affine_avx10.c PROPERTIES COMPILE_OPTIONS /arch:AVX2)
 		set_source_files_properties(${GF16_DIR}/gf16_affine_avx512.c PROPERTIES COMPILE_OPTIONS /arch:AVX512)
 		set_source_files_properties(${GF16_DIR}/gf16_cksum_avx2.c PROPERTIES COMPILE_OPTIONS /arch:AVX2)
 		set_source_files_properties(${GF16_DIR}/gf16_cksum_avx512.c PROPERTIES COMPILE_OPTIONS /arch:AVX512)
@@ -176,6 +180,13 @@ if(NOT MSVC OR CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
 			set_source_files_properties(${GF16_DIR}/gf16_affine_gfni.c PROPERTIES COMPILE_OPTIONS "-mssse3;-mgfni")
 			
 			set_source_files_properties(${SRC_DIR}/platform_warnings.c.c PROPERTIES COMPILE_OPTIONS "-mavx2;-mgfni")
+		endif()
+		CHECK_CXX_COMPILER_FLAG("-mno-evex512" COMPILER_SUPPORTS_AVX10)
+		if(COMPILER_SUPPORTS_AVX10 AND COMPILER_SUPPORTS_GFNI)
+			set_source_files_properties(${GF16_DIR}/gf16_affine_avx10.c PROPERTIES COMPILE_OPTIONS "-mavx512vl;-mavx512bw;-mgfni;-mno-evex512")
+		endif()
+		if(COMPILER_SUPPORTS_AVX10)
+			set_source_files_properties(${GF16_DIR}/gf_add_avx10.c PROPERTIES COMPILE_OPTIONS "-mavx512vl;-mno-evex512")
 		endif()
 		
 		CHECK_CXX_COMPILER_FLAG("-mvpclmulqdq" COMPILER_SUPPORTS_VPCLMULQDQ)
