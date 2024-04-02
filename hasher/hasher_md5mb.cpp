@@ -18,7 +18,12 @@ void set_hasherMD5MultiLevel(MD5MultiLevels level) {
 			SET_LEVEL(MD5Multi_AVX512_256, MD5MULT_AVX512VL)
 			// fallthrough
 		case MD5MULT_AVX512F:
-			SET_LEVEL(MD5Multi_AVX512, MD5MULT_AVX512F)
+		case MD5MULT_AVX10:
+			if(level == MD5MULT_AVX10) {
+				SET_LEVEL(MD5Multi_AVX512, MD5MULT_AVX10)
+			} else {
+				SET_LEVEL(MD5Multi_AVX512, MD5MULT_AVX512F)
+			}
 			// fallthrough
 		case MD5MULT_XOP:
 			SET_LEVEL(MD5Multi_XOP, MD5MULT_XOP)
@@ -45,6 +50,7 @@ void set_hasherMD5MultiLevel(MD5MultiLevels level) {
 			break;
 		
 		// prevent compiler warnings
+		case MD5MULT_AVX10:
 		case MD5MULT_AVX512VL:
 		case MD5MULT_AVX512F:
 		case MD5MULT_XOP:
@@ -99,7 +105,7 @@ MD5Multi::MD5Multi(int srcCount) {
 	// now for last hasher, find smallest hasher which covers all remaining
 	if(srcCount) {
 		#define ADD_LAST_CTX(cond, impl) \
-			if(cond && srcCount <= impl::getNumRegions()) { \
+			if((cond) && srcCount <= impl::getNumRegions()) { \
 				lastCtxData.resize(impl::getNumRegions()); \
 				ctx.push_back(new impl()); \
 				lastCtxDataDup = impl::getNumRegions() - srcCount; \
@@ -109,10 +115,10 @@ MD5Multi::MD5Multi(int srcCount) {
 		else ADD_LAST_CTX(1, MD5Multi2_Scalar)
 #ifdef PLATFORM_X86
 		// AVX512 hasher would be faster than scalar on Intel, but slower on AMD, so we won't bother trying to do that optimisation
-		else ADD_LAST_CTX(HasherMD5Multi_level == MD5MULT_AVX512VL, MD5Multi_AVX512_128)
+		else ADD_LAST_CTX(HasherMD5Multi_level == MD5MULT_AVX512VL || HasherMD5Multi_level == MD5MULT_AVX10, MD5Multi_AVX512_128)
 		else ADD_LAST_CTX(HasherMD5Multi_level == MD5MULT_XOP, MD5Multi_XOP)
 		else ADD_LAST_CTX(HasherMD5Multi_level >= MD5MULT_SSE, MD5Multi_SSE)
-		else ADD_LAST_CTX(HasherMD5Multi_level == MD5MULT_AVX512VL, MD5Multi_AVX512_256)
+		else ADD_LAST_CTX(HasherMD5Multi_level == MD5MULT_AVX512VL || HasherMD5Multi_level == MD5MULT_AVX10, MD5Multi_AVX512_256)
 		else ADD_LAST_CTX(HasherMD5Multi_level >= MD5MULT_AVX2 && HasherMD5Multi_level != MD5MULT_XOP, MD5Multi_AVX2)
 		else ADD_LAST_CTX(HasherMD5Multi_level >= MD5MULT_AVX512F, MD5Multi_AVX512)
 # ifdef PLATFORM_AMD64
@@ -198,6 +204,7 @@ const char* hasherMD5Multi_methodName(MD5MultiLevels l) {
 		"SSE2",
 		"AVX2",
 		"XOP",
+		"AVX10",
 		"AVX512F",
 		"AVX512VL",
 		"NEON",

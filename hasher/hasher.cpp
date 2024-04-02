@@ -144,7 +144,7 @@ void setup_hasher() {
 #ifdef PARPAR_ENABLE_HASHER_MULTIMD5
 	// note that this logic assumes that if a compiler can compile for more advanced ISAs, it supports simpler ones as well
 # ifdef PLATFORM_X86
-	if(caps.hasAVX512VLBW && MD5Multi_AVX512_256::isAvailable) HasherMD5Multi_level = MD5MULT_AVX512VL;
+	if(caps.hasAVX512VLBW && MD5Multi_AVX512_256::isAvailable) HasherMD5Multi_level = caps.hasAVX512F ? MD5MULT_AVX512VL : MD5MULT_AVX10;
 	else if(caps.hasAVX512F && MD5Multi_AVX512::isAvailable) HasherMD5Multi_level = MD5MULT_AVX512F;
 	else if(caps.hasXOP && MD5Multi_XOP::isAvailable) HasherMD5Multi_level = MD5MULT_XOP;  // for the only CPU with AVX2 + XOP (Excavator) I imagine XOP works better than AVX2, due to half rate AVX
 	else if(caps.hasAVX2 && MD5Multi_AVX2::isAvailable) HasherMD5Multi_level = MD5MULT_AVX2;
@@ -228,8 +228,11 @@ std::vector<MD5MultiLevels> hasherMD5Multi_availableMethods(bool checkCpuid) {
 	
 #ifdef PLATFORM_X86
 	const HasherCpuCap caps(checkCpuid);
-	if(caps.hasAVX512VLBW && MD5Multi_AVX512_256::isAvailable)
-		ret.push_back(MD5MULT_AVX512VL);
+	if(caps.hasAVX512VLBW && MD5Multi_AVX512_256::isAvailable) {
+		if(caps.hasAVX512F)
+			ret.push_back(MD5MULT_AVX512VL);
+		ret.push_back(MD5MULT_AVX10);
+	}
 	if(caps.hasAVX512F && MD5Multi_AVX512::isAvailable)
 		ret.push_back(MD5MULT_AVX512F);
 	if(caps.hasXOP && MD5Multi_XOP::isAvailable)
