@@ -100,12 +100,12 @@ static void gf16_xor_create_jit_lut_sse2(struct gf16_xor_jit_scratch_sse2* scrat
 				pC[1] += _jit_xorps_r(pC[1], 0, j+3);
 				pC[3] += _jit_xorps_r(pC[3], 0, j+8);
 				pC[4] += _jit_xorps_r(pC[4], 0, j+11);
-				if(i < 16) {
+				if(i < 16 && pC[2]) { // pC[2] doesn't need to be checked, but GCC may throw a warning without it
 					pC[2] += _jit_xorps_r(pC[2], 0, j+6);
 					pC[5] += _jit_xorps_r(pC[5], 0, j+14);
 				}
 #else
-				if(i < 16) {
+				if(i < 16 && pC[3]) {
 					pC[3] += _jit_xorps_mod(pC[3], 0, AX, (j+1) <<4);
 					pC[5] += _jit_xorps_r(pC[5], 0, j+6);
 				}
@@ -125,12 +125,12 @@ static void gf16_xor_create_jit_lut_sse2(struct gf16_xor_jit_scratch_sse2* scrat
 				pC[1] += _jit_pxor_r(pC[1], reg, j+3);
 				pC[3] += _jit_pxor_r(pC[3], reg, j+8);
 				pC[4] += _jit_pxor_r(pC[4], reg, j+11);
-				if(i < 16) {
+				if(i < 16 && pC[2]) {
 					pC[2] += _jit_pxor_r(pC[2], reg, j+6);
 					pC[5] += _jit_pxor_r(pC[5], reg, j+14);
 				}
 #else
-				if(i < 16) {
+				if(i < 16 && pC[3]) {
 					pC[3] += _jit_pxor_mod(pC[3], reg, AX, (j+1) <<4);
 					pC[5] += _jit_pxor_r(pC[5], reg, j+6);
 				}
