@@ -1683,7 +1683,7 @@ std::vector<Galois16Methods> Galois16Mul::availableMethods(bool checkCpuid) {
 			ret.push_back(GF16_AFFINE2X_AVX512);
 			#endif
 		}
-		if(gf16_affine_available_avx10 && gf16_shuffle_available_avx2 && caps.hasAVX10) {
+		if(gf16_affine_available_avx10 && gf16_shuffle_available_avx2 && (caps.hasAVX10 || caps.hasAVX512VBMI)) {
 			ret.push_back(GF16_AFFINE_AVX10);
 			#if !defined(PARPAR_SLIM_GF16)
 			ret.push_back(GF16_AFFINE2X_AVX10);
