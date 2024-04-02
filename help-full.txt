@@ -257,6 +257,7 @@ I/O Tuning Options:
                                  avx512f: AVX512F implementation (16-32x lanes)
                                  avx512vl: AVX512VL 128/256-bit implementation
                                            (4-16x lanes)
+                                 avx10: `avx512vl` without AVX512F
                              ARMv7/AArch64 only choices:
                                  neon: NEON implementation (4-8x lanes)
                              AArch64 only choices:
