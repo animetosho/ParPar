@@ -180,10 +180,12 @@ static unsigned long getauxval(unsigned long cap) {
 #  define CPU_HAS_GC true
 #  define CPU_HAS_VECTOR true
 #  define CPU_HAS_Zvbc true
+#  define CPU_HAS_Zbkc true
 # else
 #  define CPU_HAS_GC false
 #  define CPU_HAS_VECTOR false
 #  define CPU_HAS_Zvbc false
+#  define CPU_HAS_Zbkc false
 
 #  if defined(AT_HWCAP)
 #   undef CPU_HAS_GC
@@ -191,20 +193,29 @@ static unsigned long getauxval(unsigned long cap) {
 #   undef CPU_HAS_VECTOR
 #   define CPU_HAS_VECTOR (getauxval(AT_HWCAP) & (1 << ('V'-'A')))
 #  endif
-# endif
-# ifdef RISCV_HWPROBE_KEY_IMA_EXT_0
-#  undef CPU_HAS_Zvbc
+#  ifdef RISCV_HWPROBE_KEY_IMA_EXT_0
+#   undef CPU_HAS_Zvbc
+#   undef CPU_HAS_Zbkc
 static uint64_t pp_hwprobe(uint64_t k) {
 	struct riscv_hwprobe p;
 	p.key = k;
 	if(syscall(__NR_riscv_hwprobe, &p, 1, 0, NULL, 0)) return 0;
 	return p.value;
 }
-#  define CPU_HAS_Zvbc (pp_hwprobe(RISCV_HWPROBE_KEY_IMA_EXT_0) & (1 << 18) /*RISCV_HWPROBE_EXT_ZVBC*/)
-# elif defined(RISCV_ISA_EXT_ZVBC)
-// TODO: RISCV_ISA_EXT_ZVBC is defined as 57 -> this doesn't work on RV32?
-#  undef CPU_HAS_Zvbc
-#  define CPU_HAS_Zvbc (getauxval(AT_HWCAP) & (1 << RISCV_ISA_EXT_ZVBC))
+// Linux RISC-V extension constants: https://github.com/torvalds/linux/blob/master/arch/riscv/include/uapi/asm/hwprobe.h
+#   define CPU_HAS_Zvbc (pp_hwprobe(RISCV_HWPROBE_KEY_IMA_EXT_0) & (1 << 18) /*RISCV_HWPROBE_EXT_ZVBC*/)
+#   define CPU_HAS_Zbkc (pp_hwprobe(RISCV_HWPROBE_KEY_IMA_EXT_0) & ((1 << 7) /*RISCV_HWPROBE_EXT_ZBC*/ | (1 << 9) /*RISCV_HWPROBE_EXT_ZBKC*/))
+#  else
+#   ifdef RISCV_ISA_EXT_ZVBC
+// TODO: RISCV_ISA_EXT_ZVBC is defined as 57 -> this doesn't work on RV32? [ref https://github.com/torvalds/linux/blob/master/arch/riscv/include/asm/hwcap.h]
+#    undef CPU_HAS_Zvbc
+#    define CPU_HAS_Zvbc (getauxval(AT_HWCAP) & (1 << RISCV_ISA_EXT_ZVBC))
+#   endif
+#   if defined(RISCV_ISA_EXT_ZBC) && defined(RISCV_ISA_EXT_ZBKC)
+#    undef CPU_HAS_Zbkc
+#    define CPU_HAS_Zbkc (getauxval(AT_HWCAP) & ((1 << RISCV_ISA_EXT_ZBC) | (1 << RISCV_ISA_EXT_ZBKC)))
+#   endif
+#  endif
 # endif
 
 #endif

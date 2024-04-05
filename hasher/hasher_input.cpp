@@ -26,6 +26,9 @@ bool set_hasherInput(HasherInputMethods method) {
 	SET_HASHER(INHASH_CRC, HasherInput_ARMCRC)
 	SET_HASHER(INHASH_SIMD_CRC, HasherInput_NEONCRC)
 #endif
+#ifdef __riscv
+	SET_HASHER(INHASH_CRC, HasherInput_RVZbc)
+#endif
 #undef SET_HASHER
 	return false;
 }
@@ -41,6 +44,10 @@ const char* hasherInput_methodName(HasherInputMethods m) {
 		"NEON+Generic",
 		"Scalar+ARMCRC",
 		"NEON+ARMCRC",
+#elif defined(__riscv)
+		"SIMD+Generic",
+		"Scalar+Zbc",
+		"SIMD+Zbc",
 #else
 		"SIMD+Generic",
 		"Scalar+CRC",

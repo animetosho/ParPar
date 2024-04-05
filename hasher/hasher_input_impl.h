@@ -18,6 +18,8 @@ protected:
 	ALIGN_TO(16, char md5State[64]); // large enough to handle all implementations of MD5 state (4x16B)
 #ifdef PLATFORM_X86
 	char crcState[64]; // ClMul uses 4x16B state, others use 4B
+#elif defined(__riscv)
+	char crcState[__riscv_xlen/2];
 #else
 	char crcState[4];
 #endif
@@ -68,6 +70,7 @@ __DECL_HASHERINPUT(AVX512);
 __DECL_HASHERINPUT(ARMCRC);
 __DECL_HASHERINPUT(NEON);
 __DECL_HASHERINPUT(NEONCRC);
+__DECL_HASHERINPUT(RVZbc);
 #undef __DECL_HASHERINPUT_EXTRACT
 #undef __DECL_HASHERINPUT
 

@@ -244,6 +244,8 @@ I/O Tuning Options:
                              x86 only choices:
                                  bmi: use BMI1 and PCLMULQDQ
                                  avx512: use AVX512VL and PCLMULQDQ
+                             RISC-V only choices:
+                                 crc: compute CRC using Zbc/Zbkc
        --md5-method          Highest level algorithm for hashing recovery data.
                              This option may be limited by `--md5-batch-size`.
                              Process can crash if CPU does not support selected

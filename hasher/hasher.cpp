@@ -81,6 +81,13 @@ struct HasherCpuCap {
 		hasSVE2 = CPU_HAS_SVE2;
 	}
 #endif
+#ifdef __riscv
+	bool hasZbkc;
+	HasherCpuCap(bool detect) : hasZbkc(true) {
+		if(!detect) return;
+		hasZbkc = CPU_HAS_Zbkc;
+	}
+#endif
 };
 
 void setup_hasher() {
@@ -139,7 +146,18 @@ void setup_hasher() {
 		set_hasherMD5CRC(MD5CRCMETH_ARMCRC);
 # endif
 #endif
+#ifdef __riscv
+	struct HasherCpuCap caps(true);
 	
+	if(caps.hasZbkc && HasherInput_RVZbc::isAvailable)
+		set_hasherInput(INHASH_CRC);
+	
+# ifdef PARPAR_ENABLE_HASHER_MD5CRC
+	if(caps.hasZbkc && MD5CRC_isAvailable_RVZbc)
+		set_hasherMD5CRC(MD5CRCMETH_RVZBC);
+# endif
+#endif
+
 	
 #ifdef PARPAR_ENABLE_HASHER_MULTIMD5
 	// note that this logic assumes that if a compiler can compile for more advanced ISAs, it supports simpler ones as well
@@ -189,6 +207,11 @@ std::vector<HasherInputMethods> hasherInput_availableMethods(bool checkCpuid) {
 	if(caps.hasCRC && caps.hasNEON && HasherInput_NEONCRC::isAvailable)
 		ret.push_back(INHASH_SIMD_CRC);
 #endif
+#ifdef __riscv
+	const HasherCpuCap caps(checkCpuid);
+	if(caps.hasZbkc && HasherInput_RVZbc::isAvailable)
+		ret.push_back(INHASH_CRC);
+#endif
 	
 	return ret;
 }
@@ -215,6 +238,11 @@ std::vector<MD5CRCMethods> hasherMD5CRC_availableMethods(bool checkCpuid, int ty
 	const HasherCpuCap caps(checkCpuid);
 	if(caps.hasCRC && MD5CRC_isAvailable_ARMCRC && (types & HASHER_MD5CRC_TYPE_CRC))
 		ret.push_back(MD5CRCMETH_ARMCRC);
+#endif
+#ifdef __riscv
+	const HasherCpuCap caps(checkCpuid);
+	if(caps.hasZbkc && MD5CRC_isAvailable_RVZbc && (types & HASHER_MD5CRC_TYPE_CRC))
+		ret.push_back(MD5CRCMETH_RVZBC);
 #endif
 	
 	return ret;

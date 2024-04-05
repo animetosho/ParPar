@@ -36,6 +36,7 @@ set(HASHER_CPP_SOURCES
 	${HASHER_DIR}/hasher_sse.cpp
 	${HASHER_DIR}/hasher_sve2.cpp
 	${HASHER_DIR}/hasher_xop.cpp
+	${HASHER_DIR}/hasher_rvzbc.cpp
 	${HASHER_DIR}/tables.cpp
 )
 
@@ -99,6 +100,19 @@ if(NOT MSVC OR CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
 		CHECK_CXX_COMPILER_FLAG("-march=armv8-a+sve2" COMPILER_SUPPORTS_SVE2)
 		if(COMPILER_SUPPORTS_SVE2)
 			set_source_files_properties(${HASHER_DIR}/hasher_sve2.cpp PROPERTIES COMPILE_OPTIONS -march=armv8-a+sve2)
+		endif()
+	endif()
+	
+	if(IS_RISCV64)
+		CHECK_CXX_COMPILER_FLAG("-march=rv64gc_zbkc" COMPILER_SUPPORTS_RVZBKC)
+		if(COMPILER_SUPPORTS_RVZBKC)
+			set_source_files_properties(${HASHER_DIR}/hasher_rvzbc.cpp PROPERTIES COMPILE_OPTIONS -march=rv64gc_zbkc)
+		endif()
+	endif()
+	if(IS_RISCV32)
+		CHECK_CXX_COMPILER_FLAG("-march=rv32gc_zbkc" COMPILER_SUPPORTS_RVZBKC)
+		if(COMPILER_SUPPORTS_RVZBKC)
+			set_source_files_properties(${HASHER_DIR}/hasher_rvzbc.cpp PROPERTIES COMPILE_OPTIONS -march=rv32gc_zbkc)
 		endif()
 	endif()
 endif()

@@ -31,6 +31,9 @@ bool set_hasherMD5CRC(MD5CRCMethods method) {
 #ifdef PLATFORM_ARM
 		SET_HASHER(MD5CRCMETH_ARMCRC, ARMCRC, MD5CRCMETH_SCALAR, MD5CRCMETH_ARMCRC)
 #endif
+#ifdef __riscv
+		SET_HASHER(MD5CRCMETH_RVZBC, RVZbc, MD5CRCMETH_SCALAR, MD5CRCMETH_RVZBC)
+#endif
 		default: return false;
 	}
 #undef SET_HASHER
@@ -60,6 +63,9 @@ bool set_hasherMD5CRC(MD5CRCMethods method) {
 			break;
 		case MD5CRCMETH_ARMCRC:
 			CRC32_Calc = &CRC32_Calc_ARMCRC;
+			break;
+		case MD5CRCMETH_RVZBC:
+			CRC32_Calc = &CRC32_Calc_RVZbc;
 			break;
 		case MD5CRCMETH_SCALAR:
 			CRC32_Calc = &CRC32_Calc_Slice4;
@@ -131,7 +137,8 @@ const char* md5crc_methodName(MD5CRCMethods m) {
 		"NoLEA",
 		"AVX512",
 		"ARMCRC",
-		"PCLMUL"
+		"PCLMUL",
+		"Zbc"
 	};
 	
 	return names[(int)m];

@@ -53,6 +53,8 @@ uint32_t MD5CRC(Calc)(const void* data, size_t length, size_t zeroPad, void* md5
 	uint32_t md5State[4] = {0x67452301, 0xefcdab89, 0x98badcfe, 0x10325476};
 #ifdef PLATFORM_X86
 	ALIGN_TO(16, char crcState[64]); // ClMul uses 4x16B state, others use 4B
+#elif defined(__riscv)
+	ALIGN_TO(8, char crcState[__riscv_xlen/2]);
 #else
 	char crcState[4];
 #endif
@@ -81,6 +83,8 @@ const bool CRC32Impl(CRC32_isAvailable) = true;
 uint32_t CRC32Impl(CRC32_Calc)(const void* data, size_t len) {
 #ifdef PLATFORM_X86
 	ALIGN_TO(16, char crcState[64]); // ClMul uses 4x16B state, others use 4B
+#elif defined(__riscv)
+	ALIGN_TO(8, char crcState[__riscv_xlen/2]);
 #else
 	char crcState[4];
 #endif
