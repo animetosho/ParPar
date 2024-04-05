@@ -179,10 +179,11 @@ bool PAR2Proc::_addInput(const void* buffer, size_t size, uint16_t inputRef, T i
 		cbRef = addCbRefs.emplace(std::make_pair(inputRef, PAR2ProcAddCbRef{
 			(int)backends.size(), cb,
 			[this, inputRef]() {
-				auto& ref = addCbRefs[inputRef];
+				auto itRef = addCbRefs.find(inputRef);
+				auto& ref = itRef->second;
 				if(--ref.backendsActive == 0) {
 					auto cb = ref.cb;
-					addCbRefs.erase(inputRef);
+					addCbRefs.erase(itRef);
 					if(cb) cb();
 				}
 			}
@@ -213,6 +214,7 @@ bool PAR2Proc::_addInput(const void* buffer, size_t size, uint16_t inputRef, T i
 		hasAdded = true;
 		for(auto& backend : backends)
 			backend.added.erase(inputRef);
+		// have seen the above line segfault in qemu-user RV64, but not if changed to `backend.added.erase(backend.added.find(inputRef))` - don't understand why, maybe dodgy C++ runtime?
 	}
 	return success;
 }
