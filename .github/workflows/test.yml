@@ -15,7 +15,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - uses: ilammy/setup-nasm@v1
-      - uses: petarpetrovt/setup-sde@v2.2
+      - uses: petarpetrovt/setup-sde@v2.4
       - run: |
           mkdir test\gf16\build
           cmake -B test\gf16\build -S test\gf16 -G "Visual Studio 17 2022" -T ${{ matrix.compiler }} -A ${{ matrix.arch }}
@@ -80,7 +80,7 @@ jobs:
       run:
         shell: msys2 {0}
     steps:
-      #- uses: petarpetrovt/setup-sde@v2.2
+      #- uses: petarpetrovt/setup-sde@v2.4
       - uses: msys2/setup-msys2@v2
         with:
           msystem: ${{matrix.sys.sys}}
@@ -126,7 +126,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - run: sudo apt update
-      - uses: petarpetrovt/setup-sde@v2.2
+      - uses: petarpetrovt/setup-sde@v2.4
         if: ${{ matrix.t.arch == 'amd64' || matrix.t.arch == 'i386' }}
       - run: sudo apt install -y qemu-user-static
         if: ${{ matrix.t.arch != 'amd64' && matrix.t.arch != 'i386' }}
@@ -188,7 +188,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - run: sudo apt update && sudo apt install -y clang-${{ matrix.cc_ver }}
-      - uses: petarpetrovt/setup-sde@v2.2
+      - uses: petarpetrovt/setup-sde@v2.4
         if: ${{ matrix.t.arch == 'amd64' || matrix.t.arch == 'i386' }}
       - run: sudo apt install -y qemu-user-static
         if: ${{ matrix.t.arch != 'amd64' && matrix.t.arch != 'i386' }}
