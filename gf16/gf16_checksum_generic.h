@@ -95,15 +95,26 @@ static HEDLEY_ALWAYS_INLINE void gf16_ungrp2a_block_generic(void *HEDLEY_RESTRIC
 	size_t remaining = blockLen;
 	while(remaining) {
 		if(sizeof(uintptr_t) >= 8) {
+#if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+			write64(_dst, ((uint64_t)read16(_src) << 48) |
+				((uint64_t)read16(_src + 2) << 32) |
+				((uint64_t)read16(_src + 4) << 16) |
+				read16(_src + 6));
+#else
 			write64(_dst, read16(_src) |
-				((uintptr_t)read16(_src + 2) << 16) |
-				((uintptr_t)read16(_src + 4) << 32) |
-				((uintptr_t)read16(_src + 6) << 48));
+				((uint64_t)read16(_src + 2) << 16) |
+				((uint64_t)read16(_src + 4) << 32) |
+				((uint64_t)read16(_src + 6) << 48));
+#endif
 			remaining -= 8;
 			_src += 8;
 			_dst += 4;
 		} else if(sizeof(uintptr_t) >= 4) {
-			write32(_dst, read16(_src) | ((uintptr_t)read16(_src + 2) << 16));
+#if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+			write32(_dst, ((uint32_t)read16(_src) << 16) | read16(_src + 2) << 16);
+#else
+			write32(_dst, read16(_src) | ((uint32_t)read16(_src + 2) << 16));
+#endif
 			remaining -= 4;
 			_src += 4;
 			_dst += 2;
