@@ -188,8 +188,9 @@ static HEDLEY_ALWAYS_INLINE void _FN(gf16_ungrp2a_block)(void *HEDLEY_RESTRICT d
 		_src += 2;
 		
 #if MWORD_SIZE==64
-		_mword r = _MM(permutex2var_epi16)(w1, _MM(set_epi16)(
-			62,60,58,56,54,52,50,48,46,44,42,40,38,36,34,32,30,28,26,24,22,20,18,16,14,12,10,8,6,4,2,0
+		_mword r = _MM(permutex2var_epi16)(w1, _mm512_set_epi32(
+			0x3e003c, 0x3a0038, 0x360034, 0x320030, 0x2e002c, 0x2a0028, 0x260024, 0x220020,
+			0x1e001c, 0x1a0018, 0x160014, 0x120010, 0x0e000c, 0x0a0008, 0x060004, 0x020000
 		), w2);
 #elif MWORD_SIZE==32
 		w1 = _MMI(and)(w1, _MM(set1_epi32)(0xffff));
@@ -217,8 +218,9 @@ static HEDLEY_ALWAYS_INLINE void _FN(gf16_ungrp2b_block)(void *HEDLEY_RESTRICT d
 		_src += 2;
 		
 #if MWORD_SIZE==64
-		_mword r = _MM(permutex2var_epi16)(w1, _MM(set_epi16)(
-			63,61,59,57,55,53,51,49,47,45,43,41,39,37,35,33,31,29,27,25,23,21,19,17,15,13,11,9,7,5,3,1
+		_mword r = _MM(permutex2var_epi16)(w1, _mm512_set_epi32(
+			0x3f003d, 0x3b0039, 0x370035, 0x330031, 0x2f002d, 0x2b0029, 0x270025, 0x230021,
+			0x1f001d, 0x1b0019, 0x170015, 0x130011, 0x0f000d, 0x0b0009, 0x070005, 0x030001
 		), w2);
 #else
 		w1 = _MM(srai_epi32)(w1, 16);
