@@ -23,7 +23,9 @@ void gf16pmul_sve2(void *HEDLEY_RESTRICT dst, const void* src1, const void* src2
 		svuint8_t high1 = svpmullb_pair_u8(svget2(data1, 1), svget2(data2, 1));
 		svuint8_t high2 = svpmullt_pair_u8(svget2(data1, 1), svget2(data2, 1));
 		
-		gf16_clmul_sve2_reduction(&low1, low2, mid1, mid2, &high1, high2);
+		gf16_clmul_sve2_reduction(&low1, &low2, mid1, mid2, &high1, &high2);
+		low1 = NOMASK(sveor_u8, low1, low2);
+		high1 = NOMASK(sveor_u8, high1, high2);
 		svst2_u8(svptrue_b8(), _dst+ptr, svcreate2_u8(low1, high1));
 	}
 }

@@ -107,11 +107,11 @@ static HEDLEY_ALWAYS_INLINE void gf16_clmul_sha3_merge2(
 		gf16_clmul_neon_round1(_src8+ptr*srcScale, &low1b, &low2b, &mid1b, &mid2b, &high1b, &high2b, coeff + CLMUL_COEFF_PER_REGION*7); \
 		gf16_clmul_sha3_merge1(&low1a, &low2a, &mid1a, &mid2a, &high1a, &high2a, low1b, low2b, mid1b, mid2b, high1b, high2b); \
 	} \
-	gf16_clmul_neon_reduction(&low1a, low2a, mid1a, mid2a, &high1a, high2a); \
+	gf16_clmul_neon_reduction(&low1a, &low2a, mid1a, mid2a, &high1a, &high2a); \
 		\
 	uint8x16x2_t vb = vld2q_u8(_dst+ptr); \
-	vb.val[0] = veorq_u8(vreinterpretq_u8_p16(low1a), vb.val[0]); \
-	vb.val[1] = veorq_u8(vreinterpretq_u8_p16(high1a), vb.val[1]); \
+	vb.val[0] = veor3q_u8(vreinterpretq_u8_p16(low1a), vreinterpretq_u8_p16(low2a), vb.val[0]); \
+	vb.val[1] = veor3q_u8(vreinterpretq_u8_p16(high1a), vreinterpretq_u8_p16(high2a), vb.val[1]); \
 	vst2q_u8(_dst+ptr, vb)
 
 #endif // defined(__APPLE__)

@@ -35,10 +35,10 @@ void gf16pmul_neon(void *HEDLEY_RESTRICT dst, const void* src1, const void* src2
 		poly16x8_t high2 = vmull_p8(vget_high_p8(data1.val[1]), vget_high_p8(data2.val[1]));
 #endif
 		
-		gf16_clmul_neon_reduction(&low1, low2, mid1, mid2, &high1, high2);
+		gf16_clmul_neon_reduction(&low1, &low2, mid1, mid2, &high1, &high2);
 		uint8x16x2_t out;
-		out.val[0] = vreinterpretq_u8_p16(low1);
-		out.val[1] = vreinterpretq_u8_p16(high1);
+		out.val[0] = veorq_u8(vreinterpretq_u8_p16(low1), vreinterpretq_u8_p16(low2));
+		out.val[1] = veorq_u8(vreinterpretq_u8_p16(high1), vreinterpretq_u8_p16(high2));
 		vst2q_u8(_dst+ptr, out);
 	}
 }

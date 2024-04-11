@@ -100,11 +100,11 @@ static HEDLEY_ALWAYS_INLINE void gf16_clmul_muladd_x_sve2(
 			gf16_clmul_sve2_round(_src8+ptr*srcScale, &low1b, &low2b, &mid1b, &mid2b, &high1b, &high2b, coeff7); \
 			gf16_clmul_sve2_merge1(&low1a, &low2a, &mid1a, &mid2a, &high1a, &high2a, low1b, low2b, mid1b, mid2b, high1b, high2b); \
 		} \
-		gf16_clmul_sve2_reduction(&low1a, low2a, mid1a, mid2a, &high1a, high2a); \
+		gf16_clmul_sve2_reduction(&low1a, &low2a, mid1a, mid2a, &high1a, &high2a); \
 		 \
 		svuint8x2_t vb = svld2_u8(svptrue_b8(), _dst+ptr); \
-		low1a = NOMASK(sveor_u8, low1a, svget2(vb, 0)); \
-		high1a = NOMASK(sveor_u8, high1a, svget2(vb, 1)); \
+		low1a = sveor3_u8(low1a, low2a, svget2(vb, 0)); \
+		high1a = sveor3_u8(high1a, high2a, svget2(vb, 1)); \
 		svst2_u8(svptrue_b8(), _dst+ptr, svcreate2_u8(low1a, high1a))
 	
 	if(doPrefetch) {
@@ -142,7 +142,9 @@ void gf16_clmul_mul_sve2(const void *HEDLEY_RESTRICT scratch, void* dst, const v
 	svuint8_t low1, low2, mid1, mid2, high1, high2;
 	for(intptr_t ptr = -(intptr_t)len; ptr; ptr += svcntb()*2) {
 		gf16_clmul_sve2_round(_src+ptr, &low1, &low2, &mid1, &mid2, &high1, &high2, coeff);
-		gf16_clmul_sve2_reduction(&low1, low2, mid1, mid2, &high1, high2);
+		gf16_clmul_sve2_reduction(&low1, &low2, mid1, mid2, &high1, &high2);
+		low1 = NOMASK(sveor_u8, low1, low2);
+		high1 = NOMASK(sveor_u8, high1, high2);
 		svst2_u8(svptrue_b8(), _dst+ptr, svcreate2_u8(low1, high1));
 	}
 #else

@@ -91,11 +91,11 @@ static HEDLEY_ALWAYS_INLINE void _FN(gf16_clmul_muladd_x)(
 		if(srcCount > 7) \
 			gf16_clmul_neon_round(_src8+ptr*srcScale, &low1, &low2, &mid1, &mid2, &high1, &high2, coeff + CLMUL_COEFF_PER_REGION*7); \
 		 \
-		gf16_clmul_neon_reduction(&low1, low2, mid1, mid2, &high1, high2); \
+		gf16_clmul_neon_reduction(&low1, &low2, mid1, mid2, &high1, &high2); \
 		 \
 		uint8x16x2_t vb = vld2q_u8(_dst+ptr); \
-		vb.val[0] = veorq_u8(vreinterpretq_u8_p16(low1), vb.val[0]); \
-		vb.val[1] = veorq_u8(vreinterpretq_u8_p16(high1), vb.val[1]); \
+		vb.val[0] = veorq_u8(vreinterpretq_u8_p16(veorq_p16(low1, low2)), vb.val[0]); \
+		vb.val[1] = veorq_u8(vreinterpretq_u8_p16(veorq_p16(high1, high2)), vb.val[1]); \
 		vst2q_u8(_dst+ptr, vb)
 #endif
 	
@@ -149,10 +149,10 @@ void _FN(gf16_clmul_mul)(const void *HEDLEY_RESTRICT scratch, void* dst, const v
 	poly16x8_t low1, low2, mid1, mid2, high1, high2;
 	for(intptr_t ptr = -(intptr_t)len; ptr; ptr += sizeof(uint8x16_t)*2) {
 		gf16_clmul_neon_round1(_src+ptr, &low1, &low2, &mid1, &mid2, &high1, &high2, coeff);
-		gf16_clmul_neon_reduction(&low1, low2, mid1, mid2, &high1, high2);
+		gf16_clmul_neon_reduction(&low1, &low2, mid1, mid2, &high1, &high2);
 		uint8x16x2_t out;
-		out.val[0] = vreinterpretq_u8_p16(low1);
-		out.val[1] = vreinterpretq_u8_p16(high1);
+		out.val[0] = vreinterpretq_u8_p16(veorq_p16(low1, low2));
+		out.val[1] = vreinterpretq_u8_p16(veorq_p16(high1, high2));
 		vst2q_u8(_dst+ptr, out);
 	}
 #else

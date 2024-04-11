@@ -2,12 +2,12 @@
 
 #if defined(__ARM_FEATURE_SVE2)
 
-static HEDLEY_ALWAYS_INLINE void gf16_clmul_sve2_reduction(svuint8_t* low1, svuint8_t low2, svuint8_t mid1, svuint8_t mid2, svuint8_t* high1, svuint8_t high2) {
+static HEDLEY_ALWAYS_INLINE void gf16_clmul_sve2_reduction(svuint8_t* low1, svuint8_t* low2, svuint8_t mid1, svuint8_t mid2, svuint8_t* high1, svuint8_t* high2) {
 	// put data in proper form
-	svuint8_t hibytesL = svtrn1_u8(*high1, high2);
-	svuint8_t hibytesH = svtrn2_u8(*high1, high2);
-	svuint8_t lobytesL = svtrn1_u8(*low1, low2);
-	svuint8_t lobytesH = svtrn2_u8(*low1, low2);
+	svuint8_t hibytesL = svtrn1_u8(*high1, *high2);
+	svuint8_t hibytesH = svtrn2_u8(*high1, *high2);
+	svuint8_t lobytesL = svtrn1_u8(*low1, *low2);
+	svuint8_t lobytesH = svtrn2_u8(*low1, *low2);
 	
 	// merge mid into high/low
 	svuint8_t midbytesL = svtrn1_u8(mid1, mid2);
@@ -42,11 +42,11 @@ static HEDLEY_ALWAYS_INLINE void gf16_clmul_sve2_reduction(svuint8_t* low1, svui
 		svpmul_n_u8(th1, 0x0b),
 		NOMASK(svlsr_n_u8, th0_hi3, 2)
 	);
-	lobytesH = NOMASK(sveor_u8, lobytesH, svsli_n_u8(th0_hi3, th0, 4));
-	lobytesL = NOMASK(sveor_u8, lobytesL, svpmul_n_u8(th0, 0x0b));
 	
-	*low1 = lobytesL;
 	*high1 = lobytesH;
+	*high2 = svsli_n_u8(th0_hi3, th0, 4);
+	*low1 = lobytesL;
+	*low2 = svpmul_n_u8(th0, 0x0b);
 }
 
 #endif

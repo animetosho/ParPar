@@ -49,10 +49,10 @@ static HEDLEY_ALWAYS_INLINE uint8x16_t eor3q_u8(uint8x16_t a, uint8x16_t b, uint
 }
 #endif
 
-static HEDLEY_ALWAYS_INLINE void gf16_clmul_neon_reduction(poly16x8_t* low1, poly16x8_t low2, poly16x8_t mid1, poly16x8_t mid2, poly16x8_t* high1, poly16x8_t high2) {
+static HEDLEY_ALWAYS_INLINE void gf16_clmul_neon_reduction(poly16x8_t* low1, poly16x8_t* low2, poly16x8_t mid1, poly16x8_t mid2, poly16x8_t* high1, poly16x8_t* high2) {
 	// put data in proper form
-	uint8x16x2_t hibytes = vuzpq_u8(vreinterpretq_u8_p16(*high1), vreinterpretq_u8_p16(high2));
-	uint8x16x2_t lobytes = vuzpq_u8(vreinterpretq_u8_p16(*low1), vreinterpretq_u8_p16(low2));
+	uint8x16x2_t hibytes = vuzpq_u8(vreinterpretq_u8_p16(*high1), vreinterpretq_u8_p16(*high2));
+	uint8x16x2_t lobytes = vuzpq_u8(vreinterpretq_u8_p16(*low1), vreinterpretq_u8_p16(*low2));
 	
 	// merge mid into high/low
 	uint8x16x2_t midbytes = vuzpq_u8(vreinterpretq_u8_p16(mid1), vreinterpretq_u8_p16(mid2));
@@ -88,13 +88,14 @@ static HEDLEY_ALWAYS_INLINE void gf16_clmul_neon_reduction(poly16x8_t* low1, pol
 	
 	// multiply by polynomial: 0x100b
 	poly8x16_t redL = vdupq_n_p8(0x0b);
-	hibytes.val[1] = veorq_u8(th0_hi3, th0_hi1);
-	hibytes.val[1] = vsliq_n_u8(hibytes.val[1], th0, 4);
+	hibytes.val[1] = vsliq_n_u8(th0_hi3, th0, 4);
 	th1 = vreinterpretq_u8_p8(vmulq_p8(vreinterpretq_p8_u8(th1), redL));
 	hibytes.val[0] = vreinterpretq_u8_p8(vmulq_p8(vreinterpretq_p8_u8(th0), redL));
 	
-	*low1 = vreinterpretq_p16_u8(veorq_u8(lobytes.val[0], hibytes.val[0]));
-	*high1 = vreinterpretq_p16_u8(eor3q_u8(hibytes.val[1], lobytes.val[1], th1));
+	*low1 = vreinterpretq_p16_u8(lobytes.val[0]);
+	*low2 = vreinterpretq_p16_u8(hibytes.val[0]);
+	*high1 = vreinterpretq_p16_u8(eor3q_u8(hibytes.val[1], th0_hi1, th1));
+	*high2 = vreinterpretq_p16_u8(lobytes.val[1]);
 }
 
 #endif
