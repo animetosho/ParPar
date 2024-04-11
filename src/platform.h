@@ -229,8 +229,9 @@ HEDLEY_WARNING("GFNI disabled on GCC < 10 due to incorrect GF2P8AFFINEQB operand
 # undef __AVX512F__
 #endif
 
-#if defined(_MSC_VER) && defined(__clang__)
+#if (defined(_MSC_VER) && defined(__clang__)) || (defined(PARPAR_SLIM_GF16) && defined(__APPLE__))
 // ClangCL doesn't support SVE as of 15.0.1 (maybe due to not being defined on Windows-ARM?)
+// No Apple CPU supports SVE, and there's no defined way to detect it, meaning it'll never get used in practice (even if a later CPU supports SVE), so strip out SVE functionality for now
 # ifdef __ARM_FEATURE_SVE
 #  undef __ARM_FEATURE_SVE
 # endif

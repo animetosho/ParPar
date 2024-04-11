@@ -38,6 +38,7 @@ typedef int(*Galois16UngrpCksumCheck) (void *HEDLEY_RESTRICT dst, const void *HE
 
 enum Galois16Methods {
 	// * = excluded if PARPAR_SLIM_GF16
+	// Apple builds strip out SVE kernels if PARPAR_SLIM_GF16 is defined
 	GF16_AUTO,
 	GF16_LOOKUP,
 	GF16_LOOKUP_SSE2,  // *

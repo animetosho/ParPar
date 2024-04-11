@@ -17,7 +17,7 @@ static HEDLEY_ALWAYS_INLINE void _vlseg2e8(vuint8m1_t* v0, vuint8m1_t* v1, const
 	*v1 = RV(vget_v_u8m1x2_u8m1)(d, 1);
 }
 static HEDLEY_ALWAYS_INLINE void _vsseg2e8(uint8_t* dst, vuint8m1_t v0, vuint8m1_t v1, size_t vl) {
-	vuint8m1x2_t d = {};
+	vuint8m1x2_t d = {};  // __riscv_vcreate_v_u8m1x2 missing in Clang 17
 	d = RV(vset_v_u8m1_u8m1x2)(d, 0, v0);
 	d = RV(vset_v_u8m1_u8m1x2)(d, 1, v1);
 	RV(vsseg2e8_v_u8m1x2)(dst, d, vl);
