@@ -1,6 +1,7 @@
 #include "gf16_neon_common.h"
 
-#if defined(_AVAILABLE)
+#if defined(_AVAILABLE) && !defined(__GF16_CLMUL_NEON_H)
+#define __GF16_CLMUL_NEON_H 1
 
 // `vaddq_p8` and co seems to be missing from some compilers (like GCC), so define our own variant
 static HEDLEY_ALWAYS_INLINE poly8x16_t veorq_p8(poly8x16_t a, poly8x16_t b) {

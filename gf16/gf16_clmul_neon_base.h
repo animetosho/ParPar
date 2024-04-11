@@ -72,8 +72,9 @@ static HEDLEY_ALWAYS_INLINE void _FN(gf16_clmul_muladd_x)(
 		//coeff[src] = vcombine_p8(vdup_n_p8(lo), vdup_n_p8(hi));
 	}
 
-	poly16x8_t low1, low2, mid1, mid2, high1, high2;
-	#define DO_PROCESS \
+#ifndef GF16_CLMUL_DO_PROCESS
+	#define GF16_CLMUL_PROCESS_VARS poly16x8_t low1, low2, mid1, mid2, high1, high2
+	#define GF16_CLMUL_DO_PROCESS \
 		gf16_clmul_neon_round1(_src1+ptr*srcScale, &low1, &low2, &mid1, &mid2, &high1, &high2, coeff + 0); \
 		if(srcCount > 1) \
 			gf16_clmul_neon_round(_src2+ptr*srcScale, &low1, &low2, &mid1, &mid2, &high1, &high2, coeff + CLMUL_COEFF_PER_REGION*1); \
@@ -96,6 +97,9 @@ static HEDLEY_ALWAYS_INLINE void _FN(gf16_clmul_muladd_x)(
 		vb.val[0] = veorq_u8(vreinterpretq_u8_p16(low1), vb.val[0]); \
 		vb.val[1] = veorq_u8(vreinterpretq_u8_p16(high1), vb.val[1]); \
 		vst2q_u8(_dst+ptr, vb)
+#endif
+	
+	GF16_CLMUL_PROCESS_VARS;
 	
 	if(doPrefetch) {
 		intptr_t ptr = -(intptr_t)len;
@@ -104,7 +108,7 @@ static HEDLEY_ALWAYS_INLINE void _FN(gf16_clmul_muladd_x)(
 		if(doPrefetch == 2)
 			PREFETCH_MEM(_pf+ptr, 0);
 		while(ptr & (CACHELINE_SIZE-1)) {
-			DO_PROCESS;
+			GF16_CLMUL_DO_PROCESS;
 			ptr += sizeof(uint8x16_t)*2;
 		}
 		while(ptr) {
@@ -114,16 +118,17 @@ static HEDLEY_ALWAYS_INLINE void _FN(gf16_clmul_muladd_x)(
 				PREFETCH_MEM(_pf+ptr, 0);
 			
 			for(size_t iter=0; iter<(CACHELINE_SIZE/(sizeof(uint8x16_t)*2)); iter++) {
-				DO_PROCESS;
+				GF16_CLMUL_DO_PROCESS;
 				ptr += sizeof(uint8x16_t)*2;
 			}
 		}
 	} else {
 		for(intptr_t ptr = -(intptr_t)len; ptr; ptr += sizeof(uint8x16_t)*2) {
-			DO_PROCESS;
+			GF16_CLMUL_DO_PROCESS;
 		}
 	}
-	#undef DO_PROCESS
+	#undef GF16_CLMUL_PROCESS_VARS
+	#undef GF16_CLMUL_DO_PROCESS
 }
 #endif /*defined(_AVAILABLE)*/
 
