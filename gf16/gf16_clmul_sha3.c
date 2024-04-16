@@ -48,6 +48,9 @@ static HEDLEY_ALWAYS_INLINE poly16x8_t pmacl_high(poly16x8_t sum, poly8x16_t a, 
 
 // non-Apple chip with SHA3 support without SVE2: likely Neoverse V1 or Qualcomm chips
 // we use EOR3 for accumulation, since PMULL+EOR isn't fused
+// as this strategy requires more registers to hold values before accumulation, the number of concurrent regions means spills will occur
+// changing the number of regions would mean that NEON prepare routines couldn't be used anymore though
+// regardless of spills, it still seems to bench slightly better than CLMul (NEON)
 
 #include "gf16_clmul_neon.h"
 static HEDLEY_ALWAYS_INLINE void gf16_clmul_neon_round1(const void* src, poly16x8_t* low1, poly16x8_t* low2, poly16x8_t* mid1, poly16x8_t* mid2, poly16x8_t* high1, poly16x8_t* high2, const coeff_t* coeff);
