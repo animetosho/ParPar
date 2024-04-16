@@ -531,7 +531,8 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 		scratch = NULL;
 	}
 	
-	#define METHOD_REQUIRES(c) if(!(c)) { \
+	#define METHOD_REQUIRES(c, cx) if(!(c)) abort(); \
+	if(!(cx)) { \
 		setupMethod(_method == GF16_AUTO ? GF16_LOOKUP : GF16_AUTO); \
 		return; \
 	}
@@ -560,7 +561,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			
 			switch(method) {
 				case GF16_SHUFFLE_SSSE3:
-					METHOD_REQUIRES(gf16_shuffle_available_ssse3 && scratch)
+					METHOD_REQUIRES(gf16_shuffle_available_ssse3, scratch)
 					
 					SET_FOR_INVERT(_mul, gf16_shuffle_mul_ssse3);
 					_mul_add = &gf16_shuffle_muladd_ssse3;
@@ -582,7 +583,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 					SET_FOR_INVERT(replace_word, gf16_shuffle16_replace_word);
 				break;
 				case GF16_SHUFFLE_AVX:
-					METHOD_REQUIRES(gf16_shuffle_available_avx && scratch)
+					METHOD_REQUIRES(gf16_shuffle_available_avx, scratch)
 					SET_FOR_INVERT(_mul, gf16_shuffle_mul_avx);
 					_mul_add = &gf16_shuffle_muladd_avx;
 					_mul_add_pf = &gf16_shuffle_muladd_prefetch_avx;
@@ -603,7 +604,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 					SET_FOR_INVERT(replace_word, gf16_shuffle16_replace_word);
 				break;
 				case GF16_SHUFFLE_AVX2:
-					METHOD_REQUIRES(gf16_shuffle_available_avx2 && scratch)
+					METHOD_REQUIRES(gf16_shuffle_available_avx2, scratch)
 					SET_FOR_INVERT(_mul, gf16_shuffle_mul_avx2);
 					_mul_add = &gf16_shuffle_muladd_avx2;
 					_mul_add_pf = &gf16_shuffle_muladd_prefetch_avx2;
@@ -624,7 +625,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 					SET_FOR_INVERT(replace_word, gf16_shuffle32_replace_word);
 				break;
 				case GF16_SHUFFLE_AVX512:
-					METHOD_REQUIRES(gf16_shuffle_available_avx512 && scratch)
+					METHOD_REQUIRES(gf16_shuffle_available_avx512, scratch)
 					SET_FOR_INVERT(_mul, gf16_shuffle_mul_avx512);
 					_mul_add = &gf16_shuffle_muladd_avx512;
 					_mul_add_pf = &gf16_shuffle_muladd_prefetch_avx512;
@@ -659,7 +660,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 		break;
 		case GF16_SHUFFLE_VBMI:
 			scratch = gf16_shuffle_init_vbmi(GF16_POLYNOMIAL);
-			METHOD_REQUIRES(gf16_shuffle_available_vbmi && scratch)
+			METHOD_REQUIRES(gf16_shuffle_available_vbmi, scratch)
 			SET_FOR_INVERT(_mul, gf16_shuffle_mul_vbmi);
 			_mul_add = &gf16_shuffle_muladd_vbmi;
 			_mul_add_pf = &gf16_shuffle_muladd_prefetch_vbmi;
@@ -690,7 +691,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 		break;
 		case GF16_SHUFFLE2X_AVX512:
 			scratch = gf16_shuffle_init_x86(GF16_POLYNOMIAL);
-			METHOD_REQUIRES(gf16_shuffle_available_avx512 && scratch)
+			METHOD_REQUIRES(gf16_shuffle_available_avx512, scratch)
 			SET_FOR_INVERT(_mul, gf16_shuffle2x_mul_avx512);
 			_mul_add = &gf16_shuffle2x_muladd_avx512;
 			SET_BASIC_OP(add_multi, gf_add_multi_avx512);
@@ -720,7 +721,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 		break;
 		case GF16_SHUFFLE2X_AVX2:
 			scratch = gf16_shuffle_init_x86(GF16_POLYNOMIAL);
-			METHOD_REQUIRES(gf16_shuffle_available_avx2 && scratch)
+			METHOD_REQUIRES(gf16_shuffle_available_avx2, scratch)
 			SET_FOR_INVERT(_mul, gf16_shuffle2x_mul_avx2);
 			_mul_add = &gf16_shuffle2x_muladd_avx2;
 			SET_BASIC_OP(add_multi, gf_add_multi_avx2);
@@ -752,7 +753,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 		case GF16_SHUFFLE_NEON:
 			scratch = gf16_shuffle_init_arm(GF16_POLYNOMIAL);
 			
-			METHOD_REQUIRES(gf16_available_neon && scratch)
+			METHOD_REQUIRES(gf16_available_neon, scratch)
 			SET_FOR_INVERT(_mul, gf16_shuffle_mul_neon);
 			_mul_add = &gf16_shuffle_muladd_neon;
 			SET_BASIC_OP(add_multi, gf_add_multi_neon);
@@ -780,7 +781,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 		case GF16_CLMUL_NEON: {
 			int available = gf16_clmul_init_arm(GF16_POLYNOMIAL);
 			
-			METHOD_REQUIRES(gf16_available_neon && available)
+			METHOD_REQUIRES(gf16_available_neon && available, 1)
 			
 			// use Shuffle for single region multiplies, because it's faster (NOTE: disabled for slim GF16 build)
 			scratch = gf16_shuffle_init_arm(GF16_POLYNOMIAL);
@@ -812,7 +813,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 		
 		case GF16_CLMUL_SHA3: {
 			int available = gf16_clmul_init_arm(GF16_POLYNOMIAL);
-			METHOD_REQUIRES(gf16_available_neon_sha3 && available)
+			METHOD_REQUIRES(gf16_available_neon_sha3 && available, 1)
 			
 			scratch = gf16_shuffle_init_arm(GF16_POLYNOMIAL);
 			if(scratch) {
@@ -841,7 +842,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 		} break;
 		
 		case GF16_SHUFFLE_128_SVE:
-			METHOD_REQUIRES(gf16_available_sve)
+			METHOD_REQUIRES(gf16_available_sve, 1)
 			
 			scratch = gf16_shuffle_init_128_sve(GF16_POLYNOMIAL);
 			
@@ -866,7 +867,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 		break;
 		
 		case GF16_SHUFFLE_128_SVE2:
-			METHOD_REQUIRES(gf16_available_sve2)
+			METHOD_REQUIRES(gf16_available_sve2, 1)
 			
 			SET_FOR_INVERT(_mul, gf16_shuffle_mul_128_sve2);
 			_mul_add = &gf16_shuffle_muladd_128_sve2;
@@ -889,7 +890,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 		break;
 		
 		case GF16_SHUFFLE2X_128_SVE2:
-			METHOD_REQUIRES(gf16_available_sve2 && gf16_sve_get_size() >= 32)
+			METHOD_REQUIRES(gf16_available_sve2, gf16_sve_get_size() >= 32)
 			
 			SET_FOR_INVERT(_mul, gf16_shuffle2x_mul_128_sve2);
 			_mul_add = &gf16_shuffle2x_muladd_128_sve2;
@@ -912,7 +913,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 		break;
 		
 		case GF16_SHUFFLE_512_SVE2:
-			METHOD_REQUIRES(gf16_available_sve2 && gf16_sve_get_size() >= 64)
+			METHOD_REQUIRES(gf16_available_sve2, gf16_sve_get_size() >= 64)
 			// TODO: this could be made to work on vect-size>=256b using TBL2
 			
 			scratch = gf16_shuffle_init_512_sve(GF16_POLYNOMIAL);
@@ -938,7 +939,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 		break;
 
 		case GF16_CLMUL_SVE2:
-			METHOD_REQUIRES(gf16_available_sve2)
+			METHOD_REQUIRES(gf16_available_sve2, 1)
 			
 			// single region multiplies (_mul/add) use Shuffle-128 instead
 			SET_FOR_INVERT(_mul, gf16_shuffle_mul_128_sve2);
@@ -963,7 +964,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 		
 		case GF16_SHUFFLE_128_RVV:
 			scratch = gf16_shuffle_init_128_rvv(GF16_POLYNOMIAL);
-			METHOD_REQUIRES(gf16_available_rvv)
+			METHOD_REQUIRES(gf16_available_rvv, 1)
 			
 			SET_FOR_INVERT(_mul, gf16_shuffle_mul_128_rvv);
 			_mul_add = &gf16_shuffle_muladd_128_rvv;
@@ -986,7 +987,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 		break;
 		
 		case GF16_CLMUL_RVV:
-			METHOD_REQUIRES(gf16_available_rvv_zvbc)
+			METHOD_REQUIRES(gf16_available_rvv_zvbc, 1)
 			
 			SET_FOR_INVERT(_mul, gf16_clmul_mul_rvv);
 			_mul_add = &gf16_clmul_muladd_rvv;
@@ -1010,7 +1011,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 		
 		case GF16_AFFINE_AVX512:
 			scratch = gf16_affine_init_avx2(GF16_POLYNOMIAL);
-			METHOD_REQUIRES(gf16_affine_available_avx512 && gf16_shuffle_available_avx512)
+			METHOD_REQUIRES(gf16_affine_available_avx512 && gf16_shuffle_available_avx512, 1)
 			SET_FOR_INVERT(_mul, gf16_affine_mul_avx512);
 			_mul_add = &gf16_affine_muladd_avx512;
 			_mul_add_pf = &gf16_affine_muladd_prefetch_avx512;
@@ -1042,7 +1043,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 		
 		case GF16_AFFINE_AVX10:
 			scratch = gf16_affine_init_avx2(GF16_POLYNOMIAL);
-			METHOD_REQUIRES(gf16_affine_available_avx10 && gf16_shuffle_available_avx2)
+			METHOD_REQUIRES(gf16_affine_available_avx10 && gf16_shuffle_available_avx2, 1)
 			SET_FOR_INVERT(_mul, gf16_affine_mul_avx2);
 			_mul_add = &gf16_affine_muladd_avx10;
 			_mul_add_pf = &gf16_affine_muladd_prefetch_avx10;
@@ -1074,7 +1075,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 		
 		case GF16_AFFINE_AVX2:
 			scratch = gf16_affine_init_avx2(GF16_POLYNOMIAL);
-			METHOD_REQUIRES(gf16_affine_available_avx2 && gf16_shuffle_available_avx2)
+			METHOD_REQUIRES(gf16_affine_available_avx2 && gf16_shuffle_available_avx2, 1)
 			SET_FOR_INVERT(_mul, gf16_affine_mul_avx2);
 			_mul_add = &gf16_affine_muladd_avx2;
 			_mul_add_pf = &gf16_affine_muladd_prefetch_avx2;
@@ -1106,7 +1107,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 		
 		case GF16_AFFINE_GFNI:
 			scratch = gf16_affine_init_gfni(GF16_POLYNOMIAL);
-			METHOD_REQUIRES(gf16_affine_available_gfni && gf16_shuffle_available_ssse3)
+			METHOD_REQUIRES(gf16_affine_available_gfni && gf16_shuffle_available_ssse3, 1)
 			SET_FOR_INVERT(_mul, gf16_affine_mul_gfni);
 			_mul_add = &gf16_affine_muladd_gfni;
 			_mul_add_pf = &gf16_affine_muladd_prefetch_gfni;
@@ -1138,7 +1139,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 		
 		case GF16_AFFINE2X_AVX512:
 			scratch = gf16_affine_init_avx2(GF16_POLYNOMIAL);
-			METHOD_REQUIRES(gf16_affine_available_avx512 && gf16_shuffle_available_avx512)
+			METHOD_REQUIRES(gf16_affine_available_avx512 && gf16_shuffle_available_avx512, 1)
 			SET_FOR_INVERT(_mul, gf16_affine2x_mul_avx512);
 			_mul_add = &gf16_affine2x_muladd_avx512;
 			SET_FOR_INVERT(_mul_add_multi, gf16_affine2x_muladd_multi_avx512);
@@ -1169,7 +1170,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 		
 		case GF16_AFFINE2X_AVX10:
 			scratch = gf16_affine_init_avx2(GF16_POLYNOMIAL);
-			METHOD_REQUIRES(gf16_affine_available_avx10 && gf16_shuffle_available_avx2)
+			METHOD_REQUIRES(gf16_affine_available_avx10 && gf16_shuffle_available_avx2, 1)
 			SET_FOR_INVERT(_mul, gf16_affine2x_mul_avx2);
 			_mul_add = &gf16_affine2x_muladd_avx10;
 			SET_FOR_INVERT(_mul_add_multi, gf16_affine2x_muladd_multi_avx10);
@@ -1200,7 +1201,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 		
 		case GF16_AFFINE2X_AVX2:
 			scratch = gf16_affine_init_avx2(GF16_POLYNOMIAL);
-			METHOD_REQUIRES(gf16_affine_available_avx2 && gf16_shuffle_available_avx2)
+			METHOD_REQUIRES(gf16_affine_available_avx2 && gf16_shuffle_available_avx2, 1)
 			SET_FOR_INVERT(_mul, gf16_affine2x_mul_avx2);
 			_mul_add = &gf16_affine2x_muladd_avx2;
 			SET_FOR_INVERT(_mul_add_multi, gf16_affine2x_muladd_multi_avx2);
@@ -1231,7 +1232,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 		
 		case GF16_AFFINE2X_GFNI:
 			scratch = gf16_affine_init_gfni(GF16_POLYNOMIAL);
-			METHOD_REQUIRES(gf16_affine_available_gfni && gf16_shuffle_available_ssse3)
+			METHOD_REQUIRES(gf16_affine_available_gfni && gf16_shuffle_available_ssse3, 1)
 			SET_FOR_INVERT(_mul, gf16_affine2x_mul_gfni);
 			_mul_add = &gf16_affine2x_muladd_gfni;
 			SET_FOR_INVERT(_mul_add_multi, gf16_affine2x_muladd_multi_gfni);
@@ -1271,7 +1272,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			switch(method) {
 				case GF16_XOR_JIT_SSE2:
 				case GF16_XOR_SSE2:
-					METHOD_REQUIRES(gf16_xor_available_sse2)
+					METHOD_REQUIRES(gf16_xor_available_sse2, 1)
 					if(method == GF16_XOR_SSE2) {
 						scratch = gf16_xor_init_sse2(GF16_POLYNOMIAL);
 						SET_FOR_INVERT(_mul, gf16_xor_mul_sse2);
@@ -1300,7 +1301,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 				break;
 				/*
 				case GF16_XOR_JIT_AVX:
-					METHOD_REQUIRES(gf16_xor_available_avx)
+					METHOD_REQUIRES(gf16_xor_available_avx, 1)
 					scratch = gf16_xor_jit_init_sse2(GF16_POLYNOMIAL, jitOptStrat);
 					SET_FOR_INVERT(_mul, gf16_xor_jit_mul_avx);
 					_mul_add = &gf16_xor_jit_muladd_avx;
@@ -1323,7 +1324,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 				break;
 				*/
 				case GF16_XOR_JIT_AVX2:
-					METHOD_REQUIRES(gf16_xor_available_avx2)
+					METHOD_REQUIRES(gf16_xor_available_avx2, 1)
 #ifdef PLATFORM_AMD64
 					scratch = gf16_xor_jit_init_avx2(GF16_POLYNOMIAL, jitOptStrat);
 					SET_FOR_INVERT(_mul, gf16_xor_jit_mul_avx2);
@@ -1348,7 +1349,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 				break;
 				case GF16_XOR_JIT_AVX512:
 #ifdef PLATFORM_AMD64
-					METHOD_REQUIRES(gf16_xor_available_avx512)
+					METHOD_REQUIRES(gf16_xor_available_avx512, 1)
 					scratch = gf16_xor_jit_init_avx512(GF16_POLYNOMIAL, jitOptStrat);
 					SET_FOR_INVERT(_mul, gf16_xor_jit_mul_avx512);
 					_mul_add = &gf16_xor_jit_muladd_avx512;
@@ -1375,7 +1376,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 				default: break; // for pedantic compilers
 			}
 #else
-			METHOD_REQUIRES(0)
+			METHOD_REQUIRES(1, 0)
 #endif
 		} break;
 		
