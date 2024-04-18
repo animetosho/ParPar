@@ -179,7 +179,7 @@ if(NOT MSVC OR CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
 			set_source_files_properties(${GF16_DIR}/gf16_affine_avx512.c PROPERTIES COMPILE_OPTIONS "-mavx512vl;-mavx512bw;-mgfni")
 			set_source_files_properties(${GF16_DIR}/gf16_affine_gfni.c PROPERTIES COMPILE_OPTIONS "-mssse3;-mgfni")
 			
-			set_source_files_properties(${SRC_DIR}/platform_warnings.c.c PROPERTIES COMPILE_OPTIONS "-mavx2;-mgfni")
+			set_source_files_properties(${SRC_DIR}/platform_warnings.c PROPERTIES COMPILE_OPTIONS "-mavx2;-mgfni")
 		endif()
 		CHECK_CXX_COMPILER_FLAG("-mno-evex512" COMPILER_SUPPORTS_AVX10)
 		if(COMPILER_SUPPORTS_AVX10 AND COMPILER_SUPPORTS_GFNI)
