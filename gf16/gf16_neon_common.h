@@ -42,11 +42,14 @@ typedef uint8x16_t qtbl_t;
 
 // for compilers that lack these functions
 // (Clang armv7 crashes with this on versions 9-12)
-# if (defined(__clang__) && (defined(__aarch64__) || __clang_major__<9 || __clang_major__>12)) || (HEDLEY_GCC_VERSION_CHECK(8,5,0) && defined(__aarch64__))
+# if (defined(__clang__) && (defined(__aarch64__) || __clang_major__<9 || __clang_major__>12)) || (HEDLEY_GCC_VERSION_CHECK(8,5,0) && defined(__aarch64__)) || HEDLEY_GCC_VERSION_CHECK(14,0,0)
 #  define vld1q_u8_x2_align(p) vld1q_u8_x2((uint8_t*)__builtin_assume_aligned(p, 32))
 #  define vst1q_u8_x2_align(p, data) vst1q_u8_x2((uint8_t*)__builtin_assume_aligned(p, 32), data)
-#  define _vld1q_u8_x2 vld1q_u8_x2
-#  define _vst1q_u8_x2 vst1q_u8_x2
+// Clang armv7 always incorrectly assumes 32 byte alignment with these
+#  if !defined(__clang__) || defined(__aarch64__)
+#   define _vld1q_u8_x2 vld1q_u8_x2
+#   define _vst1q_u8_x2 vst1q_u8_x2
+#  endif
 # else
 static HEDLEY_ALWAYS_INLINE uint8x16x2_t vld1q_u8_x2_align(const uint8_t* p) {
 	uint8x16x2_t r;
@@ -58,12 +61,16 @@ static HEDLEY_ALWAYS_INLINE void vst1q_u8_x2_align(uint8_t* p, uint8x16x2_t data
 	vst1q_u8_align(p, data.val[0], 16);
 	vst1q_u8_align(p+16, data.val[1], 16);
 }
+# endif
+# ifndef _vld1q_u8_x2
 static HEDLEY_ALWAYS_INLINE uint8x16x2_t _vld1q_u8_x2(const uint8_t* p) {
 	uint8x16x2_t r;
 	r.val[0] = vld1q_u8(p);
 	r.val[1] = vld1q_u8(p+16);
 	return r;
 }
+# endif
+# ifndef _vst1q_u8_x2
 static HEDLEY_ALWAYS_INLINE void _vst1q_u8_x2(uint8_t* p, uint8x16x2_t data) {
 	vst1q_u8(p, data.val[0]);
 	vst1q_u8(p+16, data.val[1]);
