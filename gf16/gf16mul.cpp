@@ -1588,7 +1588,7 @@ Galois16Methods Galois16Mul::default_method(size_t regionSizeHint, unsigned inpu
 #endif
 #ifdef PLATFORM_ARM
 	const GF16CpuCap caps(true);
-	if(caps.hasSVE2) {
+	if(gf16_available_sve2 && caps.hasSVE2) {
 # ifdef PARPAR_SLIM_GF16
 		return GF16_CLMUL_SVE2;
 # else
@@ -1597,7 +1597,7 @@ Galois16Methods Galois16Mul::default_method(size_t regionSizeHint, unsigned inpu
 		return inputs > 3 ? GF16_CLMUL_SVE2 : GF16_SHUFFLE_128_SVE2;
 # endif
 	}
-	if(caps.hasSVE && gf16_sve_get_size() > 16)
+	if(gf16_available_sve && caps.hasSVE && gf16_sve_get_size() > 16)
 		return GF16_SHUFFLE_128_SVE;
 # ifdef __aarch64__
 	if(gf16_available_neon_sha3 && caps.hasSHA3)
