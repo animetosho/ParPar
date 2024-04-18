@@ -111,7 +111,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_ungrp2a_block_generic(void *HEDLEY_RESTRIC
 			_dst += 4;
 		} else if(sizeof(uintptr_t) >= 4) {
 #if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
-			write32(_dst, ((uint32_t)read16(_src) << 16) | read16(_src + 2) << 16);
+			write32(_dst, ((uint32_t)read16(_src) << 16) | read16(_src + 2));
 #else
 			write32(_dst, read16(_src) | ((uint32_t)read16(_src + 2) << 16));
 #endif
