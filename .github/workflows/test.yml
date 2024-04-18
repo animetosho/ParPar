@@ -24,12 +24,6 @@ jobs:
           mkdir test\hasher\build
           cmake -B test\hasher\build -S test\hasher -G "Visual Studio 17 2022" -T ${{ matrix.compiler }} -A ${{ matrix.arch }}
           cmake --build test\hasher\build --config ${{ matrix.config }}
-      - uses: actions/upload-artifact@v3
-        with:
-          path: C:/Windows/System32/msvcrt.dll
-          name: msvcrt.dll
-          retention-days: 5
-        if: ${{ matrix.config == 'Release' && matrix.compiler == 'ClangCL' && matrix.arch == 'x64' }}
       - run: Invoke-Expression "$env:SDE_PATH\sde.exe -icx -- test/gf16/build/${{ matrix.config }}/test.exe"
       - run: Invoke-Expression "$env:SDE_PATH\sde.exe -icx -- test/gf16/build/${{ matrix.config }}/test-pmul.exe"
       - run: Invoke-Expression "$env:SDE_PATH\sde.exe -icx -- test/gf16/build/${{ matrix.config }}/test-ctrl.exe -f"
@@ -39,6 +33,7 @@ jobs:
       - run: Invoke-Expression "$env:SDE_PATH\sde.exe -icx -- test/hasher/build/${{ matrix.config }}/test.exe"
       
       # test SSE2-only to see if CPUID checking works
+      # ...unfortunately msvcrt.dll's memset can issue an AVX instruction if IsProcessorFeaturePresent says it's available, which SDE doesn't intercept
       - run: |
           Invoke-Expression "$env:SDE_PATH\sde.exe -p4p -- test/gf16/build/${{ matrix.config }}/test.exe"
           Invoke-Expression "$env:SDE_PATH\sde.exe -p4p -- test/gf16/build/${{ matrix.config }}/test-pmul.exe"
@@ -135,8 +130,6 @@ jobs:
       - uses: petarpetrovt/setup-sde@v2.4
         with:
           sdeVersion: 9.24.0  # 9.27/9.33 doesn't work in Linux VMs
-        if: ${{ matrix.t.arch == 'amd64' || matrix.t.arch == 'i386' }}
-      - run: ${{ matrix.t.emu }} ping
         if: ${{ matrix.t.arch == 'amd64' || matrix.t.arch == 'i386' }}
       - run: sudo apt install -y qemu-user-static
         if: ${{ matrix.t.arch != 'amd64' && matrix.t.arch != 'i386' }}
@@ -305,7 +298,7 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v3
-      - run: echo -e "deb http://azure.archive.ubuntu.com/ubuntu mantic main restricted" | sudo tee /etc/apt/sources.list.d/mantic.list
+      - run: echo -e "deb http://azure.archive.ubuntu.com/ubuntu mantic main restricted universe multiverse" | sudo tee /etc/apt/sources.list.d/mantic.list
       - run: sudo apt update && sudo apt install -y pocl-opencl-icd
       - run: |
           mkdir test/gf16/build
@@ -344,7 +337,7 @@ jobs:
   # TODO: test building on Mac ARM64? might not be necessary, given we build it in par2cmdline-turbo
   
   test-fbsd-x86:
-    runs-on: macos-12
+    runs-on: ubuntu-latest
     name: Test freebsd amd64
     steps:
     - uses: actions/checkout@v3
@@ -367,7 +360,7 @@ jobs:
           test/gf16/build/test-inv -f
           test/hasher/build/test
   test-nbsd-x86:
-    runs-on: macos-12
+    runs-on: ubuntu-latest
     name: Test netbsd amd64
     steps:
     - uses: actions/checkout@v3
