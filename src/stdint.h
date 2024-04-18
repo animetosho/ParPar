@@ -29,7 +29,7 @@
 // 
 ///////////////////////////////////////////////////////////////////////////////
 
-#if !defined(_MSC_VER) || defined(_STDINT) || _MSC_VER >= 1900
+#if !defined(_MSC_VER) || defined(_STDINT) || _MSC_VER >= 1900 || defined(__clang__)
 #include <stdint.h>
 #else
 
