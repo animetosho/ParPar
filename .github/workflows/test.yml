@@ -26,10 +26,10 @@ jobs:
           cmake --build test\hasher\build --config ${{ matrix.config }}
       - uses: actions/upload-artifact@v3
         with:
-          path: test/gf16/build/${{ matrix.config }}/test-pmul.exe
-          name: test-pmul-${{ matrix.arch }}.exe
+          path: C:/Windows/System32/msvcrt.dll
+          name: msvcrt.dll
           retention-days: 5
-        if: ${{ matrix.config == 'Release' && matrix.compiler == 'ClangCL' }}
+        if: ${{ matrix.config == 'Release' && matrix.compiler == 'ClangCL' && matrix.arch == 'x64' }}
       - run: Invoke-Expression "$env:SDE_PATH\sde.exe -icx -- test/gf16/build/${{ matrix.config }}/test.exe"
       - run: Invoke-Expression "$env:SDE_PATH\sde.exe -icx -- test/gf16/build/${{ matrix.config }}/test-pmul.exe"
       - run: Invoke-Expression "$env:SDE_PATH\sde.exe -icx -- test/gf16/build/${{ matrix.config }}/test-ctrl.exe -f"
@@ -134,7 +134,9 @@ jobs:
       - run: sudo apt update
       - uses: petarpetrovt/setup-sde@v2.4
         with:
-          sdeVersion: 9.24.0
+          sdeVersion: 9.24.0  # 9.27/9.33 doesn't work in Linux VMs
+        if: ${{ matrix.t.arch == 'amd64' || matrix.t.arch == 'i386' }}
+      - run: ${{ matrix.t.emu }} ping
         if: ${{ matrix.t.arch == 'amd64' || matrix.t.arch == 'i386' }}
       - run: sudo apt install -y qemu-user-static
         if: ${{ matrix.t.arch != 'amd64' && matrix.t.arch != 'i386' }}
@@ -170,7 +172,7 @@ jobs:
           cmake --build test/hasher/build
       - run: ${{ matrix.t.emu }} test/gf16/build/test
       - run: ${{ matrix.t.emu }} test/gf16/build/test-pmul
-      - run: ${{ matrix.t.emu }} test/gf16/build/test-ctrl -f -v
+      - run: ${{ matrix.t.emu }} test/gf16/build/test-ctrl -f
         if: ${{ matrix.config == 'Release' && matrix.cc_ver == '12' }}
       - run: ${{ matrix.t.emu }} test/gf16/build/test-inv -f
         if: ${{ matrix.config == 'Release' && matrix.cc_ver == '12' }}
@@ -257,14 +259,14 @@ jobs:
       matrix:
         config: [Debug, Release]
         t:
-          # x32 tested as 'amd64'
-          - {arch: 'amd64', target: 'x86_64-linux-muslx32', emu: ''}
-          - {arch: 'armeb', target: 'armeb-linux-musleabihf', emu: 'qemu-armeb-static -cpu max'}
-          - {arch: 'aarch64_be', target: 'aarch64_be-linux-musl', emu: 'qemu-aarch64_be-static -cpu max,sve-max-vq=4'}
+          # x32 tested as 'amd64'; note: x32 is not supported on Ubuntu 22.10 or later kernels [https://bugs.launchpad.net/ubuntu/+source/linux/+bug/1994516]
+          - {arch: 'amd64', target: 'x86_64-linux-muslx32', emu: '', runson: 'ubuntu-20.04'}
+          - {arch: 'armeb', target: 'armeb-linux-musleabihf', emu: 'qemu-armeb-static -cpu max', runson: 'ubuntu-22.04'}
+          - {arch: 'aarch64_be', target: 'aarch64_be-linux-musl', emu: 'qemu-aarch64_be-static -cpu max,sve-max-vq=4', runson: 'ubuntu-22.04'}
           # RV32 MUSL compiler currently unavailable
           #- {arch: 'riscv32', target: 'riscv32-linux-musl', emu: 'qemu-riscv32-static -cpu rv32,v=true,vlen=512,elen=64,vext_spec=v1.0,zba=true,zbb=true,zbc=true'}
     name: Test MUSL ${{ matrix.t.arch }} (${{ matrix.config }})
-    runs-on: ubuntu-22.04
+    runs-on: ${{ matrix.runson }}
     steps:
       - uses: actions/checkout@v3
       - run: sudo apt update && sudo apt install -y qemu-user-static
@@ -294,12 +296,6 @@ jobs:
           CC: ${{ steps.musl.outputs.path }}/${{ matrix.t.target }}-cc
           CXX: ${{ steps.musl.outputs.path }}/${{ matrix.t.target }}-c++
           AR: ${{ steps.musl.outputs.path }}/${{ matrix.t.target }}-ar
-      - uses: actions/upload-artifact@v3
-        with:
-          path: test/gf16/build/test
-          name: test-x32
-          retention-days: 5
-        if: ${{ matrix.config == 'Release' && matrix.t.arch == 'amd64' }}
       - run: ${{ matrix.t.emu }} test/gf16/build/test
       - run: ${{ matrix.t.emu }} test/gf16/build/test-pmul
       - run: ${{ matrix.t.emu }} test/hasher/build/test
@@ -309,7 +305,7 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v3
-      - run: echo -e "deb http://archive.ubuntu.com/ubuntu/ mantic main restricted" | sudo tee /etc/apt/sources.list.d/mantic.conf
+      - run: echo -e "deb http://azure.archive.ubuntu.com/ubuntu mantic main restricted" | sudo tee /etc/apt/sources.list.d/mantic.list
       - run: sudo apt update && sudo apt install -y pocl-opencl-icd
       - run: |
           mkdir test/gf16/build
@@ -352,7 +348,7 @@ jobs:
     name: Test freebsd amd64
     steps:
     - uses: actions/checkout@v3
-    - uses: vmactions/freebsd-vm@v0
+    - uses: vmactions/freebsd-vm@v1
       with:
         copyback: false
         prepare: pkg install -y cmake lang/gcc gmake
@@ -375,7 +371,7 @@ jobs:
     name: Test netbsd amd64
     steps:
     - uses: actions/checkout@v3
-    - uses: vmactions/netbsd-vm@v0
+    - uses: vmactions/netbsd-vm@v1
       with:
         copyback: false
         prepare: /usr/sbin/pkg_add cmake gcc13 gmake
