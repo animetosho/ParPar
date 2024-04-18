@@ -515,7 +515,7 @@ int main(int argc, char** argv) {
 			std::cout << "Testing finish grp2..." << std::endl;
 			for(unsigned gi = 0; gi < gf.size(); gi++) {
 				const auto& g = gf[gi];
-				const std::vector<size_t> regionSizes{g.info().stride, g.info().stride-2, g.info().stride+2, REGION_SIZE, REGION_SIZE-2};
+				const std::vector<size_t> regionSizes{2, g.info().stride, g.info().stride-2, g.info().stride+2, REGION_SIZE, REGION_SIZE-2};
 				for(unsigned regionSize : regionSizes) {
 					if(verbose) std::cout << "  " << g.info().name << ": regionSize=" << regionSize << std::endl;
 					unsigned totalSize = regionSize + g.info().cksumSize;
