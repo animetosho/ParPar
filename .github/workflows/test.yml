@@ -12,6 +12,7 @@ jobs:
         arch: ['Win32', 'x64']
     name: Test VS ${{ matrix.compiler }} ${{ matrix.arch }} (${{ matrix.config }})
     runs-on: windows-2022
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v3
       - uses: ilammy/setup-nasm@v1
@@ -53,6 +54,7 @@ jobs:
             arch: ARM
     name: Test VS ${{ matrix.compiler }} ${{ matrix.arch }}
     runs-on: windows-2022
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v3
       - run: |
@@ -66,6 +68,7 @@ jobs:
   
   test-msys:
     runs-on: windows-latest
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
@@ -118,21 +121,20 @@ jobs:
           - {arch: 'amd64',    target: 'x86-64-linux-gnu',     libc: 'amd64',   emu: '$SDE_PATH/sde64 -icx --'}
           - {arch: 'aarch64',  target: 'aarch64-linux-gnu',    libc: 'arm64',   emu: 'qemu-aarch64-static -L /usr/aarch64-linux-gnu -cpu max,sve-max-vq=4'}
           - {arch: 'arm',      target: 'arm-linux-gnueabihf',  libc: 'armhf',   emu: 'qemu-arm-static -L /usr/arm-linux-gnueabihf -cpu max'}
-          # RVV unavailable in Ubuntu 22.04's qemu
-          # TODO: consider using newer qemu
-          #- {arch: 'riscv64',  target: 'riscv64-linux-gnu',    libc: 'riscv64', emu: 'qemu-riscv64-static -L /usr/riscv64-linux-gnu -cpu rv64,v=true,vlen=512,elen=64,vext_spec=v1.0,zba=true,zbb=true,zbc=true'}
+          - {arch: 'riscv64',  target: 'riscv64-linux-gnu',    libc: 'riscv64', emu: 'qemu-riscv64-static -L /usr/riscv64-linux-gnu -cpu rv64,v=true,vlen=512,elen=64,vext_spec=v1.0,zba=true,zbb=true,zbc=true'}
           - {arch: 'ppc64',  target: 'powerpc64-linux-gnu',    libc: 'ppc64', emu: 'qemu-ppc64-static -L /usr/powerpc64-linux-gnu'}
     name: Test Ubuntu GCC ${{ matrix.cc_ver }} ${{ matrix.t.arch }} (${{ matrix.config }})
     runs-on: ubuntu-22.04
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v3
+      - run: sudo dpkg --add-architecture i386
+        if: ${{ matrix.t.arch == 'i386' }}
       - run: sudo apt update
       - uses: petarpetrovt/setup-sde@v2.4
         with:
           sdeVersion: 9.24.0  # 9.27/9.33 doesn't work in Linux VMs
         if: ${{ matrix.t.arch == 'amd64' || matrix.t.arch == 'i386' }}
-      - run: sudo apt install -y qemu-user-static
-        if: ${{ matrix.t.arch != 'amd64' && matrix.t.arch != 'i386' }}
       - run: |
           sudo apt install -y g++-${{ matrix.cc_ver }}-${{ matrix.t.target }}
           echo "CC=${{ matrix.t.target }}-gcc-${{ matrix.cc_ver }}" >> $GITHUB_ENV
@@ -143,6 +145,12 @@ jobs:
           echo "CC=gcc-${{ matrix.cc_ver }}" >> $GITHUB_ENV
           echo "CXX=g++-${{ matrix.cc_ver }}" >> $GITHUB_ENV
         if: ${{ matrix.t.arch == 'amd64' }}
+      - run: |
+          echo -e "deb http://azure.archive.ubuntu.com/ubuntu mantic main restricted universe multiverse" | sudo tee /etc/apt/sources.list.d/mantic.list
+          sudo apt update
+        if: ${{ matrix.t.arch == 'riscv64' || matrix.t.arch == 'riscv32' }}  # RVV unavailable in Ubuntu 22.04's qemu
+      - run: sudo apt install -y --no-install-recommends qemu-user-static
+        if: ${{ matrix.t.arch != 'amd64' && matrix.t.arch != 'i386' }}
       - run: |
           mkdir test/gf16/build
           cmake -Btest/gf16/build -Stest/gf16 -DSKIP_AUX=1 -DCMAKE_BUILD_TYPE=${{ matrix.config }} \
@@ -163,6 +171,8 @@ jobs:
             -DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=ONLY \
             -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=ONLY
           cmake --build test/hasher/build
+      - run: sudo apt install -y libc6:i386 libstdc++6:i386
+        if: ${{ matrix.t.arch == 'i386' }}
       - run: ${{ matrix.t.emu }} test/gf16/build/test
       - run: ${{ matrix.t.emu }} test/gf16/build/test-pmul
       - run: ${{ matrix.t.emu }} test/gf16/build/test-ctrl -f
@@ -183,22 +193,28 @@ jobs:
           - {arch: 'amd64', target: 'x86-64-linux-gnu', cl_target: 'x86_64-linux-gnu', libc: 'amd64', emu: '$SDE_PATH/sde64 -icx --'}
           - {arch: 'aarch64', target: 'aarch64-linux-gnu', cl_target: 'aarch64-linux-gnu', libc: 'arm64', emu: 'qemu-aarch64-static -L /usr/aarch64-linux-gnu -cpu max,sve-max-vq=4'}
           - {arch: 'arm', target: 'arm-linux-gnueabihf', cl_target: 'armv7a-linux-gnueabihf', libc: 'armhf', emu: 'qemu-arm-static -L /usr/arm-linux-gnueabihf -cpu max'}
-          # RVV unavailable in Ubuntu 22.04's qemu
-          #- {arch: 'riscv64', target: 'riscv64-linux-gnu', cl_target: 'riscv64-linux-gnu', libc: 'riscv64', emu: 'qemu-riscv64-static -L /usr/riscv64-linux-gnu -cpu rv64,v=true,vlen=512,elen=64,vext_spec=v1.0,zba=true,zbb=true,zbc=true'}
+          - {arch: 'riscv64', target: 'riscv64-linux-gnu', cl_target: 'riscv64-linux-gnu', libc: 'riscv64', emu: 'qemu-riscv64-static -L /usr/riscv64-linux-gnu -cpu rv64,v=true,vlen=512,elen=64,vext_spec=v1.0,zba=true,zbb=true,zbc=true'}
           - {arch: 'ppc64', target: 'powerpc64-linux-gnu', cl_target: 'ppc64-linux-gnu', libc: 'ppc64', emu: 'qemu-ppc64-static -L /usr/powerpc64-linux-gnu'}
     name: Test Ubuntu Clang ${{ matrix.cc_ver }} ${{ matrix.t.arch }} (${{ matrix.config }})
     runs-on: ubuntu-22.04
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v3
+      - run: sudo dpkg --add-architecture i386
+        if: ${{ matrix.t.arch == 'i386' }}
       - run: sudo apt update && sudo apt install -y clang-${{ matrix.cc_ver }}
       - uses: petarpetrovt/setup-sde@v2.4
         with:
           sdeVersion: 9.24.0
         if: ${{ matrix.t.arch == 'amd64' || matrix.t.arch == 'i386' }}
-      - run: sudo apt install -y qemu-user-static
-        if: ${{ matrix.t.arch != 'amd64' && matrix.t.arch != 'i386' }}
       - run: sudo apt install -y binutils-${{ matrix.t.target }} libgcc-12-dev-${{ matrix.t.libc }}-cross libstdc++-12-dev-${{ matrix.t.libc }}-cross
         if: ${{ matrix.t.arch != 'amd64' }}
+      - run: |
+          echo -e "deb http://azure.archive.ubuntu.com/ubuntu mantic main restricted universe multiverse" | sudo tee /etc/apt/sources.list.d/mantic.list
+          sudo apt update
+        if: ${{ matrix.t.arch == 'riscv64' || matrix.t.arch == 'riscv32' }}  # RVV unavailable in Ubuntu 22.04's qemu
+      - run: sudo apt install -y --no-install-recommends qemu-user-static
+        if: ${{ matrix.t.arch != 'amd64' && matrix.t.arch != 'i386' }}
       - run: echo "SANITIZE=-DENABLE_SANITIZE=1" >> $GITHUB_ENV
         if: ${{ matrix.config == 'Release' && matrix.t.arch == 'amd64' && matrix.cc_ver == '15' }} # SDE+ASAN problematic with Clang 11
       - run: |
@@ -238,6 +254,8 @@ jobs:
             -DCMAKE_CXX_STANDARD_INCLUDE_DIRECTORIES="/usr/${{ matrix.t.target }}/include;`ls -d /usr/${{ matrix.t.target }}/include/c++/*|head -n1`/${{ matrix.t.target }}" \
             $LINKER_FLAG
           cmake --build test/hasher/build
+      - run: sudo apt install -y libc6:i386 libstdc++6:i386
+        if: ${{ matrix.t.arch == 'i386' }}
       - run: ${{ matrix.t.emu }} test/gf16/build/test
       - run: ${{ matrix.t.emu }} test/gf16/build/test-pmul
       - run: ${{ matrix.t.emu }} test/gf16/build/test-ctrl -f
@@ -252,14 +270,13 @@ jobs:
       matrix:
         config: [Debug, Release]
         t:
-          # x32 tested as 'amd64'; note: x32 is not supported on Ubuntu 22.10 or later kernels [https://bugs.launchpad.net/ubuntu/+source/linux/+bug/1994516]
-          - {arch: 'amd64', target: 'x86_64-linux-muslx32', emu: '', runson: 'ubuntu-20.04'}
-          - {arch: 'armeb', target: 'armeb-linux-musleabihf', emu: 'qemu-armeb-static -cpu max', runson: 'ubuntu-22.04'}
-          - {arch: 'aarch64_be', target: 'aarch64_be-linux-musl', emu: 'qemu-aarch64_be-static -cpu max,sve-max-vq=4', runson: 'ubuntu-22.04'}
+          - {arch: 'armeb', target: 'armeb-linux-musleabihf', emu: 'qemu-armeb-static -cpu max'}
+          - {arch: 'aarch64_be', target: 'aarch64_be-linux-musl', emu: 'qemu-aarch64_be-static -cpu max,sve-max-vq=4'}
           # RV32 MUSL compiler currently unavailable
           #- {arch: 'riscv32', target: 'riscv32-linux-musl', emu: 'qemu-riscv32-static -cpu rv32,v=true,vlen=512,elen=64,vext_spec=v1.0,zba=true,zbb=true,zbc=true'}
     name: Test MUSL ${{ matrix.t.arch }} (${{ matrix.config }})
-    runs-on: ${{ matrix.runson }}
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v3
       - run: sudo apt update && sudo apt install -y qemu-user-static
@@ -268,11 +285,6 @@ jobs:
         id: musl
         with:
           target: ${{ matrix.t.target }}
-      - run: |
-          uname -a
-          grep X32 /boot/config-$(uname -r)
-          true
-        if: ${{ matrix.t.arch == 'amd64' }}
       - run: |
           mkdir test/gf16/build
           cmake -Btest/gf16/build -Stest/gf16 -DSKIP_AUX=1 -DSTATIC_LINK=1 -DCMAKE_BUILD_TYPE=${{ matrix.config }} \
@@ -293,12 +305,48 @@ jobs:
       - run: ${{ matrix.t.emu }} test/gf16/build/test-pmul
       - run: ${{ matrix.t.emu }} test/hasher/build/test
   
+  # x32 is not supported on Ubuntu 22.10 or later kernels [https://bugs.launchpad.net/ubuntu/+source/linux/+bug/1994516], but the Azure instances use a 6.5+ kernel
+  # so we can only do this in a VM with a kernel built with x32 support
+  test-x32-musl:
+    name: Test MUSL x32
+    runs-on: macos-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v3
+      - uses: leleliu008/github-actions-vagrant@v1
+        with:
+          box: generic/debian12
+          run: |
+            apt update && apt install -y build-essential cmake curl
+            curl http://musl.cc/x86_64-linux-muslx32-native.tgz | tar zxf -
+            
+            mkdir test/gf16/build
+            cmake -Btest/gf16/build -Stest/gf16 -DSTATIC_LINK=1 -DCMAKE_BUILD_TYPE=Release \
+              -DCMAKE_C_COMPILER=./x86_64-linux-muslx32-native/bin/x86_64-linux-muslx32-cc \
+              -DCMAKE_CXX_COMPILER=./x86_64-linux-muslx32-native/bin/x86_64-linux-muslx32-c++ \
+              -DCMAKE_SYSTEM_PROCESSOR=amd64 \
+              -DCMAKE_SYSTEM_NAME=Linux
+            cmake --build test/gf16/build
+            
+            mkdir test/hasher/build
+            cmake -Btest/hasher/build -Stest/hasher -DSKIP_AUX=1 -DSTATIC_LINK=1 -DCMAKE_BUILD_TYPE=Release \
+              -DCMAKE_C_COMPILER=./x86_64-linux-muslx32-native/bin/x86_64-linux-muslx32-cc \
+              -DCMAKE_CXX_COMPILER=./x86_64-linux-muslx32-native/bin/x86_64-linux-muslx32-c++ \
+              -DCMAKE_SYSTEM_PROCESSOR=amd64 \
+              -DCMAKE_SYSTEM_NAME=Linux
+            cmake --build test/hasher/build
+            
+            test/gf16/build/test
+            test/gf16/build/test-pmul
+            test/hasher/build/test
+  
   test-linux-pocl:
     name: Test POCL (OpenCL)
     runs-on: ubuntu-22.04
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v3
-      - run: echo -e "deb http://azure.archive.ubuntu.com/ubuntu mantic main restricted universe multiverse" | sudo tee /etc/apt/sources.list.d/mantic.list
+      - run: echo -e "deb http://azure.archive.ubuntu.com/ubuntu lunar main restricted universe multiverse" | sudo tee /etc/apt/sources.list.d/lunar.list
       - run: sudo apt update && sudo apt install -y pocl-opencl-icd
       - run: |
           mkdir test/gf16/build
@@ -316,6 +364,7 @@ jobs:
           - {cc: 'clang', cxx: 'clang++'}
     name: Test MacOS ${{ matrix.compiler.cc }} (${{ matrix.config }})
     runs-on: macos-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v3
       - run: |
@@ -339,6 +388,7 @@ jobs:
   test-fbsd-x86:
     runs-on: ubuntu-latest
     name: Test freebsd amd64
+    timeout-minutes: 45
     steps:
     - uses: actions/checkout@v3
     - uses: vmactions/freebsd-vm@v1
@@ -362,6 +412,7 @@ jobs:
   test-nbsd-x86:
     runs-on: ubuntu-latest
     name: Test netbsd amd64
+    timeout-minutes: 45
     steps:
     - uses: actions/checkout@v3
     - uses: vmactions/netbsd-vm@v1
