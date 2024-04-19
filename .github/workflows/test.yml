@@ -33,13 +33,6 @@ jobs:
         if: ${{ matrix.config == 'Release' && (matrix.compiler == 'ClangCL' || matrix.compiler == 'v143') }}
       - run: Invoke-Expression "$env:SDE_PATH\sde.exe -icx -- test/hasher/build/${{ matrix.config }}/test.exe"
       
-      # test SSE2-only to see if CPUID checking works
-      # ...unfortunately msvcrt.dll's memset can issue an AVX instruction if IsProcessorFeaturePresent says it's available, which SDE doesn't intercept
-      - run: |
-          Invoke-Expression "$env:SDE_PATH\sde.exe -p4p -- test/gf16/build/${{ matrix.config }}/test.exe"
-          Invoke-Expression "$env:SDE_PATH\sde.exe -p4p -- test/gf16/build/${{ matrix.config }}/test-pmul.exe"
-          Invoke-Expression "$env:SDE_PATH\sde.exe -p4p -- test/hasher/build/${{ matrix.config }}/test.exe"
-        if: ${{ matrix.config == 'Release' && matrix.arch == 'x64' && matrix.compiler == 'ClangCL' }}
       # TODO: XOP tests for hasher?
   
   # test building only
@@ -147,6 +140,8 @@ jobs:
           echo "CC=gcc-${{ matrix.cc_ver }}" >> $GITHUB_ENV
           echo "CXX=g++-${{ matrix.cc_ver }}" >> $GITHUB_ENV
         if: ${{ matrix.t.arch == 'amd64' }}
+      - run: sudo apt install -y libc6:i386 libstdc++6:i386
+        if: ${{ matrix.t.arch == 'i386' }}
       - run: |
           echo -e "deb http://azure.archive.ubuntu.com/ubuntu mantic main restricted universe multiverse" | sudo tee /etc/apt/sources.list.d/mantic.list
           sudo apt update
@@ -173,8 +168,6 @@ jobs:
             -DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=ONLY \
             -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=ONLY
           cmake --build test/hasher/build
-      - run: sudo apt install -y libc6:i386 libstdc++6:i386
-        if: ${{ matrix.t.arch == 'i386' }}
       - run: ${{ matrix.t.emu }} test/gf16/build/test
       - run: ${{ matrix.t.emu }} test/gf16/build/test-pmul
       - run: ${{ matrix.t.emu }} test/gf16/build/test-ctrl -f
@@ -182,6 +175,13 @@ jobs:
       - run: ${{ matrix.t.emu }} test/gf16/build/test-inv -f
         if: ${{ matrix.config == 'Release' && matrix.cc_ver == '12' }}
       - run: ${{ matrix.t.emu }} test/hasher/build/test
+      
+      # also test SSE2-only to see if CPUID checking works
+      - run: |
+          $SDE_PATH/sde64 -p4p -- test/gf16/build/test
+          $SDE_PATH/sde64 -p4p -- test/gf16/build/test-pmul
+          $SDE_PATH/sde64 -p4p -- test/hasher/build/test
+        if: ${{ matrix.config == 'Release' && matrix.cc_ver == '12' && matrix.t.arch == 'amd64' }}
   
   test-linux-clang:
     strategy:
@@ -211,6 +211,8 @@ jobs:
         if: ${{ matrix.t.arch == 'amd64' || matrix.t.arch == 'i386' }}
       - run: sudo apt install -y binutils-${{ matrix.t.target }} libgcc-12-dev-${{ matrix.t.libc }}-cross libstdc++-12-dev-${{ matrix.t.libc }}-cross
         if: ${{ matrix.t.arch != 'amd64' }}
+      - run: sudo apt install -y libc6:i386 libstdc++6:i386
+        if: ${{ matrix.t.arch == 'i386' }}
       - run: |
           echo -e "deb http://azure.archive.ubuntu.com/ubuntu mantic main restricted universe multiverse" | sudo tee /etc/apt/sources.list.d/mantic.list
           sudo apt update
@@ -256,8 +258,6 @@ jobs:
             -DCMAKE_CXX_STANDARD_INCLUDE_DIRECTORIES="/usr/${{ matrix.t.target }}/include;`ls -d /usr/${{ matrix.t.target }}/include/c++/*|head -n1`/${{ matrix.t.target }}" \
             $LINKER_FLAG
           cmake --build test/hasher/build
-      - run: sudo apt install -y libc6:i386 libstdc++6:i386
-        if: ${{ matrix.t.arch == 'i386' }}
       - run: ${{ matrix.t.emu }} test/gf16/build/test
       - run: ${{ matrix.t.emu }} test/gf16/build/test-pmul
       - run: ${{ matrix.t.emu }} test/gf16/build/test-ctrl -f
@@ -341,8 +341,8 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - run: |
-          curl http://musl.cc/x86_64-linux-muslx32-native.tgz | tar zxf -
-          MUSL_BIN=`pwd`/x86_64-linux-muslx32-native/bin/x86_64-linux-muslx32
+          curl http://musl.cc/x86_64-linux-muslx32-cross.tgz | tar zxf -
+          MUSL_BIN=`pwd`/x86_64-linux-muslx32-cross/bin/x86_64-linux-muslx32
           
           mkdir test/gf16/build
           cmake -Btest/gf16/build -Stest/gf16 -DSTATIC_LINK=1 -DCMAKE_BUILD_TYPE=Release \
@@ -360,7 +360,7 @@ jobs:
             -DCMAKE_SYSTEM_NAME=Linux
           cmake --build test/hasher/build
           
-          rm -rf ./x86_64-linux-muslx32-native
+          rm -rf ./x86_64-linux-muslx32-cross
       
       - uses: leleliu008/github-actions-vagrant@v1
         with:
