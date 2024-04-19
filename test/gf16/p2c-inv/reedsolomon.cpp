@@ -191,12 +191,10 @@ bool ReedSolomon_Compute(const vector<bool> &present, vector<RSOutputRow> output
 
   // Allocate the right hand matrix only if we are recovering
 
-  Galois16 *rightmatrix = 0;
+  vector<Galois16> rightmatrix;
   if (datamissing > 0)
   {
-    rightmatrix = new Galois16[outcount * outcount];
-    for (unsigned int index=0; index < outcount * outcount; index++)
-      rightmatrix[index] = 0;
+    rightmatrix = vector<Galois16>(outcount * outcount);
   }
 
   // Fill in the two matrices:
@@ -241,8 +239,7 @@ bool ReedSolomon_Compute(const vector<bool> &present, vector<RSOutputRow> output
   {
     // Perform Gaussian Elimination and then delete the right matrix (which
     // will no longer be required).
-    bool success = ReedSolomon_GaussElim(outcount, incount, leftmatrix, rightmatrix, datamissing);
-    delete [] rightmatrix;
+    bool success = ReedSolomon_GaussElim(outcount, incount, leftmatrix, rightmatrix.data(), datamissing);
     return success;
   }
 

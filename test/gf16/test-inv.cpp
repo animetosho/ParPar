@@ -127,7 +127,10 @@ int main(int argc, char** argv) {
 			
 			Galois16* leftmatrix = nullptr;
 			bool canInvert = p2c_invert(flawedInput, recovery, leftmatrix);
-			if(!canInvert) abort();
+			if(!canInvert) {
+				std::cout << "Unexpected invert failure" << std::endl;
+				abort();
+			}
 			
 			compare_invert(mat, leftmatrix, flawedInput, recovery);
 			delete[] leftmatrix;
