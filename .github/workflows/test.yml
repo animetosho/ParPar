@@ -136,12 +136,12 @@ jobs:
           sdeVersion: 9.24.0  # 9.27/9.33 doesn't work in Linux VMs
         if: ${{ matrix.t.arch == 'amd64' || matrix.t.arch == 'i386' }}
       - run: |
-          sudo apt install -y g++-${{ matrix.cc_ver }}-${{ matrix.t.target }}
+          sudo apt install -y g++-${{ matrix.cc_ver }}-${{ matrix.t.target }} cmake
           echo "CC=${{ matrix.t.target }}-gcc-${{ matrix.cc_ver }}" >> $GITHUB_ENV
           echo "CXX=${{ matrix.t.target }}-g++-${{ matrix.cc_ver }}" >> $GITHUB_ENV
         if: ${{ matrix.t.arch != 'amd64' }}
       - run: |
-          sudo apt install -y g++-${{ matrix.cc_ver }}
+          sudo apt install -y g++-${{ matrix.cc_ver }} cmake
           echo "CC=gcc-${{ matrix.cc_ver }}" >> $GITHUB_ENV
           echo "CXX=g++-${{ matrix.cc_ver }}" >> $GITHUB_ENV
         if: ${{ matrix.t.arch == 'amd64' }}
@@ -173,6 +173,15 @@ jobs:
           cmake --build test/hasher/build
       - run: sudo apt install -y libc6:i386 libstdc++6:i386
         if: ${{ matrix.t.arch == 'i386' }}
+      # diagnose odd i386 SDE failure
+      - run: |
+          $SDE_PATH/sde -version
+          echo 'int main(void){return 0;}' > a.c
+          $CC -static a.c
+          $SDE_PATH/sde -- ./a.out
+          $CC a.c
+          $SDE_PATH/sde -- ./a.out
+        if: ${{ matrix.t.arch == 'i386' }}
       - run: ${{ matrix.t.emu }} test/gf16/build/test
       - run: ${{ matrix.t.emu }} test/gf16/build/test-pmul
       - run: ${{ matrix.t.emu }} test/gf16/build/test-ctrl -f
@@ -193,7 +202,7 @@ jobs:
           - {arch: 'amd64', target: 'x86-64-linux-gnu', cl_target: 'x86_64-linux-gnu', libc: 'amd64', emu: '$SDE_PATH/sde64 -icx --'}
           - {arch: 'aarch64', target: 'aarch64-linux-gnu', cl_target: 'aarch64-linux-gnu', libc: 'arm64', emu: 'qemu-aarch64-static -L /usr/aarch64-linux-gnu -cpu max,sve-max-vq=4'}
           - {arch: 'arm', target: 'arm-linux-gnueabihf', cl_target: 'armv7a-linux-gnueabihf', libc: 'armhf', emu: 'qemu-arm-static -L /usr/arm-linux-gnueabihf -cpu max'}
-          - {arch: 'riscv64', target: 'riscv64-linux-gnu', cl_target: 'riscv64-linux-gnu', libc: 'riscv64', emu: 'qemu-riscv64-static -L /usr/riscv64-linux-gnu -cpu rv64,v=true,vlen=512,elen=64,vext_spec=v1.0,zba=true,zbb=true,zbc=true'}
+          - {arch: 'riscv64', target: 'riscv64-linux-gnu', cl_target: 'riscv64-linux-gnu', libc: 'riscv64', emu: 'qemu-riscv64-static -L /usr/riscv64-linux-gnu -cpu rv64,v=true,vlen=512,elen=64,vext_spec=v1.0,zba=true,zbb=true,zbc=true'}  # zvbc added in qemu 8.2 (Ubuntu 24.04)
           - {arch: 'ppc64', target: 'powerpc64-linux-gnu', cl_target: 'ppc64-linux-gnu', libc: 'ppc64', emu: 'qemu-ppc64-static -L /usr/powerpc64-linux-gnu'}
     name: Test Ubuntu Clang ${{ matrix.cc_ver }} ${{ matrix.t.arch }} (${{ matrix.config }})
     runs-on: ubuntu-22.04
@@ -202,7 +211,7 @@ jobs:
       - uses: actions/checkout@v3
       - run: sudo dpkg --add-architecture i386
         if: ${{ matrix.t.arch == 'i386' }}
-      - run: sudo apt update && sudo apt install -y clang-${{ matrix.cc_ver }}
+      - run: sudo apt update && sudo apt install -y clang-${{ matrix.cc_ver }} cmake
       - uses: petarpetrovt/setup-sde@v2.4
         with:
           sdeVersion: 9.24.0
@@ -215,8 +224,8 @@ jobs:
         if: ${{ matrix.t.arch == 'riscv64' || matrix.t.arch == 'riscv32' }}  # RVV unavailable in Ubuntu 22.04's qemu
       - run: sudo apt install -y --no-install-recommends qemu-user-static
         if: ${{ matrix.t.arch != 'amd64' && matrix.t.arch != 'i386' }}
-      - run: echo "SANITIZE=-DENABLE_SANITIZE=1" >> $GITHUB_ENV
-        if: ${{ matrix.config == 'Release' && matrix.t.arch == 'amd64' && matrix.cc_ver == '15' }} # SDE+ASAN problematic with Clang 11
+      #- run: echo "SANITIZE=-DENABLE_SANITIZE=1" >> $GITHUB_ENV
+      #  if: ${{ matrix.config == 'Release' && matrix.t.arch == 'amd64' && matrix.cc_ver == '15' }} # SDE+ASAN problematic with Clang 11, random hangs with Clang 15
       - run: |
           if [ '${{ matrix.t.arch }}' != 'amd64' ]; then
             LINKER_FLAG=-DCMAKE_EXE_LINKER_FLAGS=-fuse-ld=/usr/bin/${{ matrix.t.target }}-ld
@@ -263,6 +272,31 @@ jobs:
       - run: ${{ matrix.t.emu }} test/gf16/build/test-inv -f
         if: ${{ matrix.config == 'Release' && matrix.cc_ver == '15' }}
       - run: ${{ matrix.t.emu }} test/hasher/build/test
+  
+  test-linux-clang-sanitize:
+    name: Test Ubuntu Clang 15 with sanitizer
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v3
+      - run: sudo apt update && sudo apt install -y clang-15 cmake
+      - run: |
+          mkdir test/gf16/build
+          cmake -Btest/gf16/build -Stest/gf16 -DCMAKE_BUILD_TYPE=Release -DENABLE_SANITIZE=1 \
+            -DCMAKE_C_COMPILER=clang-15 \
+            -DCMAKE_CXX_COMPILER=clang++-15
+          cmake --build test/gf16/build
+          
+          mkdir test/hasher/build
+          cmake -Btest/hasher/build -Stest/hasher -DCMAKE_BUILD_TYPE=Release -DENABLE_SANITIZE=1 \
+            -DCMAKE_C_COMPILER=clang-15 \
+            -DCMAKE_CXX_COMPILER=clang++-15
+          cmake --build test/hasher/build
+      - run: test/gf16/build/test
+      - run: test/gf16/build/test-pmul
+      - run: test/gf16/build/test-ctrl -f
+      - run: test/gf16/build/test-inv -f
+      - run: test/hasher/build/test
   
   test-linux-musl:
     strategy:
@@ -320,18 +354,20 @@ jobs:
             apt update && apt install -y build-essential cmake curl
             curl http://musl.cc/x86_64-linux-muslx32-native.tgz | tar zxf -
             
+            MUSL_BIN=`pwd`/x86_64-linux-muslx32-native/bin/x86_64-linux-muslx32
+            
             mkdir test/gf16/build
             cmake -Btest/gf16/build -Stest/gf16 -DSTATIC_LINK=1 -DCMAKE_BUILD_TYPE=Release \
-              -DCMAKE_C_COMPILER=./x86_64-linux-muslx32-native/bin/x86_64-linux-muslx32-cc \
-              -DCMAKE_CXX_COMPILER=./x86_64-linux-muslx32-native/bin/x86_64-linux-muslx32-c++ \
+              -DCMAKE_C_COMPILER=$MUSL_BIN-cc \
+              -DCMAKE_CXX_COMPILER=$MUSL_BIN-c++ \
               -DCMAKE_SYSTEM_PROCESSOR=amd64 \
               -DCMAKE_SYSTEM_NAME=Linux
             cmake --build test/gf16/build
             
             mkdir test/hasher/build
             cmake -Btest/hasher/build -Stest/hasher -DSKIP_AUX=1 -DSTATIC_LINK=1 -DCMAKE_BUILD_TYPE=Release \
-              -DCMAKE_C_COMPILER=./x86_64-linux-muslx32-native/bin/x86_64-linux-muslx32-cc \
-              -DCMAKE_CXX_COMPILER=./x86_64-linux-muslx32-native/bin/x86_64-linux-muslx32-c++ \
+              -DCMAKE_C_COMPILER=$MUSL_BIN-cc \
+              -DCMAKE_CXX_COMPILER=$MUSL_BIN-c++ \
               -DCMAKE_SYSTEM_PROCESSOR=amd64 \
               -DCMAKE_SYSTEM_NAME=Linux
             cmake --build test/hasher/build
