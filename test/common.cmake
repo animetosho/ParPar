@@ -42,7 +42,11 @@ if (${TARGET_ARCH} MATCHES "riscv32|rv32")
 endif()
 
 if(STATIC_LINK)
-	add_link_options(-static)
+	if(MSVC)
+		add_compile_options("$<$<NOT:$<CONFIG:Debug>>:/MT>$<$<CONFIG:Debug>:/MTd>")
+	else()
+		add_link_options(-static)
+	endif()
 endif()
 
 if(MSVC)
