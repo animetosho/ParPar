@@ -340,27 +340,27 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v3
+      # musl.cc's x32 cross compiler won't execute, for some reason
+      - uses: Lesmiscore/musl-cross-compilers@jockie
+        id: musl
+        with:
+          target: x86_64-linux-muslx32
       - run: |
-          curl http://musl.cc/x86_64-linux-muslx32-cross.tgz | tar zxf -
-          MUSL_BIN=`pwd`/x86_64-linux-muslx32-cross/bin/x86_64-linux-muslx32
-          
           mkdir test/gf16/build
           cmake -Btest/gf16/build -Stest/gf16 -DSTATIC_LINK=1 -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_C_COMPILER=$MUSL_BIN-cc \
-            -DCMAKE_CXX_COMPILER=$MUSL_BIN-c++ \
             -DCMAKE_SYSTEM_PROCESSOR=amd64 \
             -DCMAKE_SYSTEM_NAME=Linux
           cmake --build test/gf16/build
           
           mkdir test/hasher/build
           cmake -Btest/hasher/build -Stest/hasher -DSKIP_AUX=1 -DSTATIC_LINK=1 -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_C_COMPILER=$MUSL_BIN-cc \
-            -DCMAKE_CXX_COMPILER=$MUSL_BIN-c++ \
             -DCMAKE_SYSTEM_PROCESSOR=amd64 \
             -DCMAKE_SYSTEM_NAME=Linux
           cmake --build test/hasher/build
-          
-          rm -rf ./x86_64-linux-muslx32-cross
+        env:
+          CC: ${{ steps.musl.outputs.path }}/x86_64-linux-muslx32-cc
+          CXX: ${{ steps.musl.outputs.path }}/x86_64-linux-muslx32-c++
+          AR: ${{ steps.musl.outputs.path }}/x86_64-linux-muslx32-ar
       
       - uses: leleliu008/github-actions-vagrant@v1
         with:
