@@ -203,11 +203,17 @@ jobs:
 #          asset_name: parpar-${{ steps.get_release.outputs.tag_name }}-linux-${{ matrix.static.name }}-armv7l.xz
 #          asset_content_type: application/octet-stream
 
-  build-mac-x64:
-    name: Build x64 MacOS binary
-    runs-on: macos-latest
+  build-mac:
+    strategy:
+      fail-fast: false
+      matrix:
+        m:
+          - { os: macos-13, arch: x64, xz_flag: '--x86' }
+          - { os: macos-14, arch: arm64, xz_flag: '' }
+    name: Build ${{ matrix.m.arch }} MacOS binary
+    runs-on: ${{ matrix.m.os }}
     env:
-      BUILD_ARCH: x64
+      BUILD_ARCH: ${{ matrix.m.arch }}
       BUILD_LOGLEVEL: verbose
     steps:
       - uses: actions/checkout@v3
@@ -223,12 +229,12 @@ jobs:
         working-directory: nexe
       - run: nexe/parpar --version
       - run: nexe/parpar -r1 -s1M -onexe/test.par2 nexe/parpar
-      - run: xz -9e --x86 --lzma2 nexe/parpar -c > parpar.xz
+      - run: xz -9e ${{ matrix.m.xz_flag }} --lzma2 nexe/parpar -c > parpar.xz
       - uses: sekwah41/upload-release-assets@v1
         env:
           GITHUB_TOKEN: ${{ github.token }}
         with:
           upload_url: ${{ steps.get_release.outputs.upload_url }} 
           asset_path: ./parpar.xz
-          asset_name: parpar-${{ steps.get_release.outputs.tag_name }}-macos-x64.xz
+          asset_name: parpar-${{ steps.get_release.outputs.tag_name }}-macos-${{ matrix.m.arch }}.xz
           asset_content_type: application/octet-stream

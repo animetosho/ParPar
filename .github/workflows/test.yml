@@ -336,7 +336,7 @@ jobs:
   # so we can only do this in a VM with a kernel built with x32 support
   test-x32-musl:
     name: Test MUSL x32
-    runs-on: macos-latest
+    runs-on: macos-13
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v3
@@ -384,16 +384,17 @@ jobs:
           cmake --build test/gf16/build
       - run: test/gf16/build/test-ctrl -pg
   
-  test-mac-x86:
+  test-mac:
     strategy:
       fail-fast: false
       matrix:
+        os: [macos-13, macos-14]  # 13=x64, 14=arm64
         config: ['Debug', 'Release']
         compiler:
           - {cc: 'gcc-12', cxx: 'g++-12'}
           - {cc: 'clang', cxx: 'clang++'}
     name: Test MacOS ${{ matrix.compiler.cc }} (${{ matrix.config }})
-    runs-on: macos-latest
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v3

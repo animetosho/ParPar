@@ -5,7 +5,7 @@ on:
 jobs:
   build-dev-mac-arm64:
     name: Build dev arm64 MacOS binary
-    runs-on: macos-latest
+    runs-on: macos-14
     env:
       BUILD_ARCH: arm64
       BUILD_LOGLEVEL: verbose
