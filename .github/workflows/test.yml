@@ -346,6 +346,9 @@ jobs:
         with:
           target: x86_64-linux-muslx32
       - run: |
+          file $CC
+          $CC
+          
           mkdir test/gf16/build
           cmake -Btest/gf16/build -Stest/gf16 -DSTATIC_LINK=1 -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_SYSTEM_PROCESSOR=amd64 \
@@ -393,11 +396,14 @@ jobs:
         compiler:
           - {cc: 'gcc-12', cxx: 'g++-12'}
           - {cc: 'clang', cxx: 'clang++'}
-    name: Test MacOS ${{ matrix.compiler.cc }} (${{ matrix.config }})
+    name: Test MacOS ${{ matrix.compiler.cc }} (${{ matrix.os }} ${{ matrix.config }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v3
+      # workaround https://forums.developer.apple.com/forums/thread/737707
+      - run: echo "LDFLAGS=-Wl,-ld_classic" >> $GITHUB_ENV
+        if: ${{ matrix.os == 'macos-13' && matrix.compiler.cc == 'gcc-12' }}
       - run: |
           mkdir test/gf16/build
           cmake -Btest/gf16/build -Stest/gf16 -DCMAKE_BUILD_TYPE=${{ matrix.config }} -DCMAKE_C_COMPILER=${{ matrix.compiler.cc }} -DCMAKE_CXX_COMPILER=${{ matrix.compiler.cxx }}

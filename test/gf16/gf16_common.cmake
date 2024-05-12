@@ -198,7 +198,7 @@ if(NOT MSVC OR CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
 		endif()
 	endif()
 	
-	if(IS_ARM AND NOT APPLE) # M1 Macs don't seem to need these ARM options
+	if(IS_ARM)
 		CHECK_CXX_COMPILER_FLAG("-mfpu=neon -march=armv7-a" COMPILER_SUPPORTS_ARM32_NEON)
 		if(COMPILER_SUPPORTS_ARM32_NEON)
 			set_source_files_properties(${GF16_DIR}/gf_add_neon.c PROPERTIES COMPILE_OPTIONS "-mfpu=neon;-march=armv7-a")

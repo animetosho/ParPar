@@ -209,7 +209,7 @@ jobs:
       matrix:
         m:
           - { os: macos-13, arch: x64, xz_flag: '--x86' }
-          - { os: macos-14, arch: arm64, xz_flag: '' }
+          #- { os: macos-14, arch: arm64, xz_flag: '' }  # requires Node 16 I think
     name: Build ${{ matrix.m.arch }} MacOS binary
     runs-on: ${{ matrix.m.os }}
     env:
