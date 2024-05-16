@@ -203,7 +203,7 @@ struct GF16CpuCap {
 	bool hasSHA3;
 	bool hasSVE;
 	bool hasSVE2;
-	GF16CpuCap(bool detect) : hasNEON(true), hasSVE(true), hasSVE2(true) {
+	GF16CpuCap(bool detect) : hasNEON(true), hasSHA3(true), hasSVE(true), hasSVE2(true) {
 		if(!detect) return;
 		hasNEON = CPU_HAS_NEON;
 		hasSHA3 = CPU_HAS_NEON_SHA3;

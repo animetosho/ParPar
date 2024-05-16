@@ -346,8 +346,10 @@ jobs:
         with:
           target: x86_64-linux-muslx32
       - run: |
-          file $CC
-          $CC
+          file $CXX
+          ldd $CXX
+          readelf -h -l -S -V -A -I $CXX
+          $CXX
           
           mkdir test/gf16/build
           cmake -Btest/gf16/build -Stest/gf16 -DSTATIC_LINK=1 -DCMAKE_BUILD_TYPE=Release \
@@ -396,6 +398,10 @@ jobs:
         compiler:
           - {cc: 'gcc-12', cxx: 'g++-12'}
           - {cc: 'clang', cxx: 'clang++'}
+        exclude:
+          # arm_acle.h seems to be broken in Homebrew's GCC12? (type conflict between __builtin_aarch64_rndr and __rndr)
+          - os: macos-14
+            compiler: {cc: 'gcc-12', cxx: 'g++-12'}
     name: Test MacOS ${{ matrix.compiler.cc }} (${{ matrix.os }} ${{ matrix.config }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
