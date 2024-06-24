@@ -28,6 +28,10 @@
 # define _ADDF(f,a,b,c,d) ADD(a, f(b,c,d))
 #endif
 
+#ifndef IOFFSET
+# define IOFFSET
+#endif
+
 /* code was originally based off OpenSSL's implementation */
 
 #ifndef _RX
@@ -242,35 +246,35 @@ static HEDLEY_ALWAYS_INLINE void FNB(md5_process_block)(state_word_t* state, con
 #ifdef ADD16
 	ADD16(XX0, XX1, XX2, XX3, XX4, XX5, XX6, XX7,
 	      XX8, XX9, XX10, XX11, XX12, XX13, XX14, XX15,
-	      0xf4292244L, 0x85845dd1L, 0x2ad7d2bbL, 0x8f0ccc92L,
-	      0xf7537e82L, 0xfc93a039L, 0xa3014314L, 0x432aff97L,
-	      0x6fa87e4fL, 0xeb86d391L, 0xffeff47dL, 0xbd3af235L,
-	      0x655b59c3L, 0x4e0811a1L, 0xab9423a7L, 0xfe2ce6e0L);
+	      0xf4292244L IOFFSET, 0x85845dd1L IOFFSET, 0x2ad7d2bbL IOFFSET, 0x8f0ccc92L IOFFSET,
+	      0xf7537e82L IOFFSET, 0xfc93a039L IOFFSET, 0xa3014314L IOFFSET, 0x432aff97L IOFFSET,
+	      0x6fa87e4fL IOFFSET, 0xeb86d391L IOFFSET, 0xffeff47dL IOFFSET, 0xbd3af235L IOFFSET,
+	      0x655b59c3L IOFFSET, 0x4e0811a1L IOFFSET, 0xab9423a7L IOFFSET, 0xfe2ce6e0L IOFFSET);
 # ifdef MD5X2
 	ADD16(XX0b, XX1b, XX2b, XX3b, XX4b, XX5b, XX6b, XX7b,
 	      XX8b, XX9b, XX10b, XX11b, XX12b, XX13b, XX14b, XX15b,
-	      0xf4292244L, 0x85845dd1L, 0x2ad7d2bbL, 0x8f0ccc92L,
-	      0xf7537e82L, 0xfc93a039L, 0xa3014314L, 0x432aff97L,
-	      0x6fa87e4fL, 0xeb86d391L, 0xffeff47dL, 0xbd3af235L,
-	      0x655b59c3L, 0x4e0811a1L, 0xab9423a7L, 0xfe2ce6e0L);
+	      0xf4292244L IOFFSET, 0x85845dd1L IOFFSET, 0x2ad7d2bbL IOFFSET, 0x8f0ccc92L IOFFSET,
+	      0xf7537e82L IOFFSET, 0xfc93a039L IOFFSET, 0xa3014314L IOFFSET, 0x432aff97L IOFFSET,
+	      0x6fa87e4fL IOFFSET, 0xeb86d391L IOFFSET, 0xffeff47dL IOFFSET, 0xbd3af235L IOFFSET,
+	      0x655b59c3L IOFFSET, 0x4e0811a1L IOFFSET, 0xab9423a7L IOFFSET, 0xfe2ce6e0L IOFFSET);
 # endif
 #endif
-	RX(I, A, B, C, D, X,  0,  6, 0xf4292244L);
-	RX(I, D, A, B, C, X,  7, 10, 0x432aff97L);
-	RX(I, C, D, A, B, X, 14, 15, 0xab9423a7L);
-	RX(I, B, C, D, A, X,  5, 21, 0xfc93a039L);
-	RX(I, A, B, C, D, X, 12,  6, 0x655b59c3L);
-	RX(I, D, A, B, C, X,  3, 10, 0x8f0ccc92L);
-	RX(I, C, D, A, B, X, 10, 15, 0xffeff47dL);
-	RX(I, B, C, D, A, X,  1, 21, 0x85845dd1L);
-	RX(I, A, B, C, D, X,  8,  6, 0x6fa87e4fL);
-	RX(I, D, A, B, C, X, 15, 10, 0xfe2ce6e0L);
-	RX(I, C, D, A, B, X,  6, 15, 0xa3014314L);
-	RX(I, B, C, D, A, X, 13, 21, 0x4e0811a1L);
-	RX(I, A, B, C, D, X,  4,  6, 0xf7537e82L);
-	RX(I, D, A, B, C, X, 11, 10, 0xbd3af235L);
-	RX(I, C, D, A, B, X,  2, 15, 0x2ad7d2bbL);
-	RX(I, B, C, D, A, X,  9, 21, 0xeb86d391L);
+	RX(I, A, B, C, D, X,  0,  6, 0xf4292244L IOFFSET);
+	RX(I, D, A, B, C, X,  7, 10, 0x432aff97L IOFFSET);
+	RX(I, C, D, A, B, X, 14, 15, 0xab9423a7L IOFFSET);
+	RX(I, B, C, D, A, X,  5, 21, 0xfc93a039L IOFFSET);
+	RX(I, A, B, C, D, X, 12,  6, 0x655b59c3L IOFFSET);
+	RX(I, D, A, B, C, X,  3, 10, 0x8f0ccc92L IOFFSET);
+	RX(I, C, D, A, B, X, 10, 15, 0xffeff47dL IOFFSET);
+	RX(I, B, C, D, A, X,  1, 21, 0x85845dd1L IOFFSET);
+	RX(I, A, B, C, D, X,  8,  6, 0x6fa87e4fL IOFFSET);
+	RX(I, D, A, B, C, X, 15, 10, 0xfe2ce6e0L IOFFSET);
+	RX(I, C, D, A, B, X,  6, 15, 0xa3014314L IOFFSET);
+	RX(I, B, C, D, A, X, 13, 21, 0x4e0811a1L IOFFSET);
+	RX(I, A, B, C, D, X,  4,  6, 0xf7537e82L IOFFSET);
+	RX(I, D, A, B, C, X, 11, 10, 0xbd3af235L IOFFSET);
+	RX(I, C, D, A, B, X,  2, 15, 0x2ad7d2bbL IOFFSET);
+	RX(I, B, C, D, A, X,  9, 21, 0xeb86d391L IOFFSET);
 
 	_SET_STATE(state, 0, ADD(oA, A));
 	_SET_STATE(state, 1, ADD(oB, B));

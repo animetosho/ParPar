@@ -60,12 +60,20 @@ static HEDLEY_ALWAYS_INLINE uint32x2_t vmake_u32le(
 
 #define _FN(f) f##_neon
 
-#define F vbsl_u32
-#define G(b,c,d) vbsl_u32(d, b, c)
-#define H(b,c,d) veor_u32(veor_u32(d, c), b)
-#define I(b,c,d) veor_u32(vorn_u32(b, d), c)
-// this alternative approach seems to be slower on C-A53, A55 and A76 (both ARMv7 and AArch64)
-//#define I(b,c,d) vbsl_u32(b, vmvn_u32(c), veor_u32(vmvn_u32(c), d))
+#define F 1
+#define G 2
+#define H 3
+#define I 4
+#define ADDF(f,a,b,c,d) ( \
+	f==G ? ADD(a, vbsl_u32(d, b, c)) : ( \
+	f==I ? vsub_u32(a, vbsl_u32(b, c, veor_u32(c, d))) : ADD(a, f==F ? \
+		vbsl_u32(b, c, d) : \
+		veor_u32(veor_u32(d, c), b) \
+	) \
+	) \
+)
+#define IOFFSET -1
+
 
 #include "md5x2-base.h"
 
@@ -82,6 +90,8 @@ static HEDLEY_ALWAYS_INLINE uint32x2_t vmake_u32le(
 #undef G
 #undef H
 #undef I
+#undef ADDF
+#undef IOFFSET
 
 
 static HEDLEY_ALWAYS_INLINE void md5_extract_x2_neon(void* dst, void* state, const int idx) {

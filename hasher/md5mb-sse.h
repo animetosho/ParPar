@@ -92,10 +92,26 @@ static HEDLEY_ALWAYS_INLINE void md5_extract_all_mb_sse(void* dst, void* state, 
 #endif
 
 
+#ifdef IOFFSET
+# undef IOFFSET
+#endif
+#define IOFFSET -1
+
 #ifdef __AVX__
 # define md5mb_regions_avx md5mb_regions_sse
 # define md5mb_max_regions_avx md5mb_regions_avx
 # define md5mb_alignment_avx md5mb_alignment_sse
+
+#undef ADDF
+#define ADDF(f,a,b,c,d) ( \
+	f==G ? ADD(ADD(_mm_andnot_si128(d, c), a), _mm_and_si128(d, b)) : ( \
+	f==I ? _mm_sub_epi32(a, _mm_xor_si128(c, _mm_andnot_si128(b, d))) : ADD(a, f==F ? \
+		_mm_xor_si128(_mm_and_si128(_mm_xor_si128(c, d), b), d) : \
+		_mm_xor_si128(_mm_xor_si128(d, c), b) \
+	) \
+	) \
+)
+
 
 # define _FN(f) f##_avx
 # include "md5mb-base.h"
@@ -122,16 +138,16 @@ static HEDLEY_ALWAYS_INLINE void md5_extract_all_mb_sse(void* dst, void* state, 
 #define md5mb_max_regions_xop md5mb_regions_xop
 #define md5mb_alignment_xop md5mb_alignment_sse
 
-#undef F
-#undef G
-#undef H
-#undef I
 #undef ADDF
-#define F(b,c,d) _mm_cmov_si128(c, d, b)
-#define G _mm_cmov_si128
-#define H(b,c,d) _mm_xor_si128(_mm_xor_si128(d, c), b)
-//#define I(b,c,d) _mm_xor_si128(_mm_or_si128(_mm_xor_si128(d, _mm_set1_epi8(-1)), b), c)
-#define I(b,c,d) _mm_cmov_si128(_mm_xor_si128(c, _mm_set1_epi8(-1)), _mm_xor_si128(d, _mm_xor_si128(c, _mm_set1_epi8(-1))), b)
+#define ADDF(f,a,b,c,d) ( \
+	f==G ? ADD(a, _mm_cmov_si128(b, c, d)) : ( \
+	f==I ? _mm_sub_epi32(a, _mm_cmov_si128(c, _mm_xor_si128(d, c), b)) : ADD(a, f==F ? \
+		_mm_cmov_si128(c, d, b) : \
+		_mm_xor_si128(_mm_xor_si128(d, c), b) \
+	) \
+	) \
+)
+
 
 
 #define _FN(f) f##_xop
@@ -148,6 +164,10 @@ static HEDLEY_ALWAYS_INLINE void md5_extract_all_mb_sse(void* dst, void* state, 
 #define md5_extract_all_mb_xop md5_extract_all_mb_sse
 #endif
 
+
+#ifdef IOFFSET
+# undef IOFFSET
+#endif
 
 #ifdef __AVX512VL__
 #include <immintrin.h>
@@ -246,16 +266,21 @@ static HEDLEY_ALWAYS_INLINE void md5_extract_all_mb_sse(void* dst, void* state, 
 #define md5mb_alignment_avx2 32
 
 
+#ifdef IOFFSET
+# undef IOFFSET
+#endif
+#define IOFFSET -1
+
 #define F 1
 #define G 2
 #define H 3
 #define I 4
 #define ADDF(f,a,b,c,d) ( \
-	f==G ? ADD(ADD(_mm256_andnot_si256(d, c), a), _mm256_and_si256(d, b)) : ADD(a, \
-		f==F ? _mm256_xor_si256(_mm256_and_si256(_mm256_xor_si256(c, d), b), d) : ( \
-			f==H ? _mm256_xor_si256(_mm256_xor_si256(d, c), b) : \
-			_mm256_xor_si256(_mm256_or_si256(_mm256_xor_si256(d, _mm256_set1_epi8(-1)), b), c) \
-		) \
+	f==G ? ADD(ADD(_mm256_andnot_si256(d, c), a), _mm256_and_si256(d, b)) : ( \
+	f==I ? _mm256_sub_epi32(a, _mm256_xor_si256(c, _mm256_andnot_si256(b, d))) : ADD(a, f==F ? \
+		_mm256_xor_si256(_mm256_and_si256(_mm256_xor_si256(c, d), b), d) : \
+		_mm256_xor_si256(_mm256_xor_si256(d, c), b) \
+	) \
 	) \
 )
 
@@ -323,6 +348,9 @@ static HEDLEY_ALWAYS_INLINE void md5_extract_all_mb_avx2(void* dst, void* state,
 
 #ifdef ADDF
 # undef ADDF
+#endif
+#ifdef IOFFSET
+# undef IOFFSET
 #endif
 
 #ifdef __AVX512VL__
@@ -567,6 +595,9 @@ static HEDLEY_ALWAYS_INLINE void md5_extract_all_mb_avx512(void* dst, void* stat
 # undef G
 # undef H
 # undef I
+#endif
+#ifdef IOFFSET
+# undef IOFFSET
 #endif
 
 

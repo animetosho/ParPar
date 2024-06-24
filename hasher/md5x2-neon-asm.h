@@ -8,7 +8,7 @@
 # define UNUSED(...) (void)(__VA_ARGS__)
 #endif
 
-extern const uint32_t md5_constants[64];
+extern const uint32_t md5_constants_arm[64];
 
 #ifdef __ARM_NEON
 static HEDLEY_ALWAYS_INLINE void md5_process_block_x2_neon(uint32x2_t* state, const uint8_t* const* HEDLEY_RESTRICT data, size_t offset) {
@@ -18,7 +18,7 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_x2_neon(uint32x2_t* state, co
 	uint32x2_t C = state[2];
 	uint32x2_t D = state[3];
 	
-	const uint32_t* k = md5_constants;
+	const uint32_t* k = md5_constants_arm;
 	
 #ifdef __aarch64__
 #define ROUND_X(A, B, I, R, L) \
@@ -48,9 +48,14 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_x2_neon(uint32x2_t* state, co
 	"rev32 %[" STR(A) "].4h, %[" STR(A) "].4h\n" \
 	"add %[" STR(A) "].2s, %[" STR(A) "].2s, %[" STR(B) "].2s\n"
 #define ROUND_I(A, B, C, D, I, R, L) \
-	"orn v20.8b, %[" STR(B) "].8b, %[" STR(D) "].8b\n" \
-	"eor v20.8b, v20.8b, %[" STR(C) "].8b\n" \
-	ROUND_X(A, B, I, R, L)
+	"eor v20.8b, %[" STR(C) "].8b, %[" STR(D) "].8b\n" \
+	"bit v20.8b, %[" STR(C) "].8b, %[" STR(B) "].8b\n" \
+	"add %[" STR(A) "].2s, %[" STR(A) "].2s, " I ".2s\n" \
+	"sub v20.2s, %[" STR(A) "].2s, v20.2s\n" \
+	"ushr %[" STR(A) "].2s, v20.2s, #" STR(R) "\n" \
+	"sli %[" STR(A) "].2s, v20.2s, #" STR(L) "\n" \
+	"add %[" STR(A) "].2s, %[" STR(A) "].2s, %[" STR(B) "].2s\n" \
+// TODO: subtract 1 from constant above
 
 #define RF4(r1, r2) \
 	"ld4r {v16.2s, v17.2s, v18.2s, v19.2s}, [%[k]], #16\n" \
@@ -167,9 +172,13 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_x2_neon(uint32x2_t* state, co
 	"vrev32.i16 %P[" STR(A) "], %P[" STR(A) "]\n" \
 	"vadd.i32 %P[" STR(A) "], %P[" STR(A) "], %P[" STR(B) "]\n"
 #define ROUND_I(A, B, C, D, I, R, L) \
-	"vorn d11, %P[" STR(B) "], %P[" STR(D) "]\n" \
-	"veor d11, d11, %P[" STR(C) "]\n" \
-	ROUND_X(A, B, I, R, L)
+	"veor d11, %P[" STR(C) "], %P[" STR(D) "]\n" \
+	"vbit d11, %P[" STR(C) "], %P[" STR(B) "]\n" \
+	"vadd.i32 %P[" STR(A) "], %P[" STR(A) "], " I "\n" \
+	"vsub.i32 d11, %P[" STR(A) "], d11\n" \
+	"vshr.u32 %P[" STR(A) "], d11, #" STR(R) "\n" \
+	"vsli.32  %P[" STR(A) "], d11, #" STR(L) "\n" \
+	"vadd.i32 %P[" STR(A) "], %P[" STR(A) "], %P[" STR(B) "]\n" \
 
 #define RF4(r1, r2) \
 	"vld4.32 {d12[],d13[],d14[],d15[]}, [%[k] :128]!\n" \

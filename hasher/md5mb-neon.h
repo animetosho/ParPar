@@ -32,7 +32,22 @@
 #define G(b,c,d) vbslq_u32(d, b, c)
 #define H(b,c,d) veorq_u32(veorq_u32(d, c), b)
 #define I(b,c,d) veorq_u32(vornq_u32(b, d), c)
-//#define I(b,c,d) vbslq_u32(b, vmvnq_u32(c), veorq_u32(vmvnq_u32(c), d))
+
+/* the following (I function shortcut) often performs worse - is it because VBIT is more expensive than VORN?
+#define F 1
+#define G 2
+#define H 3
+#define I 4
+#define ADDF(f,a,b,c,d) ( \
+	f==G ? ADD(a, vbslq_u32(d, b, c)) : ( \
+	f==I ? vsubq_u32(a, vbslq_u32(b, c, veorq_u32(c, d))) : ADD(a, f==F ? \
+		vbslq_u32(b, c, d) : \
+		veorq_u32(veorq_u32(d, c), b) \
+	) \
+	) \
+)
+#define IOFFSET -1
+*/
 
 
 #define _FN(f) f##_neon
@@ -55,7 +70,8 @@
 #undef G
 #undef H
 #undef I
-
+//#undef ADDF
+//#undef IOFFSET
 
 static HEDLEY_ALWAYS_INLINE void md5_extract_mb_neon(void* dst, void* state, int idx) {
 	uint32x4_t* state_ = (uint32x4_t*)state + (idx & 4);

@@ -12,11 +12,11 @@
 
 // usually the x86 code would use 6 registers (+1 for addressing input), but some compilers don't seem to like it (ClangCL, MSYS GCC) so we'll restrict usage to 5 registers by load-op the input
 #ifdef PLATFORM_AMD64
-# define ADD_CONST(K, A, I) "leal " STR(K) "(%k[" STR(I) STR(A) "], %k[TMP2]), %k[" STR(A) "]\n"
+# define ADD_CONST(K, KO, A, I) "leal " STR(K) KO "(%k[" STR(I) STR(A) "], %k[TMP2]), %k[" STR(A) "]\n"
 # define PRELOAD_INPUT(NEXT_IN) "movl " NEXT_IN ", %k[TMP2]\n"
 # define ADD_INPUT(NEXT_IN, D)
 #else
-# define ADD_CONST(K, A, I) "add $" STR(K) ", %k[" STR(A) "]\n"
+# define ADD_CONST(K, KO, A, I) "add $" STR(K) KO ", %k[" STR(A) "]\n"
 # define PRELOAD_INPUT(NEXT_IN)
 // don't need to worry about D/ID distinction here, because it's not enabled on x86
 # define ADD_INPUT(NEXT_IN, D) "add " NEXT_IN ", %k[" STR(D) "]\n"
@@ -25,7 +25,7 @@
 
 #define ROUND_F(I, A, B, C, D, NEXT_IN, K, R) \
 	"xorl %k[" STR(C) "], %k[TMP1]\n" \
-	ADD_CONST(K, A, I) \
+	ADD_CONST(K, , A, I) \
 	"andl %k[" STR(B) "], %k[TMP1]\n" \
 	PRELOAD_INPUT(NEXT_IN) \
 	"xorl %k[" STR(D) "], %k[TMP1]\n" \
@@ -38,7 +38,7 @@
 #ifdef _MD5_USE_BMI1_
 # define ROUND_F_LAST(A, B, C, D, NEXT_IN, K, R) \
 	"xorl %k[" STR(C) "], %k[TMP1]\n" \
-	ADD_CONST(K, A, ) \
+	ADD_CONST(K, , A, ) \
 	"andl %k[" STR(B) "], %k[TMP1]\n" \
 	PRELOAD_INPUT(NEXT_IN) \
 	"xorl %k[" STR(D) "], %k[TMP1]\n" \
@@ -49,7 +49,7 @@
 	"addl %k[" STR(B) "], %k[" STR(A) "]\n"
 # ifdef PLATFORM_AMD64
 #  define ROUND_G(A, B, C, D, NEXT_IN, K, R) \
-	ADD_CONST(K, A, ) \
+	ADD_CONST(K, , A, ) \
 	PRELOAD_INPUT(NEXT_IN) \
 	"movl %k[" STR(D) "], %k[TMP3]\n" \
 	"addl %k[TMP1], %k[" STR(A) "]\n" \
@@ -60,7 +60,7 @@
 	"andnl %k[" STR(B) "], %k[" STR(C) "], %k[TMP1]\n" \
 	"addl %k[" STR(B) "], %k[" STR(A) "]\n"
 #  define ROUND_G_LAST(A, B, C, D, NEXT_IN, K, R) \
-	ADD_CONST(K, A, ) \
+	ADD_CONST(K, , A, ) \
 	PRELOAD_INPUT(NEXT_IN) \
 	"movl %k[" STR(D) "], %k[TMP3]\n" \
 	"addl %k[TMP1], %k[" STR(A) "]\n" \
@@ -72,7 +72,7 @@
 	"addl %k[" STR(B) "], %k[" STR(A) "]\n"
 # else
 #  define ROUND_G(A, B, C, D, NEXT_IN, K, R) \
-	ADD_CONST(K, A, ) \
+	ADD_CONST(K, , A, ) \
 	"addl %k[TMP1], %k[" STR(A) "]\n" \
 	PRELOAD_INPUT(NEXT_IN) \
 	"movl %k[" STR(D) "], %k[TMP1]\n" \
@@ -83,7 +83,7 @@
 	"andnl %k[" STR(B) "], %k[" STR(C) "], %k[TMP1]\n" \
 	"addl %k[" STR(B) "], %k[" STR(A) "]\n"
 #  define ROUND_G_LAST(A, B, C, D, NEXT_IN, K, R) \
-	ADD_CONST(K, A, ) \
+	ADD_CONST(K, , A, ) \
 	"addl %k[TMP1], %k[" STR(A) "]\n" \
 	PRELOAD_INPUT(NEXT_IN) \
 	"movl %k[" STR(D) "], %k[TMP1]\n" \
@@ -100,7 +100,7 @@
 # ifdef PLATFORM_AMD64
 #  define ROUND_G(A, B, C, D, NEXT_IN, K, R) \
 	"notl %k[TMP1]\n" \
-	ADD_CONST(K, A, ) \
+	ADD_CONST(K, , A, ) \
 	"andl %k[" STR(C) "], %k[TMP1]\n" \
 	PRELOAD_INPUT(NEXT_IN) \
 	"movl %k[" STR(D) "], %k[TMP3]\n" \
@@ -114,7 +114,7 @@
 # else
 #  define ROUND_G(A, B, C, D, NEXT_IN, K, R) \
 	"notl %k[TMP1]\n" \
-	ADD_CONST(K, A, ) \
+	ADD_CONST(K, , A, ) \
 	"andl %k[" STR(C) "], %k[TMP1]\n" \
 	PRELOAD_INPUT(NEXT_IN) \
 	"addl %k[TMP1], %k[" STR(A) "]\n" \
@@ -128,7 +128,7 @@
 # endif
 #endif
 #define ROUND_H(A, B, C, D, NEXT_IN, K, R) \
-	ADD_CONST(K, A, ) \
+	ADD_CONST(K, , A, ) \
 	"xorl %k[" STR(B) "], %k[TMP1]\n" \
 	PRELOAD_INPUT(NEXT_IN) \
 	"addl %k[TMP1], %k[" STR(A) "]\n" \
@@ -137,28 +137,27 @@
 	ADD_INPUT(NEXT_IN, D) \
 	"addl %k[" STR(B) "], %k[" STR(A) "]\n"
 
-#if defined(_MD5_USE_BMI1_) && defined(PLATFORM_AMD64)
+#ifdef _MD5_USE_BMI1_
 #define ROUND_I(A, B, C, D, NEXT_IN, K, R) \
-	ADD_CONST(K, A, ) \
-	"orl %k[" STR(B) "], %k[TMP1]\n" \
+	ADD_CONST(K, "-1", A, ) \
+	"andnl %k[" STR(D) "], %k[" STR(B) "], %k[TMP1]\n" \
 	PRELOAD_INPUT(NEXT_IN) \
 	"xorl %k[" STR(C) "], %k[TMP1]\n" \
-	"addl %k[TMP1], %k[" STR(A) "]\n" \
+	"subl %k[TMP1], %k[" STR(A) "]\n" \
 	ADD_INPUT(NEXT_IN, D) \
 	"roll $" STR(R) ", %k[" STR(A) "]\n" \
-	"andnl %k[TMP3], %k[" STR(C) "], %k[TMP1]\n" \
 	"addl %k[" STR(B) "], %k[" STR(A) "]\n"
 #define ROUND_I_LAST(A, B, C, D, K, R) \
-	ADD_CONST(K, A, ) \
-	"orl %k[" STR(B) "], %k[TMP1]\n" \
+	ADD_CONST(K, "-1", A, ) \
+	"andnl %k[" STR(D) "], %k[" STR(B) "], %k[TMP1]\n" \
 	"xorl %k[" STR(C) "], %k[TMP1]\n" \
-	"addl %k[TMP1], %k[" STR(A) "]\n" \
+	"subl %k[TMP1], %k[" STR(A) "]\n" \
 	"roll $" STR(R) ", %k[" STR(A) "]\n" \
 	"addl %k[" STR(B) "], %k[" STR(A) "]\n"
 #else
 #define ROUND_I(A, B, C, D, NEXT_IN, K, R) \
 	"notl %k[TMP1]\n" \
-	ADD_CONST(K, A, ) \
+	ADD_CONST(K, , A, ) \
 	"orl %k[" STR(B) "], %k[TMP1]\n" \
 	PRELOAD_INPUT(NEXT_IN) \
 	"xorl %k[" STR(C) "], %k[TMP1]\n" \
@@ -169,7 +168,7 @@
 	"addl %k[" STR(B) "], %k[" STR(A) "]\n"
 #define ROUND_I_LAST(A, B, C, D, K, R) \
 	"notl %k[TMP1]\n" \
-	ADD_CONST(K, A, ) \
+	ADD_CONST(K, , A, ) \
 	"orl %k[" STR(B) "], %k[TMP1]\n" \
 	"xorl %k[" STR(C) "], %k[TMP1]\n" \
 	"addl %k[TMP1], %k[" STR(A) "]\n" \
@@ -259,7 +258,7 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_scalar(uint32_t* HEDLEY_RESTR
 		ROUND_G_LAST(B, C, D, A, "%[input5]", -0x72d5b376, 20)
 		
 		"xorl %k[C], %k[TMP1]\n"
-		ADD_CONST(-0x0005c6be, A, )
+		ADD_CONST(-0x0005c6be, , A, )
 		"xorl %k[B], %k[TMP1]\n"
 		PRELOAD_INPUT("%[input8]")
 		"addl %k[TMP1], %k[A]\n"
@@ -272,15 +271,10 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_scalar(uint32_t* HEDLEY_RESTR
 		ROUND_H(B, C, D, A, "%[input1]", -0x021ac7f4, 23)
 		RH4( 4,  7, 10, 13,  -0x5b4115bc, 0x4bdecfa9, -0x0944b4a0, -0x41404390)
 		RH4( 0,  3,  6,  9,  0x289b7ec6, -0x155ed806, -0x2b10cf7b, 0x04881d05)
-#if defined(_MD5_USE_BMI1_) && defined(PLATFORM_AMD64)
-		"movl $-1, %k[TMP3]\n"
-#endif
 		RH4(12, 15,  2,  0,  -0x262b2fc7, -0x1924661b, 0x1fa27cf8, -0x3b53a99b)
 		// above contains a redundant XOR - TODO: consider eliminating
 		
-#if defined(_MD5_USE_BMI1_) && defined(PLATFORM_AMD64)
-		"andnl %k[TMP3], %k[D], %k[TMP1]\n"
-#else
+#ifndef _MD5_USE_BMI1_
 		"movl %k[D], %k[TMP1]\n"
 #endif
 		RI4( 7, 14,  5, 12,  -0x0bd6ddbc, 0x432aff97, -0x546bdc59, -0x036c5fc7)

@@ -35,8 +35,6 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_scalar(uint32_t* HEDLEY_RESTR
 # define ROR_ADD(A, B, R) \
 	"ror %w[" STR(A) "], %w[" STR(A) "], #" STR(R) "\n" \
 	"add %w[" STR(A) "], %w[" STR(A) "], %w[" STR(B) "]\n"
-# define ORN1(dst, src1, src2) "orn " dst ", " src1 ", " src2 "\n"
-# define ORN2(dst, src1, src2)
 #else
 # if defined(__armv7__) || defined(_M_ARM) || defined(__ARM_ARCH_7__) || defined(__ARM_ARCH_7A__) || defined(__ARM_ARCH_8A__) || (defined(__ARM_ARCH) && __ARM_ARCH >= 7)
 #  define SETI_L(dst, x) "movw %[" STR(dst) "], #" STR(x) "\n"
@@ -49,8 +47,6 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_scalar(uint32_t* HEDLEY_RESTR
 # define REG(x) "%[" STR(x) "]"
 # define ROR_ADD(A, B, R) \
 	"add %[" STR(A) "], %[" STR(B) "], %[" STR(A) "], ror #" STR(R) "\n"
-# define ORN1(dst, src1, src2) "mvn " dst ", " src2 "\n"
-# define ORN2(dst, src1, src2) "orr " dst ", " dst ", " src1 "\n"
 #endif
 
 #define ROUND_F(IA, A, B, C, D, NEXT_IN, KL, KH, R) \
@@ -79,23 +75,21 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_scalar(uint32_t* HEDLEY_RESTR
 #define ROUND_I(A, B, C, D, NEXT_IN, KL, KH, R) \
 	SETI_L(TMP1, KL) \
 	"add " REG(A) ", " REG(A) ", " REG(TMP2) "\n" \
-	ORN1(REG(TMP3), REG(B), REG(D)) \
 	SETI_H(TMP1, KH) \
-	ORN2(REG(TMP3), REG(B), REG(D)) \
+	"bic " REG(TMP3) ", " REG(D) ", " REG(B) "\n" \
 	"ldr " REG(TMP2) ", " NEXT_IN "\n" \
 	"eor " REG(TMP3) ", " REG(TMP3) ", " REG(C) "\n" \
-	"add " REG(A) ", " REG(A) ", " REG(TMP1) "\n" \
+	"sub " REG(A) ", " REG(A) ", " REG(TMP1) "\n" \
 	"add " REG(A) ", " REG(A) ", " REG(TMP3) "\n" \
 	REV(TMP2) \
 	ROR_ADD(A, B, R)
 #define ROUND_I_LAST(A, B, C, D, KL, KH, R) \
 	SETI_L(TMP1, KL) \
 	"add " REG(A) ", " REG(A) ", " REG(TMP2) "\n" \
-	ORN1(REG(TMP3), REG(B), REG(D)) \
-	ORN2(REG(TMP3), REG(B), REG(D)) \
+	"bic " REG(TMP3) ", " REG(D) ", " REG(B) "\n" \
 	SETI_H(TMP1, KH) \
 	"eor " REG(TMP3) ", " REG(TMP3) ", " REG(C) "\n" \
-	"add " REG(A) ", " REG(A) ", " REG(TMP1) "\n" \
+	"sub " REG(A) ", " REG(A) ", " REG(TMP1) "\n" \
 	"add " REG(A) ", " REG(A) ", " REG(TMP3) "\n" \
 	ROR_ADD(A, B, R)
 
@@ -165,14 +159,14 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_scalar(uint32_t* HEDLEY_RESTR
 		RH4( 0,  3,  6,  9,  0x7ec6, 0x289b, 0x27fa, 0xeaa1, 0x3085, 0xd4ef, 0x1d05, 0x0488)
 		RH4(12, 15,  2,  0,  0xd039, 0xd9d4, 0x99e5, 0xe6db, 0x7cf8, 0x1fa2, 0x5665, 0xc4ac)
 		    
-		RI4( 7, 14,  5, 12,  0x2244, 0xf429, 0xff97, 0x432a, 0x23a7, 0xab94, 0xa039, 0xfc93)
-		RI4( 3, 10,  1,  8,  0x59c3, 0x655b, 0xcc92, 0x8f0c, 0xf47d, 0xffef, 0x5dd1, 0x8584)
-		RI4(15,  6, 13,  4,  0x7e4f, 0x6fa8, 0xe6e0, 0xfe2c, 0x4314, 0xa301, 0x11a1, 0x4e08)
+		RI4( 7, 14,  5, 12,  0x2243, 0xf429, 0xff96, 0x432a, 0x23a6, 0xab94, 0xa038, 0xfc93)
+		RI4( 3, 10,  1,  8,  0x59c2, 0x655b, 0xcc91, 0x8f0c, 0xf47c, 0xffef, 0x5dd0, 0x8584)
+		RI4(15,  6, 13,  4,  0x7e4e, 0x6fa8, 0xe6df, 0xfe2c, 0x4313, 0xa301, 0x11a0, 0x4e08)
 		
-		ROUND_I(A, B, C, D, "[%[in], #4*11]", 0x7e82, 0xf753, 26)
-		ROUND_I(D, A, B, C, "[%[in], #4*2]",  0xf235, 0xbd3a, 22)
-		ROUND_I(C, D, A, B, "[%[in], #4*9]",  0xd2bb, 0x2ad7, 17)
-		ROUND_I_LAST(B, C, D, A, 0xd391, 0xeb86, 11)
+		ROUND_I(A, B, C, D, "[%[in], #4*11]", 0x7e81, 0xf753, 26)
+		ROUND_I(D, A, B, C, "[%[in], #4*2]",  0xf234, 0xbd3a, 22)
+		ROUND_I(C, D, A, B, "[%[in], #4*9]",  0xd2ba, 0x2ad7, 17)
+		ROUND_I_LAST(B, C, D, A, 0xd390, 0xeb86, 11)
 	:
 #ifdef ARM_THUMB_LIMIT_REGS
 	[A]"+&l"(A), [B]"+&l"(B), [C]"+&l"(C), [D]"+&l"(D),
@@ -204,7 +198,6 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_scalar(uint32_t* HEDLEY_RESTR
 #undef SETI_L
 #undef SETI_H
 #undef ROR_ADD
-#undef ORN
 #undef REG
 }
 

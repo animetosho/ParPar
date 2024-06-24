@@ -9,7 +9,7 @@
 # define UNUSED(...) (void)(__VA_ARGS__)
 #endif
 
-extern const uint32_t md5_constants_sse[128];
+extern const uint32_t md5_constants_sse[160];
 
 #ifdef PLATFORM_AMD64
 #define ASM_PARAMS_F(n, c0, c1) \
@@ -274,10 +274,13 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_x2_avx(__m128i* state, const 
 	"vpxor %[" STR(B) "], %[TMPF1], %[TMPF1]\n" \
 	ROUND_X(A, A, B, I, R)
 #define ROUND_I(A, B, C, D, I, R) \
-	"vpxor %[" STR(D) "], %[TMPF2], %[TMPF1]\n" \
-	"vpor %[" STR(B) "], %[TMPF1], %[TMPF1]\n" \
+	"vpandn %[" STR(D) "], %[" STR(B) "], %[TMPF1]\n" \
+	"vpaddd " I ", %[" STR(A) "], %[" STR(A) "]\n" \
 	"vpxor %[" STR(C) "], %[TMPF1], %[TMPF1]\n" \
-	ROUND_X(A, A, B, I, R)
+	"vpsubd %[TMPF1], %[" STR(A) "], %[" STR(A) "]\n" \
+	"vpshufd $0b10100000, %[" STR(A) "], %[" STR(A) "]\n" \
+	"vpsrlq $" STR(R) ", %[" STR(A) "], %[" STR(A) "]\n" \
+	"vpaddd %[" STR(B) "], %[" STR(A) "], %[" STR(A) "]\n"
 
 #define ROUND_G(A, B, C, D, I, R) \
 	"vpaddd " I ", %[" STR(A) "], %[" STR(A) "]\n" \
@@ -370,12 +373,11 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_x2_avx(__m128i* state, const 
 	: ASM_PARAMS(64));
 	
 	__asm__(
-		"vpcmpeqb %[TMPF2], %[TMPF2], %[TMPF2]\n"
 		RI4(0, 0, 3, 7, 2)
 		RI4(1, 6, 1, 5, 0)
 		RI4(2, 4, 7, 3, 6)
 		RI4(3, 2, 5, 1, 4)
-	: ASM_PARAMS(96));
+	: ASM_PARAMS(128)); // use I-1 instead of I constants
 	
 	state[0] = _mm_add_epi32(A, state[0]);
 	state[1] = _mm_add_epi32(B, state[1]);

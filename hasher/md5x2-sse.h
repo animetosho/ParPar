@@ -77,6 +77,22 @@ static HEDLEY_ALWAYS_INLINE void md5_extract_x2_sse(void* dst, void* state, cons
 	state_[3] = _mm_insert_epi32(state_[3], 0x10325476L, idx*2); \
 }
 // TODO: consider using PSHUFB for rotate by 16
+
+#undef ADDF
+#define ADDF(f,a,b,c,d) ( \
+	f==G ? ADD(ADD(_mm_andnot_si128(d, c), a), _mm_and_si128(d, b)) : ( \
+	f==I ? _mm_sub_epi32(a, _mm_xor_si128(c, _mm_andnot_si128(b, d))) : ADD(a, f==F ? \
+		_mm_xor_si128(_mm_and_si128(_mm_xor_si128(c, d), b), d) : \
+		_mm_xor_si128(_mm_xor_si128(d, c), b) \
+	) \
+	) \
+)
+#ifdef IOFFSET
+# undef IOFFSET
+#endif
+#define IOFFSET -1
+
+
 # define _FN(f) f##_avx
 # include "md5x2-base.h"
 # undef _FN
@@ -104,6 +120,9 @@ static HEDLEY_ALWAYS_INLINE void md5_extract_x2_sse(void* dst, void* state, cons
 # define G(b,c,d) _mm_ternarylogic_epi32(d,c,b,0xAC)
 # define H(b,c,d) _mm_ternarylogic_epi32(d,c,b,0x96)
 # define I(b,c,d) _mm_ternarylogic_epi32(d,c,b,0x63)
+# ifdef IOFFSET
+#  undef IOFFSET
+# endif
 
 #include "md5x2-base.h"
 
@@ -126,6 +145,9 @@ static HEDLEY_ALWAYS_INLINE void md5_extract_x2_sse(void* dst, void* state, cons
 # undef G
 # undef H
 # undef I
+#endif
+#ifdef IOFFSET
+# undef IOFFSET
 #endif
 
 #ifdef MD5_USE_ASM
