@@ -67,7 +67,7 @@
 # elif defined(__has_include)
 #  if __has_include(<sys/auxv.h>)
 #   include <sys/auxv.h>
-#   ifdef __FreeBSD__
+#   if defined(__FreeBSD__) || defined(__OpenBSD__)
 static unsigned long getauxval(unsigned long cap) {
 	unsigned long ret;
 	elf_aux_info(cap, &ret, sizeof(ret));
@@ -158,7 +158,7 @@ static unsigned long getauxval(unsigned long cap) {
 # if defined(__has_include)
 #  if __has_include(<sys/auxv.h>)
 #   include <sys/auxv.h>
-#   ifdef __FreeBSD__
+#   if defined(__FreeBSD__) || defined(__OpenBSD__)
 static unsigned long getauxval(unsigned long cap) {
 	unsigned long ret;
 	elf_aux_info(cap, &ret, sizeof(ret));
