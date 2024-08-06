@@ -39,7 +39,7 @@ struct HasherCpuCap {
 			isSmallCore = CPU_FAMMDL_IS_AMDCAT(family, model);
 		}
 		
-		isVecRotSlow = (family == 0xaf); // vector rotate has 2 cycle latency on Zen4
+		isVecRotSlow = (family == 0xaf || family == 0xbf); // vector rotate has 2 cycle latency on Zen4/5
 		
 		hasAVX = false; hasBMI1 = false; hasAVX2 = false; hasAVX512F = false; hasAVX512VLBW = false;
 #if !defined(_MSC_VER) || _MSC_VER >= 1600
