@@ -32,7 +32,9 @@ static HEDLEY_ALWAYS_INLINE void gf16_checksum_blocku_rvv(const void *HEDLEY_RES
 	v = gf16_vec_mul2_rvv(v);
 	int8_t* _src = (int8_t*)src;
 	
+#ifndef __riscv_v_intrinsic
 	size_t vlmax = RV(vsetvlmax_e8m1)();
+#endif
 	vint8m1_t v8 = RV(vreinterpret_v_i16m1_i8m1)(v);
 	while(amount) {
 		size_t vl = RV(vsetvl_e8m1)(amount);
