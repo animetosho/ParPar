@@ -191,14 +191,14 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_x2_scalar(uint32_t* state, co
 		RH4( 0, 12, 24, 36,  0x7ec6, 0x289b, 0x27fa, 0xeaa1, 0x3085, 0xd4ef, 0x1d05, 0x0488)
 		RH4(48, 60,  8,  0,  0xd039, 0xd9d4, 0x99e5, 0xe6db, 0x7cf8, 0x1fa2, 0x5665, 0xc4ac)
 		
-		RI4(28, 56, 20, 48,  0x2244, 0xf429, 0xff97, 0x432a, 0x23a7, 0xab94, 0xa039, 0xfc93)
-		RI4(12, 40,  4, 32,  0x59c3, 0x655b, 0xcc92, 0x8f0c, 0xf47d, 0xffef, 0x5dd1, 0x8584)
-		RI4(60, 24, 52, 16,  0x7e4f, 0x6fa8, 0xe6e0, 0xfe2c, 0x4314, 0xa301, 0x11a1, 0x4e08)
+		RI4(28, 56, 20, 48,  0x2243, 0xf429, 0xff96, 0x432a, 0x23a6, 0xab94, 0xa038, 0xfc93)
+		RI4(12, 40,  4, 32,  0x59c2, 0x655b, 0xcc91, 0x8f0c, 0xf47c, 0xffef, 0x5dd0, 0x8584)
+		RI4(60, 24, 52, 16,  0x7e4e, 0x6fa8, 0xe6df, 0xfe2c, 0x4313, 0xa301, 0x11a0, 0x4e08)
 		
-		ROUND_I(A1, B1, C1, D1, A2, B2, C2, D2, "[%[i0], #44]", "[%[i1], #44]", 0x7e82, 0xf753, 26)
-		ROUND_I(D1, A1, B1, C1, D2, A2, B2, C2, "[%[i0], #8]", "[%[i1], #8]", 0xf235, 0xbd3a, 22)
-		ROUND_I(C1, D1, A1, B1, C2, D2, A2, B2, "[%[i0], #36]", "[%[i1], #36]", 0xd2bb, 0x2ad7, 17)
-		ROUND_I_LAST(B1, C1, D1, A1, B2, C2, D2, A2, 0xd391, 0xeb86, 11)
+		ROUND_I(A1, B1, C1, D1, A2, B2, C2, D2, "[%[i0], #44]", "[%[i1], #44]", 0x7e81, 0xf753, 26)
+		ROUND_I(D1, A1, B1, C1, D2, A2, B2, C2, "[%[i0], #8]", "[%[i1], #8]", 0xf234, 0xbd3a, 22)
+		ROUND_I(C1, D1, A1, B1, C2, D2, A2, B2, "[%[i0], #36]", "[%[i1], #36]", 0xd2ba, 0x2ad7, 17)
+		ROUND_I_LAST(B1, C1, D1, A1, B2, C2, D2, A2, 0xd390, 0xeb86, 11)
 	: [A1]"+&r"(A1), [B1]"+&r"(B1), [C1]"+&r"(C1), [D1]"+&r"(D1),
 	  [A2]"+&r"(A2), [B2]"+&r"(B2), [C2]"+&r"(C2), [D2]"+&r"(D2),
 	  [TMP1]"=&r"(tmp1), [TMP2]"=&r"(tmp2)

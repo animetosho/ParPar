@@ -63,14 +63,14 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_x2_scalar(uint32_t* state, co
 	"addl %k[" STR(B2) "], %k[" STR(A2) "]\n"
 	
 #ifdef _MD5_USE_BMI1_
-#define ROUND_I_INIT(A1, D1, A2, D2, K) \
+#define ROUND_I_INIT(A1, B1, D1, A2, B2, D2, K) \
 	"addl $" STR(K) "-1, %k[" STR(A1) "]\n" \
 	"addl $" STR(K) "-1, %k[" STR(A2) "]\n" \
 	"andnl %k[" STR(D1) "], %k[" STR(B1) "], %k[TMP1]\n" \
 	"andnl %k[" STR(D2) "], %k[" STR(B2) "], %k[TMP2]\n"
 #define ROUND_I_ADD "subl"
 #else
-#define ROUND_I_INIT(A1, D1, A2, D2, K) \
+#define ROUND_I_INIT(A1, B1, D1, A2, B2, D2, K) \
 	"movl %k[" STR(D1) "], %k[TMP1]\n" \
 	"movl %k[" STR(D2) "], %k[TMP2]\n" \
 	"addl $" STR(K) ", %k[" STR(A1) "]\n" \
@@ -82,7 +82,7 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_x2_scalar(uint32_t* state, co
 #define ROUND_I_ADD "addl"
 #endif
 #define ROUND_I(A1, B1, C1, D1, A2, B2, C2, D2, NEXT_IN1, NEXT_IN2, K, R) \
-	ROUND_I_INIT(A1, D1, A2, D2, K) \
+	ROUND_I_INIT(A1, B1, D1, A2, B2, D2, K) \
 	"xorl %k[" STR(C1) "], %k[TMP1]\n" \
 	"xorl %k[" STR(C2) "], %k[TMP2]\n" \
 	"addl " NEXT_IN1 ", %k[" STR(D1) "]\n" \
@@ -94,7 +94,7 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_x2_scalar(uint32_t* state, co
 	"addl %k[" STR(B1) "], %k[" STR(A1) "]\n" \
 	"addl %k[" STR(B2) "], %k[" STR(A2) "]\n"
 #define ROUND_I_LAST(A1, B1, C1, D1, A2, B2, C2, D2, K, R) \
-	ROUND_I_INIT(A1, D1, A2, D2, K) \
+	ROUND_I_INIT(A1, B1, D1, A2, B2, D2, K) \
 	"xorl %k[" STR(C1) "], %k[TMP1]\n" \
 	"xorl %k[" STR(C2) "], %k[TMP2]\n" \
 	ROUND_I_ADD " %k[TMP1], %k[" STR(A1) "]\n" \
