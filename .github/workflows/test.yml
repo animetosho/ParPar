@@ -340,7 +340,7 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v3
-      - uses: leleliu008/github-actions-vagrant@v1
+      - uses: leleliu008/github-actions-vagrant@v2
         with:
           box: generic/debian12
           run: |
