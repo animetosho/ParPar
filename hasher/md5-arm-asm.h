@@ -79,8 +79,8 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_scalar(uint32_t* HEDLEY_RESTR
 	"bic " REG(TMP3) ", " REG(D) ", " REG(B) "\n" \
 	"ldr " REG(TMP2) ", " NEXT_IN "\n" \
 	"eor " REG(TMP3) ", " REG(TMP3) ", " REG(C) "\n" \
-	"sub " REG(A) ", " REG(A) ", " REG(TMP1) "\n" \
-	"add " REG(A) ", " REG(A) ", " REG(TMP3) "\n" \
+	"add " REG(A) ", " REG(A) ", " REG(TMP1) "\n" \
+	"sub " REG(A) ", " REG(A) ", " REG(TMP3) "\n" \
 	REV(TMP2) \
 	ROR_ADD(A, B, R)
 #define ROUND_I_LAST(A, B, C, D, KL, KH, R) \
@@ -89,8 +89,8 @@ static HEDLEY_ALWAYS_INLINE void md5_process_block_scalar(uint32_t* HEDLEY_RESTR
 	"bic " REG(TMP3) ", " REG(D) ", " REG(B) "\n" \
 	SETI_H(TMP1, KH) \
 	"eor " REG(TMP3) ", " REG(TMP3) ", " REG(C) "\n" \
-	"sub " REG(A) ", " REG(A) ", " REG(TMP1) "\n" \
-	"add " REG(A) ", " REG(A) ", " REG(TMP3) "\n" \
+	"add " REG(A) ", " REG(A) ", " REG(TMP1) "\n" \
+	"sub " REG(A) ", " REG(A) ", " REG(TMP3) "\n" \
 	ROR_ADD(A, B, R)
 
 #define ROUND_G(A, B, C, D, NEXT_IN, KL, KH, R) \
