@@ -334,9 +334,10 @@ jobs:
   
   # x32 is not supported on Ubuntu 22.10 or later kernels [https://bugs.launchpad.net/ubuntu/+source/linux/+bug/1994516], but the Azure instances use a 6.5+ kernel
   # so we can only do this in a VM with a kernel built with x32 support
+  # Vagrant seems to be removed from the MacOS 13 image
   test-x32-musl:
     name: Test MUSL x32
-    runs-on: macos-13
+    runs-on: macos-12
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v3
