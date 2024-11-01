@@ -71,7 +71,14 @@ static HEDLEY_ALWAYS_INLINE void gf16_clmul_neon_reduction(poly16x8_t* low1, pol
 	
 	// subsequent polynomial multiplication doesn't need the low bits of th0 to be correct, so trim these now for a shorter dep chain
 	uint8x16_t th0_hi3 = vshrq_n_u8(th0, 5);
+#if defined(__aarch64__) && !defined(__ARM_FEATURE_SHA3)
+	// computes `th0_hi3 ^= th0_hi3 >> 2` in one op
+	th0_hi3 = vqtbl1q_u8(
+		vmakeq_u8(0,1,2,3,5,4,7,6, 0,0,0,0,0,0,0,0), th0_hi3
+	);
+#else
 	uint8x16_t th0_hi1 = vshrq_n_u8(th0_hi3, 2); // or is `vshrq_n_u8(th0, 7)` better?
+#endif
 	
 	// mul by 0x1a => we only care about upper byte
 #ifdef __aarch64__
@@ -94,7 +101,11 @@ static HEDLEY_ALWAYS_INLINE void gf16_clmul_neon_reduction(poly16x8_t* low1, pol
 	
 	*low1 = vreinterpretq_p16_u8(lobytes.val[0]);
 	*low2 = vreinterpretq_p16_u8(hibytes.val[0]);
+#if defined(__aarch64__) && !defined(__ARM_FEATURE_SHA3)
+	*high1 = vreinterpretq_p16_u8(veorq_u8(hibytes.val[1], th1));
+#else
 	*high1 = vreinterpretq_p16_u8(eor3q_u8(hibytes.val[1], th0_hi1, th1));
+#endif
 	*high2 = vreinterpretq_p16_u8(lobytes.val[1]);
 }
 
