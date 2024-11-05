@@ -81,16 +81,14 @@ static HEDLEY_ALWAYS_INLINE void gf16_clmul_neon_reduction(poly16x8_t* low1, pol
 #endif
 	
 	// mul by 0x1a => we only care about upper byte
-#ifdef __aarch64__
+	// note that as highest_nibble can only contain 3 bits (due to 16b*16b->31b), multiplying by 0x18 also works
+#if defined(__aarch64__) && !defined(__ARM_FEATURE_SHA3)
 	th0 = veorq_u8(th0, vqtbl1q_u8(
 		vmakeq_u8(0,1,3,2,6,7,5,4,13,12,14,15,11,10,8,9),
 		highest_nibble
 	));
 #else
-	th0 = veorq_u8(th0, vshrq_n_u8(vreinterpretq_u8_p8(vmulq_p8(
-		vreinterpretq_p8_u8(highest_nibble),
-		vdupq_n_p8(0x1a)
-	)), 4));
+	th0 = eor3q_u8(vshrq_n_u8(highest_nibble, 1), th0, highest_nibble);
 #endif
 	
 	// multiply by polynomial: 0x100b

@@ -22,16 +22,13 @@ static HEDLEY_ALWAYS_INLINE void gf16_clmul_sve2_reduction(svuint8_t* low1, svui
 	
 	svuint8_t th0 = svsri_n_u8(NOMASK(svlsl_n_u8, hibytesH, 4), hibytesL, 4);
 	th0 = sveor3_u8(th0, hibytesH, hibytesL);
-	svuint8_t th0_hi3 = NOMASK(svlsr_n_u8, th0, 5);
-	th0 = NOMASK(sveor_u8, th0, NOMASK(svlsr_n_u8,
-		svpmul_n_u8(highest_nibble, 0x1a), 4
-	));
 	
-	// alternative strategy to above, using nibble flipped ops; looks like one less op, but 0xf vector needs to be constructed, so still the same; maybe there's a better way to leverage it?
+	// alternative strategy to above, using nibble flipped ops; same number of ops, but 0xf vector needs to be constructed, so likely worse; maybe there's a better way to leverage it?
 	// svuint8_t th0 = svxar_n_u8(hibytesH, hibytesL, 4);
-	// th0 = svbcax_n_u8(th0, svpmul_n_u8(highest_nibble, 0x1a), 0xf);
 	// th0 = svxar_n_u8(th0, svbsl_n_u8(hibytesH, hibytesL, 0xf), 4);
-	// svuint8_t th0_hi3 = NOMASK(svlsr_n_u8, th0, 5);
+	
+	svuint8_t th0_hi3 = NOMASK(svlsr_n_u8, th0, 5);
+	th0 = sveor3_u8(th0, highest_nibble, NOMASK(svlsr_n_u8, highest_nibble, 1));
 	
 	svuint8_t th1 = NOMASK(sveor_u8, hibytesH, highest_nibble);
 	
