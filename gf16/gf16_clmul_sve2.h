@@ -18,19 +18,17 @@ static HEDLEY_ALWAYS_INLINE void gf16_clmul_sve2_reduction(svuint8_t* low1, svui
 	
 	// Barrett reduction
 	// first reduction coefficient is 0x1111a
-	svuint8_t highest_nibble = NOMASK(svlsr_n_u8, hibytesH, 4);
-	
+	svuint8_t th1 = NOMASK(sveor_u8, hibytesH, NOMASK(svlsr_n_u8, hibytesH, 4));
 	svuint8_t th0 = svsri_n_u8(NOMASK(svlsl_n_u8, hibytesH, 4), hibytesL, 4);
-	th0 = sveor3_u8(th0, hibytesH, hibytesL);
+	th0 = sveor3_u8(th0, th1, hibytesL);
 	
 	// alternative strategy to above, using nibble flipped ops; same number of ops, but 0xf vector needs to be constructed, so likely worse; maybe there's a better way to leverage it?
-	// svuint8_t th0 = svxar_n_u8(hibytesH, hibytesL, 4);
+	// svuint8_t th0 = svxar_n_u8(th1, hibytesL, 4);
 	// th0 = svxar_n_u8(th0, svbsl_n_u8(hibytesH, hibytesL, 0xf), 4);
 	
 	svuint8_t th0_hi3 = NOMASK(svlsr_n_u8, th0, 5);
-	th0 = sveor3_u8(th0, highest_nibble, NOMASK(svlsr_n_u8, highest_nibble, 1));
+	th0 = NOMASK(sveor_u8, th0, NOMASK(svlsr_n_u8, hibytesH, 5));
 	
-	svuint8_t th1 = NOMASK(sveor_u8, hibytesH, highest_nibble);
 	
 	
 	// multiply by polynomial: 0x100b

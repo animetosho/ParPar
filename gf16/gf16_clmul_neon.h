@@ -63,11 +63,10 @@ static HEDLEY_ALWAYS_INLINE void gf16_clmul_neon_reduction(poly16x8_t* low1, pol
 	
 	// Barrett reduction
 	// first reduction coefficient is 0x1111a
-	// multiply hibytes by 0x11100
-	uint8x16_t highest_nibble = vshrq_n_u8(hibytes.val[1], 4);
+	// multiply hibytes by 0x11110
 	uint8x16_t th0 = vsriq_n_u8(vshlq_n_u8(hibytes.val[1], 4), hibytes.val[0], 4);
-	th0 = eor3q_u8(th0, hibytes.val[0], hibytes.val[1]);
-	uint8x16_t th1 = veorq_u8(hibytes.val[1], highest_nibble);
+	uint8x16_t th1 = veorq_u8(hibytes.val[1], vshrq_n_u8(hibytes.val[1], 4));
+	th0 = eor3q_u8(th0, th1, hibytes.val[0]);
 	
 	// subsequent polynomial multiplication doesn't need the low bits of th0 to be correct, so trim these now for a shorter dep chain
 	uint8x16_t th0_hi3 = vshrq_n_u8(th0, 5);
@@ -81,15 +80,9 @@ static HEDLEY_ALWAYS_INLINE void gf16_clmul_neon_reduction(poly16x8_t* low1, pol
 #endif
 	
 	// mul by 0x1a => we only care about upper byte
-	// note that as highest_nibble can only contain 3 bits (due to 16b*16b->31b), multiplying by 0x18 also works
-#if defined(__aarch64__) && !defined(__ARM_FEATURE_SHA3)
-	th0 = veorq_u8(th0, vqtbl1q_u8(
-		vmakeq_u8(0,1,3,2,6,7,5,4,13,12,14,15,11,10,8,9),
-		highest_nibble
-	));
-#else
-	th0 = eor3q_u8(vshrq_n_u8(highest_nibble, 1), th0, highest_nibble);
-#endif
+	// note that as hibytes.val[1] can only contain 7 bits (due to 16b*16b->31b), multiplying by 0x18 also works
+	// the 0x10 part is handled above, so just need to shift in for the 0x8
+	th0 = veorq_u8(th0, vshrq_n_u8(hibytes.val[1], 5));
 	
 	// multiply by polynomial: 0x100b
 	poly8x16_t redL = vdupq_n_p8(0x0b);

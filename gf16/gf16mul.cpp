@@ -1589,6 +1589,10 @@ Galois16Methods Galois16Mul::default_method(size_t regionSizeHint, unsigned inpu
 #ifdef PLATFORM_ARM
 	const GF16CpuCap caps(true);
 	if(gf16_available_sve2 && caps.hasSVE2) {
+		// preferred technique seems to vary across cores
+		// Cortex A510: prefers CLMul SHA3, and CLMul over Shuffle
+		// Cortex A710: prefers CLMul NEON > Shuffle SVE2 > CLMul SVE2 > CLMul SHA3 > Shuffle SVE > Shuffle NEON
+		// Cortex X2: prefers Shuffle SVE2 > CLMul SVE2 > CLMul SHA3 > Shuffle NEON > Shuffle SVE > CLMul NEON
 # ifdef PARPAR_SLIM_GF16
 		return GF16_CLMUL_SVE2;
 # else
