@@ -23,7 +23,7 @@
       }],
       ['OS!="win"', {
         "variables": {
-          "missing_memalign%": "<!(<!(echo ${CC_target:-${CC:-cc}}) -c src/test_alignalloc.c -o /dev/null -Werror 2>/dev/null || echo failed)",
+          "missing_memalign%": "<!(<!(echo ${CC_target:-${CC:-cc}}) -c src/test_alignalloc.c -std=c99 -o /dev/null -Werror 2>/dev/null || echo failed)",
           "supports_cpp14%": "<!(<!(echo ${CXX_target:-${CXX:-c++}}) -MM -E hasher/hasher.cpp -std=c++14 2>/dev/null || true)"
         },
         "conditions": [
