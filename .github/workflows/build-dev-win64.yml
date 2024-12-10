@@ -20,7 +20,7 @@ jobs:
       - run: npm install --production
         working-directory: nexe
       # diagnose weird execution failure
-      - run: "C:\\Program Files\\Git\\usr\\bin\\sed" -i "s/child_process_1\.spawn/this.log.step('Executing ' + command + ' ' + args); \0/" node_modules/nexe/lib/compiler.js
+      - run: "C:\\Program Files\\Git\\usr\\bin\\sed" -i "s/child_process_1\\.spawn/this.log.step('Executing ' + command + ' ' + args); \\0/" node_modules/nexe/lib/compiler.js
         working-directory: nexe
       - run: node build
         working-directory: nexe
