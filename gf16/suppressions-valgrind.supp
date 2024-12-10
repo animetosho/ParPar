@@ -1,0 +1,6 @@
+{
+	<gfmat_tables>
+	Memcheck:Leak
+	fun:malloc
+	fun:gfmat_init
+}
