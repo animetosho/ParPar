@@ -16,7 +16,7 @@ jobs:
         working-directory: nexe
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: '3.9'  # 'pipes' removed in Python 3.13, 'rU' mode unsupported in 3.11
       - run: node build
         working-directory: nexe
       - run: nexe/parpar --version
