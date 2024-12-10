@@ -14,7 +14,9 @@ jobs:
       - run: npm install --production --ignore-scripts
       - run: npm install --production
         working-directory: nexe
-      - run: pip install pipes
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
       - run: node build
         working-directory: nexe
       - run: nexe/parpar --version
