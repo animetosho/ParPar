@@ -41,7 +41,7 @@ jobs:
       fail-fast: false
       matrix:
         compiler: ['v142', 'v143', 'ClangCL']
-        arch: ['ARM', 'ARM64']
+        arch: ['ARM64']  # 'ARM' SDK seems to be missing on GHA now
         exclude:
           - compiler: ClangCL
             arch: ARM
@@ -143,7 +143,7 @@ jobs:
       - run: sudo apt install -y libc6:i386 libstdc++6:i386
         if: ${{ matrix.t.arch == 'i386' }}
       - run: |
-          echo -e "deb http://azure.archive.ubuntu.com/ubuntu mantic main restricted universe multiverse" | sudo tee /etc/apt/sources.list.d/mantic.list
+          echo -e "deb http://azure.archive.ubuntu.com/ubuntu noble main restricted universe multiverse" | sudo tee /etc/apt/sources.list.d/noble.list
           sudo apt update
         if: ${{ matrix.t.arch == 'riscv64' || matrix.t.arch == 'riscv32' || matrix.t.arch == 'i386' }}  # RVV unavailable in Ubuntu 22.04's qemu
       - run: sudo apt install -y --no-install-recommends qemu-user-static
@@ -214,7 +214,7 @@ jobs:
       - run: sudo apt install -y libc6:i386 libstdc++6:i386
         if: ${{ matrix.t.arch == 'i386' }}
       - run: |
-          echo -e "deb http://azure.archive.ubuntu.com/ubuntu mantic main restricted universe multiverse" | sudo tee /etc/apt/sources.list.d/mantic.list
+          echo -e "deb http://azure.archive.ubuntu.com/ubuntu noble main restricted universe multiverse" | sudo tee /etc/apt/sources.list.d/noble.list
           sudo apt update
         if: ${{ matrix.t.arch == 'riscv64' || matrix.t.arch == 'riscv32' || matrix.t.arch == 'i386' }}  # RVV unavailable in Ubuntu 22.04's qemu
       - run: sudo apt install -y --no-install-recommends qemu-user-static
@@ -375,7 +375,7 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v3
-      - run: echo -e "deb http://azure.archive.ubuntu.com/ubuntu lunar main restricted universe multiverse" | sudo tee /etc/apt/sources.list.d/lunar.list
+      - run: echo -e "deb http://azure.archive.ubuntu.com/ubuntu noble main restricted universe multiverse" | sudo tee /etc/apt/sources.list.d/noble.list
       - run: sudo apt update && sudo apt install -y pocl-opencl-icd
       - run: |
           mkdir test/gf16/build
