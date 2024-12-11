@@ -16,7 +16,9 @@ var skipFileCreate = true; // skip creating test files if they already exist (sp
 var pruneCache = false; // prune unused keys from cached results
 
 
-var fastTest = process.argv.slice(2).indexOf('-f') > -1;
+var procArgs = process.argv.slice(2);
+var fastTest = procArgs.indexOf('-f') > -1;
+var verbose = procArgs.indexOf('-v') > -1;
 
 var fs = require('fs');
 var crypto = require('crypto');
@@ -220,7 +222,7 @@ function par2_args(o) {
 	return a.concat([o.out], o.in);
 }
 function parpar_args(o) {
-	var a = ['-q'];
+	var a = verbose ? [] : ['-q'];
 	// TODO: tests for multi file generation
 	if(o.blockSize) a.push('--input-slices='+o.blockSize+'b');
 	if(o.inBlocks) a.push('--input-slices='+o.inBlocks);
@@ -582,7 +584,7 @@ async.timesSeries(allTests.length, function(testNum, cb) {
 	proc.execFile(exeNode, execArgs, function(err, stdout, stderr) {
 		timePP = Date.now() - timePP;
 		if(err) {
-			console.error('Error info: ', err);
+			console.error('Error occurred after ' + (timePP/1000) + '; std output: ');
 			process.stdout.write(stdout);
 			process.stderr.write(stderr);
 			throw err;
