@@ -28,6 +28,10 @@ jobs:
       - run: npm install --production --ignore-scripts
       - run: npm install --production
         working-directory: nexe
+      # workaround issue https://github.com/nodejs/node/issues/52681#issuecomment-2076426887
+      - run: |
+          (Get-Content -Path "node_modules/nexe/lib/compiler.js" -Raw) -replace 'cwd: this.src,', 'shell: true, cwd: this.src,' | Set-Content -Path "node_modules/nexe/lib/compiler.js"
+        working-directory: nexe
       - run: node build
         working-directory: nexe
       - run: nexe\parpar.exe --version

@@ -222,7 +222,7 @@ function par2_args(o) {
 	return a.concat([o.out], o.in);
 }
 function parpar_args(o) {
-	var a = verbose ? [] : ['-q'];
+	var a = verbose ? ['--json'] : ['-q'];
 	// TODO: tests for multi file generation
 	if(o.blockSize) a.push('--input-slices='+o.blockSize+'b');
 	if(o.inBlocks) a.push('--input-slices='+o.inBlocks);
