@@ -24,6 +24,7 @@ jobs:
     name: Test on Node v${{ matrix.version }}
     runs-on: ubuntu-latest
     steps:
+      - run: sudo apt-get install -y gdb
       - uses: MatteoH2O1999/setup-python@v2
         with:
           python-version: '2.7'
@@ -33,5 +34,8 @@ jobs:
         with:
           node-version: ${{ matrix.version }}
       - run: npm install --production
-      - run: node ${{ matrix.flags }} par-compare.js -f -v
+        env:
+          CFLAGS: -ggdb
+          CXXFLAGS: -ggdb
+      - run: node ${{ matrix.flags }} par-compare.js -f -v -d
         working-directory: test

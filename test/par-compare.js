@@ -9,6 +9,7 @@
 var tmpDir = (process.env.TMP || process.env.TEMP || '.') + require('path').sep;
 //var tmpDir = require('path').resolve('./tmp') + require('path').sep;
 var exeNode = 'node';
+var exeGdb = 'gdb'; // only used if native stack traces wanted
 var exeParpar = '../bin/parpar';
 var exePar2 = 'par2';
 
@@ -19,6 +20,7 @@ var pruneCache = false; // prune unused keys from cached results
 var procArgs = process.argv.slice(2);
 var fastTest = procArgs.indexOf('-f') > -1;
 var verbose = procArgs.indexOf('-v') > -1;
+var use_gdb = procArgs.indexOf('-d') > -1;
 
 var fs = require('fs');
 var crypto = require('crypto');
@@ -579,14 +581,18 @@ async.timesSeries(allTests.length, function(testNum, cb) {
 	var testFiles, refFiles;
 	var execArgs = exeParpar ? (Array.isArray(exeParpar) ? exeParpar : [exeParpar]).concat(testArgs) : testArgs;
 	console.log('Executing: ' + exeNode, execArgs.map(function(arg) { return '"' + arg + '"'; }).join(' ')); // arguments not properly escaped, but should be good enough for 99% of cases
+	if(use_gdb) {
+		execArgs = ['--batch', '-ex','r', '-ex','bt', '-ex','q $_exitcode', '--args', exeNode].concat(execArgs);
+	}
 	var timePP, timeP2;
 	timePP = Date.now();
-	proc.execFile(exeNode, execArgs, function(err, stdout, stderr) {
+	proc.execFile(use_gdb ? exeGdb : exeNode, execArgs, function(err, stdout, stderr) {
 		timePP = Date.now() - timePP;
 		if(err) {
 			console.error('Error occurred after ' + (timePP/1000) + '; std output: ');
 			process.stdout.write(stdout);
 			process.stderr.write(stderr);
+			console.log('Error object: ', err);
 			throw err;
 		}
 		
