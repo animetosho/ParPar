@@ -212,6 +212,9 @@ typedef std::function<void(ThreadMessageQueue<void*>&)> thread_cb_t;
 # include <Windows.h>
 #else
 # include <pthread.h>
+# ifdef __OpenBSD__
+#  include <pthread_np.h>
+# endif
 #endif
 #if defined(__linux) || defined(__linux__)
 # include <unistd.h>
