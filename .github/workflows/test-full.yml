@@ -11,24 +11,24 @@ jobs:
         include:
         - version: '0.10.48'
           flags: ''
-          python2: true
+          python: '2.7'
         - version: '4.9.1'
           flags: ''
-          python2: true
+          python: '2.7'
         - version: '12.22.12'
           flags: '--trace-warnings'
-          python2: false
+          python: '3.9'
         - version: '21.0.0'
           flags: '--pending-deprecation --throw-deprecation --trace-warnings --openssl-legacy-provider'
-          python2: false
+          python: ''
     name: Test on Node v${{ matrix.version }}
     runs-on: ubuntu-latest
     steps:
       - run: sudo apt-get install -y gdb
       - uses: MatteoH2O1999/setup-python@v2
         with:
-          python-version: '2.7'
-        if: ${{ matrix.python2 }}
+          python-version: ${{ matrix.python }}
+        if: ${{ matrix.python != '' }}
       - uses: actions/checkout@v3
       - uses: actions/setup-node@v3
         with:
@@ -37,5 +37,5 @@ jobs:
         env:
           CFLAGS: -ggdb
           CXXFLAGS: -ggdb
-      - run: node ${{ matrix.flags }} par-compare.js -f -v -d
+      - run: node ${{ matrix.flags }} par-compare.js -f -d
         working-directory: test
