@@ -125,6 +125,19 @@ public:
 		return notEmpty;
 	}
 	
+	// NOTE: unlike 'pop', this doesn't wait - it's more like trypop
+	std::vector<T> popall() {
+		std::vector<T> copy;
+		mutex_lock(mutex);
+		copy.reserve(q.size());
+		while(!q.empty()) {
+			copy.emplace_back(std::move(q.front()));
+			q.pop();
+		}
+		mutex_unlock(mutex);
+		return copy;
+	}
+	
 	size_t size() const {
 		mutex_lock(mutex);
 		size_t s = q.size();
@@ -159,8 +172,8 @@ class ThreadNotifyQueue {
 #endif
 	) {
 		auto self = static_cast<ThreadNotifyQueue*>(handle->data);
-		void* notification;
-		while(self->q.trypop(&notification))
+		auto notifications = self->q.popall();
+		for(void* notification : notifications)
 			(self->o->*(self->cb))(notification);
 	}
 public:

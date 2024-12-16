@@ -956,8 +956,8 @@ protected:
 		}
 	}
 	void after_process() {
-		struct input_work_data* data;
-		while(hashesDone.trypop(&data)) {
+		auto doneData = hashesDone.popall();
+		for(struct input_work_data* data : doneData) {
 			static_cast<HasherInput*>(data->self)->queueCount--;
 			data->cb->call();
 			delete data->cb;
