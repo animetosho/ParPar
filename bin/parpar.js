@@ -20,6 +20,31 @@ var print_json = function(type, obj) {
 };
 var arg_parser = require('../lib/arg_parser.js');
 
+var throttleParseFunc = function(prop, v) {
+	if(!v || v == '0') return null;
+	var m = (''+v).match(/^(([0-9.]*)([bkmgtper])\/)?([0-9.]*)(m?s|[mhdw])$/i);
+	if(!m) error('Invalid format for `--'+prop+'-read-throttle`: ' + v);
+	if(m[4] === '') m[4] = '1';
+	if(m[1]) {
+		if(m[2] === '') m[2] = '1';
+		if(m[3] == 'r' || m[3] == 'R') return {
+			mode: 'reqrate',
+			count: m[2],
+			time: arg_parser.parseTime(m[4] + m[5])
+		};
+		else return {
+			mode: 'rate',
+			size: arg_parser.parseSize(m[2] + m[3]),
+			time: arg_parser.parseTime(m[4] + m[5])
+		};
+	} else {
+		return {
+			mode: 'delay',
+			time: arg_parser.parseTime(m[4] + m[5])
+		};
+	}
+};
+
 var opts = {
 	'input-slices': {
 		alias: 's',
@@ -172,6 +197,16 @@ var opts = {
 	'chunk-read-threads': {
 		type: 'int',
 		map: 'chunkReadThreads'
+	},
+	'seq-read-throttle': {
+		type: 'string',
+		map: 'seqReadThrottle',
+		fn: throttleParseFunc.bind(null, 'seq')
+	},
+	'chunk-read-throttle': {
+		type: 'string',
+		map: 'chunkReadThrottle',
+		fn: throttleParseFunc.bind(null, 'chunk')
 	},
 	'read-buffers': {
 		type: 'int',

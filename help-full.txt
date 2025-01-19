@@ -223,6 +223,13 @@ I/O Tuning Options:
                              Default `2`
        --read-buffers        Maximum number of read buffers to read into and
                              send to processing backend. Default `8`
+       --seq-read-throttle   Throttle sequential read speed. The following
+                             examples demonstrate permitted values:
+                                 `2.5s`: delay each read request by 2.5 seconds
+                                 `2.5M/s`: limit to 2.5MB per second
+                                 `5r/2s`: limit of 5 requests per 2 seconds
+       --chunk-read-throttle This is the same as `--seq-read-throttle` but
+                             applies to chunked reading.
        --read-hash-queue     Number of read buffers to queue up for hashing
                              before reading from a different file. Lower
                              values may be more optimal on disks with faster
