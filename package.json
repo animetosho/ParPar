@@ -1,6 +1,6 @@
 {
   "name": "@animetosho/parpar",
-  "version": "0.4.5-dev",
+  "version": "0.4.5",
   "description": "High performance multi-threaded PAR2 creation library",
   "keywords": [
     "par2",
