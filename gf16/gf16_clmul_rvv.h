@@ -31,15 +31,14 @@ static vuint64m1_t RV(vclmul_vv_u64m1)(vuint64m1_t v, vuint64m1_t v2, size_t vl)
 }
 
 #elif defined(__RVV_LE) && defined(__riscv_zvbc) && defined(__riscv_v_intrinsic) && __riscv_v_intrinsic>=12000
-# if (defined(__clang__) && __clang_major__>=18)
-// TODO: add GCC support; intrinsic not available in GCC14 trunk
+# if (defined(__clang__) && __clang_major__>=20) || HEDLEY_GCC_VERSION_CHECK(14, 1, 0)
 #  define RISCV_ZVBC_INTRIN 1
 // for testing on compilers without Zvbc intrinsics
 # elif 0  //defined(RISCV_ZVBC_EMULATE)
 #  define RISCV_ZVBC_INTRIN 1
 HEDLEY_NEVER_INLINE static vuint64m1_t RV(vclmul_vx_u64m1)(vuint64m1_t v, uint64_t x, size_t vl) {
 	vuint64m1_t d;
-	__asm__ ("vsetivli zero, %3, e64, m1, ta, ma\n"
+	__asm__ ("vsetvli zero, %3, e64, m1, ta, ma\n"
 			 "vclmul.vx %0,%1,%2\n"
 		: "=vr"(d)
 		: "vr"(v), "r"(x), "r"(vl)
@@ -48,7 +47,7 @@ HEDLEY_NEVER_INLINE static vuint64m1_t RV(vclmul_vx_u64m1)(vuint64m1_t v, uint64
 }
 HEDLEY_NEVER_INLINE static vuint64m1_t RV(vclmul_vv_u64m1)(vuint64m1_t v, vuint64m1_t v2, size_t vl) {
 	vuint64m1_t d;
-	__asm__ ("vsetivli zero, %3, e64, m1, ta, ma\n"
+	__asm__ ("vsetvli zero, %3, e64, m1, ta, ma\n"
 			 "vclmul.vv %0,%1,%2\n"
 		: "=vr"(d)
 		: "vr"(v), "vr"(v2), "r"(vl)
