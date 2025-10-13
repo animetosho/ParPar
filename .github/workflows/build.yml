@@ -9,7 +9,7 @@ on:
 jobs:
   build-win64:
     name: Build x64 Windows binary
-    runs-on: windows-2019
+    runs-on: windows-2022
     env:
       BUILD_ARCH: x64
       BUILD_LOGLEVEL: verbose
