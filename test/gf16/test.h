@@ -17,6 +17,11 @@
 	// MSVC doesn't support C11 aligned_alloc: https://stackoverflow.com/a/62963007
 	#define ALIGN_ALLOC(buf, len, align) *(void**)&(buf) = _aligned_malloc((len), align)
 	#define ALIGN_FREE _aligned_free
+#elif defined(__ANDROID__)
+	// Android NDK may have broken std::aligned_alloc [https://github.com/android/ndk/issues/1339]
+	#include <malloc.h>
+	#define ALIGN_ALLOC(buf, len, align) *(void**)&(buf) = memalign(align, (len))
+	#define ALIGN_FREE free
 #elif defined(_ISOC11_SOURCE)
 	// C11 method
 	// len needs to be a multiple of alignment, although it sometimes works if it isn't...
