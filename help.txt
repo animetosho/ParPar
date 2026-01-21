@@ -95,5 +95,5 @@ Other Options:
 ------------------
 Examples
 
-  parpar -s 1M -r 64 -o my_recovery.par2 file1 file2
-      Generate 64MB of PAR2 recovery files from file1 and file2, named "my_recovery"
+  parpar -s 2M -r 64 -o my_recovery.par2 file1 file2
+      Generate 128MB of PAR2 recovery files from file1 and file2, named "my_recovery"
