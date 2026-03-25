@@ -103,10 +103,10 @@ var opts = {
 		alias: 'f',
 		type: 'enum',
 		enum: ['basename','keep','common','outrel','path'],
-		default: 'common',
 		map: 'displayNameFormat'
 	},
 	'filepath-base': {
+		alias: 'B',
 		type: 'string',
 		map: 'displayNameBase'
 	},
@@ -453,6 +453,9 @@ if(argv['recovery-exponents']) {
 	if(!argv.noindex)
 		error('`--recovery-exponents` cannot be used with `--noindex`');
 }
+
+if(argv['filepath-base'] && !argv['filepath-format'])
+	argv['filepath-format'] = 'path';
 
 var inputFiles = argv._;
 
