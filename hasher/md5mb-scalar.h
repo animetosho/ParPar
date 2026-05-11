@@ -2,7 +2,7 @@
 
 #define md5mb_regions_scalar 1
 #define md5mb_max_regions_scalar 1
-#define md5mb_alignment_scalar 4
+#define md5mb_alignment_scalar sizeof(void *)
 
 
 #define _FN(f) f##_scalar

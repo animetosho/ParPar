@@ -149,7 +149,15 @@ nexe.compile({
 			await compiler.replaceInFileAsync('node.gyp', /('target_name': '(node_mksnapshot|mkcodecache|<\(node_core_target_name\)|<\(node_lib_target_name\))',)( 'cflags': \['-U_FORTIFY_SOURCE'\],)?/g, "$1 'cflags': ['-U_FORTIFY_SOURCE'],");
 			return next();
 		},
-		
+
+		// Xcode 15+ (Clang 15+) promotes -Wenum-constexpr-conversion to an error, breaking V8 in Node 12
+		async (compiler, next) => {
+			if(buildOs == 'darwin' || buildOs == 'mac') {
+				await compiler.replaceInFileAsync('common.gypi', /'WARNING_CFLAGS': \[(\s*'-Wno-enum-constexpr-conversion',)?/, "'WARNING_CFLAGS': [ '-Wno-enum-constexpr-conversion',");
+			}
+			return next();
+		},
+
 		// increase default UV_THREADPOOL_SIZE to 8 (allows higher --chunk-read-threads)
 		async (compiler, next) => {
 			await compiler.replaceInFileAsync('deps/uv/src/threadpool.c', /uv_thread_t default_threads[\d+];/, "uv_thread_t default_threads[8];");

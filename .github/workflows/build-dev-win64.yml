@@ -15,7 +15,7 @@ jobs:
         id: py
         with:
           python-version: '2.7'
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - run: npm install --production --ignore-scripts
       - run: npm install --production
         working-directory: nexe
@@ -28,7 +28,7 @@ jobs:
       - run: nexe\parpar.exe --version
       - run: nexe\parpar.exe -r1 -s1M -o nexe\test.par2 nexe\parpar.exe
       - run: move nexe\parpar.exe parpar.exe && 7z a -t7z -mx=9 parpar.7z parpar.exe
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         with:
           path: ./parpar.7z
           name: parpar-${{ github.ref_name }}-win64.7z
