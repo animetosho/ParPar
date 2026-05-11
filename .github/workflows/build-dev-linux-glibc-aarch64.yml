@@ -11,7 +11,7 @@ jobs:
       BUILD_LOGLEVEL: verbose
       BUILD_STATIC: '--partly-static'
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: junelife/gha-ubuntu-cross@v6
         with:
           arch: 'arm64'
@@ -34,7 +34,7 @@ jobs:
           CC_host: cc
           CXX_host: c++
       - run: xz -9e --lzma2 nexe/parpar -c > parpar.xz
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         with:
           path: ./parpar.xz
           name: parpar-${{ github.ref_name }}-linux-glibc-aarch64.xz

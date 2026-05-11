@@ -16,7 +16,7 @@ jobs:
         id: py
         with:
           python-version: '3.9' # workaround "cannot import name 'Mapping' from 'collections'" error
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: junelife/gha-ubuntu-cross@v6
         with:
           arch: 'armhf'
@@ -39,7 +39,7 @@ jobs:
           CC_host: cc
           CXX_host: c++
       - run: xz -9e --arm --lzma2 nexe/parpar -c > parpar.xz
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         with:
           path: ./parpar.xz
           name: parpar-${{ github.ref_name }}-linux-glibc-armv7l.xz

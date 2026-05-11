@@ -12,7 +12,7 @@ jobs:
       BUILD_STATIC: '--fully-static'
       BUILD_NO_LTO: 1   # the MUSL setup doesn't support linker plugins
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Setup musl
         run: |
           curl http://musl.cc/aarch64-linux-musl-cross.tgz | tar zxf -
@@ -35,7 +35,7 @@ jobs:
           CC_host: cc
           CXX_host: c++
       - run: xz -9e --lzma2 nexe/parpar -c > parpar.xz
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         with:
           path: ./parpar.xz
           name: parpar-${{ github.ref_name }}-linux-static-aarch64.xz

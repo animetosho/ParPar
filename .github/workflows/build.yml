@@ -19,7 +19,7 @@ jobs:
         id: py
         with:
           python-version: '2.7'
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Get release
         id: get_release
         uses: bruceadams/get-release@v1.3.2
@@ -62,7 +62,7 @@ jobs:
       BUILD_LOGLEVEL: verbose
       BUILD_STATIC: ${{ matrix.static.flag }}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: actions/setup-python@v4
         id: py
         with:
@@ -115,7 +115,7 @@ jobs:
       BUILD_LOGLEVEL: verbose
       BUILD_STATIC: ${{ matrix.static.flag }}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: actions/setup-python@v4
         id: py
         with:
@@ -170,7 +170,7 @@ jobs:
 #      BUILD_STATIC: ${{ matrix.static.flag }}
 #      BUILD_NO_LTO: 1  # AArch32 compilers don't like mixing FPU modes with LTO [https://github.com/sabnzbd/#sabctools/issues/56#issuecomment-1151994494]
 #    steps:
-#      - uses: actions/checkout@v3
+#      - uses: actions/checkout@v4
 #      - uses: actions/setup-python@v4
 #        id: py
 #        with:
@@ -220,7 +220,7 @@ jobs:
       BUILD_ARCH: ${{ matrix.m.arch }}
       BUILD_LOGLEVEL: verbose
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Get release
         id: get_release
         uses: bruceadams/get-release@v1.3.2
