@@ -22,7 +22,7 @@ Benchmark Details
 Applications Tested (and commands given)
 ----------------------------------------
 
--   [ParPar 0.4.0](https://animetosho.org/app/parpar) [2023-05-24]
+-   [ParPar 0.4.0](https://github.com/animetosho/parpar) [2023-05-24]
     -   `parpar -s [blocksize]b -r [rblocks] -m 2000M -d equal -o [output] [input]`
 -   [par2j from MultiPar 1.3.2.7](https://github.com/Yutaka-Sawada/MultiPar/) [2023-02-23]
     -   `par2j c -ss [blocksize] -rn [rblocks] -rf1 -in -m7 {-lc32|-lc64} [output] [input]`

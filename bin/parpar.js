@@ -333,7 +333,7 @@ try {
 }
 
 var version = require('../package.json').version;
-var creator = 'ParPar v' + version + ' ' + process.arch + ' [https://animetosho.org/app/parpar]';
+var creator = 'ParPar v' + version + ' ' + process.arch + ' [https://github.com/animetosho/parpar]';
 
 var fs = require('fs');
 /*{{!include_in_executable!
