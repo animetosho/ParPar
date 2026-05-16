@@ -310,9 +310,9 @@ class MessageThread {
 			}
 			#elif defined(__linux) || defined(__linux__)
 			prctl(PR_SET_NAME, self->name, 0, 0, 0);
-			#elif defined(__MACH__)
+			#elif defined(__MACH__) && defined(__APPLE__)
 			pthread_setname_np(self->name);
-			#elif defined(__FreeBSD__) || defined(__DragonFly__)
+			#elif defined(__FreeBSD__) || defined(__DragonFly__) || (defined(__GNU__) && defined(__MACH__) /*Hurd*/)
 			pthread_setname_np(pthread_self(), self->name);
 			#elif defined(__NetBSD__)
 			pthread_setname_np(pthread_self(), self->name, NULL);
