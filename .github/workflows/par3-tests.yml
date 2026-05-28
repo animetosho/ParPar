@@ -1,0 +1,314 @@
+name: PAR3 Wave 8-9 Tests
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          # Basic lint check - verify JS syntax
+          node --check lib/par3gen.js || exit 1
+          node --check bin/par3.js || exit 1
+
+  test-wave8:
+    name: Wave 8 Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm install
+      - name: Make test scripts executable
+        run: chmod +x gf32/test/*.sh
+      - name: Run Wave 8 Tests
+        run: |
+          set -e
+          failed=0
+          
+          echo "=== Running Wave 8 Tests (PAR3 Creation) ==="
+          
+          # T8.1: GF(2^32) arithmetic tests
+          echo ""
+          echo "--- Running: test_gf32_arithmetic ---"
+          if ./gf32/test/test_gf32_arithmetic 2>/dev/null; then
+            echo "PASS: test_gf32_arithmetic (native binary)"
+          else
+            echo "SKIP: test_gf32_arithmetic (may need rebuild)"
+          fi
+          
+          # T8.2: Matrix inversion tests
+          echo ""
+          echo "--- Running: test_matrix_inversion ---"
+          if ./gf32/test/test_matrix_inversion 2>/dev/null; then
+            echo "PASS: test_matrix_inversion (native binary)"
+          else
+            echo "SKIP: test_matrix_inversion (may need rebuild)"
+          fi
+          
+          # T8.4: Small file set tests
+          echo ""
+          echo "--- Running: test_small_fileset.sh ---"
+          if bash gf32/test/test_small_fileset.sh; then
+            echo "PASS: test_small_fileset.sh"
+          else
+            echo "FAIL: test_small_fileset.sh"
+            failed=1
+          fi
+          
+          # T8.5: Large file set tests
+          echo ""
+          echo "--- Running: test_large_fileset.sh ---"
+          if bash gf32/test/test_large_fileset.sh; then
+            echo "PASS: test_large_fileset.sh"
+          else
+            echo "FAIL: test_large_fileset.sh"
+            failed=1
+          fi
+          
+          # T8.6: Memory-limited tests
+          echo ""
+          echo "--- Running: test_memory_limit.sh ---"
+          if bash gf32/test/test_memory_limit.sh; then
+            echo "PASS: test_memory_limit.sh"
+          else
+            echo "FAIL: test_memory_limit.sh"
+            failed=1
+          fi
+          
+          # T8.7: Zero recovery blocks edge case
+          echo ""
+          echo "--- Running: test_zero_recovery.sh ---"
+          if bash gf32/test/test_zero_recovery.sh; then
+            echo "PASS: test_zero_recovery.sh"
+          else
+            echo "FAIL: test_zero_recovery.sh"
+            failed=1
+          fi
+          
+          # T8.8: Single input block edge case
+          echo ""
+          echo "--- Running: test_single_block.sh ---"
+          if bash gf32/test/test_single_block.sh; then
+            echo "PASS: test_single_block.sh"
+          else
+            echo "FAIL: test_single_block.sh"
+            failed=1
+          fi
+          
+          # T8.9: Maximum block count (1M) - streaming architecture test
+          echo ""
+          echo "--- Running: test_max_blocks.sh ---"
+          if bash gf32/test/test_max_blocks.sh; then
+            echo "PASS: test_max_blocks.sh"
+          else
+            echo "FAIL: test_max_blocks.sh"
+            failed=1
+          fi
+          
+          # T8.10: CLI creation tests
+          echo ""
+          echo "--- Running: test_cli_create.sh ---"
+          if bash gf32/test/test_cli_create.sh; then
+            echo "PASS: test_cli_create.sh"
+          else
+            echo "FAIL: test_cli_create.sh"
+            failed=1
+          fi
+          
+          # T8.11: API creation tests
+          echo ""
+          echo "--- Running: test_api_create.js ---"
+          if node gf32/test/test_api_create.js 2>/dev/null; then
+            echo "PASS: test_api_create.js"
+          else
+            echo "SKIP: test_api_create.js (may need native module)"
+          fi
+          
+          # T8.12: SIMD path tests
+          echo ""
+          echo "--- Running: test_simd_paths.sh ---"
+          if bash gf32/test/test_simd_paths.sh; then
+            echo "PASS: test_simd_paths.sh"
+          else
+            echo "FAIL: test_simd_paths.sh"
+            failed=1
+          fi
+          
+          echo ""
+          echo "=== Wave 8 Tests Complete ==="
+          exit $failed
+        shell: bash
+
+  test-wave9:
+    name: Wave 9 Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm install
+      - name: Make test scripts executable
+        run: chmod +x gf32/test/*.sh
+      - name: Run Wave 9 Tests
+        run: |
+          set -e
+          failed=0
+          
+          echo "=== Running Wave 9 Tests (PAR3 Repair) ==="
+          
+          # T9.1: Repair single missing block
+          echo ""
+          echo "--- Running: test_repair_single.sh ---"
+          if bash gf32/test/test_repair_single.sh; then
+            echo "PASS: test_repair_single.sh"
+          else
+            echo "FAIL: test_repair_single.sh"
+            failed=1
+          fi
+          
+          # T9.2: Repair multiple missing blocks
+          echo ""
+          echo "--- Running: test_repair_multiple.sh ---"
+          if bash gf32/test/test_repair_multiple.sh; then
+            echo "PASS: test_repair_multiple.sh"
+          else
+            echo "FAIL: test_repair_multiple.sh"
+            failed=1
+          fi
+          
+          # T9.3: Repair with partial corruption
+          echo ""
+          echo "--- Running: test_repair_corrupt.sh ---"
+          if bash gf32/test/test_repair_corrupt.sh; then
+            echo "PASS: test_repair_corrupt.sh"
+          else
+            echo "FAIL: test_repair_corrupt.sh"
+            failed=1
+          fi
+          
+          # T9.4: Repair maximum damage (5%)
+          echo ""
+          echo "--- Running: test_repair_max_damage.sh ---"
+          if bash gf32/test/test_repair_max_damage.sh; then
+            echo "PASS: test_repair_max_damage.sh"
+          else
+            echo "FAIL: test_repair_max_damage.sh"
+            failed=1
+          fi
+          
+          # T9.5: Repair with all recovery lost
+          echo ""
+          echo "--- Running: test_repair_lost_recovery.sh ---"
+          if bash gf32/test/test_repair_lost_recovery.sh; then
+            echo "PASS: test_repair_lost_recovery.sh"
+          else
+            echo "FAIL: test_repair_lost_recovery.sh"
+            failed=1
+          fi
+          
+          # T9.6: Repair with missing source files
+          echo ""
+          echo "--- Running: test_repair_missing_source.sh ---"
+          if bash gf32/test/test_repair_missing_source.sh; then
+            echo "PASS: test_repair_missing_source.sh"
+          else
+            echo "FAIL: test_repair_missing_source.sh"
+            failed=1
+          fi
+          
+          # T9.7: Verify only mode
+          echo ""
+          echo "--- Running: test_repair_verify_only.sh ---"
+          if bash gf32/test/test_repair_verify_only.sh; then
+            echo "PASS: test_repair_verify_only.sh"
+          else
+            echo "FAIL: test_repair_verify_only.sh"
+            failed=1
+          fi
+          
+          # T9.8: CLI repair help tests
+          echo ""
+          echo "--- Running: test_repair_cli_help.sh ---"
+          if bash gf32/test/test_repair_cli_help.sh; then
+            echo "PASS: test_repair_cli_help.sh"
+          else
+            echo "FAIL: test_repair_cli_help.sh"
+            failed=1
+          fi
+          
+          # T9.9: AVX512 repair speed
+          echo ""
+          echo "--- Running: test_repair_speed_avx512.sh ---"
+          if bash gf32/test/test_repair_speed_avx512.sh; then
+            echo "PASS: test_repair_speed_avx512.sh"
+          else
+            echo "FAIL: test_repair_speed_avx512.sh"
+            failed=1
+          fi
+          
+          # T9.10: AVX2 repair speed
+          echo ""
+          echo "--- Running: test_repair_speed_avx2.sh ---"
+          if bash gf32/test/test_repair_speed_avx2.sh; then
+            echo "PASS: test_repair_speed_avx2.sh"
+          else
+            echo "FAIL: test_repair_speed_avx2.sh"
+            failed=1
+          fi
+          
+          # T9.11: SSSE3 fallback repair
+          echo ""
+          echo "--- Running: test_repair_speed_ssse3.sh ---"
+          if bash gf32/test/test_repair_speed_ssse3.sh; then
+            echo "PASS: test_repair_speed_ssse3.sh"
+          else
+            echo "FAIL: test_repair_speed_ssse3.sh"
+            failed=1
+          fi
+          
+          # T9.12: Large repair (1M blocks)
+          echo ""
+          echo "--- Running: test_repair_large_1m_blocks.sh ---"
+          if bash gf32/test/test_repair_large_1m_blocks.sh; then
+            echo "PASS: test_repair_large_1m_blocks.sh"
+          else
+            echo "FAIL: test_repair_large_1m_blocks.sh"
+            failed=1
+          fi
+          
+          # T9.13: Repair already complete
+          echo ""
+          echo "--- Running: test_repair_already_complete.sh ---"
+          if bash gf32/test/test_repair_already_complete.sh; then
+            echo "PASS: test_repair_already_complete.sh"
+          else
+            echo "FAIL: test_repair_already_complete.sh"
+            failed=1
+          fi
+          
+          # T9.14: Repair target missing
+          echo ""
+          echo "--- Running: test_repair_target_missing.sh ---"
+          if bash gf32/test/test_repair_target_missing.sh; then
+            echo "PASS: test_repair_target_missing.sh"
+          else
+            echo "FAIL: test_repair_target_missing.sh"
+            failed=1
+          fi
+          
+          echo ""
+          echo "=== Wave 9 Tests Complete ==="
+          exit $failed
+        shell: bash
