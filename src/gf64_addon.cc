@@ -21,7 +21,7 @@
 #include <malloc.h>
 #endif
 
-#include "../gf64/gf64_global.h"
+#include "gf64_global.h"
 
 using namespace v8;
 
