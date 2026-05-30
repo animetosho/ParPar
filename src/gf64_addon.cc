@@ -21,7 +21,7 @@
 #include <malloc.h>
 #endif
 
-#include "../gf64/gf64_global.h"
+#include "gf64_global.h"
 
 using namespace v8;
 
@@ -48,7 +48,7 @@ public:
 
 int Gf64EncoderWrapper::dispatch_initialized = 0;
 
-static void Gf64EncoderWrapper_Finalize(const struct napi_env__* env, void* data, void* hint) {
+static void Gf64EncoderWrapper_Finalize(napi_env__* env, void* data, void* hint) {
 	Gf64EncoderWrapper* enc = static_cast<Gf64EncoderWrapper*>(data);
 	if(enc != NULL) {
 		delete enc;
@@ -162,7 +162,7 @@ static napi_value Gf64Encoder_NAPI_constructor(napi_env env, napi_callback_info 
 
 	Gf64EncoderWrapper* enc = new Gf64EncoderWrapper((GF64Method)method);
 
-	status = napi_wrap(env, this_arg, enc, Gf64EncoderWrapper_Finalize, NULL, NULL);
+status = napi_wrap(env, this_arg, enc, (napi_finalize)Gf64EncoderWrapper_Finalize, NULL, NULL);
 	if(status != napi_ok) {
 		delete enc;
 		napi_throw_error(env, NULL, "Failed to wrap encoder");
@@ -299,6 +299,76 @@ static napi_value Gf64Encoder_NAPI_mul_arr(napi_env env, napi_callback_info info
 	return NULL;
 }
 
+// Factory function for par3gen.js compatibility
+static napi_value Gf64Encoder_NAPI_create(napi_env env, napi_callback_info info) {
+	napi_status status;
+	size_t argc = 2;
+	napi_value args[2];
+
+	status = napi_get_cb_info(env, info, &argc, args, NULL, NULL);
+	if(status != napi_ok) {
+		napi_throw_error(env, NULL, "Failed to get callback info");
+		return NULL;
+	}
+
+	int method = 0;
+	if(argc >= 1) {
+		status = napi_get_value_int32(env, args[0], &method);
+		if(status != napi_ok) {
+			method = 0;
+		}
+	}
+
+	int numThreads = 0;
+	if(argc >= 2) {
+		status = napi_get_value_int32(env, args[1], &numThreads);
+		if(status != napi_ok) {
+			numThreads = 0;
+		}
+	}
+
+	gf64_init_dispatch();
+
+	Gf64EncoderWrapper* enc = new Gf64EncoderWrapper((GF64Method)method);
+	(void)numThreads; // Currently unused but part of API
+
+	napi_value result;
+	// Don't set a finalizer here - Gf64Encoder_NAPI_destroy is solely responsible for cleanup
+	// to avoid double-free when destroy is explicitly called
+	status = napi_create_external(env, enc, NULL, NULL, &result);
+	if(status != napi_ok) {
+		delete enc;
+		napi_throw_error(env, NULL, "Failed to create external");
+		return NULL;
+	}
+
+	return result;
+}
+
+static napi_value Gf64Encoder_NAPI_destroy(napi_env env, napi_callback_info info) {
+	napi_status status;
+	size_t argc = 1;
+	napi_value args[1];
+
+	status = napi_get_cb_info(env, info, &argc, args, NULL, NULL);
+	if(status != napi_ok) {
+		napi_throw_error(env, NULL, "Failed to get callback info");
+		return NULL;
+	}
+
+	void* data = NULL;
+	status = napi_get_value_external(env, args[0], &data);
+	if(status != napi_ok || data == NULL) {
+		napi_throw_error(env, NULL, "Invalid external value");
+		return NULL;
+	}
+
+	// Just delete directly - Finalize would do the same
+	delete (Gf64EncoderWrapper*)data;
+
+	return NULL;
+}
+
 napi_value parpar_gf64_init_NAPI(napi_env env, napi_value exports) {
 	napi_status status;
 
@@ -336,6 +406,30 @@ napi_value parpar_gf64_init_NAPI(napi_env env, napi_value exports) {
 	status = napi_set_named_property(env, exports, "gf64_info", gf64_info_fn);
 	if(status != napi_ok) {
 		napi_throw_error(env, NULL, "Failed to set gf64_info property");
+		return NULL;
+	}
+
+napi_value create_fn;
+	status = napi_create_function(env, NULL, 0, Gf64Encoder_NAPI_create, NULL, &create_fn);
+	if(status != napi_ok) {
+		napi_throw_error(env, NULL, "Failed to create Gf64Encoder_create function");
+		return NULL;
+	}
+	status = napi_set_named_property(env, exports, "Gf64Encoder_create", create_fn);
+	if(status != napi_ok) {
+		napi_throw_error(env, NULL, "Failed to set Gf64Encoder_create property");
+		return NULL;
+	}
+
+	napi_value destroy_fn;
+	status = napi_create_function(env, NULL, 0, Gf64Encoder_NAPI_destroy, NULL, &destroy_fn);
+	if(status != napi_ok) {
+		napi_throw_error(env, NULL, "Failed to create Gf64Encoder_destroy function");
+		return NULL;
+	}
+	status = napi_set_named_property(env, exports, "Gf64Encoder_destroy", destroy_fn);
+	if(status != napi_ok) {
+		napi_throw_error(env, NULL, "Failed to set Gf64Encoder_destroy property");
 		return NULL;
 	}
 
