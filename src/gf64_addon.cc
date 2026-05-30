@@ -48,7 +48,7 @@ public:
 
 int Gf64EncoderWrapper::dispatch_initialized = 0;
 
-static void Gf64EncoderWrapper_Finalize(napi_env env, void* data, void* hint) {
+static void Gf64EncoderWrapper_Finalize(const napi_env env, void* data, void* hint) {
 	Gf64EncoderWrapper* enc = static_cast<Gf64EncoderWrapper*>(data);
 	if(enc != NULL) {
 		delete enc;
