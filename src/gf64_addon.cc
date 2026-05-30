@@ -363,7 +363,7 @@ static napi_value Gf64Encoder_NAPI_destroy(napi_env env, napi_callback_info info
 		return NULL;
 	}
 
-	// Explicitly delete the wrapper (no finalizer was set on the external)
+	// Just delete directly - Finalize would do the same
 	delete (Gf64EncoderWrapper*)data;
 
 	return NULL;
