@@ -1,0 +1,1 @@
+cmd_Release/parpar_gf64.node := ln -f "Release/obj.target/parpar_gf64.node" "Release/parpar_gf64.node" 2>/dev/null || (rm -rf "Release/parpar_gf64.node" && cp -af "Release/obj.target/parpar_gf64.node" "Release/parpar_gf64.node")
