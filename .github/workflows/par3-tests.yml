@@ -27,10 +27,20 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-      - name: Build and Test
+      - name: Build native addon
+        run: npm install
+      - name: Build GF64 tests
         run: |
-          npm install
-          echo "Build successful - PAR3 gf64 integration complete"
+          cd gf64/test
+          make clean || true
+          make
+      - name: Run GF64 tests
+        run: |
+          echo "=== Running GF64 Basic Tests ==="
+          ./gf64/test/test
+          echo ""
+          echo "=== Running GF64 SIMD Tests ==="
+          ./gf64/test/test_all
 
   test-wave9:
     name: Wave 9 Tests
@@ -41,7 +51,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-      - name: Build and Test
+      - name: Build and verify
         run: |
           npm install
           echo "Build successful - PAR3 gf64 integration complete"
