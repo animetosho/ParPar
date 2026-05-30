@@ -162,7 +162,7 @@ static napi_value Gf64Encoder_NAPI_constructor(napi_env env, napi_callback_info 
 
 	Gf64EncoderWrapper* enc = new Gf64EncoderWrapper((GF64Method)method);
 
-	status = napi_wrap(env, this_arg, enc, (napi_finalize)Gf64EncoderWrapper_Finalize, NULL, NULL);
+status = napi_wrap(env, this_arg, enc, (napi_finalize)Gf64EncoderWrapper_Finalize, NULL, NULL);
 	if(status != napi_ok) {
 		delete enc;
 		napi_throw_error(env, NULL, "Failed to wrap encoder");
@@ -409,7 +409,7 @@ napi_value parpar_gf64_init_NAPI(napi_env env, napi_value exports) {
 		return NULL;
 	}
 
-	napi_value create_fn;
+napi_value create_fn;
 	status = napi_create_function(env, NULL, 0, Gf64Encoder_NAPI_create, NULL, &create_fn);
 	if(status != napi_ok) {
 		napi_throw_error(env, NULL, "Failed to create Gf64Encoder_create function");
