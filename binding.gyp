@@ -1153,5 +1153,29 @@
         }]
       ]
     }
+  ],
+  "targets": [
+    {
+      "target_name": "parpar_gf64",
+      "sources": [
+        "src/gf64_addon.cc",
+        "gf64/gf64_single.c",
+        "gf64/gf64_region_scalar.c",
+        "gf64/gf64_region_ssse3.c",
+        "gf64/gf64_region_avx2.c",
+        "gf64/gf64_region_avx512.c",
+        "gf64/gf64_dispatch.c",
+        "gf64/gf64_invert.c"
+      ],
+      "include_dirs": ["gf64"],
+      "cflags": ["-fmax-include-depth=1024"],
+      "cxxflags": ["-fmax-include-depth=1024"],
+      "conditions": [
+        ["OS!=\"win\"", {
+          "cflags": ["-fmax-include-depth=1024"],
+          "cxxflags": ["-std=c++11", "-fmax-include-depth=1024"]
+        }]
+      ]
+    }
   ]
 }
