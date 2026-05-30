@@ -3,8 +3,8 @@
 
 CC := gcc
 CXX := g++
-CFLAGS := -std=c99 -Wall -Wextra -O2 -march=native
-CXXFLAGS := -std=c++11 -Wall -Wextra -O2 -march=native
+CFLAGS := -std=c99 -Wall -Wextra -O2 -march=native -D_POSIX_C_SOURCE=200112L -D_GNU_SOURCE
+CXXFLAGS := -std=c++11 -Wall -Wextra -O2 -march=native -D_POSIX_C_SOURCE=200112L -D_GNU_SOURCE
 LDFLAGS :=
 
 # Source files
