@@ -407,8 +407,16 @@ if(argv['opencl-list']) {
 	process.exit(0);
 }
 
-if(!argv.out || !argv['input-slices']) {
-	error('Values for `out` and `input-slices` are required');
+var cmd = argv._.shift();
+
+} else {
+	if(cmd && cmd !== 'create') {
+		error('Unknown command: ' + cmd + '. Use: create');
+	}
+	
+	if(!argv.out || !argv['input-slices']) {
+		error('Values for `out` and `input-slices` are required');
+	}
 }
 
 
