@@ -1284,7 +1284,7 @@ void parpar_gf_init(
 	t = FunctionTemplate::New(ISOLATE HasherOutput::New);
 	HasherOutput::AttachMethods(t);
 	SET_OBJ_FUNC(target, "HasherOutput", t);
-	
+
 	NODE_SET_METHOD(target, "set_HasherInput", SetHasherInput);
 	NODE_SET_METHOD(target, "set_HasherOutput", SetHasherOutput);
 	NODE_SET_METHOD(target, "hasherInput_method", HasherInputMethod);
