@@ -25,7 +25,8 @@
     "node": ">=0.10"
   },
   "scripts": {
-    "install": "node-gyp rebuild"
+    "install": "node-gyp rebuild",
+    "prepare": "husky"
   },
   "type": "commonjs",
   "pkg": {
@@ -38,5 +39,8 @@
   "bugs": {
     "url": "https://github.com/animetosho/parpar/issues"
   },
-  "homepage": "https://animetosho.org/app/parpar"
+  "homepage": "https://animetosho.org/app/parpar",
+  "devDependencies": {
+    "husky": "^9.1.7"
+  }
 }
