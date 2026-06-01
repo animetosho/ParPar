@@ -1,0 +1,19 @@
+/.sisyphus
+
+# Build output
+/build/**
+
+# Native addon binaries
+*.node
+
+# Object files
+*.o
+
+# Static archives
+*.a
+
+# Dependency files
+*.d
+
+# NPM packages
+node_modules/
