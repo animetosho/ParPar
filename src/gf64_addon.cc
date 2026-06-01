@@ -162,7 +162,7 @@ static napi_value Gf64Encoder_NAPI_constructor(napi_env env, napi_callback_info 
 
 	Gf64EncoderWrapper* enc = new Gf64EncoderWrapper((GF64Method)method);
 
-status = napi_wrap(env, this_arg, enc, (napi_finalize)Gf64EncoderWrapper_Finalize, NULL, NULL);
+	status = napi_wrap(env, this_arg, enc, (node_api_basic_finalize)Gf64EncoderWrapper_Finalize, NULL, NULL);
 	if(status != napi_ok) {
 		delete enc;
 		napi_throw_error(env, NULL, "Failed to wrap encoder");
