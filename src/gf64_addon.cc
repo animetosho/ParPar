@@ -53,6 +53,10 @@ static void Gf64EncoderWrapper_Finalize(napi_env__* env, void* data, void* hint)
 	}
 }
 
+static void Gf64EncoderWrapper_Finalize_Trampoline(const napi_env__* env, void* data, void* hint) {
+	Gf64EncoderWrapper_Finalize(const_cast<napi_env__*>(env), data, hint);
+}
+
 static napi_value gf64_info_NAPI(napi_env env, napi_callback_info info) {
 	napi_status status;
 	size_t argc = 1;
@@ -160,7 +164,7 @@ static napi_value Gf64Encoder_NAPI_constructor(napi_env env, napi_callback_info 
 
 	Gf64EncoderWrapper* enc = new Gf64EncoderWrapper((GF64Method)method);
 
-	status = napi_wrap(env, this_arg, enc, Gf64EncoderWrapper_Finalize, NULL, NULL);
+	status = napi_wrap(env, this_arg, enc, Gf64EncoderWrapper_Finalize_Trampoline, NULL, NULL);
 	if(status != napi_ok) {
 		delete enc;
 		napi_throw_error(env, NULL, "Failed to wrap encoder");
