@@ -118,7 +118,8 @@
         "gf64/gf64_region_avx2.c",
         "gf64/gf64_region_avx512.c",
         "gf64/gf64_dispatch.c",
-        "gf64/gf64_invert.c"
+        "gf64/gf64_invert.c",
+        "gf64/gf64_solve.c"
       ],
       "include_dirs": ["gf64"],
       "cflags": ["-fmax-include-depth=1024"],

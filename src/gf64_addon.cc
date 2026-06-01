@@ -369,6 +369,84 @@ static napi_value Gf64Encoder_NAPI_destroy(napi_env env, napi_callback_info info
 	return NULL;
 }
 
+extern "C" int gf64_solve(gf64_t* A, gf64_t* b, gf64_t* x, size_t n);
+
+static napi_value gf64_solve_NAPI(napi_env env, napi_callback_info info) {
+	napi_status status;
+	size_t argc = 3;
+	napi_value args[3];
+
+	status = napi_get_cb_info(env, info, &argc, args, NULL, NULL);
+	if(status != napi_ok) {
+		napi_throw_error(env, NULL, "Failed to get callback info");
+		return NULL;
+	}
+
+	if(argc < 3) {
+		napi_throw_type_error(env, NULL, "Requires A, b, and n");
+		return NULL;
+	}
+
+	gf64_t* A = NULL;
+	size_t ALen = 0;
+	status = napi_get_buffer_info(env, args[0], (void**)&A, &ALen);
+	if(status != napi_ok) {
+		napi_throw_type_error(env, NULL, "Matrix A buffer required");
+		return NULL;
+	}
+
+	gf64_t* b = NULL;
+	size_t bLen = 0;
+	status = napi_get_buffer_info(env, args[1], (void**)&b, &bLen);
+	if(status != napi_ok) {
+		napi_throw_type_error(env, NULL, "Vector b buffer required");
+		return NULL;
+	}
+
+	int32_t n = 0;
+	status = napi_get_value_int32(env, args[2], &n);
+	if(status != napi_ok || n <= 0) {
+		napi_throw_type_error(env, NULL, "Dimension n must be positive integer");
+		return NULL;
+	}
+
+	size_t nSize = (size_t)n;
+	if(ALen < nSize * nSize * sizeof(gf64_t)) {
+		napi_throw_error(env, NULL, "Matrix A buffer too small");
+		return NULL;
+	}
+	if(bLen < nSize * sizeof(gf64_t)) {
+		napi_throw_error(env, NULL, "Vector b buffer too small");
+		return NULL;
+	}
+
+	gf64_t* x = (gf64_t*)malloc(nSize * sizeof(gf64_t));
+	if(!x) {
+		napi_throw_error(env, NULL, "Failed to allocate solution vector");
+		return NULL;
+	}
+
+	gf64_init_dispatch();
+
+	int result = gf64_solve(A, b, x, nSize);
+
+	napi_value result_val;
+	if(result == 0) {
+		status = napi_create_buffer_copy(env, nSize * sizeof(gf64_t), x, NULL, &result_val);
+	} else {
+		status = napi_get_undefined(env, &result_val);
+	}
+
+	free(x);
+
+	if(status != napi_ok) {
+		napi_throw_error(env, NULL, "Failed to create result");
+		return NULL;
+	}
+
+	return result_val;
+}
+
 napi_value parpar_gf64_init_NAPI(napi_env env, napi_value exports) {
 	napi_status status;
 
@@ -430,6 +508,18 @@ napi_value create_fn;
 	status = napi_set_named_property(env, exports, "Gf64Encoder_destroy", destroy_fn);
 	if(status != napi_ok) {
 		napi_throw_error(env, NULL, "Failed to set Gf64Encoder_destroy property");
+		return NULL;
+	}
+
+	napi_value solve_fn;
+	status = napi_create_function(env, NULL, 0, gf64_solve_NAPI, NULL, &solve_fn);
+	if(status != napi_ok) {
+		napi_throw_error(env, NULL, "Failed to create gf64_solve function");
+		return NULL;
+	}
+	status = napi_set_named_property(env, exports, "gf64_solve", solve_fn);
+	if(status != napi_ok) {
+		napi_throw_error(env, NULL, "Failed to set gf64_solve property");
 		return NULL;
 	}
 

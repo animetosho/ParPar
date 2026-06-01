@@ -37,6 +37,56 @@ Here’s a list of features currently *not* in ParPar, and may never be supporte
 -   Verify/repair PAR2 (consider [par2cmdline-turbo](https://github.com/animetosho/par2cmdline-turbo) if you need this)
 -   Some optimisations in weird edge cases, such as using slice sizes significantly larger than all input data
 
+PAR3 GF64 Repair
+----------------
+
+ParPar includes a PAR3 implementation that supports both creation and repair of archives. PAR3 is a next-generation format that uses GF(2^64) instead of PAR2's GF(2^16), enabling recovery from larger amounts of corruption.
+
+The PAR3 implementation uses the irreducible polynomial **0x100000000000001B** for its Galois Field arithmetic.
+
+### Usage
+
+**Creating a PAR3 archive:**
+
+```bash
+node bin/par3.js create --output myarchive --recovery-slices 10 file1 file2
+```
+
+Or with the built binary if available:
+
+```bash
+par3 create -o myarchive -r 10 file1 file2
+```
+
+**Repairing a corrupted PAR3 archive:**
+
+```bash
+node bin/par3.js repair myarchive.par3
+```
+
+Specify an output directory for repaired files:
+
+```bash
+node bin/par3.js repair --output-dir /recovered myarchive.par3
+```
+
+### Key Differences from PAR2
+
+- PAR3 uses **GF(2^64)** with polynomial `0x100000000000001B` instead of GF(2^16)
+- This allows recovery from significantly more corruption per recovery slice
+- PAR3 and PAR2 formats are not compatible with each other
+
+### Options
+
+- `--block-size, -b <size>` — Block size (default: 1MB)
+- `--recovery-slices, -r <n>` — Number of recovery slices (or percentage with % suffix)
+- `--gf-method, -m <method>` — GF method: auto, scalar, ssse3, avx2, avx512
+- `--threads, -t <n>` — Number of threads
+- `--output, -o <file>` — Output base filename
+- `--output-dir <dir>` — Output directory for repair
+- `--verbose, -v` — Verbose output
+- `--json` — JSON output
+
 Installation / Building
 =======================
 
