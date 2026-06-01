@@ -8,9 +8,6 @@
 #include <node.h>
 #include <node_buffer.h>
 #include <node_version.h>
-#ifdef HEDLEY_GCC_VERSION
- #pragma GCC diagnostic pop
-#endif
 #include <v8.h>
 #include <stdlib.h>
 #include <string.h>
