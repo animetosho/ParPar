@@ -127,7 +127,7 @@
       "conditions": [
         ["OS!=\"win\"", {
           "cflags": ["-fmax-include-depth=1024"],
-          "cxxflags": ["-std=c++11", "-fmax-include-depth=1024"]
+          "cxxflags": ["-std=c++11", "-fmax-include-depth=1024", "-fpermissive"]
         }]
       ]
     },
