@@ -95,6 +95,7 @@ jobs:
 
       - name: Create PAR3 archive
         run: |
+          mkdir -p par3-test-output
           node bin/par3.js create --output par3-test-output/data --recovery-slices 2 par3-test-input/file1.txt par3-test-input/file2.txt par3-test-input/file3.txt
 
       - name: Verify PAR3 archive was created
