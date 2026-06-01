@@ -53,8 +53,8 @@ static void Gf64EncoderWrapper_Finalize(napi_env__* env, void* data, void* hint)
 	}
 }
 
-static void Gf64EncoderWrapper_Finalize_Trampoline(const napi_env__* env, void* data, void* hint) {
-	Gf64EncoderWrapper_Finalize(const_cast<napi_env__*>(env), data, hint);
+static void Gf64EncoderWrapper_Finalize_Trampoline(napi_env__* env, void* data, void* hint) {
+	Gf64EncoderWrapper_Finalize(env, data, hint);
 }
 
 static napi_value gf64_info_NAPI(napi_env env, napi_callback_info info) {
