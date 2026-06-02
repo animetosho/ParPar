@@ -38,6 +38,7 @@
             "configurations": {"Release": {
               "cflags": ["-fomit-frame-pointer"],
               "cxxflags": ["-fomit-frame-pointer"],
+              "defines": ["NAPI_VERSION=8"],
               "xcode_settings": {
                 "OTHER_CFLAGS": ["-fomit-frame-pointer"],
                 "OTHER_CXXFLAGS": ["-fomit-frame-pointer"]
