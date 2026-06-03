@@ -3,7 +3,6 @@
 #ifdef HEDLEY_GCC_VERSION
  #pragma GCC diagnostic push
  #pragma GCC diagnostic ignored "-Wcast-function-type"
- #pragma GCC diagnostic ignored "-fpermissive"
 #endif
 #include <node.h>
 #include <node_buffer.h>
