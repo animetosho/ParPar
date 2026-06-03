@@ -9,6 +9,7 @@
 
 extern gf64_t gf64_mul_reference(gf64_t a, gf64_t b);
 extern void gf64_region_mul_scalar(gf64_t *HEDLEY_RESTRICT out, const gf64_t *HEDLEY_RESTRICT in, size_t len, gf64_t constant);
+extern void gf64_region_mul_scalar_arr(gf64_t *HEDLEY_RESTRICT out, const gf64_t *HEDLEY_RESTRICT in, const gf64_t *HEDLEY_RESTRICT coeff, size_t len, size_t n_coeff);
 
 static uint64_t g_seed = 12345;
 
@@ -175,6 +176,61 @@ static void test_region(void) {
     free(out);
 }
 
+static void test_mul_arr_semantics(void) {
+    printf("Test: mul_arr semantics...\n");
+
+    gf64_t in[4] = { 1ULL, 2ULL, 3ULL, 4ULL };
+
+    {
+        gf64_t out[4] = { 0 };
+        gf64_t coeff[1] = { 0xDEADBEEF12345678ULL };
+        gf64_region_mul_scalar_arr(out, in, coeff, 4, 1);
+        for (size_t i = 0; i < 4; i++) {
+            gf64_t expected = gf64_mul_reference(in[i], coeff[0]);
+            EXPECT_EQ(out[i], expected, "n_coeff=1 acts as scalar multiplier");
+        }
+    }
+
+    {
+        gf64_t out[4] = { 0 };
+        gf64_t coeff[2] = { 0xAA00AA00AA00AA00ULL, 0xBB00BB00BB00BB00ULL };
+        gf64_region_mul_scalar_arr(out, in, coeff, 4, 2);
+        for (size_t i = 0; i < 4; i++) {
+            gf64_t expected = gf64_mul_reference(in[i], coeff[i % 2]);
+            EXPECT_EQ(out[i], expected, "n_coeff>1 uses cyclic index");
+        }
+    }
+
+    {
+        gf64_t out[4] = { 0xDEADBEEFULL, 0xDEADBEEFULL, 0xDEADBEEFULL, 0xDEADBEEFULL };
+        gf64_t coeff[1] = { 0ULL };
+        gf64_region_mul_scalar_arr(out, in, coeff, 4, 1);
+        for (size_t i = 0; i < 4; i++) {
+            EXPECT_EQ(out[i], 0ULL, "coeff=0 yields zero");
+        }
+    }
+
+    {
+        gf64_t out[4] = { 0 };
+        gf64_t coeff[1] = { 1ULL };
+        gf64_region_mul_scalar_arr(out, in, coeff, 4, 1);
+        for (size_t i = 0; i < 4; i++) {
+            EXPECT_EQ(out[i], in[i], "coeff=1 is identity");
+        }
+    }
+
+    {
+        gf64_t buf[4];
+        gf64_t coeff[2] = { 0xCC00CC00CC00CC00ULL, 0xDD00DD00DD00DD00ULL };
+        for (size_t i = 0; i < 4; i++) buf[i] = in[i];
+        gf64_region_mul_scalar_arr(buf, buf, coeff, 4, 2);
+        for (size_t i = 0; i < 4; i++) {
+            gf64_t expected = gf64_mul_reference(in[i], coeff[i % 2]);
+            EXPECT_EQ(buf[i], expected, "in-place (in == out) works");
+        }
+    }
+}
+
 static void run_benchmarks(void) {
     printf("\n=== Benchmarks ===\n");
     printf("%-12s %12s\n", "Size", "MB/s");
@@ -216,6 +272,7 @@ int main(void) {
     test_random_pairs();
     test_powers_of_2();
     test_region();
+    test_mul_arr_semantics();
     run_benchmarks();
     
     printf("\n=== Summary ===\n");
