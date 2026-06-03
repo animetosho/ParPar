@@ -43,6 +43,15 @@ jobs:
           # Note: test_all requires AVX2/AVX512 which may not be available on all CI runners
           # Run manually on capable hardware: cd gf64/test && make test_all && ./test_all
 
+      - name: Setup Node 22.16.0 for par3 recovery perf test
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.16.0'
+
+      - name: Run par3 recovery perf test
+        timeout-minutes: 5
+        run: node test/par3-recovery-perf.js
+
   test-wave9:
     name: Wave 9 Tests
     runs-on: ubuntu-latest
