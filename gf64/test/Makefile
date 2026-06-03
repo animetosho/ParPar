@@ -8,7 +8,7 @@ CXXFLAGS := -std=c++11 -Wall -Wextra -O2 -march=native -D_POSIX_C_SOURCE=200112L
 LDFLAGS :=
 
 # Source files
-GF64_SOURCES := ../gf64_single.c ../gf64_region_scalar.c ../gf64_region_ssse3.c ../gf64_region_avx2.c ../gf64_region_avx512.c ../gf64_dispatch.c ../gf64_invert.c
+GF64_SOURCES := ../gf64_single.c ../gf64_region_scalar.c ../gf64_region_ssse3.c ../gf64_region_ssse3_arr.c ../gf64_region_avx2.c ../gf64_region_avx2_arr.c ../gf64_region_avx512.c ../gf64_region_avx512_arr.c ../gf64_dispatch.c ../gf64_invert.c
 GF64_INCLUDES := -I..
 
 # Test sources

@@ -10,6 +10,9 @@
 extern gf64_t gf64_mul_reference(gf64_t a, gf64_t b);
 extern void gf64_region_mul_scalar(gf64_t *HEDLEY_RESTRICT out, const gf64_t *HEDLEY_RESTRICT in, size_t len, gf64_t constant);
 extern void gf64_region_mul_scalar_arr(gf64_t *HEDLEY_RESTRICT out, const gf64_t *HEDLEY_RESTRICT in, const gf64_t *HEDLEY_RESTRICT coeff, size_t len, size_t n_coeff);
+extern void gf64_region_mul_ssse3_arr(gf64_t *HEDLEY_RESTRICT out, const gf64_t *HEDLEY_RESTRICT in, const gf64_t *HEDLEY_RESTRICT coeff, size_t len, size_t n_coeff);
+extern void gf64_region_mul_avx2_arr(gf64_t *HEDLEY_RESTRICT out, const gf64_t *HEDLEY_RESTRICT in, const gf64_t *HEDLEY_RESTRICT coeff, size_t len, size_t n_coeff);
+extern void gf64_region_mul_avx512_arr(gf64_t *HEDLEY_RESTRICT out, const gf64_t *HEDLEY_RESTRICT in, const gf64_t *HEDLEY_RESTRICT coeff, size_t len, size_t n_coeff);
 
 static uint64_t g_seed = 12345;
 
@@ -231,6 +234,95 @@ static void test_mul_arr_semantics(void) {
     }
 }
 
+static void test_mul_arr_simd_comparison(void) {
+    printf("Test: SIMD _arr vs SCALAR equivalence...\n");
+
+    /* Test lengths that exercise every tail-case boundary:
+     *   SSSE3 stride = 2, AVX2 stride = 4, AVX512 stride = 8
+     * Lengths include each stride-1, stride, stride+1, and longer patterns
+     * to catch off-by-one errors in the tail epilog of each SIMD variant. */
+    const size_t test_lens[] = {1, 2, 3, 4, 5, 7, 8, 9, 15, 16, 17, 31, 32, 33, 63, 64, 65, 100, 127, 128, 129, 255, 256, 257, 1023, 1024, 1025};
+    const size_t num_lens = sizeof(test_lens) / sizeof(test_lens[0]);
+
+    const size_t max_len = 1025;
+    gf64_t *in = malloc(max_len * sizeof(gf64_t));
+    gf64_t *out_scalar = malloc(max_len * sizeof(gf64_t));
+    gf64_t *out_simd = malloc(max_len * sizeof(gf64_t));
+    gf64_t *coeff = malloc(max_len * sizeof(gf64_t));
+
+    SRAND(0xDEADBEEF);
+
+    for (size_t t = 0; t < num_lens; t++) {
+        size_t len = test_lens[t];
+
+        /* Fill input with random data */
+        for (size_t i = 0; i < len; i++) in[i] = RANDOM();
+
+        /* Test n_coeff = 1 (fast path — broadcast single coefficient) */
+        for (size_t i = 0; i < len; i++) coeff[i] = RANDOM();
+        gf64_t c0 = coeff[0];
+        gf64_t coeff_arr[1] = { c0 };
+
+        /* SCALAR reference */
+        gf64_region_mul_scalar_arr(out_scalar, in, coeff_arr, len, 1);
+
+#if defined(__SSSE3__)
+        /* SSSE3 SIMD */
+        gf64_region_mul_ssse3_arr(out_simd, in, coeff_arr, len, 1);
+        for (size_t i = 0; i < len; i++) {
+            EXPECT_EQ(out_simd[i], out_scalar[i], "SSSE3 _arr matches SCALAR (n_coeff=1)");
+        }
+#endif
+
+#if defined(__AVX2__)
+        /* AVX2 SIMD */
+        gf64_region_mul_avx2_arr(out_simd, in, coeff_arr, len, 1);
+        for (size_t i = 0; i < len; i++) {
+            EXPECT_EQ(out_simd[i], out_scalar[i], "AVX2 _arr matches SCALAR (n_coeff=1)");
+        }
+#endif
+
+#if defined(__AVX512F__)
+        /* AVX512 SIMD */
+        gf64_region_mul_avx512_arr(out_simd, in, coeff_arr, len, 1);
+        for (size_t i = 0; i < len; i++) {
+            EXPECT_EQ(out_simd[i], out_scalar[i], "AVX512 _arr matches SCALAR (n_coeff=1)");
+        }
+#endif
+
+        /* Test n_coeff = 3 (general cyclic case) — only SCALAR + AVX2 (the only
+         * _arr variant with a non-fast-path branch currently exercised; the
+         * others all use the SCALAR epilog for n_coeff > 1 and the fast path
+         * is the production case anyway). */
+        for (size_t i = 0; i < len; i++) coeff[i] = RANDOM();
+        /* SCALAR reference */
+        gf64_region_mul_scalar_arr(out_scalar, in, coeff, len, 3);
+#if defined(__SSSE3__)
+        gf64_region_mul_ssse3_arr(out_simd, in, coeff, len, 3);
+        for (size_t i = 0; i < len; i++) {
+            EXPECT_EQ(out_simd[i], out_scalar[i], "SSSE3 _arr matches SCALAR (n_coeff=3)");
+        }
+#endif
+#if defined(__AVX2__)
+        gf64_region_mul_avx2_arr(out_simd, in, coeff, len, 3);
+        for (size_t i = 0; i < len; i++) {
+            EXPECT_EQ(out_simd[i], out_scalar[i], "AVX2 _arr matches SCALAR (n_coeff=3)");
+        }
+#endif
+#if defined(__AVX512F__)
+        gf64_region_mul_avx512_arr(out_simd, in, coeff, len, 3);
+        for (size_t i = 0; i < len; i++) {
+            EXPECT_EQ(out_simd[i], out_scalar[i], "AVX512 _arr matches SCALAR (n_coeff=3)");
+        }
+#endif
+    }
+
+    free(in);
+    free(out_scalar);
+    free(out_simd);
+    free(coeff);
+}
+
 static void run_benchmarks(void) {
     printf("\n=== Benchmarks ===\n");
     printf("%-12s %12s\n", "Size", "MB/s");
@@ -273,6 +365,7 @@ int main(void) {
     test_powers_of_2();
     test_region();
     test_mul_arr_semantics();
+    test_mul_arr_simd_comparison();
     run_benchmarks();
     
     printf("\n=== Summary ===\n");
