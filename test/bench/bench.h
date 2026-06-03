@@ -116,6 +116,7 @@ static Galois16Methods gf16_method_from_string(const std::string& val) {
 	if(val == "affine2x-avx2") return GF16_AFFINE2X_AVX2;
 	if(val == "affine2x-avx10") return GF16_AFFINE2X_AVX10;
 	if(val == "affine2x-avx512") return GF16_AFFINE2X_AVX512;
+	if(val == "affine-bmm") return GF16_AFFINE_BMM;
 	if(val == "clmul-neon") return GF16_CLMUL_NEON;
 	if(val == "clmul-sha3") return GF16_CLMUL_SHA3;
 	if(val == "clmul-sve2") return GF16_CLMUL_SVE2;

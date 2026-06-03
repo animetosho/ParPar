@@ -66,11 +66,17 @@ It’s not clear whether this arrangement is more beneficial than the regular *S
 
 ### Affine (Affine/2x)
 
-Uses the [`GF2P8AFFINEQB` instruction](https://www.felixcloutier.com/x86/gf2p8affineqb) from x86 GFNI to [perform multiplication](https://gist.github.com/animetosho/6cb732ccb5ecd86675ca0a442b3c0622#arbitrary-modular-gf2w-multiplication). GFNI is only supported on recent Intel/AMD processors (Ice Lake, Tremont, Zen4 or newer), but if available, is the fastest technique.
+Uses the [`GF2P8AFFINEQB` instruction](https://www.felixcloutier.com/x86/gf2p8affineqb) from x86 GFNI to [perform multiplication](https://gist.github.com/animetosho/6cb732ccb5ecd86675ca0a442b3c0622#arbitrary-modular-gf2w-multiplication). GFNI is only supported on recent Intel/AMD processors (Ice Lake, Tremont, Zen4 or newer), but if available, it outperforms other techniques.
 
 This class of techniques follows from the [“Affine Transformation” technique](../fast-gf-multiplication.md#affine-transformation--bit-matrix-xor).
 
 Overall, in terms of operation, it’s quite similar to *Shuffle*, but uses affine operations instead of shuffle, which is faster due to fewer operations needed (processes 8 bits at a time instead of 4 or 6, which also eliminates the need for masking/shifting). It also only requires four vector registers per multiply (or two for Affine2x variants), so can process many more multiplies concurrently.
+
+#### BMM
+
+This instead uses the `VBMACXOR16x16x16` instruction added in Zen6's AVX512 BMM extension. Where `GF2P8AFFINEQB` can do an 8x8 bit matrix multiply, `VBMACXOR16x16x16` does 16x16, enabling 16-bit GF multiplication to be performed in a single instruction. In addition, the instruction accumulates into the destination, removing the need for any additional XOR operations.
+
+Doing everything in one instruction simplifies the code, and also removes the need for pre/post memory arrangement that GFNI Affine methods require.
 
 ### CLMul
 

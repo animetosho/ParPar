@@ -21,7 +21,7 @@ extern "C" {
 # endif
 # include "x86_jit.h"
 struct GF16CpuCap {
-	bool hasSSE2, hasSSSE3, hasAVX, hasAVX2, hasAVX512VLBW, hasAVX512VBMI, hasGFNI, hasAVX10;
+	bool hasSSE2, hasSSSE3, hasAVX, hasAVX2, hasAVX512VLBW, hasAVX512VBMI, hasGFNI, hasAVX10, hasBMM;
 	size_t propPrefShuffleThresh;
 	bool propFastJit, propHT;
 	bool canMemWX, isEmulated;
@@ -35,6 +35,7 @@ struct GF16CpuCap {
 	  hasAVX512VBMI(true),
 	  hasGFNI(true),
 	  hasAVX10(true),
+	  hasBMM(true),
 	  propPrefShuffleThresh(0),
 	  propFastJit(false),
 	  propHT(false),
@@ -44,8 +45,8 @@ struct GF16CpuCap {
 	{
 		if(!detect) return;
 		
-		int cpuInfo[4];
-		int cpuInfoX[4];
+		unsigned cpuInfo[4];
+		unsigned cpuInfoX[4];
 		int family, model, hasMulticore;
 		_cpuid(cpuInfo, 1);
 		hasMulticore = (cpuInfo[3] & (1<<28));
@@ -104,7 +105,7 @@ struct GF16CpuCap {
 			|| family == 0xaf // AMD Zen3/4 family
 		);
 		
-		hasAVX = false; hasAVX2 = false; hasAVX512VLBW = false; hasAVX512VBMI = false; hasGFNI = false; hasAVX10 = false;
+		hasAVX = false; hasAVX2 = false; hasAVX512VLBW = false; hasAVX512VBMI = false; hasGFNI = false; hasAVX10 = false; hasBMM = false;
 #if !defined(_MSC_VER) || _MSC_VER >= 1600
 		_cpuidX(cpuInfoX, 7, 0);
 		if((cpuInfo[2] & 0x1C000000) == 0x1C000000) { // has AVX + OSXSAVE + XSAVE
@@ -128,6 +129,12 @@ struct GF16CpuCap {
 		}
 		hasGFNI = (cpuInfoX[2] & 0x100) == 0x100;
 #endif
+		
+		_cpuid(cpuInfo, 0x80000000);
+		if(cpuInfo[0] >= 0x80000021) {
+			_cpuid(cpuInfo, 0x80000021);
+			hasBMM = (cpuInfo[1] & 0x800000);
+		}
 		
 		_cpuid(cpuInfo, 0);
 		isEmulated = (
@@ -422,6 +429,16 @@ Galois16MethodInfo Galois16Mul::info(Galois16Methods _method) {
 			#endif
 		break;
 		
+		case GF16_AFFINE_BMM:
+			_info.alignment = 64;
+			_info.stride = 64;
+			#ifdef PLATFORM_AMD64
+			_info.idealInputMultiple = 12;
+			#else
+			_info.idealInputMultiple = 6;
+			#endif
+		break;
+		
 		case GF16_XOR_JIT_AVX512:
 		case GF16_XOR_JIT_AVX2:
 		//case GF16_XOR_JIT_AVX:
@@ -508,6 +525,7 @@ Galois16MethodInfo Galois16Mul::info(Galois16Methods _method) {
 		break;
 		case GF16_AFFINE_AVX512:
 		case GF16_AFFINE2X_AVX512:
+		case GF16_AFFINE_BMM:
 			_info.idealChunkSize = 4*1024;
 		break;
 		case GF16_CLMUL_NEON: // faster init than Shuffle, and usually faster
@@ -1261,6 +1279,35 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			SET_FOR_INVERT(replace_word, gf16_affine2x_replace_word);
 		break;
 		
+		case GF16_AFFINE_BMM:
+			scratch = gf16_affine_init_bmm(GF16_POLYNOMIAL);
+			METHOD_REQUIRES(gf16_affine_available_bmm, 1)
+			SET_FOR_INVERT(_mul, gf16_affine_mul_bmm);
+			_mul_add = &gf16_affine_muladd_bmm;
+			_mul_add_pf = &gf16_affine_muladd_prefetch_bmm;
+			SET_BASIC_OP(add_multi, gf_add_multi_avx512);
+			SET_FOR_INVERT(_mul_add_multi, gf16_affine_muladd_multi_bmm);
+			SET_FOR_INVERT(_mul_add_multi_stridepf, gf16_affine_muladd_multi_stridepf_bmm);
+			_mul_add_multi_packed = &gf16_affine_muladd_multi_packed_bmm;
+			_mul_add_multi_packpf = &gf16_affine_muladd_multi_packpf_bmm;
+			#ifdef PLATFORM_AMD64
+			SET_BASIC_OP(add_multi_packed, gf_add_multi_packed_v1i12_avx512);
+			add_multi_packpf = &gf_add_multi_packpf_v1i12_avx512;
+			#else
+			SET_BASIC_OP(add_multi_packed, gf_add_multi_packed_v1i6_avx512);
+			add_multi_packpf = &gf_add_multi_packpf_v1i6_avx512;
+			#endif
+			SET_BASIC_OP(prepare_packed, gf16_affine_prepare_packed_bmm);
+			prepare_packed_cksum = &gf16_affine_prepare_packed_cksum_bmm;
+			prepare_partial_packsum = &gf16_affine_prepare_partial_packsum_bmm;
+			SET_BASIC_OP(finish_packed, gf16_affine_finish_packed_bmm);
+			finish_packed_cksum = &gf16_affine_finish_packed_cksum_bmm;
+			finish_partial_packsum = &gf16_affine_finish_partial_packsum_bmm;
+			SET_FOR_OPENCL(copy_cksum, gf16_cksum_copy_avx512);
+			SET_FOR_OPENCL(copy_cksum_check, gf16_cksum_copy_check_avx512);
+			SET_FOR_OPENCL(finish_grp2_cksum, gf16_grp2_finish_avx512);
+		break;
+		
 		case GF16_XOR_JIT_AVX512:
 		case GF16_XOR_JIT_AVX2:
 		//case GF16_XOR_JIT_AVX:
@@ -1668,6 +1715,9 @@ std::vector<Galois16Methods> Galois16Mul::availableMethods(bool checkCpuid) {
 	if(gf16_shuffle_available_vbmi && caps.hasAVX512VBMI) {
 		ret.push_back(GF16_SHUFFLE_VBMI);
 	}
+	
+	if(gf16_affine_available_bmm && caps.hasBMM)
+		ret.push_back(GF16_AFFINE_BMM);
 	
 	if(caps.hasGFNI) {
 		if(gf16_affine_available_gfni && gf16_shuffle_available_ssse3 && caps.hasSSSE3) {

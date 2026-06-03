@@ -28,6 +28,7 @@ set(GF16_C_SOURCES
 	${GF16_DIR}/gf16_affine_avx10.c
 	${GF16_DIR}/gf16_affine_avx512.c
 	${GF16_DIR}/gf16_affine_gfni.c
+	${GF16_DIR}/gf16_affine_bmm.c
 	${GF16_DIR}/gf16_cksum_avx2.c
 	${GF16_DIR}/gf16_cksum_avx512.c
 	${GF16_DIR}/gf16_cksum_generic.c
@@ -188,6 +189,11 @@ if(NOT MSVC OR CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
 		if(COMPILER_SUPPORTS_AVX10)
 			set_source_files_properties(${GF16_DIR}/gf_add_avx10.c PROPERTIES COMPILE_OPTIONS "-mavx512vl;-mno-evex512")
 		endif()
+		CHECK_CXX_COMPILER_FLAG("-mavx512bmm" COMPILER_SUPPORTS_BMM)
+		if(COMPILER_SUPPORTS_BMM)
+			set_source_files_properties(${GF16_DIR}/gf16_affine_bmm.c PROPERTIES COMPILE_OPTIONS "-mavx512bmm;-mavx512vl")
+		endif()
+
 		
 		CHECK_CXX_COMPILER_FLAG("-mvpclmulqdq" COMPILER_SUPPORTS_VPCLMULQDQ)
 		if(COMPILER_SUPPORTS_VPCLMULQDQ)

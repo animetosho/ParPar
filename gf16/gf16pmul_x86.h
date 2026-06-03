@@ -208,6 +208,16 @@ void _FN(gf16pmul)(void *HEDLEY_RESTRICT dst, const void* src1, const void* src2
 		_mword rem = _MM(unpacklo_epi64)(tmp1, tmp2);
 		_mword quot = _MM(unpackhi_epi64)(tmp1, tmp2);
 		
+# ifdef _USE_BMM
+		_mword result = _MM(bmacxor16x16x16)(rem, quot, _MM(set_epi16)(
+#  if MWORD_SIZE >= 64
+			0x0dff, 0x8efa, 0x477d, 0xabbb, 0xddd8, 0x6eec, 0x3776, 0x1bbb,
+			0x85d8, 0x42ec, 0x2176, 0x10bb, 0x8058, 0x402c, 0x2016, 0x100b,
+#  endif
+			0x0dff, 0x8efa, 0x477d, 0xabbb, 0xddd8, 0x6eec, 0x3776, 0x1bbb,
+			0x85d8, 0x42ec, 0x2176, 0x10bb, 0x8058, 0x402c, 0x2016, 0x100b
+		));
+# else
 		// multiply by 0x1111a (or rather, 0x11118, since the '2' bit doesn't matter due to the product being at most 31 bits) and retain high half
 		tmp1 = _MMI(xor)(quot, _MM(srli_epi16)(quot, 4));
 		tmp1 = _MMI(xor)(tmp1, _MM(srli_epi16)(tmp1, 8));
@@ -219,6 +229,7 @@ void _FN(gf16pmul)(void *HEDLEY_RESTRICT dst, const void* src1, const void* src2
 		quot = _MMI(xor)(tmp1, _MM(slli_epi16)(quot, 12));
 		
 		_mword result = _MMI(xor)(quot, rem);
+# endif
 		_MMI(store)((_mword*)(_dst + ptr), result);
 	}
 #endif

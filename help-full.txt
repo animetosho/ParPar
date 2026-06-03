@@ -314,6 +314,7 @@ CPU Tuning Options:
                                  affine2x-avx2: half width variant of affine-avx2
                                  affine2x-avx10: half width variant of affine-avx10
                                  affine2x-avx512: half width variant of affine-avx512
+                                 affine-bmm: 16x16 bit matrix multiplication (AVX512BMM)
                              ARMv7/AArch64 only choices:
                                  shuffle-neon: NEON variant of shuffle-sse
                                  clmul-neon: split 8-bit polynomial multiplication (NEON)

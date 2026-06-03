@@ -58,7 +58,7 @@ void gf_add_multi_packpf_v##vs##i##il##_avx512(unsigned packedRegions, unsigned 
 
 #ifdef PLATFORM_AMD64
 PACKED_FUNC_NOTSLIM(avx512, 1, 6, 18)
-PACKED_FUNC_NOTSLIM(avx512, 1, 12, 12)
+PACKED_FUNC(1, 12, 12)
 PACKED_FUNC(2, 3, 12)
 PACKED_FUNC(2, 4, 12)
 PACKED_FUNC(2, 6, 18)
@@ -67,6 +67,7 @@ PACKED_FUNC_NOTSLIM(avx512, 16, 6, 18)
 PACKED_FUNC_NOTSLIM(avx512, 1, 1, 6)
 PACKED_FUNC_NOTSLIM(avx512, 1, 2, 8)
 PACKED_FUNC(2, 1, 6)
+PACKED_FUNC(1, 6, 6)
 #endif
 
 #undef PACKED_FUNC
