@@ -8,6 +8,9 @@ extern void gf64_region_mul_ssse3(gf64_t *HEDLEY_RESTRICT out, const gf64_t *HED
 extern void gf64_region_mul_avx2(gf64_t *HEDLEY_RESTRICT out, const gf64_t *HEDLEY_RESTRICT in, size_t len, gf64_t constant);
 extern void gf64_region_mul_avx512(gf64_t *HEDLEY_RESTRICT out, const gf64_t *HEDLEY_RESTRICT in, size_t len, gf64_t constant);
 extern void gf64_region_mul_scalar_arr(gf64_t *HEDLEY_RESTRICT out, const gf64_t *HEDLEY_RESTRICT in, const gf64_t *HEDLEY_RESTRICT coeff, size_t len, size_t n_coeff);
+extern void gf64_region_mul_ssse3_arr(gf64_t *HEDLEY_RESTRICT out, const gf64_t *HEDLEY_RESTRICT in, const gf64_t *HEDLEY_RESTRICT coeff, size_t len, size_t n_coeff);
+extern void gf64_region_mul_avx2_arr(gf64_t *HEDLEY_RESTRICT out, const gf64_t *HEDLEY_RESTRICT in, const gf64_t *HEDLEY_RESTRICT coeff, size_t len, size_t n_coeff);
+extern void gf64_region_mul_avx512_arr(gf64_t *HEDLEY_RESTRICT out, const gf64_t *HEDLEY_RESTRICT in, const gf64_t *HEDLEY_RESTRICT coeff, size_t len, size_t n_coeff);
 
 gf64_region_mul_fn gf64_region_mul;
 gf64_region_mul_arr_fn gf64_region_mul_arr;
@@ -125,20 +128,22 @@ int gf64_init_dispatch(void) {
 	switch (gf64_current_method) {
 		case GF64_AVX512:
 			gf64_region_mul = gf64_region_mul_avx512;
+			gf64_region_mul_arr = gf64_region_mul_avx512_arr;
 			break;
 		case GF64_AVX2:
 			gf64_region_mul = gf64_region_mul_avx2;
+			gf64_region_mul_arr = gf64_region_mul_avx2_arr;
 			break;
 		case GF64_SSSE3:
 			gf64_region_mul = gf64_region_mul_ssse3;
+			gf64_region_mul_arr = gf64_region_mul_ssse3_arr;
 			break;
 		case GF64_SCALAR:
 		default:
 			gf64_region_mul = gf64_region_mul_scalar;
+			gf64_region_mul_arr = gf64_region_mul_scalar_arr;
 			break;
 	}
-
-	gf64_region_mul_arr = gf64_region_mul_scalar_arr;
 
 	return 0;
 }
