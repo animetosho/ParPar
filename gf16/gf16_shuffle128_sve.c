@@ -38,17 +38,17 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle128_sve_round1(svuint8x2_t va, svui
 	svuint8_t tbl_l0, svuint8_t tbl_l1, svuint8_t tbl_l2, svuint8_t tbl_l3, 
 	svuint8_t tbl_h0, svuint8_t tbl_h1, svuint8_t tbl_h2, svuint8_t tbl_h3
 ) {
-	svuint8_t tmp = NOMASK(svand_n_u8, svget2(va, 0), 0xf);
+	svuint8_t tmp = NOMASK(svand_n_u8, svget2_u8(va, 0), 0xf);
 	*rl = svtbl_u8(tbl_l0, tmp);
 	*rh = svtbl_u8(tbl_h0, tmp);
-	tmp = NOMASK(svand_n_u8, svget2(va, 1), 0xf);
+	tmp = NOMASK(svand_n_u8, svget2_u8(va, 1), 0xf);
 	*rl = NOMASK(sveor_u8, *rl, svtbl_u8(tbl_l2, tmp));
 	*rh = NOMASK(sveor_u8, *rh, svtbl_u8(tbl_h2, tmp));
 	
-	tmp = NOMASK(svlsr_n_u8, svget2(va, 0), 4);
+	tmp = NOMASK(svlsr_n_u8, svget2_u8(va, 0), 4);
 	*rl = NOMASK(sveor_u8, *rl, svtbl_u8(tbl_l1, tmp));
 	*rh = NOMASK(sveor_u8, *rh, svtbl_u8(tbl_h1, tmp));
-	tmp = NOMASK(svlsr_n_u8, svget2(va, 1), 4);
+	tmp = NOMASK(svlsr_n_u8, svget2_u8(va, 1), 4);
 	*rl = NOMASK(sveor_u8, *rl, svtbl_u8(tbl_l3, tmp));
 	*rh = NOMASK(sveor_u8, *rh, svtbl_u8(tbl_h3, tmp));
 }
@@ -56,17 +56,17 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle128_sve_round(svuint8x2_t va, svuin
 	svuint8_t tbl_l0, svuint8_t tbl_l1, svuint8_t tbl_l2, svuint8_t tbl_l3, 
 	svuint8_t tbl_h0, svuint8_t tbl_h1, svuint8_t tbl_h2, svuint8_t tbl_h3
 ) {
-	svuint8_t tmp = NOMASK(svand_n_u8, svget2(va, 0), 0xf);
+	svuint8_t tmp = NOMASK(svand_n_u8, svget2_u8(va, 0), 0xf);
 	*rl = NOMASK(sveor_u8, *rl, svtbl_u8(tbl_l0, tmp));
 	*rh = NOMASK(sveor_u8, *rh, svtbl_u8(tbl_h0, tmp));
-	tmp = NOMASK(svand_n_u8, svget2(va, 1), 0xf);
+	tmp = NOMASK(svand_n_u8, svget2_u8(va, 1), 0xf);
 	*rl = NOMASK(sveor_u8, *rl, svtbl_u8(tbl_l2, tmp));
 	*rh = NOMASK(sveor_u8, *rh, svtbl_u8(tbl_h2, tmp));
 	
-	tmp = NOMASK(svlsr_n_u8, svget2(va, 0), 4);
+	tmp = NOMASK(svlsr_n_u8, svget2_u8(va, 0), 4);
 	*rl = NOMASK(sveor_u8, *rl, svtbl_u8(tbl_l1, tmp));
 	*rh = NOMASK(sveor_u8, *rh, svtbl_u8(tbl_h1, tmp));
-	tmp = NOMASK(svlsr_n_u8, svget2(va, 1), 4);
+	tmp = NOMASK(svlsr_n_u8, svget2_u8(va, 1), 4);
 	*rl = NOMASK(sveor_u8, *rl, svtbl_u8(tbl_l3, tmp));
 	*rh = NOMASK(sveor_u8, *rh, svtbl_u8(tbl_h3, tmp));
 }

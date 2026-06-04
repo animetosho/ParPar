@@ -16,7 +16,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle128_sve_calc_tables(const void *HED
 	UNUSED(scratch);
 	#endif
 	
-	svint16_t val1 = svld1_s16(svwhilelt_b16((uint32_t)0, (uint32_t)srcCount), (int16_t*)coefficients);
+	svint16_t val1 = svld1_s16(svwhilelt_b16_u32(0, srcCount), (int16_t*)coefficients);
 	svint16_t val2 = gf16_vec_mul2_sve(val1);
 	svint16_t val4 = gf16_vec_mul2_sve(val2);
 	svint16_t val8 = gf16_vec_mul2_sve(val4);
@@ -147,8 +147,8 @@ static HEDLEY_ALWAYS_INLINE void _FN(gf16_shuffle_muladd_x)(
 		}
 		
 		svuint8x2_t vb = svld2_u8(svptrue_b8(), _dst+ptr);
-		rl = svget2(vb, 0);
-		rh = svget2(vb, 1);
+		rl = svget2_u8(vb, 0);
+		rh = svget2_u8(vb, 1);
 		SVE_ROUND(svld2_u8(svptrue_b8(), _src1+ptr*srcScale), &rl, &rh, tbl_Al0, tbl_Al1, tbl_Al2, tbl_Al3, tbl_Ah0, tbl_Ah1, tbl_Ah2, tbl_Ah3);
 		if(srcCount > 1)
 			SVE_ROUND(svld2_u8(svptrue_b8(), _src2+ptr*srcScale), &rl, &rh, tbl_Bl0, tbl_Bl1, tbl_Bl2, tbl_Bl3, tbl_Bh0, tbl_Bh1, tbl_Bh2, tbl_Bh3);

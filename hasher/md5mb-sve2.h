@@ -153,8 +153,8 @@ HEDLEY_WARNING("Clang prior to version 12 may break SVE2 MD5 code");
 // using gather
 #define LOAD2(set, ptr, offs, idx, var0, var1) { \
 	svuint64x2_t base = svld2_u64(svptrue_b64(), (const uint64_t*)(ptr + set*svcntw())); \
-	svuint32_t data0 = svreinterpret_u32_u64(svld1_gather_offset_u64(svptrue_b64(), svget2(base, 0), offs + idx*4)); \
-	svuint32_t data1 = svreinterpret_u32_u64(svld1_gather_offset_u64(svptrue_b64(), svget2(base, 1), offs + idx*4)); \
+	svuint32_t data0 = svreinterpret_u32_u64(svld1_gather_offset_u64(svptrue_b64(), svget2_u64(base, 0), offs + idx*4)); \
+	svuint32_t data1 = svreinterpret_u32_u64(svld1_gather_offset_u64(svptrue_b64(), svget2_u64(base, 1), offs + idx*4)); \
 	var0 = svtrn1_u32(data0, data1); \
 	var1 = svtrn2_u32(data0, data1); \
 }

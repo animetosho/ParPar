@@ -23,7 +23,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_checksum_blocku_sve(const void *HEDLEY_RES
 	int8_t* _src = (int8_t*)src;
 	
 	if(amount) while(1) {
-		svbool_t active = svwhilelt_b8((uint64_t)0, (uint64_t)amount);
+		svbool_t active = svwhilelt_b8_u64(0, amount);
 		v = NOMASK(sveor_s16, v, svreinterpret_s16_s8(svld1_s8(active, _src)));
 		if(amount <= svcntb()) break;
 		amount -= svcntb();
@@ -54,7 +54,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_ungrp2a_block_sve(void *HEDLEY_RESTRICT ds
 	uint16_t* _dst = (uint16_t*)dst;
 	for(unsigned i=0; i<blockLen; i+=svcntb()) {
 		svuint16x2_t w = svld2_u16(svptrue_b16(), _src + i);
-		svst1_u16(svptrue_b16(), _dst + i/2, svget2(w, 0));
+		svst1_u16(svptrue_b16(), _dst + i/2, svget2_u16(w, 0));
 	}
 }
 static HEDLEY_ALWAYS_INLINE void gf16_ungrp2b_block_sve(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, const size_t blockLen) {
@@ -62,7 +62,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_ungrp2b_block_sve(void *HEDLEY_RESTRICT ds
 	uint16_t* _dst = (uint16_t*)dst;
 	for(unsigned i=0; i<blockLen; i+=svcntb()) {
 		svuint16x2_t w = svld2_u16(svptrue_b16(), _src + i);
-		svst1_u16(svptrue_b16(), _dst + i/2, svget2(w, 1));
+		svst1_u16(svptrue_b16(), _dst + i/2, svget2_u16(w, 1));
 	}
 }
 

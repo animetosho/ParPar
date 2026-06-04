@@ -13,8 +13,8 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle512_mul64(svuint8x2_t poly, svuint8
 	svuint8_t th = svsri_n_u8(NOMASK(svlsl_n_u8, rh, 6), rl, 2);
 	
 	svuint8_t ti = NOMASK(svlsr_n_u8, rh, 2);
-	*tbl_l1 = NOMASK(sveor_u8, tl, svtbl_u8(svget2(poly, 0), ti));
-	*tbl_h1 = NOMASK(sveor_u8, th, svtbl_u8(svget2(poly, 1), ti));
+	*tbl_l1 = NOMASK(sveor_u8, tl, svtbl_u8(svget2_u8(poly, 0), ti));
+	*tbl_h1 = NOMASK(sveor_u8, th, svtbl_u8(svget2_u8(poly, 1), ti));
 	
 	// multiply by 16 and store to tbl2
 	ti = NOMASK(svlsr_n_u8, *tbl_h1, 4);
@@ -46,11 +46,11 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle512_sve2_calc_tables(
 	svuint8_t* tbl_Dh0, svuint8_t* tbl_Dh1, svuint8_t* tbl_Dh2
 ) {
 	svuint8x2_t poly = svcreate2_u8(
-		svld1_u8(svwhilelt_b8(0, 64), scratch),
-		svld1_u8(svwhilelt_b8(0, 64), (uint8_t*)scratch + 64)
+		svld1_u8(svwhilelt_b8_u32(0, 64), scratch),
+		svld1_u8(svwhilelt_b8_u32(0, 64), (uint8_t*)scratch + 64)
 	);
 	
-	svint16_t val = svld1_s16(svwhilelt_b16((uint32_t)0, (uint32_t)srcCount), (int16_t*)coefficients);
+	svint16_t val = svld1_s16(svwhilelt_b16_u32(0, srcCount), (int16_t*)coefficients);
 	// dupe 16b elements across 128b vector
 	val = svtbl_s16(val, NOMASK(svlsr_n_u16, svindex_u16(0, 1), 3));
 	// (alternative idea to do a 16->64b extended load, unpack, mul-lane)
@@ -195,17 +195,17 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle512_sve2_round1(svuint8x2_t va, svu
 	svuint8_t tbl_l0, svuint8_t tbl_l1, svuint8_t tbl_l2, 
 	svuint8_t tbl_h0, svuint8_t tbl_h1, svuint8_t tbl_h2
 ) {
-	svuint8_t tmp = NOMASK(svand_n_u8, svget2(va, 0), 0x3f);
+	svuint8_t tmp = NOMASK(svand_n_u8, svget2_u8(va, 0), 0x3f);
 	*rl = svtbl_u8(tbl_l0, tmp);
 	*rh = svtbl_u8(tbl_h0, tmp);
 	
-	tmp = NOMASK(svlsr_n_u8, svget2(va, 1), 2);
+	tmp = NOMASK(svlsr_n_u8, svget2_u8(va, 1), 2);
 	
 	// straddeld element - top 2 from low, bottom 2 from high
 	// TODO: investigate a non-contiguous straddled component to save a vector register; SRI is generally slower than BSL though so may not be worth it
 	svuint8_t mid = svbsl_n_u8(
-		svget2(va, 1),
-		NOMASK(svlsr_n_u8, svget2(va, 0), 4),
+		svget2_u8(va, 1),
+		NOMASK(svlsr_n_u8, svget2_u8(va, 0), 4),
 		3
 	);
 	
@@ -216,14 +216,14 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle512_sve2_round(svuint8x2_t va, svui
 	svuint8_t tbl_l0, svuint8_t tbl_l1, svuint8_t tbl_l2, 
 	svuint8_t tbl_h0, svuint8_t tbl_h1, svuint8_t tbl_h2
 ) {
-	svuint8_t tmp = NOMASK(svand_n_u8, svget2(va, 0), 0x3f);
-	svuint8_t tmp2 = NOMASK(svlsr_n_u8, svget2(va, 1), 2);
+	svuint8_t tmp = NOMASK(svand_n_u8, svget2_u8(va, 0), 0x3f);
+	svuint8_t tmp2 = NOMASK(svlsr_n_u8, svget2_u8(va, 1), 2);
 	*rl = sveor3_u8(*rl, svtbl_u8(tbl_l0, tmp), svtbl_u8(tbl_l2, tmp2));
 	*rh = sveor3_u8(*rh, svtbl_u8(tbl_h0, tmp), svtbl_u8(tbl_h2, tmp2));
 	
 	svuint8_t mid = svbsl_n_u8(
-		svget2(va, 1),
-		NOMASK(svlsr_n_u8, svget2(va, 0), 4),
+		svget2_u8(va, 1),
+		NOMASK(svlsr_n_u8, svget2_u8(va, 0), 4),
 		3
 	);
 	
@@ -235,14 +235,14 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle512_sve2_round4(svuint8x2_t va, svu
 	svuint8_t tbl_h0, svuint8_t tbl_h1, svuint8_t tbl_h2
 ) {
 	*rl = NOMASK(sveor_u8, *rl, rl2); // free up a register to avoid a spill
-	svuint8_t tmp = NOMASK(svand_n_u8, svget2(va, 0), 0x3f);
+	svuint8_t tmp = NOMASK(svand_n_u8, svget2_u8(va, 0), 0x3f);
 	*rl = NOMASK(sveor_u8, *rl, svtbl_u8(tbl_l0, tmp));
 	*rh = sveor3_u8(*rh, svtbl_u8(tbl_h0, tmp), rh2);
 	
-	svuint8_t tmp2 = NOMASK(svlsr_n_u8, svget2(va, 1), 2);
+	svuint8_t tmp2 = NOMASK(svlsr_n_u8, svget2_u8(va, 1), 2);
 	svuint8_t mid = svbsl_n_u8(
-		svget2(va, 1),
-		NOMASK(svlsr_n_u8, svget2(va, 0), 4),
+		svget2_u8(va, 1),
+		NOMASK(svlsr_n_u8, svget2_u8(va, 0), 4),
 		3
 	);
 	
@@ -286,11 +286,11 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle512_muladd_x_sve2(
 		if(srcCount > 1) {
 			gf16_shuffle512_sve2_round(svld2_u8(svptrue_b8(), _src2+ptr*srcScale), &rl, &rh, &rl2, &rh2, tbl_Bl0, tbl_Bl1, tbl_Bl2, tbl_Bh0, tbl_Bh1, tbl_Bh2);
 			
-			rl = sveor3_u8(rl, rl2, svget2(vb, 0));
-			rh = sveor3_u8(rh, rh2, svget2(vb, 1));
+			rl = sveor3_u8(rl, rl2, svget2_u8(vb, 0));
+			rh = sveor3_u8(rh, rh2, svget2_u8(vb, 1));
 		} else {
-			rl2 = svget2(vb, 0);
-			rh2 = svget2(vb, 1);
+			rl2 = svget2_u8(vb, 0);
+			rh2 = svget2_u8(vb, 1);
 		}
 		
 		if(srcCount > 2) {
