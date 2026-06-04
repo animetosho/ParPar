@@ -129,6 +129,15 @@
 	#define _mm512_bmacxor16x16x16 _mm512_bmacxor16x16x16_epi16
 # endif
 
+# if defined(__aarch64__) && _MSC_VER >= 1930
+	#define __ARM_FEATURE_SHA3 1
+# endif
+# if defined(__aarch64__) && _MSC_VER >= 1950
+	// MSVC 19.50 added SVE2 support, but our code crashes the compiler, so disable it until it's fixed
+	//#define __ARM_FEATURE_SVE 1
+	//#define __ARM_FEATURE_SVE2 1
+# endif
+
 #endif /* _MSC_VER */
 
 #ifdef __SSE2__
@@ -235,7 +244,7 @@ HEDLEY_WARNING("GFNI disabled on GCC < 10 due to incorrect GF2P8AFFINEQB operand
 #endif
 
 #if (defined(_MSC_VER) && defined(__clang__)) || (defined(PARPAR_SLIM_GF16) && defined(__APPLE__))
-// ClangCL doesn't support SVE as of 15.0.1 (maybe due to not being defined on Windows-ARM?)
+// ClangCL's SVE is broken in 20.1.8, so disabled until fixed
 // No Apple CPU supports SVE, and there's no defined way to detect it, meaning it'll never get used in practice (even if a later CPU supports SVE), so strip out SVE functionality for now
 # ifdef __ARM_FEATURE_SVE
 #  undef __ARM_FEATURE_SVE

@@ -10,6 +10,13 @@
 
 #ifndef CKSUM_SIZE
 # define CKSUM_SIZE sizeof(cksum_t)
+#elif defined(_MSC_VER) && !defined(__clang__)
+// CKSUM_SIZE is dynamic size (e.g. SVE) and MSVC doesn't support variable stack declaration
+# include <malloc.h>
+# define CKSUM_ALLOC(nam) uint8_t* nam = (uint8_t*)_alloca(CKSUM_SIZE)
+#endif
+#ifndef CKSUM_ALLOC
+# define CKSUM_ALLOC(nam) uint8_t nam[CKSUM_SIZE]
 #endif
 
 static HEDLEY_ALWAYS_INLINE void _FN(gf16_cksum_docopy)(uint8_t *HEDLEY_RESTRICT dst, const uint8_t *HEDLEY_RESTRICT src, size_t srcLen, cksum_t* cksum) {
@@ -67,7 +74,7 @@ int _FN(gf16_grp2_finish)(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT
 	uint8_t* _dst = (uint8_t*)dst;
 	cksum_t cksum;
 	{
-		uint8_t block[CKSUM_SIZE];
+		CKSUM_ALLOC(block);
 		if(grp & 1)
 			_FN(gf16_ungrp2b_block)(block, _src + len*2, CKSUM_SIZE);
 		else

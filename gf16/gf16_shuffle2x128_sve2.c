@@ -7,7 +7,7 @@
 
 // emulate svzip1q_u8 without FP64MatMul feature
 static HEDLEY_ALWAYS_INLINE svuint8_t join_lane(svuint8_t a, svuint8_t b, int lane) {
-	const svuint64_t tbl2base = svorr_n_u64_m(
+	svuint64_t tbl2base = svorr_n_u64_m(
 		svnot_b_z(svptrue_b64(), svptrue_pat_b64(SV_VL2)),
 		svdupq_n_u64(0, 1),
 		svcntd()

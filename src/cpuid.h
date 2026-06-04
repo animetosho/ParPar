@@ -135,6 +135,18 @@ static unsigned long getauxval(unsigned long cap) {
 #   define CPU_HAS_NEON (IsProcessorFeaturePresent(PF_ARM_NEON_INSTRUCTIONS_AVAILABLE))
 #   undef CPU_HAS_ARMCRC
 #   define CPU_HAS_ARMCRC (IsProcessorFeaturePresent(PF_ARM_V8_CRC32_INSTRUCTIONS_AVAILABLE))
+#   ifdef PF_ARM_SHA3_INSTRUCTIONS_AVAILABLE
+#    undef CPU_HAS_NEON_SHA3
+#    define CPU_HAS_NEON_SHA3 (IsProcessorFeaturePresent(PF_ARM_SHA3_INSTRUCTIONS_AVAILABLE))
+#   endif
+#   ifdef PF_ARM_SVE_INSTRUCTIONS_AVAILABLE
+#    undef CPU_HAS_SVE
+#    define CPU_HAS_SVE (IsProcessorFeaturePresent(PF_ARM_SVE_INSTRUCTIONS_AVAILABLE))
+#   endif
+#   ifdef PF_ARM_SVE2_INSTRUCTIONS_AVAILABLE
+#    undef CPU_HAS_SVE2
+#    define CPU_HAS_SVE2 (IsProcessorFeaturePresent(PF_ARM_SVE2_INSTRUCTIONS_AVAILABLE))
+#   endif
 #  elif defined(__APPLE__)
 #   undef CPU_HAS_NEON
 #   define CPU_HAS_NEON (cpuHasFeature("hw.optional.neon"))

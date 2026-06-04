@@ -27,10 +27,10 @@ static HEDLEY_ALWAYS_INLINE uintptr_t gf16_multi_mul2(uintptr_t v) {
 	assert(sizeof(uintptr_t) >= 2);
 	
 	if(sizeof(uintptr_t) >= 8) {
-		const uint64_t mask = 0x0001000100010001ULL;
+		const uintptr_t mask = (uintptr_t)0x0001000100010001ULL;
 		v = ((v*2) & ~mask) ^ (((v >> 15) & mask) * (GF16_POLYNOMIAL & 0xffff));
 	} else if(sizeof(uintptr_t) >= 4) {
-		const uint32_t mask = 0x00010001;
+		const uintptr_t mask = (uintptr_t)0x00010001;
 		v = ((v*2) & ~mask) ^ (((v >> 15) & mask) * (GF16_POLYNOMIAL & 0xffff));
 	} else {
 		v = (v*2) ^ (-(v >> 15) & GF16_POLYNOMIAL);
