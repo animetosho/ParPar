@@ -202,13 +202,11 @@ void gf16_affine_muladd_prefetch_bmm(const void *HEDLEY_RESTRICT scratch, void *
 }
 
 #if defined(__AVX512BMM__) && defined(__AVX512VL__)
-GF16_MULADD_MULTI_FUNCS(gf16_affine, _bmm, gf16_affine_muladd_x_bmm,
 #ifdef PLATFORM_AMD64
-	12
+GF16_MULADD_MULTI_FUNCS(gf16_affine, _bmm, gf16_affine_muladd_x_bmm, 12, sizeof(__m512i), 0, (void)0)
 #else
-	6
+GF16_MULADD_MULTI_FUNCS(gf16_affine, _bmm, gf16_affine_muladd_x_bmm, 6, sizeof(__m512i), 0, (void)0)
 #endif
-, sizeof(__m512i), 0, (void)0)
 #else
 GF16_MULADD_MULTI_FUNCS_STUB(gf16_affine, _bmm)
 #endif

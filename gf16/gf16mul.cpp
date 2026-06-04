@@ -45,8 +45,8 @@ struct GF16CpuCap {
 	{
 		if(!detect) return;
 		
-		unsigned cpuInfo[4];
-		unsigned cpuInfoX[4];
+		int cpuInfo[4];
+		int cpuInfoX[4];
 		int family, model, hasMulticore;
 		_cpuid(cpuInfo, 1);
 		hasMulticore = (cpuInfo[3] & (1<<28));
@@ -131,7 +131,7 @@ struct GF16CpuCap {
 #endif
 		
 		_cpuid(cpuInfo, 0x80000000);
-		if(cpuInfo[0] >= 0x80000021) {
+		if((unsigned)cpuInfo[0] >= 0x80000021) {
 			_cpuid(cpuInfo, 0x80000021);
 			hasBMM = (cpuInfo[1] & 0x800000);
 		}
