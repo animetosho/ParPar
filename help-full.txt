@@ -266,7 +266,6 @@ I/O Tuning Options:
                                  avx512f: AVX512F implementation (16-32x lanes)
                                  avx512vl: AVX512VL 128/256-bit implementation
                                            (4-16x lanes)
-                                 avx10: `avx512vl` without AVX512F
                              ARMv7/AArch64 only choices:
                                  neon: NEON implementation (4-8x lanes)
                              AArch64 only choices:
@@ -308,11 +307,9 @@ CPU Tuning Options:
                                  shuffle2x-avx512: half width variant of shuffle-avx512
                                  affine-sse: split 2x 8-bit vector XOR dependencies (GFNI)
                                  affine-avx2: AVX2 + GFNI variant of above
-                                 affine-avx10: AVX10/256 + GFNI variant of above
                                  affine-avx512: AVX512BW + GFNI variant of above
                                  affine2x-sse: half width variant of affine-sse
                                  affine2x-avx2: half width variant of affine-avx2
-                                 affine2x-avx10: half width variant of affine-avx10
                                  affine2x-avx512: half width variant of affine-avx512
                                  affine-bmm: 16x16 bit matrix multiplication (AVX512BMM)
                              ARMv7/AArch64 only choices:

@@ -62,11 +62,9 @@ enum Galois16Methods {
 	GF16_XOR_JIT_AVX512,  // *
 	GF16_AFFINE_GFNI,
 	GF16_AFFINE_AVX2,
-	GF16_AFFINE_AVX10,
 	GF16_AFFINE_AVX512,
 	GF16_AFFINE2X_GFNI,  // *
 	GF16_AFFINE2X_AVX2,  // *
-	GF16_AFFINE2X_AVX10,  // *
 	GF16_AFFINE2X_AVX512,  // *
 	GF16_AFFINE_BMM,
 	GF16_CLMUL_NEON,
@@ -99,11 +97,9 @@ static const char* Galois16MethodsText[] = {
 	"Xor-Jit (AVX512)",
 	"Affine (GFNI)",
 	"Affine (GFNI+AVX2)",
-	"Affine (GFNI+AVX10)",
 	"Affine (GFNI+AVX512)",
 	"Affine2x (GFNI)",
 	"Affine2x (GFNI+AVX2)",
-	"Affine2x (GFNI+AVX10)",
 	"Affine2x (GFNI+AVX512)",
 	"Affine (BMM)",
 	"CLMul (NEON)",

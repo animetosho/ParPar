@@ -110,11 +110,9 @@ static Galois16Methods gf16_method_from_string(const std::string& val) {
 	if(val == "xorjit-avx512") return GF16_XOR_JIT_AVX512;
 	if(val == "affine-sse") return GF16_AFFINE_GFNI;
 	if(val == "affine-avx2") return GF16_AFFINE_AVX2;
-	if(val == "affine-avx10") return GF16_AFFINE_AVX10;
 	if(val == "affine-avx512") return GF16_AFFINE_AVX512;
 	if(val == "affine2x-sse") return GF16_AFFINE2X_GFNI;
 	if(val == "affine2x-avx2") return GF16_AFFINE2X_AVX2;
-	if(val == "affine2x-avx10") return GF16_AFFINE2X_AVX10;
 	if(val == "affine2x-avx512") return GF16_AFFINE2X_AVX512;
 	if(val == "affine-bmm") return GF16_AFFINE_BMM;
 	if(val == "clmul-neon") return GF16_CLMUL_NEON;
