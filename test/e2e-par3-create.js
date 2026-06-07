@@ -7,7 +7,7 @@ var helpers = require('./e2e/helpers');
 var TEST_SIZE = 128 * 1024; // 128KB for CI speed
 var tempDir = path.join(helpers.getTempDir(), 'e2e-par3-create');
 
-function run() {
+async function run() {
 	var testFile = path.join(tempDir, 'test.bin');
 	var outputBase = path.join(tempDir, 'out');
 	var par3File = outputBase + '.par3';
@@ -26,9 +26,10 @@ function run() {
 
 		// Step 2: Create PAR3 archive
 		console.log('Running par3.js create...');
-		var createResult = helpers.runPar3([
+		var createResult = await helpers.runPar3([
 			'create',
 			'-o', outputBase,
+			'-r', '1',
 			testFile
 		]);
 		console.log('  Exit code: ' + createResult.code);
@@ -49,7 +50,7 @@ function run() {
 
 		// Step 4: Run par3.js verify with JSON output
 		console.log('Running par3.js verify (JSON output)...');
-		var verifyResult = helpers.runPar3([
+		var verifyResult = await helpers.runPar3([
 			'--json',
 			'verify',
 			par3File
@@ -68,12 +69,22 @@ function run() {
 		var jsonOutput;
 		try {
 			var lines = verifyResult.stdout.split('\n');
-			var jsonOutput = null;
+			jsonOutput = null;
 			for (var i = lines.length - 1; i >= 0; i--) {
-				var line = lines[i].trim();
-				if (line && line.startsWith('{')) {
-					jsonOutput = JSON.parse(line);
-					break;
+				var line = lines[i];
+				if (line.trim() === '}') {
+					var accumulated = '';
+					for (var j = i; j >= 0; j--) {
+						accumulated = lines[j] + '\n' + accumulated;
+						if (lines[j].trim() === '{' || lines[j].trim().startsWith('{')) {
+							try {
+								jsonOutput = JSON.parse(accumulated);
+								break;
+							} catch(e) {
+							}
+						}
+					}
+					if (jsonOutput) break;
 				}
 			}
 			if (!jsonOutput) {
@@ -112,4 +123,9 @@ function run() {
 	}
 }
 
-run();
+run().catch(err => {
+	console.error('\n======================');
+	console.error('TEST FAILED: ' + err.message);
+	console.error('======================');
+	process.exitCode = 1;
+});
