@@ -269,15 +269,61 @@ Low Level API
 
 ParPar can be operated at a lower level API, which gives more control over the creation process, but requires a deeper understanding of how the application operates and has a number of constraints. This API is undocumented, but examples can be found in [the examples folder](examples/).
 
+Prerequisites
+-------------
+
+On Linux (including WSL2), you need the following system packages installed before building ParPar from source:
+
+```bash
+# Ubuntu/Debian
+sudo apt install build-essential patchelf par2
+```
+
+If you are on WSL2 and using Debian/Ubuntu, you may also need to remove a conflicting libnode package that causes segfaults when loading native addons:
+
+```bash
+# Only needed if you encounter ABI mismatch errors with native addons
+sudo apt remove libnode109 libnode-dev
+```
+
+Node.js v18 or later is required. Using [nvm](https://github.com/nvm/nvm) is recommended to manage Node versions.
+
+Troubleshooting
+--------------
+
+**Segfault when requiring native addon (.node file)**
+
+If you see a segfault when running `node -e "require('./build/Release/parpar_gf64.node')"` or during `npm install`, this is likely caused by a `libnode.so.109` ABI mismatch. Your system has Debian's libnode109 package (Node 18, ABI 109) but your Node.js installation is a different version (ABI 127 for Node 22, etc.).
+
+To fix:
+1. Remove the conflicting packages: `sudo apt remove libnode109 libnode-dev`
+2. Rebuild: `npm install` or `node-gyp rebuild`
+
+The build scripts include a `preinstall` step that detects this conflict and warns you, and an `install` step that removes the bad `libnode.so.109` link if `patchelf` is installed.
+
+**par2: command not found**
+
+Install par2: `sudo apt install par2` (Ubuntu/Debian). The `par-compare.js` test requires `par2cmdline` to be installed.
+
 Development
-===========
+==========
 
 Running Tests
 -------------
 
-Currently only some very basic test scripts are included, which can be found in the aptly named *test* folder.
+Run all 7 test files with:
 
-*par-compare.js* tests PAR2 generation by comparing output from ParPar against that of par2cmdline. As such, par2cmdline needs to be installed for tests to be run. Note that tests will cover extreme cases, including those using large amounts of memory, generating large amounts of recovery data and so on. As such, you will likely need a machine with large amounts of RAM available (preferrably at least 8GB) and reasonable amount of free disk space available (20GB or more recommended) to successfully run all tests.  
+```bash
+npm test
+```
+
+Run only the 3 end-to-end tests (CI target) with:
+
+```bash
+npm run test:e2e
+```
+
+*par-compare.js* tests PAR2 generation by comparing output from ParPar against that of par2cmdline. As such, par2cmdline needs to be installed for tests to be run. Note that tests will cover extreme cases, including those using large amounts of memory, generating large amounts of recovery data and so on. As such, you will likely need a machine with large amounts of RAM available (preferrably at least 8GB) and reasonable amount of free disk space available (20GB or more recommended) to successfully run all tests.
 The test will write several files to a temporary location (sourced from `TEMP` or `TMP` environment variables, or the current working directory if none set) and will likely take a while to complete.
 
 Building Binary
