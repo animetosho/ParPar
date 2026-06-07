@@ -25,7 +25,10 @@
     "node": ">=0.10"
   },
   "scripts": {
-    "install": "node-gyp rebuild",
+    "preinstall": "node scripts/prebuild-check.js",
+    "install": "node-gyp rebuild && bash scripts/postbuild-patchelf.sh",
+    "test": "cd test && for f in *.js; do node --openssl-legacy-provider \"$f\" || exit 1; done",
+    "test:e2e": "for f in test/e2e-*.js; do node --openssl-legacy-provider \"$f\" || exit 1; done",
     "prepare": "husky"
   },
   "type": "commonjs",
