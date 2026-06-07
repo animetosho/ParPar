@@ -5,7 +5,7 @@
 #include "../src/stdint.h"
 #include "../src/platform.h"
 
-#define GF64_POLYNOMIAL 0x1BULL
+#define GF64_POLYNOMIAL 0x100000000000001BULL
 #define UNUSED(...) (void)(__VA_ARGS__)
 #define MAX_STACK_BUF 256
 
@@ -30,6 +30,7 @@ typedef void (*gf64_region_mul_arr_fn)(gf64_t *HEDLEY_RESTRICT out, const gf64_t
 extern gf64_region_mul_fn gf64_region_mul;
 extern gf64_region_mul_arr_fn gf64_region_mul_arr;
 extern GF64Method gf64_current_method;
+extern gf64_t gf64_inverse(gf64_t a);
 
 GF64Method gf64_detect_method(void);
 int gf64_init_dispatch(void);
