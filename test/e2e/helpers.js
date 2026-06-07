@@ -2,13 +2,15 @@
 
 var path = require('path');
 var fs = require('fs');
+var os = require('os');
 var crypto = require('crypto');
 var { spawn } = require('child_process');
 
-var BIN_PATH = path.join(__dirname, '..', 'bin', 'par3.js');
+var BIN_PATH = path.join(__dirname, '..', '..', 'bin', 'par3.js');
+var PARPAR_BIN_PATH = path.join(__dirname, '..', '..', 'bin', 'parpar.js');
 
 function getTempDir() {
-	return '/tmp/par3-repair-e2e-' + Date.now();
+	return fs.mkdtempSync(path.join(os.tmpdir(), 'parpar-test-'));
 }
 
 function cleanup(dir) {
@@ -105,6 +107,32 @@ function runPar3Sync(args) {
 	}
 }
 
+function runParPar(args) {
+	var proc;
+	try {
+		proc = require('child_process').spawnSync(process.execPath, [PARPAR_BIN_PATH].concat(args), {
+			cwd: path.dirname(PARPAR_BIN_PATH),
+			stdio: ['ignore', 'pipe', 'pipe']
+		});
+		return { code: proc.status, stdout: proc.stdout ? proc.stdout.toString() : '', stderr: proc.stderr ? proc.stderr.toString() : '' };
+	} catch (e) {
+		return { code: -1, stdout: '', stderr: e.message };
+	}
+}
+
+function runParParSync(args) {
+	var proc;
+	try {
+		proc = require('child_process').spawnSync(process.execPath, [PARPAR_BIN_PATH].concat(args), {
+			cwd: path.dirname(PARPAR_BIN_PATH),
+			stdio: ['ignore', 'pipe', 'pipe']
+		});
+		return { code: proc.status, stdout: proc.stdout ? proc.stdout.toString() : '', stderr: proc.stderr ? proc.stderr.toString() : '' };
+	} catch (e) {
+		return { code: -1, stdout: '', stderr: e.message };
+	}
+}
+
 function deleteRandomSlices(filePath, sliceSize, count) {
 	var stat = fs.statSync(filePath);
 	var fileSize = stat.size;
@@ -162,5 +190,7 @@ module.exports = {
 	hashFile: hashFile,
 	runPar3: runPar3,
 	runPar3Sync: runPar3Sync,
+	runParPar: runParPar,
+	runParParSync: runParParSync,
 	deleteRandomSlices: deleteRandomSlices
 };

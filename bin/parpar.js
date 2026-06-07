@@ -408,15 +408,9 @@ if(argv['opencl-list']) {
 }
 
 var cmd = argv._.shift();
-
-} else {
-	if(cmd && cmd !== 'create') {
-		error('Unknown command: ' + cmd + '. Use: create');
-	}
-	
-	if(!argv.out || !argv['input-slices']) {
-		error('Values for `out` and `input-slices` are required');
-	}
+if(cmd !== 'create' && cmd !== 'verify') {
+	argv._.unshift(cmd);
+	cmd = 'create';
 }
 
 

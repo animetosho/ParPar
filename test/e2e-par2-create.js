@@ -33,7 +33,7 @@ function run() {
 		helpers.createTestFile(256 * 1024, testFile);
 		
 		console.log('Running parpar.js to create PAR2 archive...');
-		result = helpers.runParPar(['-s', '16K', '-r', '10', '-o', outFile, testFile]);
+		result = helpers.runParPar(['create', '-s', '16K', '-r', '10', '-o', outFile, testFile]);
 		
 		if (result.code !== 0) {
 			console.error('parpar.js failed with code:', result.code);
