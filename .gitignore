@@ -17,3 +17,29 @@
 
 # NPM packages
 node_modules/
+
+# Test data blobs (root + test/)
+/test*.bin
+/test/test*.bin
+
+# Test output fixtures
+/test/testout*.par2
+/test/testout*.vol*
+/test/refout*.par2
+/test/refout*.vol*
+
+# Root-level test binaries (executable)
+/compute_mu
+/compute_mu2
+/test_barrett
+/test_barrett2
+/test_barrett3
+/test_gf32_minimal
+/verify_naive
+
+# C++ benchmark test binaries (already built)
+/gf64/test/test
+/gf64/test/test_all
+
+# xor_depends helper tool
+/xor_depends/
