@@ -1,7 +1,7 @@
 #pragma once
 
 #include <stddef.h>
-#include "gf64/gf64_global.h"
+#include "gf64_global.h"
 
 /// Controller for GF(2^64) arithmetic operations used in PAR3 encoding/repair.
 ///
@@ -49,10 +49,12 @@ public:
 	/// @param numIn        Number of input blocks
 	/// @param coeffMatrix  Coefficient matrix (numOut * numIn elements)
 	/// @param blockSize64  Block size in 64-bit words
+	/// @param tmp           Pre-allocated temp buffer (blockSize64 elements). Caller owns it.
 	static void MultiplyAccumulate(
 		gf64_t* out, size_t numOut,
 		const gf64_t* in, size_t numIn,
 		const gf64_t* coeffMatrix,
-		size_t blockSize64
+		size_t blockSize64,
+		gf64_t* tmp
 	);
 };
