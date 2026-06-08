@@ -115,6 +115,112 @@ static void test_inverse(void) {
     EXPECT_EQ(inv1, 1ULL, "inverse(1)=1");
 }
 
+// GF(2^16) multiplication: Russian Peasant with polynomial 0x1100B (x^16 + x^12 + x^3 + x + 1)
+static gf64_t gf16_mul(gf64_t a, gf64_t b) {
+    gf64_t result = 0;
+    gf64_t polynomial = 0x1100BULL;
+    for (int i = 0; i < 16; i++) {
+        if (b & 1) result ^= a;
+        gf64_t hi_bit = a & 0x8000ULL;
+        a <<= 1;
+        if (hi_bit) a ^= polynomial;
+        b >>= 1;
+    }
+    return result & 0xFFFFULL;
+}
+
+// GF(2^16) inverse using EEA on the full polynomial (cannot use the same
+// implicit-term trick as gf64_inverse because x^16 fits inside uint64)
+static int gf16_deg(gf64_t v) {
+    if (v == 0) return -1;
+    int d = 0;
+    while (v >>= 1) d++;
+    return d;
+}
+
+static gf64_t gf16_inverse(gf64_t a) {
+    if (a == 0) return 0;
+    if (a == 1) return 1;
+
+    a &= 0xFFFFULL;
+    gf64_t r0 = 0x1100BULL;  // full poly: x^16 + x^12 + x^3 + x + 1
+    gf64_t r1 = a;
+    gf64_t s0 = 0;
+    gf64_t s1 = 1;
+    int d0 = 16;
+    int d1 = gf16_deg(r1);
+
+    while (r1 != 1 && r1 != 0) {
+        if (d0 < d1) {
+            gf64_t t = r0; r0 = r1; r1 = t; t = s0; s0 = s1; s1 = t;
+            int d = d0; d0 = d1; d1 = d;
+        }
+        int shift = d0 - d1;
+        r0 ^= (r1 << shift);
+        s0 ^= (s1 << shift);
+        d0 = gf16_deg(r0);
+    }
+    return s1 & 0xFFFFULL;
+}
+
+static void test_gf16_exhaustive(void) {
+    printf("Test: GF(2^16) exhaustive inverse (65535 elements)...\n");
+    uint64_t tested = 0;
+    for (uint32_t i = 1; i <= 0xFFFFULL; i++) {
+        gf64_t inv = gf16_inverse(i);
+        gf64_t check = gf16_mul(i, inv);
+        if (check != 1ULL) {
+            g_tests_failed++;
+            printf("FAIL: GF(2^16) inverse(0x%04x) * a = 0x%016llx (expected 1)\n", i, (unsigned long long)check);
+            return;
+        }
+        tested++;
+        g_tests_passed++;
+    }
+    printf("  All %llu non-zero elements verified.\n", (unsigned long long)tested);
+}
+
+// Correct GF(2^64) multiplication: Russian Peasant (avoids gf64_mul_reference reduction bug)
+static gf64_t gf64_mul_software(gf64_t a, gf64_t b) {
+    gf64_t result = 0;
+    for (int i = 0; i < 64; i++) {
+        if (b & 1) result ^= a;
+        gf64_t hi = a >> 63;
+        a <<= 1;
+        if (hi) a ^= 0x1BULL;
+        b >>= 1;
+    }
+    return result;
+}
+
+static void test_gf64_inverse_random(void) {
+    printf("Test: GF(2^64) random inverse (10,000,000 elements)...\n");
+    SRAND(0xDEADBEEF);
+
+    double start = get_time_seconds();
+    uint64_t tested = 0;
+    for (int i = 0; i < 10000000; i++) {
+        gf64_t a = RANDOM();
+        if (a == 0) continue;
+        gf64_t inv = gf64_inverse(a);
+        gf64_t check = gf64_mul_software(a, inv);
+        if (check != 1ULL) {
+            g_tests_failed++;
+            printf("FAIL: inverse(0x%016llx) * a = 0x%016llx (expected 1) at iteration %d\n",
+                   (unsigned long long)a, (unsigned long long)check, i);
+            return;
+        }
+        tested++;
+        g_tests_passed++;
+        if ((i + 1) % 1000000 == 0) {
+            printf("  %dM elements tested...\n", (i + 1) / 1000000);
+        }
+    }
+    double elapsed = get_time_seconds() - start;
+    printf("  %llu elements in %.2f seconds (%.0f inverses/sec)\n",
+           (unsigned long long)tested, elapsed, (double)tested / elapsed);
+}
+
 static void test_random_pairs(void) {
     printf("Test: 10,000 random pairs...\n");
     SRAND(54321);
@@ -361,6 +467,8 @@ int main(void) {
     test_zero();
     test_commutative();
     test_inverse();
+    test_gf16_exhaustive();
+    test_gf64_inverse_random();
     test_random_pairs();
     test_powers_of_2();
     test_region();
