@@ -1,5 +1,18 @@
 #include "gf64_invert.h"
 
+#ifdef _MSC_VER
+# include <intrin.h>
+static inline int my_clzll(uint64_t x) {
+    unsigned long idx;
+    _BitScanReverse64(&idx, x);
+    return (int)(63 - idx);
+}
+#else
+static inline int my_clzll(uint64_t x) {
+    return __builtin_clzll(x);
+}
+#endif
+
 HEDLEY_BEGIN_C_DECLS
 
 gf64_t gf64_inverse(gf64_t a) {
@@ -22,7 +35,7 @@ gf64_t gf64_inverse(gf64_t a) {
 	gf64_t s1 = 1;
 
 	int deg_r0 = 64;  /* implicit x^64 term */
-	int deg_r1 = (r1 == 0) ? -1 : (63 - __builtin_clzll(r1));
+	int deg_r1 = (r1 == 0) ? -1 : (63 - my_clzll(r1));
 
 	while (r1 != 1 && r1 != 0) {
 		if (deg_r0 < deg_r1) {
@@ -34,7 +47,7 @@ gf64_t gf64_inverse(gf64_t a) {
 		r0 ^= (r1 << shift);
 		s0 ^= (s1 << shift);
 
-		deg_r0 = (r0 == 0) ? -1 : (63 - __builtin_clzll(r0));
+		deg_r0 = (r0 == 0) ? -1 : (63 - my_clzll(r0));
 	}
 
 	if (r1 == 0)
