@@ -113,6 +113,7 @@
       "target_name": "parpar_gf64",
       "sources": [
         "src/gf64_addon.cc",
+        "src/par3_engine.cc",
         "gf64/gf64_single.c",
         "gf64/gf64_region_scalar.c",
         "gf64/gf64_region_ssse3.c",

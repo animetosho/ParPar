@@ -19,6 +19,7 @@
 #endif
 
 #include "gf64_global.h"
+#include "par3_engine.h"
 
 using namespace v8;
 
@@ -448,6 +449,157 @@ static napi_value gf64_solve_NAPI(napi_env env, napi_callback_info info) {
 	return result_val;
 }
 
+// Helper: extract uint64 from napi_value (accepts Number or BigInt).
+// Extract uint64 from napi_value (Number or BigInt).
+// Tries BigInt first (via napi_get_value_bigint_uint64), then falls back to Number.
+// Returns napi_ok on success, napi_generic_failure if neither type.
+static napi_status get_uint64_from_value(napi_env env, napi_value val, uint64_t* result) {
+	napi_status status;
+	napi_valuetype valuetype;
+
+	status = napi_typeof(env, val, &valuetype);
+	if(status != napi_ok) return status;
+
+	if(valuetype == napi_bigint) {
+		bool lossless = false;
+		status = napi_get_value_bigint_uint64(env, val, result, &lossless);
+		if(status == napi_ok) return status;
+		// Fall through to Number attempt (rare — only if BigInt conversion fails)
+	}
+
+	int64_t tmp;
+	status = napi_get_value_int64(env, val, &tmp);
+	if(status == napi_ok) {
+		*result = (uint64_t)tmp;
+		return napi_ok;
+	}
+
+	return napi_generic_failure;
+}
+
+static napi_value ComputeRecovery_NAPI(napi_env env, napi_callback_info info) {
+	napi_status status;
+	size_t argc = 8;
+	napi_value args[8];
+
+	status = napi_get_cb_info(env, info, &argc, args, NULL, NULL);
+	if(status != napi_ok) {
+		napi_throw_error(env, NULL, "Failed to get callback info");
+		return NULL;
+	}
+
+	if(argc < 7) {
+		napi_throw_type_error(env, NULL, "Requires inputs, outputs, numInputs, numRecovery, blockSize, firstInput, firstRecovery [, numThreads]");
+		return NULL;
+	}
+
+	// Extract buffer args
+	gf64_t* inputs = NULL;
+	size_t inputsLen = 0;
+	status = napi_get_buffer_info(env, args[0], (void**)&inputs, &inputsLen);
+	if(status != napi_ok) {
+		napi_throw_type_error(env, NULL, "inputs must be a Buffer");
+		return NULL;
+	}
+
+	gf64_t* outputs = NULL;
+	size_t outputsLen = 0;
+	status = napi_get_buffer_info(env, args[1], (void**)&outputs, &outputsLen);
+	if(status != napi_ok) {
+		napi_throw_type_error(env, NULL, "outputs must be a Buffer");
+		return NULL;
+	}
+
+	// Extract integer args
+	int32_t numInputs = 0;
+	status = napi_get_value_int32(env, args[2], &numInputs);
+	if(status != napi_ok) {
+		napi_throw_type_error(env, NULL, "numInputs must be an integer");
+		return NULL;
+	}
+
+	int32_t numRecovery = 0;
+	status = napi_get_value_int32(env, args[3], &numRecovery);
+	if(status != napi_ok) {
+		napi_throw_type_error(env, NULL, "numRecovery must be an integer");
+		return NULL;
+	}
+
+	int64_t blockSize = 0;
+	status = napi_get_value_int64(env, args[4], &blockSize);
+	if(status != napi_ok) {
+		napi_throw_type_error(env, NULL, "blockSize must be an integer");
+		return NULL;
+	}
+
+	// Parse firstInput (Number or BigInt)
+	uint64_t firstInput = 0;
+	status = get_uint64_from_value(env, args[5], &firstInput);
+	if(status != napi_ok) {
+		napi_throw_type_error(env, NULL, "firstInput must be a Number or BigInt");
+		return NULL;
+	}
+
+	// Parse firstRecovery (Number or BigInt)
+	uint64_t firstRecovery = 0;
+	status = get_uint64_from_value(env, args[6], &firstRecovery);
+	if(status != napi_ok) {
+		napi_throw_type_error(env, NULL, "firstRecovery must be a Number or BigInt");
+		return NULL;
+	}
+
+	// Parse numThreads (optional, defaults to 0 = auto)
+	int32_t numThreads = 0;
+	if(argc >= 8) {
+		status = napi_get_value_int32(env, args[7], &numThreads);
+		if(status != napi_ok) {
+			napi_throw_type_error(env, NULL, "numThreads must be an integer");
+			return NULL;
+		}
+	}
+
+	// Validation
+	if(numInputs <= 0) {
+		napi_throw_range_error(env, NULL, "numInputs must be positive");
+		return NULL;
+	}
+
+	if(numRecovery <= 0) {
+		napi_throw_range_error(env, NULL, "numRecovery must be positive");
+		return NULL;
+	}
+
+	if(blockSize <= 0 || blockSize % 8 != 0) {
+		napi_throw_range_error(env, NULL, "blockSize must be positive and a multiple of 8");
+		return NULL;
+	}
+
+	if(inputsLen < (size_t)(numInputs * blockSize)) {
+		napi_throw_range_error(env, NULL, "inputs buffer too small for numInputs * blockSize");
+		return NULL;
+	}
+
+	if(outputsLen < (size_t)(numRecovery * blockSize)) {
+		napi_throw_range_error(env, NULL, "outputs buffer too small for numRecovery * blockSize");
+		return NULL;
+	}
+
+	// Convert blockSize (bytes) to blockSize64 (64-bit words)
+	size_t blockSize64 = (size_t)(blockSize / 8);
+
+	// Call the engine
+	gf64_init_dispatch();
+	GF64Controller::ComputeRecoveryBlocks(
+		inputs, (size_t)numInputs,
+		outputs, (size_t)numRecovery,
+		blockSize64,
+		firstInput, firstRecovery,
+		(int)numThreads
+	);
+
+	return NULL;
+}
+
 napi_value parpar_gf64_init_NAPI(napi_env env, napi_value exports) {
 	napi_status status;
 
@@ -521,6 +673,18 @@ napi_value create_fn;
 	status = napi_set_named_property(env, exports, "gf64_solve", solve_fn);
 	if(status != napi_ok) {
 		napi_throw_error(env, NULL, "Failed to set gf64_solve property");
+		return NULL;
+	}
+
+	napi_value compute_recovery_fn;
+	status = napi_create_function(env, NULL, 0, ComputeRecovery_NAPI, NULL, &compute_recovery_fn);
+	if(status != napi_ok) {
+		napi_throw_error(env, NULL, "Failed to create compute_recovery function");
+		return NULL;
+	}
+	status = napi_set_named_property(env, exports, "compute_recovery", compute_recovery_fn);
+	if(status != napi_ok) {
+		napi_throw_error(env, NULL, "Failed to set compute_recovery property");
 		return NULL;
 	}
 
