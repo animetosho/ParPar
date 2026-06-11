@@ -56,6 +56,13 @@ static HEDLEY_ALWAYS_INLINE uint32x2_t vmake_u32le(
 	state_[2] = vset_lane_u32(0x98badcfeL, state_[2], idx); \
 	state_[3] = vset_lane_u32(0x10325476L, state_[3], idx); \
 }
+static HEDLEY_ALWAYS_INLINE void md5_init_x2_neon(void* state) {
+	uint32x2_t* state_ = (uint32x2_t*)state;
+	state_[0]  = vdup_n_u32(0x67452301L);
+	state_[1]  = vdup_n_u32(0xefcdab89L);
+	state_[2]  = vdup_n_u32(0x98badcfeL);
+	state_[3]  = vdup_n_u32(0x10325476L);
+}
 
 
 #define _FN(f) f##_neon
