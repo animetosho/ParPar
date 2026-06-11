@@ -1,4 +1,4 @@
-# ParPar (PAR3 fork)
+# ParParPar (PAR3 fork)
 
 High-performance PAR3 create and repair with GF(2^64) recovery, written in C++ with a Node.js frontend. This fork adds a fast, large-file capable PAR3 implementation on top of upstream ParPar (which is PAR2 create-only).
 
