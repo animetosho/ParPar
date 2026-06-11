@@ -116,8 +116,6 @@ function run() {
 	var startTime = Date.now();
 	var copyFixtureStart, hashOriginalStart, createPar3Start, verifyStart, deleteSlicesStart, repairStart, hashRepairedStart;
 
-	helpers.cleanup(tempDir);
-
 	try {
 		copyFixtureStart = Date.now();
 		console.log('Copying fixture to temp dir...');
