@@ -127,11 +127,10 @@ void gf16_affine_mul_bmm(const void *HEDLEY_RESTRICT scratch, void* dst, const v
 #if defined(__AVX512BMM__) && defined(__AVX512VL__)
 static HEDLEY_ALWAYS_INLINE void gf16_affine_muladd_x_bmm(
 	const void *HEDLEY_RESTRICT scratch,
-	uint8_t *HEDLEY_RESTRICT _dst, const unsigned srcScale,
-	GF16_MULADD_MULTI_SRCLIST, size_t len,
+	GF16_BLKMAC_SRCDSTLIST, size_t len,
 	const uint16_t *HEDLEY_RESTRICT coefficients, const int doPrefetch, const char* _pf
 ) {
-	GF16_MULADD_MULTI_SRC_UNUSED(16);
+	GF16_BLKMAC_SRCDST_UNUSED(16, 1);
 	__m512i mat[16];
 	for(int i=0; i < (srcCount & ~1); i+=2)
 		gf16_bmm_load2_matrix(scratch, coefficients[i], coefficients[i+1], mat + i, mat + i+1);
@@ -145,7 +144,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_affine_muladd_x_bmm(
 		if(doPrefetch == 2)
 			_mm_prefetch(_pf+ptr, _MM_HINT_T2);
 		
-		acc = _mm512_load_si512(_dst + ptr);
+		acc = _mm512_load_si512(_dst1 + ptr*dstScale);
 		acc = _mm512_bmacxor16x16x16(acc, _mm512_load_si512(_src1 + ptr*srcScale), mat[0]);
 		if(srcCount > 1)
 			acc = _mm512_bmacxor16x16x16(acc, _mm512_load_si512(_src2 + ptr*srcScale), mat[1]);
@@ -177,7 +176,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_affine_muladd_x_bmm(
 			acc = _mm512_bmacxor16x16x16(acc, _mm512_load_si512(_src15 + ptr*srcScale), mat[14]);
 		if(srcCount > 15)
 			acc = _mm512_bmacxor16x16x16(acc, _mm512_load_si512(_src16 + ptr*srcScale), mat[15]);
-		_mm512_store_si512(_dst + ptr, acc);
+		_mm512_store_si512(_dst1 + ptr*dstScale, acc);
 	}
 }
 #endif /*defined(__AVX512BMM__)*/

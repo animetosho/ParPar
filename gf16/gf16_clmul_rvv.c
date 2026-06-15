@@ -27,10 +27,10 @@ static HEDLEY_ALWAYS_INLINE void gf16_clmul_rvv_round(size_t vl, const void* src
 
 static HEDLEY_ALWAYS_INLINE void gf16_clmul_muladd_x_rvv(
 	const void *HEDLEY_RESTRICT scratch,
-	uint8_t *HEDLEY_RESTRICT _dst, const unsigned srcScale, GF16_MULADD_MULTI_SRCLIST, size_t len,
+	GF16_BLKMAC_SRCDSTLIST, size_t len,
 	const uint16_t *HEDLEY_RESTRICT coefficients, const int doPrefetch, const char* _pf
 ) {
-	GF16_MULADD_MULTI_SRC_UNUSED(12);
+	GF16_BLKMAC_SRCDST_UNUSED(12, 1);
 	UNUSED(scratch);
 	
 	size_t vl = RV(vsetvlmax_e8m1)();
@@ -66,10 +66,10 @@ static HEDLEY_ALWAYS_INLINE void gf16_clmul_muladd_x_rvv(
 		// reduce & add to dest
 		vuint16m1_t r = RV(vxor_vv_u16m1)(
 			gf16_clmul_rvv_reduction(ra, rb, vl),
-			RV(vle16_v_u16m1)((const uint16_t*)(_dst+ptr), vl),
+			RV(vle16_v_u16m1)((const uint16_t*)(_dst1+ptr*dstScale), vl),
 			vl
 		);
-		RV(vse16_v_u16m1)((uint16_t*)(_dst+ptr), r, vl);
+		RV(vse16_v_u16m1)((uint16_t*)(_dst1+ptr*dstScale), r, vl);
 	}
 }
 

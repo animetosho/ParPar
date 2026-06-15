@@ -10,20 +10,20 @@ static HEDLEY_ALWAYS_INLINE uint8x16x2_t veorq_u8_x2(uint8x16x2_t a, uint8x16x2_
 }
 
 static HEDLEY_ALWAYS_INLINE void gf_add_x_neon(
-	const void *HEDLEY_RESTRICT scratch, uint8_t *HEDLEY_RESTRICT _dst, const unsigned srcScale,
-	GF16_MULADD_MULTI_SRCLIST, size_t len,
+	const void *HEDLEY_RESTRICT scratch,
+	GF16_BLKMAC_SRCDSTLIST, size_t len,
 	const uint16_t *HEDLEY_RESTRICT coefficients,
 	const int doPrefetch, const char* _pf
 ) {
 	ASSUME((len & (sizeof(uint8x16_t)*2-1)) == 0);
-	ASSUME(((uintptr_t)_dst & (sizeof(uint8x16_t)-1)) == 0);
+	ASSUME(((uintptr_t)_dst1 & (sizeof(uint8x16_t)-1)) == 0);
 	ASSUME(len > 0);
 	
-	GF16_MULADD_MULTI_SRC_UNUSED(18);
+	GF16_BLKMAC_SRCDST_UNUSED(18, 1);
 	UNUSED(scratch); UNUSED(coefficients);
 	
 	#define DO_PROCESS \
-		uint8x16x2_t data = vld1q_u8_x2_align(_dst+ptr); \
+		uint8x16x2_t data = vld1q_u8_x2_align(_dst1+ptr*dstScale); \
 		data = veorq_u8_x2(data, _vld1q_u8_x2(_src1+ptr*srcScale)); \
 		if(srcCount >= 2) \
 			data = veorq_u8_x2(data, _vld1q_u8_x2(_src2+ptr*srcScale)); \
@@ -59,7 +59,7 @@ static HEDLEY_ALWAYS_INLINE void gf_add_x_neon(
 			data = veorq_u8_x2(data, _vld1q_u8_x2(_src17+ptr*srcScale)); \
 		if(srcCount >= 18) \
 			data = veorq_u8_x2(data, _vld1q_u8_x2(_src18+ptr*srcScale)); \
-		vst1q_u8_x2_align(_dst+ptr, data)
+		vst1q_u8_x2_align(_dst1+ptr*dstScale, data)
 	
 	if(doPrefetch) {
 		intptr_t ptr = -(intptr_t)len;

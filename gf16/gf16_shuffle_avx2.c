@@ -49,8 +49,8 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle2x_muladd_round_avx2(__m256i* _dst,
 	_mm256_store_si256(_dst, result);
 }
 
-static HEDLEY_ALWAYS_INLINE void gf16_shuffle2x_muladd_x_avx2(const void *HEDLEY_RESTRICT scratch, uint8_t *HEDLEY_RESTRICT _dst, const unsigned srcScale, GF16_MULADD_MULTI_SRCLIST, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, const int doPrefetch, const char* _pf) {
-	GF16_MULADD_MULTI_SRC_UNUSED(2);
+static HEDLEY_ALWAYS_INLINE void gf16_shuffle2x_muladd_x_avx2(const void *HEDLEY_RESTRICT scratch, GF16_BLKMAC_SRCDSTLIST, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, const int doPrefetch, const char* _pf) {
+	GF16_BLKMAC_SRCDST_UNUSED(2, 1);
 	
 	__m256i shufNormLoA, shufSwapLoA, shufNormHiA, shufSwapHiA;
 	__m256i shufNormLoB, shufSwapLoB, shufNormHiB, shufSwapHiB;
@@ -117,7 +117,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle2x_muladd_x_avx2(const void *HEDLEY
 		intptr_t ptr = -(intptr_t)len;
 		if(len & (sizeof(__m256i)*2-1)) { // number of loop iterations isn't even, so do one iteration to make it even
 			gf16_shuffle2x_muladd_round_avx2(
-				(__m256i*)(_dst+ptr), srcCount, _src1, _src2, ptr*srcScale,
+				(__m256i*)(_dst1+ptr*dstScale), srcCount, _src1, _src2, ptr*srcScale,
 				shufNormLoA, shufNormLoB, shufNormHiA, shufNormHiB, shufSwapLoA, shufSwapLoB, shufSwapHiA, shufSwapHiB
 			);
 			if(doPrefetch == 1)
@@ -128,12 +128,12 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle2x_muladd_x_avx2(const void *HEDLEY
 		}
 		while(ptr) {
 			gf16_shuffle2x_muladd_round_avx2(
-				(__m256i*)(_dst+ptr), srcCount, _src1, _src2, ptr*srcScale,
+				(__m256i*)(_dst1+ptr*dstScale), srcCount, _src1, _src2, ptr*srcScale,
 				shufNormLoA, shufNormLoB, shufNormHiA, shufNormHiB, shufSwapLoA, shufSwapLoB, shufSwapHiA, shufSwapHiB
 			);
 			ptr += sizeof(__m256i);
 			gf16_shuffle2x_muladd_round_avx2(
-				(__m256i*)(_dst+ptr), srcCount, _src1, _src2, ptr*srcScale,
+				(__m256i*)(_dst1+ptr*dstScale), srcCount, _src1, _src2, ptr*srcScale,
 				shufNormLoA, shufNormLoB, shufNormHiA, shufNormHiB, shufSwapLoA, shufSwapLoB, shufSwapHiA, shufSwapHiB
 			);
 			
@@ -146,7 +146,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle2x_muladd_x_avx2(const void *HEDLEY
 	} else {
 		for(intptr_t ptr = -(intptr_t)len; ptr; ptr += sizeof(__m256i)) {
 			gf16_shuffle2x_muladd_round_avx2(
-				(__m256i*)(_dst+ptr), srcCount, _src1, _src2, ptr*srcScale,
+				(__m256i*)(_dst1+ptr*dstScale), srcCount, _src1, _src2, ptr*srcScale,
 				shufNormLoA, shufNormLoB, shufNormHiA, shufNormHiB, shufSwapLoA, shufSwapLoB, shufSwapHiA, shufSwapHiB
 			);
 		}

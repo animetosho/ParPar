@@ -55,10 +55,10 @@ static HEDLEY_ALWAYS_INLINE void gf16_clmul_neon_round(const void* src, poly16x8
 
 static HEDLEY_ALWAYS_INLINE void _FN(gf16_clmul_muladd_x)(
 	const void *HEDLEY_RESTRICT scratch,
-	uint8_t *HEDLEY_RESTRICT _dst, const unsigned srcScale, GF16_MULADD_MULTI_SRCLIST, size_t len,
+	GF16_BLKMAC_SRCDSTLIST, size_t len,
 	const uint16_t *HEDLEY_RESTRICT coefficients, const int doPrefetch, const char* _pf
 ) {
-	GF16_MULADD_MULTI_SRC_UNUSED(CLMUL_NUM_REGIONS);
+	GF16_BLKMAC_SRCDST_UNUSED(CLMUL_NUM_REGIONS, 1);
 	UNUSED(scratch);
 	
 	coeff_t coeff[CLMUL_COEFF_PER_REGION*CLMUL_NUM_REGIONS];
@@ -93,10 +93,10 @@ static HEDLEY_ALWAYS_INLINE void _FN(gf16_clmul_muladd_x)(
 		 \
 		gf16_clmul_neon_reduction(&low1, &low2, mid1, mid2, &high1, &high2); \
 		 \
-		uint8x16x2_t vb = vld2q_u8(_dst+ptr); \
+		uint8x16x2_t vb = vld2q_u8(_dst1+ptr*dstScale); \
 		vb.val[0] = veorq_u8(vreinterpretq_u8_p16(veorq_p16(low1, low2)), vb.val[0]); \
 		vb.val[1] = veorq_u8(vreinterpretq_u8_p16(veorq_p16(high1, high2)), vb.val[1]); \
-		vst2q_u8(_dst+ptr, vb)
+		vst2q_u8(_dst1+ptr*dstScale, vb)
 #endif
 	
 	GF16_CLMUL_PROCESS_VARS;

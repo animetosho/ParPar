@@ -5,14 +5,14 @@
 #ifdef __riscv_vector
 
 static HEDLEY_ALWAYS_INLINE void gf_add_x_rvv(
-	const void *HEDLEY_RESTRICT scratch, uint8_t *HEDLEY_RESTRICT _dst, const unsigned srcScale,
-	GF16_MULADD_MULTI_SRCLIST, size_t len,
+	const void *HEDLEY_RESTRICT scratch,
+	GF16_BLKMAC_SRCDSTLIST, size_t len,
 	const uint16_t *HEDLEY_RESTRICT coefficients,
 	const int doPrefetch, const char* _pf
 ) {
 	ASSUME(len > 0);
 	
-	GF16_MULADD_MULTI_SRC_UNUSED(18);
+	GF16_BLKMAC_SRCDST_UNUSED(18, 1);
 	UNUSED(coefficients);
 	
 	unsigned vecStride = (unsigned)((uintptr_t)scratch); // abuse this otherwise unused variable
@@ -23,7 +23,7 @@ static HEDLEY_ALWAYS_INLINE void gf_add_x_rvv(
 	#define DO_ADD(lmul) \
 		size_t vl = RV(vsetvlmax_e8m ## lmul)(); \
 		for(intptr_t ptr = -(intptr_t)len; ptr; ptr += vl) { \
-			vuint8m ## lmul ## _t data = RV(vle8_v_u8m ## lmul)(_dst+ptr, vl); \
+			vuint8m ## lmul ## _t data = RV(vle8_v_u8m ## lmul)(_dst1+ptr*dstScale, vl); \
 			 \
 			XOR_LOAD(1, lmul); \
 			XOR_LOAD(2, lmul); \
@@ -44,7 +44,7 @@ static HEDLEY_ALWAYS_INLINE void gf_add_x_rvv(
 			XOR_LOAD(17, lmul); \
 			XOR_LOAD(18, lmul); \
 			 \
-			RV(vse8_v_u8m ## lmul)(_dst+ptr, data, vl); \
+			RV(vse8_v_u8m ## lmul)(_dst1+ptr*dstScale, data, vl); \
 		}
 	
 	UNUSED(doPrefetch); UNUSED(_pf);

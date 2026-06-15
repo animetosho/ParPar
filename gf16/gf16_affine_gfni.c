@@ -108,11 +108,10 @@ static HEDLEY_ALWAYS_INLINE void gf16_affine_muladd_round(const __m128i* src, __
 }
 static HEDLEY_ALWAYS_INLINE void gf16_affine_muladd_x_gfni(
 	const void *HEDLEY_RESTRICT scratch,
-	uint8_t *HEDLEY_RESTRICT _dst, const unsigned srcScale,
-	GF16_MULADD_MULTI_SRCLIST, size_t len,
+	GF16_BLKMAC_SRCDSTLIST, size_t len,
 	const uint16_t *HEDLEY_RESTRICT coefficients, const int doPrefetch, const char* _pf
 ) {
-	GF16_MULADD_MULTI_SRC_UNUSED(3);
+	GF16_BLKMAC_SRCDST_UNUSED(3, 1);
 	__m128i depmask1, depmask2;
 	
 	gf16_affine_load_matrix(scratch, coefficients[0], &depmask1, &depmask2);
@@ -143,15 +142,15 @@ static HEDLEY_ALWAYS_INLINE void gf16_affine_muladd_x_gfni(
 	if(doPrefetch) {
 		intptr_t ptr = -(intptr_t)len;
 		if(len & (sizeof(__m128i)*4-1)) { // number of loop iterations isn't even, so do one iteration to make it even
-			tph = _mm_load_si128((__m128i*)(_dst + ptr));
-			tpl = _mm_load_si128((__m128i*)(_dst + ptr) + 1);
+			tph = _mm_load_si128((__m128i*)(_dst1 + ptr*dstScale));
+			tpl = _mm_load_si128((__m128i*)(_dst1 + ptr*dstScale) + 1);
 			gf16_affine_muladd_round((__m128i*)(_src1 + ptr*srcScale), &tpl, &tph, mat_All, mat_Ahl, mat_Alh, mat_Ahh);
 			if(srcCount > 1)
 				gf16_affine_muladd_round((__m128i*)(_src2 + ptr*srcScale), &tpl, &tph, mat_Bll, mat_Bhl, mat_Blh, mat_Bhh);
 			if(srcCount > 2)
 				gf16_affine_muladd_round((__m128i*)(_src3 + ptr*srcScale), &tpl, &tph, mat_Cll, mat_Chl, mat_Clh, mat_Chh);
-			_mm_store_si128 ((__m128i*)(_dst + ptr), tph);
-			_mm_store_si128 ((__m128i*)(_dst + ptr)+1, tpl);
+			_mm_store_si128 ((__m128i*)(_dst1 + ptr*dstScale), tph);
+			_mm_store_si128 ((__m128i*)(_dst1 + ptr*dstScale)+1, tpl);
 			
 			if(doPrefetch == 1)
 				_mm_prefetch(_pf+ptr, MM_HINT_WT1);
@@ -160,27 +159,27 @@ static HEDLEY_ALWAYS_INLINE void gf16_affine_muladd_x_gfni(
 			ptr += sizeof(__m128i)*2;
 		}
 		while(ptr) {
-			tph = _mm_load_si128((__m128i*)(_dst + ptr));
-			tpl = _mm_load_si128((__m128i*)(_dst + ptr) + 1);
+			tph = _mm_load_si128((__m128i*)(_dst1 + ptr*dstScale));
+			tpl = _mm_load_si128((__m128i*)(_dst1 + ptr*dstScale) + 1);
 			gf16_affine_muladd_round((__m128i*)(_src1 + ptr*srcScale), &tpl, &tph, mat_All, mat_Ahl, mat_Alh, mat_Ahh);
 			if(srcCount > 1)
 				gf16_affine_muladd_round((__m128i*)(_src2 + ptr*srcScale), &tpl, &tph, mat_Bll, mat_Bhl, mat_Blh, mat_Bhh);
 			if(srcCount > 2)
 				gf16_affine_muladd_round((__m128i*)(_src3 + ptr*srcScale), &tpl, &tph, mat_Cll, mat_Chl, mat_Clh, mat_Chh);
-			_mm_store_si128 ((__m128i*)(_dst + ptr), tph);
-			_mm_store_si128 ((__m128i*)(_dst + ptr)+1, tpl);
+			_mm_store_si128 ((__m128i*)(_dst1 + ptr*dstScale), tph);
+			_mm_store_si128 ((__m128i*)(_dst1 + ptr*dstScale)+1, tpl);
 			
 			ptr += sizeof(__m128i)*2;
 			
-			tph = _mm_load_si128((__m128i*)(_dst + ptr));
-			tpl = _mm_load_si128((__m128i*)(_dst + ptr) + 1);
+			tph = _mm_load_si128((__m128i*)(_dst1 + ptr*dstScale));
+			tpl = _mm_load_si128((__m128i*)(_dst1 + ptr*dstScale) + 1);
 			gf16_affine_muladd_round((__m128i*)(_src1 + ptr*srcScale), &tpl, &tph, mat_All, mat_Ahl, mat_Alh, mat_Ahh);
 			if(srcCount > 1)
 				gf16_affine_muladd_round((__m128i*)(_src2 + ptr*srcScale), &tpl, &tph, mat_Bll, mat_Bhl, mat_Blh, mat_Bhh);
 			if(srcCount > 2)
 				gf16_affine_muladd_round((__m128i*)(_src3 + ptr*srcScale), &tpl, &tph, mat_Cll, mat_Chl, mat_Clh, mat_Chh);
-			_mm_store_si128 ((__m128i*)(_dst + ptr), tph);
-			_mm_store_si128 ((__m128i*)(_dst + ptr)+1, tpl);
+			_mm_store_si128 ((__m128i*)(_dst1 + ptr*dstScale), tph);
+			_mm_store_si128 ((__m128i*)(_dst1 + ptr*dstScale)+1, tpl);
 			
 			if(doPrefetch == 1)
 				_mm_prefetch(_pf+(ptr>>1), MM_HINT_WT1);
@@ -190,15 +189,15 @@ static HEDLEY_ALWAYS_INLINE void gf16_affine_muladd_x_gfni(
 		}
 	} else {
 		for(intptr_t ptr = -(intptr_t)len; ptr; ptr += sizeof(__m128i)*2) {
-			tph = _mm_load_si128((__m128i*)(_dst + ptr));
-			tpl = _mm_load_si128((__m128i*)(_dst + ptr) + 1);
+			tph = _mm_load_si128((__m128i*)(_dst1 + ptr*dstScale));
+			tpl = _mm_load_si128((__m128i*)(_dst1 + ptr*dstScale) + 1);
 			gf16_affine_muladd_round((__m128i*)(_src1 + ptr*srcScale), &tpl, &tph, mat_All, mat_Ahl, mat_Alh, mat_Ahh);
 			if(srcCount > 1)
 				gf16_affine_muladd_round((__m128i*)(_src2 + ptr*srcScale), &tpl, &tph, mat_Bll, mat_Bhl, mat_Blh, mat_Bhh);
 			if(srcCount > 2)
 				gf16_affine_muladd_round((__m128i*)(_src3 + ptr*srcScale), &tpl, &tph, mat_Cll, mat_Chl, mat_Clh, mat_Chh);
-			_mm_store_si128 ((__m128i*)(_dst + ptr), tph);
-			_mm_store_si128 ((__m128i*)(_dst + ptr)+1, tpl);
+			_mm_store_si128 ((__m128i*)(_dst1 + ptr*dstScale), tph);
+			_mm_store_si128 ((__m128i*)(_dst1 + ptr*dstScale)+1, tpl);
 		}
 	}
 }
@@ -248,11 +247,10 @@ void* gf16_affine_init_gfni(int polynomial) {
 #if defined(__GFNI__) && defined(__SSSE3__) && !defined(PARPAR_SLIM_GF16)
 static HEDLEY_ALWAYS_INLINE void gf16_affine2x_muladd_x_gfni(
 	const void *HEDLEY_RESTRICT scratch,
-	uint8_t *HEDLEY_RESTRICT _dst, const unsigned srcScale,
-	GF16_MULADD_MULTI_SRCLIST,
+	GF16_BLKMAC_SRCDSTLIST,
 	size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, const int doPrefetch, const char* _pf
 ) {
-	GF16_MULADD_MULTI_SRC_UNUSED(6);
+	GF16_BLKMAC_SRCDST_UNUSED(6, 1);
 	
 	__m128i matNormA, matSwapA;
 	__m128i matNormB, matSwapB;
@@ -315,9 +313,9 @@ static HEDLEY_ALWAYS_INLINE void gf16_affine2x_muladd_x_gfni(
 				result2 = _mm_xor_si128(result2, _mm_gf2p8affine_epi64_epi8(data, matSwapF, 0));
 			}
 			
-			result1 = _mm_xor_si128(result1, _mm_load_si128((__m128i*)(_dst + ptr)));
+			result1 = _mm_xor_si128(result1, _mm_load_si128((__m128i*)(_dst1 + ptr*dstScale)));
 			result1 = _mm_xor_si128(result1, _mm_shuffle_epi32(result2, _MM_SHUFFLE(1,0,3,2)));
-			_mm_store_si128((__m128i*)(_dst + ptr), result1);
+			_mm_store_si128((__m128i*)(_dst1 + ptr*dstScale), result1);
 			
 			ptr += sizeof(__m128i);
 		}
@@ -359,9 +357,9 @@ static HEDLEY_ALWAYS_INLINE void gf16_affine2x_muladd_x_gfni(
 				result2 = _mm_xor_si128(result2, _mm_gf2p8affine_epi64_epi8(data, matSwapF, 0));
 			}
 			
-			result1 = _mm_xor_si128(result1, _mm_load_si128((__m128i*)(_dst + ptr)));
+			result1 = _mm_xor_si128(result1, _mm_load_si128((__m128i*)(_dst1 + ptr*dstScale)));
 			result1 = _mm_xor_si128(result1, _mm_shuffle_epi32(result2, _MM_SHUFFLE(1,0,3,2)));
-			_mm_store_si128((__m128i*)(_dst + ptr), result1);
+			_mm_store_si128((__m128i*)(_dst1 + ptr*dstScale), result1);
 			
 			ptr += sizeof(__m128i);
 		}

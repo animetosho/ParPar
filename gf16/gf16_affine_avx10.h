@@ -60,11 +60,10 @@ static HEDLEY_ALWAYS_INLINE void _FN(gf16_affine_muladd_round)(const _mword* src
 }
 static HEDLEY_ALWAYS_INLINE void _FN(gf16_affine_muladd_x)(
 	const void *HEDLEY_RESTRICT scratch,
-	uint8_t *HEDLEY_RESTRICT _dst, const unsigned srcScale,
-	GF16_MULADD_MULTI_SRCLIST,
+	GF16_BLKMAC_SRCDSTLIST,
 	size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, const int doPrefetch, const char* _pf
 ) {
-	GF16_MULADD_MULTI_SRC_UNUSED(6);
+	GF16_BLKMAC_SRCDST_UNUSED(6, 1);
 	
 	_mword mat_All, mat_Alh, mat_Ahl, mat_Ahh;
 	_mword mat_Bll, mat_Blh, mat_Bhl, mat_Bhh;
@@ -147,8 +146,8 @@ static HEDLEY_ALWAYS_INLINE void _FN(gf16_affine_muladd_x)(
 	
 	
 	for(intptr_t ptr = -(intptr_t)len; ptr; ptr += sizeof(_mword)*2) {
-		_mword tph = _MMI(load)((_mword*)(_dst + ptr));
-		_mword tpl = _MMI(load)((_mword*)(_dst + ptr) + 1);
+		_mword tph = _MMI(load)((_mword*)(_dst1 + ptr*dstScale));
+		_mword tpl = _MMI(load)((_mword*)(_dst1 + ptr*dstScale) + 1);
 		_FN(gf16_affine_muladd_round)((_mword*)(_src1 + ptr*srcScale), &tpl, &tph, mat_All, mat_Ahl, mat_Alh, mat_Ahh);
 		if(srcCount >= 2)
 			_FN(gf16_affine_muladd_round)((_mword*)(_src2 + ptr*srcScale), &tpl, &tph, mat_Bll, mat_Bhl, mat_Blh, mat_Bhh);
@@ -160,8 +159,8 @@ static HEDLEY_ALWAYS_INLINE void _FN(gf16_affine_muladd_x)(
 			_FN(gf16_affine_muladd_round)((_mword*)(_src5 + ptr*srcScale), &tpl, &tph, mat_Ell, mat_Ehl, mat_Elh, mat_Ehh);
 		if(srcCount >= 6)
 			_FN(gf16_affine_muladd_round)((_mword*)(_src6 + ptr*srcScale), &tpl, &tph, mat_Fll, mat_Fhl, mat_Flh, mat_Fhh);
-		_MMI(store)((_mword*)(_dst + ptr), tph);
-		_MMI(store)((_mword*)(_dst + ptr)+1, tpl);
+		_MMI(store)((_mword*)(_dst1 + ptr*dstScale), tph);
+		_MMI(store)((_mword*)(_dst1 + ptr*dstScale)+1, tpl);
 		
 		if(doPrefetch == 1)
 			_mm_prefetch(_pf+(ptr>>1), MM_HINT_WT1);
@@ -231,11 +230,11 @@ static HEDLEY_ALWAYS_INLINE void _FN(gf16_affine2x_muladd_2round)(const int srcC
 	}
 }
 static HEDLEY_ALWAYS_INLINE void _FN(gf16_affine2x_muladd_x)(
-	const void *HEDLEY_RESTRICT scratch, uint8_t *HEDLEY_RESTRICT _dst, const unsigned srcScale,
-	GF16_MULADD_MULTI_SRCLIST,
+	const void *HEDLEY_RESTRICT scratch,
+	GF16_BLKMAC_SRCDSTLIST,
 	size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, const int doPrefetch, const char* _pf
 ) {
-	GF16_MULADD_MULTI_SRC_UNUSED(13);
+	GF16_BLKMAC_SRCDST_UNUSED(13, 1);
 	
 	_mword depmask;
 	_mword matNormA, matSwapA;
@@ -401,10 +400,10 @@ static HEDLEY_ALWAYS_INLINE void _FN(gf16_affine2x_muladd_x)(
 		result = _MM(ternarylogic_epi32)(
 			result,
 			_MM(shuffle_epi32)(swapped, _MM_SHUFFLE(1,0,3,2)),
-			_MMI(load)((_mword*)(_dst + ptr)),
+			_MMI(load)((_mword*)(_dst1 + ptr*dstScale)),
 			0x96
 		);
-		_MMI(store) ((_mword*)(_dst + ptr), result);
+		_MMI(store) ((_mword*)(_dst1 + ptr*dstScale), result);
 		
 		if(doPrefetch == 1)
 			_mm_prefetch(_pf+ptr, MM_HINT_WT1);

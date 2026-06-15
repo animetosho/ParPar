@@ -265,11 +265,11 @@ int gf16_shuffle_available_vbmi = 0;
 
 #if defined(__AVX512VBMI__) && defined(__AVX512VL__)
 static HEDLEY_ALWAYS_INLINE void gf16_shuffle_muladd_x_vbmi(
-	const void *HEDLEY_RESTRICT scratch, uint8_t *HEDLEY_RESTRICT _dst, const unsigned srcScale,
-	GF16_MULADD_MULTI_SRCLIST,
+	const void *HEDLEY_RESTRICT scratch,
+	GF16_BLKMAC_SRCDSTLIST,
 	size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, const int doPrefetch, const char* _pf
 ) {
-	GF16_MULADD_MULTI_SRC_UNUSED(4);
+	GF16_BLKMAC_SRCDST_UNUSED(4, 1);
 	__m512i mulLo = _mm512_load_si512((__m512i*)scratch + 1);
 	__m512i mulHi = _mm512_load_si512((__m512i*)scratch);
 	
@@ -313,11 +313,11 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle_muladd_x_vbmi(
 				&tpl, &tph, &tl, &th
 			);
 			
-			tph = _mm512_ternarylogic_epi32(tph, th, _mm512_load_si512((__m512i*)(_dst+ptr)), 0x96);
-			tpl = _mm512_ternarylogic_epi32(tpl, tl, _mm512_load_si512((__m512i*)(_dst+ptr) + 1), 0x96);
+			tph = _mm512_ternarylogic_epi32(tph, th, _mm512_load_si512((__m512i*)(_dst1+ptr*dstScale)), 0x96);
+			tpl = _mm512_ternarylogic_epi32(tpl, tl, _mm512_load_si512((__m512i*)(_dst1+ptr*dstScale) + 1), 0x96);
 		} else {
-			th = _mm512_load_si512((__m512i*)(_dst+ptr));
-			tl = _mm512_load_si512((__m512i*)(_dst+ptr) + 1);
+			th = _mm512_load_si512((__m512i*)(_dst1+ptr*dstScale));
+			tl = _mm512_load_si512((__m512i*)(_dst1+ptr*dstScale) + 1);
 		}
 		
 		if(srcCount > 2) {
@@ -369,8 +369,8 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle_muladd_x_vbmi(
 			tpl = _mm512_xor_si512(tpl, tl);
 			tph = _mm512_xor_si512(tph, th);
 		}
-		_mm512_store_si512((__m512i*)(_dst+ptr), tph);
-		_mm512_store_si512((__m512i*)(_dst+ptr) + 1, tpl);
+		_mm512_store_si512((__m512i*)(_dst1+ptr*dstScale), tph);
+		_mm512_store_si512((__m512i*)(_dst1+ptr*dstScale) + 1, tpl);
 		
 		if(doPrefetch == 1) {
 			_mm_prefetch(_pf+(ptr>>1), MM_HINT_WT1);

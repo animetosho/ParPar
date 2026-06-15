@@ -105,11 +105,10 @@ static HEDLEY_ALWAYS_INLINE void gf16_affine_muladd_round(const __m256i* src, __
 }
 static HEDLEY_ALWAYS_INLINE void gf16_affine_muladd_x_avx2(
 	const void *HEDLEY_RESTRICT scratch,
-	uint8_t *HEDLEY_RESTRICT _dst, const unsigned srcScale,
-	GF16_MULADD_MULTI_SRCLIST, size_t len,
+	GF16_BLKMAC_SRCDSTLIST, size_t len,
 	const uint16_t *HEDLEY_RESTRICT coefficients, const int doPrefetch, const char* _pf
 ) {
-	GF16_MULADD_MULTI_SRC_UNUSED(3);
+	GF16_BLKMAC_SRCDST_UNUSED(3, 1);
 	__m256i depmask = gf16_affine_load_matrix(scratch, coefficients[0]);
 	
 	__m256i mat_All = _mm256_broadcastq_epi64(_mm256_castsi256_si128(depmask));
@@ -136,15 +135,15 @@ static HEDLEY_ALWAYS_INLINE void gf16_affine_muladd_x_avx2(
 	}
 	
 	for(intptr_t ptr = -(intptr_t)len; ptr; ptr += sizeof(__m256i)*2) {
-		__m256i tph = _mm256_load_si256((__m256i*)(_dst + ptr));
-		__m256i tpl = _mm256_load_si256((__m256i*)(_dst + ptr) + 1);
+		__m256i tph = _mm256_load_si256((__m256i*)(_dst1 + ptr*dstScale));
+		__m256i tpl = _mm256_load_si256((__m256i*)(_dst1 + ptr*dstScale) + 1);
 		gf16_affine_muladd_round((__m256i*)(_src1 + ptr*srcScale), &tpl, &tph, mat_All, mat_Ahl, mat_Alh, mat_Ahh);
 		if(srcCount > 1)
 			gf16_affine_muladd_round((__m256i*)(_src2 + ptr*srcScale), &tpl, &tph, mat_Bll, mat_Bhl, mat_Blh, mat_Bhh);
 		if(srcCount > 2)
 			gf16_affine_muladd_round((__m256i*)(_src3 + ptr*srcScale), &tpl, &tph, mat_Cll, mat_Chl, mat_Clh, mat_Chh);
-		_mm256_store_si256 ((__m256i*)(_dst + ptr), tph);
-		_mm256_store_si256 ((__m256i*)(_dst + ptr)+1, tpl);
+		_mm256_store_si256 ((__m256i*)(_dst1 + ptr*dstScale), tph);
+		_mm256_store_si256 ((__m256i*)(_dst1 + ptr*dstScale)+1, tpl);
 		
 		if(doPrefetch == 1)
 			_mm_prefetch(_pf+(ptr>>1), MM_HINT_WT1);
@@ -203,11 +202,10 @@ void* gf16_affine_init_avx2(int polynomial) {
 #if defined(__GFNI__) && defined(__AVX2__) && !defined(PARPAR_SLIM_GF16)
 static HEDLEY_ALWAYS_INLINE void gf16_affine2x_muladd_x_avx2(
 	const void *HEDLEY_RESTRICT scratch,
-	uint8_t *HEDLEY_RESTRICT _dst, const unsigned srcScale,
-	GF16_MULADD_MULTI_SRCLIST,
+	GF16_BLKMAC_SRCDSTLIST,
 	size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, const int doPrefetch, const char* _pf
 ) {
-	GF16_MULADD_MULTI_SRC_UNUSED(6);
+	GF16_BLKMAC_SRCDST_UNUSED(6, 1);
 	
 	__m256i matNormA, matSwapA;
 	__m256i matNormB, matSwapB;
@@ -287,9 +285,9 @@ static HEDLEY_ALWAYS_INLINE void gf16_affine2x_muladd_x_avx2(
 				result2 = _mm256_xor_si256(result2, _mm256_gf2p8affine_epi64_epi8(data, matSwapF, 0));
 			}
 			
-			result1 = _mm256_xor_si256(result1, _mm256_load_si256((__m256i*)(_dst + ptr)));
+			result1 = _mm256_xor_si256(result1, _mm256_load_si256((__m256i*)(_dst1 + ptr*dstScale)));
 			result1 = _mm256_xor_si256(result1, _mm256_shuffle_epi32(result2, _MM_SHUFFLE(1,0,3,2)));
-			_mm256_store_si256((__m256i*)(_dst + ptr), result1);
+			_mm256_store_si256((__m256i*)(_dst1 + ptr*dstScale), result1);
 			
 			ptr += sizeof(__m256i);
 		}
@@ -331,9 +329,9 @@ static HEDLEY_ALWAYS_INLINE void gf16_affine2x_muladd_x_avx2(
 				result2 = _mm256_xor_si256(result2, _mm256_gf2p8affine_epi64_epi8(data, matSwapF, 0));
 			}
 			
-			result1 = _mm256_xor_si256(result1, _mm256_load_si256((__m256i*)(_dst + ptr)));
+			result1 = _mm256_xor_si256(result1, _mm256_load_si256((__m256i*)(_dst1 + ptr*dstScale)));
 			result1 = _mm256_xor_si256(result1, _mm256_shuffle_epi32(result2, _MM_SHUFFLE(1,0,3,2)));
-			_mm256_store_si256((__m256i*)(_dst + ptr), result1);
+			_mm256_store_si256((__m256i*)(_dst1 + ptr*dstScale), result1);
 			
 			ptr += sizeof(__m256i);
 		}

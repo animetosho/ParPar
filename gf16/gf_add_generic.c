@@ -2,14 +2,14 @@
 #include "gf16_muladd_multi.h"
 
 static HEDLEY_ALWAYS_INLINE void gf_add_x_generic(
-	const void *HEDLEY_RESTRICT scratch, uint8_t *HEDLEY_RESTRICT _dst, const unsigned srcScale,
-	GF16_MULADD_MULTI_SRCLIST, size_t len,
+	const void *HEDLEY_RESTRICT scratch,
+	GF16_BLKMAC_SRCDSTLIST, size_t len,
 	const uint16_t *HEDLEY_RESTRICT coefficients,
 	const int doPrefetch, const char* _pf
 ) {
 	ASSUME(len > 0);
 	
-	GF16_MULADD_MULTI_SRC_UNUSED(8);
+	GF16_BLKMAC_SRCDST_UNUSED(8, 1);
 	UNUSED(coefficients);
 	UNUSED(doPrefetch); UNUSED(_pf);
 	
@@ -34,7 +34,7 @@ static HEDLEY_ALWAYS_INLINE void gf_add_x_generic(
 		if(srcCount >= 8)
 			data ^= _src8[ptr*srcScale];
 		assert(!lookup3Rearrange);
-		_dst[ptr] ^= data;
+		_dst1[ptr*dstScale] ^= data;
 		
 		ptr++;
 	}
@@ -67,7 +67,7 @@ static HEDLEY_ALWAYS_INLINE void gf_add_x_generic(
 			}
 		}
 		
-		writePtr(_dst+ptr, readPtr(_dst+ptr) ^ data);
+		writePtr(_dst1+ptr*dstScale, readPtr(_dst1+ptr*dstScale) ^ data);
 	}
 }
 

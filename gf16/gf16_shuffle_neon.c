@@ -196,10 +196,10 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle_neon_round(uint8x16x2_t va, uint8x
 
 static HEDLEY_ALWAYS_INLINE void gf16_shuffle_muladd_x_neon(
 	const void *HEDLEY_RESTRICT scratch,
-	uint8_t *HEDLEY_RESTRICT _dst, const unsigned srcScale, GF16_MULADD_MULTI_SRCLIST, size_t len,
+	GF16_BLKMAC_SRCDSTLIST, size_t len,
 	const uint16_t *HEDLEY_RESTRICT coefficients, const int doPrefetch, const char* _pf
 ) {
-	GF16_MULADD_MULTI_SRC_UNUSED(3);
+	GF16_BLKMAC_SRCDST_UNUSED(3, 1);
 #ifdef GF16_POLYNOMIAL_SIMPLE
 	uint8x16_t poly = vld1q_u8_align(scratch, 16);
 #else
@@ -228,10 +228,10 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle_muladd_x_neon(
 				gf16_shuffle_neon_round(vld2q_u8(_src2+ptr*srcScale), &rl, &rh, tbl_Bl, tbl_Bh);
 			if(srcCount > 2)
 				gf16_shuffle_neon_round(vld2q_u8(_src3+ptr*srcScale), &rl, &rh, tbl_Cl, tbl_Ch);
-			uint8x16x2_t vb = vld2q_u8(_dst+ptr);
+			uint8x16x2_t vb = vld2q_u8(_dst1+ptr*dstScale);
 			vb.val[0] = veorq_u8(rl, vb.val[0]);
 			vb.val[1] = veorq_u8(rh, vb.val[1]);
-			vst2q_u8(_dst+ptr, vb);
+			vst2q_u8(_dst1+ptr*dstScale, vb);
 			
 			ptr += sizeof(uint8x16_t)*2;
 		}
@@ -247,10 +247,10 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle_muladd_x_neon(
 					gf16_shuffle_neon_round(vld2q_u8(_src2+ptr*srcScale), &rl, &rh, tbl_Bl, tbl_Bh);
 				if(srcCount > 2)
 					gf16_shuffle_neon_round(vld2q_u8(_src3+ptr*srcScale), &rl, &rh, tbl_Cl, tbl_Ch);
-				uint8x16x2_t vb = vld2q_u8(_dst+ptr);
+				uint8x16x2_t vb = vld2q_u8(_dst1+ptr*dstScale);
 				vb.val[0] = veorq_u8(rl, vb.val[0]);
 				vb.val[1] = veorq_u8(rh, vb.val[1]);
-				vst2q_u8(_dst+ptr, vb);
+				vst2q_u8(_dst1+ptr*dstScale, vb);
 				ptr += sizeof(uint8x16_t)*2;
 			}
 		}
@@ -261,10 +261,10 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle_muladd_x_neon(
 				gf16_shuffle_neon_round(vld2q_u8(_src2+ptr*srcScale), &rl, &rh, tbl_Bl, tbl_Bh);
 			if(srcCount > 2)
 				gf16_shuffle_neon_round(vld2q_u8(_src3+ptr*srcScale), &rl, &rh, tbl_Cl, tbl_Ch);
-			uint8x16x2_t vb = vld2q_u8(_dst+ptr);
+			uint8x16x2_t vb = vld2q_u8(_dst1+ptr*dstScale);
 			vb.val[0] = veorq_u8(rl, vb.val[0]);
 			vb.val[1] = veorq_u8(rh, vb.val[1]);
-			vst2q_u8(_dst+ptr, vb);
+			vst2q_u8(_dst1+ptr*dstScale, vb);
 		}
 	}
 }

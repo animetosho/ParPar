@@ -73,12 +73,12 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle_avx512_round(
 }
 
 static HEDLEY_ALWAYS_INLINE void gf16_shuffle_muladd_x_avx512(
-	const void *HEDLEY_RESTRICT scratch, uint8_t *HEDLEY_RESTRICT _dst, const unsigned srcScale,
-	GF16_MULADD_MULTI_SRCLIST, size_t len,
+	const void *HEDLEY_RESTRICT scratch,
+	GF16_BLKMAC_SRCDSTLIST, size_t len,
 	const uint16_t *HEDLEY_RESTRICT coefficients,
 	const int doPrefetch, const char* _pf
 ) {
-	GF16_MULADD_MULTI_SRC_UNUSED(3);
+	GF16_BLKMAC_SRCDST_UNUSED(3, 1);
 	__m512i polyl, polyh;
 	if(srcCount > 1) {
 		polyl = _mm512_broadcast_i32x4(_mm_load_si128((__m128i*)scratch));
@@ -144,8 +144,8 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle_muladd_x_avx512(
 	
 	
 	for(intptr_t ptr = -(intptr_t)len; ptr; ptr += sizeof(__m512i)*2) {
-		__m512i tph = _mm512_load_si512((__m512i*)(_dst+ptr));
-		__m512i tpl = _mm512_load_si512((__m512i*)(_dst+ptr) + 1);
+		__m512i tph = _mm512_load_si512((__m512i*)(_dst1+ptr*dstScale));
+		__m512i tpl = _mm512_load_si512((__m512i*)(_dst1+ptr*dstScale) + 1);
 		gf16_shuffle_avx512_round((__m512i*)(_src1+ptr*srcScale), &tpl, &tph, lowA0, highA0, lowA1, highA1, lowA2, highA2, lowA3, highA3);
 		if(srcCount >= 2)
 			gf16_shuffle_avx512_round((__m512i*)(_src2+ptr*srcScale), &tpl, &tph, lowB0, highB0, lowB1, highB1, lowB2, highB2, lowB3, highB3);
@@ -153,8 +153,8 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle_muladd_x_avx512(
 			gf16_shuffle_avx512_round((__m512i*)(_src3+ptr*srcScale), &tpl, &tph, lowC0, highC0, lowC1, highC1, lowC2, highC2, lowC3, highC3);
 		if(srcCount >= 4)
 			gf16_shuffle_avx512_round((__m512i*)(_src4+ptr*srcScale), &tpl, &tph, lowD0, highD0, lowD1, highD1, lowD2, highD2, lowD3, highD3);
-		_mm512_store_si512((__m512i*)(_dst+ptr), tph);
-		_mm512_store_si512((__m512i*)(_dst+ptr) + 1, tpl);
+		_mm512_store_si512((__m512i*)(_dst1+ptr*dstScale), tph);
+		_mm512_store_si512((__m512i*)(_dst1+ptr*dstScale) + 1, tpl);
 		
 		if(doPrefetch == 1)
 			_mm_prefetch(_pf+(ptr>>1), MM_HINT_WT1);
@@ -215,12 +215,12 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle2x_avx512_round(
 }
 
 static HEDLEY_ALWAYS_INLINE void gf16_shuffle2x_muladd_x_avx512(
-	const void *HEDLEY_RESTRICT scratch, uint8_t *HEDLEY_RESTRICT _dst, const unsigned srcScale,
-	GF16_MULADD_MULTI_SRCLIST, size_t len,
+	const void *HEDLEY_RESTRICT scratch,
+	GF16_BLKMAC_SRCDSTLIST, size_t len,
 	const uint16_t *HEDLEY_RESTRICT coefficients,
 	const int doPrefetch, const char* _pf
 ) {
-	GF16_MULADD_MULTI_SRC_UNUSED(6);
+	GF16_BLKMAC_SRCDST_UNUSED(6, 1);
 	__m512i polyl, polyh;
 	if(srcCount > 1) {
 		polyl = _mm512_broadcast_i32x4(_mm_load_si128((__m128i*)scratch));
@@ -306,7 +306,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle2x_muladd_x_avx512(
 	}
 	
 	for(intptr_t ptr = -(intptr_t)len; ptr; ptr += sizeof(__m512i)) {
-		__m512i swapped, result = _mm512_load_si512((__m512i*)(_dst+ptr));
+		__m512i swapped, result = _mm512_load_si512((__m512i*)(_dst1+ptr*dstScale));
 		gf16_shuffle2x_avx512_round1((__m512i*)(_src1+ptr*srcScale), &result, &swapped, shufNormLoA, shufNormHiA, shufSwapLoA, shufSwapHiA);
 		if(srcCount >= 2)
 			gf16_shuffle2x_avx512_round((__m512i*)(_src2+ptr*srcScale), &result, &swapped, shufNormLoB, shufNormHiB, shufSwapLoB, shufSwapHiB);
@@ -322,7 +322,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle2x_muladd_x_avx512(
 		swapped = _mm512_shuffle_i32x4(swapped, swapped, _MM_SHUFFLE(1,0,3,2));
 		result = _mm512_xor_si512(result, swapped);
 		
-		_mm512_store_si512((__m512i*)(_dst+ptr), result);
+		_mm512_store_si512((__m512i*)(_dst1+ptr*dstScale), result);
 		
 		if(doPrefetch == 1)
 			_mm_prefetch(_pf+ptr, MM_HINT_WT1);

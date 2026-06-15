@@ -9,19 +9,19 @@ static HEDLEY_ALWAYS_INLINE void gf_add2_sve(svuint8_t* data1, svuint8_t* data2,
 }
 
 static HEDLEY_ALWAYS_INLINE void gf_add_x_sve(
-	const void *HEDLEY_RESTRICT scratch, uint8_t *HEDLEY_RESTRICT _dst, const unsigned srcScale,
-	GF16_MULADD_MULTI_SRCLIST, size_t len,
+	const void *HEDLEY_RESTRICT scratch,
+	GF16_BLKMAC_SRCDSTLIST, size_t len,
 	const uint16_t *HEDLEY_RESTRICT coefficients,
 	const int doPrefetch, const char* _pf
 ) {
 	ASSUME(len > 0);
 	
-	GF16_MULADD_MULTI_SRC_UNUSED(18);
+	GF16_BLKMAC_SRCDST_UNUSED(18, 1);
 	UNUSED(scratch); UNUSED(coefficients);
 	
 	for(intptr_t ptr = -(intptr_t)len; ptr; ptr += svcntb()*2) {
-		svuint8_t data1 = svld1_u8(svptrue_b8(), _dst+ptr);
-		svuint8_t data2 = svld1_vnum_u8(svptrue_b8(), _dst+ptr, 1);
+		svuint8_t data1 = svld1_u8(svptrue_b8(), _dst1+ptr*dstScale);
+		svuint8_t data2 = svld1_vnum_u8(svptrue_b8(), _dst1+ptr*dstScale, 1);
 		
 		gf_add2_sve(&data1, &data2, _src1+ptr*srcScale);
 		if(srcCount >= 2)
@@ -58,8 +58,8 @@ static HEDLEY_ALWAYS_INLINE void gf_add_x_sve(
 			gf_add2_sve(&data1, &data2, _src17+ptr*srcScale);
 		if(srcCount >= 18)
 			gf_add2_sve(&data1, &data2, _src18+ptr*srcScale);
-		svst1_u8(svptrue_b8(), _dst+ptr, data1);
-		svst1_vnum_u8(svptrue_b8(), _dst+ptr, 1, data2);
+		svst1_u8(svptrue_b8(), _dst1+ptr*dstScale, data1);
+		svst1_vnum_u8(svptrue_b8(), _dst1+ptr*dstScale, 1, data2);
 		
 		if(doPrefetch == 1)
 			svprfb(svptrue_b8(), _pf+(ptr>>1), SV_PLDL1KEEP);

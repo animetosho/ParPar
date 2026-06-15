@@ -253,10 +253,10 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle512_sve2_round4(svuint8x2_t va, svu
 
 static HEDLEY_ALWAYS_INLINE void gf16_shuffle512_muladd_x_sve2(
 	const void *HEDLEY_RESTRICT scratch,
-	uint8_t *HEDLEY_RESTRICT _dst, const unsigned srcScale, GF16_MULADD_MULTI_SRCLIST, size_t len,
+	GF16_BLKMAC_SRCDSTLIST, size_t len,
 	const uint16_t *HEDLEY_RESTRICT coefficients, const int doPrefetch, const char* _pf
 ) {
-	GF16_MULADD_MULTI_SRC_UNUSED(4);
+	GF16_BLKMAC_SRCDST_UNUSED(4, 1);
 	
 	svuint8_t tbl_Al0, tbl_Al1, tbl_Al2, tbl_Ah0, tbl_Ah1, tbl_Ah2;
 	svuint8_t tbl_Bl0, tbl_Bl1, tbl_Bl2, tbl_Bh0, tbl_Bh1, tbl_Bh2;
@@ -281,7 +281,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle512_muladd_x_sve2(
 			svprfb_vnum(svptrue_b8(), _pf+ptr, 1, SV_PLDL2KEEP);
 		}
 		
-		svuint8x2_t vb = svld2_u8(svptrue_b8(), _dst+ptr);
+		svuint8x2_t vb = svld2_u8(svptrue_b8(), _dst1+ptr*dstScale);
 		gf16_shuffle512_sve2_round1(svld2_u8(svptrue_b8(), _src1+ptr*srcScale), &rl, &rh, tbl_Al0, tbl_Al1, tbl_Al2, tbl_Ah0, tbl_Ah1, tbl_Ah2);
 		if(srcCount > 1) {
 			gf16_shuffle512_sve2_round(svld2_u8(svptrue_b8(), _src2+ptr*srcScale), &rl, &rh, &rl2, &rh2, tbl_Bl0, tbl_Bl1, tbl_Bl2, tbl_Bh0, tbl_Bh1, tbl_Bh2);
@@ -304,7 +304,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle512_muladd_x_sve2(
 			rl = NOMASK(sveor_u8, rl, rl2);
 			rh = NOMASK(sveor_u8, rh, rh2);
 		}
-		svst2_u8(svptrue_b8(), _dst+ptr, svcreate2_u8(rl, rh));
+		svst2_u8(svptrue_b8(), _dst1+ptr*dstScale, svcreate2_u8(rl, rh));
 	}
 }
 #endif /*defined(__ARM_FEATURE_SVE2) && !defined(PARPAR_SLIM_GF16)*/
