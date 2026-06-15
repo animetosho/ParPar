@@ -37,6 +37,6 @@ static HEDLEY_ALWAYS_INLINE vint16m1_t gf16_vec_mul2_rvv(vint16m1_t v) {
 }
 
 
-#endif
+#endif // defined(__riscv_vector)
 
-#endif
+#endif // defined(__GF16_RVV_COMMON_H)

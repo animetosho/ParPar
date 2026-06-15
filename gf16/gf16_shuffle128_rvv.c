@@ -128,22 +128,22 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle_muladd_x_128_rvv(
 		UNUSED(doPrefetch); UNUSED(_pf);
 		
 		vuint8m1_t rl, rh;
-		_vlseg2e8(&rl, &rh, _dst+ptr, vl*2);
+		_vlseg2e8(&rl, &rh, _dst+ptr, vl);
 		
 		vuint8m1_t in0, in1;
-		_vlseg2e8(&in0, &in1, _src1+ptr*srcScale, vl*2);
+		_vlseg2e8(&in0, &in1, _src1+ptr*srcScale, vl);
 		
 		gf16_shuffle_128_rvv_round(vl, in0, in1, &rl, &rh, tbl_Al0, tbl_Al1, tbl_Al2, tbl_Al3, tbl_Ah0, tbl_Ah1, tbl_Ah2, tbl_Ah3);
 		if(srcCount > 1) {
-			_vlseg2e8(&in0, &in1, _src2+ptr*srcScale, vl*2);
+			_vlseg2e8(&in0, &in1, _src2+ptr*srcScale, vl);
 			gf16_shuffle_128_rvv_round(vl, in0, in1, &rl, &rh, tbl_Bl0, tbl_Bl1, tbl_Bl2, tbl_Bl3, tbl_Bh0, tbl_Bh1, tbl_Bh2, tbl_Bh3);
 		}
 		if(srcCount > 2) {
-			_vlseg2e8(&in0, &in1, _src3+ptr*srcScale, vl*2);
+			_vlseg2e8(&in0, &in1, _src3+ptr*srcScale, vl);
 			gf16_shuffle_128_rvv_round(vl, in0, in1, &rl, &rh, tbl_Cl0, tbl_Cl1, tbl_Cl2, tbl_Cl3, tbl_Ch0, tbl_Ch1, tbl_Ch2, tbl_Ch3);
 		}
 		
-		_vsseg2e8(_dst+ptr, rl, rh, vl*2);
+		_vsseg2e8(_dst+ptr, rl, rh, vl);
 	}
 }
 
@@ -167,7 +167,7 @@ void gf16_shuffle_mul_128_rvv(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_
 	
 	for(intptr_t ptr = -(intptr_t)len; ptr; ptr += vl*2) {
 		vuint8m1_t in0, in1;
-		_vlseg2e8(&in0, &in1, _src+ptr, vl*2);
+		_vlseg2e8(&in0, &in1, _src+ptr, vl);
 		
 		vuint8m1_t tmp = RV(vand_vx_u8m1)(in0, 0xf, vl);
 		vuint8m1_t rl = RV(vrgather_vv_u8m1)(tbl_l0, tmp, vl);
@@ -185,7 +185,7 @@ void gf16_shuffle_mul_128_rvv(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_
 		rl = RV(vxor_vv_u8m1)(rl, RV(vrgather_vv_u8m1)(tbl_l3, tmp, vl), vl);
 		rh = RV(vxor_vv_u8m1)(rh, RV(vrgather_vv_u8m1)(tbl_h3, tmp, vl), vl);
 		
-		_vsseg2e8(_dst+ptr, rl, rh, vl*2);
+		_vsseg2e8(_dst+ptr, rl, rh, vl);
 	}
 #else
 	UNUSED(scratch); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(val);
