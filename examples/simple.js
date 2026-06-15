@@ -28,7 +28,7 @@ ParPar.fileInfo(files, function(err, info) {
 	
 	// buffer to hold read data
 	// note that we create the buffer outside the loop. Not only does this reduce overheads with reallocation, it's nicer to the GC
-	var buf = new Buffer(sliceSize);
+	var buf = Buffer.alloc(sliceSize);
 	
 	// loop through each file; NOTE: files may be a re-ordered version of the files array you supplied it!
 	var pFiles = par2.getFiles();
