@@ -600,6 +600,191 @@ static napi_value ComputeRecovery_NAPI(napi_env env, napi_callback_info info) {
 	return NULL;
 }
 
+// ComputeRepairBlocks NAPI binding
+// Args: availBlocks, repairedBlocks, numAvail, numMissing, blockSize, solveMatrix [, numThreads]
+static napi_value ComputeRepair_NAPI(napi_env env, napi_callback_info info) {
+	napi_status status;
+	size_t argc = 7;
+	napi_value args[7];
+
+	status = napi_get_cb_info(env, info, &argc, args, NULL, NULL);
+	if(status != napi_ok) {
+		napi_throw_error(env, NULL, "Failed to get callback info");
+		return NULL;
+	}
+
+	if(argc < 6) {
+		napi_throw_type_error(env, NULL, "Requires availBlocks, repairedBlocks, numAvail, numMissing, blockSize, solveMatrix [, numThreads]");
+		return NULL;
+	}
+
+	gf64_t* availBlocks = NULL;
+	size_t availLen = 0;
+	status = napi_get_buffer_info(env, args[0], (void**)&availBlocks, &availLen);
+	if(status != napi_ok) {
+		napi_throw_type_error(env, NULL, "availBlocks must be a Buffer");
+		return NULL;
+	}
+
+	gf64_t* repairedBlocks = NULL;
+	size_t repairedLen = 0;
+	status = napi_get_buffer_info(env, args[1], (void**)&repairedBlocks, &repairedLen);
+	if(status != napi_ok) {
+		napi_throw_type_error(env, NULL, "repairedBlocks must be a Buffer");
+		return NULL;
+	}
+
+	int32_t numAvail = 0;
+	status = napi_get_value_int32(env, args[2], &numAvail);
+	if(status != napi_ok) {
+		napi_throw_type_error(env, NULL, "numAvail must be an integer");
+		return NULL;
+	}
+
+	int32_t numMissing = 0;
+	status = napi_get_value_int32(env, args[3], &numMissing);
+	if(status != napi_ok) {
+		napi_throw_type_error(env, NULL, "numMissing must be an integer");
+		return NULL;
+	}
+
+	int64_t blockSize = 0;
+	status = napi_get_value_int64(env, args[4], &blockSize);
+	if(status != napi_ok) {
+		napi_throw_type_error(env, NULL, "blockSize must be an integer");
+		return NULL;
+	}
+
+	gf64_t* solveMatrix = NULL;
+	size_t solveLen = 0;
+	status = napi_get_buffer_info(env, args[5], (void**)&solveMatrix, &solveLen);
+	if(status != napi_ok) {
+		napi_throw_type_error(env, NULL, "solveMatrix must be a Buffer");
+		return NULL;
+	}
+
+	int32_t numThreads = 0;
+	if(argc >= 7) {
+		status = napi_get_value_int32(env, args[6], &numThreads);
+		if(status != napi_ok) {
+			numThreads = 0;
+		}
+	}
+
+	if(numAvail <= 0 || numMissing <= 0) {
+		napi_throw_range_error(env, NULL, "numAvail and numMissing must be positive");
+		return NULL;
+	}
+
+	if(blockSize <= 0 || blockSize % 8 != 0) {
+		napi_throw_range_error(env, NULL, "blockSize must be positive and a multiple of 8");
+		return NULL;
+	}
+
+	size_t blockSize64 = (size_t)(blockSize / 8);
+
+	if(availLen < (size_t)(numAvail * blockSize)) {
+		napi_throw_range_error(env, NULL, "availBlocks buffer too small");
+		return NULL;
+	}
+
+	if(repairedLen < (size_t)(numMissing * blockSize)) {
+		napi_throw_range_error(env, NULL, "repairedBlocks buffer too small");
+		return NULL;
+	}
+
+	if(solveLen < (size_t)(numMissing * numAvail * sizeof(gf64_t))) {
+		napi_throw_range_error(env, NULL, "solveMatrix buffer too small");
+		return NULL;
+	}
+
+	gf64_init_dispatch();
+	GF64Controller::ComputeRepairBlocks(
+		availBlocks, (size_t)numAvail,
+		repairedBlocks, (size_t)numMissing,
+		solveMatrix, blockSize64,
+		(int)numThreads
+	);
+
+	return NULL;
+}
+
+static napi_value SolveAndReconstruct_NAPI(napi_env env, napi_callback_info info) {
+	napi_status status;
+	size_t argc = 4;
+	napi_value args[4];
+
+	status = napi_get_cb_info(env, info, &argc, args, NULL, NULL);
+	if(status != napi_ok) {
+		napi_throw_error(env, NULL, "Failed to get callback info");
+		return NULL;
+	}
+
+	if(argc < 4) {
+		napi_throw_type_error(env, NULL, "Requires A, rhsBlocks, n, blockSize");
+		return NULL;
+	}
+
+	gf64_t* A = NULL;
+	size_t ALen = 0;
+	status = napi_get_buffer_info(env, args[0], (void**)&A, &ALen);
+	if(status != napi_ok) {
+		napi_throw_type_error(env, NULL, "A must be a Buffer");
+		return NULL;
+	}
+
+	gf64_t* rhsBlocks = NULL;
+	size_t rhsLen = 0;
+	status = napi_get_buffer_info(env, args[1], (void**)&rhsBlocks, &rhsLen);
+	if(status != napi_ok) {
+		napi_throw_type_error(env, NULL, "rhsBlocks must be a Buffer");
+		return NULL;
+	}
+
+	int32_t n = 0;
+	status = napi_get_value_int32(env, args[2], &n);
+	if(status != napi_ok || n <= 0) {
+		napi_throw_type_error(env, NULL, "n must be a positive integer");
+		return NULL;
+	}
+
+	int64_t blockSize = 0;
+	status = napi_get_value_int64(env, args[3], &blockSize);
+	if(status != napi_ok || blockSize <= 0 || blockSize % 8 != 0) {
+		napi_throw_type_error(env, NULL, "blockSize must be positive and a multiple of 8");
+		return NULL;
+	}
+
+	size_t nSize = (size_t)n;
+	size_t blockSize64 = (size_t)(blockSize / 8);
+
+	if(ALen < nSize * nSize * sizeof(gf64_t)) {
+		napi_throw_range_error(env, NULL, "A buffer too small for n×n matrix");
+		return NULL;
+	}
+
+	if(rhsLen < nSize * (size_t)blockSize) {
+		napi_throw_range_error(env, NULL, "rhsBlocks buffer too small for n blocks");
+		return NULL;
+	}
+
+	gf64_init_dispatch();
+	int result = GF64Controller::SolveAndReconstruct(A, rhsBlocks, nSize, blockSize64, 0);
+
+	napi_value ret;
+	if(result == 0) {
+		status = napi_get_boolean(env, true, &ret);
+	} else {
+		status = napi_get_boolean(env, false, &ret);
+	}
+	if(status != napi_ok) {
+		napi_throw_error(env, NULL, "Failed to create return value");
+		return NULL;
+	}
+
+	return ret;
+}
+
 napi_value parpar_gf64_init_NAPI(napi_env env, napi_value exports) {
 	napi_status status;
 
@@ -685,6 +870,30 @@ napi_value create_fn;
 	status = napi_set_named_property(env, exports, "compute_recovery", compute_recovery_fn);
 	if(status != napi_ok) {
 		napi_throw_error(env, NULL, "Failed to set compute_recovery property");
+		return NULL;
+	}
+
+	napi_value compute_repair_fn;
+	status = napi_create_function(env, NULL, 0, ComputeRepair_NAPI, NULL, &compute_repair_fn);
+	if(status != napi_ok) {
+		napi_throw_error(env, NULL, "Failed to create compute_repair function");
+		return NULL;
+	}
+	status = napi_set_named_property(env, exports, "compute_repair", compute_repair_fn);
+	if(status != napi_ok) {
+		napi_throw_error(env, NULL, "Failed to set compute_repair property");
+		return NULL;
+	}
+
+	napi_value solve_reconstruct_fn;
+	status = napi_create_function(env, NULL, 0, SolveAndReconstruct_NAPI, NULL, &solve_reconstruct_fn);
+	if(status != napi_ok) {
+		napi_throw_error(env, NULL, "Failed to create solve_and_reconstruct function");
+		return NULL;
+	}
+	status = napi_set_named_property(env, exports, "solve_and_reconstruct", solve_reconstruct_fn);
+	if(status != napi_ok) {
+		napi_throw_error(env, NULL, "Failed to set solve_and_reconstruct property");
 		return NULL;
 	}
 

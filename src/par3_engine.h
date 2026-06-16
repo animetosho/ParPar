@@ -55,4 +55,39 @@ public:
 		const gf64_t* coeffMatrix,
 		size_t blockSize64
 	);
+
+	/// Reconstruct missing input blocks via SIMD-accelerated muladd.
+	/// For each missing block k: repaired[k] = XOR_j(avail[j] * solveMatrix[k*numAvail + j])
+	/// Uses gf64_region_muladd_arr (same SIMD kernels as create path).
+	/// @param availBlocks    Available blocks (numAvail blocks of blockSize64 words each)
+	/// @param numAvail       Number of available blocks
+	/// @param repairedBlocks Output repaired blocks (numMissing blocks of blockSize64 words each)
+	/// @param numMissing     Number of missing blocks to reconstruct
+	/// @param solveMatrix    Solution matrix from gf64_solve (numMissing * numAvail elements)
+	/// @param blockSize64    Block size in 64-bit words
+	/// @param numThreads     Number of threads for parallel computation (0 = auto)
+	static void ComputeRepairBlocks(
+		const gf64_t* availBlocks, size_t numAvail,
+		gf64_t* repairedBlocks, size_t numMissing,
+		const gf64_t* solveMatrix,
+		size_t blockSize64,
+		int numThreads
+	);
+
+	/// Solve n×n system and reconstruct n blocks in one pass.
+	/// Gaussian-eliminate A, apply elimination to RHS blocks using
+	/// gf64_region_muladd_arr for SIMD-accelerated row operations.
+	/// @param A          n×n Cauchy sub-matrix (MODIFIED in-place by elimination)
+	/// @param rhsBlocks  n blocks of blockSize64 words each (MODIFIED: becomes solution blocks)
+	/// @param n          Number of equations / missing blocks
+	/// @param blockSize64 Block size in 64-bit words
+	/// @param numThreads  Number of threads (0 = auto, currently single-threaded)
+	/// @return 0 on success, -1 on singular matrix
+	static int SolveAndReconstruct(
+		gf64_t* A,
+		gf64_t* rhsBlocks,
+		size_t n,
+		size_t blockSize64,
+		int numThreads
+	);
 };
