@@ -64,8 +64,7 @@ void GF64Controller::MultiplyAccumulate(
 	gf64_t* out, size_t numOut,
 	const gf64_t* in, size_t numIn,
 	const gf64_t* coeffMatrix,
-	size_t blockSize64,
-	gf64_t* tmp
+	size_t blockSize64
 ) {
 	EnsureDispatch();
 
@@ -75,11 +74,8 @@ void GF64Controller::MultiplyAccumulate(
 
 		const gf64_t* row = coeffMatrix + k * numIn;
 		for (size_t j = 0; j < numIn; j++) {
-			gf64_region_mul(tmp, in + j * blockSize64,
-			                blockSize64, row[j]);
-			for (size_t i = 0; i < blockSize64; i++) {
-				out_k[i] ^= tmp[i];
-			}
+			gf64_region_muladd_arr(out_k, in + j * blockSize64,
+			                       &row[j], blockSize64, 1);
 		}
 	}
 }
@@ -96,7 +92,6 @@ struct WorkerRange {
 	size_t        num_in;
 	const gf64_t* coeff_row_start; // coeffMatrix + outStart * numIn
 	size_t        block_size64;
-	gf64_t*       tmp;             // pre-allocated temp buffer (caller owns)
 };
 
 static void WorkerThread(const WorkerRange& range) {
@@ -108,11 +103,8 @@ static void WorkerThread(const WorkerRange& range) {
 
 		const gf64_t* row = range.coeff_row_start + k * range.num_in;
 		for (size_t j = 0; j < range.num_in; j++) {
-			gf64_region_mul(range.tmp, range.in + j * range.block_size64,
-			                range.block_size64, row[j]);
-			for (size_t i = 0; i < range.block_size64; i++) {
-				out_k[i] ^= range.tmp[i];
-			}
+			gf64_region_muladd_arr(out_k, range.in + j * range.block_size64,
+			                       &row[j], range.block_size64, 1);
 		}
 	}
 }
@@ -159,31 +151,9 @@ void GF64Controller::ComputeRecoveryBlocks(
 
 	if (n_workers == 1) {
 		// Single-threaded path — avoids std::thread overhead.
-		gf64_t* tmp = (gf64_t*)malloc(blockSize64 * sizeof(gf64_t));
-		if (!tmp) { free(coeff); return; }
 		MultiplyAccumulate(recovery, numRecovery,
-		                   inputs, numInputs, coeff, blockSize64, tmp);
-		free(tmp);
+		                   inputs, numInputs, coeff, blockSize64);
 	} else {
-		// Pre-allocate one tmp buffer per worker before spawning threads
-		// so that malloc failure can be handled cleanly (no partial work).
-		std::vector<gf64_t*> tmp_bufs(n_workers, nullptr);
-		bool alloc_ok = true;
-		for (size_t wi = 0; wi < n_workers; wi++) {
-			tmp_bufs[wi] = (gf64_t*)malloc(blockSize64 * sizeof(gf64_t));
-			if (!tmp_bufs[wi]) {
-				alloc_ok = false;
-				break;
-			}
-		}
-		if (!alloc_ok) {
-			for (size_t wi = 0; wi < n_workers; wi++) {
-				free(tmp_bufs[wi]);
-			}
-			free(coeff);
-			return;
-		}
-
 		std::thread* workers = new std::thread[n_workers];
 		size_t active = 0;
 
@@ -197,7 +167,6 @@ void GF64Controller::ComputeRecoveryBlocks(
 			r.num_in          = numInputs;
 			r.coeff_row_start = coeff + base * numInputs;
 			r.block_size64    = blockSize64;
-			r.tmp             = tmp_bufs[active];
 
 			new (&workers[active]) std::thread(WorkerThread, r);
 			active++;
@@ -209,10 +178,6 @@ void GF64Controller::ComputeRecoveryBlocks(
 		}
 
 		delete[] workers;
-
-		for (size_t wi = 0; wi < n_workers; wi++) {
-			free(tmp_bufs[wi]);
-		}
 	}
 
 	free(coeff);
