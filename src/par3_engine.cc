@@ -18,11 +18,45 @@
 #include <vector>
 #include <unordered_map>
 #include <list>
+#include <cstdio>
 
 // ============================================================================
 // Dispatch initialisation (one-shot)
 // ============================================================================
 static bool s_dispatch_initialized = false;
+
+// ============================================================================
+// L3 cache size detection
+// ----------------------------------------------------------------------------
+// Reads shared L3 cache size from sysfs. Falls back to 32 MiB if unavailable.
+// ============================================================================
+static size_t GetL3CacheSize() {
+	FILE* f = std::fopen("/sys/devices/system/cpu/cpu0/cache/index3/size", "r");
+	if (f) {
+		char buf[256];
+		if (std::fgets(buf, sizeof(buf), f)) {
+			std::fclose(f);
+			char* endptr = nullptr;
+			// strtod handles leading whitespace and numbers
+			double val = std::strtod(buf, &endptr);
+			size_t multiplier = 1;
+			// skip whitespace before unit
+			while (endptr && (*endptr == ' ' || *endptr == '\t')) {
+				endptr++;
+			}
+			if (endptr) {
+				switch (*endptr) {
+					case 'K': case 'k': multiplier = 1024; break;
+					case 'M': case 'm': multiplier = 1024 * 1024; break;
+					case 'G': case 'g': multiplier = 1024 * 1024 * 1024; break;
+				}
+			}
+			return static_cast<size_t>(val * multiplier);
+		}
+		std::fclose(f);
+	}
+	return 32ULL * 1024 * 1024; // 32 MiB fallback
+}
 
 // ============================================================================
 // LRU cache for coefficient matrices
@@ -195,19 +229,38 @@ struct WorkerRange {
 	size_t        num_in;
 	const gf64_t* coeff_row_start; // coeffMatrix + outStart * numIn
 	size_t        block_size64;
+	size_t        tile_size;       // L3-aware input tile size (in blocks)
 };
 
 static void WorkerThread(const WorkerRange& range) {
 	EnsureDispatch();
 
-	for (size_t k = 0; k < range.num_out; k++) {
-		gf64_t* out_k = range.out_start + k * range.block_size64;
-		memset(out_k, 0, range.block_size64 * sizeof(gf64_t));
+	if (range.tile_size == 0 || range.tile_size >= range.num_in) {
+		for (size_t k = 0; k < range.num_out; k++) {
+			gf64_t* out_k = range.out_start + k * range.block_size64;
+			memset(out_k, 0, range.block_size64 * sizeof(gf64_t));
 
-		const gf64_t* row = range.coeff_row_start + k * range.num_in;
-		for (size_t j = 0; j < range.num_in; j++) {
-			gf64_region_muladd_arr(out_k, range.in + j * range.block_size64,
-			                       &row[j], range.block_size64, 1);
+			const gf64_t* row = range.coeff_row_start + k * range.num_in;
+			for (size_t j = 0; j < range.num_in; j++) {
+				gf64_region_muladd_arr(out_k, range.in + j * range.block_size64,
+				                       &row[j], range.block_size64, 1);
+			}
+		}
+		return;
+	}
+
+	for (size_t j_tile = 0; j_tile < range.num_in; j_tile += range.tile_size) {
+		size_t j_end = std::min(j_tile + range.tile_size, range.num_in);
+		for (size_t k = 0; k < range.num_out; k++) {
+			gf64_t* out_k = range.out_start + k * range.block_size64;
+			if (j_tile == 0) {
+				memset(out_k, 0, range.block_size64 * sizeof(gf64_t));
+			}
+			const gf64_t* row = range.coeff_row_start + k * range.num_in;
+			for (size_t j = j_tile; j < j_end; j++) {
+				gf64_region_muladd_arr(out_k, range.in + j * range.block_size64,
+				                       &row[j], range.block_size64, 1);
+			}
 		}
 	}
 }
@@ -420,10 +473,27 @@ void GF64Controller::ComputeRecoveryBlocks(
 	size_t chunk   = (numRecovery + numThreads - 1) / (size_t)numThreads;
 	size_t n_workers = (size_t)numThreads;
 
+	// Compute L3-aware tile size for input blocks.
+	size_t l3Size = GetL3CacheSize();
+	size_t bytesPerBlock = blockSize64 * sizeof(gf64_t);
+	size_t tileSize = 256;
+	if (bytesPerBlock > 0 && l3Size > 0) {
+		tileSize = l3Size / bytesPerBlock;
+		tileSize = std::min(tileSize, (size_t)256);
+		if (tileSize == 0) tileSize = 1;
+	}
+
 	if (n_workers == 1) {
 		// Single-threaded path — avoids std::thread overhead.
-		MultiplyAccumulate(recovery, numRecovery,
-		                   inputs, numInputs, coeff, blockSize64);
+		WorkerRange r;
+		r.out_start = recovery;
+		r.num_out = numRecovery;
+		r.in = inputs;
+		r.num_in = numInputs;
+		r.coeff_row_start = coeff;
+		r.block_size64 = blockSize64;
+		r.tile_size = tileSize;
+		WorkerThread(r);
 	} else {
 		std::thread* workers = new std::thread[n_workers];
 		size_t active = 0;
@@ -438,6 +508,7 @@ void GF64Controller::ComputeRecoveryBlocks(
 			r.num_in          = numInputs;
 			r.coeff_row_start = coeff + base * numInputs;
 			r.block_size64    = blockSize64;
+			r.tile_size       = tileSize;
 
 			new (&workers[active]) std::thread(WorkerThread, r);
 			active++;

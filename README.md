@@ -4,7 +4,7 @@ High-performance PAR3 create and repair with GF(2^64) recovery, written in C++ w
 
 ## Hero Metrics
 
-All numbers below are measured on a real workload. The environment is the AMD Ryzen 7 7800X3D host used for the `par3-large-file-and-speed` plan, with Node v22 and AVX-512/AVX2 SIMD as noted.
+All numbers below are measured on a real workload. The environment is the AMD Ryzen 7 7800X3D host used for the `par3-large-file-and-speed` and `par3-further-speed` plans, with Node v22 and AVX-512/AVX-2 SIMD as noted.
 
 | Metric | Value | Environment | Before this plan |
 |---|---|---|---|
@@ -15,7 +15,7 @@ All numbers below are measured on a real workload. The environment is the AMD Ry
 | PAR2 create 1 GiB throughput | 471.24 MB/s | GF(2^16) Affine (GFNI+AVX-512) | reference baseline |
 | PAR3 verify/repair on 4.3 GiB archive | works | streaming, no full-file read | failed: "File size > 2 GiB" |
 
-The PAR3 row tells the headline story: the previous single-threaded JS `mul_arr` loop spent almost all of its time in BigInt arithmetic. The new path calls a C++ kernel (`src/par3_engine.cc`) over a NAPI binding, which uses VPCLMULQDQ carryless multiplies and runs across worker threads. RSS stays low because the create path now streams the recovery packet output to disk and processes input blocks in batches rather than holding the whole input in memory.
+The PAR3 row tells the headline story: the previous single-threaded JS `mul_arr` loop spent almost all of its time in BigInt arithmetic. The new path calls a C++ kernel (`src/par3_engine.cc`) over a NAPI binding, which uses VPCLMULQDQ carryless multiplies and runs across worker threads. RSS stays low because the create path now streams the recovery packet output to disk and processes input blocks in batches rather than holding the whole input in memory. Note: the hero metrics above are from `par3-large-file-and-speed` and reflect create throughput. This plan (`par3-further-speed`) focused on fixing the GF(2^64) SIMD math, achieving repair parity 17/17, and kernel parity 1215/1215 across all ISA levels.
 
 ## What This Fork Adds
 
@@ -38,20 +38,21 @@ The main goal is high-performance PAR3 create AND repair. Upstream PAR3 implemen
 
 ## Recent Achievements
 
-The `par3-large-file-and-speed` plan ran 15 tasks across 4 review waves and is fully complete (status `completed` in `.omo/boulder.json`).
+The `par3-further-speed` plan ran 19 tasks and is fully complete (status `completed` in `.omo/boulder.json`). It fixed the GF(2^64) SIMD math, extended repair correctness to 17/17 scenarios, and achieved kernel parity 1215/1215 across all ISA levels.
 
-- Removed the 2 GiB Buffer limit from `par3 verify` and `par3 repair` by converting the parse and write paths to streaming I/O. Verify now reads packets chunk-by-chunk; repair runs a metadata scan first, then seeks to the recorded offsets of each DATA/RECOVERY body.
-- Added `src/par3_engine.cc` and `src/par3_engine.h` to `binding.gyp` so the threaded kernel actually compiles.
-- Exposed the C++ kernel as a NAPI binding `compute_recovery` in `src/gf64_addon.cc`. The binding wraps `GF64Controller::ComputeRecoveryBlocks` and is bit-exact with the JS path.
-- Replaced the single-threaded JS `mul_arr` loop in `lib/par3gen.js:_generateRecoveryBlocks` with a call to the new C++ binding. The old code path is still available behind `PAR3_USE_JS_KERNEL=1` for fallback.
-- Converted `par3_parse_buffer` from tail-recursive to iterative. The old version would stack-overflow on a 100 000+ block archive.
-- Converted `readBlock` from recursive to async/iterative for the same reason.
-- Converted the create output path from `fs.writeSync` to `fs.createWriteStream` with backpressure. Same for the recovery packet writes.
-- Added batched input-block processing in the create path, which is what makes the peak RSS number in the hero table possible.
-- Added three new tests under `test/`:
-  - `par3-kernel-parity.js`: bit-exact JS-vs-C++ parity over 1000 randomized inputs
-  - `e2e-par3-large-file.js`: 2.3 GiB and 4.3 GiB create/verify/repair
-  - `bench/par3-create-bench-large.js`: throughput benchmark with JSON output
+- Fixed the GF64 reduction bug: the PCLMULQDQ reduction in `gf64_mul` and `gf64_mul_combi` was using a broken `t >> 32` split instead of the correct `hi >> 60` formula. All recovery generation and repair was producing corrupt data until this was caught and fixed with the proven `gf64_reduce_128` from the single-word kernel.
+- Implemented AVX-512/AVX-2/SSSE-3 `_arr` SIMD kernels with real VPCLMULQDQ carryless multiply for the TDD multiplication path.
+- Implemented fused muladd (mul+XOR) variants for all three `_arr` kernels, switched `MultiplyAccumulate` to the `_arr` muladd path.
+- `BuildCauchyMatrix` parallelized across physical cores (T12). Coeff matrix LRU cache added with key `numIn x numRec` and size cap 8 (T13).
+- `pickBestMethod` wired into `_detectGfMethod` for runtime SIMD method selection with a startup microbenchmark (T11).
+- Repair path now uses SIMD dispatch with the `_arr` muladd kernel in the worker thread (T17-T19).
+- 500 MiB throughput cliff root-caused and fixed (T15). Per-slice overhead reduced for 10k-slice workloads (T18).
+- NAPI surface cleaned up: unused `par3_recovery_calculate` export removed, `par3_method_detection` now returns a typed array with method name and flags (T10).
+- Work-stealing thread pool (T16) was attempted but abandoned due to complexity; batched async I/O is simpler and performs well for the target use case.
+- Added `par3-repair-parity.js`: 17/17 repair scenarios across 4 section configs.
+- Added `par3-repair-simd.js`: SIMD dispatch verification on WSL2 (Zen4, AVX-2 selected).
+- Added `e2e-par3-repair.js`: 100 MiB E2E repair with SHA256 match.
+- `par3-kernel-parity.js` extended to 1000 random inputs across 50 multi-thread configs and 15 n_coeff combos: 1215/1215 parity with JS BigInt across AVX-512, AVX-2, SSSE-3, and scalar paths.
 
 ## Architecture
 
@@ -152,7 +153,7 @@ See also the Github Actions [build workflows](.github/workflows).
 
 ## Related Artifacts
 
-- [`.omo/plans/par3-large-file-and-speed.md`](.omo/plans/par3-large-file-and-speed.md): the plan that drove the recent changes
+- [`.omo/plans/par3-further-speed.md`](.omo/plans/par3-further-speed.md): the plan that drove the recent changes (kernel parity, GF64 fix, repair correctness)
 - [`.omo/boulder.json`](.omo/boulder.json): progress log, with every task session and review verdict
 - [`test/fixtures/par3-spec-amendments.md`](test/fixtures/par3-spec-amendments.md): the 17-amendment spec proposal
 - [`test/e2e-par3-large-file.js`](test/e2e-par3-large-file.js): end-to-end test that proves the 2.3 GiB and 4.3 GiB create+verify+repair round trip

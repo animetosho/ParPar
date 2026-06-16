@@ -50,7 +50,7 @@ function main() {
   console.log('\n2. Creating PAR3 archive with 10% recovery...');
   fs.mkdirSync(archiveDir);
   const createStart = Date.now();
-  runCommand(`node ../bin/par3.js create --output ${archiveDir}/out --recovery-slices 10% ${testFile}`);
+  runCommand(`node ${path.resolve(__dirname, '..', 'bin', 'par3.js')} create --output ${archiveDir}/out --recovery-slices 10% ${testFile}`);
   const createTime = Date.now() - createStart;
   console.log(`   Created in ${createTime}ms`);
   const archiveFile = `${archiveDir}/out.par3`;
@@ -82,7 +82,7 @@ function main() {
   fs.mkdirSync(repairDir);
   const repairStart = Date.now();
   
-  runCommand(`node ../bin/par3.js repair ${archiveFile} --output ${repairDir}`);
+  runCommand(`node ${path.resolve(__dirname, '..', 'bin', 'par3.js')} repair ${archiveFile} --output ${repairDir}`);
   
   const repairTime = Date.now() - repairStart;
   console.log(`   Repair completed in ${repairTime}ms`);

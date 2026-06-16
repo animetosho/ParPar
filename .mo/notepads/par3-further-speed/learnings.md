@@ -49,3 +49,23 @@ If sustained throughput needs improvement beyond current 3.39 MB/s average:
 ### Recommendation
 
 Current implementation meets the ≥ 2 MB/s throughput target for 10k slices × 4 KiB blocks. The performance variability between runs warrants further investigation for production use, but satisfies the immediate task requirements.
+
+---
+
+## 2026-06-17: F4 Scope Fidelity Check Results
+
+### Verdict: APPROVE
+
+- **Tasks compliant**: 21/21 implemented (T16 abandoned, T20/T23/T24 blocked by environment)
+- **Contamination**: 1 issue (gf64_reduce_128 overflow fix applied to non-_arr kernel files during T6 — correctness fix, not scope creep)
+- **Unaccounted files**: 5 files, all defensible supporting infrastructure
+- **Must-NOT violations**: 0/9
+- **WSL2 SIGILL guard**: NOT added (confirmed)
+
+### Key finding: cross-task contamination from shared infrastructure
+
+The `gf64_reduce_128()` function is `static inline` and duplicated across 5 files (avx2.c, avx512.c, ssse3.c, single.c, plus each _arr variant). When T6 discovered and fixed the overflow bug (bits 64-67 were lost due to uint64_t truncation), the fix had to be applied to all copies. This meant modifying files that belong to the single-coefficient kernels (not part of any _arr task scope). Correctness trumped task boundaries — the right call, but it's a contamination event worth noting for future plans that touch shared inline functions.
+
+### No scope creep detected
+
+All 21 implemented tasks stayed within their "What to do" boundaries. The only spillover was the correctness fix above. No guardrails were violated. No unaccounted work was introduced. Blocked tasks (T20, T23, T24) are environment-limited, not scope deficits.

@@ -31,12 +31,12 @@ var MIN_RECOVERY_SLICES = 10;
 
 function parseArgs() {
   var args = process.argv.slice(2);
-  var opts = { 
-    size: DEFAULT_SIZE, 
-    slices: 10000, 
+  var opts = {
+    size: DEFAULT_SIZE,
+    slices: 10000,
     blockSize: DEFAULT_BLOCK_SIZE,
     runs: DEFAULT_RUNS,
-    keep: false 
+    keep: false
   };
   for (var i = 0; i < args.length; i++) {
     var a = args[i];
@@ -106,56 +106,55 @@ function run(opts) {
   var totalThroughput = 0;
   var validRuns = 0;
 
-  for (var run = 1; run <= opts.runs; run++) {
-    if (opts.runs > 1) {
-      console.log('--- Run ' + run + '/' + opts.runs + ' ---');
-    }
-
-    var t0 = Date.now();
-    console.log('Generating ' + helpers.formatBytes(actualSize) + ' source file...');
-    helpers.createBenchSource(actualSize, sourceFile);
-    var tFile = Date.now() - t0;
-    console.log('  Source file ready: ' + helpers.formatDuration(tFile));
-
-    var tCreate = Date.now();
-    var peakRSS = 0;
-    var memTimer = setInterval(function() {
-      var m = process.memoryUsage();
-      if (m.rss > peakRSS) peakRSS = m.rss;
-    }, 100);
-
-    par3.create([sourceFile], outputBase, {
-      outputBase: outputBase,
-      recoverySlices: recoverySlices,
-      blockSize: opts.blockSize,
-      // Default: gfMethod: null (auto) — will pick AVX512 if available
-    }, function(err) {
-      clearInterval(memTimer);
-      var dtCreate = Date.now() - tCreate;
-      var dtTotal = Date.now() - t0;
-      var throughput = (actualSize / 1048576) / (dtCreate / 1000);
-
-      if (err) {
-        console.error('PAR3 create failed:', err.message);
-        if (!opts.keep) helpers.cleanup(tmpDir);
-        process.exit(1);
+  // Helper to run a single iteration and return the throughput
+  function doRun(runIndex) {
+    return new Promise(function(resolve, reject) {
+      if (opts.runs > 1) {
+        console.log('--- Run ' + runIndex + '/' + opts.runs + ' ---');
       }
 
-      console.log('PAR3 creation complete: ' + helpers.formatDuration(dtCreate));
-      console.log('  Throughput: ' + throughput.toFixed(2) + ' MB/s');
-      console.log('  Peak RSS:   ' + helpers.formatBytes(peakRSS));
+      var t0 = Date.now();
+      console.log('Generating ' + helpers.formatBytes(actualSize) + ' source file...');
+      helpers.createBenchSource(actualSize, sourceFile);
+      var tFile = Date.now() - t0;
+      console.log('  Source file ready: ' + helpers.formatDuration(tFile));
 
-      totalThroughput += throughput;
-      validRuns++;
+      var tCreate = Date.now();
+      var peakRSS = 0;
+      var memTimer = setInterval(function() {
+        var m = process.memoryUsage();
+        if (m.rss > peakRSS) peakRSS = m.rss;
+      }, 100);
 
-      if (run === opts.runs || (opts.runs > 1 && run < opts.runs)) {
-        console.log('');
-      }
+      par3.create([sourceFile], outputBase, {
+        outputBase: outputBase,
+        recoverySlices: recoverySlices,
+        blockSize: opts.blockSize,
+        // Default: gfMethod: null (auto) — will pick AVX512 if available
+      }, function(err) {
+        clearInterval(memTimer);
+        var dtCreate = Date.now() - tCreate;
+        var dtTotal = Date.now() - t0;
+        var throughput = (actualSize / 1048576) / (dtCreate / 1000);
 
-      if (run === opts.runs) {
-        var avgThroughput = totalThroughput / validRuns;
-        console.log('Average throughput over ' + validRuns + ' run(s): ' + avgThroughput.toFixed(2) + ' MB/s');
+        if (err) {
+          console.error('PAR3 create failed:', err.message);
+          if (!opts.keep) helpers.cleanup(tmpDir);
+          process.exit(1);
+        }
 
+        console.log('PAR3 creation complete: ' + helpers.formatDuration(dtCreate));
+        console.log('  Throughput: ' + throughput.toFixed(2) + ' MB/s');
+        console.log('  Peak RSS:   ' + helpers.formatBytes(peakRSS));
+
+        totalThroughput += throughput;
+        validRuns++;
+
+        if (opts.runs > 1 && runIndex < opts.runs) {
+          console.log('');
+        }
+
+        // Per-run metrics JSON
         var metrics = {
           format: 'PAR3',
           sourceBytes: actualSize,
@@ -167,12 +166,12 @@ function run(opts) {
           blockSizeHuman: helpers.formatBytes(opts.blockSize),
           recoverySlices: recoverySlices,
           gfMethod: gf.gf64,
-          runs: validRuns,
+          run: runIndex,
           metrics: {
             sourceFileMs: tFile,
             createMs: dtCreate,
             totalMs: dtTotal,
-            createMBps: avgThroughput,
+            createMBps: throughput,
             peakRssBytes: peakRSS,
             peakRssHuman: helpers.formatBytes(peakRSS)
           }
@@ -182,10 +181,26 @@ function run(opts) {
         console.log(JSON.stringify(metrics, null, 2));
         console.log('---END METRICS---');
 
-        if (!opts.keep) helpers.cleanup(tmpDir);
-      }
+        resolve(throughput);
+      });
     });
   }
+
+  var chain = Promise.resolve();
+  for (var run = 1; run <= opts.runs; run++) {
+    (function(currentRun) {
+      chain = chain.then(function() {
+        return doRun(currentRun);
+      });
+    })(run);
+  }
+
+  chain.then(function() {
+    var avgThroughput = totalThroughput / validRuns;
+    console.log('Average throughput over ' + validRuns + ' run(s): ' + avgThroughput.toFixed(2) + ' MB/s');
+
+    if (!opts.keep) helpers.cleanup(tmpDir);
+  });
 }
 
 if (require.main === module) {
