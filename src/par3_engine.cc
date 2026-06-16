@@ -10,13 +10,50 @@
 #endif
 
 #include <thread>
+#include <future>
 #include <algorithm>
 #include <vector>
+#include <unordered_map>
+#include <list>
 
 // ============================================================================
 // Dispatch initialisation (one-shot)
 // ============================================================================
 static bool s_dispatch_initialized = false;
+
+// ============================================================================
+// LRU cache for coefficient matrices
+// ----------------------------------------------------------------------------
+// Keyed by (numInputs, numRecovery, firstInput, firstRecovery) so repeated
+// calls with the same recovery exponents reuse the same matrix.
+// ============================================================================
+struct CoeffCacheKey {
+	size_t numInputs;
+	size_t numRecovery;
+	uint64_t firstInput;
+	uint64_t firstRecovery;
+
+	bool operator==(const CoeffCacheKey& o) const {
+		return numInputs == o.numInputs && numRecovery == o.numRecovery &&
+		       firstInput == o.firstInput && firstRecovery == o.firstRecovery;
+	}
+};
+
+struct CoeffCacheKeyHash {
+	size_t operator()(const CoeffCacheKey& k) const {
+		return std::hash<size_t>()(k.numInputs) ^
+		       std::hash<size_t>()(k.numRecovery) ^
+		       std::hash<uint64_t>()(k.firstInput) ^
+		       std::hash<uint64_t>()(k.firstRecovery);
+	}
+};
+
+static const size_t COEFF_CACHE_MAX = 8;
+
+static struct {
+	std::unordered_map<CoeffCacheKey, gf64_t*, CoeffCacheKeyHash> map;
+	std::list<CoeffCacheKey> lru;
+} s_coeffCache;
 
 static inline void EnsureDispatch() {
 	if (!s_dispatch_initialized) {
@@ -39,15 +76,78 @@ void GF64Controller::BuildCauchyMatrix(
 	size_t numInputs, size_t numRecovery,
 	uint64_t firstInput, uint64_t firstRecovery
 ) {
-	for (size_t r = 0; r < numRecovery; r++) {
-		uint64_t y = firstRecovery + r;
-		for (size_t c = 0; c < numInputs; c++) {
-			uint64_t x = firstInput + c;
-			uint64_t denom = x ^ y;
-			if (denom == 0) denom = 1;
-			coeffMatrix[r * numInputs + c] = gf64_inverse(denom);
+	// Parallelize across rows (recovery blocks) — each row is independent
+	size_t numThreads = std::thread::hardware_concurrency();
+	if (numThreads == 0) numThreads = 1;
+	if (numThreads > numRecovery) numThreads = numRecovery;
+
+	// Chunk rows per thread
+	size_t chunkSize = (numRecovery + numThreads - 1) / numThreads;
+	std::vector<std::future<void>> futures;
+	futures.reserve(numThreads);
+
+	for (size_t t = 0; t < numThreads; t++) {
+		size_t rowStart = t * chunkSize;
+		size_t rowEnd = std::min(rowStart + chunkSize, numRecovery);
+		futures.push_back(std::async(std::launch::async,
+			[coeffMatrix, numInputs, rowStart, rowEnd, firstInput, firstRecovery]() {
+				for (size_t r = rowStart; r < rowEnd; r++) {
+					uint64_t y = firstRecovery + r;
+					for (size_t c = 0; c < numInputs; c++) {
+						uint64_t x = firstInput + c;
+						uint64_t denom = x ^ y;
+						if (denom == 0) denom = 1;
+						coeffMatrix[r * numInputs + c] = gf64_inverse(denom);
+					}
+				}
+			}
+		));
+	}
+
+	for (auto& f : futures) {
+		f.wait();
+	}
+}
+
+// ============================================================================
+// GetOrBuildCoeffMatrix  (LRU-cached)
+// ----------------------------------------------------------------------------
+// Returns a coefficient matrix from the LRU cache if one with the same
+// (numInputs, numRecovery, firstInput, firstRecovery) exists, otherwise
+// allocates and builds a new one.  The cache owns the memory — callers must
+// NOT free the returned pointer.
+// ============================================================================
+static gf64_t* GetOrBuildCoeffMatrix(
+	size_t numInputs, size_t numRecovery,
+	uint64_t firstInput, uint64_t firstRecovery
+) {
+	CoeffCacheKey key = { numInputs, numRecovery, firstInput, firstRecovery };
+
+	auto it = s_coeffCache.map.find(key);
+	if (it != s_coeffCache.map.end()) {
+		s_coeffCache.lru.remove(key);
+		s_coeffCache.lru.push_front(key);
+		return it->second;
+	}
+
+	gf64_t* matrix = (gf64_t*)malloc(numRecovery * numInputs * sizeof(gf64_t));
+	if (!matrix) return nullptr;
+
+	GF64Controller::BuildCauchyMatrix(matrix, numInputs, numRecovery, firstInput, firstRecovery);
+
+	if (s_coeffCache.map.size() >= COEFF_CACHE_MAX) {
+		auto evictKey = s_coeffCache.lru.back();
+		s_coeffCache.lru.pop_back();
+		auto evictIt = s_coeffCache.map.find(evictKey);
+		if (evictIt != s_coeffCache.map.end()) {
+			free(evictIt->second);
+			s_coeffCache.map.erase(evictIt);
 		}
 	}
+
+	s_coeffCache.map[key] = matrix;
+	s_coeffCache.lru.push_front(key);
+	return matrix;
 }
 
 // ============================================================================
@@ -134,11 +234,9 @@ void GF64Controller::ComputeRecoveryBlocks(
 		if (numThreads <= 0) numThreads = 1;
 	}
 
-	// --- 1. Build coefficient matrix ---
-	gf64_t* coeff = (gf64_t*)malloc(numRecovery * numInputs * sizeof(gf64_t));
+	// --- 1. Build coefficient matrix (via LRU cache) ---
+	gf64_t* coeff = GetOrBuildCoeffMatrix(numInputs, numRecovery, firstInput, firstRecovery);
 	if (!coeff) return;
-
-	BuildCauchyMatrix(coeff, numInputs, numRecovery, firstInput, firstRecovery);
 
 	// --- 2. Distribute work ---
 	// Cap threads at numRecovery (no point spinning more workers than blocks).
@@ -180,5 +278,4 @@ void GF64Controller::ComputeRecoveryBlocks(
 		delete[] workers;
 	}
 
-	free(coeff);
 }
