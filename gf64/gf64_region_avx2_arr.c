@@ -178,4 +178,108 @@ void gf64_region_mul_avx2_arr(gf64_t *HEDLEY_RESTRICT out, const gf64_t *HEDLEY_
 	}
 }
 
+__attribute__((target("avx2,vpclmulqdq")))
+void gf64_region_muladd_avx2_arr(gf64_t *HEDLEY_RESTRICT out, const gf64_t *HEDLEY_RESTRICT in, const gf64_t *HEDLEY_RESTRICT coeff, size_t len, size_t n_coeff) {
+	size_t i = 0;
+
+	if (n_coeff == 1) {
+		uint64_t c0 = coeff[0];
+		__m256i coeff_broadcast = _mm256_set1_epi64x((int64_t)c0);
+
+		size_t blocks = len / 4;
+		for (size_t b = 0; b < blocks; b++) {
+			__m256i in01 = _mm256_setr_epi64x((int64_t)in[i + 0], 0, (int64_t)in[i + 1], 0);
+			__m256i prod01 = _mm256_clmulepi64_epi128(in01, coeff_broadcast, 0x00);
+			__m128i p01_lo = _mm256_extracti128_si256(prod01, 0);
+			__m128i p01_hi = _mm256_extracti128_si256(prod01, 1);
+
+			uint64_t p00_lo = (uint64_t)_mm_cvtsi128_si64(p01_lo);
+			uint64_t p00_hi = (uint64_t)_mm_cvtsi128_si64(_mm_srli_si128(p01_lo, 8));
+			uint64_t p01_lo_v = (uint64_t)_mm_cvtsi128_si64(p01_hi);
+			uint64_t p01_hi_v = (uint64_t)_mm_cvtsi128_si64(_mm_srli_si128(p01_hi, 8));
+
+			out[i + 0] ^= gf64_reduce_128(p00_lo, p00_hi);
+			out[i + 1] ^= gf64_reduce_128(p01_lo_v, p01_hi_v);
+
+			__m256i in23 = _mm256_setr_epi64x((int64_t)in[i + 2], 0, (int64_t)in[i + 3], 0);
+			__m256i prod23 = _mm256_clmulepi64_epi128(in23, coeff_broadcast, 0x00);
+			__m128i p23_lo = _mm256_extracti128_si256(prod23, 0);
+			__m128i p23_hi = _mm256_extracti128_si256(prod23, 1);
+
+			uint64_t p02_lo = (uint64_t)_mm_cvtsi128_si64(p23_lo);
+			uint64_t p02_hi = (uint64_t)_mm_cvtsi128_si64(_mm_srli_si128(p23_lo, 8));
+			uint64_t p03_lo = (uint64_t)_mm_cvtsi128_si64(p23_hi);
+			uint64_t p03_hi = (uint64_t)_mm_cvtsi128_si64(_mm_srli_si128(p23_hi, 8));
+
+			out[i + 2] ^= gf64_reduce_128(p02_lo, p02_hi);
+			out[i + 3] ^= gf64_reduce_128(p03_lo, p03_hi);
+
+			i += 4;
+		}
+
+		while (i < len) {
+			out[i] ^= gf64_mul_reference(in[i], c0);
+			i++;
+		}
+	} else {
+		size_t blocks = len / 4;
+		for (size_t b = 0; b < blocks; b++) {
+			__m256i in01 = _mm256_setr_epi64x((int64_t)in[i + 0], 0, (int64_t)in[i + 1], 0);
+			uint64_t acc0 = 0, acc1 = 0;
+
+			for (size_t c = 0; c < n_coeff; c++) {
+				__m256i coeff_bc = _mm256_set1_epi64x((int64_t)coeff[c]);
+				__m256i prod = _mm256_clmulepi64_epi128(in01, coeff_bc, 0x00);
+
+				__m128i p_lo = _mm256_extracti128_si256(prod, 0);
+				__m128i p_hi = _mm256_extracti128_si256(prod, 1);
+
+				uint64_t lo_lane0 = (uint64_t)_mm_cvtsi128_si64(p_lo);
+				uint64_t hi_lane0 = (uint64_t)_mm_cvtsi128_si64(_mm_srli_si128(p_lo, 8));
+				uint64_t lo_lane1 = (uint64_t)_mm_cvtsi128_si64(p_hi);
+				uint64_t hi_lane1 = (uint64_t)_mm_cvtsi128_si64(_mm_srli_si128(p_hi, 8));
+
+				acc0 ^= gf64_reduce_128(lo_lane0, hi_lane0);
+				acc1 ^= gf64_reduce_128(lo_lane1, hi_lane1);
+			}
+
+			out[i + 0] ^= acc0;
+			out[i + 1] ^= acc1;
+
+			__m256i in23 = _mm256_setr_epi64x((int64_t)in[i + 2], 0, (int64_t)in[i + 3], 0);
+			uint64_t acc2 = 0, acc3 = 0;
+
+			for (size_t c = 0; c < n_coeff; c++) {
+				__m256i coeff_bc = _mm256_set1_epi64x((int64_t)coeff[c]);
+				__m256i prod = _mm256_clmulepi64_epi128(in23, coeff_bc, 0x00);
+
+				__m128i p_lo = _mm256_extracti128_si256(prod, 0);
+				__m128i p_hi = _mm256_extracti128_si256(prod, 1);
+
+				uint64_t lo_lane0 = (uint64_t)_mm_cvtsi128_si64(p_lo);
+				uint64_t hi_lane0 = (uint64_t)_mm_cvtsi128_si64(_mm_srli_si128(p_lo, 8));
+				uint64_t lo_lane1 = (uint64_t)_mm_cvtsi128_si64(p_hi);
+				uint64_t hi_lane1 = (uint64_t)_mm_cvtsi128_si64(_mm_srli_si128(p_hi, 8));
+
+				acc2 ^= gf64_reduce_128(lo_lane0, hi_lane0);
+				acc3 ^= gf64_reduce_128(lo_lane1, hi_lane1);
+			}
+
+			out[i + 2] ^= acc2;
+			out[i + 3] ^= acc3;
+
+			i += 4;
+		}
+
+		while (i < len) {
+			uint64_t sum = 0;
+			for (size_t c = 0; c < n_coeff; c++) {
+				sum ^= gf64_mul_reference(in[i], coeff[c]);
+			}
+			out[i] ^= sum;
+			i++;
+		}
+	}
+}
+
 HEDLEY_END_C_DECLS

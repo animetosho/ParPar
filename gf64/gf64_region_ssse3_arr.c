@@ -104,4 +104,49 @@ void gf64_region_mul_ssse3_arr(gf64_t *HEDLEY_RESTRICT out, const gf64_t *HEDLEY
 	}
 }
 
+void gf64_region_muladd_ssse3_arr(gf64_t *HEDLEY_RESTRICT out, const gf64_t *HEDLEY_RESTRICT in, const gf64_t *HEDLEY_RESTRICT coeff, size_t len, size_t n_coeff) {
+	size_t blocks = len / 2;
+	size_t i = 0;
+
+	if (n_coeff == 1) {
+		gf64_t c0 = coeff[0];
+		for (size_t b = 0; b < blocks; b++) {
+			uint64_t lo0, hi0, lo1, hi1;
+			gf64_clmul_64x64(in[i + 0], c0, &lo0, &hi0);
+			gf64_clmul_64x64(in[i + 1], c0, &lo1, &hi1);
+			out[i + 0] ^= gf64_reduce_128(lo0, hi0);
+			out[i + 1] ^= gf64_reduce_128(lo1, hi1);
+			i += 2;
+		}
+		while (i < len) {
+			out[i] ^= gf64_mul_reference(in[i], c0);
+			i++;
+		}
+	} else {
+		size_t blocks = len / 2;
+		i = 0;
+		for (size_t b = 0; b < blocks; b++) {
+			uint64_t acc0 = 0, acc1 = 0;
+			for (size_t c = 0; c < n_coeff; c++) {
+				uint64_t lo0, hi0, lo1, hi1;
+				gf64_clmul_64x64(in[i + 0], coeff[c], &lo0, &hi0);
+				gf64_clmul_64x64(in[i + 1], coeff[c], &lo1, &hi1);
+				acc0 ^= gf64_reduce_128(lo0, hi0);
+				acc1 ^= gf64_reduce_128(lo1, hi1);
+			}
+			out[i + 0] ^= acc0;
+			out[i + 1] ^= acc1;
+			i += 2;
+		}
+		while (i < len) {
+			uint64_t sum = 0;
+			for (size_t c = 0; c < n_coeff; c++) {
+				sum ^= gf64_mul_reference(in[i], coeff[c]);
+			}
+			out[i] ^= sum;
+			i++;
+		}
+	}
+}
+
 HEDLEY_END_C_DECLS

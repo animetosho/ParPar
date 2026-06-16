@@ -26,9 +26,11 @@ typedef enum {
 
 typedef void (*gf64_region_mul_fn)(gf64_t *HEDLEY_RESTRICT out, const gf64_t *HEDLEY_RESTRICT in, size_t len, gf64_t constant);
 typedef void (*gf64_region_mul_arr_fn)(gf64_t *HEDLEY_RESTRICT out, const gf64_t *HEDLEY_RESTRICT in, const gf64_t *HEDLEY_RESTRICT coeff, size_t len, size_t n_coeff);
+typedef void (*gf64_region_muladd_arr_fn)(gf64_t *HEDLEY_RESTRICT out, const gf64_t *HEDLEY_RESTRICT in, const gf64_t *HEDLEY_RESTRICT coeff, size_t len, size_t n_coeff);
 
 extern gf64_region_mul_fn gf64_region_mul;
 extern gf64_region_mul_arr_fn gf64_region_mul_arr;
+extern gf64_region_muladd_arr_fn gf64_region_muladd_arr;
 extern GF64Method gf64_current_method;
 extern gf64_t gf64_inverse(gf64_t a);
 
