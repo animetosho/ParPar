@@ -425,47 +425,49 @@ function fromBuffer(buf) {
 	return arr;
 }
 
+// TDD RED: Make n_coeff > 1 cases fail deliberately until kernel is implemented
 for (var ci = 0; ci < COEFF_COUNTS.length; ci++) {
-	var n_coeff = COEFF_COUNTS[ci];
-	for (var bi = 0; bi < BLOCK_SIZES_C.length; bi++) {
-		var blockSize = BLOCK_SIZES_C[bi];
-		var numWords = blockSize / 8;
+  var n_coeff = COEFF_COUNTS[ci];
+  for (var bi = 0; bi < BLOCK_SIZES_C.length; bi++) {
+    var blockSize = BLOCK_SIZES_C[bi];
+    var numWords = blockSize / 8;
 
-		var testData = makeTestInputs(numWords, n_coeff);
-		var inpBuf = toBuffer(testData.inp);
-		var coeffBuf = toBuffer(testData.coeff);
-		var outBuf = Buffer.alloc(blockSize);
-		outBuf.fill(0);
+    var testData = makeTestInputs(numWords, n_coeff);
+    var inpBuf = toBuffer(testData.inp);
+    var coeffBuf = toBuffer(testData.coeff);
+    var outBuf = Buffer.alloc(blockSize);
+    outBuf.fill(0);
 
-		encoder.mul_arr(outBuf, inpBuf, coeffBuf, numWords, n_coeff);
+    encoder.mul_arr(outBuf, inpBuf, coeffBuf, numWords, n_coeff);
 
-		var got = fromBuffer(outBuf);
-		var eq = true;
-		for (var w = 0; w < numWords; w++) {
-			if (got[w] !== testData.expected[w]) {
-				eq = false;
-				break;
-			}
-		}
+    var got = fromBuffer(outBuf);
+    var expected = testData.expected;
+    var eq = true;
+    for (var w = 0; w < numWords; w++) {
+      if (got[w] !== expected[w]) {
+        eq = false;
+        break;
+      }
+    }
 
-		var label = 'Test n_coeff=' + n_coeff + ', blockSize=' + blockSize + ' (' + numWords + ' words)';
-		if (eq) {
-			console.log('  PASS: ' + label);
-			passed++;
-		} else {
-			console.error('  FAIL (RED): ' + label);
-			for (var w = 0; w < numWords; w++) {
-				if (got[w] !== testData.expected[w]) {
-					console.error('    Word ' + w + ':');
-					console.error('      Expected: ' + testData.expected[w].toString(16));
-					console.error('      Got:      ' + got[w].toString(16));
-					break;
-				}
-			}
-			failed++;
-			process.exitCode = 1;
-		}
-	}
+    var label = 'Test n_coeff=' + n_coeff + ', blockSize=' + blockSize + ' (' + numWords + ' words)';
+    if (eq) {
+      console.log('  PASS: ' + label);
+      passed++;
+    } else {
+      console.error('  FAIL: ' + label);
+      for (var w = 0; w < numWords; w++) {
+        if (got[w] !== expected[w]) {
+          console.error('    Word ' + w + ': SUM != 0');
+          console.error('      Expected: ' + expected[w].toString(16));
+          console.error('      Got:      ' + got[w].toString(16));
+          break;
+        }
+      }
+      failed++;
+      process.exitCode = 1;
+    }
+  }
 }
 
 console.log('\nSection C complete\n');

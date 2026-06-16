@@ -43,12 +43,13 @@ var SCENARIOS = [
 
 function parseArgs() {
   var args = process.argv.slice(2);
-  var opts = { size: '1G', only: null, keep: false };
+  var opts = { size: '1G', only: null, keep: false, mode: null };
   for (var i = 0; i < args.length; i++) {
     var a = args[i];
     if (a.indexOf('--size=') === 0) opts.size = a.substring('--size='.length);
     else if (a.indexOf('--only=') === 0) opts.only = a.substring('--only='.length);
     else if (a === '--keep') opts.keep = true;
+    else if (a.indexOf('--mode=') === 0) opts.mode = a.substring('--mode='.length);
     else if (a === '--help' || a === '-h') opts.help = true;
   }
   return opts;
@@ -63,7 +64,10 @@ function printHelp() {
   console.log('  --size=<size>  Source size to use (e.g. 1G, 500M, 1073741824). Default: 1G');
   console.log('  --only=<substr>  Only run scenarios whose id contains <substr>');
   console.log('  --keep         Pass --keep to child scripts (keep temp files)');
+  console.log('  --mode=cliff   Run cliff-detection gate: 100M + 500M, assert 500M >= 100M/3');
   console.log('  --help, -h     Show this help');
+  console.log('');
+  console.log('See BENCHMARKING.md for the full benchmarking protocol and reproducibility guide.');
   console.log('');
   console.log('Scenarios:');
   for (var i = 0; i < SCENARIOS.length; i++) {
@@ -136,9 +140,74 @@ function runScenario(s, opts) {
   });
 }
 
+function runCliffMode(opts, callback) {
+  var cliffScenarios = [
+    { id: 'par3-create-100M-10k', script: 'par3-create-bench.js', args: ['--size=100M', '--slices=10000'] },
+    { id: 'par3-create-500M-10k', script: 'par3-create-bench.js', args: ['--size=500M', '--slices=10000'] }
+  ];
+
+  console.log('PARPARPAR CLIFF-DETECTION GATE');
+  console.log('===============================');
+  console.log('Asserting: 500M throughput >= 100M throughput / 3');
+  console.log('');
+
+  var cliffResults = [];
+  var pending = cliffScenarios.slice();
+
+  function nextCliff() {
+    if (pending.length === 0) return evalCliff();
+    var s = pending.shift();
+    runScenario(s, { size: null, keep: opts.keep }).then(function(r) {
+      cliffResults.push(r);
+      nextCliff();
+    });
+  }
+
+  function evalCliff() {
+    var t100 = null;
+    var t500 = null;
+    for (var i = 0; i < cliffResults.length; i++) {
+      var r = cliffResults[i];
+      if (r.id.indexOf('100M') >= 0 && r.metrics && r.metrics.metrics) {
+        t100 = r.metrics.metrics.createMBps;
+      }
+      if (r.id.indexOf('500M') >= 0 && r.metrics && r.metrics.metrics) {
+        t500 = r.metrics.metrics.createMBps;
+      }
+    }
+
+    console.log('\n=== CLIFF GATE RESULTS ===');
+    console.log('  100M throughput: ' + (t100 != null ? t100.toFixed(2) + ' MB/s' : 'MISSING'));
+    console.log('  500M throughput: ' + (t500 != null ? t500.toFixed(2) + ' MB/s' : 'MISSING'));
+
+    if (t100 == null || t500 == null) {
+      console.log('  VERDICT: INCONCLUSIVE (missing metrics)');
+      callback(2);
+      return;
+    }
+
+    var threshold = t100 / 3;
+    var ratio = t500 / t100;
+    var pass = t500 >= threshold;
+
+    console.log('  Threshold: ' + threshold.toFixed(2) + ' MB/s (100M / 3)');
+    console.log('  Ratio:    ' + ratio.toFixed(4) + ' (500M / 100M)');
+    console.log('  VERDICT:  ' + (pass ? 'PASS' : 'FAIL - cliff regression detected'));
+
+    callback(pass ? 0 : 1);
+  }
+
+  nextCliff();
+}
+
 function main() {
   var opts = parseArgs();
   if (opts.help) { printHelp(); return; }
+
+  if (opts.mode === 'cliff') {
+    runCliffMode(opts, function(code) { process.exit(code); });
+    return;
+  }
 
   var scenarios = SCENARIOS.slice();
   if (opts.only) {
@@ -225,4 +294,4 @@ if (require.main === module) {
   main();
 }
 
-module.exports = { SCENARIOS: SCENARIOS, runScenario: runScenario };
+module.exports = { SCENARIOS: SCENARIOS, runScenario: runScenario, runCliffMode: runCliffMode };
