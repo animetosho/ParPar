@@ -13,10 +13,28 @@ extern gf64_t gf64_mul_reference(gf64_t a, gf64_t b);
  * the per-lane scalar reduction after each VPCLMULQDQ call.
  */
 static inline uint64_t gf64_reduce_128(uint64_t lo, uint64_t hi) {
-	uint64_t t = (hi << 4) ^ (hi << 3) ^ (hi << 1) ^ hi;
-	uint64_t t_hi = t >> 32;
-	uint64_t t_lo = t & 0xFFFFFFFFULL;
-	uint64_t t2 = (t_hi << 4) ^ (t_hi << 3) ^ (t_hi << 1) ^ t_hi;
+	/* Lower 64 bits of hi * 0x1B (truncated at 64 bits by uint64_t). */
+	uint64_t t_lo = (hi << 4) ^ (hi << 3) ^ (hi << 1) ^ hi;
+
+	/* Overflow bits (64-67) of hi * 0x1B:
+	 * (hi<<4) overflow: hi[60:63] → full_product[64:67]
+	 * (hi<<3) overflow: hi[61:63] → full_product[64:66]
+	 * (hi<<1) overflow: hi[63]   → full_product[64]
+	 * R_hi[0] = full_product bit 64 = hi[60] ^ hi[61] ^ hi[63]
+	 * R_hi[1] = full_product bit 65 = hi[61] ^ hi[62]
+	 * R_hi[2] = full_product bit 66 = hi[62] ^ hi[63]
+	 * R_hi[3] = full_product bit 67 = hi[63]
+	 */
+	uint64_t R_hi =
+		(((hi >> 60) ^ (hi >> 61) ^ (hi >> 63)) & 1) |
+		((((hi >> 61) ^ (hi >> 62)) & 1) << 1) |
+		((((hi >> 62) ^ (hi >> 63)) & 1) << 2) |
+		(((hi >> 63) & 1) << 3);
+
+	/* Reduce R_hi: x^64 ≡ 0x1B, so R_hi * x^64 ≡ R_hi * 0x1B.
+	 * R_hi < 16, so R_hi * 0x1B fits safely in uint64_t. */
+	uint64_t t2 = (R_hi << 4) ^ (R_hi << 3) ^ (R_hi << 1) ^ R_hi;
+
 	return lo ^ t_lo ^ t2;
 }
 
@@ -92,53 +110,69 @@ void gf64_region_mul_avx2_arr(gf64_t *HEDLEY_RESTRICT out, const gf64_t *HEDLEY_
 			i++;
 		}
 	} else {
-		/* General case: distinct coefficient per element.
-		 * Still 2 GF elements per VPCLMULQDQ call (one per 128-bit lane).
-		 * Coefficients are placed in the low qword of each lane; with imm8=0x00
-		 * VPCLMULQDQ pairs the low qword of the input lane with the low qword
-		 * of the coefficient lane.
+		/* General case: each input element is multiplied by ALL coefficients
+		 * and the products are XORed together (dot product per element).
+		 * Process 2 elements per VPCLMULQDQ call (one per 128-bit lane).
+		 * Two VPCLMULQDQ calls per 4-element block.
 		 */
 		size_t blocks = len / 4;
 		for (size_t b = 0; b < blocks; b++) {
-			uint64_t c_a = coeff[i % n_coeff];
-			uint64_t c_b = coeff[(i + 1) % n_coeff];
-			uint64_t c_c = coeff[(i + 2) % n_coeff];
-			uint64_t c_d = coeff[(i + 3) % n_coeff];
+			/* Pair 1: out[i+0], out[i+1] */
+			__m256i in01 = _mm256_setr_epi64x((int64_t)in[i + 0], 0, (int64_t)in[i + 1], 0);
+			uint64_t acc0 = 0, acc1 = 0;
 
-			__m256i coeff_v0 = _mm256_setr_epi64x((int64_t)c_a, 0, (int64_t)c_b, 0);
-			__m256i in_v0 = _mm256_setr_epi64x((int64_t)in[i + 0], 0, (int64_t)in[i + 1], 0);
-			__m256i prod0 = _mm256_clmulepi64_epi128(in_v0, coeff_v0, 0x00);
-			__m128i p0_lo = _mm256_extracti128_si256(prod0, 0);
-			__m128i p0_hi = _mm256_extracti128_si256(prod0, 1);
+			for (size_t c = 0; c < n_coeff; c++) {
+				__m256i coeff_bc = _mm256_set1_epi64x((int64_t)coeff[c]);
+				__m256i prod = _mm256_clmulepi64_epi128(in01, coeff_bc, 0x00);
 
-			uint64_t q00_lo = (uint64_t)_mm_cvtsi128_si64(p0_lo);
-			uint64_t q00_hi = (uint64_t)_mm_cvtsi128_si64(_mm_srli_si128(p0_lo, 8));
-			uint64_t q01_lo = (uint64_t)_mm_cvtsi128_si64(p0_hi);
-			uint64_t q01_hi = (uint64_t)_mm_cvtsi128_si64(_mm_srli_si128(p0_hi, 8));
+				__m128i p_lo = _mm256_extracti128_si256(prod, 0);
+				__m128i p_hi = _mm256_extracti128_si256(prod, 1);
 
-			out[i + 0] = gf64_reduce_128(q00_lo, q00_hi);
-			out[i + 1] = gf64_reduce_128(q01_lo, q01_hi);
+				uint64_t lo_lane0 = (uint64_t)_mm_cvtsi128_si64(p_lo);
+				uint64_t hi_lane0 = (uint64_t)_mm_cvtsi128_si64(_mm_srli_si128(p_lo, 8));
+				uint64_t lo_lane1 = (uint64_t)_mm_cvtsi128_si64(p_hi);
+				uint64_t hi_lane1 = (uint64_t)_mm_cvtsi128_si64(_mm_srli_si128(p_hi, 8));
 
-			__m256i coeff_v1 = _mm256_setr_epi64x((int64_t)c_c, 0, (int64_t)c_d, 0);
-			__m256i in_v1 = _mm256_setr_epi64x((int64_t)in[i + 2], 0, (int64_t)in[i + 3], 0);
-			__m256i prod1 = _mm256_clmulepi64_epi128(in_v1, coeff_v1, 0x00);
-			__m128i p1_lo = _mm256_extracti128_si256(prod1, 0);
-			__m128i p1_hi = _mm256_extracti128_si256(prod1, 1);
+				acc0 ^= gf64_reduce_128(lo_lane0, hi_lane0);
+				acc1 ^= gf64_reduce_128(lo_lane1, hi_lane1);
+			}
 
-			uint64_t q02_lo = (uint64_t)_mm_cvtsi128_si64(p1_lo);
-			uint64_t q02_hi = (uint64_t)_mm_cvtsi128_si64(_mm_srli_si128(p1_lo, 8));
-			uint64_t q03_lo = (uint64_t)_mm_cvtsi128_si64(p1_hi);
-			uint64_t q03_hi = (uint64_t)_mm_cvtsi128_si64(_mm_srli_si128(p1_hi, 8));
+			out[i + 0] = acc0;
+			out[i + 1] = acc1;
 
-			out[i + 2] = gf64_reduce_128(q02_lo, q02_hi);
-			out[i + 3] = gf64_reduce_128(q03_lo, q03_hi);
+			/* Pair 2: out[i+2], out[i+3] */
+			__m256i in23 = _mm256_setr_epi64x((int64_t)in[i + 2], 0, (int64_t)in[i + 3], 0);
+			uint64_t acc2 = 0, acc3 = 0;
+
+			for (size_t c = 0; c < n_coeff; c++) {
+				__m256i coeff_bc = _mm256_set1_epi64x((int64_t)coeff[c]);
+				__m256i prod = _mm256_clmulepi64_epi128(in23, coeff_bc, 0x00);
+
+				__m128i p_lo = _mm256_extracti128_si256(prod, 0);
+				__m128i p_hi = _mm256_extracti128_si256(prod, 1);
+
+				uint64_t lo_lane0 = (uint64_t)_mm_cvtsi128_si64(p_lo);
+				uint64_t hi_lane0 = (uint64_t)_mm_cvtsi128_si64(_mm_srli_si128(p_lo, 8));
+				uint64_t lo_lane1 = (uint64_t)_mm_cvtsi128_si64(p_hi);
+				uint64_t hi_lane1 = (uint64_t)_mm_cvtsi128_si64(_mm_srli_si128(p_hi, 8));
+
+				acc2 ^= gf64_reduce_128(lo_lane0, hi_lane0);
+				acc3 ^= gf64_reduce_128(lo_lane1, hi_lane1);
+			}
+
+			out[i + 2] = acc2;
+			out[i + 3] = acc3;
 
 			i += 4;
 		}
 
-		/* Tail (0..3 elements) — scalar epilog. */
+		/* Tail (0..3 elements) — scalar epilog with SUM semantics. */
 		while (i < len) {
-			out[i] = gf64_mul_reference(in[i], coeff[i % n_coeff]);
+			uint64_t sum = 0;
+			for (size_t c = 0; c < n_coeff; c++) {
+				sum ^= gf64_mul_reference(in[i], coeff[c]);
+			}
+			out[i] = sum;
 			i++;
 		}
 	}

@@ -34,10 +34,28 @@ static inline void gf64_clmul_64x64(uint64_t a, uint64_t b, uint64_t *lo, uint64
 }
 
 static inline uint64_t gf64_reduce_128(uint64_t lo, uint64_t hi) {
-	uint64_t t = (hi << 4) ^ (hi << 3) ^ (hi << 1) ^ hi;
-	uint64_t t_hi = t >> 32;
-	uint64_t t_lo = t & 0xFFFFFFFFULL;
-	uint64_t t2 = (t_hi << 4) ^ (t_hi << 3) ^ (t_hi << 1) ^ t_hi;
+	/* Lower 64 bits of hi * 0x1B (truncated at 64 bits by uint64_t). */
+	uint64_t t_lo = (hi << 4) ^ (hi << 3) ^ (hi << 1) ^ hi;
+
+	/* Overflow bits (64-67) of hi * 0x1B:
+	 * (hi<<4) overflow: hi[60:63] → full_product[64:67]
+	 * (hi<<3) overflow: hi[61:63] → full_product[64:66]
+	 * (hi<<1) overflow: hi[63]   → full_product[64]
+	 * R_hi[0] = full_product bit 64 = hi[60] ^ hi[61] ^ hi[63]
+	 * R_hi[1] = full_product bit 65 = hi[61] ^ hi[62]
+	 * R_hi[2] = full_product bit 66 = hi[62] ^ hi[63]
+	 * R_hi[3] = full_product bit 67 = hi[63]
+	 */
+	uint64_t R_hi =
+		(((hi >> 60) ^ (hi >> 61) ^ (hi >> 63)) & 1) |
+		((((hi >> 61) ^ (hi >> 62)) & 1) << 1) |
+		((((hi >> 62) ^ (hi >> 63)) & 1) << 2) |
+		(((hi >> 63) & 1) << 3);
+
+	/* Reduce R_hi: x^64 ≡ 0x1B, so R_hi * x^64 ≡ R_hi * 0x1B.
+	 * R_hi < 16, so R_hi * 0x1B fits safely in uint64_t. */
+	uint64_t t2 = (R_hi << 4) ^ (R_hi << 3) ^ (R_hi << 1) ^ R_hi;
+
 	return lo ^ t_lo ^ t2;
 }
 
@@ -60,16 +78,27 @@ void gf64_region_mul_ssse3_arr(gf64_t *HEDLEY_RESTRICT out, const gf64_t *HEDLEY
 			i++;
 		}
 	} else {
+		size_t blocks = len / 2;
+		i = 0;
 		for (size_t b = 0; b < blocks; b++) {
-			uint64_t lo0, hi0, lo1, hi1;
-			gf64_clmul_64x64(in[i + 0], coeff[i % n_coeff], &lo0, &hi0);
-			gf64_clmul_64x64(in[i + 1], coeff[(i + 1) % n_coeff], &lo1, &hi1);
-			out[i + 0] = gf64_reduce_128(lo0, hi0);
-			out[i + 1] = gf64_reduce_128(lo1, hi1);
+			uint64_t acc0 = 0, acc1 = 0;
+			for (size_t c = 0; c < n_coeff; c++) {
+				uint64_t lo0, hi0, lo1, hi1;
+				gf64_clmul_64x64(in[i + 0], coeff[c], &lo0, &hi0);
+				gf64_clmul_64x64(in[i + 1], coeff[c], &lo1, &hi1);
+				acc0 ^= gf64_reduce_128(lo0, hi0);
+				acc1 ^= gf64_reduce_128(lo1, hi1);
+			}
+			out[i + 0] = acc0;
+			out[i + 1] = acc1;
 			i += 2;
 		}
 		while (i < len) {
-			out[i] = gf64_mul_reference(in[i], coeff[i % n_coeff]);
+			uint64_t sum = 0;
+			for (size_t c = 0; c < n_coeff; c++) {
+				sum ^= gf64_mul_reference(in[i], coeff[c]);
+			}
+			out[i] = sum;
 			i++;
 		}
 	}

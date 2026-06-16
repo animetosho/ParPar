@@ -34,10 +34,28 @@ static inline void gf64_clmul_64x64(uint64_t a, uint64_t b, uint64_t *lo, uint64
 }
 
 static inline uint64_t gf64_reduce_128(uint64_t lo, uint64_t hi) {
-	uint64_t t = (hi << 4) ^ (hi << 3) ^ (hi << 1) ^ hi;
-	uint64_t t_hi = t >> 32;
-	uint64_t t_lo = t & 0xFFFFFFFFULL;
-	uint64_t t2 = (t_hi << 4) ^ (t_hi << 3) ^ (t_hi << 1) ^ t_hi;
+	/* Lower 64 bits of hi * 0x1B (truncated at 64 bits by uint64_t). */
+	uint64_t t_lo = (hi << 4) ^ (hi << 3) ^ (hi << 1) ^ hi;
+
+	/* Overflow bits (64-67) of hi * 0x1B:
+	 * (hi<<4) overflow: hi[60:63] → full_product[64:67]
+	 * (hi<<3) overflow: hi[61:63] → full_product[64:66]
+	 * (hi<<1) overflow: hi[63]   → full_product[64]
+	 * R_hi[0] = full_product bit 64 = hi[60] ^ hi[61] ^ hi[63]
+	 * R_hi[1] = full_product bit 65 = hi[61] ^ hi[62]
+	 * R_hi[2] = full_product bit 66 = hi[62] ^ hi[63]
+	 * R_hi[3] = full_product bit 67 = hi[63]
+	 */
+	uint64_t R_hi =
+		(((hi >> 60) ^ (hi >> 61) ^ (hi >> 63)) & 1) |
+		((((hi >> 61) ^ (hi >> 62)) & 1) << 1) |
+		((((hi >> 62) ^ (hi >> 63)) & 1) << 2) |
+		(((hi >> 63) & 1) << 3);
+
+	/* Reduce R_hi: x^64 ≡ 0x1B, so R_hi * x^64 ≡ R_hi * 0x1B.
+	 * R_hi < 16, so R_hi * 0x1B fits safely in uint64_t. */
+	uint64_t t2 = (R_hi << 4) ^ (R_hi << 3) ^ (R_hi << 1) ^ R_hi;
+
 	return lo ^ t_lo ^ t2;
 }
 

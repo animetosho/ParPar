@@ -360,6 +360,117 @@ for (var bt = 0; bt < THREAD_SUBSET; bt++) {
 console.log('\nSection B complete\n');
 
 // ============================================================================
+// Section C — n_coeff > 1 mul_arr parity (TDD red/green for Wave 2)
+// ----------------------------------------------------------------------------
+// These tests exercise the multi-coefficient path of gf64_region_mul_arr.
+// Each case uses deterministic inputs for reproducibility.
+// ============================================================================
+
+console.log('\nSection C: n_coeff > 1 mul_arr parity');
+console.log('--------------------------------------------------\n');
+
+var COEFF_COUNTS = [2, 4, 8, 16, 32];
+var BLOCK_SIZES_C = [64, 256, 1024];
+
+function jsMulArr(out, inp, coeff, numWords, n_coeff) {
+	for (var w = 0; w < numWords; w++) {
+		var sum = 0n;
+		for (var c = 0; c < n_coeff; c++) {
+			sum ^= gf64_mul(inp[w], coeff[c]);
+		}
+		out[w] = sum;
+	}
+}
+
+var rngC = mulberry32(0xFEEDFACE);
+
+function makeTestInputs(numWords, n_coeff) {
+	var inp = [];
+	var coeff = [];
+	var expected = [];
+	for (var w = 0; w < numWords; w++) {
+		var hi = (rngC() * 4294967296) >>> 0;
+		var lo = (rngC() * 4294967296) >>> 0;
+		inp[w] = (BigInt(hi) << 32n) | BigInt(lo);
+	}
+	for (var c = 0; c < n_coeff; c++) {
+		var hi = (rngC() * 4294967296) >>> 0;
+		var lo = (rngC() * 4294967296) >>> 0;
+		coeff[c] = (BigInt(hi) << 32n) | BigInt(lo);
+	}
+	for (var w = 0; w < numWords; w++) {
+		var sum = 0n;
+		for (var c = 0; c < n_coeff; c++) {
+			sum ^= gf64_mul(inp[w], coeff[c]);
+		}
+		expected[w] = sum;
+	}
+	return { inp: inp, coeff: coeff, expected: expected };
+}
+
+function toBuffer(arr) {
+	var buf = Buffer.alloc(arr.length * 8);
+	for (var i = 0; i < arr.length; i++) {
+		buf.writeBigUInt64LE(arr[i], i * 8);
+	}
+	return buf;
+}
+
+function fromBuffer(buf) {
+	var arr = [];
+	var words = buf.length / 8;
+	for (var i = 0; i < words; i++) {
+		arr[i] = buf.readBigUInt64LE(i * 8);
+	}
+	return arr;
+}
+
+for (var ci = 0; ci < COEFF_COUNTS.length; ci++) {
+	var n_coeff = COEFF_COUNTS[ci];
+	for (var bi = 0; bi < BLOCK_SIZES_C.length; bi++) {
+		var blockSize = BLOCK_SIZES_C[bi];
+		var numWords = blockSize / 8;
+
+		var testData = makeTestInputs(numWords, n_coeff);
+		var inpBuf = toBuffer(testData.inp);
+		var coeffBuf = toBuffer(testData.coeff);
+		var outBuf = Buffer.alloc(blockSize);
+		outBuf.fill(0);
+
+		encoder.mul_arr(outBuf, inpBuf, coeffBuf, numWords, n_coeff);
+
+		var got = fromBuffer(outBuf);
+		var eq = true;
+		for (var w = 0; w < numWords; w++) {
+			if (got[w] !== testData.expected[w]) {
+				eq = false;
+				break;
+			}
+		}
+
+		var label = 'Test n_coeff=' + n_coeff + ', blockSize=' + blockSize + ' (' + numWords + ' words)';
+		if (eq) {
+			console.log('  PASS: ' + label);
+			passed++;
+		} else {
+			console.error('  FAIL (RED): ' + label);
+			for (var w = 0; w < numWords; w++) {
+				if (got[w] !== testData.expected[w]) {
+					console.error('    Word ' + w + ':');
+					console.error('      Expected: ' + testData.expected[w].toString(16));
+					console.error('      Got:      ' + got[w].toString(16));
+					break;
+				}
+			}
+			failed++;
+			process.exitCode = 1;
+		}
+	}
+}
+
+console.log('\nSection C complete\n');
+
+// ============================================================================
 // Summary
 // ============================================================================
 
