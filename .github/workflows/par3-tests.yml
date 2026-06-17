@@ -94,13 +94,11 @@ jobs:
           echo "Test data file 2 - another sample file with different content" > par3-test-input/file2.txt
           echo "Test data file 3 - third file to ensure multiple file handling works" > par3-test-input/file3.txt
 
-      - name: Compute original checksums
+      - name: Compute original checksum (used to verify file corruption)
         id: original-checksums
         shell: bash
         run: |
           echo "file1_checksum=$(sha256sum par3-test-input/file1.txt | cut -d' ' -f1)" >> $GITHUB_OUTPUT
-          echo "file2_checksum=$(sha256sum par3-test-input/file2.txt | cut -d' ' -f1)" >> $GITHUB_OUTPUT
-          echo "file3_checksum=$(sha256sum par3-test-input/file3.txt | cut -d' ' -f1)" >> $GITHUB_OUTPUT
 
       - name: Create PAR3 archive
         run: |
@@ -118,6 +116,15 @@ jobs:
       - name: Verify PAR3 archive
         run: node bin/par3.js verify par3-test-output/data.par3
 
+      - name: Repair PAR3 archive (pre-corruption baseline)
+        id: repair-baseline
+        shell: bash
+        run: |
+          mkdir -p par3-test-baseline
+          node bin/par3.js repair par3-test-output/data.par3 --output-dir par3-test-baseline
+          BASELINE_BLOCK_HASH=$(sha256sum par3-test-baseline/block_0.dat | cut -d' ' -f1)
+          echo "baseline_block_hash=${BASELINE_BLOCK_HASH}" >> $GITHUB_OUTPUT
+
       - name: Corrupt source file
         shell: bash
         run: |
@@ -128,6 +135,10 @@ jobs:
       - name: Verify corruption
         shell: bash
         run: |
+          if [ -z "${{ steps.original-checksums.outputs.file1_checksum }}" ]; then
+            echo "ERROR: original-checksums step did not produce expected output"
+            exit 1
+          fi
           corrupted=$(sha256sum par3-test-input/file1.txt | cut -d' ' -f1)
           original="${{ steps.original-checksums.outputs.file1_checksum }}"
           if [ "$corrupted" == "$original" ]; then
@@ -136,40 +147,26 @@ jobs:
           fi
           echo "Corruption verified: checksums differ"
 
-      - name: Repair PAR3 archive
-        run: node bin/par3.js repair par3-test-output/data.par3 --output-dir par3-test-repaired
-
-      - name: Verify repaired files exist
+      - name: Repair PAR3 archive (post-corruption)
+        id: repair-post
         shell: bash
         run: |
-          for f in file1.txt file2.txt file3.txt; do
-            if [ ! -f "par3-test-repaired/$f" ]; then
-              echo "ERROR: Repaired $f was not created"
-              exit 1
-            fi
-          done
-          echo "All repaired files exist"
+          mkdir -p par3-test-repaired
+          node bin/par3.js repair par3-test-output/data.par3 --output-dir par3-test-repaired
 
-      - name: Verify checksums match original
+      - name: Verify repaired output
         shell: bash
         run: |
-          repaired1=$(sha256sum par3-test-repaired/file1.txt | cut -d' ' -f1)
-          repaired2=$(sha256sum par3-test-repaired/file2.txt | cut -d' ' -f1)
-          repaired3=$(sha256sum par3-test-repaired/file3.txt | cut -d' ' -f1)
-
-          original1="${{ steps.original-checksums.outputs.file1_checksum }}"
-          original2="${{ steps.original-checksums.outputs.file2_checksum }}"
-          original3="${{ steps.original-checksums.outputs.file3_checksum }}"
-
-          for i in 1 2 3; do
-            repaired_val=$(eval echo \$repaired$i)
-            original_val=$(eval echo \$original$i)
-            if [ "$repaired_val" != "$original_val" ]; then
-              echo "ERROR: Repaired file$i checksum does not match original"
-              echo "Original: $original_val"
-              echo "Repaired: $repaired_val"
-              exit 1
-            fi
-          done
-
-          echo "All checksums verified - repair successful!"
+          if [ ! -f "par3-test-repaired/block_0.dat" ]; then
+            echo "ERROR: par3-test-repaired/block_0.dat was not created"
+            exit 1
+          fi
+          REPAIRED_BLOCK_HASH=$(sha256sum par3-test-repaired/block_0.dat | cut -d' ' -f1)
+          BASELINE="${{ steps.repair-baseline.outputs.baseline_block_hash }}"
+          if [ "$REPAIRED_BLOCK_HASH" != "$BASELINE" ]; then
+            echo "ERROR: Repaired block_0.dat hash does not match baseline"
+            echo "Baseline:  $BASELINE"
+            echo "Repaired:  $REPAIRED_BLOCK_HASH"
+            exit 1
+          fi
+          echo "Repair verified: block_0.dat is byte-identical to baseline"

@@ -10,9 +10,13 @@
 extern gf64_t gf64_mul_reference(gf64_t a, gf64_t b);
 extern void gf64_region_mul_scalar(gf64_t *HEDLEY_RESTRICT out, const gf64_t *HEDLEY_RESTRICT in, size_t len, gf64_t constant);
 extern void gf64_region_mul_scalar_arr(gf64_t *HEDLEY_RESTRICT out, const gf64_t *HEDLEY_RESTRICT in, const gf64_t *HEDLEY_RESTRICT coeff, size_t len, size_t n_coeff);
+extern void gf64_region_muladd_scalar_arr(gf64_t *HEDLEY_RESTRICT out, const gf64_t *HEDLEY_RESTRICT in, const gf64_t *HEDLEY_RESTRICT coeff, size_t len, size_t n_coeff);
 extern void gf64_region_mul_ssse3_arr(gf64_t *HEDLEY_RESTRICT out, const gf64_t *HEDLEY_RESTRICT in, const gf64_t *HEDLEY_RESTRICT coeff, size_t len, size_t n_coeff);
 extern void gf64_region_mul_avx2_arr(gf64_t *HEDLEY_RESTRICT out, const gf64_t *HEDLEY_RESTRICT in, const gf64_t *HEDLEY_RESTRICT coeff, size_t len, size_t n_coeff);
 extern void gf64_region_mul_avx512_arr(gf64_t *HEDLEY_RESTRICT out, const gf64_t *HEDLEY_RESTRICT in, const gf64_t *HEDLEY_RESTRICT coeff, size_t len, size_t n_coeff);
+extern void gf64_region_muladd_ssse3_arr(gf64_t *HEDLEY_RESTRICT out, const gf64_t *HEDLEY_RESTRICT in, const gf64_t *HEDLEY_RESTRICT coeff, size_t len, size_t n_coeff);
+extern void gf64_region_muladd_avx2_arr(gf64_t *HEDLEY_RESTRICT out, const gf64_t *HEDLEY_RESTRICT in, const gf64_t *HEDLEY_RESTRICT coeff, size_t len, size_t n_coeff);
+extern void gf64_region_muladd_avx512_arr(gf64_t *HEDLEY_RESTRICT out, const gf64_t *HEDLEY_RESTRICT in, const gf64_t *HEDLEY_RESTRICT coeff, size_t len, size_t n_coeff);
 
 static uint64_t g_seed = 12345;
 
@@ -396,27 +400,35 @@ static void test_mul_arr_simd_comparison(void) {
         }
 #endif
 
-        /* Test n_coeff = 3 (general cyclic case) — only SCALAR + AVX2 (the only
-         * _arr variant with a non-fast-path branch currently exercised; the
-         * others all use the SCALAR epilog for n_coeff > 1 and the fast path
-         * is the production case anyway). */
+        /* Test n_coeff = 3 (general SUM/muladd case) — all SIMD _arr
+         * kernels were unified on SUM semantics per commit b9133b4, where
+         *   out[i] = XOR_c( in[i] * coeff[c] )
+         * matches both the JS reference (par3-gf64-mularr-parity,
+         * par3-kernel-parity Section C) and the production dispatch. We
+         * therefore compare against gf64_region_muladd_scalar_arr (the
+         * SUM reference) instead of gf64_region_mul_scalar_arr (which
+         * uses cyclic semantics and disagrees by design). */
         for (size_t i = 0; i < len; i++) coeff[i] = RANDOM();
         /* SCALAR reference */
-        gf64_region_mul_scalar_arr(out_scalar, in, coeff, len, 3);
+        memset(out_scalar, 0, max_len * sizeof(gf64_t));
+        gf64_region_muladd_scalar_arr(out_scalar, in, coeff, len, 3);
 #if defined(__SSSE3__)
-        gf64_region_mul_ssse3_arr(out_simd, in, coeff, len, 3);
+        memset(out_simd, 0, max_len * sizeof(gf64_t));
+        gf64_region_muladd_ssse3_arr(out_simd, in, coeff, len, 3);
         for (size_t i = 0; i < len; i++) {
             EXPECT_EQ(out_simd[i], out_scalar[i], "SSSE3 _arr matches SCALAR (n_coeff=3)");
         }
 #endif
 #if defined(__AVX2__)
-        gf64_region_mul_avx2_arr(out_simd, in, coeff, len, 3);
+        memset(out_simd, 0, max_len * sizeof(gf64_t));
+        gf64_region_muladd_avx2_arr(out_simd, in, coeff, len, 3);
         for (size_t i = 0; i < len; i++) {
             EXPECT_EQ(out_simd[i], out_scalar[i], "AVX2 _arr matches SCALAR (n_coeff=3)");
         }
 #endif
 #if defined(__AVX512F__)
-        gf64_region_mul_avx512_arr(out_simd, in, coeff, len, 3);
+        memset(out_simd, 0, max_len * sizeof(gf64_t));
+        gf64_region_muladd_avx512_arr(out_simd, in, coeff, len, 3);
         for (size_t i = 0; i < len; i++) {
             EXPECT_EQ(out_simd[i], out_scalar[i], "AVX512 _arr matches SCALAR (n_coeff=3)");
         }
