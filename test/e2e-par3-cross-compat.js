@@ -1,9 +1,9 @@
 "use strict";
 
 /**
- * E2E Cross-Compatibility Test: ParPar PAR3 vs par3cmdline
+ * E2E Cross-Compatibility Test: ParParPar PAR3 vs par3cmdline
  *
- * Tests that ParPar-generated PAR3 archives can be verified by the
+ * Tests that ParParPar-generated PAR3 archives can be verified by the
  * reference par3cmdline implementation, and vice versa.
  *
  * Requires the par3cmdline binary at test/fixtures/par3cmdline-bin/par3.
@@ -524,10 +524,10 @@ async function run() {
 
 	try {
 		// -----------------------------------------------------------------------
-		// Test A: par3cmdline list on ParPar PAR3
+		// Test A: par3cmdline list on ParParPar PAR3
 		// -----------------------------------------------------------------------
 		totalTests++;
-		console.log('Test A: par3cmdline list on ParPar PAR3...');
+		console.log('Test A: par3cmdline list on ParParPar PAR3...');
 		if (skipPar3Cmdline) {
 			console.log('  ' + SKIP + ' (requires par3cmdline binary)\n');
 			skippedTests++;
@@ -572,10 +572,10 @@ async function run() {
 		}
 
 		// -----------------------------------------------------------------------
-		// Test B: par3cmdline verify on ParPar PAR3
+		// Test B: par3cmdline verify on ParParPar PAR3
 		// -----------------------------------------------------------------------
 		totalTests++;
-		console.log('Test B: par3cmdline verify on ParPar PAR3...');
+		console.log('Test B: par3cmdline verify on ParParPar PAR3...');
 		if (skipPar3Cmdline) {
 			console.log('  ' + SKIP + ' (requires par3cmdline binary)\n');
 			skippedTests++;
@@ -620,10 +620,10 @@ async function run() {
 		}
 
 		// -----------------------------------------------------------------------
-		// Test C: ParPar on par3cmdline PAR3
+		// Test C: ParParPar on par3cmdline PAR3
 		// -----------------------------------------------------------------------
 		totalTests++;
-		console.log('Test C: ParPar verify on par3cmdline PAR3...');
+		console.log('Test C: ParParPar verify on par3cmdline PAR3...');
 		try {
 			var par3cmdlineFile = path.resolve(__dirname, 'fixtures', 'par3-golden-par3cmdline.par3');
 			resultC = await helpers.runPar3(['verify', par3cmdlineFile]);
@@ -674,7 +674,7 @@ async function run() {
 		}
 		if (resultC !== null && resultC.code === -1) {
 			testDPassed = false;
-			testDFailures.push('Test C (ParPar verify) had uncaught exception: ' + resultC.stderr);
+			testDFailures.push('Test C (ParParPar verify) had uncaught exception: ' + resultC.stderr);
 		}
 
 		if (testDPassed) {
