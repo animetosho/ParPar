@@ -5,6 +5,14 @@
 **Target**: [Parity Volume Set Specification v3.0](https://parchive.github.io/doc/Parity_Volume_Set_Specification_v3.0.html) (2022-01-28 ALPHA DRAFT)
 **Authors**: Based on gap analysis of par3cmdline (v0.0.1) and ParPar implementations
 
+> **About this document**
+>
+> This document is maintained by the **ParParPar** project, a fork of upstream
+> [ParPar](https://github.com/animetosho/ParPar). The canonical URL for this
+> repository is [github.com/trafgals/ParParPar](https://github.com/trafgals/ParParPar).
+> Where the body below says "ParPar" in a PAR3-specific context, it refers to
+> ParParPar (this fork). Upstream ParPar has no PAR3 implementation.
+
 ## Purpose
 
 This document identifies ambiguities, gaps, and practical issues in the current PAR3 v3.0 ALPHA DRAFT specification. These proposals are informed by the experience of two independent implementations (par3cmdline, the official reference implementation by Yutaka-Sawada, and ParPar, a third-party implementation by animetosho) whose interpretations of the spec have diverged in several critical areas.
@@ -16,10 +24,10 @@ The amendments are organized by severity and designed as discussion points for t
 The PAR3 spec is an ALPHA DRAFT from 2022-01-28. Two implementations exist:
 
 - **par3cmdline** (v0.0.1, last commit 2026-02-11): Official reference implementation by Yutaka-Sawada (also maintains MultiPar). C++ codebase. Supports GF(2^8) and GF(2^16) with Reed-Solomon (Cauchy matrix).
-- **ParPar**: Third-party implementation by animetosho (also maintains par2cmdline-turbo). Node.js/C++ hybrid. Supports GF(2^64) with polynomial `0x100000000000001B`.
+- **ParParPar**: Third-party implementation forked from animetosho (also maintains par2cmdline-turbo). Node.js/C++ hybrid. Supports GF(2^64) with polynomial `0x100000000000001B`.
 - **MultiPar** (Yutaka-Sawada): Historical third PAR3 implementation predating the spec. Same maintainer as par3cmdline.
 
-Four fundamental incompatibilities between par3cmdline and ParPar were discovered during analysis, motivating these amendments.
+Four fundamental incompatibilities between par3cmdline and ParParPar were discovered during analysis, motivating these amendments.
 
 ---
 
@@ -43,10 +51,10 @@ The spec also contains a TODO comment: "Make sure 'lower 16-bytes bytes' above i
 
 > The "fingerprint hash" is the first 16 output bytes of a BLAKE3 hash (i.e., BLAKE3(data)[0:16]).
 
-**Rationale**: Using array-slice notation `BLAKE3(data)[0:16]` removes all ambiguity. This matches how BLAKE3 naturally produces output (first 16 bytes can be read with zero-copy from the output buffer). Both par3cmdline and ParPar already use the first 16 bytes in practice.
+**Rationale**: Using array-slice notation `BLAKE3(data)[0:16]` removes all ambiguity. This matches how BLAKE3 naturally produces output (first 16 bytes can be read with zero-copy from the output buffer). Both par3cmdline and ParParPar already use the first 16 bytes in practice.
 
 **Implementation impact**:
-- ParPar: None (already uses first 16 bytes)
+- ParParPar: None (already uses first 16 bytes)
 - par3cmdline: None (already uses first 16 bytes)
 - Spec change complexity: LOW — wording clarification
 
@@ -69,7 +77,7 @@ The spec also contains a TODO comment: "Make sure 'first 8 bytes' above is speci
 **Rationale**: Consistent notation with Amendment 1 makes it clear that both the fingerprint hash (first 16 bytes) and the InputSetID (first 8 bytes) are prefixes from the same end of the BLAKE3 output.
 
 **Implementation impact**:
-- ParPar: None (already uses first 8 bytes)
+- ParParPar: None (already uses first 8 bytes)
 - par3cmdline: None (already uses first 8 bytes)
 - Spec change complexity: LOW — wording clarification
 
@@ -87,7 +95,7 @@ And (Galois Field Encoding section):
 
 **Identified issue**: The spec claims to support any power of 2^8, but:
 
-1. No reference implementation supports arbitrary powers. par3cmdline supports only GF(2^8) and GF(2^16). ParPar supports only GF(2^64) with polynomial `0x100000000000001B`.
+1. No reference implementation supports arbitrary powers. par3cmdline supports only GF(2^8) and GF(2^16). ParParPar supports only GF(2^64) with polynomial `0x100000000000001B`.
 2. The spec does not define which irreducible polynomial to use for each field size. Without a polynomial, two implementations targeting the same GF size will produce incompatible matrices.
 3. The Start packet body does not contain a polynomial field beyond the generator value. The generator is necessary but not sufficient (the generator depends on the polynomial).
 4. The Galois Field Encoding section's table lists generators for 8-bit (0x11D), 16-bit (0x1100B), and 128-bit fields, but not for 32-bit or 64-bit fields.
@@ -106,10 +114,10 @@ And (Galois Field Encoding section):
 >
 > Implementations MUST support GF(2^8) and GF(2^16). Support for GF(2^32), GF(2^64), and GF(2^128) is OPTIONAL. The block size must be a multiple of the GF element size in bytes.
 
-**Rationale**: Enumerating supported fields and their polynomials ensures interop. The 64-bit polynomial `0x100000000000001B` is recommended based on ParPar's usage and x86 CLMUL hardware support.
+**Rationale**: Enumerating supported fields and their polynomials ensures interop. The 64-bit polynomial `0x100000000000001B` is recommended based on ParParPar's usage and x86 CLMUL hardware support.
 
 **Implementation impact**:
-- ParPar: None (already implements GF(2^64) with this polynomial)
+- ParParPar: None (already implements GF(2^64) with this polynomial)
 - par3cmdline: Minor (would need to add GF(2^64) support or clearly declare which fields it supports)
 - Spec change complexity: MEDIUM — adds a normative table
 
@@ -127,10 +135,10 @@ And (Galois Field Encoding section):
 
 > All Galois field element values in packet bodies, data blocks, and recovery blocks are also little-endian. The binary representation of a GF element is stored with its least significant byte first.
 
-**Rationale**: Both par3cmdline and ParPar already use little-endian for GF values. Making this explicit prevents future implementations from choosing big-endian (which would be incompatible).
+**Rationale**: Both par3cmdline and ParParPar already use little-endian for GF values. Making this explicit prevents future implementations from choosing big-endian (which would be incompatible).
 
 **Implementation impact**:
-- ParPar: None
+- ParParPar: None
 - par3cmdline: None
 - Spec change complexity: LOW — normative addition
 
@@ -142,7 +150,7 @@ And (Galois Field Encoding section):
 
 > x_I is the Galois field element with the same bit pattern as binary integer I+1
 
-**Identified issue**: The spec uses zero-indexing for vectors (I and R start at 0), so the first input block at index 0 maps to `I+1 = 1`. However, ParPar uses `M[r][c] = inv((0 + c) ^ (N + r))` where recovery and input offsets are 0 and N, while par3cmdline uses `inv((I+1) ^ (MAX - R))`. These interpretations differ in how the recovery block index participates in the formula, leading to incompatible matrix values. The spec is technically correct but the wording is misleading.
+**Identified issue**: The spec uses zero-indexing for vectors (I and R start at 0), so the first input block at index 0 maps to `I+1 = 1`. However, ParParPar uses `M[r][c] = inv((0 + c) ^ (N + r))` where recovery and input offsets are 0 and N, while par3cmdline uses `inv((I+1) ^ (MAX - R))`. These interpretations differ in how the recovery block index participates in the formula, leading to incompatible matrix values. The spec is technically correct but the wording is misleading.
 
 **Proposed spec text** (add after the existing formula):
 
@@ -153,7 +161,7 @@ A canonical worked example with concrete byte values should be provided (see Ame
 **Rationale**: The concrete examples eliminate interpretation differences. The additions/subtractions on I and R are done in native integer arithmetic (as the spec says), but showing the specific values prevents misreading.
 
 **Implementation impact**:
-- ParPar: Minor (clarify formula to match spec intent)
+- ParParPar: Minor (clarify formula to match spec intent)
 - par3cmdline: None
 - Spec change complexity: LOW — add example
 
@@ -180,7 +188,7 @@ Alternatively, if Root is to remain optional:
 **Rationale**: Making Root required aligns the spec with par3cmdline's behavior and the practical need for a top-level checksum. The Root packet is the only mechanism to verify that the complete input set has been recovered.
 
 **Implementation impact**:
-- ParPar: Would need to generate Root packets (currently does not emit them in all code paths)
+- ParParPar: Would need to generate Root packets (currently does not emit them in all code paths)
 - par3cmdline: None (already requires Root)
 - Spec change complexity: LOW — wording change
 
@@ -196,7 +204,7 @@ And:
 
 > If the checksum of the data read/received does not match this field's value, the packet is ignored.
 
-**Identified issue**: The spec describes the checksum field but does not specify what to do when it is all zeros. ParPar writes zero-filled checksums for all packets, treating the field as reserved for future use. par3cmdline validates checksums and rejects packets with invalid ones. A zero checksum is ambiguous: it could mean "no checksum computed" or "this packet has a checksum of zero". Until this ambiguity is resolved, archives from different implementations will be unreadable by the other.
+**Identified issue**: The spec describes the checksum field but does not specify what to do when it is all zeros. ParParPar writes zero-filled checksums for all packets, treating the field as reserved for future use. par3cmdline validates checksums and rejects packets with invalid ones. A zero checksum is ambiguous: it could mean "no checksum computed" or "this packet has a checksum of zero". Until this ambiguity is resolved, archives from different implementations will be unreadable by the other.
 
 **Proposed spec text** (transitional approach — SOFTENED from original):
 
@@ -208,10 +216,10 @@ And:
 >
 > A future amendment (post-finalization) SHOULD make checksum validation MANDATORY without exception.
 
-**Rationale**: Using SHOULD/MAY rather than hard MUST avoids immediately breaking ParPar while setting a clear path toward spec finalization. The transition period allows ParPar and other implementations to adopt checksum computation.
+**Rationale**: Using SHOULD/MAY rather than hard MUST avoids immediately breaking ParParPar while setting a clear path toward spec finalization. The transition period allows ParParPar and other implementations to adopt checksum computation.
 
 **Implementation impact**:
-- ParPar: **Major work needed** — would need to add BLAKE3 packet checksum computation
+- ParParPar: **Major work needed** — would need to add BLAKE3 packet checksum computation
 - par3cmdline: None (already validates checksums)
 - Spec change complexity: HIGH — normative change with transition plan
 
@@ -230,7 +238,7 @@ And:
 - Matrix inversion failures
 - Checksum mismatches during recovery
 
-par3cmdline defines `RET_*` error codes, but these are implementation-specific. ParPar reports errors via stderr text. Without spec guidance, users get inconsistent error experiences.
+par3cmdline defines `RET_*` error codes, but these are implementation-specific. ParParPar reports errors via stderr text. Without spec guidance, users get inconsistent error experiences.
 
 **Proposed spec text** (new "Compliance and Error Handling" section):
 
@@ -251,7 +259,7 @@ par3cmdline defines `RET_*` error codes, but these are implementation-specific. 
 **Rationale**: Error handling is underspecified for an ALPHA DRAFT heading toward finalization. Basic compliance rules reduce support burden across implementations.
 
 **Implementation impact**:
-- ParPar: None (informal error reporting exists)
+- ParParPar: None (informal error reporting exists)
 - par3cmdline: None (already has error codes)
 - Spec change complexity: LOW — new section
 
@@ -291,7 +299,7 @@ These amendments improve cross-implementation compatibility but do not block spe
 **Rationale**: A defined recommended order enables single-pass recovery implementations and provides a consistent target for encoder developers.
 
 **Implementation impact**:
-- ParPar: None (reorder output)
+- ParParPar: None (reorder output)
 - par3cmdline: None (reorder output)
 - Spec change complexity: LOW — list addition
 
@@ -301,7 +309,7 @@ These amendments improve cross-implementation compatibility but do not block spe
 
 **Current spec text** (File packet): The File packet body contains a 16-byte File ID field, shown in the body table as a "fingerprint hash" type, but its generation is not specified beyond the field type.
 
-**Identified issue**: ParPar uses MD5 of the file's relative path as the File ID. par3cmdline generates random 16-byte UUIDs. ParPar's approach means two files at the same path in different archives will collide. Neither approach is wrong, but the spec should provide guidance to prevent accidental collisions.
+**Identified issue**: ParParPar uses MD5 of the file's relative path as the File ID. par3cmdline generates random 16-byte UUIDs. ParParPar's approach means two files at the same path in different archives will collide. Neither approach is wrong, but the spec should provide guidance to prevent accidental collisions.
 
 **Proposed spec text** (add to File packet section):
 
@@ -310,7 +318,7 @@ These amendments improve cross-implementation compatibility but do not block spe
 **Rationale**: Providing two acceptable methods (deterministic and random) matches existing practice while mandating uniqueness where it matters.
 
 **Implementation impact**:
-- ParPar: Change from MD5 to BLAKE3 of path, or switch to random UUIDs
+- ParParPar: Change from MD5 to BLAKE3 of path, or switch to random UUIDs
 - par3cmdline: None (already uses random UUIDs)
 - Spec change complexity: MEDIUM — normative addition
 
@@ -331,7 +339,7 @@ These amendments improve cross-implementation compatibility but do not block spe
 **Rationale**: Explicit alignment rules prevent edge cases where a valid-by-the-spec block size causes processing failures in specific implementations.
 
 **Implementation impact**:
-- ParPar: None (already enforces this)
+- ParParPar: None (already enforces this)
 - par3cmdline: None (already enforces this)
 - Spec change complexity: LOW — wording clarification
 
@@ -341,7 +349,7 @@ These amendments improve cross-implementation compatibility but do not block spe
 
 **Current spec text**: None — there are no hex dump examples in the current spec.
 
-**Identified issue**: The two independent implementations (par3cmdline and ParPar) interpret the Start packet body and Matrix packet type differently despite both targeting the same spec. The Start packet body contains a variable-length generator field whose byte count depends on the GF size. The Matrix packet type field contains `PAR CAU`, `PAR SPA`, or `PAR EXP`. Both implementations parse these correctly, but without examples, new implementers are likely to make the same mistakes.
+**Identified issue**: The two independent implementations (par3cmdline and ParParPar) interpret the Start packet body and Matrix packet type differently despite both targeting the same spec. The Start packet body contains a variable-length generator field whose byte count depends on the GF size. The Matrix packet type field contains `PAR CAU`, `PAR SPA`, or `PAR EXP`. Both implementations parse these correctly, but without examples, new implementers are likely to make the same mistakes.
 
 **Proposed spec text** (new appendix):
 
@@ -353,10 +361,10 @@ These amendments improve cross-implementation compatibility but do not block spe
 
 Each field MUST be annotated with offset, length, description, and value.
 
-**Rationale**: Examples prevent misinterpretation of packet layouts. The par3cmdline vs ParPar divergence proves that written descriptions alone are insufficient.
+**Rationale**: Examples prevent misinterpretation of packet layouts. The par3cmdline vs ParParPar divergence proves that written descriptions alone are insufficient.
 
 **Implementation impact**:
-- ParPar: None
+- ParParPar: None
 - par3cmdline: None
 - Spec change complexity: MEDIUM — adds substantial appendix content
 
@@ -387,7 +395,7 @@ And:
 **Rationale**: Lightweight recommendation without imposing a new requirement. Keeps back-compat with existing archives.
 
 **Implementation impact**:
-- ParPar: Minor string format adjustment
+- ParParPar: Minor string format adjustment
 - par3cmdline: Minor string format adjustment
 - Spec change complexity: LOW — wording
 
@@ -416,7 +424,7 @@ And:
 **Rationale**: Naming convention without governance avoids a bottleneck while giving implementers clear guidance. An informal wiki or registry could be linked in a footnote.
 
 **Implementation impact**:
-- ParPar: None
+- ParParPar: None
 - par3cmdline: None
 - Spec change complexity: LOW — guidelines
 
@@ -439,7 +447,7 @@ The spec describes permissions packets but does not discuss the order in which p
 **Rationale**: Defining recovery precedence prevents permission-related errors during file system restoration.
 
 **Implementation impact**:
-- ParPar: **Major work needed** — would need to add permissions packet generation
+- ParParPar: **Major work needed** — would need to add permissions packet generation
 - par3cmdline: None
 - Spec change complexity: LOW — wording
 
@@ -460,7 +468,7 @@ The spec describes permissions packets but does not discuss the order in which p
 **Rationale**: Clear tiebreaking rules prevent non-deterministic behavior during recovery.
 
 **Implementation impact**:
-- ParPar: None
+- ParParPar: None
 - par3cmdline: None
 - Spec change complexity: LOW — wording
 
@@ -470,7 +478,7 @@ The spec describes permissions packets but does not discuss the order in which p
 
 **Current spec text**: The Use Case section describes files but does not address the case of an empty input set (zero files, zero directories).
 
-**Identified issue**: The spec mentions "support empty directories" (a design goal) but does not discuss what happens when the entire input set is empty. Can a Par3 archive contain zero input files? par3cmdline's behavior in this case is unclear; ParPar throws an error. The spec should define what is valid.
+**Identified issue**: The spec mentions "support empty directories" (a design goal) but does not discuss what happens when the entire input set is empty. Can a Par3 archive contain zero input files? par3cmdline's behavior in this case is unclear; ParParPar throws an error. The spec should define what is valid.
 
 **Proposed spec text** (add to Use Case or a new note):
 
@@ -479,7 +487,7 @@ The spec describes permissions packets but does not discuss the order in which p
 **Rationale**: Defining boundary behavior prevents implementations from silently producing or rejecting degenerate archives differently.
 
 **Implementation impact**:
-- ParPar: Minor (accept zero-file archives)
+- ParParPar: Minor (accept zero-file archives)
 - par3cmdline: Minor (accept zero-file archives)
 - Spec change complexity: LOW — wording
 
@@ -502,45 +510,45 @@ The following self-inconsistencies were discovered within the current spec (2022
 | 1 | Conventions vs Start packet | Conventions section says "lower 16-bytes" (fingerprint hash) while Start packet section says "first 8 bytes" (InputSetID). Both have TODO comments acknowledging the ambiguity. This is a terminology inconsistency — one uses spatial ordering ("lower"), the other uses sequential ordering ("first") — making it unclear whether they refer to the same end of the Blake3 output. |
 | 2 | Matrix vs Sparse sections | Design Goals says "support any linear code" and the Sparse Random Matrix Packet section provides a detailed packet layout for sparse codes. However, the Cauchy Matrix section gives the impression that Cauchy is the primary/canonical matrix type. The packet type `PAR SPR\0` (Sparse Random) body is defined, but the spec does not address how a decoder should handle mixed matrix types (Cauchy + Sparse) within the same InputSetID. |
 | 3 | Required packets | The Packets section states "A Par3 file is only required to contain 1 specific packet: the packet that identifies the client that created the file" (Creator). However, par3cmdline requires Root and Start for all operations, and the Start packet is implicitly required (since InputSetID derives from it). The spec should clarify which packets are required for encoding vs decoding vs verification. |
-| 4 | Error reporting | The Creator packet section says "the contents of the creator packet MUST be shown to the user" if decoding fails, but there is no spec requirement for standardized error codes or error reporting format. par3cmdline defines `RET_*` codes (implementation-specific), ParPar uses stderr text. The spec should define minimum error reporting requirements. |
+| 4 | Error reporting | The Creator packet section says "the contents of the creator packet MUST be shown to the user" if decoding fails, but there is no spec requirement for standardized error codes or error reporting format. par3cmdline defines `RET_*` codes (implementation-specific), ParParPar uses stderr text. The spec should define minimum error reporting requirements. |
 | 5 | Tail packing | Design Goals lists "tail packing" as a feature ("where a block holds data from multiple files"), but the packet format does not explicitly support it. The File packet section mentions tail packing in design notes but does not define a packet field or flag to indicate that a block contains tail data from multiple files. This makes tail packing an underspecified feature that implementations must invent independently. |
 
 ---
 
 ## Section 5: Implementation Impact Matrix
 
-The following matrix summarizes the impact of each amendment on both reference implementations and the spec itself.
+The following matrix summarizes the impact of each amendment on the upstream PAR2-only implementation, this fork, the reference implementation, and the spec itself. Upstream ParPar has no PAR3 implementation, so all PAR3-specific amendments are N/A.
 
-| Amendment | ParPar changes needed | par3cmdline changes needed | Spec change complexity |
-|-----------|----------------------|---------------------------|------------------------|
-| 1 (Blake3 byte order) | None | None | LOW — wording change |
-| 2 (InputSetID) | None | None | LOW — wording change |
-| 3 (polynomial) | None | Minor (support more GF sizes) | MEDIUM — adds normative table |
-| 4 (endianness) | None | None | LOW — normative addition |
-| 5 (first-input convention) | Minor (clarify formula) | None | LOW — add example |
-| 6 (Root required) | **Add Root packet generation** | None | LOW — wording change |
-| 7 (checksum mandatory) | **Major: add BLAKE3 packet checksums** | None | HIGH — normative change with transition |
-| 8 (error semantics) | None | None | LOW — new section |
-| 9 (packet order) | None | None | LOW — list addition |
-| 10 (file ID) | **Change from MD5 to BLAKE3 (or random)** | None | MEDIUM — normative addition |
-| 11 (alignment) | None | None | LOW — wording clarification |
-| 12 (memory budget) | DROPPED | DROPPED | DROPPED |
-| 13 (creator format) | Minor string format adjustment | Minor string format adjustment | LOW — wording |
-| 14 (app prefix) | None | None | LOW — guidelines |
-| 15 (hex examples) | None | None | MEDIUM — adds appendix |
-| 16 (permissions order) | **Major: add permissions packets** | None | LOW — wording |
-| 17 (duplication) | None | None | LOW — wording |
-| 18 (empty set) | Minor (accept zero-file archives) | Minor (accept zero-file archives) | LOW — wording |
+| Amendment | Upstream ParPar (PAR2 only) | ParParPar (this fork) | par3cmdline | Spec complexity |
+|-----------|----------------------------|------------------------|-------------|-----------------|
+| 1 (Blake3 byte order) | N/A | None | None | LOW — wording change |
+| 2 (InputSetID) | N/A | None | None | LOW — wording change |
+| 3 (polynomial) | N/A | None | Minor (support more GF sizes) | MEDIUM — adds normative table |
+| 4 (endianness) | N/A | None | None | LOW — normative addition |
+| 5 (first-input convention) | N/A | Minor (clarify formula) | None | LOW — add example |
+| 6 (Root required) | N/A | **Add Root packet generation** | None | LOW — wording change |
+| 7 (checksum mandatory) | N/A | **Major: add BLAKE3 packet checksums** | None | HIGH — normative change with transition |
+| 8 (error semantics) | N/A | None | None | LOW — new section |
+| 9 (packet order) | N/A | None | None | LOW — list addition |
+| 10 (file ID) | N/A | **Change from MD5 to BLAKE3 (or random)** | None | MEDIUM — normative addition |
+| 11 (alignment) | N/A | None | None | LOW — wording clarification |
+| 12 (memory budget) | DROPPED | DROPPED | DROPPED | DROPPED |
+| 13 (creator format) | N/A | Minor string format adjustment | Minor string format adjustment | LOW — wording |
+| 14 (app prefix) | N/A | None | None | LOW — guidelines |
+| 15 (hex examples) | N/A | None | None | MEDIUM — adds appendix |
+| 16 (permissions order) | N/A | **Major: add permissions packets** | None | LOW — wording |
+| 17 (duplication) | N/A | None | None | LOW — wording |
+| 18 (empty set) | N/A | Minor (accept zero-file archives) | Minor (accept zero-file archives) | LOW — wording |
 
 ### Key Observations
 
-1. **ParPar has most implementation work**: Amendments 6, 7, 10, and 16 require non-trivial changes to ParPar. Amendment 7 (checksums) is the largest effort.
+1. **ParParPar has most implementation work**: Amendments 6, 7, 10, and 16 require non-trivial changes to ParParPar. Amendment 7 (checksums) is the largest effort.
 
 2. **par3cmdline needs minimal changes**: As the reference implementation, par3cmdline already conforms to most proposed amendments.
 
 3. **Spec complexity is mostly LOW**: 12 of 17 amendments (Amendment 12 dropped) are LOW complexity. Only Amendments 3, 7, 10, and 15 require more than wording changes.
 
-4. **Transition planning is critical**: Amendment 7's soft "SHOULD/MAY" language is deliberate. A hard "MUST" would immediately break ParPar-produced archives.
+4. **Transition planning is critical**: Amendment 7's soft "SHOULD/MAY" language is deliberate. A hard "MUST" would immediately break ParParPar-produced archives.
 
 ---
 
