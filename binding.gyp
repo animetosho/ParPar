@@ -111,29 +111,35 @@
     },
     {
       "target_name": "parpar_gf64",
-      "sources": [
-        "src/gf64_addon.cc",
-        "src/par3_engine.cc",
-        "gf64/gf64_single.c",
-        "gf64/gf64_region_scalar.c",
-        "gf64/gf64_region_ssse3.c",
-        "gf64/gf64_region_ssse3_arr.c",
-        "gf64/gf64_region_avx2.c",
-        "gf64/gf64_region_avx2_arr.c",
-        "gf64/gf64_region_avx512.c",
-        "gf64/gf64_region_avx512_arr.c",
-        "gf64/gf64_dispatch.c",
-        "gf64/gf64_invert.c",
-        "gf64/gf64_solve.c"
-      ],
-      "include_dirs": ["gf64"],
-      "cflags": ["-fmax-include-depth=1024"],
-      "cxxflags": ["-fmax-include-depth=1024"],
       "conditions": [
-        ["OS!=\"win\"", {
+        ['target_arch in "ia32 x64"', {
+          "sources": [
+            "src/gf64_addon.cc",
+            "src/par3_engine.cc",
+            "gf64/gf64_single.c",
+            "gf64/gf64_region_scalar.c",
+            "gf64/gf64_region_ssse3.c",
+            "gf64/gf64_region_ssse3_arr.c",
+            "gf64/gf64_region_avx2.c",
+            "gf64/gf64_region_avx2_arr.c",
+            "gf64/gf64_region_avx512.c",
+            "gf64/gf64_region_avx512_arr.c",
+            "gf64/gf64_dispatch.c",
+            "gf64/gf64_invert.c",
+            "gf64/gf64_solve.c"
+          ],
+          "include_dirs": ["gf64"],
           "cflags": ["-fmax-include-depth=1024"],
-          "cxxflags": ["-std=c++11", "-fmax-include-depth=1024", "-fpermissive"],
-          "cflags_cc": ["-fpermissive"]
+          "cxxflags": ["-fmax-include-depth=1024"],
+          "conditions": [
+            ["OS!=\"win\"", {
+              "cflags": ["-fmax-include-depth=1024"],
+              "cxxflags": ["-std=c++11", "-fmax-include-depth=1024", "-fpermissive"],
+              "cflags_cc": ["-fpermissive"]
+            }]
+          ]
+        }, {
+          "sources": ["src/gf64_stub.cc"]
         }]
       ]
     },
