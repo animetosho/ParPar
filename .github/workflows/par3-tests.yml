@@ -71,7 +71,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     strategy:
-      # windows-2022 pin is short-term; see https://github.com/trafgals/ParParPar/issues/5
+      # windows-2022 pin is short-term; see https://github.com/trafgals/ParParPar/issues/6
       fail-fast: false
       matrix:
         node-version: [18, 20, 22]
