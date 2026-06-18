@@ -38,7 +38,10 @@
   },
   "gypfile": true,
   "dependencies": {
-    "async": "0.2.0 - 2.9999.9999"
+    "@noble/hashes": "^2.2.0",
+    "async": "0.2.0 - 2.9999.9999",
+    "blake3": "^2.1.7",
+    "blake3-wasm": "^2.1.5"
   },
   "bugs": {
     "url": "https://github.com/animetosho/parpar/issues"
