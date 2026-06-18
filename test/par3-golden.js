@@ -6,9 +6,9 @@
 // ----------------------------------------------------------------------------
 // Freezes current JS engine behavior for PAR3 recovery block generation.
 //
-// Runs PAR3's _generateRecoveryBlocks() with deterministic input data,
-// captures the raw recovery bytes BEFORE PAR3 packet wrapping, and saves
-// them as a golden .bin file with a recorded CRC32.
+// Runs PAR3's _processRecoveryBatch + _finalizeRecoveryBlocks with
+// deterministic input data, captures the raw recovery bytes BEFORE PAR3
+// packet wrapping, and saves them as a golden .bin file with a recorded CRC32.
 //
 // Usage:
 //   node test/par3-golden.js              # generate golden.bin
@@ -102,8 +102,8 @@ function makeInputBlocks(numFiles, blockSize) {
 // ---------------------------------------------------------------------------
 
 /**
- * Generate raw recovery block bytes using PAR3's _generateRecoveryBlocks
- * with the current JS engine state (native addon).
+ * Generate raw recovery block bytes using PAR3's _processRecoveryBatch
+ * + _finalizeRecoveryBlocks with the current JS engine state (native addon).
  *
  * We intercept _createRecoveryPackets to grab the raw block data
  * before it gets wrapped into PAR3 recovery packets.
@@ -132,7 +132,10 @@ function generateRecoveryBlocks(inputBlocks, recoverySlices, blockSize, cb) {
 		innerCb(null, []);
 	};
 
-	creator._generateRecoveryBlocks(inputBlocks, function(evt) {
+	var numRecovery = recoverySlices;
+	var accumulator = Buffer.alloc(numRecovery * blockSize);
+	creator._processRecoveryBatch(inputBlocks, BigInt(0), BigInt(inputBlocks.length), numRecovery, accumulator);
+	creator._finalizeRecoveryBlocks(accumulator, inputBlocks.length, function(evt) {
 		// event callback — no-op for golden test
 	}, function(err) {
 		if (err) return cb(err);
