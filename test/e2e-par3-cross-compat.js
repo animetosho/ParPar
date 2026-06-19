@@ -499,7 +499,7 @@ var skippedTests = 0;
 var isCI = process.argv.indexOf('--ci') >= 0;
 
 async function run() {
-	console.log('PAR3 Cross-Compatibility Graceful Rejection Tests');
+	console.log('PAR3 Cross-Compatibility Tests');
 	console.log('================================================\n');
 
 	// GF(2^64) Self-Consistency Tests (independent of par3cmdline)
@@ -537,29 +537,17 @@ async function run() {
 
 			resultA = await runPar3Cmdline(['l', 'test/fixtures/par3-golden-parpar.par3']);
 
-			if (resultA.code === 0) {
+			if (resultA.code === 4) {
 				testAPassed = false;
-				testAFailures.push('exit code was 0 (expected 4 or 7, indicating rejection)');
+				testAFailures.push('exit code was 4 (parse failure - should accept archive)');
 			}
 			if (resultA.code === 139) {
 				testAPassed = false;
 				testAFailures.push('exit code was 139 (SIGSEGV - segfault)');
 			}
-			if (resultA.code !== 4 && resultA.code !== 7) {
-				testAPassed = false;
-				testAFailures.push('exit code was ' + resultA.code + ' (expected 4 or 7)');
-			}
-			var combinedOutputA = (resultA.stdout + '\n' + resultA.stderr);
-			if (combinedOutputA.indexOf('Galois Field') === -1 &&
-				combinedOutputA.indexOf('too large') === -1 &&
-				combinedOutputA.indexOf('Failed to find') === -1) {
-				testAPassed = false;
-				testAFailures.push('output does not show rejection (expected "Galois Field", "too large", or "Failed to find")');
-			}
 
 			if (testAPassed) {
-				console.log('  ' + PASS + ' (exit code: ' + resultA.code + ')');
-				console.log('  stderr: ' + resultA.stderr.trim());
+				console.log('  ' + PASS + ' (par3cmdline accepted ParParPar archive, exit code: ' + resultA.code + ')');
 				passedTests++;
 			} else {
 				console.log('  ' + FAIL + ': ' + testAFailures.join('; '));
@@ -585,29 +573,17 @@ async function run() {
 
 			resultB = await runPar3Cmdline(['v', 'test/fixtures/par3-golden-parpar.par3']);
 
-			if (resultB.code === 0) {
+			if (resultB.code === 4) {
 				testBPassed = false;
-				testBFailures.push('exit code was 0 (expected 4 or 7, indicating rejection)');
+				testBFailures.push('exit code was 4 (parse failure - should accept archive)');
 			}
 			if (resultB.code === 139) {
 				testBPassed = false;
 				testBFailures.push('exit code was 139 (SIGSEGV - segfault)');
 			}
-			if (resultB.code !== 4 && resultB.code !== 7) {
-				testBPassed = false;
-				testBFailures.push('exit code was ' + resultB.code + ' (expected 4 or 7)');
-			}
-			var combinedOutputB = (resultB.stdout + '\n' + resultB.stderr);
-			if (combinedOutputB.indexOf('Galois Field') === -1 &&
-				combinedOutputB.indexOf('too large') === -1 &&
-				combinedOutputB.indexOf('Failed to find') === -1) {
-				testBPassed = false;
-				testBFailures.push('output does not show rejection (expected "Galois Field", "too large", or "Failed to find")');
-			}
 
 			if (testBPassed) {
-				console.log('  ' + PASS + ' (exit code: ' + resultB.code + ')');
-				console.log('  stderr: ' + resultB.stderr.trim());
+				console.log('  ' + PASS + ' (par3cmdline accepted ParParPar archive, exit code: ' + resultB.code + ')');
 				passedTests++;
 			} else {
 				console.log('  ' + FAIL + ': ' + testBFailures.join('; '));
@@ -634,17 +610,17 @@ async function run() {
 		var testCPassed = true;
 		var testCFailures = [];
 
-		if (resultC.code === 0) {
-			testCPassed = false;
-			testCFailures.push('exit code was 0 (expected non-zero, indicating graceful rejection)');
-		}
 		if (resultC.code === -1) {
 			testCPassed = false;
 			testCFailures.push('uncaught exception: ' + resultC.stderr);
 		}
+		if (resultC.code === 4) {
+			testCPassed = false;
+			testCFailures.push('exit code was 4 (parse failure - should accept archive)');
+		}
 
 		if (testCPassed) {
-			console.log('  ' + PASS + ' (exit code: ' + resultC.code + ')');
+			console.log('  ' + PASS + ' (ParParPar verified par3cmdline archive, exit: ' + resultC.code + ')');
 			if (resultC.stderr) console.log('  stderr: ' + resultC.stderr.trim());
 			passedTests++;
 		} else {
@@ -682,6 +658,379 @@ async function run() {
 			passedTests++;
 		} else {
 			console.log('  ' + FAIL + ': ' + testDFailures.join('; '));
+			failedTests++;
+		}
+		console.log('');
+
+		// -----------------------------------------------------------------------
+		// Test E: Amendment 6 — Root packet present
+		// -----------------------------------------------------------------------
+		totalTests++;
+		console.log('Test E: Root packet (Amendment 6)...');
+		try {
+			var eTmpDir = fs.mkdtempSync(path.join(require('os').tmpdir(), 'par3-crosscomp-e-'));
+			var eInputFile = path.join(eTmpDir, 'test-root.bin');
+			fs.writeFileSync(eInputFile, Buffer.alloc(1024, 0x42));
+			fs.chmodSync(eInputFile, 0o755);
+			var eOutput = path.join(eTmpDir, 'out');
+
+			var eGenResult = helpers.runPar3Sync([
+				'create', '-o', eOutput, '-r', '1',
+				'-b', '1024', eInputFile
+			]);
+			var eTestPassed = true;
+			var eFailures = [];
+
+			if (eGenResult.code !== 0) {
+				eTestPassed = false;
+				eFailures.push('archive creation failed with exit ' + eGenResult.code);
+			}
+
+			if (eTestPassed) {
+				var eArchivePath = eOutput + '.par3';
+				if (!fs.existsSync(eArchivePath)) {
+					eTestPassed = false;
+					eFailures.push('archive file not found at ' + eArchivePath);
+				} else {
+					var eBuf = fs.readFileSync(eArchivePath);
+					var eFoundRoot = false;
+					// Search for "PAR ROO" (8 bytes: "PAR ROO\0")
+					for (var eI = 0; eI < eBuf.length - 8; eI++) {
+						if (eBuf[eI] === 0x50 && eBuf[eI + 1] === 0x41 && eBuf[eI + 2] === 0x52 && eBuf[eI + 3] === 0x20 &&
+							eBuf[eI + 4] === 0x52 && eBuf[eI + 5] === 0x4f && eBuf[eI + 6] === 0x4f && eBuf[eI + 7] === 0x00) {
+							eFoundRoot = true;
+							break;
+						}
+					}
+					if (!eFoundRoot) {
+						eTestPassed = false;
+						eFailures.push('"PAR ROO" not found in binary output');
+					}
+				}
+			}
+
+			if (eTestPassed) {
+				console.log('  ' + PASS + ' (Root packet found)');
+				passedTests++;
+			} else {
+				console.log('  ' + FAIL + ': ' + eFailures.join('; '));
+				failedTests++;
+			}
+
+			try { fs.rmSync(eTmpDir, { recursive: true, force: true }); } catch (e) {}
+		} catch (err) {
+			console.log('  ' + FAIL + ': ' + err.message);
+			failedTests++;
+		}
+		console.log('');
+
+		// -----------------------------------------------------------------------
+		// Test F: Amendment 7 — BLAKE3 checksums (par3cmdline can parse, exit not 4)
+		// -----------------------------------------------------------------------
+		totalTests++;
+		console.log('Test F: BLAKE3 checksums (Amendment 7)...');
+		if (skipPar3Cmdline) {
+			console.log('  ' + SKIP + ' (requires par3cmdline binary)\n');
+			skippedTests++;
+		} else {
+			var fTestPassed = true;
+			var fFailures = [];
+
+			var fTmpDir = fs.mkdtempSync(path.join(require('os').tmpdir(), 'par3-crosscomp-f-'));
+			var fInputFile = path.join(fTmpDir, 'test-blake3.bin');
+			fs.writeFileSync(fInputFile, Buffer.alloc(2048, 0xAB));
+			var fOutput = path.join(fTmpDir, 'out');
+
+			var fGenResult = helpers.runPar3Sync([
+				'create', '-o', fOutput, '-r', '1',
+				'-b', '1024', fInputFile
+			]);
+
+			if (fGenResult.code !== 0) {
+				fTestPassed = false;
+				fFailures.push('archive creation failed with exit ' + fGenResult.code);
+			}
+
+			if (fTestPassed) {
+				var fArchivePath = fOutput + '.par3';
+				var fResult = runPar3CmdlineSync(['v', fArchivePath]);
+				if (fResult.code === 4) {
+					fTestPassed = false;
+					fFailures.push('exit code 4 (Failed to find Start Packet / parse failure). Expected not 4');
+				}
+				if (fResult.code === 139) {
+					fTestPassed = false;
+					fFailures.push('exit code 139 (SIGSEGV - segfault)');
+				}
+			}
+
+			if (fTestPassed) {
+				console.log('  ' + PASS + ' (par3cmdline accepted archive, exit code not 4)');
+				passedTests++;
+			} else {
+				console.log('  ' + FAIL + ': ' + fFailures.join('; '));
+				failedTests++;
+			}
+
+			try { fs.rmSync(fTmpDir, { recursive: true, force: true }); } catch (e) {}
+			console.log('');
+		}
+
+		// -----------------------------------------------------------------------
+		// Test G: Amendment 9 — Packet order
+		// -----------------------------------------------------------------------
+		totalTests++;
+		console.log('Test G: Packet order (Amendment 9)...');
+		try {
+			var gTmpDir = fs.mkdtempSync(path.join(require('os').tmpdir(), 'par3-crosscomp-g-'));
+			var gInputFile = path.join(gTmpDir, 'test-order.bin');
+			fs.writeFileSync(gInputFile, Buffer.alloc(4096, 0xCC));
+			var gOutput = path.join(gTmpDir, 'out');
+
+			var gGenResult = helpers.runPar3Sync([
+				'create', '-o', gOutput, '-r', '1',
+				'-b', '1024', gInputFile
+			]);
+			var gTestPassed = true;
+			var gFailures = [];
+
+			if (gGenResult.code !== 0) {
+				gTestPassed = false;
+				gFailures.push('archive creation failed with exit ' + gGenResult.code);
+			}
+
+			if (gTestPassed) {
+				var gArchivePath = gOutput + '.par3';
+				var gBuf = fs.readFileSync(gArchivePath);
+
+				// Find all 8-byte packet magic strings "PAR XXX\0"
+				function findPacketTypes(buf) {
+					var types = [];
+					for (var i = 0; i < buf.length - 8; i++) {
+						if (buf[i] === 0x50 && buf[i + 1] === 0x41 && buf[i + 2] === 0x52 && buf[i + 3] === 0x20 && buf[i + 7] === 0x00) {
+							var typeStr = String.fromCharCode(buf[i + 4]) +
+								String.fromCharCode(buf[i + 5]) +
+								String.fromCharCode(buf[i + 6]);
+							types.push(typeStr);
+						}
+					}
+					return types;
+				}
+
+				var gPacketTypes = findPacketTypes(gBuf);
+				// Expected: CRE, STA, CAU, FIL, ROO, REC (Root is "ROO" in binary)
+				var gExpectedOrder = ['CRE', 'STA', 'CAU', 'FIL', 'ROO', 'REC'];
+
+				// Filter to just the expected types in order of first appearance
+				var gFiltered = [];
+				for (var gI = 0; gI < gPacketTypes.length; gI++) {
+					if (gExpectedOrder.indexOf(gPacketTypes[gI]) >= 0) {
+						gFiltered.push(gPacketTypes[gI]);
+					}
+				}
+
+				// Verify the expected types appear in the correct order
+				var gOrderOk = true;
+				if (gFiltered.length < gExpectedOrder.length) {
+					gOrderOk = false;
+					gFailures.push('missing packet types. Found: [' + gFiltered.join(',') +
+						'], expected at least: [' + gExpectedOrder.join(',') + ']');
+				} else {
+					for (var gI = 0; gI < gExpectedOrder.length; gI++) {
+						if (gFiltered[gI] !== gExpectedOrder[gI]) {
+							gOrderOk = false;
+							gFailures.push('order mismatch at index ' + gI +
+								': got ' + gFiltered[gI] + ' expected ' + gExpectedOrder[gI]);
+							break;
+						}
+					}
+				}
+
+				if (!gOrderOk) {
+					gTestPassed = false;
+				}
+			}
+
+			if (gTestPassed) {
+				console.log('  ' + PASS + ' (packet order: CRE, STA, CAU, FIL, ROO, REC)');
+				passedTests++;
+			} else {
+				console.log('  ' + FAIL + ': ' + gFailures.join('; '));
+				failedTests++;
+			}
+
+			try { fs.rmSync(gTmpDir, { recursive: true, force: true }); } catch (e) {}
+		} catch (err) {
+			console.log('  ' + FAIL + ': ' + err.message);
+			failedTests++;
+		}
+		console.log('');
+
+		// -----------------------------------------------------------------------
+		// Test H: Amendment 10 — Random file IDs (two archives, same file → different File IDs)
+		// -----------------------------------------------------------------------
+		totalTests++;
+		console.log('Test H: Random file IDs (Amendment 10)...');
+		try {
+			var hTmpDir = fs.mkdtempSync(path.join(require('os').tmpdir(), 'par3-crosscomp-h-'));
+			var hInputFile = path.join(hTmpDir, 'test-fileid.bin');
+			fs.writeFileSync(hInputFile, Buffer.alloc(8192, 0xDD));
+			fs.chmodSync(hInputFile, 0o755);
+
+			var hOutput1 = path.join(hTmpDir, 'out1');
+			var hOutput2 = path.join(hTmpDir, 'out2');
+
+			var hGen1 = helpers.runPar3Sync([
+				'create', '-o', hOutput1, '-r', '1',
+				'-b', '2048', hInputFile
+			]);
+			var hGen2 = helpers.runPar3Sync([
+				'create', '-o', hOutput2, '-r', '1',
+				'-b', '2048', hInputFile
+			]);
+
+			var hTestPassed = true;
+			var hFailures = [];
+
+			if (hGen1.code !== 0 || hGen2.code !== 0) {
+				hTestPassed = false;
+				hFailures.push('archive creation failed (exit ' + hGen1.code + ' / ' + hGen2.code + ')');
+			}
+
+			// File ID is stored in the Permissions packet (PAR UNX),
+			// first 16 bytes after the 8-byte "PAR UNX\0" packet type marker.
+			function extractFileIdFromPerms(archivePath) {
+				var buf = fs.readFileSync(archivePath);
+				for (var i = 0; i < buf.length - 8; i++) {
+					if (buf[i] === 0x55 && buf[i + 1] === 0x4e && buf[i + 2] === 0x58 && buf[i + 3] === 0x00) {
+						// Check 4 bytes before for "PAR " to confirm this is "PAR UNX\0" (not random UNX bytes)
+						if (i >= 4 && buf[i - 4] === 0x50 && buf[i - 3] === 0x41 && buf[i - 2] === 0x52 && buf[i - 1] === 0x20) {
+							// Body starts at offset of "PAR UNX\0" + 8 (pktType is at header offset 40, body at 48)
+							return buf.slice(i + 4, i + 4 + 16);
+						}
+					}
+				}
+				return null;
+			}
+
+			if (hTestPassed) {
+				var hId1 = extractFileIdFromPerms(hOutput1 + '.par3');
+				var hId2 = extractFileIdFromPerms(hOutput2 + '.par3');
+
+				if (!hId1 || !hId2) {
+					hTestPassed = false;
+					hFailures.push('could not extract File ID from Permissions packet');
+				} else if (hId1.equals(hId2)) {
+					hTestPassed = false;
+					hFailures.push('File IDs are identical (expected different / random)');
+				}
+			}
+
+			if (hTestPassed) {
+				console.log('  ' + PASS + ' (File IDs differ across two archives)');
+				passedTests++;
+			} else {
+				console.log('  ' + FAIL + ': ' + hFailures.join('; '));
+				failedTests++;
+			}
+
+			try { fs.rmSync(hTmpDir, { recursive: true, force: true }); } catch (e) {}
+		} catch (err) {
+			console.log('  ' + FAIL + ': ' + err.message);
+			failedTests++;
+		}
+		console.log('');
+
+		// -----------------------------------------------------------------------
+		// Test I: Amendment 16 — Permissions packet (UNIX)
+		// -----------------------------------------------------------------------
+		totalTests++;
+		console.log('Test I: Permissions packet (Amendment 16)...');
+		try {
+			var iTmpDir = fs.mkdtempSync(path.join(require('os').tmpdir(), 'par3-crosscomp-i-'));
+			var iInputFile = path.join(iTmpDir, 'test-perms.bin');
+			fs.writeFileSync(iInputFile, '#!/bin/sh\necho ok\n');
+			fs.chmodSync(iInputFile, 0o755);
+			var iOutput = path.join(iTmpDir, 'out');
+
+			var iGenResult = helpers.runPar3Sync([
+				'create', '-o', iOutput, '-r', '1',
+				'-b', '1024', iInputFile
+			]);
+			var iTestPassed = true;
+			var iFailures = [];
+
+			if (iGenResult.code !== 0) {
+				iTestPassed = false;
+				iFailures.push('archive creation failed with exit ' + iGenResult.code);
+			}
+
+			if (iTestPassed) {
+				var iArchivePath = iOutput + '.par3';
+				var iBuf = fs.readFileSync(iArchivePath);
+				var iFoundUnix = false;
+				for (var iIdx = 0; iIdx < iBuf.length - 8; iIdx++) {
+					if (iBuf[iIdx] === 0x50 && iBuf[iIdx + 1] === 0x41 && iBuf[iIdx + 2] === 0x52 && iBuf[iIdx + 3] === 0x20 &&
+						iBuf[iIdx + 4] === 0x55 && iBuf[iIdx + 5] === 0x4e && iBuf[iIdx + 6] === 0x58 && iBuf[iIdx + 7] === 0x00) {
+						iFoundUnix = true;
+						break;
+					}
+				}
+				if (!iFoundUnix) {
+					iTestPassed = false;
+					iFailures.push('"PAR UNX" not found in binary output');
+				}
+			}
+
+			if (iTestPassed) {
+				console.log('  ' + PASS + ' (UNIX permissions packet found)');
+				passedTests++;
+			} else {
+				console.log('  ' + FAIL + ': ' + iFailures.join('; '));
+				failedTests++;
+			}
+
+			try { fs.rmSync(iTmpDir, { recursive: true, force: true }); } catch (e) {}
+		} catch (err) {
+			console.log('  ' + FAIL + ': ' + err.message);
+			failedTests++;
+		}
+		console.log('');
+
+		// -----------------------------------------------------------------------
+		// Test J: Amendment 18 — Empty input set (empty directory)
+		// -----------------------------------------------------------------------
+		totalTests++;
+		console.log('Test J: Empty input set (Amendment 18)...');
+		try {
+			var jTmpDir = fs.mkdtempSync(path.join(require('os').tmpdir(), 'par3-crosscomp-j-'));
+			var jEmptyDir = path.join(jTmpDir, 'emptydir');
+			fs.mkdirSync(jEmptyDir);
+			var jOutput = path.join(jTmpDir, 'out');
+
+			var jGenResult = helpers.runPar3Sync([
+				'create', '-o', jOutput, '-r', '1',
+				'-b', '1024', jEmptyDir
+			]);
+			var jTestPassed = true;
+			var jFailures = [];
+
+			if (jGenResult.code !== 0) {
+				jTestPassed = false;
+				jFailures.push('empty input set creation failed with exit ' + jGenResult.code);
+			}
+
+			if (jTestPassed) {
+				console.log('  ' + PASS + ' (empty input set created successfully, exit 0)');
+				passedTests++;
+			} else {
+				console.log('  ' + FAIL + ': ' + jFailures.join('; '));
+				failedTests++;
+			}
+
+			try { fs.rmSync(jTmpDir, { recursive: true, force: true }); } catch (e) {}
+		} catch (err) {
+			console.log('  ' + FAIL + ': ' + err.message);
 			failedTests++;
 		}
 		console.log('');

@@ -1,0 +1,55 @@
+=== Section A: Existence check ===
+
+  PASS: gf64_mul is exported
+  PASS: invert64 is exported
+  PASS: GF64_POLY is exported as bigint
+  PASS: GF64_MASK is exported as bigint
+  PASS: mul is exported
+  PASS: mul_arr is exported
+  PASS: solve_and_reconstruct is exported
+  PASS: gf64_solve is exported
+
+=== Section B: Field axiom tests ===
+
+  PASS: gf64_mul(a, 0n) === 0n
+  PASS: gf64_mul(a, 1n) === a
+  PASS: gf64_mul(a, b) === gf64_mul(b, a)
+  PASS: invert64(a) !== 0n for a !== 0n
+  PASS: gf64_mul(a, invert64(a)) === 1n
+  PASS: invert64(0n) === 0n
+  PASS: invert64(1n) === 1n
+
+=== Section C: mul test ===
+
+  PASS: mul len_words=1 matches gf64_mul
+  PASS: mul len_words=16 matches gf64_mul for all words
+
+=== Section D: mul_arr test ===
+
+  PASS: mul_arr n_coeff=1 matches mul
+  PASS: mul_arr len_words=0 is a no-op (no error)
+
+=== Section E: solve_and_reconstruct test ===
+
+  PASS: solve_and_reconstruct returns 0 for non-singular 2x2 system
+  PASS: A * solution == rhs after solve_and_reconstruct
+  PASS: solve_and_reconstruct returns -1 for singular matrix
+  PASS: solve_and_reconstruct with n=0 returns 0
+
+=== Section F: gf64_solve test ===
+
+  PASS: gf64_solve returns a Buffer
+  PASS: gf64_solve returns Buffer of size n*8
+  PASS: A * solution == b after gf64_solve
+  PASS: gf64_solve returns null for singular matrix
+  PASS: gf64_solve with n=0 returns empty Buffer
+
+=== Section G: Known-answer and native parity ===
+
+  PASS: Known-answer: gf64_mul(2n, 3n) = 6n
+  PASS: Known-answer: gf64_mul(0x8000...0n, 3n) = 0x8000...001Bn
+  SKIP: native binding unavailable - running JS-only tests
+
+---
+30 tests passed, 1 skipped
+EXIT: 0

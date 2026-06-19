@@ -38,7 +38,8 @@
   },
   "gypfile": true,
   "dependencies": {
-    "async": "0.2.0 - 2.9999.9999"
+    "async": "0.2.0 - 2.9999.9999",
+    "blake3": "^2.1.7"
   },
   "bugs": {
     "url": "https://github.com/animetosho/parpar/issues"
