@@ -34,7 +34,7 @@ async.waterfall([
 		// most packets cannot be generated in chunked mode
 		// note that we don't call .setRecoverySlices as we aren't generating recovery packets here
 		console.log('Calculating hashes...');
-		var buf = new Buffer(sliceSize);
+		var buf = Buffer.alloc(sliceSize);
 		async.eachSeries(pFiles, function(file, cb) {
 			fs.open(file.name, 'r', function(err, fd) {
 				if(err) return cb(err);
@@ -117,7 +117,7 @@ async.waterfall([
 		
 		// loop through all the chunks
 		var sliceOffset = 0; // where we're at within each slice
-		var buf = new Buffer(chunkSize);
+		var buf = Buffer.alloc(chunkSize);
 		async.timesSeries(numChunks, function(n, cb) {
 			// if the final chunk is too large, adjust accordingly
 			if(sliceOffset + chunkSize > sliceSize) {
