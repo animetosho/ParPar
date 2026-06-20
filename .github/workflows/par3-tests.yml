@@ -71,11 +71,11 @@ jobs:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     strategy:
-      # windows-2022 pin is short-term; see https://github.com/trafgals/ParParPar/issues/6
+      # windows-2025 pin requires node-gyp ^12.4.0 (see .npmrc); see https://github.com/trafgals/ParParPar/issues/5
       fail-fast: false
       matrix:
-        node-version: [18, 20, 22]
-        os: [ubuntu-latest, macos-latest, windows-2022]
+        node-version: [20, 22]
+        os: [ubuntu-latest, macos-latest, windows-2025]
 
     steps:
       - uses: actions/checkout@v4
