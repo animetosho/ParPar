@@ -46,6 +46,7 @@
   },
   "homepage": "https://animetosho.org/app/parpar",
   "devDependencies": {
-    "husky": "^9.1.7"
+    "husky": "^9.1.7",
+    "node-gyp": "^12.4.0"
   }
 }
