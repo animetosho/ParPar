@@ -9,7 +9,7 @@ on:
 jobs:
   build-win64:
     name: Build x64 Windows binary
-    runs-on: windows-2019
+    runs-on: windows-2022
     env:
       BUILD_ARCH: x64
       BUILD_LOGLEVEL: verbose
@@ -56,7 +56,7 @@ jobs:
         - name: static
           flag: --fully-static
     name: Build amd64 Linux ${{ matrix.static.name }} binary
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     env:
       BUILD_ARCH: x64
       BUILD_LOGLEVEL: verbose

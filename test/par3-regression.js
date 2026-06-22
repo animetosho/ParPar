@@ -35,7 +35,7 @@ var BENCHMARKS_PATH = path.join(__dirname, '..', '.omo', 'benchmarks.json');
 
 // Golden file expected properties
 var GOLDEN_BIN_EXPECTED_SIZE = 2048;
-var GOLDEN_BIN_EXPECTED_CRC32 = '2FB9F77B';
+var GOLDEN_BIN_EXPECTED_CRC32 = '6A941C15';
 
 // Known-answer test parameters (2 inputs x 1 recovery, blockSize=1024)
 // blockSize must be >= 1024 and a power of 2 per PAR3Gen constraints

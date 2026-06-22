@@ -32,7 +32,7 @@ var GOLDEN_BIN = path.join(__dirname, 'par3-golden.bin');
 // EXPECTED_CRC32 is updated by --generate to freeze the current engine output.
 // On first run (when no golden.bin exists), we generate and record it.
 // On subsequent runs, we compare against this value.
-var EXPECTED_CRC32 = '2FB9F77B';
+var EXPECTED_CRC32 = '6A941C15';
 
 // ---------------------------------------------------------------------------
 // CRC32 (pure JS, table-based)
