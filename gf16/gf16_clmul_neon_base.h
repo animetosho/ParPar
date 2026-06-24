@@ -173,7 +173,7 @@ void _FN(gf16_clmul_muladd)(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RE
 
 
 #if defined(_AVAILABLE)
-GF16_MULADD_MULTI_FUNCS(gf16_clmul, _FNSUFFIX, _FN(gf16_clmul_muladd_x), CLMUL_NUM_REGIONS, sizeof(uint8x16_t)*2, 0, (void)0)
+GF16_MULADD_MULTI_FUNCS(gf16_clmul, _FNSUFFIX, _FN(gf16_clmul_muladd_x), CLMUL_NUM_REGIONS, 1, sizeof(uint8x16_t)*2, 0, (void)0)
 #else
 GF16_MULADD_MULTI_FUNCS_STUB(gf16_clmul, _FNSUFFIX)
 #endif

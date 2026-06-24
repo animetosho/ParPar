@@ -36,15 +36,15 @@ void gf_add_multi_sse2(unsigned regions, size_t offset, void *HEDLEY_RESTRICT ds
 # ifdef PARPAR_INCLUDE_BASIC_OPS
 #  define PACKED_FUNC(vs, il, it) \
 void gf_add_multi_packed_v##vs##i##il##_sse2(unsigned packedRegions, unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len) { \
-	gf16_muladd_multi_packed((void*)vs, &gf_add_x_sse2, il, it, packedRegions, regions, dst, src, len, sizeof(__m128i)*vs, NULL); \
+	gf16_blkmac_packed((void*)vs, &gf_add_x_sse2, il, it, 1, packedRegions, regions, 1, dst, src, len, sizeof(__m128i)*vs, NULL); \
 } \
 void gf_add_multi_packpf_v##vs##i##il##_sse2(unsigned packedRegions, unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, const void* HEDLEY_RESTRICT prefetchIn, const void* HEDLEY_RESTRICT prefetchOut) { \
-	gf16_muladd_multi_packpf((void*)vs, &gf_add_x_sse2, il, it, packedRegions, regions, dst, src, len, sizeof(__m128i)*vs, NULL, vs>1, prefetchIn, prefetchOut); \
+	gf16_blkmac_packpf((void*)vs, &gf_add_x_sse2, il, it, 1, packedRegions, regions, 1, dst, src, len, sizeof(__m128i)*vs, NULL, vs>1, prefetchIn, prefetchOut); \
 }
 # else
 #  define PACKED_FUNC(vs, il, it) \
 void gf_add_multi_packpf_v##vs##i##il##_sse2(unsigned packedRegions, unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, const void* HEDLEY_RESTRICT prefetchIn, const void* HEDLEY_RESTRICT prefetchOut) { \
-	gf16_muladd_multi_packpf((void*)vs, &gf_add_x_sse2, il, it, packedRegions, regions, dst, src, len, sizeof(__m128i)*vs, NULL, vs>1, prefetchIn, prefetchOut); \
+	gf16_blkmac_packpf((void*)vs, &gf_add_x_sse2, il, it, 1, packedRegions, regions, 1, dst, src, len, sizeof(__m128i)*vs, NULL, vs>1, prefetchIn, prefetchOut); \
 }
 # endif
 #else

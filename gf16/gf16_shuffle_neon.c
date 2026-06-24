@@ -311,7 +311,7 @@ void gf16_shuffle_muladd_neon(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_
 
 
 #if defined(__ARM_NEON) && defined(__aarch64__) && !defined(PARPAR_SLIM_GF16)
-GF16_MULADD_MULTI_FUNCS(gf16_shuffle, _neon, gf16_shuffle_muladd_x_neon, 2, sizeof(uint8x16_t)*2, 0, (void)0)
+GF16_MULADD_MULTI_FUNCS(gf16_shuffle, _neon, gf16_shuffle_muladd_x_neon, 2, 1, sizeof(uint8x16_t)*2, 0, (void)0)
 #else
 GF16_MULADD_MULTI_FUNCS_STUB(gf16_shuffle, _neon)
 #endif

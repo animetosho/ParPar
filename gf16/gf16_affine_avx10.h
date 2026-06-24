@@ -191,7 +191,7 @@ void _FN(gf16_affine_muladd_prefetch)(const void *HEDLEY_RESTRICT scratch, void 
 }
 
 #if defined(_AVAILABLE) && defined(PLATFORM_AMD64)
-GF16_MULADD_MULTI_FUNCS(gf16_affine, _FNSUFFIX, _FN(gf16_affine_muladd_x), 6, sizeof(_mword)*2, 1, _mm256_zeroupper())
+GF16_MULADD_MULTI_FUNCS(gf16_affine, _FNSUFFIX, _FN(gf16_affine_muladd_x), 6, 1, sizeof(_mword)*2, 1, _mm256_zeroupper())
 #else
 GF16_MULADD_MULTI_FUNCS_STUB(gf16_affine, _FNSUFFIX)
 #endif
@@ -428,10 +428,10 @@ void _FN(gf16_affine2x_muladd)(const void *HEDLEY_RESTRICT scratch, void *HEDLEY
 #if defined(_AVAILABLE) && !defined(PARPAR_SLIM_GF16)
 # ifdef PLATFORM_AMD64
 // TODO: may not want 12 regions for non-packed variant
-GF16_MULADD_MULTI_FUNCS(gf16_affine2x, _FNSUFFIX, _FN(gf16_affine2x_muladd_x), 12, sizeof(_mword), 0, _mm256_zeroupper())
+GF16_MULADD_MULTI_FUNCS(gf16_affine2x, _FNSUFFIX, _FN(gf16_affine2x_muladd_x), 12, 1, sizeof(_mword), 0, _mm256_zeroupper())
 # else
 // if only 8 registers available, only allow 2 parallel regions
-GF16_MULADD_MULTI_FUNCS(gf16_affine2x, _FNSUFFIX, _FN(gf16_affine2x_muladd_x), 2, sizeof(_mword), 0, _mm256_zeroupper())
+GF16_MULADD_MULTI_FUNCS(gf16_affine2x, _FNSUFFIX, _FN(gf16_affine2x_muladd_x), 2, 1, sizeof(_mword), 0, _mm256_zeroupper())
 # endif
 #else
 GF16_MULADD_MULTI_FUNCS_STUB(gf16_affine2x, _FNSUFFIX)

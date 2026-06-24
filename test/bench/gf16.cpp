@@ -253,17 +253,17 @@ void mat_mul_packed(const Galois16Mul& g, void* mutScratch, const void* input, u
 			if(round == numChunks-1) {
 				if(out < numOutputs-1) {
 					if(oNums[out])
-						g.mul_add_multi_packpf(numInputs, numInputs, ((uint8_t*)outputs[out]) + offset, (const char*)input + offset*numInputs, procSize, vals, mutScratch, NULL, ((uint8_t*)outputs[out+1]) + offset);
+						g.blkmac_packpf(numInputs, numInputs, 1, ((uint8_t*)outputs[out]) + offset, (const char*)input + offset*numInputs, procSize, vals, mutScratch, NULL, ((uint8_t*)outputs[out+1]) + offset);
 					else
 						g.add_multi_packpf(numInputs, numInputs, ((uint8_t*)outputs[out]) + offset, (const char*)input + offset*numInputs, procSize, NULL, ((uint8_t*)outputs[out+1]) + offset);
 				} else
-					g.mul_add_multi_packed(numInputs, numInputs, ((uint8_t*)outputs[out]) + offset, (const char*)input + offset*numInputs, procSize, vals, mutScratch);
+					g.blkmac_packed(numInputs, numInputs, 1, ((uint8_t*)outputs[out]) + offset, (const char*)input + offset*numInputs, procSize, vals, mutScratch);
 			} else {
 				const char* pfInput = out >= inputPrefetchOutOffset ? (const char*)input + (round+1)*chunkSize*numInputs + ((inputsPrefetchedPerInvok*(out-inputPrefetchOutOffset)*procSize)>>MAX_PF_FACTOR) : NULL;
 				// procSize input prefetch may be wrong for final round, but it's the closest we've got
 				
 				if(oNums[out])
-					g.mul_add_multi_packpf(numInputs, numInputs, ((uint8_t*)outputs[out]) + offset, (const char*)input + offset*numInputs, procSize, vals, mutScratch, pfInput, ((uint8_t*)outputs[out+1]) + offset);
+					g.blkmac_packpf(numInputs, numInputs, 1, ((uint8_t*)outputs[out]) + offset, (const char*)input + offset*numInputs, procSize, vals, mutScratch, pfInput, ((uint8_t*)outputs[out+1]) + offset);
 				else
 					g.add_multi_packpf(numInputs, numInputs, ((uint8_t*)outputs[out]) + offset, (const char*)input + offset*numInputs, procSize, pfInput, ((uint8_t*)outputs[out+1]) + offset);
 			}
@@ -277,7 +277,7 @@ void mat_mul_packed(const Galois16Mul& g, void* mutScratch, const void* input, u
 			
 			if(!add) memset(((uint8_t*)outputs[out])+offset, 0, procSize);
 			if(oNums[out])
-				g.mul_add_multi_packed(numInputs, numInputs, ((uint8_t*)outputs[out]) + offset, (const char*)input + offset*numInputs, procSize, factors + out*numInputs, mutScratch);
+				g.blkmac_packed(numInputs, numInputs, 1, ((uint8_t*)outputs[out]) + offset, (const char*)input + offset*numInputs, procSize, factors + out*numInputs, mutScratch);
 			else
 				g.add_multi_packed(numInputs, numInputs, ((uint8_t*)outputs[out]) + offset, (const char*)input + offset*numInputs, procSize);
 		}
@@ -329,17 +329,17 @@ void mat_mul_packed2(const Galois16Mul& g, void* mutScratch, const void* input, 
 			if(round == numChunks-1) {
 				if(out < numOutputs-1) {
 					if(oNums[out])
-						g.mul_add_multi_packpf(numInputs, numInputs, dstPtr, (const char*)input + round*chunkSize*numInputs, procSize, vals, mutScratch, NULL, dstPtr+procSize);
+						g.blkmac_packpf(numInputs, numInputs, 1, dstPtr, (const char*)input + round*chunkSize*numInputs, procSize, vals, mutScratch, NULL, dstPtr+procSize);
 					else
 						g.add_multi_packpf(numInputs, numInputs, dstPtr, (const char*)input + round*chunkSize*numInputs, procSize, NULL, dstPtr+procSize);
 				} else
-					g.mul_add_multi_packed(numInputs, numInputs, dstPtr, (const char*)input + round*chunkSize*numInputs, procSize, vals, mutScratch);
+					g.blkmac_packed(numInputs, numInputs, 1, dstPtr, (const char*)input + round*chunkSize*numInputs, procSize, vals, mutScratch);
 			} else {
 				const char* pfInput = out >= inputPrefetchOutOffset ? (const char*)input + (round+1)*chunkSize*numInputs + ((inputsPrefetchedPerInvok*(out-inputPrefetchOutOffset)*procSize)>>MAX_PF_FACTOR) : NULL;
 				// procSize input prefetch may be wrong for final round, but it's the closest we've got
 				
 				if(oNums[out])
-					g.mul_add_multi_packpf(numInputs, numInputs, dstPtr, (const char*)input + round*chunkSize*numInputs, procSize, vals, mutScratch, pfInput, dstPtr+procSize);
+					g.blkmac_packpf(numInputs, numInputs, 1, dstPtr, (const char*)input + round*chunkSize*numInputs, procSize, vals, mutScratch, pfInput, dstPtr+procSize);
 				else
 					g.add_multi_packpf(numInputs, numInputs, dstPtr, (const char*)input + round*chunkSize*numInputs, procSize, pfInput, dstPtr+procSize);
 			}
@@ -353,7 +353,7 @@ void mat_mul_packed2(const Galois16Mul& g, void* mutScratch, const void* input, 
 			char* dstPtr = (char*)output + out*procSize + round*numOutputs*chunkSize;
 			if(!add) memset(dstPtr, 0, procSize);
 			if(oNums[out])
-				g.mul_add_multi_packed(numInputs, numInputs, dstPtr, (const char*)input + round*chunkSize*numInputs, procSize, factors + out*numInputs, mutScratch);
+				g.blkmac_packed(numInputs, numInputs, 1, dstPtr, (const char*)input + round*chunkSize*numInputs, procSize, factors + out*numInputs, mutScratch);
 			else
 				g.add_multi_packed(numInputs, numInputs, dstPtr, (const char*)input + round*chunkSize*numInputs, procSize);
 		}
@@ -763,12 +763,12 @@ int main(int argc, char** argv) {
 				}
 			}
 			
-			// bench mul_add_multi_packed
-			if((g.hasMultiMulAddPacked() || explicitlySpecifiedFuncs) && funcs.find(TestFuncs::MULTIPLY_ADD_MULTI_PACKED) != funcs.end()) {
+			// bench blkmac_packed
+			if((g.hasBlkmacPacked() || explicitlySpecifiedFuncs) && funcs.find(TestFuncs::MULTIPLY_ADD_MULTI_PACKED) != funcs.end()) {
 				for(unsigned regions : multis) {
 					if(!hideFuncLabels) print_func("MAddPk%2d", regions);
 					run_bench([&](size_t size, const uint16_t*& coeff) {
-						g.mul_add_multi_packed(regions, regions, dst, src, size, coeff, gp.second);
+						g.blkmac_packed(regions, regions, 1, dst, src, size, coeff, gp.second);
 						coeff += regions;
 					}, coeffs, TEST_SIZE / regions, regions);
 					std::cout << std::endl;

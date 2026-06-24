@@ -906,7 +906,8 @@ void gf16_xor_jit_muladd_multi_avx512(const void *HEDLEY_RESTRICT scratch, unsig
 #endif
 }
 
-void gf16_xor_jit_muladd_multi_packed_avx512(const void *HEDLEY_RESTRICT scratch, unsigned packRegions, unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch) {
+void gf16_xor_jit_blkmac_packed_avx512(const void *HEDLEY_RESTRICT scratch, unsigned packRegions, unsigned regions, unsigned dstRegions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch) {
+	UNUSED(dstRegions);
 #ifdef _AVAILABLE
 	const struct gf16_xor_scratch *HEDLEY_RESTRICT info = (const struct gf16_xor_scratch*)scratch;
 	jit_wx_pair* jit = (jit_wx_pair*)mutScratch;
@@ -1013,7 +1014,7 @@ void gf16_xor_jit_muladd_multi_packed_avx512(const void *HEDLEY_RESTRICT scratch
 #endif
 }
 
-// TODO: gf16_xor_jit_muladd_multi_packpf_avx512  if bored enough
+// TODO: gf16_xor_jit_blkmac_packpf_avx512  if bored enough
 
 
 #ifdef _AVAILABLE

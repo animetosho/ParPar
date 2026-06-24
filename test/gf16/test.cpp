@@ -403,7 +403,7 @@ int main(int argc, char** argv) {
 									}
 									// TODO: need to fix the below
 									for(unsigned outputNum = 0; outputNum < numOutputs; outputNum++) {
-										g.mul_add_multi_packed(numOutputs, numOutputs, tmp2, tmp, chunkLen, <0s>, gfScratch[gi]);
+										g.blkmac_packed(numOutputs, numOutputs, 1, tmp2, tmp, chunkLen, <0s>, gfScratch[gi]);
 									}
 									*/
 									// unpack output
@@ -452,7 +452,7 @@ int main(int argc, char** argv) {
 										
 										uint8_t* tmpPtr = (uint8_t*)tmp + outputNum*len + sliceOffset*numOutputs;
 										memset(tmpPtr, 0, len);
-										g.mul_add_multi_packed(1, 1, tmpPtr, (uint8_t*)tmp2 + sliceOffset, len, coeffs + outputNum, gfScratch[gi]);
+										g.blkmac_packed(1, 1, 1, tmpPtr, (uint8_t*)tmp2 + sliceOffset, len, coeffs + outputNum, gfScratch[gi]);
 									}
 								}
 								for(unsigned misalign = 0; misalign < MAX_MISALIGN; misalign++) {
@@ -714,10 +714,10 @@ int main(int argc, char** argv) {
 							g.prepare(dst, src2, regionSize);
 							for(unsigned region = 0; region < maxRegions; region++)
 								g.prepare_packed(tmp, srcM[region], regionSize, regionSize, maxRegions+blankRegions, region, regionSize);
-							g.mul_add_multi_packed(maxRegions+blankRegions, maxRegions, dst, tmp, regionSize, coeffs, gfScratch[gi]);
+							g.blkmac_packed(maxRegions+blankRegions, maxRegions, 1, dst, tmp, regionSize, coeffs, gfScratch[gi]);
 							g.finish(dst, regionSize);
 							if(memcmp(dst, ref, regionSize)) {
-								std::cout << "Mul_add_multi_packed (" << maxRegions << "+" << blankRegions << ") failure: " << g.info().name << std::endl;
+								std::cout << "Blkmac_packed (" << maxRegions << "+" << blankRegions << ") failure: " << g.info().name << std::endl;
 								display_mem_diff(ref, dst, regionSize/2);
 								return 1;
 							}
@@ -727,10 +727,10 @@ int main(int argc, char** argv) {
 							g.prepare(dst, src2, regionSize);
 							for(unsigned region = 0; region < maxRegions; region++)
 								g.prepare_packed(tmp, srcM[region], regionSize, regionSize, maxRegions+blankRegions, region, regionSize);
-							g.mul_add_multi_packpf(maxRegions+blankRegions, maxRegions, dst, tmp, regionSize, coeffs, gfScratch[gi], tmp, tmp2 /*prefetch - any memory will do*/);
+							g.blkmac_packpf(maxRegions+blankRegions, maxRegions, 1, dst, tmp, regionSize, coeffs, gfScratch[gi], tmp, tmp2 /*prefetch - any memory will do*/);
 							g.finish(dst, regionSize);
 							if(memcmp(dst, ref, regionSize)) {
-								std::cout << "Mul_add_multi_packpf (" << maxRegions << "+" << blankRegions << ") failure: " << g.info().name << std::endl;
+								std::cout << "Blkmac_packpf (" << maxRegions << "+" << blankRegions << ") failure: " << g.info().name << std::endl;
 								display_mem_diff(ref, dst, regionSize/2);
 								return 1;
 							}

@@ -110,7 +110,7 @@ void gf16_clmul_muladd_rvv(const void *HEDLEY_RESTRICT scratch, void *HEDLEY_RES
 
 
 #ifdef RISCV_ZVBC_INTRIN
-GF16_MULADD_MULTI_FUNCS(gf16_clmul, _rvv, gf16_clmul_muladd_x_rvv, 12, RV(vsetvlmax_e8m1)(), 0, (void)0)
+GF16_MULADD_MULTI_FUNCS(gf16_clmul, _rvv, gf16_clmul_muladd_x_rvv, 12, 1, RV(vsetvlmax_e8m1)(), 0, (void)0)
 #else
 GF16_MULADD_MULTI_FUNCS_STUB(gf16_clmul, _rvv)
 #endif

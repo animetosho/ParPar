@@ -496,18 +496,18 @@ void PAR2ProcCPU::compute_worker(ThreadMessageQueue<void*>& q) {
 				if(round == req->numChunks-1) {
 					if(out+1 < req->numOutputs) {
 						if(req->outNonZero[out])
-							req->gf->mul_add_multi_packpf(req->inputGrouping, req->numInputs, dstPtr, srcPtr, procSize, vals, req->mutScratch, NULL, dstPtr+procSize);
+							req->gf->blkmac_packpf(req->inputGrouping, req->numInputs, 1, dstPtr, srcPtr, procSize, vals, req->mutScratch, NULL, dstPtr+procSize);
 						else
 							req->gf->add_multi_packpf(req->inputGrouping, req->numInputs, dstPtr, srcPtr, procSize, NULL, dstPtr+procSize);
 					} else
 						// TODO: this could also be a 0 output, so consider add_multi optimisation?
-						req->gf->mul_add_multi_packed(req->inputGrouping, req->numInputs, dstPtr, srcPtr, procSize, vals, req->mutScratch);
+						req->gf->blkmac_packed(req->inputGrouping, req->numInputs, 1, dstPtr, srcPtr, procSize, vals, req->mutScratch);
 				} else {
 					const char* pfInput = out >= inputPrefetchOutOffset ? static_cast<const char*>(req->input) + (round+1)*req->chunkSize*req->inputGrouping + ((inputsPrefetchedPerInvok*(out-inputPrefetchOutOffset)*procSize)>>MAX_PF_FACTOR) : NULL;
 					// procSize input prefetch may be wrong for final round, but it's the closest we've got; TODO: perhaps consider skipping out of prefetching, if the final round has a different region size
 					
 					if(req->outNonZero[out])
-						req->gf->mul_add_multi_packpf(req->inputGrouping, req->numInputs, dstPtr, srcPtr, procSize, vals, req->mutScratch, pfInput, dstPtr+procSize);
+						req->gf->blkmac_packpf(req->inputGrouping, req->numInputs, 1, dstPtr, srcPtr, procSize, vals, req->mutScratch, pfInput, dstPtr+procSize);
 					else
 						req->gf->add_multi_packpf(req->inputGrouping, req->numInputs, dstPtr, srcPtr, procSize, pfInput, dstPtr+procSize);
 				}

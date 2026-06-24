@@ -176,7 +176,7 @@ void gf16_affine_muladd_prefetch_avx2(const void *HEDLEY_RESTRICT scratch, void 
 
 
 #if defined(__GFNI__) && defined(__AVX2__) && defined(PLATFORM_AMD64)
-GF16_MULADD_MULTI_FUNCS(gf16_affine, _avx2, gf16_affine_muladd_x_avx2, 3, sizeof(__m256i)*2, 1, _mm256_zeroupper())
+GF16_MULADD_MULTI_FUNCS(gf16_affine, _avx2, gf16_affine_muladd_x_avx2, 3, 1, sizeof(__m256i)*2, 1, _mm256_zeroupper())
 #else
 GF16_MULADD_MULTI_FUNCS_STUB(gf16_affine, _avx2)
 #endif
@@ -377,9 +377,9 @@ void gf16_affine2x_muladd_avx2(const void *HEDLEY_RESTRICT scratch, void *HEDLEY
 
 #if defined(__GFNI__) && defined(__AVX2__) && !defined(PARPAR_SLIM_GF16)
 # ifdef PLATFORM_AMD64
-GF16_MULADD_MULTI_FUNCS(gf16_affine2x, _avx2, gf16_affine2x_muladd_x_avx2, 6, sizeof(__m256i), 0, _mm256_zeroupper())
+GF16_MULADD_MULTI_FUNCS(gf16_affine2x, _avx2, gf16_affine2x_muladd_x_avx2, 6, 1, sizeof(__m256i), 0, _mm256_zeroupper())
 # else
-GF16_MULADD_MULTI_FUNCS(gf16_affine2x, _avx2, gf16_affine2x_muladd_x_avx2, 2, sizeof(__m256i), 0, _mm256_zeroupper())
+GF16_MULADD_MULTI_FUNCS(gf16_affine2x, _avx2, gf16_affine2x_muladd_x_avx2, 2, 1, sizeof(__m256i), 0, _mm256_zeroupper())
 # endif
 #else
 GF16_MULADD_MULTI_FUNCS_STUB(gf16_affine2x, _avx2)

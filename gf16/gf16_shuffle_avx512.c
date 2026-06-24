@@ -166,7 +166,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle_muladd_x_avx512(
 
 
 #if defined(_AVAILABLE) && defined(PLATFORM_AMD64)
-GF16_MULADD_MULTI_FUNCS(gf16_shuffle, _avx512, gf16_shuffle_muladd_x_avx512, 3, sizeof(__m512i)*2, 1, _mm256_zeroupper())
+GF16_MULADD_MULTI_FUNCS(gf16_shuffle, _avx512, gf16_shuffle_muladd_x_avx512, 3, 1, sizeof(__m512i)*2, 1, _mm256_zeroupper())
 #else
 GF16_MULADD_MULTI_FUNCS_STUB(gf16_shuffle, _avx512)
 #endif
@@ -334,7 +334,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle2x_muladd_x_avx512(
 
 
 #if defined(_AVAILABLE) && !defined(PARPAR_SLIM_GF16) && defined(PLATFORM_AMD64)
-GF16_MULADD_MULTI_FUNCS(gf16_shuffle2x, _avx512, gf16_shuffle2x_muladd_x_avx512, 6, sizeof(__m512i), 0, _mm256_zeroupper())
+GF16_MULADD_MULTI_FUNCS(gf16_shuffle2x, _avx512, gf16_shuffle2x_muladd_x_avx512, 6, 1, sizeof(__m512i), 0, _mm256_zeroupper())
 #else
 GF16_MULADD_MULTI_FUNCS_STUB(gf16_shuffle2x, _avx512)
 #endif

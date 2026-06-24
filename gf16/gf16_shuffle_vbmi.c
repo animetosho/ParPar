@@ -439,7 +439,7 @@ void gf16_shuffle_muladd_prefetch_vbmi(const void *HEDLEY_RESTRICT scratch, void
 }
 
 #if defined(__AVX512VBMI__) && defined(__AVX512VL__) && defined(PLATFORM_AMD64)
-GF16_MULADD_MULTI_FUNCS(gf16_shuffle, _vbmi, gf16_shuffle_muladd_x_vbmi, 4, sizeof(__m512i)*2, 1, _mm256_zeroupper())
+GF16_MULADD_MULTI_FUNCS(gf16_shuffle, _vbmi, gf16_shuffle_muladd_x_vbmi, 4, 1, sizeof(__m512i)*2, 1, _mm256_zeroupper())
 #else
 GF16_MULADD_MULTI_FUNCS_STUB(gf16_shuffle, _vbmi)
 #endif

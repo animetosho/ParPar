@@ -24,8 +24,8 @@ typedef void(*Galois16MulPfFunc) (const void *HEDLEY_RESTRICT scratch, void *HED
 typedef void(*Galois16PowFunc) (const void *HEDLEY_RESTRICT scratch, unsigned outputs, size_t offset, void **HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, uint16_t coefficient, void *HEDLEY_RESTRICT mutScratch);
 typedef void(*Galois16MulMultiFunc) (const void *HEDLEY_RESTRICT scratch, unsigned regions, size_t offset, void *HEDLEY_RESTRICT dst, const void* const*HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch);
 typedef void(*Galois16MulStridePfFunc) (const void *HEDLEY_RESTRICT scratch, unsigned regions, size_t srcStride, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch, const void *HEDLEY_RESTRICT prefetch);
-typedef void(*Galois16MulPackedFunc) (const void *HEDLEY_RESTRICT scratch, unsigned packedRegions, unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch);
-typedef void(*Galois16MulPackPfFunc) (const void *HEDLEY_RESTRICT scratch, unsigned packedRegions, unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch, const void* HEDLEY_RESTRICT prefetchIn, const void* HEDLEY_RESTRICT prefetchOut);
+typedef void(*Galois16BlkPackedFunc) (const void *HEDLEY_RESTRICT scratch, unsigned packedRegions, unsigned regions, unsigned dstRegions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch);
+typedef void(*Galois16BlkPackPfFunc) (const void *HEDLEY_RESTRICT scratch, unsigned packedRegions, unsigned regions, unsigned dstRegions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch, const void* HEDLEY_RESTRICT prefetchIn, const void* HEDLEY_RESTRICT prefetchOut);
 typedef void(*Galois16AddFunc) (void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len);
 typedef void(*Galois16AddMultiFunc) (unsigned regions, size_t offset, void *HEDLEY_RESTRICT dst, const void* const*HEDLEY_RESTRICT src, size_t len);
 typedef void(*Galois16AddPackedFunc) (unsigned packedRegions, unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len);
@@ -135,8 +135,8 @@ private:
 	Galois16MulMultiFunc _mul_add_multi;
 	Galois16MulStridePfFunc _mul_add_multi_stridepf;
 #endif
-	Galois16MulPackedFunc _mul_add_multi_packed;
-	Galois16MulPackPfFunc _mul_add_multi_packpf;
+	Galois16BlkPackedFunc _blkmac_packed;
+	Galois16BlkPackPfFunc _blkmac_packpf;
 	
 	static void _prepare_none(void* dst, const void* src, size_t srcLen) {
 		if(dst != src)
@@ -189,8 +189,8 @@ public:
 		return _mul_add_multi != NULL;
 	};
 #endif
-	inline bool hasMultiMulAddPacked() const {
-		return _mul_add_multi_packed != NULL;
+	inline bool hasBlkmacPacked() const {
+		return _blkmac_packed != NULL;
 	};
 #ifdef PARPAR_POW_SUPPORT
 	inline bool hasPowAdd() const {
@@ -357,38 +357,40 @@ public:
 	}
 #endif
 	
-	inline void mul_add_multi_packed(unsigned packedRegions, unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch) const {
+	inline void blkmac_packed(unsigned packedRegions, unsigned regions, unsigned dstRegions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch) const {
 		assert(isMultipleOfStride(len));
 		assert(len > 0);
 		assert(regions > 0);
 		
-		if(_mul_add_multi_packed)
-			_mul_add_multi_packed(scratch, packedRegions, regions, dst, src, len, coefficients, mutScratch);
+		if(_blkmac_packed)
+			_blkmac_packed(scratch, packedRegions, regions, dstRegions, dst, src, len, coefficients, mutScratch);
 		else {
+			assert(dstRegions == 1);
 			for(unsigned region = 0; region<regions; region++) {
 				_mul_add(scratch, dst, (uint8_t*)src + region*len, len, coefficients[region], mutScratch);
 			}
 		}
 	}
 	
-	inline void mul_add_multi_packpf(unsigned packedRegions, unsigned regions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch, const void* HEDLEY_RESTRICT prefetchIn, const void* HEDLEY_RESTRICT prefetchOut) const {
+	inline void blkmac_packpf(unsigned packedRegions, unsigned regions, unsigned dstRegions, void *HEDLEY_RESTRICT dst, const void* HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, void *HEDLEY_RESTRICT mutScratch, const void* HEDLEY_RESTRICT prefetchIn, const void* HEDLEY_RESTRICT prefetchOut) const {
 		assert(isMultipleOfStride(len));
 		assert(len > 0);
 		assert(regions > 0);
 		
 		// TODO: mul by 1?
 		
-		if(_mul_add_multi_packpf) {
-			_mul_add_multi_packpf(scratch, packedRegions, regions, dst, src, len, coefficients, mutScratch, prefetchIn, prefetchOut);
+		if(_blkmac_packpf) {
+			_blkmac_packpf(scratch, packedRegions, regions, dstRegions, dst, src, len, coefficients, mutScratch, prefetchIn, prefetchOut);
 			return;
 		}
-		if(_mul_add_multi_packed || !_mul_add_pf) {
+		if(_blkmac_packed || !_mul_add_pf) {
 			// implies no support for prefetching
-			mul_add_multi_packed(packedRegions, regions, dst, src, len, coefficients, mutScratch);
+			blkmac_packed(packedRegions, regions, dstRegions, dst, src, len, coefficients, mutScratch);
 			return;
 		}
 		
 		// do using single multiplies
+		assert(dstRegions == 1);
 		unsigned region = 0;
 		size_t pfLen = len>>_info.prefetchDownscale;
 		// firstly, prefetch output

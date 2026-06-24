@@ -300,7 +300,7 @@ void gf16_shuffle2x_muladd_128_sve2(const void *HEDLEY_RESTRICT scratch, void *H
 }
 
 #if defined(__ARM_FEATURE_SVE2) && !defined(PARPAR_SLIM_GF16)
-GF16_MULADD_MULTI_FUNCS(gf16_shuffle2x, _128_sve2, gf16_shuffle2x_muladd_x_sve2, 6, svcntb(), 0, (void)0)
+GF16_MULADD_MULTI_FUNCS(gf16_shuffle2x, _128_sve2, gf16_shuffle2x_muladd_x_sve2, 6, 1, svcntb(), 0, (void)0)
 #else
 GF16_MULADD_MULTI_FUNCS_STUB(gf16_shuffle2x, _128_sve2)
 #endif

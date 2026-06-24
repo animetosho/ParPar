@@ -204,7 +204,7 @@ void gf16_shuffle_muladd_128_rvv(const void *HEDLEY_RESTRICT scratch, void *HEDL
 
 
 #if defined(__RVV_LE)
-GF16_MULADD_MULTI_FUNCS(gf16_shuffle, _128_rvv, gf16_shuffle_muladd_x_128_rvv, 3, RV(vsetvlmax_e8m1)()*2, 0, (void)0)
+GF16_MULADD_MULTI_FUNCS(gf16_shuffle, _128_rvv, gf16_shuffle_muladd_x_128_rvv, 3, 1, RV(vsetvlmax_e8m1)()*2, 0, (void)0)
 #else
 GF16_MULADD_MULTI_FUNCS_STUB(gf16_shuffle, _128_rvv)
 #endif

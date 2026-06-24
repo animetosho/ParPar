@@ -624,8 +624,8 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 					// if 32 registers are available, can do multi-region
 					SET_FOR_INVERT(_mul_add_multi, gf16_shuffle_muladd_multi_avx512);
 					SET_FOR_INVERT(_mul_add_multi_stridepf, gf16_shuffle_muladd_multi_stridepf_avx512);
-					_mul_add_multi_packed = &gf16_shuffle_muladd_multi_packed_avx512;
-					_mul_add_multi_packpf = &gf16_shuffle_muladd_multi_packpf_avx512;
+					_blkmac_packed = &gf16_shuffle_blkmac_packed_avx512;
+					_blkmac_packpf = &gf16_shuffle_blkmac_packpf_avx512;
 					SET_BASIC_OP(add_multi_packed, gf_add_multi_packed_v2i3_avx512);
 					add_multi_packpf = &gf_add_multi_packpf_v2i3_avx512;
 					#else
@@ -658,8 +658,8 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			#ifdef PLATFORM_AMD64
 			SET_FOR_INVERT(_mul_add_multi, gf16_shuffle_muladd_multi_vbmi);
 			SET_FOR_INVERT(_mul_add_multi_stridepf, gf16_shuffle_muladd_multi_stridepf_vbmi);
-			_mul_add_multi_packed = &gf16_shuffle_muladd_multi_packed_vbmi;
-			_mul_add_multi_packpf = &gf16_shuffle_muladd_multi_packpf_vbmi;
+			_blkmac_packed = &gf16_shuffle_blkmac_packed_vbmi;
+			_blkmac_packpf = &gf16_shuffle_blkmac_packpf_vbmi;
 			SET_BASIC_OP(add_multi_packed, gf_add_multi_packed_v2i4_avx512);
 			add_multi_packpf = &gf_add_multi_packpf_v2i4_avx512;
 			#else
@@ -688,8 +688,8 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			#ifdef PLATFORM_AMD64
 			SET_FOR_INVERT(_mul_add_multi, gf16_shuffle2x_muladd_multi_avx512);
 			SET_FOR_INVERT(_mul_add_multi_stridepf, gf16_shuffle2x_muladd_multi_stridepf_avx512);
-			_mul_add_multi_packed = &gf16_shuffle2x_muladd_multi_packed_avx512;
-			_mul_add_multi_packpf = &gf16_shuffle2x_muladd_multi_packpf_avx512;
+			_blkmac_packed = &gf16_shuffle2x_blkmac_packed_avx512;
+			_blkmac_packpf = &gf16_shuffle2x_blkmac_packpf_avx512;
 			SET_BASIC_OP(add_multi_packed, gf_add_multi_packed_v1i6_avx512);
 			add_multi_packpf = &gf_add_multi_packpf_v1i6_avx512;
 			#else
@@ -718,8 +718,8 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			#ifdef PLATFORM_AMD64
 			SET_FOR_INVERT(_mul_add_multi, gf16_shuffle2x_muladd_multi_avx2);
 			SET_FOR_INVERT(_mul_add_multi_stridepf, gf16_shuffle2x_muladd_multi_stridepf_avx2);
-			_mul_add_multi_packed = &gf16_shuffle2x_muladd_multi_packed_avx2;
-			_mul_add_multi_packpf = &gf16_shuffle2x_muladd_multi_packpf_avx2;
+			_blkmac_packed = &gf16_shuffle2x_blkmac_packed_avx2;
+			_blkmac_packpf = &gf16_shuffle2x_blkmac_packpf_avx2;
 			SET_BASIC_OP(add_multi_packed, gf_add_multi_packed_v1i2_avx2);
 			add_multi_packpf = &gf_add_multi_packpf_v1i2_avx2;
 			#else
@@ -751,9 +751,9 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			// enable only if 32 registers available
 			SET_FOR_INVERT(_mul_add_multi, gf16_shuffle_muladd_multi_neon);
 			SET_FOR_INVERT(_mul_add_multi_stridepf, gf16_shuffle_muladd_multi_stridepf_neon);
-			_mul_add_multi_packed = &gf16_shuffle_muladd_multi_packed_neon;
+			_blkmac_packed = &gf16_shuffle_blkmac_packed_neon;
 			// TODO: on Cortex A53, prefetching seems to be slower, so disabled for now
-			//_mul_add_multi_packpf = &gf16_shuffle_muladd_multi_packpf_neon;
+			//_blkmac_packpf = &gf16_shuffle_blkmac_packpf_neon;
 			SET_BASIC_OP(prepare_packed, gf16_shuffle_prepare_packed_neon);
 			#endif
 			SET_BASIC_OP(add_multi_packed, gf_add_multi_packed_shuffle_neon);
@@ -784,12 +784,12 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			}
 			SET_FOR_INVERT(_mul_add_multi, gf16_clmul_muladd_multi_neon);
 			SET_FOR_INVERT(_mul_add_multi_stridepf, gf16_clmul_muladd_multi_stridepf_neon);
-			_mul_add_multi_packed = &gf16_clmul_muladd_multi_packed_neon;
+			_blkmac_packed = &gf16_clmul_blkmac_packed_neon;
 			SET_BASIC_OP(add_multi, gf_add_multi_neon);
 			SET_BASIC_OP(add_multi_packed, gf_add_multi_packed_clmul_neon);
 			add_multi_packpf = &gf_add_multi_packpf_clmul_neon;
 			// TODO: on Cortex A53, prefetching seems to be slower, so disabled for now
-			//_mul_add_multi_packpf = &gf16_clmul_muladd_multi_packpf_neon;
+			//_blkmac_packpf = &gf16_clmul_blkmac_packpf_neon;
 			SET_BASIC_OP(prepare_packed, gf16_clmul_prepare_packed_neon);
 			prepare_packed_cksum = &gf16_clmul_prepare_packed_cksum_neon;
 			prepare_partial_packsum = &gf16_clmul_prepare_partial_packsum_neon;
@@ -815,11 +815,11 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			}
 			SET_FOR_INVERT(_mul_add_multi, gf16_clmul_muladd_multi_sha3);
 			SET_FOR_INVERT(_mul_add_multi_stridepf, gf16_clmul_muladd_multi_stridepf_sha3);
-			_mul_add_multi_packed = &gf16_clmul_muladd_multi_packed_sha3;
+			_blkmac_packed = &gf16_clmul_blkmac_packed_sha3;
 			SET_BASIC_OP(add_multi, gf_add_multi_neon);
 			SET_BASIC_OP(add_multi_packed, gf_add_multi_packed_clmul_neon);
 			add_multi_packpf = &gf_add_multi_packpf_clmul_neon;
-			_mul_add_multi_packpf = &gf16_clmul_muladd_multi_packpf_sha3;
+			_blkmac_packpf = &gf16_clmul_blkmac_packpf_sha3;
 			SET_BASIC_OP(prepare_packed, gf16_clmul_prepare_packed_neon);
 			prepare_packed_cksum = &gf16_clmul_prepare_packed_cksum_neon;
 			prepare_partial_packsum = &gf16_clmul_prepare_partial_packsum_neon;
@@ -840,8 +840,8 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			_mul_add = &gf16_shuffle_muladd_128_sve;
 			SET_FOR_INVERT(_mul_add_multi, gf16_shuffle_muladd_multi_128_sve);
 			SET_FOR_INVERT(_mul_add_multi_stridepf, gf16_shuffle_muladd_multi_stridepf_128_sve);
-			_mul_add_multi_packed = &gf16_shuffle_muladd_multi_packed_128_sve;
-			//_mul_add_multi_packpf = &gf16_shuffle_muladd_multi_packpf_128_sve;
+			_blkmac_packed = &gf16_shuffle_blkmac_packed_128_sve;
+			//_blkmac_packpf = &gf16_shuffle_blkmac_packpf_128_sve;
 			SET_BASIC_OP(add_multi, gf_add_multi_sve);
 			SET_BASIC_OP(add_multi_packed, gf_add_multi_packed_sve);
 			add_multi_packpf = &gf_add_multi_packpf_sve;
@@ -863,8 +863,8 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			_mul_add = &gf16_shuffle_muladd_128_sve2;
 			SET_FOR_INVERT(_mul_add_multi, gf16_shuffle_muladd_multi_128_sve2);
 			SET_FOR_INVERT(_mul_add_multi_stridepf, gf16_shuffle_muladd_multi_stridepf_128_sve2);
-			_mul_add_multi_packed = &gf16_shuffle_muladd_multi_packed_128_sve2;
-			//_mul_add_multi_packpf = &gf16_shuffle_muladd_multi_packpf_128_sve2;
+			_blkmac_packed = &gf16_shuffle_blkmac_packed_128_sve2;
+			//_blkmac_packpf = &gf16_shuffle_blkmac_packpf_128_sve2;
 			SET_BASIC_OP(add_multi, gf_add_multi_sve2);
 			SET_BASIC_OP(add_multi_packed, gf_add_multi_packed_v2i3_sve2);
 			add_multi_packpf = &gf_add_multi_packpf_v2i3_sve2;
@@ -886,8 +886,8 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			_mul_add = &gf16_shuffle2x_muladd_128_sve2;
 			SET_FOR_INVERT(_mul_add_multi, gf16_shuffle2x_muladd_multi_128_sve2);
 			SET_FOR_INVERT(_mul_add_multi_stridepf, gf16_shuffle2x_muladd_multi_stridepf_128_sve2);
-			_mul_add_multi_packed = &gf16_shuffle2x_muladd_multi_packed_128_sve2;
-			//_mul_add_multi_packpf = &gf16_shuffle2x_muladd_multi_packpf_128_sve2;
+			_blkmac_packed = &gf16_shuffle2x_blkmac_packed_128_sve2;
+			//_blkmac_packpf = &gf16_shuffle2x_blkmac_packpf_128_sve2;
 			SET_BASIC_OP(add_multi, gf_add_multi_sve2);
 			SET_BASIC_OP(add_multi_packed, gf_add_multi_packed_v1i6_sve2);
 			add_multi_packpf = &gf_add_multi_packpf_v1i6_sve2;
@@ -912,8 +912,8 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			_mul_add = &gf16_shuffle_muladd_512_sve2;
 			SET_FOR_INVERT(_mul_add_multi, gf16_shuffle_muladd_multi_512_sve2);
 			SET_FOR_INVERT(_mul_add_multi_stridepf, gf16_shuffle_muladd_multi_stridepf_512_sve2);
-			_mul_add_multi_packed = &gf16_shuffle_muladd_multi_packed_512_sve2;
-			//_mul_add_multi_packpf = &gf16_shuffle_muladd_multi_packpf_512_sve2;
+			_blkmac_packed = &gf16_shuffle_blkmac_packed_512_sve2;
+			//_blkmac_packpf = &gf16_shuffle_blkmac_packpf_512_sve2;
 			SET_BASIC_OP(add_multi, gf_add_multi_sve2);
 			SET_BASIC_OP(add_multi_packed, gf_add_multi_packed_v2i4_sve2);
 			add_multi_packpf = &gf_add_multi_packpf_v2i4_sve2;
@@ -936,8 +936,8 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			_mul_add = &gf16_shuffle_muladd_128_sve2;
 			SET_FOR_INVERT(_mul_add_multi, gf16_clmul_muladd_multi_sve2);
 			SET_FOR_INVERT(_mul_add_multi_stridepf, gf16_clmul_muladd_multi_stridepf_sve2);
-			_mul_add_multi_packed = &gf16_clmul_muladd_multi_packed_sve2;
-			//_mul_add_multi_packpf = &gf16_clmul_muladd_multi_packpf_sve2;
+			_blkmac_packed = &gf16_clmul_blkmac_packed_sve2;
+			//_blkmac_packpf = &gf16_clmul_blkmac_packpf_sve2;
 			SET_BASIC_OP(add_multi, gf_add_multi_sve2);
 			SET_BASIC_OP(add_multi_packed, gf_add_multi_packed_v2i8_sve2);
 			add_multi_packpf = &gf_add_multi_packpf_v2i8_sve2;
@@ -960,8 +960,8 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			_mul_add = &gf16_shuffle_muladd_128_rvv;
 			SET_FOR_INVERT(_mul_add_multi, gf16_shuffle_muladd_multi_128_rvv);
 			SET_FOR_INVERT(_mul_add_multi_stridepf, gf16_shuffle_muladd_multi_stridepf_128_rvv);
-			_mul_add_multi_packed = &gf16_shuffle_muladd_multi_packed_128_rvv;
-			//_mul_add_multi_packpf = &gf16_shuffle_muladd_multi_packpf_128_rvv;
+			_blkmac_packed = &gf16_shuffle_blkmac_packed_128_rvv;
+			//_blkmac_packpf = &gf16_shuffle_blkmac_packpf_128_rvv;
 			SET_BASIC_OP(add_multi, gf_add_multi_rvv);
 			SET_BASIC_OP(add_multi_packed, gf_add_multi_packed_v2i3_rvv);
 			add_multi_packpf = &gf_add_multi_packpf_v2i3_rvv;
@@ -983,8 +983,8 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			_mul_add = &gf16_clmul_muladd_rvv;
 			SET_FOR_INVERT(_mul_add_multi, gf16_clmul_muladd_multi_rvv);
 			SET_FOR_INVERT(_mul_add_multi_stridepf, gf16_clmul_muladd_multi_stridepf_rvv);
-			_mul_add_multi_packed = &gf16_clmul_muladd_multi_packed_rvv;
-			//_mul_add_multi_packpf = &gf16_clmul_muladd_multi_packpf_rvv;
+			_blkmac_packed = &gf16_clmul_blkmac_packed_rvv;
+			//_blkmac_packpf = &gf16_clmul_blkmac_packpf_rvv;
 			SET_BASIC_OP(add_multi, gf_add_multi_rvv);
 			SET_BASIC_OP(add_multi_packed, gf_add_multi_packed_v1i12_rvv);
 			add_multi_packpf = &gf_add_multi_packpf_v1i12_rvv;
@@ -1009,8 +1009,8 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			#ifdef PLATFORM_AMD64
 			SET_FOR_INVERT(_mul_add_multi, gf16_affine_muladd_multi_avx512);
 			SET_FOR_INVERT(_mul_add_multi_stridepf, gf16_affine_muladd_multi_stridepf_avx512);
-			_mul_add_multi_packed = &gf16_affine_muladd_multi_packed_avx512;
-			_mul_add_multi_packpf = &gf16_affine_muladd_multi_packpf_avx512;
+			_blkmac_packed = &gf16_affine_blkmac_packed_avx512;
+			_blkmac_packpf = &gf16_affine_blkmac_packpf_avx512;
 			SET_BASIC_OP(add_multi_packed, gf_add_multi_packed_v2i6_avx512);
 			add_multi_packpf = &gf_add_multi_packpf_v2i6_avx512;
 			#else
@@ -1041,8 +1041,8 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			#ifdef PLATFORM_AMD64
 			SET_FOR_INVERT(_mul_add_multi, gf16_affine_muladd_multi_avx2);
 			SET_FOR_INVERT(_mul_add_multi_stridepf, gf16_affine_muladd_multi_stridepf_avx2);
-			_mul_add_multi_packed = &gf16_affine_muladd_multi_packed_avx2;
-			_mul_add_multi_packpf = &gf16_affine_muladd_multi_packpf_avx2;
+			_blkmac_packed = &gf16_affine_blkmac_packed_avx2;
+			_blkmac_packpf = &gf16_affine_blkmac_packpf_avx2;
 			SET_BASIC_OP(add_multi_packed, gf_add_multi_packed_v2i3_avx2);
 			add_multi_packpf = &gf_add_multi_packpf_v2i3_avx2;
 			#else
@@ -1073,8 +1073,8 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			#ifdef PLATFORM_AMD64
 			SET_FOR_INVERT(_mul_add_multi, gf16_affine_muladd_multi_gfni);
 			SET_FOR_INVERT(_mul_add_multi_stridepf, gf16_affine_muladd_multi_stridepf_gfni);
-			_mul_add_multi_packed = &gf16_affine_muladd_multi_packed_gfni;
-			_mul_add_multi_packpf = &gf16_affine_muladd_multi_packpf_gfni;
+			_blkmac_packed = &gf16_affine_blkmac_packed_gfni;
+			_blkmac_packpf = &gf16_affine_blkmac_packpf_gfni;
 			SET_BASIC_OP(add_multi_packed, gf_add_multi_packed_v2i3_sse2);
 			add_multi_packpf = &gf_add_multi_packpf_v2i3_sse2;
 			#else
@@ -1102,8 +1102,8 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			_mul_add = &gf16_affine2x_muladd_avx512;
 			SET_FOR_INVERT(_mul_add_multi, gf16_affine2x_muladd_multi_avx512);
 			SET_FOR_INVERT(_mul_add_multi_stridepf, gf16_affine2x_muladd_multi_stridepf_avx512);
-			_mul_add_multi_packed = &gf16_affine2x_muladd_multi_packed_avx512;
-			_mul_add_multi_packpf = &gf16_affine2x_muladd_multi_packpf_avx512;
+			_blkmac_packed = &gf16_affine2x_blkmac_packed_avx512;
+			_blkmac_packpf = &gf16_affine2x_blkmac_packpf_avx512;
 			SET_BASIC_OP(add_multi, gf_add_multi_avx512);
 			#ifdef PLATFORM_AMD64
 			SET_BASIC_OP(add_multi_packed, gf_add_multi_packed_v1i12_avx512);
@@ -1133,8 +1133,8 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			_mul_add = &gf16_affine2x_muladd_avx2;
 			SET_FOR_INVERT(_mul_add_multi, gf16_affine2x_muladd_multi_avx2);
 			SET_FOR_INVERT(_mul_add_multi_stridepf, gf16_affine2x_muladd_multi_stridepf_avx2);
-			_mul_add_multi_packed = &gf16_affine2x_muladd_multi_packed_avx2;
-			_mul_add_multi_packpf = &gf16_affine2x_muladd_multi_packpf_avx2;
+			_blkmac_packed = &gf16_affine2x_blkmac_packed_avx2;
+			_blkmac_packpf = &gf16_affine2x_blkmac_packpf_avx2;
 			SET_BASIC_OP(add_multi, gf_add_multi_avx2);
 			#ifdef PLATFORM_AMD64
 			SET_BASIC_OP(add_multi_packed, gf_add_multi_packed_v1i6_avx2);
@@ -1164,8 +1164,8 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			_mul_add = &gf16_affine2x_muladd_gfni;
 			SET_FOR_INVERT(_mul_add_multi, gf16_affine2x_muladd_multi_gfni);
 			SET_FOR_INVERT(_mul_add_multi_stridepf, gf16_affine2x_muladd_multi_stridepf_gfni);
-			_mul_add_multi_packed = &gf16_affine2x_muladd_multi_packed_gfni;
-			_mul_add_multi_packpf = &gf16_affine2x_muladd_multi_packpf_gfni;
+			_blkmac_packed = &gf16_affine2x_blkmac_packed_gfni;
+			_blkmac_packpf = &gf16_affine2x_blkmac_packpf_gfni;
 			SET_BASIC_OP(add_multi, gf_add_multi_sse2);
 			#ifdef PLATFORM_AMD64
 			SET_BASIC_OP(add_multi_packed, gf_add_multi_packed_v1i6_sse2);
@@ -1197,8 +1197,8 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 			SET_BASIC_OP(add_multi, gf_add_multi_avx512);
 			SET_FOR_INVERT(_mul_add_multi, gf16_affine_muladd_multi_bmm);
 			SET_FOR_INVERT(_mul_add_multi_stridepf, gf16_affine_muladd_multi_stridepf_bmm);
-			_mul_add_multi_packed = &gf16_affine_muladd_multi_packed_bmm;
-			_mul_add_multi_packpf = &gf16_affine_muladd_multi_packpf_bmm;
+			_blkmac_packed = &gf16_affine_blkmac_packed_bmm;
+			_blkmac_packpf = &gf16_affine_blkmac_packpf_bmm;
 			#ifdef PLATFORM_AMD64
 			SET_BASIC_OP(add_multi_packed, gf_add_multi_packed_v1i12_avx512);
 			add_multi_packpf = &gf_add_multi_packpf_v1i12_avx512;
@@ -1311,7 +1311,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 					_mul_add = &gf16_xor_jit_muladd_avx512;
 					_mul_add_pf = &gf16_xor_jit_muladd_prefetch_avx512;
 					SET_FOR_INVERT(_mul_add_multi, gf16_xor_jit_muladd_multi_avx512);
-					_mul_add_multi_packed = &gf16_xor_jit_muladd_multi_packed_avx512;
+					_blkmac_packed = &gf16_xor_jit_blkmac_packed_avx512;
 					SET_BASIC_OP(add_multi, gf_add_multi_avx512);
 					SET_BASIC_OP(add_multi_packed, gf_add_multi_packed_v16i6_avx512);
 					add_multi_packpf = &gf_add_multi_packpf_v16i6_avx512;
@@ -1353,7 +1353,7 @@ void Galois16Mul::setupMethod(Galois16Methods _method) {
 		case GF16_LOOKUP3:
 			SET_FOR_INVERT(_mul, gf16_lookup3_mul);
 			_mul_add = &gf16_lookup3_muladd;
-			_mul_add_multi_packed = &gf16_lookup3_muladd_multi_packed;
+			_blkmac_packed = &gf16_lookup3_blkmac_packed;
 			SET_BASIC_OP(add_multi_packed, gf_add_multi_packed_lookup3);
 			add_multi_packpf = &gf_add_multi_packpf_lookup3;
 			SET_BASIC_OP(prepare_packed, gf16_lookup3_prepare_packed_generic);
@@ -1408,8 +1408,8 @@ Galois16Mul::Galois16Mul(Galois16Methods method) {
 	_mul_add_multi = NULL;
 	_mul_add_multi_stridepf = NULL;
 #endif
-	_mul_add_multi_packed = NULL;
-	_mul_add_multi_packpf = NULL;
+	_blkmac_packed = NULL;
+	_blkmac_packpf = NULL;
 #ifdef PARPAR_OPENCL_SUPPORT
 	copy_cksum = &gf16_cksum_copy_generic;
 	copy_cksum_check = &gf16_cksum_copy_check_generic;
@@ -1458,8 +1458,8 @@ void Galois16Mul::move(Galois16Mul& other) {
 	_mul_add_multi = other._mul_add_multi;
 	_mul_add_multi_stridepf = other._mul_add_multi_stridepf;
 #endif
-	_mul_add_multi_packed = other._mul_add_multi_packed;
-	_mul_add_multi_packpf = other._mul_add_multi_packpf;
+	_blkmac_packed = other._blkmac_packed;
+	_blkmac_packpf = other._blkmac_packpf;
 #ifdef PARPAR_POW_SUPPORT
 	_pow = other._pow;
 	_pow_add = other._pow_add;

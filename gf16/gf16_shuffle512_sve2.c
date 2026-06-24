@@ -347,7 +347,7 @@ void gf16_shuffle_muladd_512_sve2(const void *HEDLEY_RESTRICT scratch, void *HED
 
 
 #if defined(__ARM_FEATURE_SVE2) && !defined(PARPAR_SLIM_GF16)
-GF16_MULADD_MULTI_FUNCS(gf16_shuffle, _512_sve2, gf16_shuffle512_muladd_x_sve2, 4, svcntb()*2, 0, (void)0)
+GF16_MULADD_MULTI_FUNCS(gf16_shuffle, _512_sve2, gf16_shuffle512_muladd_x_sve2, 4, 1, svcntb()*2, 0, (void)0)
 #else
 GF16_MULADD_MULTI_FUNCS_STUB(gf16_shuffle, _512_sve2)
 #endif

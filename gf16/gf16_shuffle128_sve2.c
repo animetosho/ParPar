@@ -82,7 +82,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle128_sve2_round(svuint8x2_t va, svui
 #endif
 
 #if defined(__ARM_FEATURE_SVE2) && !defined(PARPAR_SLIM_GF16)
-GF16_MULADD_MULTI_FUNCS(gf16_shuffle, _128_sve2, gf16_shuffle_muladd_x_128_sve2, 3, svcntb()*2, 0, (void)0)
+GF16_MULADD_MULTI_FUNCS(gf16_shuffle, _128_sve2, gf16_shuffle_muladd_x_128_sve2, 3, 1, svcntb()*2, 0, (void)0)
 #else
 GF16_MULADD_MULTI_FUNCS_STUB(gf16_shuffle, _128_sve2)
 #endif

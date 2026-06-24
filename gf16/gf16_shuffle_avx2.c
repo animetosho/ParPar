@@ -156,7 +156,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle2x_muladd_x_avx2(const void *HEDLEY
 
 
 #if defined(_AVAILABLE) && !defined(PARPAR_SLIM_GF16) && defined(PLATFORM_AMD64)
-GF16_MULADD_MULTI_FUNCS(gf16_shuffle2x, _avx2, gf16_shuffle2x_muladd_x_avx2, 2, sizeof(__m256i), 0, _mm256_zeroupper())
+GF16_MULADD_MULTI_FUNCS(gf16_shuffle2x, _avx2, gf16_shuffle2x_muladd_x_avx2, 2, 1, sizeof(__m256i), 0, _mm256_zeroupper())
 #else
 GF16_MULADD_MULTI_FUNCS_STUB(gf16_shuffle2x, _avx2)
 #endif
