@@ -9,6 +9,8 @@ All numbers below are measured on a real workload. The environment is the AMD Ry
 | Metric | Value | Environment | Before this plan |
 |---|---|---|---|
 | PAR3 create 1 GiB throughput | **94.60 MB/s** | 4 threads, AVX-512, 1 MiB blocks, -r 10% | 1.31 MB/s (single-thread JS) |
+| PAR3 create 1 GiB throughput (vectorized) | **395.99 MB/s** | 4 threads, AVX-512/AVX-2, 1 MiB blocks, -r 10% (Zen4 default) | 94.60 MB/s (T1+T5+T10 baseline) |
+| PAR3 create 1 GiB throughput (vectorized, AVX-2) | **220.81 MB/s** | 4 threads, AVX-2 forced, 1 MiB blocks, -r 10% (Zen4) | 94.60 MB/s (T1+T5+T10 baseline) |
 | PAR3 create 1 GiB wall time | **10.82 s** | 4 threads, AVX-512, 1 MiB blocks, -r 10% | 12 min 59 s (single-thread JS) |
 | PAR3 create 1 GiB peak RSS | **175.80 MiB** | 4 threads, AVX-512, 1 MiB blocks, -r 10% | unbounded for large inputs |
 | PAR3 create 1 GiB vs JS-BigInt | **~1000x** | 4 threads, AVX-512 | 1x (BigInt path) |

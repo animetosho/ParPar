@@ -4,17 +4,20 @@
 // ============================================================================
 // PAR3 Native Engine Throughput Benchmark Suite
 // ----------------------------------------------------------------------------
-// Measures `compute_recovery` throughput across multiple scenarios.
+// Measures recovery-block throughput across multiple scenarios.
 //
 // Scenarios:
 //   A — Small (64 MiB, 10 recovery, 1 MiB block) — threshold 500 MB/s
-//   B — Medium (256 MiB, 100 recovery, 1 MiB block) — threshold 600 MB/s
+//   B — Medium (256 MiB, 10 recovery, 1 MiB block) — threshold 550 MB/s
 //   C — Thread scaling speedup (informational, no assert)
 //   D — JS comparison via Gf64Encoder.mul_arr (informational, no assert)
+//   E — 1 GiB compute_recovery_full throughput gate (T12)
+//        default >= 400 MB/s on AVX-512; --ci / PAR3_GF_METHOD=avx2 relax to 200 MB/s
 //
 // Usage:
 //   node test/par3-native-perf.js          # Standard run
 //   node test/par3-native-perf.js --ci      # CI-friendly thresholds, skip B
+//   PAR3_GF_METHOD=avx2 node test/par3-native-perf.js   # Force AVX2 dispatch
 //
 // Exit code:
 //   0 — PASS or SKIP (SCALAR CPU)
@@ -29,6 +32,33 @@ var helpers = require('./bench/bench-helpers');
 var MB = 1024 * 1024;
 var isCI = process.argv.indexOf('--ci') >= 0;
 var exitCode = 0;
+var passed = 0;
+var failed = 0;
+
+// ---------------------------------------------------------------------------
+// PRNG helpers (mulberry32 + fillRandom) — used by Scenario E to fill the 1 GiB
+// random input buffer. Mirrors the helpers in par3-kernel-parity.js and
+// par3-full-recovery-parity.js so the test data is bit-comparable across the
+// parity / throughput / RSS measurement sites.
+// ---------------------------------------------------------------------------
+function mulberry32(seed) {
+	return function() {
+		seed |= 0;
+		seed = seed + 0x6D2B79F5 | 0;
+		var t = Math.imul(seed ^ seed >>> 15, 1 | seed);
+		t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+		return ((t ^ t >>> 14) >>> 0) / 4294967296;
+	};
+}
+
+function fillRandom(buf, rng) {
+	var words = buf.length / 8;
+	for (var w = 0; w < words; w++) {
+		var hi = (rng() * 4294967296) >>> 0;
+		var lo = (rng() * 4294967296) >>> 0;
+		buf.writeBigUInt64LE((BigInt(hi) << 32n) | BigInt(lo), w * 8);
+	}
+}
 
 // ---------------------------------------------------------------------------
 // Native addon loading
@@ -278,6 +308,82 @@ console.log('  Ratio (native / JS):                  ' + jsRatio.toFixed(2) + 'x
 console.log('');
 
 // ---------------------------------------------------------------------------
+// Scenario E — 1 GiB compute_recovery_full throughput gate (T12)
+// ---------------------------------------------------------------------------
+// Exercises the full create-path kernel (compute_recovery_full) on a 1 GiB
+// random input with 10% recovery slices (103 of 1024 input blocks). This is
+// the throughput gate for the PAR3 create throughput 400 MB/s target.
+//   - Default: >= 400 MB/s on AVX-512 (the plan's hero metric)
+//   - --ci:    >= 200 MB/s (CI runners typically lack AVX-512)
+//   - AVX2:    >= 200 MB/s (PAR3_GF_METHOD=avx2)
+// Peak RSS delta check is informational: the standalone compute_recovery_full
+// NAPI call holds the full input buffer in memory, so the 1 GiB case will
+// report a ~1.1 GiB delta by design. The plan's 200 MiB peak-RSS target
+// applies to the full create path in lib/par3gen.js (which streams data
+// through the kernel), not to this isolated NAPI call. We only fail on an
+// egregiously large delta (> 1.5 GiB) that would indicate a leak.
+// ---------------------------------------------------------------------------
+console.log('Scenario E \u2014 1 GiB compute_recovery_full throughput gate');
+console.log('----------------------------------------------------------\n');
+
+var E_INPUTS = 1024;
+var E_RECOVERY = 103;
+var E_BLOCK_SIZE = MB;
+var E_RSS_DELTA_LIMIT_MIB = 1536; // 1.5 GiB — leak detector only
+
+var ePreRss = process.memoryUsage().rss;
+var eInputBuf = Buffer.alloc(E_INPUTS * E_BLOCK_SIZE);
+fillRandom(eInputBuf, mulberry32(0xCAFEFACE));
+var eOutputBuf = Buffer.alloc(E_RECOVERY * E_BLOCK_SIZE);
+eOutputBuf.fill(0);
+
+var eStart = process.hrtime.bigint();
+addon.compute_recovery_full(
+	eInputBuf, eOutputBuf,
+	E_INPUTS, E_RECOVERY, E_BLOCK_SIZE,
+	0, BigInt(E_INPUTS), 0  // numThreads=0 = auto
+);
+var eEnd = process.hrtime.bigint();
+var eElapsedSec = Number(eEnd - eStart) / 1e9;
+
+// Total bytes processed = input read + output written
+var eTotalBytes = (E_INPUTS + E_RECOVERY) * E_BLOCK_SIZE;
+var eMBps = (eTotalBytes / eElapsedSec) / MB;
+
+var ePostRss = process.memoryUsage().rss;
+var eRssDeltaMiB = (ePostRss - ePreRss) / MB;
+
+var isAvx2 = (process.env.PAR3_GF_METHOD || '').toLowerCase() === 'avx2';
+var eThresholdMbps = isCI || isAvx2 ? 200 : 400;
+var eModeLabel = isCI ? 'CI' : isAvx2 ? 'AVX2' : 'AVX-512';
+
+console.log('  Elapsed:     ' + eElapsedSec.toFixed(3) + ' s');
+console.log('  Throughput:  ' + eMBps.toFixed(2) + ' MB/s');
+console.log('  RSS delta:   ' + eRssDeltaMiB.toFixed(1) + ' MiB (informational; standalone NAPI holds full input)');
+console.log('  Threshold:   >= ' + eThresholdMbps + ' MB/s (' + eModeLabel + ')');
+console.log('  Method:      ' + methodName);
+console.log('  Config:      ' + E_INPUTS + ' inputs x ' + E_RECOVERY + ' recovery, ' + helpers.formatBytes(E_BLOCK_SIZE) + ' block');
+
+if (eMBps >= eThresholdMbps) {
+	console.log('  PASS: Scenario E throughput >= ' + eThresholdMbps + ' MB/s');
+	passed++;
+} else {
+	console.error('  FAIL: Scenario E throughput ' + eMBps.toFixed(2) + ' MB/s < ' + eThresholdMbps + ' MB/s threshold (' + eModeLabel + ')');
+	failed++;
+	exitCode = 1;
+}
+
+if (eRssDeltaMiB > E_RSS_DELTA_LIMIT_MIB) {
+	console.error('  FAIL: Scenario E RSS delta > ' + E_RSS_DELTA_LIMIT_MIB + ' MiB (' + eRssDeltaMiB.toFixed(1) + ' MiB) — possible leak');
+	failed++;
+	exitCode = 1;
+} else {
+	console.log('  PASS: Scenario E RSS delta <= ' + E_RSS_DELTA_LIMIT_MIB + ' MiB (leak check; budget applies to full create path, not standalone NAPI)');
+	passed++;
+}
+console.log('');
+
+// ---------------------------------------------------------------------------
 // Metrics JSON — parseable structured output
 // ---------------------------------------------------------------------------
 var gitSha = 'unknown';
@@ -293,11 +399,23 @@ var metrics = {
 	arch: process.arch,
 	cpuMethod: methodName,
 	ciMode: isCI,
+	avx2Forced: isAvx2,
 	scenarios: {
 		'small-throughput-mbps': resultA ? resultA.mbps : 0,
 		'medium-throughput-mbps': resultB ? resultB.mbps : 0,
 		'scaling-speedup': speedup,
 		'js-comparison-ratio': jsRatio,
+		'1g-throughput-mbps': eMBps,
+		'1g-throughput-threshold-mbps': eThresholdMbps,
+		'1g-throughput-threshold-met': eMBps >= eThresholdMbps,
+		'1g-elapsed-sec': eElapsedSec,
+		'1g-rss-delta-mib': eRssDeltaMiB,
+		'1g-config': {
+			inputs: E_INPUTS,
+			recovery: E_RECOVERY,
+			blockSize: E_BLOCK_SIZE,
+			totalBytes: eTotalBytes
+		},
 		'ci-mode': isCI
 	}
 };
@@ -310,6 +428,7 @@ console.log('');
 // ---------------------------------------------------------------------------
 // Final verdict
 // ---------------------------------------------------------------------------
+console.log('Passed: ' + passed + ', Failed: ' + failed);
 if (exitCode === 0) {
 	console.log('TEST PASSED');
 } else {

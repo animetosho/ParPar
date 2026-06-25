@@ -600,6 +600,130 @@ static napi_value ComputeRecovery_NAPI(napi_env env, napi_callback_info info) {
 	return NULL;
 }
 
+// compute_recovery_full NAPI binding — single-call version of compute_recovery.
+// Args: inputs, outputs, numInputs, numRecovery, blockSize, firstInput, firstRecovery, numThreads
+// Same args as ComputeRecovery_NAPI. The "full" variant routes through the
+// single-call engine entry GF64Controller::ComputeRecoveryBlocksFull, which
+// builds the full Cauchy matrix once via the LRU cache and runs the L3-aware
+// WorkerThread over the full recovery range in one shot. This is the path
+// that lib/par3gen.js's create-path uses when PAR3_BATCH_SIZE is unset; T8's
+// lib/par3gen.js refactor is what eliminates the JS-side per-batch call
+// pattern, not this NAPI binding.
+static napi_value ComputeRecoveryFull_NAPI(napi_env env, napi_callback_info info) {
+	napi_status status;
+	size_t argc = 8;
+	napi_value args[8];
+
+	status = napi_get_cb_info(env, info, &argc, args, NULL, NULL);
+	if(status != napi_ok) {
+		napi_throw_error(env, NULL, "Failed to get callback info");
+		return NULL;
+	}
+
+	if(argc < 7) {
+		napi_throw_type_error(env, NULL, "Requires inputs, outputs, numInputs, numRecovery, blockSize, firstInput, firstRecovery [, numThreads]");
+		return NULL;
+	}
+
+	gf64_t* inputs = NULL;
+	size_t inputsLen = 0;
+	status = napi_get_buffer_info(env, args[0], (void**)&inputs, &inputsLen);
+	if(status != napi_ok) {
+		napi_throw_type_error(env, NULL, "inputs must be a Buffer");
+		return NULL;
+	}
+
+	gf64_t* outputs = NULL;
+	size_t outputsLen = 0;
+	status = napi_get_buffer_info(env, args[1], (void**)&outputs, &outputsLen);
+	if(status != napi_ok) {
+		napi_throw_type_error(env, NULL, "outputs must be a Buffer");
+		return NULL;
+	}
+
+	int32_t numInputs = 0;
+	status = napi_get_value_int32(env, args[2], &numInputs);
+	if(status != napi_ok) {
+		napi_throw_type_error(env, NULL, "numInputs must be an integer");
+		return NULL;
+	}
+
+	int32_t numRecovery = 0;
+	status = napi_get_value_int32(env, args[3], &numRecovery);
+	if(status != napi_ok) {
+		napi_throw_type_error(env, NULL, "numRecovery must be an integer");
+		return NULL;
+	}
+
+	int64_t blockSize = 0;
+	status = napi_get_value_int64(env, args[4], &blockSize);
+	if(status != napi_ok) {
+		napi_throw_type_error(env, NULL, "blockSize must be an integer");
+		return NULL;
+	}
+
+	uint64_t firstInput = 0;
+	status = get_uint64_from_value(env, args[5], &firstInput);
+	if(status != napi_ok) {
+		napi_throw_type_error(env, NULL, "firstInput must be a Number or BigInt");
+		return NULL;
+	}
+
+	uint64_t firstRecovery = 0;
+	status = get_uint64_from_value(env, args[6], &firstRecovery);
+	if(status != napi_ok) {
+		napi_throw_type_error(env, NULL, "firstRecovery must be a Number or BigInt");
+		return NULL;
+	}
+
+	int32_t numThreads = 0;
+	if(argc >= 8) {
+		status = napi_get_value_int32(env, args[7], &numThreads);
+		if(status != napi_ok) {
+			napi_throw_type_error(env, NULL, "numThreads must be an integer");
+			return NULL;
+		}
+	}
+
+	if(numInputs <= 0) {
+		napi_throw_range_error(env, NULL, "numInputs must be positive");
+		return NULL;
+	}
+
+	if(numRecovery <= 0) {
+		napi_throw_range_error(env, NULL, "numRecovery must be positive");
+		return NULL;
+	}
+
+	if(blockSize <= 0 || blockSize % 8 != 0) {
+		napi_throw_range_error(env, NULL, "blockSize must be positive and a multiple of 8");
+		return NULL;
+	}
+
+	if(inputsLen < (size_t)(numInputs * blockSize)) {
+		napi_throw_range_error(env, NULL, "inputs buffer too small for numInputs * blockSize");
+		return NULL;
+	}
+
+	if(outputsLen < (size_t)(numRecovery * blockSize)) {
+		napi_throw_range_error(env, NULL, "outputs buffer too small for numRecovery * blockSize");
+		return NULL;
+	}
+
+	size_t blockSize64 = (size_t)(blockSize / 8);
+
+	gf64_init_dispatch();
+	GF64Controller::ComputeRecoveryBlocksFull(
+		inputs, (size_t)numInputs,
+		outputs, (size_t)numRecovery,
+		blockSize64,
+		firstInput, firstRecovery,
+		(int)numThreads
+	);
+
+	return NULL;
+}
+
 // ComputeRepairBlocks NAPI binding
 // Args: availBlocks, repairedBlocks, numAvail, numMissing, blockSize, solveMatrix [, numThreads]
 static napi_value ComputeRepair_NAPI(napi_env env, napi_callback_info info) {
@@ -870,6 +994,18 @@ napi_value create_fn;
 	status = napi_set_named_property(env, exports, "compute_recovery", compute_recovery_fn);
 	if(status != napi_ok) {
 		napi_throw_error(env, NULL, "Failed to set compute_recovery property");
+		return NULL;
+	}
+
+	napi_value compute_recovery_full_fn;
+	status = napi_create_function(env, NULL, 0, ComputeRecoveryFull_NAPI, NULL, &compute_recovery_full_fn);
+	if(status != napi_ok) {
+		napi_throw_error(env, NULL, "Failed to create compute_recovery_full function");
+		return NULL;
+	}
+	status = napi_set_named_property(env, exports, "compute_recovery_full", compute_recovery_full_fn);
+	if(status != napi_ok) {
+		napi_throw_error(env, NULL, "Failed to set compute_recovery_full property");
 		return NULL;
 	}
 

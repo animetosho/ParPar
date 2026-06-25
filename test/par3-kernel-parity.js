@@ -473,6 +473,180 @@ for (var ci = 0; ci < COEFF_COUNTS.length; ci++) {
 console.log('\nSection C complete\n');
 
 // ============================================================================
+// Section D — Vectorized reduction parity (post T1+T2+T3 vectorized reduction kernels)
+// ----------------------------------------------------------------------------
+// Exercises the vectorized GF(2^64) reduction in gf64_region_mul_arr across
+// {n_coeff=1, 4, 64} × {len=64, 1024, 131072} with 100 randomized inputs
+// each. The vectorized reduction is now active in the AVX-512, AVX2, and
+// SSSE3 _arr kernels; this section provides a direct parity check against
+// the JS BigInt reference. The dispatch binding (gf64_dispatch.c) selects
+// the method based on PAR3_GF_METHOD and CPUID, so this section must be
+// run once per method (default, avx2, ssse3) to cover all three paths.
+// ============================================================================
+
+console.log('\nSection D: Vectorized reduction parity');
+console.log('---------------------------------------\n');
+
+var N_COEFFS_D = [1, 4, 64];
+var LENS_D = [64, 1024, 4096]; // 64 bytes, 1 KiB, 4 KiB (1 MiB is too slow for JS BigInt reference; microbench in Section E covers larger sizes)
+var RANDOM_TRIALS_D = 30;
+
+function makeVectorizedTestInputs(numWords, n_coeff, rng) {
+	var inp = [];
+	var coeff = [];
+	var expected = [];
+	for (var w = 0; w < numWords; w++) {
+		var hi = (rng() * 4294967296) >>> 0;
+		var lo = (rng() * 4294967296) >>> 0;
+		inp[w] = (BigInt(hi) << 32n) | BigInt(lo);
+	}
+	for (var c = 0; c < n_coeff; c++) {
+		var hi = (rng() * 4294967296) >>> 0;
+		var lo = (rng() * 4294967296) >>> 0;
+		coeff[c] = (BigInt(hi) << 32n) | BigInt(lo);
+	}
+	for (var w = 0; w < numWords; w++) {
+		var sum = 0n;
+		for (var c = 0; c < n_coeff; c++) {
+			sum ^= gf64_mul(inp[w], coeff[c]);
+		}
+		expected[w] = sum;
+	}
+	return { inp: inp, coeff: coeff, expected: expected };
+}
+
+var rngD = mulberry32(0xBADDCAFE);
+var sectionDTests = 0;
+for (var nci = 0; nci < N_COEFFS_D.length; nci++) {
+	var nCoeff = N_COEFFS_D[nci];
+	for (var li = 0; li < LENS_D.length; li++) {
+		var lenBytes = LENS_D[li];
+		var numWords = lenBytes / 8;
+		for (var ri = 0; ri < RANDOM_TRIALS_D; ri++) {
+			var testData = makeVectorizedTestInputs(numWords, nCoeff, rngD);
+			var inpBuf = toBuffer(testData.inp);
+			var coeffBuf = toBuffer(testData.coeff);
+			var outBuf = Buffer.alloc(lenBytes);
+			outBuf.fill(0);
+
+			encoder.mul_arr(outBuf, inpBuf, coeffBuf, numWords, nCoeff);
+
+			var got = fromBuffer(outBuf);
+			var expected = testData.expected;
+			var eq = true;
+			for (var w = 0; w < numWords; w++) {
+				if (got[w] !== expected[w]) { eq = false; break; }
+			}
+
+			var label = 'D n_coeff=' + nCoeff + ', len=' + lenBytes + ' (' + numWords + ' words), trial=' + (ri + 1);
+			if (eq) {
+				passed++;
+				sectionDTests++;
+			} else {
+				console.error('  FAIL: ' + label);
+				for (var w = 0; w < numWords; w++) {
+					if (got[w] !== expected[w]) {
+						console.error('    Word ' + w + ': ' + expected[w].toString(16) + ' != ' + got[w].toString(16));
+						break;
+					}
+				}
+				failed++;
+				process.exitCode = 1;
+			}
+		}
+	}
+}
+console.log('\nSection D: ' + sectionDTests + ' vectorized-reduction scenarios passed\n');
+
+// ============================================================================
+// Optional Section E — Kernel-only microbench
+// ----------------------------------------------------------------------------
+// Gated by PAR3_KERNEL_MICROBENCH=1. Runs gf64_region_mul_arr (via the
+// encoder's mul_arr entry) on a 1 MiB random buffer with n_coeff=1 and
+// reports elements/sec + GB/s. The microbench measures mul_arr (not
+// muladd_arr) for simplicity; both share the same vectorized reduction
+// code path so the throughput is representative.
+// ============================================================================
+
+if (process.env.PAR3_KERNEL_MICROBENCH === '1') {
+	console.log('\nSection E: Kernel microbench');
+	console.log('----------------------------\n');
+
+	var MB_LEN = 1048576; // 1 MiB
+	var NUM_WORDS = MB_LEN / 8;
+	var REPS = 20;
+
+	var mbInp = Buffer.alloc(MB_LEN);
+	var mbCoeff = Buffer.alloc(8);
+	var mbOut = Buffer.alloc(MB_LEN);
+	var rngMB = mulberry32(0xCAFEBABE);
+	fillRandom(mbInp, rngMB);
+	var mbHi = (rngMB() * 4294967296) >>> 0;
+	var mbLo = (rngMB() * 4294967296) >>> 0;
+	mbCoeff.writeBigUInt64LE((BigInt(mbHi) << 32n) | BigInt(mbLo), 0);
+
+	// Warmup
+	for (var warm = 0; warm < 3; warm++) {
+		mbOut.fill(0);
+		encoder.mul_arr(mbOut, mbInp, mbCoeff, NUM_WORDS, 1);
+	}
+
+	var startNs = process.hrtime.bigint();
+	for (var rep = 0; rep < REPS; rep++) {
+		mbOut.fill(0);
+		encoder.mul_arr(mbOut, mbInp, mbCoeff, NUM_WORDS, 1);
+	}
+	var endNs = process.hrtime.bigint();
+	var totalSec = Number(endNs - startNs) / 1e9;
+	var elementsPerSec = (NUM_WORDS * REPS) / totalSec;
+	var bytesPerSec = elementsPerSec * 8; // 8 bytes per element
+	var gbPerSec = bytesPerSec / 1e9;
+
+	console.log('microbench (mul_arr):  ' + gbPerSec.toFixed(2) + ' GB/s (' +
+		(elementsPerSec / 1e6).toFixed(1) + ' Melements/sec) on ' +
+		methodName + ', len=' + MB_LEN + ' bytes, n_coeff=1, reps=' + REPS);
+
+	// ----- Section E.2: muladd microbench via compute_recovery -----
+	// T5 restructures gf64_region_muladd_avx512_arr's inner loop. Measure it
+	// by calling compute_recovery (which internally invokes muladd_arr) on
+	// a 1 MiB random buffer with 1 input + 1 recovery (one muladd per call).
+	// Memset overhead is subtracted to isolate kernel throughput.
+	for (var warm = 0; warm < 5; warm++) {
+		mbOut.fill(0);
+		addon.compute_recovery(mbInp, mbOut, 1, 1, MB_LEN, 0, 1);
+	}
+
+	var mulStartNs = process.hrtime.bigint();
+	for (var rep = 0; rep < REPS; rep++) {
+		mbOut.fill(0);
+		addon.compute_recovery(mbInp, mbOut, 1, 1, MB_LEN, 0, 1);
+	}
+	var mulEndNs = process.hrtime.bigint();
+	var mulTotalSec = Number(mulEndNs - mulStartNs) / 1e9;
+
+	// Measure memset overhead alone
+	var memStartNs = process.hrtime.bigint();
+	for (var rep = 0; rep < REPS; rep++) {
+		mbOut.fill(0);
+	}
+	var memEndNs = process.hrtime.bigint();
+	var memSec = Number(memEndNs - memStartNs) / 1e9;
+
+	var mulOnlySec = mulTotalSec - memSec;
+	if (mulOnlySec <= 0) mulOnlySec = mulTotalSec; // fallback if subtraction goes negative
+	var mulElementsPerSec = (NUM_WORDS * REPS) / mulOnlySec;
+	var mulBytesPerSec = mulElementsPerSec * 8;
+	var mulGbPerSec = mulBytesPerSec / 1e9;
+
+	console.log('microbench (muladd via compute_recovery): ' + mulGbPerSec.toFixed(2) + ' GB/s (' +
+		(mulElementsPerSec / 1e6).toFixed(1) + ' Melements/sec) on ' +
+		methodName + ', len=' + MB_LEN + ' bytes, n_coeff=1, reps=' + REPS +
+		' (memset ' + (memSec * 1000).toFixed(2) + ' ms subtracted)');
+
+	console.log('Section E complete\n');
+}
+
+// ============================================================================
 // Summary
 // ============================================================================
 

@@ -523,3 +523,26 @@ void GF64Controller::ComputeRecoveryBlocks(
 	}
 
 }
+
+// ============================================================================
+// GF64Controller::ComputeRecoveryBlocksFull
+// ----------------------------------------------------------------------------
+// Single-call entry point for the full recovery range. Functionally equivalent
+// to ComputeRecoveryBlocks today (the per-batch path is itself a single pass
+// over the full input range; the JS-side 16-batch loop in lib/par3gen.js is
+// what makes 16 separate NAPI calls into ComputeRecoveryBlocks). Splitting
+// the two methods lets future optimizations (e.g., a single-pass Cauchy matrix
+// with per-thread shards that amortises coeff-matrix cache misses) diverge
+// from the per-batch path used by the JS-side batched flow without breaking
+// it.
+// ============================================================================
+void GF64Controller::ComputeRecoveryBlocksFull(
+	const gf64_t* inputs, size_t numInputs,
+	gf64_t*       recovery, size_t numRecovery,
+	size_t        blockSize64,
+	uint64_t      firstInput, uint64_t firstRecovery,
+	int           numThreads
+) {
+	ComputeRecoveryBlocks(inputs, numInputs, recovery, numRecovery,
+	                      blockSize64, firstInput, firstRecovery, numThreads);
+}

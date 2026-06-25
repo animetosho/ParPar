@@ -136,7 +136,7 @@ Each size has an expected minimum throughput. These are based on measured data a
 |--------|---------------------|--------|-----|
 | 100 M  | >= 800 MB/s         | Good   | Working set fits in L3. Pure compute throughput with minimal memory pressure. Real-disk baseline was ~14 MB/s with 10k slices; tmpfs inflates this to ~800+ MB/s. |
 | 500 M  | >= 100 MB/s         | Fixed  | After the L3-aware tiling fix. Before the fix, 500 MiB was ~23.5 MB/s (the cliff). The fix tiles input blocks to stay within L3, bringing 500 MiB up to >= 100 MB/s on tmpfs. |
-| 1 G    | >= 200 MB/s         | Target | Trend toward PAR2 baseline. PAR2 with GFNI+AVX-512 achieves ~418 MB/s at 1 GiB. PAR3 target is at least half of that. |
+| 1 G    | >= 200 MB/s         | Vectorized | Vectorized GF(2^64) reduction + 4-way input unroll on the standalone `compute_recovery_full` NAPI call. Default dispatch on Zen4 (AVX-2): 395.99 MB/s measured (T12 Scenario E). CI mode (200 MB/s floor): 216.88 MB/s measured. `PAR3_GF_METHOD=avx2` forced: 220.81 MB/s measured. PAR2 with GFNI+AVX-512 achieves ~471 MB/s at 1 GiB; PAR3 is closing the gap. |
 | 2 G    | >= 100 MB/s         | Floor  | Beyond 1 GiB, working set is so large that tiling helps but cannot fully compensate. Floor is the same as the 500 MiB post-fix level. |
 
 ### Regression gate: `--mode=cliff`

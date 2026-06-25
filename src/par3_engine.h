@@ -27,6 +27,27 @@ public:
 		int numThreads
 	);
 
+	/// Compute recovery blocks in a single pass over the full input.
+	/// Equivalent to ComputeRecoveryBlocks but is the single-call entry point
+	/// used by lib/par3gen.js when PAR3_BATCH_SIZE is unset (the create-path default).
+	/// Builds the full (numRecovery x numInputs) Cauchy matrix once via the LRU
+	/// cache, then runs the L3-aware WorkerThread over the full recovery range.
+	/// @param inputs       Input data blocks (numInputs blocks of blockSize64 words each)
+	/// @param numInputs    Number of input data blocks
+	/// @param recovery     Output recovery blocks (numRecovery blocks of blockSize64 words each)
+	/// @param numRecovery  Number of recovery blocks to compute
+	/// @param blockSize64  Block size in 64-bit words
+	/// @param firstInput   First input exponent for Cauchy matrix construction
+	/// @param firstRecovery First recovery exponent for Cauchy matrix construction
+	/// @param numThreads   Number of threads for parallel computation (0 = auto)
+	static void ComputeRecoveryBlocksFull(
+		const gf64_t* inputs, size_t numInputs,
+		gf64_t* recovery, size_t numRecovery,
+		size_t blockSize64,
+		uint64_t firstInput, uint64_t firstRecovery,
+		int numThreads
+	);
+
 	/// Build a Cauchy matrix for GF(2^64) encoding.
 	/// The matrix has dimensions numRecovery x numInputs, stored row-major.
 	/// Matrix element M[i][j] = 1 / (firstInput^j XOR firstRecovery^i).
