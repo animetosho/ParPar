@@ -9147,7 +9147,11 @@ inline cl_int copy( const CommandQueue &queue, IteratorType startIterator, Itera
     if( error != CL_SUCCESS ) {
         return error;
     }
-#if defined(_MSC_VER)
+#if defined(_MSC_VER) && _MSC_VER < 1930
+    // MSVC v143 (Visual Studio 2022 17.0) and later: stdext::checked_array_iterator
+    // was removed from the STL. Fall back to plain std::copy on the pointer,
+    // matching the Linux/macOS path. The checked-iterator guard is preserved for
+    // older MSVC toolchains where the symbol still exists.
     std::copy(
         startIterator, 
         endIterator, 

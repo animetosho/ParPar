@@ -106,6 +106,7 @@ jobs:
           node bin/par3.js create --output par3-test-output/data --recovery-slices 2 par3-test-input/file1.txt par3-test-input/file2.txt par3-test-input/file3.txt
 
       - name: Verify PAR3 archive was created
+        shell: bash
         run: |
           if [ ! -f par3-test-output/data.par3 ]; then
             echo "ERROR: PAR3 archive was not created"
@@ -128,8 +129,12 @@ jobs:
       - name: Corrupt source file
         shell: bash
         run: |
-          # Corrupt a byte in file1.txt (flip the first character)
-          sed -i 's/^./X/' par3-test-input/file1.txt
+          # Corrupt a byte in file1.txt (flip the first character).
+          # Use -i.bak on both GNU sed (Linux) and BSD sed (macOS) — they differ
+          # on whether -i requires an explicit suffix argument. -i.bak works on
+          # both and we remove the backup afterwards.
+          sed -i.bak 's/^./X/' par3-test-input/file1.txt
+          rm par3-test-input/file1.txt.bak
           echo "Corrupted file1.txt"
 
       - name: Verify corruption

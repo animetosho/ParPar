@@ -156,7 +156,10 @@ if(argv['input-file']) {
 	});
 }
 
-if(!inputFiles.length) {
+// Amendment 18: empty input set is valid for `create` (metadata-only archive).
+if(!inputFiles.length && cmd === 'create') {
+	process.stderr.write('Warning: empty input set \u2014 creating empty PAR3 archive (Amendment 18)\n');
+} else if(!inputFiles.length) {
 	error('No input files specified');
 }
 

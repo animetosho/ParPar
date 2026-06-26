@@ -9,10 +9,6 @@
 #define UNUSED(...) (void)(__VA_ARGS__)
 #define MAX_STACK_BUF 256
 
-#ifdef _MSC_VER
-# define inline __inline
-#endif
-
 HEDLEY_BEGIN_C_DECLS
 
 typedef uint64_t gf64_t;

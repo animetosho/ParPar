@@ -112,7 +112,7 @@
     {
       "target_name": "parpar_gf64",
       "conditions": [
-        ['target_arch in "ia32 x64"', {
+        ['target_arch in "ia32 x64" and OS!="win"', {
           "sources": [
             "src/gf64_addon.cc",
             "src/par3_engine.cc",
