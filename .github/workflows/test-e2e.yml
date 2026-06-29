@@ -30,5 +30,8 @@ jobs:
       - name: Install Node dependencies
         run: npm install
 
+      - name: Build native binding
+        run: npx node-gyp rebuild
+
       - name: Run E2E tests
         run: npm run test:e2e
