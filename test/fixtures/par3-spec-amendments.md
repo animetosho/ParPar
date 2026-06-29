@@ -1,6 +1,10 @@
 # PAR3 v3.0 ALPHA DRAFT: Proposed Specification Amendments
 
-**Date**: 2026-06-09
+PAR3 ([Parity Volume Set Specification v3.0](https://parchive.github.io/doc/Parity_Volume_Set_Specification_v3.0.html), ALPHA DRAFT from 2022-01-28) defines file-level parity archives using a Cauchy matrix over a Galois field. The spec has not been revised since 2022, so treat this document as reference material rather than a finalized standard.
+
+Each amendment is recorded with five fields: current spec text, identified issue, proposed wording, rationale, and implementation impact on ParParPar. The body groups the 17 surviving amendments into three severity sections (8 CRITICAL in Section 1, 4 IMPORTANT in Section 2, 5 MINOR in Section 3), followed by Section 4 listing spec self-inconsistencies and Section 5 mapping each gap to its impact on this fork. Numbering skips Amendment 12, which was dropped during drafting after an offline discussion; the gap is intentional, not a missing item.
+
+**Date**: 2026-06-29
 **Status**: Discussion Document
 **Target**: [Parity Volume Set Specification v3.0](https://parchive.github.io/doc/Parity_Volume_Set_Specification_v3.0.html) (2022-01-28 ALPHA DRAFT)
 **Authors**: Based on gap analysis of par3cmdline (v0.0.1) and ParPar implementations
