@@ -619,32 +619,115 @@ void gf64_region_2d_muladd_avx2_arr(
 	size_t i = 0;
 
 	size_t blocks = len / 4;
-	for (size_t b = 0; b < blocks; b++) {
-		for (size_t g = 0; g < G; g++) {
-			__m256i in01 = _mm256_setr_epi64x((int64_t)in_blocks[g][i + 0], 0, (int64_t)in_blocks[g][i + 1], 0);
-			__m256i in23 = _mm256_setr_epi64x((int64_t)in_blocks[g][i + 2], 0, (int64_t)in_blocks[g][i + 3], 0);
+	if (K == 2) {
+		/* K=2 fast path: wider SIMD utilization via YMM-pair unrolling.
+		 *
+		 * Per (w block, g), the serial K loop issues 2 K × 2 halves
+		 * = 4 VPCLMULQDQ, but only one is in flight at a time (each
+		 * clmul is followed by its dependent reduce/XOR-store). With
+		 * K=2 unrolled, we issue ALL 4 VPCLMULQDQ first (no deps
+		 * between them: different inputs × different coeff broadcasts),
+		 * then 4 reductions, then 4 prev-loads, then 4 XOR+stores. The
+		 * OOO engine can keep all 4 clmul + 4 reduces in flight
+		 * simultaneously, doubling the effective SIMD throughput.
+		 *
+		 * Per (w block, g) this path processes 2 K rows × 4 G-columns
+		 * = 8 gf64 elements via 4 YMMs (2 K × 2 halves). Each YMM
+		 * holds 2 gf64 elements (lanes 0-1 active, lanes 2-3 zero
+		 * padding for PCLMULQDQ).
+		 *
+		 * Bit-exact: uses the SAME polynomial reduction (PCLMULQDQ →
+		 * XOR → fold) as the serial path; the only difference is
+		 * loop ordering. Per-K-row accumulators are independent, so
+		 * moving them to parallel YMMs does not alter the bit result.
+		 *
+		 * Falls back to the serial K loop for K != 2 (general K
+		 * path below). Falls back to the scalar epilog for the
+		 * tail (len % 4). */
+		for (size_t b = 0; b < blocks; b++) {
+			for (size_t g = 0; g < G; g++) {
+				__m256i in01 = _mm256_setr_epi64x(
+					(int64_t)in_blocks[g][i + 0], 0,
+					(int64_t)in_blocks[g][i + 1], 0);
+				__m256i in23 = _mm256_setr_epi64x(
+					(int64_t)in_blocks[g][i + 2], 0,
+					(int64_t)in_blocks[g][i + 3], 0);
 
-			for (size_t k = 0; k < K; k++) {
-				__m256i coeff_bc = _mm256_set1_epi64x((int64_t)*(coeff_block_2d + k*K_stride + g));
+				/* Load both K row coefficients for this g in lockstep. */
+				__m256i COEFF_0G = _mm256_set1_epi64x(
+					(int64_t)*(coeff_block_2d + 0 * K_stride + g));
+				__m256i COEFF_1G = _mm256_set1_epi64x(
+					(int64_t)*(coeff_block_2d + 1 * K_stride + g));
 
-				__m256i prod01 = _mm256_clmulepi64_epi128(in01, coeff_bc, 0x00);
+				/* PHASE 1: 4 back-to-back VPCLMULQDQ. All independent
+				 * (different inputs × different coeff broadcasts), so
+				 * the OOO engine keeps them in flight together. */
+				__m256i PROD_01_0 = _mm256_clmulepi64_epi128(in01, COEFF_0G, 0x00);
+				__m256i PROD_23_0 = _mm256_clmulepi64_epi128(in23, COEFF_0G, 0x00);
+				__m256i PROD_01_1 = _mm256_clmulepi64_epi128(in01, COEFF_1G, 0x00);
+				__m256i PROD_23_1 = _mm256_clmulepi64_epi128(in23, COEFF_1G, 0x00);
+
+				/* PHASE 2: 4 prev-loads (XOR-targets). Independent
+				 * across (K row, w-block half). Overlap with the
+				 * reductions below. */
+				__m128i PREV_01_0 = _mm_loadu_si128((const __m128i *)(outs[0] + i + 0));
+				__m128i PREV_23_0 = _mm_loadu_si128((const __m128i *)(outs[0] + i + 2));
+				__m128i PREV_01_1 = _mm_loadu_si128((const __m128i *)(outs[1] + i + 0));
+				__m128i PREV_23_1 = _mm_loadu_si128((const __m128i *)(outs[1] + i + 2));
+
+				/* PHASE 3: 4 reductions (split + reduce). */
 				__m256i lo_v, hi_v;
-				gf64_split_prod_ymm(prod01, &lo_v, &hi_v);
-				__m256i result01 = gf64_reduce_ymm(lo_v, hi_v);
-				__m128i prev01 = _mm_loadu_si128((const __m128i *)(outs[k] + i + 0));
-				_mm_storeu_si128((__m128i *)(outs[k] + i + 0),
-					_mm_xor_si128(prev01, _mm256_castsi256_si128(result01)));
+				gf64_split_prod_ymm(PROD_01_0, &lo_v, &hi_v);
+				__m256i RESULT_01_0 = gf64_reduce_ymm(lo_v, hi_v);
+				gf64_split_prod_ymm(PROD_23_0, &lo_v, &hi_v);
+				__m256i RESULT_23_0 = gf64_reduce_ymm(lo_v, hi_v);
+				gf64_split_prod_ymm(PROD_01_1, &lo_v, &hi_v);
+				__m256i RESULT_01_1 = gf64_reduce_ymm(lo_v, hi_v);
+				gf64_split_prod_ymm(PROD_23_1, &lo_v, &hi_v);
+				__m256i RESULT_23_1 = gf64_reduce_ymm(lo_v, hi_v);
 
-				__m256i prod23 = _mm256_clmulepi64_epi128(in23, coeff_bc, 0x00);
-				gf64_split_prod_ymm(prod23, &lo_v, &hi_v);
-				__m256i result23 = gf64_reduce_ymm(lo_v, hi_v);
-				__m128i prev23 = _mm_loadu_si128((const __m128i *)(outs[k] + i + 2));
-				_mm_storeu_si128((__m128i *)(outs[k] + i + 2),
-					_mm_xor_si128(prev23, _mm256_castsi256_si128(result23)));
+				/* PHASE 4: 4 XOR + XMM stores (cast YMM → low XMM). */
+				_mm_storeu_si128((__m128i *)(outs[0] + i + 0),
+					_mm_xor_si128(PREV_01_0, _mm256_castsi256_si128(RESULT_01_0)));
+				_mm_storeu_si128((__m128i *)(outs[0] + i + 2),
+					_mm_xor_si128(PREV_23_0, _mm256_castsi256_si128(RESULT_23_0)));
+				_mm_storeu_si128((__m128i *)(outs[1] + i + 0),
+					_mm_xor_si128(PREV_01_1, _mm256_castsi256_si128(RESULT_01_1)));
+				_mm_storeu_si128((__m128i *)(outs[1] + i + 2),
+					_mm_xor_si128(PREV_23_1, _mm256_castsi256_si128(RESULT_23_1)));
 			}
-		}
 
-		i += 4;
+			i += 4;
+		}
+	} else {
+		/* General-K path: serial K loop. K=1, 4, 8, 16 fall here. */
+		for (size_t b = 0; b < blocks; b++) {
+			for (size_t g = 0; g < G; g++) {
+				__m256i in01 = _mm256_setr_epi64x((int64_t)in_blocks[g][i + 0], 0, (int64_t)in_blocks[g][i + 1], 0);
+				__m256i in23 = _mm256_setr_epi64x((int64_t)in_blocks[g][i + 2], 0, (int64_t)in_blocks[g][i + 3], 0);
+
+				for (size_t k = 0; k < K; k++) {
+					__m256i coeff_bc = _mm256_set1_epi64x((int64_t)*(coeff_block_2d + k*K_stride + g));
+
+					__m256i prod01 = _mm256_clmulepi64_epi128(in01, coeff_bc, 0x00);
+					__m256i lo_v, hi_v;
+					gf64_split_prod_ymm(prod01, &lo_v, &hi_v);
+					__m256i result01 = gf64_reduce_ymm(lo_v, hi_v);
+					__m128i prev01 = _mm_loadu_si128((const __m128i *)(outs[k] + i + 0));
+					_mm_storeu_si128((__m128i *)(outs[k] + i + 0),
+						_mm_xor_si128(prev01, _mm256_castsi256_si128(result01)));
+
+					__m256i prod23 = _mm256_clmulepi64_epi128(in23, coeff_bc, 0x00);
+					gf64_split_prod_ymm(prod23, &lo_v, &hi_v);
+					__m256i result23 = gf64_reduce_ymm(lo_v, hi_v);
+					__m128i prev23 = _mm_loadu_si128((const __m128i *)(outs[k] + i + 2));
+					_mm_storeu_si128((__m128i *)(outs[k] + i + 2),
+						_mm_xor_si128(prev23, _mm256_castsi256_si128(result23)));
+				}
+			}
+
+			i += 4;
+		}
 	}
 
 	while (i < len) {
