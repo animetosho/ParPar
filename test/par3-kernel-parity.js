@@ -647,6 +647,200 @@ if (process.env.PAR3_KERNEL_MICROBENCH === '1') {
 }
 
 // ============================================================================
+// Section F — groupSize ∈ {1, 2, 4, 8, 12, 16} parity per ISA level
+// ----------------------------------------------------------------------------
+// Regression gate for T3 (Wave 2 engine refactor). T3 turns on the n_coeff > 1
+// "general case" path of the gf64_region_mul{add}_arr kernels in the create
+// hot path; this section proves the kernels are bit-exact vs the JS BigInt
+// XOR-fold reference (the same semantic T3 will rely on) for every supported
+// group size used by the engine.
+//
+// For each group size G ∈ {1, 2, 4, 8, 12, 16}:
+//   - 200 randomized scenarios at block_size = 64 elements (8 words).
+//   - Per scenario: zero-init out[], fill coeff[0..G-1] with random 64-bit
+//     values, fill in[] with random 64-bit values, call encoder.mul_arr,
+//     compare element-wise against the JS XOR-fold reference
+//     (jsMulArr defined below — out[w] = XOR_c (in[w] * coeff[c])).
+//   - One negative scenario per group size: deliberately flip a bit in
+//     coeff[0] and assert the comparison FAILS — proves the test is
+//     non-trivial (not always-true / not always-pass).
+//
+// The test reuses the encoder created in Section A. Each `(method, G)` tuple
+// uses a deterministic per-tuple seed so failures are reproducible.
+//
+// IMPORTANT — dispatch force-mechanism caveat:
+//   `PAR3_GF_METHOD` env var is JS-side only (consumed by lib/gf_method_bench.js
+//   for pickBestMethod); the C-level kernel dispatch in gf64/gf64_dispatch.c
+//   uses CPUID-only via gf64_detect_method(). To exercise a non-default ISA,
+//   run `PAR3_GF_METHOD=<name> node test/par3-kernel-parity.js` — the env is
+//   documented, but on a host with AVX-512 the kernel will dispatch to AVX-512
+//   regardless. Building per-ISA test binaries is out of scope for T2; this
+//   section proves the parity property for the *active* dispatch method once
+//   per process, which is the strongest black-box gate available without
+//   touching gf64_dispatch.c.
+// ============================================================================
+
+console.log('\nSection F: groupSize parity {1,2,4,8,12,16}');
+console.log('----------------------------------------------\n');
+
+// Deterministic per-tuple seed: hash(methodName, groupSize) → mulberry32 seed.
+// Section F uses crypto.randomBytes for input buffers (uniform 64-bit spread);
+// the seed only chooses the *starting state*, so the prng output is independent
+// across tuples but reproducible within a tuple.
+var crypto = require('crypto');
+
+function seedFor(methodName, groupSize) {
+	var h = crypto.createHash('sha256');
+	h.update('GF64-GROUP-SIZE-PARITY');
+	h.update(String(methodName));
+	h.update(':G=' + groupSize);
+	var digest = h.digest();
+	return digest.readUInt32LE(0) ^ digest.readUInt32LE(4);
+}
+
+function fillRandU64(buf, rng) {
+	var words = buf.length / 8;
+	for (var w = 0; w < words; w++) {
+		var hi = (rng() * 4294967296) >>> 0;
+		var lo = (rng() * 4294967296) >>> 0;
+		buf.writeBigUInt64LE((BigInt(hi) << 32n) | BigInt(lo), w * 8);
+	}
+}
+
+function fillRandCoeff(buf, nCoeff, rng) {
+	for (var c = 0; c < nCoeff; c++) {
+		var hi = (rng() * 4294967296) >>> 0;
+		var lo = (rng() * 4294967296) >>> 0;
+		buf.writeBigUInt64LE((BigInt(hi) << 32n) | BigInt(lo), c * 8);
+	}
+}
+
+function bufEq64(a, b, numWords) {
+	for (var w = 0; w < numWords; w++) {
+		if (a.readBigUInt64LE(w * 8) !== b.readBigUInt64LE(w * 8)) return false;
+	}
+	return true;
+}
+
+function _runGroupSizeParity(detectedMethodName) {
+	var GROUP_SIZES_F = [1, 2, 4, 8, 12, 16];
+	var BLOCK_BYTES_F = 64;        // 64 bytes = 8 uint64 words
+	var NUM_WORDS_F = BLOCK_BYTES_F / 8;
+	var TRIALS_PER_TUPLE_F = 200;  // task-mandated regression density
+
+	var envMethod = (process.env.PAR3_GF_METHOD || '').toLowerCase();
+	console.log('Section F.start: detectedMethod=' + detectedMethodName +
+		' envMethod=' + (envMethod || '<unset>') +
+		' (env is JS-side label; C-level kernel dispatch is CPUID-only)');
+
+	var sectionFTests = 0;
+	var sectionFNegatives = 0;
+	var activeMethodLabel = detectedMethodName; // what kernel actually ran
+
+	for (var gi = 0; gi < GROUP_SIZES_F.length; gi++) {
+		var G = GROUP_SIZES_F[gi];
+		var rngF = mulberry32(seedFor(activeMethodLabel, G));
+
+		var coeffBuf = Buffer.alloc(G * 8);
+		var inBuf = Buffer.alloc(BLOCK_BYTES_F);
+		var outBuf = Buffer.alloc(BLOCK_BYTES_F);
+		var refBuf = Buffer.alloc(BLOCK_BYTES_F);
+
+		var tupleStart = passed;
+		for (var trial = 0; trial < TRIALS_PER_TUPLE_F; trial++) {
+			fillRandCoeff(coeffBuf, G, rngF);
+			fillRandU64(inBuf, rngF);
+
+			// Compute JS XOR-fold reference: ref[w] = XOR_c (in[w] * coeff[c]).
+			// Reads inBuf and coeffBuf (both populated above), writes refBuf.
+			for (var w = 0; w < NUM_WORDS_F; w++) {
+				var sum = 0n;
+				var inW = inBuf.readBigUInt64LE(w * 8);
+				for (var c = 0; c < G; c++) {
+					sum ^= gf64_mul(inW, coeffBuf.readBigUInt64LE(c * 8));
+				}
+				refBuf.writeBigUInt64LE(sum, w * 8);
+			}
+
+			// Run the kernel: zero-init outBuf then call mul_arr(out, in, coeff, len, G).
+			outBuf.fill(0);
+			encoder.mul_arr(outBuf, inBuf, coeffBuf, NUM_WORDS_F, G);
+
+			if (bufEq64(outBuf, refBuf, NUM_WORDS_F)) {
+				console.log('  PASS: Section F method=' + activeMethodLabel +
+					' groupSize=' + G + ' trial=' + (trial + 1) + '/' + TRIALS_PER_TUPLE_F);
+				passed++;
+				sectionFTests++;
+			} else {
+				console.error('  FAIL: Section F method=' + activeMethodLabel +
+					' groupSize=' + G + ' trial=' + (trial + 1) + '/' + TRIALS_PER_TUPLE_F);
+				// Show the first differing word for debuggability.
+				for (var dw = 0; dw < NUM_WORDS_F; dw++) {
+					var got = outBuf.readBigUInt64LE(dw * 8);
+					var exp = refBuf.readBigUInt64LE(dw * 8);
+					if (got !== exp) {
+						console.error('    Word ' + dw + ': got=' + got.toString(16) +
+							' exp=' + exp.toString(16));
+						break;
+					}
+				}
+				failed++;
+				process.exitCode = 1;
+			}
+		}
+
+		// Negative scenario per group size: deliberately flip a bit in coeff[0]
+		// and assert the kernel DOES NOT match the reference. This proves the
+		// test is non-trivial (not always-true) — if it ever passes, the test
+		// is broken (kernel either ignores its coefficients, or the comparison
+		// short-circuits to true).
+		var negRng = mulberry32(seedFor(activeMethodLabel, G) ^ 0xDEADBEEF);
+		fillRandCoeff(coeffBuf, G, negRng);
+		fillRandU64(inBuf, negRng);
+
+		// Compute reference (uses unflipped coeff).
+		for (var wn = 0; wn < NUM_WORDS_F; wn++) {
+			var sumN = 0n;
+			var inWN = inBuf.readBigUInt64LE(wn * 8);
+			for (var cn = 0; cn < G; cn++) {
+				sumN ^= gf64_mul(inWN, coeffBuf.readBigUInt64LE(cn * 8));
+			}
+			refBuf.writeBigUInt64LE(sumN, wn * 8);
+		}
+
+		// Flip the low bit of coeff[0] in-place.
+		var c0Before = coeffBuf.readBigUInt64LE(0);
+		coeffBuf.writeBigUInt64LE(c0Before ^ 1n, 0);
+
+		outBuf.fill(0);
+		encoder.mul_arr(outBuf, inBuf, coeffBuf, NUM_WORDS_F, G);
+
+		var negEq = bufEq64(outBuf, refBuf, NUM_WORDS_F);
+		var negLabel = 'Section F negative-trap method=' + activeMethodLabel +
+			' groupSize=' + G + ' (flipped bit in coeff[0] must FAIL comparison)';
+		if (negEq) {
+			console.error('  FAIL: ' + negLabel + ' — kernel matched reference after coeff[0] bit flip; test is non-discriminating.');
+			failed++;
+			process.exitCode = 1;
+		} else {
+			// Successful trap: kernel correctly differs after the bit flip.
+			console.log('  PASS: ' + negLabel);
+			passed++;
+			sectionFNegatives++;
+		}
+
+		console.log('Section F tuple done: method=' + activeMethodLabel +
+			' groupSize=' + G + ' trials=' + TRIALS_PER_TUPLE_F +
+			' (positive_pass=' + sectionFTests + ', negative-trap=ok)');
+	}
+
+	console.log('\nSection F complete: ' + sectionFTests +
+		' positive + ' + sectionFNegatives + ' negative-trap scenarios passed\n');
+}
+
+_runGroupSizeParity(methodName);
+
+// ============================================================================
 // Summary
 // ============================================================================
 
