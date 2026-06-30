@@ -48,6 +48,30 @@ public:
 		int numThreads
 	);
 
+	/// Compute recovery blocks from a source file via mmap(2) zero-copy input.
+	/// Opens `sourcePath`, mmaps the file with MAP_PRIVATE | MAP_POPULATE, and
+	/// feeds the mapped region directly into the existing 2D-blocked kernel
+	/// via ComputeRecoveryBlocksFull — no fs.read round-trip into a JS Buffer.
+	/// Env-gated: PAR3_GF64_USE_MMAP must be set to "1" (default off for
+	/// backward compat). When the gate is closed, returns -1 and emits a
+	/// stderr log explaining the fallback path.
+	/// @param sourcePath    Path to the source data file (input region)
+	/// @param recovery      Output recovery blocks (caller-allocated)
+	/// @param numRecovery   Number of recovery blocks to compute
+	/// @param blockSize64   Block size in 64-bit words
+	/// @param firstInput    First input exponent for Cauchy matrix construction
+	/// @param firstRecovery First recovery exponent for Cauchy matrix construction
+	/// @param numThreads    Number of threads for parallel computation (0 = auto)
+	/// @return 0 on success, -1 on error (env gate off, open/fstat/mmap
+	///         failure, or file size mismatch)
+	static int ComputeRecoveryBlocksFromFile(
+		const char* sourcePath,
+		gf64_t* recovery, size_t numRecovery,
+		size_t blockSize64,
+		uint64_t firstInput, uint64_t firstRecovery,
+		int numThreads
+	);
+
 	/// Build a Cauchy matrix for GF(2^64) encoding.
 	/// The matrix has dimensions numRecovery x numInputs, stored row-major.
 	/// Matrix element M[i][j] = 1 / (firstInput^j XOR firstRecovery^i).

@@ -4,6 +4,18 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include <cstring>
+#include <errno.h>
+
+// POSIX mmap(2) / open(2) / fstat(2) / close(2) for the A1 zero-copy
+// mmap-based ComputeRecoveryBlocksFromFile entry (PAR3_GF64_USE_MMAP=1).
+// Linux/macOS only; the binding.gyp node-gyp target compiles on POSIX
+// where these headers are universally available. (Windows builds are
+// handled by the alternate compute_recovery_full NAPI path.)
+#include <fcntl.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 #if defined(_MSC_VER)
 #include <malloc.h>
@@ -860,4 +872,133 @@ void GF64Controller::ComputeRecoveryBlocksFull(
 ) {
 	ComputeRecoveryBlocks(inputs, numInputs, recovery, numRecovery,
 	                      blockSize64, firstInput, firstRecovery, numThreads);
+}
+
+// ============================================================================
+// GF64Controller::ComputeRecoveryBlocksFromFile  (A1: mmap-based zero-copy)
+// ----------------------------------------------------------------------------
+// Zero-copy variant of the create entry: maps `sourcePath` into memory with
+// mmap(2) and passes the mapped region directly to the kernel — no fs.read
+// round-trip into a JS Buffer. This is the A1 entry; wiring it into NAPI
+// is A2's job, and exposing it through lib/par3gen.js is A3's job.
+//
+// Env gate: PAR3_GF64_USE_MMAP must be set to "1" to enable. Default off
+// for backward compatibility with existing bench harnesses — the legacy
+// ComputeRecoveryBlocks / ComputeRecoveryBlocksFull path remains the active
+// create entry unless the operator opts in.
+//
+// mmap flags: MAP_PRIVATE | MAP_POPULATE
+//   - MAP_PRIVATE  : copy-on-write; kernel can drop pages without flushing
+//                    to disk because we never mutate. This is the standard
+//                    choice for read-only input regions.
+//   - MAP_POPULATE : prefault all pages up-front. Without this, the kernel
+//                    services first-touch page faults lazily during the
+//                    kernel's input scan, adding 100s of µs of latency
+//                    per page on cold caches. POPULATE makes the first
+//                    kernel pass touch faulted-and-warm pages instead.
+//   - MAP_HUGEPAGE / MAP_HUGEPAGE_FLAG2MB are intentionally NOT used here
+//     — that's E2 (Phase E huge-pages work) which depends on /proc/meminfo
+//     and hugeadm and is out of scope for A1.
+//
+// fd lifecycle: opened O_RDONLY with mmap; closed after munmap on success.
+// On any error path (open / fstat / mmap / size mismatch / kernel),
+// munmap+close are called before returning -1.
+//
+// File size contract: `sourcePath` must contain at least
+// `numInputs * blockSize64 * sizeof(gf64_t)` bytes (the kernel reads
+// exactly that many gf64_t elements as input). The file size MUST be a
+// multiple of `blockSize64 * sizeof(gf64_t)` — otherwise the trailing
+// partial block would be silently dropped, which is detectable only by
+// comparing against the JS path's expected block count, so we reject it
+// up front with a clear error.
+//
+// Caller contract: `recovery` is caller-allocated (matches the existing
+// ComputeRecoveryBlocksFull signature). numInputs is derived from the
+// file size, not passed in — the caller knows the file but not the
+// internal split. numRecovery, blockSize64, firstInput, firstRecovery,
+// and numThreads are passed through to ComputeRecoveryBlocksFull.
+// ============================================================================
+int GF64Controller::ComputeRecoveryBlocksFromFile(
+	const char* sourcePath,
+	gf64_t*       recovery, size_t numRecovery,
+	size_t        blockSize64,
+	uint64_t      firstInput, uint64_t firstRecovery,
+	int           numThreads
+) {
+	// --- Env gate. Default off; A2 / A3 will read this too. ---
+	const char* env = std::getenv("PAR3_GF64_USE_MMAP");
+	if (env == nullptr || *env == '\0' || std::atoi(env) != 1) {
+		std::fprintf(stderr,
+			"[par3] PAR3_GF64_USE_MMAP=0; use ComputeRecoveryBlocks with pre-allocated inputs\n");
+		return -1;
+	}
+	if (sourcePath == nullptr || recovery == nullptr) {
+		std::fprintf(stderr,
+			"[par3] ComputeRecoveryBlocksFromFile: null sourcePath or recovery\n");
+		return -1;
+	}
+	if (blockSize64 == 0) {
+		std::fprintf(stderr,
+			"[par3] ComputeRecoveryBlocksFromFile: blockSize64 == 0\n");
+		return -1;
+	}
+
+	// --- 1. open(2) ---
+	int fd = ::open(sourcePath, O_RDONLY);
+	if (fd < 0) {
+		std::fprintf(stderr,
+			"[par3] ComputeRecoveryBlocksFromFile: open(%s) failed: %s\n",
+			sourcePath, std::strerror(errno));
+		return -1;
+	}
+
+	// --- 2. fstat(2): get file size ---
+	struct stat st;
+	if (::fstat(fd, &st) != 0) {
+		std::fprintf(stderr,
+			"[par3] ComputeRecoveryBlocksFromFile: fstat(%s) failed: %s\n",
+			sourcePath, std::strerror(errno));
+		::close(fd);
+		return -1;
+	}
+
+	const size_t fileSize = static_cast<size_t>(st.st_size);
+	const size_t blockBytes = blockSize64 * sizeof(gf64_t);
+
+	// Reject files smaller than one block (would underflow in numInputs calc).
+	if (fileSize < blockBytes || (fileSize % blockBytes) != 0) {
+		std::fprintf(stderr,
+			"[par3] ComputeRecoveryBlocksFromFile: file size %zu is not a positive "
+			"multiple of blockSize64 * sizeof(gf64_t) = %zu\n",
+			fileSize, blockBytes);
+		::close(fd);
+		return -1;
+	}
+
+	const size_t numInputs = fileSize / blockBytes;
+
+	// --- 3. mmap(2): MAP_PRIVATE | MAP_POPULATE for prefault + copy-on-write ---
+	void* mapped = ::mmap(nullptr, fileSize, PROT_READ, MAP_PRIVATE | MAP_POPULATE, fd, 0);
+	if (mapped == MAP_FAILED) {
+		std::fprintf(stderr,
+			"[par3] ComputeRecoveryBlocksFromFile: mmap(%s, %zu) failed: %s\n",
+			sourcePath, fileSize, std::strerror(errno));
+		::close(fd);
+		return -1;
+	}
+
+	const gf64_t* inputs = static_cast<const gf64_t*>(mapped);
+
+	// --- 4. Kernel call (delegates to ComputeRecoveryBlocksFull → ComputeRecoveryBlocks) ---
+	ComputeRecoveryBlocksFull(
+		inputs, numInputs,
+		recovery, numRecovery,
+		blockSize64,
+		firstInput, firstRecovery,
+		numThreads);
+
+	// --- 5. Cleanup: munmap + close even on success. ---
+	::munmap(mapped, fileSize);
+	::close(fd);
+	return 0;
 }
