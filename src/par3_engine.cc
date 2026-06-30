@@ -267,6 +267,45 @@ static int GetKGroupSize() {
 }
 
 // ============================================================================
+// T0: binary flags for the v3 max-perf plan (env-gated; default off)
+// ----------------------------------------------------------------------------
+// PAR3_GF64_FAST_CREATE / PAR3_GF64_BENCH_NATIVE gate Phase A / B / C paths:
+//   fast_create  = 1 → enable native fast-create path (legacy path when 0)
+//   bench_native = 1 → enable native-only bench paths   (JS path when 0)
+// Both default to 0 when unset, empty, or non-"1". The flags are pure
+// on/off switches (no range, no clamping) so the parser collapses the
+// nullptr / empty / non-1 cases into the same 0 return — matching the
+// ParseAutotuneEnv() caching style. The PUBLIC accessors (no `static`)
+// expose the cached value to future TUs (T1, A1, A2, B*, C*) that need
+// to branch on these flags; the parser helpers stay file-local.
+// ============================================================================
+static int ParseFastCreateEnv() {
+	static int cached = -1;
+	if (cached < 0) {
+		const char* env = std::getenv("PAR3_GF64_FAST_CREATE");
+		cached = (env != nullptr && *env != '\0' && std::atoi(env) == 1) ? 1 : 0;
+	}
+	return cached;
+}
+
+static int ParseBenchNativeEnv() {
+	static int cached = -1;
+	if (cached < 0) {
+		const char* env = std::getenv("PAR3_GF64_BENCH_NATIVE");
+		cached = (env != nullptr && *env != '\0' && std::atoi(env) == 1) ? 1 : 0;
+	}
+	return cached;
+}
+
+int GetFastCreate() {
+	return ParseFastCreateEnv();
+}
+
+int GetBenchNative() {
+	return ParseBenchNativeEnv();
+}
+
+// ============================================================================
 // PD3: BLOCK_SIZE autotune  (env-gated; default off)
 // ----------------------------------------------------------------------------
 // At compute-recovery time, scan {1, 4, 16, 64, 256} MiB candidate block
