@@ -115,6 +115,7 @@
         ['target_arch in "ia32 x64" and OS!="win"', {
           "sources": [
             "src/gf64_addon.cc",
+            "src/gf64_create_streaming.cc",
             "src/par3_engine.cc",
             "gf64/gf64_single.c",
             "gf64/gf64_region_scalar.c",

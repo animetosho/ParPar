@@ -21,6 +21,11 @@
 #include "gf64_global.h"
 #include "par3_engine.h"
 
+// Forward declaration of par3_create_streaming_NAPI (defined in
+// src/gf64_create_streaming.cc). Module-level export — NOT a method on
+// Gf64Encoder. Registered in parpar_gf64_init_NAPI below.
+extern napi_value par3_create_streaming_NAPI(napi_env env, napi_callback_info info);
+
 using namespace v8;
 
 class Gf64EncoderWrapper {
@@ -1592,6 +1597,18 @@ napi_value create_fn;
 	status = napi_set_named_property(env, exports, "solve_and_reconstruct", solve_reconstruct_fn);
 	if(status != napi_ok) {
 		napi_throw_error(env, NULL, "Failed to set solve_and_reconstruct property");
+		return NULL;
+	}
+
+	napi_value par3_create_streaming_fn;
+	status = napi_create_function(env, NULL, 0, par3_create_streaming_NAPI, NULL, &par3_create_streaming_fn);
+	if(status != napi_ok) {
+		napi_throw_error(env, NULL, "Failed to create par3_create_streaming function");
+		return NULL;
+	}
+	status = napi_set_named_property(env, exports, "par3_create_streaming", par3_create_streaming_fn);
+	if(status != napi_ok) {
+		napi_throw_error(env, NULL, "Failed to set par3_create_streaming property");
 		return NULL;
 	}
 
