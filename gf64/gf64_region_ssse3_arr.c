@@ -245,7 +245,7 @@ void gf64_region_muladd_ssse3_arr(gf64_t *HEDLEY_RESTRICT out, const gf64_t *HED
 void gf64_region_coupled_muladd_ssse3_arr(
 	gf64_t *HEDLEY_RESTRICT out,
 	const gf64_t *HEDLEY_RESTRICT *HEDLEY_RESTRICT in_blocks,
-	const gf64_t *HEDLEY_RESTRICT *HEDLEY_RESTRICT coeff_blocks,
+	const gf64_t *HEDLEY_RESTRICT coeff_blocks,
 	size_t len,
 	size_t G)
 {
