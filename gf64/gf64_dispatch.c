@@ -248,6 +248,33 @@ static size_t parse_workload_size_env(void) {
 	return (size_t)val;
 }
 
+/* Parse PAR3_AVX512_FORCE env var. Three recognised values:
+ *
+ *   "1" / "true" / "yes" / "on"  — honour the detected ISA as-is. The caller
+ *     of gf64_method_for_workload() will still consult the heuristic
+ *     (bypass / downclock thresholds) and may downgrade to AVX-2 if the
+ *     workload is in the downclock zone. This is the original PD2 contract.
+ *
+ *   "0" / "false" / "no" / "off" — explicit AVX-512 OFF. If AVX-512 is the
+ *     detected ISA, downgrade to AVX-2; otherwise return detected as-is.
+ *
+ *   "2" (added in v3 max-perf, C3) — UNCONDITIONAL AVX-512 force. Override
+ *     both the heuristic AND the downclock threshold; *out is set to
+ *     GF64_AVX512 regardless of `detected`. This is the operator's escape
+ *     hatch for benchmarks that want pure AVX-512 throughput with no
+ *     heuristic interference. CAVEAT: when `detected` is NOT GF64_AVX512
+ *     (host lacks AVX-512, or detection is masked by the hypervisor), the
+ *     dispatched AVX-512 kernel will raise SIGILL on first ZMM instruction
+ *     and the calling process will abort. The operator is responsible for
+ *     confirming hardware support (e.g. via `test/par3-isa-check.js`)
+ *     before setting this value. This matches the documented "operator's
+ *     choice" trade-off — the env var is explicit acknowledgement of risk.
+ *
+ * Unrecognised / malformed values return 0 and leave `*out` untouched; the
+ * caller falls through to the normal heuristic path.
+ *
+ * Returns 1 on a recognised value (with `*out` set), 0 otherwise.
+ */
 static int gf64_parse_force_env(GF64Method detected, GF64Method *out) {
 	const char *env = getenv("PAR3_AVX512_FORCE");
 	if (env == NULL || *env == '\0') return 0;
@@ -260,6 +287,12 @@ static int gf64_parse_force_env(GF64Method detected, GF64Method *out) {
 	if (strcmp(env, "0") == 0 || strcasecmp(env, "false") == 0 ||
 	    strcasecmp(env, "no") == 0 || strcasecmp(env, "off") == 0) {
 		*out = (detected == GF64_AVX512) ? GF64_AVX2 : detected;
+		return 1;
+	}
+	if (strcmp(env, "2") == 0) {
+		/* Unconditional AVX-512 force (v3 / C3). Override the heuristic +
+		 * downclock threshold — *out is GF64_AVX512 regardless of detected. */
+		*out = GF64_AVX512;
 		return 1;
 	}
 	return 0;

@@ -167,6 +167,7 @@ taskset -c 0-3 node test/bench/run-all.js --mode=cliff
 |----------|---------|---------|
 | `PAR3_GF64_METHOD` | Force a specific SIMD method (bypasses auto-detection) | `AVX2`, `AVX512`, `SSSE3`, `SCALAR` |
 | `PAR3_USE_JS_KERNEL` | Fall back to the JS BigInt path | `1` |
+| `PAR3_AVX512_FORCE` | `1`/`true`/`yes`/`on` honour detected ISA (still subject to the downclock heuristic); `0`/`false`/`no`/`off` force AVX-512 off (downgrade to AVX-2 when detected); `2` **unconditionally** forces AVX-512, overriding both the heuristic AND the downclock threshold (operator's escape hatch — confirm hardware support via `test/par3-isa-check.js` first, or the AVX-512 kernel will raise SIGILL) | `1`, `0`, `2` |
 
 These are read by `gf64_init_dispatch()` in C and by `ensureGfMethod()` in bench helpers. Always report which env vars were set when publishing numbers.
 
@@ -329,6 +330,14 @@ vectors**, each independently shippable and bench-gated:
    matrix construction (PD1); AVX-512 downclock heuristic
    `gf64_method_for_workload()` with 16 MiB threshold and `PAR3_AVX512_FORCE`
    env override (PD2); `BLOCK_SIZE` autotune env-gated feature (PD3).
+
+   **v3 follow-up (C3):** `PAR3_AVX512_FORCE=2` was added on top of PD2 to
+   force AVX-512 **unconditionally** — overriding both the downclock
+   heuristic AND the heuristic bypass. The original `=1` value still
+   honours the detected ISA through the heuristic; `=2` bypasses everything
+   and is the operator's escape hatch for benchmarks that want pure
+   AVX-512 throughput with no heuristic interference. See §4's env-var
+   table for the full `PAR3_AVX512_FORCE` matrix.
 
 Total shipped: ~12 new kernel functions across 4 ISAs + 3 NAPI exports +
 4 dispatch slots + 3 parity sections (G/H/I) + 4 engine refactors
