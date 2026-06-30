@@ -54,4 +54,38 @@ void gf64_region_coupled_muladd_scalar_arr(
 	}
 }
 
+/* Fused-output multiply-XOR-accumulate (scalar reference). */
+void gf64_region_fused_output_muladd_scalar_arr(
+    gf64_t *HEDLEY_RESTRICT *HEDLEY_RESTRICT outs,
+    const gf64_t *HEDLEY_RESTRICT in,
+    const gf64_t *HEDLEY_RESTRICT *HEDLEY_RESTRICT coeff_block_starts,
+    size_t len,
+    size_t K) {
+	for (size_t w = 0; w < len; w++) {
+		gf64_t in_w = in[w];
+		for (size_t k = 0; k < K; k++) {
+			outs[k][w] ^= gf64_mul_reference(in_w, *coeff_block_starts[k]);
+		}
+	}
+}
+
+/* 2D-blocked multiply-XOR-accumulate (scalar reference). */
+void gf64_region_2d_muladd_scalar_arr(
+    gf64_t *HEDLEY_RESTRICT *HEDLEY_RESTRICT outs,
+    size_t K,
+    const gf64_t *HEDLEY_RESTRICT *HEDLEY_RESTRICT in_blocks,
+    size_t G,
+    const gf64_t *HEDLEY_RESTRICT coeff_block_2d,
+    size_t K_stride,
+    size_t len) {
+	for (size_t w = 0; w < len; w++) {
+		for (size_t g = 0; g < G; g++) {
+			gf64_t in_w = in_blocks[g][w];
+			for (size_t k = 0; k < K; k++) {
+				outs[k][w] ^= gf64_mul_reference(in_w, *(coeff_block_2d + k*K_stride + g));
+			}
+		}
+	}
+}
+
 HEDLEY_END_C_DECLS

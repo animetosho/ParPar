@@ -534,4 +534,123 @@ void gf64_region_coupled_muladd_avx512_arr(
 	}
 }
 
+/* Fused-output muladd: outs[k][w] ^= in[w] * coeff_block_starts[k] for k in [0..K), w in [0..len). */
+extern void gf64_region_fused_output_muladd_avx512_arr(
+	gf64_t *HEDLEY_RESTRICT *HEDLEY_RESTRICT outs,
+	const gf64_t *HEDLEY_RESTRICT in,
+	const gf64_t *HEDLEY_RESTRICT *HEDLEY_RESTRICT coeff_block_starts,
+	size_t len,
+	size_t K);
+
+__attribute__((target("avx512f,vpclmulqdq")))
+void gf64_region_fused_output_muladd_avx512_arr(
+	gf64_t *HEDLEY_RESTRICT *HEDLEY_RESTRICT outs,
+	const gf64_t *HEDLEY_RESTRICT in,
+	const gf64_t *HEDLEY_RESTRICT *HEDLEY_RESTRICT coeff_block_starts,
+	size_t len,
+	size_t K) {
+	size_t i = 0;
+	size_t blocks = len / 8;
+
+	for (size_t b = 0; b < blocks; b++) {
+		__m512i in_lo = _mm512_set_epi64(0, (int64_t)in[i + 3], 0, (int64_t)in[i + 2],
+		                                  0, (int64_t)in[i + 1], 0, (int64_t)in[i + 0]);
+		__m512i in_hi = _mm512_set_epi64(0, (int64_t)in[i + 7], 0, (int64_t)in[i + 6],
+		                                  0, (int64_t)in[i + 5], 0, (int64_t)in[i + 4]);
+
+		for (size_t k = 0; k < K; k++) {
+			__m512i coeff_bc = _mm512_set1_epi64((int64_t)*coeff_block_starts[k]);
+			__m512i lo_v, hi_v;
+
+			__m512i prod_lo = _mm512_clmulepi64_epi128(in_lo, coeff_bc, 0x00);
+			gf64_split_prod_512(prod_lo, &lo_v, &hi_v);
+			__m512i red_lo = gf64_reduce_512(lo_v, hi_v);
+			__m512i prev_lo = _mm512_maskz_loadu_epi64((__mmask8)0x0F, outs[k] + i);
+			_mm512_mask_storeu_epi64(outs[k] + i, (__mmask8)0x0F,
+			                        _mm512_xor_si512(prev_lo, red_lo));
+
+			__m512i prod_hi = _mm512_clmulepi64_epi128(in_hi, coeff_bc, 0x00);
+			gf64_split_prod_512(prod_hi, &lo_v, &hi_v);
+			__m512i red_hi = gf64_reduce_512(lo_v, hi_v);
+			__m512i prev_hi = _mm512_maskz_loadu_epi64((__mmask8)0x0F, outs[k] + i + 4);
+			_mm512_mask_storeu_epi64(outs[k] + i + 4, (__mmask8)0x0F,
+			                        _mm512_xor_si512(prev_hi, red_hi));
+		}
+
+		i += 8;
+	}
+
+	while (i < len) {
+		gf64_t in_w = in[i];
+		for (size_t k = 0; k < K; k++) {
+			outs[k][i] ^= gf64_mul_reference(in_w, (gf64_t)*coeff_block_starts[k]);
+		}
+		i++;
+	}
+}
+
+extern void gf64_region_2d_muladd_avx512_arr(
+	gf64_t *HEDLEY_RESTRICT *HEDLEY_RESTRICT outs,
+	size_t K,
+	const gf64_t *HEDLEY_RESTRICT *HEDLEY_RESTRICT in_blocks,
+	size_t G,
+	const gf64_t *HEDLEY_RESTRICT coeff_block_2d,
+	size_t K_stride,
+	size_t len);
+
+__attribute__((target("avx512f,vpclmulqdq")))
+void gf64_region_2d_muladd_avx512_arr(
+	gf64_t *HEDLEY_RESTRICT *HEDLEY_RESTRICT outs,
+	size_t K,
+	const gf64_t *HEDLEY_RESTRICT *HEDLEY_RESTRICT in_blocks,
+	size_t G,
+	const gf64_t *HEDLEY_RESTRICT coeff_block_2d,
+	size_t K_stride,
+	size_t len) {
+	size_t i = 0;
+	size_t blocks = len / 8;
+
+	for (size_t b = 0; b < blocks; b++) {
+		for (size_t g = 0; g < G; g++) {
+			__m512i in_lo = _mm512_set_epi64(
+				0, (int64_t)in_blocks[g][i + 3], 0, (int64_t)in_blocks[g][i + 2],
+				0, (int64_t)in_blocks[g][i + 1], 0, (int64_t)in_blocks[g][i + 0]);
+			__m512i in_hi = _mm512_set_epi64(
+				0, (int64_t)in_blocks[g][i + 7], 0, (int64_t)in_blocks[g][i + 6],
+				0, (int64_t)in_blocks[g][i + 5], 0, (int64_t)in_blocks[g][i + 4]);
+
+			for (size_t k = 0; k < K; k++) {
+				__m512i coeff_bc = _mm512_set1_epi64(
+					(int64_t)*(coeff_block_2d + k * K_stride + g));
+				__m512i lo_v, hi_v;
+
+				__m512i prod_lo = _mm512_clmulepi64_epi128(in_lo, coeff_bc, 0x00);
+				gf64_split_prod_512(prod_lo, &lo_v, &hi_v);
+				__m512i red_lo = gf64_reduce_512(lo_v, hi_v);
+				__m512i prev_lo = _mm512_maskz_loadu_epi64((__mmask8)0x0F, outs[k] + i);
+				_mm512_mask_storeu_epi64(outs[k] + i, (__mmask8)0x0F,
+				                         _mm512_xor_si512(prev_lo, red_lo));
+
+				__m512i prod_hi = _mm512_clmulepi64_epi128(in_hi, coeff_bc, 0x00);
+				gf64_split_prod_512(prod_hi, &lo_v, &hi_v);
+				__m512i red_hi = gf64_reduce_512(lo_v, hi_v);
+				__m512i prev_hi = _mm512_maskz_loadu_epi64((__mmask8)0x0F, outs[k] + i + 4);
+				_mm512_mask_storeu_epi64(outs[k] + i + 4, (__mmask8)0x0F,
+				                         _mm512_xor_si512(prev_hi, red_hi));
+			}
+		}
+		i += 8;
+	}
+
+	while (i < len) {
+		for (size_t g = 0; g < G; g++) {
+			gf64_t in_w = in_blocks[g][i];
+			for (size_t k = 0; k < K; k++) {
+				outs[k][i] ^= gf64_mul_reference(in_w, (gf64_t)*(coeff_block_2d + k * K_stride + g));
+			}
+		}
+		i++;
+	}
+}
+
 HEDLEY_END_C_DECLS

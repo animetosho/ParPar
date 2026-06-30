@@ -275,4 +275,79 @@ void gf64_region_coupled_muladd_ssse3_arr(
 	}
 }
 
+/* Fused-output multiply-XOR-accumulate (SSSE3+pclmul). */
+__attribute__((target("ssse3,pclmul")))
+void gf64_region_fused_output_muladd_ssse3_arr(
+	gf64_t *HEDLEY_RESTRICT *HEDLEY_RESTRICT outs,
+	const gf64_t *HEDLEY_RESTRICT in,
+	const gf64_t *HEDLEY_RESTRICT *HEDLEY_RESTRICT coeff_block_starts,
+	size_t len,
+	size_t K)
+{
+	size_t blocks = len / 2;
+	size_t i = 0;
+
+	for (size_t b = 0; b < blocks; b++) {
+		for (size_t k = 0; k < K; k++) {
+			uint64_t r0, r1;
+			gf64_clmul_reduce_64x64_packed(in[i + 0], in[i + 1], (uint64_t)*coeff_block_starts[k], &r0, &r1);
+			outs[k][i + 0] ^= r0;
+			outs[k][i + 1] ^= r1;
+		}
+		i += 2;
+	}
+
+	/* Tail (1 element) */
+	if (i < len) {
+		for (size_t k = 0; k < K; k++) {
+			outs[k][i] ^= gf64_mul_reference(in[i], (gf64_t)*coeff_block_starts[k]);
+		}
+	}
+}
+
+/* 2D-blocked multiply-XOR-accumulate (SSSE3+pclmul). */
+extern void gf64_region_2d_muladd_ssse3_arr(
+	gf64_t *HEDLEY_RESTRICT *HEDLEY_RESTRICT outs,
+	size_t K,
+	const gf64_t *HEDLEY_RESTRICT *HEDLEY_RESTRICT in_blocks,
+	size_t G,
+	const gf64_t *HEDLEY_RESTRICT coeff_block_2d,
+	size_t K_stride,
+	size_t len);
+
+__attribute__((target("ssse3,pclmul")))
+void gf64_region_2d_muladd_ssse3_arr(
+	gf64_t *HEDLEY_RESTRICT *HEDLEY_RESTRICT outs,
+	size_t K,
+	const gf64_t *HEDLEY_RESTRICT *HEDLEY_RESTRICT in_blocks,
+	size_t G,
+	const gf64_t *HEDLEY_RESTRICT coeff_block_2d,
+	size_t K_stride,
+	size_t len)
+{
+	size_t blocks = len / 2;
+	size_t i = 0;
+
+	for (size_t b = 0; b < blocks; b++) {
+		for (size_t g = 0; g < G; g++) {
+			for (size_t k = 0; k < K; k++) {
+				uint64_t r0, r1;
+				gf64_clmul_reduce_64x64_packed(in_blocks[g][2*b + 0], in_blocks[g][2*b + 1], *(coeff_block_2d + k*K_stride + g), &r0, &r1);
+				outs[k][2*b + 0] ^= r0;
+				outs[k][2*b + 1] ^= r1;
+			}
+		}
+		i += 2;
+	}
+
+	/* Tail (1 element) */
+	if (i < len) {
+		for (size_t g = 0; g < G; g++) {
+			for (size_t k = 0; k < K; k++) {
+				outs[k][i] ^= gf64_mul_reference(in_blocks[g][i], *(coeff_block_2d + k*K_stride + g));
+			}
+		}
+	}
+}
+
 HEDLEY_END_C_DECLS

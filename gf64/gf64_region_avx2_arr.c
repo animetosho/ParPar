@@ -542,4 +542,120 @@ void gf64_region_coupled_muladd_avx2_arr(
 	}
 }
 
+/* Fused-output kernel: outs[k][w] ^= in[w] * coeff_block_starts[k] for k in [0..K).
+ * Structural template: gf64_region_coupled_muladd_avx2_arr. */
+extern void gf64_region_fused_output_muladd_avx2_arr(
+	gf64_t *HEDLEY_RESTRICT *HEDLEY_RESTRICT outs,
+	const gf64_t *HEDLEY_RESTRICT in,
+	const gf64_t *HEDLEY_RESTRICT *HEDLEY_RESTRICT coeff_block_starts,
+	size_t len,
+	size_t K);
+
+__attribute__((target("avx2,vpclmulqdq")))
+void gf64_region_fused_output_muladd_avx2_arr(
+	gf64_t *HEDLEY_RESTRICT *HEDLEY_RESTRICT outs,
+	const gf64_t *HEDLEY_RESTRICT in,
+	const gf64_t *HEDLEY_RESTRICT *HEDLEY_RESTRICT coeff_block_starts,
+	size_t len,
+	size_t K) {
+	size_t i = 0;
+
+	/* Process 4 elements per outer iteration (2 pairs of 2). */
+	size_t blocks = len / 4;
+	for (size_t b = 0; b < blocks; b++) {
+		__m256i in01 = _mm256_setr_epi64x((int64_t)in[i + 0], 0, (int64_t)in[i + 1], 0);
+		__m256i in23 = _mm256_setr_epi64x((int64_t)in[i + 2], 0, (int64_t)in[i + 3], 0);
+
+		for (size_t k = 0; k < K; k++) {
+			__m256i coeff_bc = _mm256_set1_epi64x((int64_t)*coeff_block_starts[k]);
+
+			__m256i prod01 = _mm256_clmulepi64_epi128(in01, coeff_bc, 0x00);
+			__m256i lo_v, hi_v;
+			gf64_split_prod_ymm(prod01, &lo_v, &hi_v);
+			__m256i result01 = gf64_reduce_ymm(lo_v, hi_v);
+			__m128i prev01 = _mm_loadu_si128((const __m128i *)(outs[k] + i + 0));
+			_mm_storeu_si128((__m128i *)(outs[k] + i + 0),
+				_mm_xor_si128(prev01, _mm256_castsi256_si128(result01)));
+
+			__m256i prod23 = _mm256_clmulepi64_epi128(in23, coeff_bc, 0x00);
+			gf64_split_prod_ymm(prod23, &lo_v, &hi_v);
+			__m256i result23 = gf64_reduce_ymm(lo_v, hi_v);
+			__m128i prev23 = _mm_loadu_si128((const __m128i *)(outs[k] + i + 2));
+			_mm_storeu_si128((__m128i *)(outs[k] + i + 2),
+				_mm_xor_si128(prev23, _mm256_castsi256_si128(result23)));
+		}
+
+		i += 4;
+	}
+
+	/* Tail (0..3 elements) — scalar epilog. */
+	while (i < len) {
+		gf64_t in_w = in[i];
+		for (size_t k = 0; k < K; k++) {
+			outs[k][i] ^= gf64_mul_reference(in_w, *coeff_block_starts[k]);
+		}
+		i++;
+	}
+}
+
+extern void gf64_region_2d_muladd_avx2_arr(
+	gf64_t *HEDLEY_RESTRICT *HEDLEY_RESTRICT outs,
+	size_t K,
+	const gf64_t *HEDLEY_RESTRICT *HEDLEY_RESTRICT in_blocks,
+	size_t G,
+	const gf64_t *HEDLEY_RESTRICT coeff_block_2d,
+	size_t K_stride,
+	size_t len);
+
+__attribute__((target("avx2,vpclmulqdq")))
+void gf64_region_2d_muladd_avx2_arr(
+	gf64_t *HEDLEY_RESTRICT *HEDLEY_RESTRICT outs,
+	size_t K,
+	const gf64_t *HEDLEY_RESTRICT *HEDLEY_RESTRICT in_blocks,
+	size_t G,
+	const gf64_t *HEDLEY_RESTRICT coeff_block_2d,
+	size_t K_stride,
+	size_t len) {
+	size_t i = 0;
+
+	size_t blocks = len / 4;
+	for (size_t b = 0; b < blocks; b++) {
+		for (size_t g = 0; g < G; g++) {
+			__m256i in01 = _mm256_setr_epi64x((int64_t)in_blocks[g][i + 0], 0, (int64_t)in_blocks[g][i + 1], 0);
+			__m256i in23 = _mm256_setr_epi64x((int64_t)in_blocks[g][i + 2], 0, (int64_t)in_blocks[g][i + 3], 0);
+
+			for (size_t k = 0; k < K; k++) {
+				__m256i coeff_bc = _mm256_set1_epi64x((int64_t)*(coeff_block_2d + k*K_stride + g));
+
+				__m256i prod01 = _mm256_clmulepi64_epi128(in01, coeff_bc, 0x00);
+				__m256i lo_v, hi_v;
+				gf64_split_prod_ymm(prod01, &lo_v, &hi_v);
+				__m256i result01 = gf64_reduce_ymm(lo_v, hi_v);
+				__m128i prev01 = _mm_loadu_si128((const __m128i *)(outs[k] + i + 0));
+				_mm_storeu_si128((__m128i *)(outs[k] + i + 0),
+					_mm_xor_si128(prev01, _mm256_castsi256_si128(result01)));
+
+				__m256i prod23 = _mm256_clmulepi64_epi128(in23, coeff_bc, 0x00);
+				gf64_split_prod_ymm(prod23, &lo_v, &hi_v);
+				__m256i result23 = gf64_reduce_ymm(lo_v, hi_v);
+				__m128i prev23 = _mm_loadu_si128((const __m128i *)(outs[k] + i + 2));
+				_mm_storeu_si128((__m128i *)(outs[k] + i + 2),
+					_mm_xor_si128(prev23, _mm256_castsi256_si128(result23)));
+			}
+		}
+
+		i += 4;
+	}
+
+	while (i < len) {
+		for (size_t g = 0; g < G; g++) {
+			gf64_t in_w = in_blocks[g][i];
+			for (size_t k = 0; k < K; k++) {
+				outs[k][i] ^= gf64_mul_reference(in_w, *(coeff_block_2d + k*K_stride + g));
+			}
+		}
+		i++;
+	}
+}
+
 HEDLEY_END_C_DECLS
