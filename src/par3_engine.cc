@@ -19,6 +19,7 @@
 #include <unordered_map>
 #include <list>
 #include <cstdio>
+#include <cstdlib>
 
 // ============================================================================
 // Dispatch initialisation (one-shot)
@@ -215,6 +216,28 @@ void GF64Controller::MultiplyAccumulate(
 			                       &row[j], blockSize64, 1);
 		}
 	}
+}
+
+// ============================================================================
+// Tunable group size for the Wave 2 engine refactor (T3).
+// ----------------------------------------------------------------------------
+// PAR3_GF64_GROUP overrides the number of recovery blocks grouped per worker
+// for cache-friendly tiling. Range: 1..256; out-of-range or invalid values
+// silently fall back to kDefaultGroupSize.
+// ============================================================================
+static constexpr size_t kDefaultGroupSize = 12;
+
+static int ParseGroupSizeEnv() {
+	const char* env = std::getenv("PAR3_GF64_GROUP");
+	if (env == nullptr || *env == '\0') return 0;
+	int v = std::atoi(env);
+	if (v < 1 || v > 256) return 0;
+	return v;
+}
+
+static int GetGroupSize() {
+	static int v = ParseGroupSizeEnv();
+	return v > 0 ? v : static_cast<int>(kDefaultGroupSize);
 }
 
 // ============================================================================
