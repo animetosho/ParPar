@@ -15,10 +15,15 @@ extern void gf64_region_muladd_scalar_arr(gf64_t *HEDLEY_RESTRICT out, const gf6
 extern void gf64_region_muladd_ssse3_arr(gf64_t *HEDLEY_RESTRICT out, const gf64_t *HEDLEY_RESTRICT in, const gf64_t *HEDLEY_RESTRICT coeff, size_t len, size_t n_coeff);
 extern void gf64_region_muladd_avx2_arr(gf64_t *HEDLEY_RESTRICT out, const gf64_t *HEDLEY_RESTRICT in, const gf64_t *HEDLEY_RESTRICT coeff, size_t len, size_t n_coeff);
 extern void gf64_region_muladd_avx512_arr(gf64_t *HEDLEY_RESTRICT out, const gf64_t *HEDLEY_RESTRICT in, const gf64_t *HEDLEY_RESTRICT coeff, size_t len, size_t n_coeff);
+extern void gf64_region_coupled_muladd_scalar_arr(gf64_t *HEDLEY_RESTRICT out, const gf64_t *HEDLEY_RESTRICT *HEDLEY_RESTRICT in_blocks, const gf64_t *HEDLEY_RESTRICT coeff_blocks, size_t len, size_t G);
+extern void gf64_region_coupled_muladd_ssse3_arr(gf64_t *HEDLEY_RESTRICT out, const gf64_t *HEDLEY_RESTRICT *HEDLEY_RESTRICT in_blocks, const gf64_t *HEDLEY_RESTRICT coeff_blocks, size_t len, size_t G);
+extern void gf64_region_coupled_muladd_avx2_arr(gf64_t *HEDLEY_RESTRICT out, const gf64_t *HEDLEY_RESTRICT *HEDLEY_RESTRICT in_blocks, const gf64_t *HEDLEY_RESTRICT coeff_blocks, size_t len, size_t G);
+extern void gf64_region_coupled_muladd_avx512_arr(gf64_t *HEDLEY_RESTRICT out, const gf64_t *HEDLEY_RESTRICT *HEDLEY_RESTRICT in_blocks, const gf64_t *HEDLEY_RESTRICT coeff_blocks, size_t len, size_t G);
 
 gf64_region_mul_fn gf64_region_mul;
 gf64_region_mul_arr_fn gf64_region_mul_arr;
 gf64_region_muladd_arr_fn gf64_region_muladd_arr;
+gf64_region_coupled_muladd_arr_fn gf64_region_coupled_muladd_arr;
 GF64Method gf64_current_method;
 
 static void gf64_cpuid(int leaf, int subleaf, unsigned int *eax, unsigned int *ebx, unsigned int *ecx, unsigned int *edx) {
@@ -135,22 +140,26 @@ int gf64_init_dispatch(void) {
 			gf64_region_mul = gf64_region_mul_avx512;
 			gf64_region_mul_arr = gf64_region_mul_avx512_arr;
 			gf64_region_muladd_arr = gf64_region_muladd_avx512_arr;
+			gf64_region_coupled_muladd_arr = gf64_region_coupled_muladd_avx512_arr;
 			break;
 		case GF64_AVX2:
 			gf64_region_mul = gf64_region_mul_avx2;
 			gf64_region_mul_arr = gf64_region_mul_avx2_arr;
 			gf64_region_muladd_arr = gf64_region_muladd_avx2_arr;
+			gf64_region_coupled_muladd_arr = gf64_region_coupled_muladd_avx2_arr;
 			break;
 		case GF64_SSSE3:
 			gf64_region_mul = gf64_region_mul_ssse3;
 			gf64_region_mul_arr = gf64_region_mul_ssse3_arr;
 			gf64_region_muladd_arr = gf64_region_muladd_ssse3_arr;
+			gf64_region_coupled_muladd_arr = gf64_region_coupled_muladd_ssse3_arr;
 			break;
 		case GF64_SCALAR:
 		default:
 			gf64_region_mul = gf64_region_mul_scalar;
 			gf64_region_mul_arr = gf64_region_mul_scalar_arr;
 			gf64_region_muladd_arr = gf64_region_muladd_scalar_arr;
+			gf64_region_coupled_muladd_arr = gf64_region_coupled_muladd_scalar_arr;
 			break;
 	}
 
