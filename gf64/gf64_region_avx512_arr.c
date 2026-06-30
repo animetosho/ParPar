@@ -634,11 +634,18 @@ void gf64_region_2d_muladd_avx512_arr(
 		 * the per-K-row accumulators are independent — moving them
 		 * to parallel ZMMs does not alter the bit result.
 		 *
-		 * Falls back to the serial K loop for K != 2 (general K
-		 * path below). Falls back to the scalar epilog for the
-		 * tail (len % 8). */
+			 * Falls back to the serial K loop for K != 2 (general K
+			 * path below). Falls back to the scalar epilog for the
+			 * tail (len % 8). */
 		for (size_t b = 0; b < blocks; b++) {
 			for (size_t g = 0; g < G; g++) {
+				/* D2: prefetch the NEXT input block's current W-lane
+				 * into L1 (T0 hint) before the SIMD loads below. The
+				 * prefetch is bounded by g+1 < G to avoid reading past
+				 * the in_blocks[] pointer array on the last iteration. */
+				if (g + 1 < G) {
+					_mm_prefetch((const char *)&in_blocks[g + 1][i], _MM_HINT_T0);
+				}
 				__m512i in_lo = _mm512_set_epi64(
 					0, (int64_t)in_blocks[g][i + 3], 0, (int64_t)in_blocks[g][i + 2],
 					0, (int64_t)in_blocks[g][i + 1], 0, (int64_t)in_blocks[g][i + 0]);
@@ -694,6 +701,13 @@ void gf64_region_2d_muladd_avx512_arr(
 		/* General-K path: serial K loop. K=1, 4, 8, 16 fall here. */
 		for (size_t b = 0; b < blocks; b++) {
 			for (size_t g = 0; g < G; g++) {
+				/* D2: prefetch the NEXT input block's current W-lane
+				 * into L1 (T0 hint) before the SIMD loads below. The
+				 * prefetch is bounded by g+1 < G to avoid reading past
+				 * the in_blocks[] pointer array on the last iteration. */
+				if (g + 1 < G) {
+					_mm_prefetch((const char *)&in_blocks[g + 1][i], _MM_HINT_T0);
+				}
 				__m512i in_lo = _mm512_set_epi64(
 					0, (int64_t)in_blocks[g][i + 3], 0, (int64_t)in_blocks[g][i + 2],
 					0, (int64_t)in_blocks[g][i + 1], 0, (int64_t)in_blocks[g][i + 0]);

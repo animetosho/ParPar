@@ -330,6 +330,13 @@ void gf64_region_2d_muladd_ssse3_arr(
 
 	for (size_t b = 0; b < blocks; b++) {
 		for (size_t g = 0; g < G; g++) {
+			/* D2: prefetch the NEXT input block's current W-lane
+			 * into L1 (T0 hint) before the SIMD loads below. The
+			 * prefetch is bounded by g+1 < G to avoid reading past
+			 * the in_blocks[] pointer array on the last iteration. */
+			if (g + 1 < G) {
+				_mm_prefetch((const char *)&in_blocks[g + 1][i], _MM_HINT_T0);
+			}
 			for (size_t k = 0; k < K; k++) {
 				uint64_t r0, r1;
 				gf64_clmul_reduce_64x64_packed(in_blocks[g][2*b + 0], in_blocks[g][2*b + 1], *(coeff_block_2d + k*K_stride + g), &r0, &r1);
