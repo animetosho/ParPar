@@ -197,12 +197,56 @@ void gf64_apply_method(GF64Method method) {
 	gf64_current_method = method;
 }
 
-/* Working-set threshold (bytes) above which AVX-512's Zen4 downclock
- * outweighs its per-instruction throughput advantage. The plan spec uses
- * 16 MiB as the L2-resident cutoff; under downclock, the per-call working
- * set that exceeds L2 stalls the pipeline frequently enough that AVX-2's
- * full-frequency execution wins. */
-#define GF64_AVX512_DOWNCLOCK_WORKING_SET_BYTES (16ULL * 1024 * 1024)
+/* AVX-512 downclock heuristic thresholds (v3 max-perf plan, Phase C).
+ *
+ * - GF64_AVX512_HEURISTIC_BYPASS_WORKING_SET_BYTES (100 MiB): for working
+ *   sets above this, AVX-512's per-instruction throughput advantage dominates
+ *   Zen4's downclock penalty. The heuristic is bypassed entirely and the
+ *   detected ISA is honoured as-is (AVX-512 if available, otherwise whatever
+ *   the next-best ISA is). The 100 MiB cutoff is well above the L2-resident
+ *   region of typical 1 GiB bench workloads.
+ *
+ * - GF64_AVX512_DOWNCLOCK_WORKING_SET_BYTES (256 MiB, was 16 MiB in v2): the
+ *   upper bound of the "downclock zone" where AVX-512 downgrades to AVX-2.
+ *   The v2 16 MiB cutoff was over-conservative — Zen4's AVX-512 downclock is
+ *   most aggressive at very small working sets, but as the working set grows
+ *   past L2 the AVX-512 throughput advantage becomes meaningful again.
+ *   256 MiB matches the L2/L3 boundary on Zen4 7800X3D; in practice this
+ *   threshold is unreachable today because the 100 MiB bypass fires first,
+ *   but it is preserved for forward-compatibility (e.g. if the bypass is
+ *   later raised or removed).
+ *
+ * - PAR3_GF64_WORKLOAD_SIZE env var: when set, overrides the inferred
+ *   working-set size (which is computed as `block_size * sizeof(gf64_t) *
+ *   (num_in + num_out)`). Useful for tests and for future C++ call sites
+ *   that know the on-disk file size directly. Malformed / negative values
+ *   are treated as "unset" (the inferred value is used).
+ */
+#define GF64_AVX512_HEURISTIC_BYPASS_WORKING_SET_BYTES (100ULL * 1024 * 1024)
+#define GF64_AVX512_DOWNCLOCK_WORKING_SET_BYTES (256ULL * 1024 * 1024)
+
+/* Read PAR3_GF64_WORKLOAD_SIZE env var as a decimal byte count. Returns 0
+ * when unset / empty / malformed (matches the spec's "0 if unset" contract).
+ * Memoised — the env var is read at most once per process. */
+static size_t parse_workload_size_env(void) {
+	static long long cached = -1;  /* -1 = not yet parsed, 0 = unset, >0 = bytes */
+	if (cached >= 0) return (size_t)cached;
+
+	const char *env = getenv("PAR3_GF64_WORKLOAD_SIZE");
+	if (env == NULL || *env == '\0') {
+		cached = 0;
+		return 0;
+	}
+
+	char *end;
+	long long val = strtoll(env, &end, 10);
+	if (end == env || *end != '\0' || val < 0) {
+		cached = 0;  /* malformed / negative → treat as unset */
+		return 0;
+	}
+	cached = val;
+	return (size_t)val;
+}
 
 static int gf64_parse_force_env(GF64Method detected, GF64Method *out) {
 	const char *env = getenv("PAR3_AVX512_FORCE");
@@ -229,16 +273,37 @@ GF64Method gf64_method_for_workload(size_t num_in, size_t num_out, size_t block_
 		return forced;
 	}
 
-	if (block_size > 0 &&
-	    (num_in + num_out) > 0 &&
-	    num_in + num_out > (SIZE_MAX / block_size / sizeof(gf64_t))) {
-		/* Overflow guard: degrade to per-ISA max (matches pre-heuristic behaviour). */
+	/* Determine the effective working-set bytes. Two paths:
+	 *   1. PAR3_GF64_WORKLOAD_SIZE env var override (set by tests or future
+	 *      C++ call sites that know the on-disk file size directly).
+	 *   2. Inferred from num_in / num_out / block_size (the historical path).
+	 * Malformed env values fall through to path 2. */
+	size_t working_set_bytes;
+	size_t env_wb = parse_workload_size_env();
+	if (env_wb > 0) {
+		working_set_bytes = env_wb;
+	} else {
+		if (block_size > 0 &&
+		    (num_in + num_out) > 0 &&
+		    num_in + num_out > (SIZE_MAX / block_size / sizeof(gf64_t))) {
+			/* Overflow guard: degrade to per-ISA max (matches pre-heuristic behaviour). */
+			return detected;
+		}
+		working_set_bytes = block_size * sizeof(gf64_t) * (num_in + num_out);
+	}
+
+	/* Big-workload bypass: for working sets > 100 MiB, AVX-512's per-instruction
+	 * throughput advantage dominates the downclock penalty — honour the detected
+	 * ISA as-is (no heuristic downgrade). */
+	if (working_set_bytes > GF64_AVX512_HEURISTIC_BYPASS_WORKING_SET_BYTES) {
 		return detected;
 	}
-	size_t working_set_bytes = block_size * sizeof(gf64_t) * (num_in + num_out);
+
 	if (working_set_bytes > GF64_AVX512_DOWNCLOCK_WORKING_SET_BYTES) {
-		/* Working set exceeds 16 MiB: AVX-512 downclock would lose.
-		 * Downgrade to AVX-2 if available; otherwise keep the per-ISA max. */
+		/* Working set exceeds 256 MiB: AVX-512 downclock would lose.
+		 * Downgrade to AVX-2 if available; otherwise keep the per-ISA max.
+		 * Effectively unreachable today (the 100 MiB bypass fires first) but
+		 * preserved for forward-compatibility. */
 		return (detected == GF64_AVX512) ? GF64_AVX2 : detected;
 	}
 
