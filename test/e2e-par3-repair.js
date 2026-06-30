@@ -12,6 +12,9 @@ var BLOCK_SIZE = 1024 * 1024;
 var SLICE_COUNT = 10;
 var DELETE_RATIO = 0.1;
 
+var PAR3_MAGIC = Buffer.from('PAR3\0PKT');
+var PAR3_PKT_HDR_SIZE = 48;
+
 function formatDuration(ms) {
 	if (ms < 1000) return ms + 'ms';
 	if (ms < 60000) return (ms / 1000).toFixed(1) + 's';
@@ -45,6 +48,80 @@ function parseArgs() {
 	return { mode: mode, jsonMetrics: jsonMetrics };
 }
 
+// Walk the PAR3 file packet-by-packet and return a list of DATA packets
+// as { offset, bodyOffset, blockIndex, totalLen }.
+// PAR3 packet header (48 bytes):
+//   bytes 0-7:   magic "PAR3\0PKT"
+//   bytes 8-23:  BLAKE3 checksum
+//   bytes 24-31: totalLen (uint64 LE) — header + body
+//   bytes 32-39: inputSetID (8 bytes)
+//   bytes 40-47: type (8-byte ASCII, e.g., 'PAR DAT\0')
+// DATA packet body: blockIndex (uint64 LE) + raw block bytes
+function parseDataPackets(par3File) {
+	var fd = fs.openSync(par3File, 'r');
+	var stat = fs.fstatSync(fd);
+	var offset = 0;
+	var dataPackets = [];
+	while (offset < stat.size) {
+		var header = Buffer.alloc(PAR3_PKT_HDR_SIZE);
+		fs.readSync(fd, header, 0, PAR3_PKT_HDR_SIZE, offset);
+		if (!header.slice(0, 8).equals(PAR3_MAGIC)) {
+			// Skip forward and resync; should not happen in a well-formed archive
+			offset += 8;
+			continue;
+		}
+		var totalLen = Number(header.readBigUInt64LE(24));
+		if (totalLen < PAR3_PKT_HDR_SIZE || offset + totalLen > stat.size + 8) {
+			break;
+		}
+		var typeStr = header.slice(40, 48).toString('ascii');
+		if (typeStr === 'PAR DAT\0') {
+			var bodyOffset = offset + PAR3_PKT_HDR_SIZE;
+			var blockIndexBuf = Buffer.alloc(8);
+			fs.readSync(fd, blockIndexBuf, 0, 8, bodyOffset);
+			dataPackets.push({
+				offset: offset,
+				bodyOffset: bodyOffset,
+				blockIndex: Number(blockIndexBuf.readBigUInt64LE(0)),
+				totalLen: totalLen
+			});
+		}
+		offset += totalLen;
+	}
+	fs.closeSync(fd);
+	return dataPackets;
+}
+
+// Damage the PAR3 archive by zeroing out `numToZero` DATA packets in their ENTIRETY
+// (header + body). This is necessary because the repair tool's pass 1 records every
+// successfully-parsed DATA packet's file offset and pass 2 reads it unconditionally;
+// damaging just the body bytes leaves the header intact, so the packet is still
+// parsed, recorded, and added to the available-block map as a 0-byte block, and the
+// repair tool happily takes the "no missing blocks" path producing an empty file.
+// Zeroing the entire packet (including the 48-byte header) breaks the PAR3 magic
+// signature, which causes the streaming parser to fall into its magic-resync path
+// (parseOffset += 8) and skip over the damaged packet. The repair tool then sees
+// the damaged DATA block as genuinely missing and exercises its actual repair path
+// via the RECOVERY packets.
+function damageArchive(par3File, numToZero, sliceSize) {
+	var dataPackets = parseDataPackets(par3File);
+	if (dataPackets.length === 0) {
+		throw new Error('damageArchive: no DATA packets found in archive');
+	}
+	var fd = fs.openSync(par3File, 'r+');
+	var damaged = [];
+	for (var i = 0; i < dataPackets.length && damaged.length < numToZero; i++) {
+		var pkt = dataPackets[i];
+		// Zero the entire packet (header + body) so the magic signature is destroyed.
+		var zeroBuf = Buffer.alloc(pkt.totalLen);
+		fs.writeSync(fd, zeroBuf, 0, pkt.totalLen, pkt.offset);
+		damaged.push(pkt);
+	}
+	fs.fsyncSync(fd);
+	fs.closeSync(fd);
+	return damaged;
+}
+
 function run() {
 	var opts = parseArgs();
 	var isLocal = opts.mode === 'local';
@@ -57,7 +134,6 @@ function run() {
 	var testFile = path.join(tempDir, 'test.bin');
 	var outputBase = path.join(tempDir, 'out');
 	var par3File = outputBase + '.par3';
-	var corruptedFile = path.join(tempDir, 'test_corrupted.bin');
 	
 	var metrics = {
 		fileSize: fileSize,
@@ -84,10 +160,10 @@ function run() {
 	console.log('File size: ' + formatBytes(fileSize));
 	console.log('Data slices: ' + actualDataSlices + ' (' + formatBytes(sliceSize) + ' each)');
 	console.log('Recovery slices: ' + SLICE_COUNT);
-	console.log('Slices to delete: ' + slicesToDelete + ' (' + (DELETE_RATIO * 100) + '%)\n');
+	console.log('Slices to damage: ' + slicesToDelete + ' (' + (DELETE_RATIO * 100) + '%)\n');
 	
 	var startTime = Date.now();
-	var createFileStart, hashOriginalStart, createPar3Start, deleteSlicesStart, repairStart, hashRepairedStart;
+	var createFileStart, hashOriginalStart, createPar3Start, damageSlicesStart, repairStart, hashRepairedStart;
 	
 	helpers.cleanup(tempDir);
 	
@@ -116,11 +192,10 @@ function run() {
 			}
 			console.log('  Create succeeded\n');
 			
-			deleteSlicesStart = Date.now();
-			console.log('Copying file and deleting ' + slicesToDelete + ' random slices...');
-			fs.copyFileSync(testFile, corruptedFile);
-			var deletedIndices = helpers.deleteRandomSlices(corruptedFile, sliceSize, slicesToDelete);
-			console.log('  Deleted slices: ' + deletedIndices.length + '\n');
+			damageSlicesStart = Date.now();
+			console.log('Damaging ' + slicesToDelete + ' DATA packets inside the PAR3 archive...');
+			var damaged = damageArchive(par3File, slicesToDelete, sliceSize);
+			console.log('  Damaged DATA packets: ' + damaged.length + '\n');
 			
 			repairStart = Date.now();
 			console.log('Running repair...');
@@ -176,8 +251,8 @@ function run() {
 		metrics.durations.createFile = createFileStart - startTime;
 		metrics.durations.hashOriginal = hashOriginalStart - createFileStart;
 		metrics.durations.createPar3 = createPar3Start - hashOriginalStart;
-		metrics.durations.deleteSlices = deleteSlicesStart - createPar3Start;
-		metrics.durations.repair = repairStart - deleteSlicesStart;
+		metrics.durations.damageSlices = damageSlicesStart - createPar3Start;
+		metrics.durations.repair = repairStart - damageSlicesStart;
 		metrics.durations.hashRepaired = hashRepairedStart - repairStart;
 		metrics.durations.total = endTime - startTime;
 		
@@ -185,7 +260,7 @@ function run() {
 			createFile: formatDuration(metrics.durations.createFile),
 			hashOriginal: formatDuration(metrics.durations.hashOriginal),
 			createPar3: formatDuration(metrics.durations.createPar3),
-			deleteSlices: formatDuration(metrics.durations.deleteSlices),
+			damageSlices: formatDuration(metrics.durations.damageSlices),
 			repair: formatDuration(metrics.durations.repair),
 			hashRepaired: formatDuration(metrics.durations.hashRepaired),
 			total: formatDuration(metrics.durations.total)
@@ -218,12 +293,12 @@ function run() {
 		console.log('\nPerformance Metrics:');
 		console.log('  File size: ' + metrics.fileSizeHuman);
 		console.log('  Slice count: ' + metrics.sliceCount + ' (' + formatBytes(metrics.sliceSize) + ' each)');
-		console.log('  Slices deleted: ' + metrics.slicesDeleted);
+		console.log('  Slices damaged: ' + metrics.slicesDeleted);
 		console.log('\nDurations:');
 		console.log('  createFile: ' + metrics.durationsHuman.createFile);
 		console.log('  hashOriginal: ' + metrics.durationsHuman.hashOriginal);
 		console.log('  createPar3: ' + metrics.durationsHuman.createPar3);
-		console.log('  deleteSlices: ' + metrics.durationsHuman.deleteSlices);
+		console.log('  damageSlices: ' + metrics.durationsHuman.damageSlices);
 		console.log('  repair: ' + metrics.durationsHuman.repair);
 		console.log('  hashRepaired: ' + metrics.durationsHuman.hashRepaired);
 		console.log('  TOTAL: ' + metrics.durationsHuman.total);
