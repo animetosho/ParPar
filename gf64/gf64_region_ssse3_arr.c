@@ -228,4 +228,51 @@ void gf64_region_muladd_ssse3_arr(gf64_t *HEDLEY_RESTRICT out, const gf64_t *HED
 	}
 }
 
+/* Coupled-input XOR-accumulating variant for Cauchy-style recovery.
+ *
+ * Unlike gf64_region_muladd_ssse3_arr (which sums over a single shared
+ * in[] buffer across all n_coeff), this kernel reads PER-INDEX input
+ * addressing: in_blocks[g] is the g-th input block and coeff_blocks[g]
+ * is its paired coefficient. The g-loop therefore varies both inputs
+ * and coefficients, giving the outer-product / coupled-input semantic
+ * required by PAR3 recovery:
+ *
+ *   for g in 0..G-1: out[i] ^= gf64_mul(in_blocks[g][i], coeff_blocks[g])
+ *
+ * Same packed 2-element SSSE3+pclmul inner loop as the dot-product
+ * variant above; one tail-element path covers odd len. Bit-exact against
+ * the gf64_mul_reference (PA1) path; not wired to dispatch (PA5). */
+void gf64_region_coupled_muladd_ssse3_arr(
+	gf64_t *HEDLEY_RESTRICT out,
+	const gf64_t *HEDLEY_RESTRICT *HEDLEY_RESTRICT in_blocks,
+	const gf64_t *HEDLEY_RESTRICT *HEDLEY_RESTRICT coeff_blocks,
+	size_t len,
+	size_t G)
+{
+	size_t blocks = len / 2;
+	size_t i = 0;
+
+	for (size_t b = 0; b < blocks; b++) {
+		uint64_t acc0 = 0, acc1 = 0;
+		for (size_t g = 0; g < G; g++) {
+			uint64_t r0, r1;
+			gf64_clmul_reduce_64x64_packed(in_blocks[g][2*b + 0], in_blocks[g][2*b + 1], coeff_blocks[g], &r0, &r1);
+			acc0 ^= r0;
+			acc1 ^= r1;
+		}
+		out[2*b + 0] ^= acc0;
+		out[2*b + 1] ^= acc1;
+		i += 2;
+	}
+
+	/* Tail (1 element) */
+	if (i < len) {
+		uint64_t acc = 0;
+		for (size_t g = 0; g < G; g++) {
+			acc ^= gf64_mul_reference(in_blocks[g][i], coeff_blocks[g]);
+		}
+		out[i] ^= acc;
+	}
+}
+
 HEDLEY_END_C_DECLS
