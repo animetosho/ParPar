@@ -459,4 +459,87 @@ void gf64_region_muladd_avx2_arr(gf64_t *HEDLEY_RESTRICT out, const gf64_t *HEDL
 	}
 }
 
+/* Coupled-input kernel: out[i] ^= XOR_{g=0..G-1} (in_blocks[g][i] * coeff_blocks[g]).
+ * Each coefficient `coeff_blocks[g]` is paired with its OWN input block
+ * `in_blocks[g][]` (not a single shared `in[]` as in the existing
+ * gf64_region_mul_avx2_arr n_coeff>1 branch). The two semantics are NOT
+ * equivalent — see .omo/notepads/par3-par2-perf/learnings.md "Task 3 root
+ * cause" for the linear-collapse proof. This kernel is the corrected
+ * coupled-input variant used by the Cauchy recovery path in WorkerThread.
+ *
+ * Process 4 elements per outer iteration (2 pairs of 2). Each pair's two
+ * GF(2^64) products fit in a single 256-bit VPCLMULQDQ lane pair. The
+ * g-loop folds the per-g contributions into YMM acc_lo/acc_hi accumulators
+ * (XOR-fold over 128-bit carry-less products), then a single vectorized
+ * gf64_reduce_ymm per pair produces the 64-bit result which is XOR-ed
+ * into the existing out[]. Structural template:
+ * gf64_region_muladd_avx2_arr n_coeff>1 general case (lines 404-460).
+ */
+extern void gf64_region_coupled_muladd_avx2_arr(
+	gf64_t *HEDLEY_RESTRICT out,
+	const gf64_t *HEDLEY_RESTRICT *HEDLEY_RESTRICT in_blocks,
+	const gf64_t *HEDLEY_RESTRICT *HEDLEY_RESTRICT coeff_blocks,
+	size_t len,
+	size_t G);
+
+__attribute__((target("avx2,vpclmulqdq")))
+void gf64_region_coupled_muladd_avx2_arr(
+	gf64_t *HEDLEY_RESTRICT out,
+	const gf64_t *HEDLEY_RESTRICT *HEDLEY_RESTRICT in_blocks,
+	const gf64_t *HEDLEY_RESTRICT *HEDLEY_RESTRICT coeff_blocks,
+	size_t len,
+	size_t G) {
+	size_t i = 0;
+
+	/* Process 4 elements per outer iteration (2 pairs of 2). */
+	size_t blocks = len / 4;
+	for (size_t b = 0; b < blocks; b++) {
+		__m256i acc_lo_01 = _mm256_setzero_si256();
+		__m256i acc_hi_01 = _mm256_setzero_si256();
+		__m256i acc_lo_23 = _mm256_setzero_si256();
+		__m256i acc_hi_23 = _mm256_setzero_si256();
+
+		for (size_t g = 0; g < G; g++) {
+			__m256i in01_g = _mm256_setr_epi64x(
+				(int64_t)in_blocks[g][i + 0], 0,
+				(int64_t)in_blocks[g][i + 1], 0);
+			__m256i coeff_bc = _mm256_set1_epi64x((int64_t)coeff_blocks[g]);
+			__m256i prod01 = _mm256_clmulepi64_epi128(in01_g, coeff_bc, 0x00);
+			__m256i lo_v, hi_v;
+			gf64_split_prod_ymm(prod01, &lo_v, &hi_v);
+			acc_lo_01 = _mm256_xor_si256(acc_lo_01, lo_v);
+			acc_hi_01 = _mm256_xor_si256(acc_hi_01, hi_v);
+
+			__m256i in23_g = _mm256_setr_epi64x(
+				(int64_t)in_blocks[g][i + 2], 0,
+				(int64_t)in_blocks[g][i + 3], 0);
+			__m256i prod23 = _mm256_clmulepi64_epi128(in23_g, coeff_bc, 0x00);
+			gf64_split_prod_ymm(prod23, &lo_v, &hi_v);
+			acc_lo_23 = _mm256_xor_si256(acc_lo_23, lo_v);
+			acc_hi_23 = _mm256_xor_si256(acc_hi_23, hi_v);
+		}
+
+		__m256i result01 = gf64_reduce_ymm(acc_lo_01, acc_hi_01);
+		__m256i result23 = gf64_reduce_ymm(acc_lo_23, acc_hi_23);
+
+		__m128i prev01 = _mm_loadu_si128((const __m128i *)(out + i + 0));
+		__m128i prev23 = _mm_loadu_si128((const __m128i *)(out + i + 2));
+		_mm_storeu_si128((__m128i *)(out + i + 0),
+			_mm_xor_si128(prev01, _mm256_castsi256_si128(result01)));
+		_mm_storeu_si128((__m128i *)(out + i + 2),
+			_mm_xor_si128(prev23, _mm256_castsi256_si128(result23)));
+		i += 4;
+	}
+
+	/* Tail (0..3 elements) — scalar epilog. */
+	while (i < len) {
+		gf64_t acc = 0;
+		for (size_t g = 0; g < G; g++) {
+			acc ^= gf64_mul_reference(in_blocks[g][i], coeff_blocks[g]);
+		}
+		out[i] ^= acc;
+		i++;
+	}
+}
+
 HEDLEY_END_C_DECLS
