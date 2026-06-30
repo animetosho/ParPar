@@ -255,36 +255,80 @@ struct WorkerRange {
 	size_t        tile_size;       // L3-aware input tile size (in blocks)
 };
 
+// ============================================================================
+// WorkerThread  (Wave 3: coupled-input stacking)
+// ----------------------------------------------------------------------------
+// For each output block k, accumulate contributions from G consecutive input
+// blocks via the coupled-input kernel:
+//
+//   out_k[w] ^= XOR_{g=0..Gk-1}  in[j+g][w] * row[j+g]
+//
+// where row is the Cauchy coefficient row for output block k.
+// G = GetGroupSize()  (default 12; user-tunable via PAR3_GF64_GROUP, capped
+// at 256 by ParseGroupSizeEnv and at 256 by tile_size in ComputeRecoveryBlocks).
+// Gk = min(G, num_inputs_remaining) per call.
+//
+// The in_blocks pointer array is stack-allocated up to the 256-element cap;
+// for the (unreachable) case where Gk exceeds the stack cap, fall back to a
+// heap vector.
+// ============================================================================
 static void WorkerThread(const WorkerRange& range) {
 	EnsureDispatch();
+	const int G = GetGroupSize();
+	const size_t num_in = range.num_in;
+	const size_t num_out = range.num_out;
+	const size_t B = range.block_size64;
+	const size_t MAX_STACK_GROUPS = 256;  // matches kDefaultGroupSize cap
 
-	if (range.tile_size == 0 || range.tile_size >= range.num_in) {
-		for (size_t k = 0; k < range.num_out; k++) {
-			gf64_t* out_k = range.out_start + k * range.block_size64;
-			memset(out_k, 0, range.block_size64 * sizeof(gf64_t));
+	auto process_out = [&](size_t k) {
+		gf64_t* out_k = range.out_start + k * B;
+		// Storage lives in the enclosing lambda's stack frame so its address
+		// remains valid across the gf64_region_coupled_muladd_arr call below.
+		const gf64_t* in_blocks_stack[MAX_STACK_GROUPS];
+		std::vector<const gf64_t*> in_blocks_heap;
 
-			const gf64_t* row = range.coeff_row_start + k * range.num_in;
-			for (size_t j = 0; j < range.num_in; j++) {
-				gf64_region_muladd_arr(out_k, range.in + j * range.block_size64,
-				                       &row[j], range.block_size64, 1);
+		if (range.tile_size == 0 || range.tile_size >= num_in) {
+			memset(out_k, 0, B * sizeof(gf64_t));
+			const gf64_t* row = range.coeff_row_start + k * num_in;
+			for (size_t j = 0; j < num_in; j += (size_t)G) {
+				size_t Gk = std::min((size_t)G, num_in - j);
+				const gf64_t** in_blocks_ptr = in_blocks_stack;
+				if (Gk > MAX_STACK_GROUPS) {
+					in_blocks_heap.resize(Gk);
+					in_blocks_ptr = in_blocks_heap.data();
+				}
+				for (size_t g = 0; g < Gk; g++) {
+					in_blocks_ptr[g] = range.in + (j + g) * B;
+				}
+				gf64_region_coupled_muladd_arr(out_k,
+					(const gf64_t *HEDLEY_RESTRICT *)in_blocks_ptr,
+					&row[j], B, Gk);
+			}
+		} else {
+			for (size_t j_tile = 0; j_tile < num_in; j_tile += range.tile_size) {
+				size_t j_end = std::min(j_tile + range.tile_size, num_in);
+				if (j_tile == 0) memset(out_k, 0, B * sizeof(gf64_t));
+				const gf64_t* row = range.coeff_row_start + k * num_in;
+				for (size_t j = j_tile; j < j_end; j += (size_t)G) {
+					size_t Gk = std::min((size_t)G, j_end - j);
+					const gf64_t** in_blocks_ptr = in_blocks_stack;
+					if (Gk > MAX_STACK_GROUPS) {
+						in_blocks_heap.resize(Gk);
+						in_blocks_ptr = in_blocks_heap.data();
+					}
+					for (size_t g = 0; g < Gk; g++) {
+						in_blocks_ptr[g] = range.in + (j + g) * B;
+					}
+					gf64_region_coupled_muladd_arr(out_k,
+						(const gf64_t *HEDLEY_RESTRICT *)in_blocks_ptr,
+						&row[j], B, Gk);
+				}
 			}
 		}
-		return;
-	}
+	};
 
-	for (size_t j_tile = 0; j_tile < range.num_in; j_tile += range.tile_size) {
-		size_t j_end = std::min(j_tile + range.tile_size, range.num_in);
-		for (size_t k = 0; k < range.num_out; k++) {
-			gf64_t* out_k = range.out_start + k * range.block_size64;
-			if (j_tile == 0) {
-				memset(out_k, 0, range.block_size64 * sizeof(gf64_t));
-			}
-			const gf64_t* row = range.coeff_row_start + k * range.num_in;
-			for (size_t j = j_tile; j < j_end; j++) {
-				gf64_region_muladd_arr(out_k, range.in + j * range.block_size64,
-				                       &row[j], range.block_size64, 1);
-			}
-		}
+	for (size_t k = 0; k < num_out; k++) {
+		process_out(k);
 	}
 }
 
