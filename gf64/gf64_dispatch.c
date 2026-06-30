@@ -1,5 +1,7 @@
 #include "gf64_global.h"
 #include <stdbool.h>
+#include <stdlib.h>
+#include <string.h>
 
 HEDLEY_BEGIN_C_DECLS
 
@@ -19,11 +21,26 @@ extern void gf64_region_coupled_muladd_scalar_arr(gf64_t *HEDLEY_RESTRICT out, c
 extern void gf64_region_coupled_muladd_ssse3_arr(gf64_t *HEDLEY_RESTRICT out, const gf64_t *HEDLEY_RESTRICT *HEDLEY_RESTRICT in_blocks, const gf64_t *HEDLEY_RESTRICT coeff_blocks, size_t len, size_t G);
 extern void gf64_region_coupled_muladd_avx2_arr(gf64_t *HEDLEY_RESTRICT out, const gf64_t *HEDLEY_RESTRICT *HEDLEY_RESTRICT in_blocks, const gf64_t *HEDLEY_RESTRICT coeff_blocks, size_t len, size_t G);
 extern void gf64_region_coupled_muladd_avx512_arr(gf64_t *HEDLEY_RESTRICT out, const gf64_t *HEDLEY_RESTRICT *HEDLEY_RESTRICT in_blocks, const gf64_t *HEDLEY_RESTRICT coeff_blocks, size_t len, size_t G);
+extern void gf64_region_fused_output_muladd_scalar_arr(gf64_t *HEDLEY_RESTRICT *HEDLEY_RESTRICT outs, const gf64_t *HEDLEY_RESTRICT in, const gf64_t *HEDLEY_RESTRICT *HEDLEY_RESTRICT coeff_block_starts, size_t len, size_t K);
+extern void gf64_region_fused_output_muladd_ssse3_arr(gf64_t *HEDLEY_RESTRICT *HEDLEY_RESTRICT outs, const gf64_t *HEDLEY_RESTRICT in, const gf64_t *HEDLEY_RESTRICT *HEDLEY_RESTRICT coeff_block_starts, size_t len, size_t K);
+extern void gf64_region_fused_output_muladd_avx2_arr(gf64_t *HEDLEY_RESTRICT *HEDLEY_RESTRICT outs, const gf64_t *HEDLEY_RESTRICT in, const gf64_t *HEDLEY_RESTRICT *HEDLEY_RESTRICT coeff_block_starts, size_t len, size_t K);
+extern void gf64_region_fused_output_muladd_avx512_arr(gf64_t *HEDLEY_RESTRICT *HEDLEY_RESTRICT outs, const gf64_t *HEDLEY_RESTRICT in, const gf64_t *HEDLEY_RESTRICT *HEDLEY_RESTRICT coeff_block_starts, size_t len, size_t K);
+extern void gf64_region_2d_muladd_scalar_arr(gf64_t *HEDLEY_RESTRICT *HEDLEY_RESTRICT outs, size_t K, const gf64_t *HEDLEY_RESTRICT *HEDLEY_RESTRICT in_blocks, size_t G, const gf64_t *HEDLEY_RESTRICT coeff_block_2d, size_t K_stride, size_t len);
+extern void gf64_region_2d_muladd_ssse3_arr(gf64_t *HEDLEY_RESTRICT *HEDLEY_RESTRICT outs, size_t K, const gf64_t *HEDLEY_RESTRICT *HEDLEY_RESTRICT in_blocks, size_t G, const gf64_t *HEDLEY_RESTRICT coeff_block_2d, size_t K_stride, size_t len);
+extern void gf64_region_2d_muladd_avx2_arr(gf64_t *HEDLEY_RESTRICT *HEDLEY_RESTRICT outs, size_t K, const gf64_t *HEDLEY_RESTRICT *HEDLEY_RESTRICT in_blocks, size_t G, const gf64_t *HEDLEY_RESTRICT coeff_block_2d, size_t K_stride, size_t len);
+extern void gf64_region_2d_muladd_avx512_arr(gf64_t *HEDLEY_RESTRICT *HEDLEY_RESTRICT outs, size_t K, const gf64_t *HEDLEY_RESTRICT *HEDLEY_RESTRICT in_blocks, size_t G, const gf64_t *HEDLEY_RESTRICT coeff_block_2d, size_t K_stride, size_t len);
+extern void gf64_inverse_batch_scalar(gf64_t *HEDLEY_RESTRICT out, const gf64_t *HEDLEY_RESTRICT in, size_t N);
+extern void gf64_inverse_batch_ssse3 (gf64_t *HEDLEY_RESTRICT out, const gf64_t *HEDLEY_RESTRICT in, size_t N);
+extern void gf64_inverse_batch_avx2  (gf64_t *HEDLEY_RESTRICT out, const gf64_t *HEDLEY_RESTRICT in, size_t N);
+extern void gf64_inverse_batch_avx512(gf64_t *HEDLEY_RESTRICT out, const gf64_t *HEDLEY_RESTRICT in, size_t N);
 
 gf64_region_mul_fn gf64_region_mul;
 gf64_region_mul_arr_fn gf64_region_mul_arr;
 gf64_region_muladd_arr_fn gf64_region_muladd_arr;
 gf64_region_coupled_muladd_arr_fn gf64_region_coupled_muladd_arr;
+gf64_region_fused_output_muladd_arr_fn gf64_region_fused_output_muladd_arr;
+gf64_region_2d_muladd_arr_fn gf64_region_2d_muladd_arr;
+gf64_inverse_batch_fn gf64_inverse_batch;
 GF64Method gf64_current_method;
 
 static void gf64_cpuid(int leaf, int subleaf, unsigned int *eax, unsigned int *ebx, unsigned int *ecx, unsigned int *edx) {
@@ -133,26 +150,38 @@ GF64Method gf64_detect_method(void) {
 }
 
 int gf64_init_dispatch(void) {
-	gf64_current_method = gf64_detect_method();
+	gf64_apply_method(gf64_detect_method());
+	return 0;
+}
 
-	switch (gf64_current_method) {
+void gf64_apply_method(GF64Method method) {
+	switch (method) {
 		case GF64_AVX512:
 			gf64_region_mul = gf64_region_mul_avx512;
 			gf64_region_mul_arr = gf64_region_mul_avx512_arr;
 			gf64_region_muladd_arr = gf64_region_muladd_avx512_arr;
 			gf64_region_coupled_muladd_arr = gf64_region_coupled_muladd_avx512_arr;
+			gf64_region_fused_output_muladd_arr = gf64_region_fused_output_muladd_avx512_arr;
+			gf64_region_2d_muladd_arr = gf64_region_2d_muladd_avx512_arr;
+			gf64_inverse_batch = gf64_inverse_batch_avx512;
 			break;
 		case GF64_AVX2:
 			gf64_region_mul = gf64_region_mul_avx2;
 			gf64_region_mul_arr = gf64_region_mul_avx2_arr;
 			gf64_region_muladd_arr = gf64_region_muladd_avx2_arr;
 			gf64_region_coupled_muladd_arr = gf64_region_coupled_muladd_avx2_arr;
+			gf64_region_fused_output_muladd_arr = gf64_region_fused_output_muladd_avx2_arr;
+			gf64_region_2d_muladd_arr = gf64_region_2d_muladd_avx2_arr;
+			gf64_inverse_batch = gf64_inverse_batch_avx2;
 			break;
 		case GF64_SSSE3:
 			gf64_region_mul = gf64_region_mul_ssse3;
 			gf64_region_mul_arr = gf64_region_mul_ssse3_arr;
 			gf64_region_muladd_arr = gf64_region_muladd_ssse3_arr;
 			gf64_region_coupled_muladd_arr = gf64_region_coupled_muladd_ssse3_arr;
+			gf64_region_fused_output_muladd_arr = gf64_region_fused_output_muladd_ssse3_arr;
+			gf64_region_2d_muladd_arr = gf64_region_2d_muladd_ssse3_arr;
+			gf64_inverse_batch = gf64_inverse_batch_ssse3;
 			break;
 		case GF64_SCALAR:
 		default:
@@ -160,10 +189,60 @@ int gf64_init_dispatch(void) {
 			gf64_region_mul_arr = gf64_region_mul_scalar_arr;
 			gf64_region_muladd_arr = gf64_region_muladd_scalar_arr;
 			gf64_region_coupled_muladd_arr = gf64_region_coupled_muladd_scalar_arr;
+			gf64_region_fused_output_muladd_arr = gf64_region_fused_output_muladd_scalar_arr;
+			gf64_region_2d_muladd_arr = gf64_region_2d_muladd_scalar_arr;
+			gf64_inverse_batch = gf64_inverse_batch_scalar;
 			break;
 	}
+	gf64_current_method = method;
+}
 
+/* Working-set threshold (bytes) above which AVX-512's Zen4 downclock
+ * outweighs its per-instruction throughput advantage. The plan spec uses
+ * 16 MiB as the L2-resident cutoff; under downclock, the per-call working
+ * set that exceeds L2 stalls the pipeline frequently enough that AVX-2's
+ * full-frequency execution wins. */
+#define GF64_AVX512_DOWNCLOCK_WORKING_SET_BYTES (16ULL * 1024 * 1024)
+
+static int gf64_parse_force_env(GF64Method detected, GF64Method *out) {
+	const char *env = getenv("PAR3_AVX512_FORCE");
+	if (env == NULL || *env == '\0') return 0;
+
+	if (strcmp(env, "1") == 0 || strcasecmp(env, "true") == 0 ||
+	    strcasecmp(env, "yes") == 0 || strcasecmp(env, "on") == 0) {
+		*out = detected;
+		return 1;
+	}
+	if (strcmp(env, "0") == 0 || strcasecmp(env, "false") == 0 ||
+	    strcasecmp(env, "no") == 0 || strcasecmp(env, "off") == 0) {
+		*out = (detected == GF64_AVX512) ? GF64_AVX2 : detected;
+		return 1;
+	}
 	return 0;
+}
+
+GF64Method gf64_method_for_workload(size_t num_in, size_t num_out, size_t block_size) {
+	GF64Method detected = gf64_detect_method();
+
+	GF64Method forced;
+	if (gf64_parse_force_env(detected, &forced)) {
+		return forced;
+	}
+
+	if (block_size > 0 &&
+	    (num_in + num_out) > 0 &&
+	    num_in + num_out > (SIZE_MAX / block_size / sizeof(gf64_t))) {
+		/* Overflow guard: degrade to per-ISA max (matches pre-heuristic behaviour). */
+		return detected;
+	}
+	size_t working_set_bytes = block_size * sizeof(gf64_t) * (num_in + num_out);
+	if (working_set_bytes > GF64_AVX512_DOWNCLOCK_WORKING_SET_BYTES) {
+		/* Working set exceeds 16 MiB: AVX-512 downclock would lose.
+		 * Downgrade to AVX-2 if available; otherwise keep the per-ISA max. */
+		return (detected == GF64_AVX512) ? GF64_AVX2 : detected;
+	}
+
+	return detected;
 }
 
 HEDLEY_END_C_DECLS

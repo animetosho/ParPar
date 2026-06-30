@@ -46,6 +46,14 @@ public:
 	inline void CoupledMulAdd(uint64_t* out, const uint64_t* const* in, const uint64_t* coeff, size_t len, size_t G) {
 		gf64_region_coupled_muladd_arr(out, (const gf64_t *HEDLEY_RESTRICT *)in, coeff, len, G);
 	}
+
+	inline void FusedOutputMulAdd(uint64_t* const* outs, const uint64_t* in, const uint64_t* const* coeff_block_starts, size_t len, size_t K) {
+		gf64_region_fused_output_muladd_arr((gf64_t *HEDLEY_RESTRICT *HEDLEY_RESTRICT)outs, (const gf64_t *HEDLEY_RESTRICT)in, (const gf64_t *HEDLEY_RESTRICT *HEDLEY_RESTRICT)coeff_block_starts, len, K);
+	}
+
+	inline void TwoDMulAdd(uint64_t* const* outs, size_t K, const uint64_t* const* in_blocks, size_t G, const uint64_t* coeff_block_2d, size_t K_stride, size_t len) {
+		gf64_region_2d_muladd_arr((gf64_t *HEDLEY_RESTRICT *HEDLEY_RESTRICT)outs, K, (const gf64_t *HEDLEY_RESTRICT *HEDLEY_RESTRICT)in_blocks, G, (const gf64_t *HEDLEY_RESTRICT)coeff_block_2d, K_stride, len);
+	}
 };
 
 int Gf64EncoderWrapper::dispatch_initialized = 0;
@@ -437,6 +445,417 @@ static napi_value Gf64Encoder_NAPI_coupled_muladd_arr(napi_env env, napi_callbac
 	enc->CoupledMulAdd(out, in_blocks, coeff, (size_t)len, G);
 
 	if(heap_allocated) free(in_blocks);
+
+	return NULL;
+}
+
+/* Fused-output muladd: for each k in [0..K): outs[k][w] ^= in[w] * coeff_block_starts[k]
+ * for all w in [0..len). All K outputs are updated from a single input block.
+ *
+ * Arguments:
+ *   args[0] (Array of Buffers) — outs: K destination buffers, each len * 8 bytes
+ *   args[1] (Buffer) — in: single input block, len * 8 bytes
+ *   args[2] (Array of Buffers) — coeff_block_starts: K scalar buffers, each 8 bytes
+ *   args[3] (Number) — len: number of gf64_t elements per output block
+ *   args[4] (Number) — K: number of (output, coeff) pairs
+ *
+ * Coefficient layout choice: an Array<K> of single-scalar Buffers (mirrors
+ * the coupled_muladd_arr in-blocks pattern). This keeps the JS-side surface
+ * symmetric with coupled_muladd_arr — both new bindings use Array<K> of
+ * per-element Buffers for their pointer-array marshaling. A flat Buffer of
+ * K scalars would also satisfy the in-pointer-array dispatch, but would
+ * diverge from the established per-element-pointer pattern.
+ */
+static napi_value Gf64Encoder_NAPI_fused_output_muladd_arr(napi_env env, napi_callback_info info) {
+	napi_status status;
+	size_t argc = 5;
+	napi_value args[5];
+	napi_value this_arg;
+
+	status = napi_get_cb_info(env, info, &argc, args, &this_arg, NULL);
+	if(status != napi_ok) {
+		napi_throw_error(env, NULL, "Failed to get callback info");
+		return NULL;
+	}
+
+	if(argc < 5) {
+		napi_throw_type_error(env, NULL, "Requires outs, in, coeff, len, K");
+		return NULL;
+	}
+
+	Gf64EncoderWrapper* enc = NULL;
+	status = napi_unwrap(env, this_arg, (void**)&enc);
+	if(status != napi_ok || enc == NULL) {
+		napi_throw_error(env, NULL, "Invalid encoder");
+		return NULL;
+	}
+
+	int64_t K_signed = 0;
+	status = napi_get_value_int64(env, args[4], &K_signed);
+	if(status != napi_ok) {
+		napi_throw_type_error(env, NULL, "K must be an integer");
+		return NULL;
+	}
+	if(K_signed < 0 || K_signed > 65536) {
+		napi_throw_range_error(env, NULL, "K out of range [0, 65536]");
+		return NULL;
+	}
+	size_t K = (size_t)K_signed;
+
+	int64_t len = 0;
+	status = napi_get_value_int64(env, args[3], &len);
+	if(status != napi_ok) {
+		napi_throw_type_error(env, NULL, "Length must be an integer");
+		return NULL;
+	}
+	if(len < 0) {
+		napi_throw_range_error(env, NULL, "Length must be non-negative");
+		return NULL;
+	}
+
+	const uint64_t* in = NULL;
+	size_t inLen = 0;
+	status = napi_get_buffer_info(env, args[1], (void**)&in, &inLen);
+	if(status != napi_ok) {
+		napi_throw_type_error(env, NULL, "Input buffer required");
+		return NULL;
+	}
+	if(inLen < (size_t)len * sizeof(uint64_t)) {
+		napi_throw_range_error(env, NULL, "Input buffer too small for len");
+		return NULL;
+	}
+
+	bool outs_is_array = false;
+	status = napi_is_array(env, args[0], &outs_is_array);
+	if(status != napi_ok || !outs_is_array) {
+		napi_throw_type_error(env, NULL, "Outputs must be an array of buffers");
+		return NULL;
+	}
+
+	uint32_t outs_len_u32 = 0;
+	status = napi_get_array_length(env, args[0], &outs_len_u32);
+	if(status != napi_ok) {
+		napi_throw_error(env, NULL, "Failed to get outputs array length");
+		return NULL;
+	}
+	if((size_t)outs_len_u32 != K) {
+		napi_throw_range_error(env, NULL, "Outputs array length must equal K");
+		return NULL;
+	}
+
+	bool coeff_is_array = false;
+	status = napi_is_array(env, args[2], &coeff_is_array);
+	if(status != napi_ok || !coeff_is_array) {
+		napi_throw_type_error(env, NULL, "Coefficients must be an array of buffers");
+		return NULL;
+	}
+
+	uint32_t coeff_len_u32 = 0;
+	status = napi_get_array_length(env, args[2], &coeff_len_u32);
+	if(status != napi_ok) {
+		napi_throw_error(env, NULL, "Failed to get coefficients array length");
+		return NULL;
+	}
+	if((size_t)coeff_len_u32 != K) {
+		napi_throw_range_error(env, NULL, "Coefficients array length must equal K");
+		return NULL;
+	}
+
+	/* Collect per-block pointers. Stack-allocated for K<=1024; heap fallback
+	 * for larger K to avoid blowing the C stack. Two parallel arrays share
+	 * the same lifetime, so we use a single allocation size. */
+	uint64_t* outs_stack[1024];
+	const uint64_t* coeff_stack[1024];
+	uint64_t** outs_ptrs;
+	const uint64_t** coeff_ptrs;
+	bool heap_allocated = false;
+	if(K <= 1024) {
+		outs_ptrs = outs_stack;
+		coeff_ptrs = coeff_stack;
+	} else {
+		outs_ptrs = (uint64_t**)malloc(K * sizeof(uint64_t*));
+		coeff_ptrs = (const uint64_t**)malloc(K * sizeof(const uint64_t*));
+		if(outs_ptrs == NULL || coeff_ptrs == NULL) {
+			if(outs_ptrs != NULL) free(outs_ptrs);
+			if(coeff_ptrs != NULL) free(coeff_ptrs);
+			napi_throw_error(env, NULL, "Out of memory allocating pointer arrays");
+			return NULL;
+		}
+		heap_allocated = true;
+	}
+
+	for(uint32_t k = 0; k < outs_len_u32; k++) {
+		napi_value elem;
+		status = napi_get_element(env, args[0], k, &elem);
+		if(status != napi_ok) {
+			if(heap_allocated) { free(outs_ptrs); free(coeff_ptrs); }
+			napi_throw_error(env, NULL, "Failed to read outputs array element");
+			return NULL;
+		}
+		uint64_t* p = NULL;
+		size_t pl = 0;
+		status = napi_get_buffer_info(env, elem, (void**)&p, &pl);
+		if(status != napi_ok) {
+			if(heap_allocated) { free(outs_ptrs); free(coeff_ptrs); }
+			napi_throw_type_error(env, NULL, "Outputs array element must be a Buffer");
+			return NULL;
+		}
+		if(pl < (size_t)len * sizeof(uint64_t)) {
+			if(heap_allocated) { free(outs_ptrs); free(coeff_ptrs); }
+			napi_throw_range_error(env, NULL, "Outputs array element buffer too small for len");
+			return NULL;
+		}
+		outs_ptrs[k] = p;
+	}
+
+	for(uint32_t k = 0; k < coeff_len_u32; k++) {
+		napi_value elem;
+		status = napi_get_element(env, args[2], k, &elem);
+		if(status != napi_ok) {
+			if(heap_allocated) { free(outs_ptrs); free(coeff_ptrs); }
+			napi_throw_error(env, NULL, "Failed to read coefficients array element");
+			return NULL;
+		}
+		const uint64_t* p = NULL;
+		size_t pl = 0;
+		status = napi_get_buffer_info(env, elem, (void**)&p, &pl);
+		if(status != napi_ok) {
+			if(heap_allocated) { free(outs_ptrs); free(coeff_ptrs); }
+			napi_throw_type_error(env, NULL, "Coefficients array element must be a Buffer");
+			return NULL;
+		}
+		if(pl < sizeof(uint64_t)) {
+			if(heap_allocated) { free(outs_ptrs); free(coeff_ptrs); }
+			napi_throw_range_error(env, NULL, "Coefficients array element buffer too small for one scalar");
+			return NULL;
+		}
+		coeff_ptrs[k] = p;
+	}
+
+	enc->FusedOutputMulAdd(outs_ptrs, in, coeff_ptrs, (size_t)len, K);
+
+	if(heap_allocated) { free(outs_ptrs); free(coeff_ptrs); }
+
+	return NULL;
+}
+
+/* 2D-blocked muladd: for each (k, g) in [0..K) x [0..G):
+ *   outs[k][w] ^= in_blocks[g][w] * coeff_block_2d[k * K_stride + g]
+ * for all w in [0..len). This is the most memory-efficient of the three
+ * new muladd variants (K outputs x G inputs per call) — it reduces both
+ * input load count AND output store count compared to a coupled-only or
+ * fused-only path.
+ *
+ * Arguments:
+ *   args[0] (Array of Buffers) — outs: K destination buffers, each len * 8 bytes
+ *   args[1] (Number) — K: number of output blocks in the tile
+ *   args[2] (Array of Buffers) — in_blocks: G input buffers, each len * 8 bytes
+ *   args[3] (Number) — G: number of input blocks in the tile
+ *   args[4] (Buffer) — coeff_block_2d: 2D coefficient matrix, K * K_stride * 8 bytes
+ *                      (laid out row-major: coeff[k * K_stride + g] for k in [0..K), g in [0..G)).
+ *                      K_stride may exceed G (padding to SIMD boundary) — caller is responsible
+ *                      for zero-padding the unused tail columns of each row.
+ *   args[5] (Number) — K_stride: row stride for the 2D coefficient matrix; must be >= G
+ *   args[6] (Number) — len: number of gf64_t elements per block
+ */
+static napi_value Gf64Encoder_NAPI_two_d_muladd_arr(napi_env env, napi_callback_info info) {
+	napi_status status;
+	size_t argc = 7;
+	napi_value args[7];
+	napi_value this_arg;
+
+	status = napi_get_cb_info(env, info, &argc, args, &this_arg, NULL);
+	if(status != napi_ok) {
+		napi_throw_error(env, NULL, "Failed to get callback info");
+		return NULL;
+	}
+
+	if(argc < 7) {
+		napi_throw_type_error(env, NULL, "Requires outs, K, in_blocks, G, coeff_block_2d, K_stride, len");
+		return NULL;
+	}
+
+	Gf64EncoderWrapper* enc = NULL;
+	status = napi_unwrap(env, this_arg, (void**)&enc);
+	if(status != napi_ok || enc == NULL) {
+		napi_throw_error(env, NULL, "Invalid encoder");
+		return NULL;
+	}
+
+	int64_t len_signed = 0;
+	status = napi_get_value_int64(env, args[6], &len_signed);
+	if(status != napi_ok) {
+		napi_throw_type_error(env, NULL, "len must be an integer");
+		return NULL;
+	}
+	if(len_signed < 0) {
+		napi_throw_range_error(env, NULL, "len must be non-negative");
+		return NULL;
+	}
+	size_t len = (size_t)len_signed;
+
+	int64_t K_signed = 0;
+	status = napi_get_value_int64(env, args[1], &K_signed);
+	if(status != napi_ok) {
+		napi_throw_type_error(env, NULL, "K must be an integer");
+		return NULL;
+	}
+	if(K_signed < 0 || K_signed > 65536) {
+		napi_throw_range_error(env, NULL, "K out of range [0, 65536]");
+		return NULL;
+	}
+	size_t K = (size_t)K_signed;
+
+	int64_t G_signed = 0;
+	status = napi_get_value_int64(env, args[3], &G_signed);
+	if(status != napi_ok) {
+		napi_throw_type_error(env, NULL, "G must be an integer");
+		return NULL;
+	}
+	if(G_signed < 0 || G_signed > 65536) {
+		napi_throw_range_error(env, NULL, "G out of range [0, 65536]");
+		return NULL;
+	}
+	size_t G = (size_t)G_signed;
+
+	int64_t K_stride_signed = 0;
+	status = napi_get_value_int64(env, args[5], &K_stride_signed);
+	if(status != napi_ok) {
+		napi_throw_type_error(env, NULL, "K_stride must be an integer");
+		return NULL;
+	}
+	if(K_stride_signed < (int64_t)G) {
+		napi_throw_range_error(env, NULL, "K_stride must be >= G");
+		return NULL;
+	}
+	if(K_stride_signed > 65536) {
+		napi_throw_range_error(env, NULL, "K_stride out of range [0, 65536]");
+		return NULL;
+	}
+	size_t K_stride = (size_t)K_stride_signed;
+
+	const uint64_t* coeff_block_2d = NULL;
+	size_t coeffLen = 0;
+	status = napi_get_buffer_info(env, args[4], (void**)&coeff_block_2d, &coeffLen);
+	if(status != napi_ok) {
+		napi_throw_type_error(env, NULL, "coeff_block_2d buffer required");
+		return NULL;
+	}
+	if(coeffLen < K * K_stride * sizeof(uint64_t)) {
+		napi_throw_range_error(env, NULL, "coeff_block_2d buffer too small for K * K_stride");
+		return NULL;
+	}
+
+	bool outs_is_array = false;
+	status = napi_is_array(env, args[0], &outs_is_array);
+	if(status != napi_ok || !outs_is_array) {
+		napi_throw_type_error(env, NULL, "outs must be an array of buffers");
+		return NULL;
+	}
+
+	uint32_t outs_len_u32 = 0;
+	status = napi_get_array_length(env, args[0], &outs_len_u32);
+	if(status != napi_ok) {
+		napi_throw_error(env, NULL, "Failed to get outs array length");
+		return NULL;
+	}
+	if((size_t)outs_len_u32 != K) {
+		napi_throw_range_error(env, NULL, "outs array length must equal K");
+		return NULL;
+	}
+
+	bool in_is_array = false;
+	status = napi_is_array(env, args[2], &in_is_array);
+	if(status != napi_ok || !in_is_array) {
+		napi_throw_type_error(env, NULL, "in_blocks must be an array of buffers");
+		return NULL;
+	}
+
+	uint32_t in_len_u32 = 0;
+	status = napi_get_array_length(env, args[2], &in_len_u32);
+	if(status != napi_ok) {
+		napi_throw_error(env, NULL, "Failed to get in_blocks array length");
+		return NULL;
+	}
+	if((size_t)in_len_u32 != G) {
+		napi_throw_range_error(env, NULL, "in_blocks array length must equal G");
+		return NULL;
+	}
+
+	/* Collect per-block pointers. Stack-allocated for K+G<=1024; heap fallback
+	 * for larger combined size to avoid blowing the C stack. Two parallel arrays
+	 * share the same lifetime, so we use a single allocation. */
+	uint64_t* outs_stack[1024];
+	const uint64_t* in_stack[1024];
+	uint64_t** outs_ptrs;
+	const uint64_t** in_ptrs;
+	bool heap_allocated = false;
+	if(K <= 1024 && G <= 1024) {
+		outs_ptrs = outs_stack;
+		in_ptrs = in_stack;
+	} else {
+		outs_ptrs = (uint64_t**)malloc(K * sizeof(uint64_t*));
+		in_ptrs = (const uint64_t**)malloc(G * sizeof(const uint64_t*));
+		if(outs_ptrs == NULL || in_ptrs == NULL) {
+			if(outs_ptrs != NULL) free(outs_ptrs);
+			if(in_ptrs != NULL) free(in_ptrs);
+			napi_throw_error(env, NULL, "Out of memory allocating pointer arrays");
+			return NULL;
+		}
+		heap_allocated = true;
+	}
+
+	for(uint32_t k = 0; k < outs_len_u32; k++) {
+		napi_value elem;
+		status = napi_get_element(env, args[0], k, &elem);
+		if(status != napi_ok) {
+			if(heap_allocated) { free(outs_ptrs); free(in_ptrs); }
+			napi_throw_error(env, NULL, "Failed to read outs array element");
+			return NULL;
+		}
+		uint64_t* p = NULL;
+		size_t pl = 0;
+		status = napi_get_buffer_info(env, elem, (void**)&p, &pl);
+		if(status != napi_ok) {
+			if(heap_allocated) { free(outs_ptrs); free(in_ptrs); }
+			napi_throw_type_error(env, NULL, "outs array element must be a Buffer");
+			return NULL;
+		}
+		if(pl < (size_t)len * sizeof(uint64_t)) {
+			if(heap_allocated) { free(outs_ptrs); free(in_ptrs); }
+			napi_throw_range_error(env, NULL, "outs array element buffer too small for len");
+			return NULL;
+		}
+		outs_ptrs[k] = p;
+	}
+
+	for(uint32_t g = 0; g < in_len_u32; g++) {
+		napi_value elem;
+		status = napi_get_element(env, args[2], g, &elem);
+		if(status != napi_ok) {
+			if(heap_allocated) { free(outs_ptrs); free(in_ptrs); }
+			napi_throw_error(env, NULL, "Failed to read in_blocks array element");
+			return NULL;
+		}
+		const uint64_t* p = NULL;
+		size_t pl = 0;
+		status = napi_get_buffer_info(env, elem, (void**)&p, &pl);
+		if(status != napi_ok) {
+			if(heap_allocated) { free(outs_ptrs); free(in_ptrs); }
+			napi_throw_type_error(env, NULL, "in_blocks array element must be a Buffer");
+			return NULL;
+		}
+		if(pl < (size_t)len * sizeof(uint64_t)) {
+			if(heap_allocated) { free(outs_ptrs); free(in_ptrs); }
+			napi_throw_range_error(env, NULL, "in_blocks array element buffer too small for len");
+			return NULL;
+		}
+		in_ptrs[g] = p;
+	}
+
+	enc->TwoDMulAdd(outs_ptrs, K, in_ptrs, G, coeff_block_2d, K_stride, len);
+
+	if(heap_allocated) { free(outs_ptrs); free(in_ptrs); }
 
 	return NULL;
 }
@@ -1055,7 +1474,9 @@ napi_value parpar_gf64_init_NAPI(napi_env env, napi_value exports) {
 	napi_property_descriptor properties[] = {
 		{ "mul", NULL, Gf64Encoder_NAPI_mul, NULL, NULL, NULL, napi_default, NULL },
 		{ "mul_arr", NULL, Gf64Encoder_NAPI_mul_arr, NULL, NULL, NULL, napi_default, NULL },
-		{ "coupled_muladd_arr", NULL, Gf64Encoder_NAPI_coupled_muladd_arr, NULL, NULL, NULL, napi_default, NULL }
+		{ "coupled_muladd_arr", NULL, Gf64Encoder_NAPI_coupled_muladd_arr, NULL, NULL, NULL, napi_default, NULL },
+		{ "fused_output_muladd_arr", NULL, Gf64Encoder_NAPI_fused_output_muladd_arr, NULL, NULL, NULL, napi_default, NULL },
+		{ "two_d_muladd_arr", NULL, Gf64Encoder_NAPI_two_d_muladd_arr, NULL, NULL, NULL, napi_default, NULL }
 	};
 
 	napi_value constructor;
@@ -1064,7 +1485,7 @@ napi_value parpar_gf64_init_NAPI(napi_env env, napi_value exports) {
 		NAPI_AUTO_LENGTH,
 		Gf64Encoder_NAPI_constructor,
 		NULL,
-		3,
+		5,
 		properties,
 		&constructor);
 	if(status != napi_ok) {
