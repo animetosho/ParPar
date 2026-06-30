@@ -19,7 +19,9 @@
 #include <unordered_map>
 #include <list>
 #include <cstdio>
+#include <cstdint>
 #include <cstdlib>
+#include <chrono>
 
 // ============================================================================
 // Dispatch initialisation (one-shot)
@@ -241,6 +243,132 @@ static int GetGroupSize() {
 }
 
 // ============================================================================
+// Tunable K-group size for the Wave 3 fused-output engine refactor (PB7).
+// ----------------------------------------------------------------------------
+// PAR3_GF64_K_GROUP overrides the number of output blocks grouped per fused-
+// output kernel call (one input block is applied to K outputs in each call).
+// Range: 1..256; out-of-range or invalid values silently fall back to
+// kDefaultKGroupSize. Default 12 mirrors PA7's kDefaultGroupSize so a single
+// env var controls batch sizing for both coupled-input and fused-output paths.
+// ============================================================================
+static constexpr size_t kDefaultKGroupSize = 12;
+
+static int ParseKGroupSizeEnv() {
+	const char* env = std::getenv("PAR3_GF64_K_GROUP");
+	if (env == nullptr || *env == '\0') return 0;
+	int v = std::atoi(env);
+	if (v < 1 || v > 256) return 0;
+	return v;
+}
+
+static int GetKGroupSize() {
+	static int v = ParseKGroupSizeEnv();
+	return v > 0 ? v : static_cast<int>(kDefaultKGroupSize);
+}
+
+// ============================================================================
+// PD3: BLOCK_SIZE autotune  (env-gated; default off)
+// ----------------------------------------------------------------------------
+// At compute-recovery time, scan {1, 4, 16, 64, 256} MiB candidate block
+// sizes against a 1 MiB synthetic pilot (256 blocks at 4 KiB) and pick the
+// size that maximises bytes/us through the existing
+// `gf64_region_muladd_*_arr` dispatch. Env var:
+//   PAR3_GF64_BLOCK_SIZE_AUTOTUNE=1  → enable
+//   PAR3_GF64_BLOCK_SIZE_AUTOTUNE=0  (or unset) → disabled, return 0
+//
+// Layout-constraint note: the JS-side input/output buffers are sized at
+// exactly `numInputs * (JS-passed blockSize)` bytes by `lib/par3gen.js`
+// before the C++ entry is reached. The chosen block size therefore cannot
+// be applied mid-flight — overriding `blockSize64` would corrupt the
+// stride math in `WorkerRange` / `WorkerThread` (offsets `(k * B)`,
+// `(j * B)`). The chosen size is reported for telemetry / future
+// JS-aware refactors; the actual recovery computation continues to use
+// the JS-passed blockSize64 unchanged. This is the safest behaviour given
+// the MUST NOT `lib/par3gen.js` constraint.
+//
+// When the env var is unset, the function returns 0 immediately so the
+// caller proceeds with the existing block size unchanged.
+// ============================================================================
+static int ParseAutotuneEnv() {
+	static int cached = -1;
+	if (cached < 0) {
+		const char* env = std::getenv("PAR3_GF64_BLOCK_SIZE_AUTOTUNE");
+		cached = (env != nullptr && *env != '\0' && std::atoi(env) == 1) ? 1 : 0;
+	}
+	return cached;
+}
+
+static size_t AutotuneBlockSize() {
+	if (!ParseAutotuneEnv()) return 0;
+	EnsureDispatch();
+
+	// 1 MiB synthetic pilot (256 blocks at 4 KiB).
+	constexpr size_t SAMPLE_BYTES = 1ULL * 1024 * 1024;
+	constexpr size_t SAMPLE_WORDS = SAMPLE_BYTES / sizeof(gf64_t); // 131072 gf64_t
+	constexpr int   N_ITER        = 64;
+	constexpr int   N_WARMUP      = 3;
+
+	gf64_t* sample_in  = (gf64_t*)std::malloc(SAMPLE_BYTES);
+	gf64_t* sample_out = (gf64_t*)std::malloc(SAMPLE_BYTES);
+	if (sample_in == nullptr || sample_out == nullptr) {
+		std::free(sample_in);
+		std::free(sample_out);
+		return 0;
+	}
+
+	// Deterministic synthetic data (avoids all-zero / all-one edges).
+	for (size_t i = 0; i < SAMPLE_WORDS; i++) {
+		sample_in[i]  = (gf64_t)((uint64_t)i * 0x9E3779B97F4A7C15ULL ^ 0x123456789ABCDEFULL);
+		sample_out[i] = (gf64_t)((uint64_t)i * 0xC6BC279692B5C323ULL ^ 0xFEDCBA9876543210ULL);
+	}
+	gf64_t coeff = (gf64_t)0x0123456789ABCDEFULL;
+
+	// Candidate block sizes in gf64_t units (1 / 4 / 16 / 64 / 256 MiB).
+	// Note: the kernel doesn't observe the block size — each measurement
+	// runs the same `len = SAMPLE_WORDS` payload through
+	// `gf64_region_muladd_arr`. The candidate name labels the working-set
+	// dimension being benchmarked; the bytes/us proxy captures host-
+	// specific cache / TLB behaviour at that scale.
+	static const size_t CANDIDATES_GF64[5] = {
+		(1ULL   * 1024 * 1024) / sizeof(gf64_t),  //  131072
+		(4ULL   * 1024 * 1024) / sizeof(gf64_t),  //  524288
+		(16ULL  * 1024 * 1024) / sizeof(gf64_t),  // 2097152
+		(64ULL  * 1024 * 1024) / sizeof(gf64_t),  // 8388608
+		(256ULL * 1024 * 1024) / sizeof(gf64_t)   // 33554432
+	};
+
+	size_t best_size_gf64 = 0;
+	double best_bpus      = 0.0;
+
+	for (int c = 0; c < 5; c++) {
+		const size_t B = CANDIDATES_GF64[c];
+		(void)B;  // naming only — kernel `len` is SAMPLE_WORDS for every measurement
+
+		for (int w = 0; w < N_WARMUP; w++) {
+			gf64_region_muladd_arr(sample_out, sample_in, &coeff, SAMPLE_WORDS, 1);
+		}
+
+		std::chrono::steady_clock::time_point t0 = std::chrono::steady_clock::now();
+		for (int i = 0; i < N_ITER; i++) {
+			gf64_region_muladd_arr(sample_out, sample_in, &coeff, SAMPLE_WORDS, 1);
+		}
+		std::chrono::steady_clock::time_point t1 = std::chrono::steady_clock::now();
+		const double us     = std::chrono::duration<double, std::micro>(t1 - t0).count();
+		const double bpus   = ((double)SAMPLE_BYTES * (double)N_ITER) / us;
+
+		if (bpus > best_bpus) {
+			best_bpus      = bpus;
+			best_size_gf64 = CANDIDATES_GF64[c];
+		}
+	}
+
+	std::free(sample_in);
+	std::free(sample_out);
+
+	return best_size_gf64;
+}
+
+// ============================================================================
 // Thread worker  —  drives MultiplyAccumulate on a contiguous range of
 // recovery blocks.  Each worker gets its own tmp buffer so there is zero
 // synchronisation outside the final output region (non-overlapping).
@@ -256,79 +384,124 @@ struct WorkerRange {
 };
 
 // ============================================================================
-// WorkerThread  (Wave 3: coupled-input stacking)
+// WorkerThread  (Wave 3: 2D-blocked batching — K outputs × G inputs per call)
 // ----------------------------------------------------------------------------
-// For each output block k, accumulate contributions from G consecutive input
-// blocks via the coupled-input kernel:
+// Combines PA7's coupled-input outer-product (G inputs at a time) with PB7's
+// fused-output batching (K outputs at a time) into a single 2D kernel call:
+// for each output tile (k_start..k_start+Kk) × input tile (j..j+Gk):
 //
-//   out_k[w] ^= XOR_{g=0..Gk-1}  in[j+g][w] * row[j+g]
+//   for k_local in [0..Kk):
+//     for g_local in [0..Gk):
+//       out_{k_start + k_local}[w] ^= in[j + g_local][w] * coeff[k_start + k_local][j + g_local]
 //
-// where row is the Cauchy coefficient row for output block k.
-// G = GetGroupSize()  (default 12; user-tunable via PAR3_GF64_GROUP, capped
-// at 256 by ParseGroupSizeEnv and at 256 by tile_size in ComputeRecoveryBlocks).
-// Gk = min(G, num_inputs_remaining) per call.
+// k_start ranges over [0..num_out) in steps of K; Kk = min(K, num_out - k_start).
+// j ranges over [0..num_in) in steps of G; Gk = min(G, num_in - j) (or tile_size-bounded).
 //
-// The in_blocks pointer array is stack-allocated up to the 256-element cap;
-// for the (unreachable) case where Gk exceeds the stack cap, fall back to a
-// heap vector.
+// K = GetKGroupSize()  (default 12; user-tunable via PAR3_GF64_K_GROUP, capped
+// at 256 by ParseKGroupSizeEnv).
+// G = GetGroupSize()    (default 12; user-tunable via PAR3_GF64_GROUP, capped
+// at 256 by ParseGroupSizeEnv).
+//
+// K_stride = num_in: the engine's coefficient matrix is row-major
+// (num_out × num_in), so the K rows of a 2D tile starting at column j are
+// spaced num_in elements apart. The 2D kernel reads
+// `coeff_block_2d[k_local * K_stride + g_local]`, which equals
+// `coeff[(k_start + k_local) * num_in + (j + g_local)]` when
+// `coeff_block_2d = &coeff[k_start * num_in + j]` and `K_stride = num_in`.
+//
+// Per-output memset is folded back into the per-k lambda (like PA7) since
+// k is now outer again, restoring PA7's locality: the kernel reads K output
+// buffers fully, then K more, with no pre-pass required.
+//
+// The K and G pointer arrays are stack-allocated up to the 256-element cap;
+// for the (unreachable) case where either exceeds the stack cap, fall back to
+// heap vectors.
 // ============================================================================
 static void WorkerThread(const WorkerRange& range) {
 	EnsureDispatch();
+	const int K = GetKGroupSize();
 	const int G = GetGroupSize();
 	const size_t num_in = range.num_in;
 	const size_t num_out = range.num_out;
 	const size_t B = range.block_size64;
-	const size_t MAX_STACK_GROUPS = 256;  // matches kDefaultGroupSize cap
+	const size_t MAX_STACK_K = 256;  // matches kDefaultKGroupSize cap
+	const size_t MAX_STACK_G = 256;  // matches kDefaultGroupSize cap
 
-	auto process_out = [&](size_t k) {
-		gf64_t* out_k = range.out_start + k * B;
-		// Storage lives in the enclosing lambda's stack frame so its address
-		// remains valid across the gf64_region_coupled_muladd_arr call below.
-		const gf64_t* in_blocks_stack[MAX_STACK_GROUPS];
-		std::vector<const gf64_t*> in_blocks_heap;
+	// Storage for the K × G inner-loop pointer arrays. Lives in
+	// WorkerThread's stack frame so its addresses remain valid across each
+	// gf64_region_2d_muladd_arr call below.
+	gf64_t* outs_stack[MAX_STACK_K];
+	const gf64_t* in_blocks_stack[MAX_STACK_G];
+	std::vector<gf64_t*> outs_heap;
+	std::vector<const gf64_t*> in_blocks_heap;
 
+	auto process_out = [&](size_t k_start) {
+		gf64_t* out_k0 = range.out_start + k_start * B;
+		memset(out_k0, 0, B * sizeof(gf64_t));
+
+		const size_t Kk = std::min((size_t)K, num_out - k_start);
+		gf64_t** outs_ptr = outs_stack;
+		if (Kk > MAX_STACK_K) {
+			outs_heap.resize(Kk);
+			outs_ptr = outs_heap.data();
+		}
+		for (size_t k_local = 0; k_local < Kk; k_local++) {
+			outs_ptr[k_local] = range.out_start + (k_start + k_local) * B;
+		}
+
+		// Coeff row for k_start..k_start+Kk-1, starting at column j.
+		const gf64_t* coeff_base = range.coeff_row_start + k_start * num_in;
+
+		// L3-aware input tile: tile_size caps the j range to keep the
+		// (K outputs + G inputs) working set L3-resident.
 		if (range.tile_size == 0 || range.tile_size >= num_in) {
-			memset(out_k, 0, B * sizeof(gf64_t));
-			const gf64_t* row = range.coeff_row_start + k * num_in;
 			for (size_t j = 0; j < num_in; j += (size_t)G) {
 				size_t Gk = std::min((size_t)G, num_in - j);
 				const gf64_t** in_blocks_ptr = in_blocks_stack;
-				if (Gk > MAX_STACK_GROUPS) {
+				if (Gk > MAX_STACK_G) {
 					in_blocks_heap.resize(Gk);
 					in_blocks_ptr = in_blocks_heap.data();
 				}
-				for (size_t g = 0; g < Gk; g++) {
-					in_blocks_ptr[g] = range.in + (j + g) * B;
+				for (size_t g_local = 0; g_local < Gk; g_local++) {
+					in_blocks_ptr[g_local] = range.in + (j + g_local) * B;
 				}
-				gf64_region_coupled_muladd_arr(out_k,
-					(const gf64_t *HEDLEY_RESTRICT *)in_blocks_ptr,
-					&row[j], B, Gk);
+				gf64_region_2d_muladd_arr(
+					(gf64_t *HEDLEY_RESTRICT *HEDLEY_RESTRICT)outs_ptr,
+					Kk,
+					(const gf64_t *HEDLEY_RESTRICT *HEDLEY_RESTRICT)in_blocks_ptr,
+					Gk,
+					coeff_base + j,
+					num_in,
+					B);
 			}
 		} else {
 			for (size_t j_tile = 0; j_tile < num_in; j_tile += range.tile_size) {
 				size_t j_end = std::min(j_tile + range.tile_size, num_in);
-				if (j_tile == 0) memset(out_k, 0, B * sizeof(gf64_t));
-				const gf64_t* row = range.coeff_row_start + k * num_in;
 				for (size_t j = j_tile; j < j_end; j += (size_t)G) {
 					size_t Gk = std::min((size_t)G, j_end - j);
 					const gf64_t** in_blocks_ptr = in_blocks_stack;
-					if (Gk > MAX_STACK_GROUPS) {
+					if (Gk > MAX_STACK_G) {
 						in_blocks_heap.resize(Gk);
 						in_blocks_ptr = in_blocks_heap.data();
 					}
-					for (size_t g = 0; g < Gk; g++) {
-						in_blocks_ptr[g] = range.in + (j + g) * B;
+					for (size_t g_local = 0; g_local < Gk; g_local++) {
+						in_blocks_ptr[g_local] = range.in + (j + g_local) * B;
 					}
-					gf64_region_coupled_muladd_arr(out_k,
-						(const gf64_t *HEDLEY_RESTRICT *)in_blocks_ptr,
-						&row[j], B, Gk);
+					gf64_region_2d_muladd_arr(
+						(gf64_t *HEDLEY_RESTRICT *HEDLEY_RESTRICT)outs_ptr,
+						Kk,
+						(const gf64_t *HEDLEY_RESTRICT *HEDLEY_RESTRICT)in_blocks_ptr,
+						Gk,
+						coeff_base + j,
+						num_in,
+						B);
 				}
 			}
 		}
 	};
 
-	for (size_t k = 0; k < num_out; k++) {
-		process_out(k);
+	for (size_t k_start = 0; k_start < num_out; k_start += (size_t)K) {
+		process_out(k_start);
 	}
 }
 
@@ -541,6 +714,20 @@ void GF64Controller::ComputeRecoveryBlocks(
 ) {
 	if (numInputs == 0 || numRecovery == 0) return;
 
+	// --- 0. PD3 BLOCK_SIZE autotune (env-gated) ---
+	// Runs once per process; cheap when disabled. The chosen size is
+	// reported for telemetry — see AutotuneBlockSize comment for the
+	// layout-constraint reason the JS-passed blockSize64 is preserved.
+	{
+		static const size_t s_autotune_once = AutotuneBlockSize();
+		if (s_autotune_once != 0 && s_autotune_once != blockSize64) {
+			std::fprintf(stderr,
+				"[par3] BLOCK_SIZE autotune: chose %zu gf64_t (~%.2f MiB); JS-passed %zu gf64_t (~%.2f MiB) — using JS-passed (layout-locked)\n",
+				s_autotune_once, (double)s_autotune_once * sizeof(gf64_t) / (1024.0 * 1024.0),
+				blockSize64,    (double)blockSize64    * sizeof(gf64_t) / (1024.0 * 1024.0));
+		}
+	}
+
 	if (numThreads <= 0) {
 		numThreads = (int)std::thread::hardware_concurrency();
 		if (numThreads <= 0) numThreads = 1;
@@ -550,7 +737,10 @@ void GF64Controller::ComputeRecoveryBlocks(
 	gf64_t* coeff = GetOrBuildCoeffMatrix(numInputs, numRecovery, firstInput, firstRecovery);
 	if (!coeff) return;
 
-	// --- 2. Distribute work ---
+	// --- 2. Per-workload dispatch (PD2 AVX-512 downclock heuristic) ---
+	gf64_apply_method(gf64_method_for_workload(numInputs, numRecovery, blockSize64));
+
+	// --- 3. Distribute work ---
 	// Cap threads at numRecovery (no point spinning more workers than blocks).
 	if ((size_t)numThreads > numRecovery) numThreads = (int)numRecovery;
 
