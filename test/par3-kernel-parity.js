@@ -999,6 +999,428 @@ function _runCoupledInputParity(detectedMethodName) {
 _runCoupledInputParity(methodName);
 
 // ============================================================================
+// Section H — fused-output kernel parity (K output buffers, single input)
+// ----------------------------------------------------------------------------
+// Regression gate for the PB5 dispatch + NAPI binding. PB5 wires the
+// PB1-PB4 fused-output kernels (scalar/SSSE3/AVX2/AVX-512) into the
+// dispatch table and exposes them via the `fused_output_muladd_arr` NAPI
+// export on the Gf64Encoder class. This section proves the wired kernel
+// is bit-exact vs the JS BigInt reference for every supported
+// (K, len, in_block, coeff_block_starts[0..K-1]) tuple.
+//
+// For each K ∈ {1, 2, 4, 8, 16}:
+//   - 200 randomized scenarios with `len` picked per-trial from
+//     {1, 7, 16, 64, 256, 1024, 4096} gf64_t element counts (8..32768 bytes).
+//   - Per scenario: zero-init outs[0..K-1], allocate 1 input buffer +
+//     K scalar coefficient buffers (each 8 bytes — single-scalar-per-buffer
+//     symmetric with coupled-input), fill with random 64-bit values, call
+//     encoder.fused_output_muladd_arr(outs, in, coeff_block_starts, len, K).
+//   - Compute JS reference: out_ref[k][w] = in[w] * coeff[k] for w in [0..len).
+//   - Compare each outBufs[k] against out_ref[k] element-wise.
+//   - One negative scenario per K: flip the low bit of coeff_block_starts[0],
+//     assert the comparison FAILS — proves the test is non-trivial (kernel
+//     must differ from reference after the bit flip).
+//
+// Same dispatch caveat as Section F/G: PAR3_GF_METHOD is JS-side only;
+// C-level dispatch is CPUID via gf64_detect_method(). On a host with
+// AVX-512 the kernel dispatches AVX-512 regardless of the env var, but
+// Section H must still pass on whatever method dispatch selects.
+// ============================================================================
+
+console.log('\nSection H: fused-output kernel parity K={1,2,4,8,16}, len={1,7,16,64,256,1024,4096}');
+console.log('----------------------------------------------------------------------------\n');
+
+function _runFusedOutputParity(detectedMethodName) {
+	var K_SIZES_H = [1, 2, 4, 8, 16];
+	var LEN_POOL_H = [1, 7, 16, 64, 256, 1024, 4096]; // gf64_t element counts (len arg)
+	var MAX_LEN_H = LEN_POOL_H[LEN_POOL_H.length - 1]; // 4096 elements
+	var MAX_LEN_BYTES_H = MAX_LEN_H * 8;              // 32768 bytes
+	var TRIALS_PER_TUPLE_H = 200;
+
+	var envMethod = (process.env.PAR3_GF_METHOD || '').toLowerCase();
+	console.log('Section H.start: detectedMethod=' + detectedMethodName +
+		' envMethod=' + (envMethod || '<unset>') +
+		' (env is JS-side label; C-level kernel dispatch is CPUID-only)');
+
+	var sectionHTests = 0;
+	var sectionHNegatives = 0;
+	var activeMethodLabel = detectedMethodName; // what kernel actually ran
+
+	for (var ki = 0; ki < K_SIZES_H.length; ki++) {
+		var K = K_SIZES_H[ki];
+		var rngH = mulberry32(seedFor(activeMethodLabel, K + 3000));
+
+		// Pre-allocate buffers at max size; per-trial we use only the first numWords*8 bytes.
+		var inBuf = Buffer.alloc(MAX_LEN_BYTES_H);
+		var outBufs = new Array(K);
+		var coeffBufs = new Array(K);
+		var refBufs = new Array(K);
+		for (var k = 0; k < K; k++) {
+			outBufs[k] = Buffer.alloc(MAX_LEN_BYTES_H);
+			coeffBufs[k] = Buffer.alloc(8); // single scalar per PB5 design (symmetric with coupled-input)
+			refBufs[k] = Buffer.alloc(MAX_LEN_BYTES_H);
+		}
+
+		// ----- Positive scenarios: 200 per (method, K) tuple -----
+		for (var trial = 0; trial < TRIALS_PER_TUPLE_H; trial++) {
+			var len = LEN_POOL_H[Math.floor(rngH() * LEN_POOL_H.length)];
+			var numWords = len; // len is the gf64_t element count passed to the NAPI binding
+
+			// Fill input subarray + K scalar coefficients with random 64-bit values.
+			fillRandU64(inBuf.subarray(0, len * 8), rngH);
+			for (var k = 0; k < K; k++) {
+				var hi = (rngH() * 4294967296) >>> 0;
+				var lo = (rngH() * 4294967296) >>> 0;
+				coeffBufs[k].writeBigUInt64LE((BigInt(hi) << 32n) | BigInt(lo), 0);
+			}
+
+			// JS reference: out_ref[k][w] = in[w] * coeff[k] for w in [0..numWords).
+			// Mirrors the C scalar reference's XOR-accumulate against a zero-init buffer:
+			// outs[k][w] = 0 ^ (in[w] * coeff[k]) = in[w] * coeff[k].
+			for (var k = 0; k < K; k++) {
+				var coeffW = coeffBufs[k].readBigUInt64LE(0);
+				for (var w = 0; w < numWords; w++) {
+					var inW = inBuf.readBigUInt64LE(w * 8);
+					refBufs[k].writeBigUInt64LE(gf64_mul(inW, coeffW), w * 8);
+				}
+			}
+
+			// Run the wired fused-output kernel via the PB5 NAPI export.
+			for (var k = 0; k < K; k++) {
+				outBufs[k].fill(0);
+			}
+			encoder.fused_output_muladd_arr(outBufs, inBuf, coeffBufs, numWords, K);
+
+			// Compare each output buffer against its reference.
+			var ok = true;
+			for (var k = 0; k < K && ok; k++) {
+				if (!bufEq64(outBufs[k], refBufs[k], numWords)) ok = false;
+			}
+
+			if (ok) {
+				console.log('  PASS: Section H method=' + activeMethodLabel +
+					' K=' + K + ' len=' + len + ' trial=' + (trial + 1) + '/' + TRIALS_PER_TUPLE_H);
+				passed++;
+				sectionHTests++;
+			} else {
+				console.error('  FAIL: Section H method=' + activeMethodLabel +
+					' K=' + K + ' len=' + len + ' trial=' + (trial + 1) + '/' + TRIALS_PER_TUPLE_H);
+				// Show the first differing (k, word) for debuggability.
+				for (var k = 0; k < K; k++) {
+					if (!bufEq64(outBufs[k], refBufs[k], numWords)) {
+						for (var dw = 0; dw < numWords; dw++) {
+							var got = outBufs[k].readBigUInt64LE(dw * 8);
+							var exp = refBufs[k].readBigUInt64LE(dw * 8);
+							if (got !== exp) {
+								console.error('    k=' + k + ' word=' + dw +
+									': got=' + got.toString(16) +
+									' exp=' + exp.toString(16));
+								break;
+							}
+						}
+						break;
+					}
+				}
+				failed++;
+				process.exitCode = 1;
+			}
+		}
+
+		// ----- Negative scenario per K: flip the low bit of coeff_block_starts[0] -----
+		// Same pattern as Sections F/G: deliberately flip one bit, assert the
+		// comparison FAILS. Proves the test is non-discriminating-free (kernel
+		// correctly differs from reference after the bit flip).
+		var negRng = mulberry32(seedFor(activeMethodLabel, K + 4000) ^ 0xDEADBEEF);
+		var negLen = LEN_POOL_H[Math.floor(negRng() * LEN_POOL_H.length)];
+		var negNumWords = negLen;
+
+		fillRandU64(inBuf.subarray(0, negLen * 8), negRng);
+		for (var k = 0; k < K; k++) {
+			var hi = (negRng() * 4294967296) >>> 0;
+			var lo = (negRng() * 4294967296) >>> 0;
+			coeffBufs[k].writeBigUInt64LE((BigInt(hi) << 32n) | BigInt(lo), 0);
+		}
+
+		// Compute reference using the ORIGINAL (unflipped) coeff_block_starts[0].
+		for (var k = 0; k < K; k++) {
+			var coeffWN = coeffBufs[k].readBigUInt64LE(0);
+			for (var w = 0; w < negNumWords; w++) {
+				var inWN = inBuf.readBigUInt64LE(w * 8);
+				refBufs[k].writeBigUInt64LE(gf64_mul(inWN, coeffWN), w * 8);
+			}
+		}
+
+		// Flip the low bit of coeff_block_starts[0] in-place.
+		var c0Before = coeffBufs[0].readBigUInt64LE(0);
+		coeffBufs[0].writeBigUInt64LE(c0Before ^ 1n, 0);
+
+		for (var k = 0; k < K; k++) {
+			outBufs[k].fill(0);
+		}
+		encoder.fused_output_muladd_arr(outBufs, inBuf, coeffBufs, negNumWords, K);
+
+		var negOk = true;
+		for (var k = 0; k < K && negOk; k++) {
+			if (!bufEq64(outBufs[k], refBufs[k], negNumWords)) negOk = false;
+		}
+		var negLabel = 'Section H negative-trap method=' + activeMethodLabel +
+			' K=' + K + ' (flipped bit in coeff_block_starts[0] must FAIL comparison)';
+		if (negOk) {
+			console.error('  FAIL: ' + negLabel + ' — kernel matched reference after coeff_block_starts[0] bit flip; test is non-discriminating.');
+			failed++;
+			process.exitCode = 1;
+		} else {
+			// Successful trap: kernel correctly differs after the bit flip.
+			console.log('  PASS: ' + negLabel);
+			passed++;
+			sectionHNegatives++;
+		}
+
+		console.log('Section H tuple done: method=' + activeMethodLabel +
+			' K=' + K + ' trials=' + TRIALS_PER_TUPLE_H +
+			' (positive_pass=' + sectionHTests + ', negative-trap=ok)');
+	}
+
+	console.log('\nSection H complete: ' + sectionHTests +
+		' positive + ' + sectionHNegatives + ' negative-trap scenarios passed\n');
+}
+
+_runFusedOutputParity(methodName);
+
+// ============================================================================
+// Section I — 2D-blocked kernel parity (K outputs × G inputs per call)
+// ----------------------------------------------------------------------------
+// Regression gate for the PC5 dispatch + NAPI binding. PC5 wires the
+// PC1-PC4 2D-blocked kernels (scalar/SSSE3/AVX2/AVX-512) into the dispatch
+// table and exposes them via the `two_d_muladd_arr` NAPI export on the
+// Gf64Encoder class. This section proves the wired kernel is bit-exact vs
+// the JS BigInt reference for every supported (K, G, len, in_blocks[0..G-1],
+// coeff_block_2d[0..K*K_stride)) tuple.
+//
+// Per-iteration semantic (matches the C scalar reference in
+// gf64/gf64_region_scalar.c::gf64_region_2d_muladd_scalar_arr):
+//   for k in [0..K), g in [0..G), w in [0..len):
+//     outs[k][w] ^= in_blocks[g][w] * coeff_block_2d[k * K_stride + g]
+//
+// Cartesian product K ∈ {1, 2, 4, 8} × G ∈ {1, 2, 4, 8, 12, 16}:
+//   - 200 randomized scenarios per (K, G) tuple with `len` picked per-trial
+//     from {1, 7, 16, 64, 256, 1024, 4096} gf64_t element counts (8..32768
+//     bytes).
+//   - Per scenario: zero-init outs[0..K-1], allocate G input buffers (each
+//     `len * 8` bytes) + a flat 2D coefficient matrix buffer (K * K_stride
+//     * 8 bytes, row-major), K_stride = G (no SIMD padding in this test),
+//     fill all with random 64-bit values, call
+//     encoder.two_d_muladd_arr(outs, K, in_blocks, G, coeff_block_2d,
+//     K_stride, len).
+//   - Compute JS reference per (k, w): out_ref[k][w] = XOR_g
+//     (in_blocks[g][w] * coeff_block_2d[k * K_stride + g]).
+//   - Compare each outs[k] against out_ref[k] element-wise.
+//   - One negative scenario per (K, G) tuple: flip the low bit of
+//     coeff_block_2d[0] (= coeff[k=0, g=0]), assert the comparison FAILS —
+//     proves the test is non-trivial (kernel must differ from reference
+//     after the bit flip).
+//
+// Same dispatch caveat as Sections F/G/H: PAR3_GF_METHOD is JS-side only;
+// C-level dispatch is CPUID via gf64_detect_method(). On a host with AVX-512
+// the kernel dispatches AVX-512 regardless of the env var, but Section I must
+// still pass on whatever method dispatch selects.
+// ============================================================================
+
+console.log('\nSection I: 2D-blocked kernel parity K={1,2,4,8} × G={1,2,4,8,12,16}');
+console.log('----------------------------------------------------------------------------\n');
+
+function _runTwoDMulAddParity(detectedMethodName) {
+	var K_SIZES_I = [1, 2, 4, 8];
+	var G_POOL_I = [1, 2, 4, 8, 12, 16];
+	var LEN_POOL_I = [1, 7, 16, 64, 256, 1024, 4096]; // gf64_t element counts (len arg)
+	var MAX_LEN_I = LEN_POOL_I[LEN_POOL_I.length - 1]; // 4096 elements
+	var MAX_LEN_BYTES_I = MAX_LEN_I * 8;              // 32768 bytes
+	var TRIALS_PER_TUPLE_I = 200;
+	var MAX_K_I = K_SIZES_I[K_SIZES_I.length - 1]; // 8 (row count cap for coeff_block_2d)
+
+	var envMethod = (process.env.PAR3_GF_METHOD || '').toLowerCase();
+	console.log('Section I.start: detectedMethod=' + detectedMethodName +
+		' envMethod=' + (envMethod || '<unset>') +
+		' (env is JS-side label; C-level kernel dispatch is CPUID-only)');
+
+	var sectionITests = 0;
+	var sectionINegatives = 0;
+	var activeMethodLabel = detectedMethodName; // what kernel actually ran
+
+	for (var ki = 0; ki < K_SIZES_I.length; ki++) {
+		var K = K_SIZES_I[ki];
+		for (var gi = 0; gi < G_POOL_I.length; gi++) {
+			var G = G_POOL_I[gi];
+			var K_stride = G; // no SIMD padding in this test; >= G per binding contract.
+			var rngI = mulberry32(seedFor(activeMethodLabel, K * 100 + G + 5000));
+
+			// Pre-allocate buffers at max size; per-trial we use only the first numWords*8 bytes.
+			// outBufs[k] has length MAX_LEN_BYTES_I; inBufs[g] has length MAX_LEN_BYTES_I;
+			// coeff_block_2d has K * K_stride * 8 bytes (fixed across trials).
+			var inBufs = new Array(G);
+			for (var g0 = 0; g0 < G; g0++) {
+				inBufs[g0] = Buffer.alloc(MAX_LEN_BYTES_I);
+			}
+			var outBufs = new Array(K);
+			var refBufs = new Array(K);
+			for (var k0 = 0; k0 < K; k0++) {
+				outBufs[k0] = Buffer.alloc(MAX_LEN_BYTES_I);
+				refBufs[k0] = Buffer.alloc(MAX_LEN_BYTES_I);
+			}
+			var coeffBlock2D = Buffer.alloc(K * K_stride * 8);
+
+			// ----- Positive scenarios: 200 per (method, K, G) tuple -----
+			for (var trial = 0; trial < TRIALS_PER_TUPLE_I; trial++) {
+				var len = LEN_POOL_I[Math.floor(rngI() * LEN_POOL_I.length)];
+				var numWords = len; // len is the gf64_t element count passed to the NAPI binding
+
+				// Fill G input subarrays with random 64-bit values.
+				for (var gf = 0; gf < G; gf++) {
+					fillRandU64(inBufs[gf].subarray(0, len * 8), rngI);
+				}
+				// Fill K * K_stride coefficient words with random 64-bit values.
+				for (var cw = 0; cw < K * K_stride; cw++) {
+					var hi = (rngI() * 4294967296) >>> 0;
+					var lo = (rngI() * 4294967296) >>> 0;
+					coeffBlock2D.writeBigUInt64LE((BigInt(hi) << 32n) | BigInt(lo), cw * 8);
+				}
+
+				// JS reference: out_ref[k][w] = XOR_g (in_blocks[g][w] *
+				// coeff_block_2d[k * K_stride + g]) for w in [0..numWords).
+				// Mirrors the C scalar reference's XOR-accumulate against
+				// a zero-init buffer:
+				// outs[k][w] = 0 ^ (XOR_g in_blocks[g][w] * coeff[k,g]).
+				for (var k1 = 0; k1 < K; k1++) {
+					for (var w = 0; w < numWords; w++) {
+						var sum = 0n;
+						var inW = 0n; // hoisted; in_blocks[g][w] is constant across g loops below
+						// Cache misses on inBufs[g].readBigUInt64LE are real;
+						// iterate k outer / g inner / w inner to keep inW in
+						// registers per (k, w). For this test, correctness is
+						// the only goal — ref time is not measured.
+						for (var g1 = 0; g1 < G; g1++) {
+							inW = inBufs[g1].readBigUInt64LE(w * 8);
+							var coeffW = coeffBlock2D.readBigUInt64LE((k1 * K_stride + g1) * 8);
+							sum ^= gf64_mul(inW, coeffW);
+						}
+						refBufs[k1].writeBigUInt64LE(sum, w * 8);
+					}
+				}
+
+				// Run the wired 2D-blocked kernel via the PC5 NAPI export.
+				for (var ko = 0; ko < K; ko++) {
+					outBufs[ko].fill(0);
+				}
+				encoder.two_d_muladd_arr(outBufs, K, inBufs, G, coeffBlock2D, K_stride, numWords);
+
+				// Compare each output buffer against its reference.
+				var ok = true;
+				for (var kc = 0; kc < K && ok; kc++) {
+					if (!bufEq64(outBufs[kc], refBufs[kc], numWords)) ok = false;
+				}
+
+				if (ok) {
+					console.log('  PASS: Section I method=' + activeMethodLabel +
+						' K=' + K + ' G=' + G + ' len=' + len +
+						' trial=' + (trial + 1) + '/' + TRIALS_PER_TUPLE_I);
+					passed++;
+					sectionITests++;
+				} else {
+					console.error('  FAIL: Section I method=' + activeMethodLabel +
+						' K=' + K + ' G=' + G + ' len=' + len +
+						' trial=' + (trial + 1) + '/' + TRIALS_PER_TUPLE_I);
+					// Show the first differing (k, word) for debuggability.
+					for (var kd = 0; kd < K; kd++) {
+						if (!bufEq64(outBufs[kd], refBufs[kd], numWords)) {
+							for (var dw = 0; dw < numWords; dw++) {
+								var got = outBufs[kd].readBigUInt64LE(dw * 8);
+								var exp = refBufs[kd].readBigUInt64LE(dw * 8);
+								if (got !== exp) {
+									console.error('    k=' + kd + ' word=' + dw +
+										': got=' + got.toString(16) +
+										' exp=' + exp.toString(16));
+									break;
+								}
+							}
+							break;
+						}
+					}
+					failed++;
+					process.exitCode = 1;
+				}
+			}
+
+			// ----- Negative scenario per (K, G) tuple: flip the low bit of
+			// coeff_block_2d[0] (= coeff[k=0, g=0]). Same pattern as
+			// Sections F/G/H: deliberately flip one bit, assert the
+			// comparison FAILS. Proves the test is non-discriminating-free
+			// (kernel correctly differs from reference after the bit flip).
+			var negRng = mulberry32(seedFor(activeMethodLabel, K * 100 + G + 6000) ^ 0xDEADBEEF);
+			var negLen = LEN_POOL_I[Math.floor(negRng() * LEN_POOL_I.length)];
+			var negNumWords = negLen;
+
+			for (var gn = 0; gn < G; gn++) {
+				fillRandU64(inBufs[gn].subarray(0, negLen * 8), negRng);
+			}
+			for (var cn = 0; cn < K * K_stride; cn++) {
+				var nhi = (negRng() * 4294967296) >>> 0;
+				var nlo = (negRng() * 4294967296) >>> 0;
+				coeffBlock2D.writeBigUInt64LE((BigInt(nhi) << 32n) | BigInt(nlo), cn * 8);
+			}
+
+			// Compute reference using the ORIGINAL (unflipped) coeff[k=0,g=0].
+			for (var kn = 0; kn < K; kn++) {
+				for (var wn = 0; wn < negNumWords; wn++) {
+					var sumN = 0n;
+					for (var gn2 = 0; gn2 < G; gn2++) {
+						var inWN = inBufs[gn2].readBigUInt64LE(wn * 8);
+						var coeffWN = coeffBlock2D.readBigUInt64LE((kn * K_stride + gn2) * 8);
+						sumN ^= gf64_mul(inWN, coeffWN);
+					}
+					refBufs[kn].writeBigUInt64LE(sumN, wn * 8);
+				}
+			}
+
+			// Flip the low bit of coeff_block_2d[0] in-place.
+			var c00Before = coeffBlock2D.readBigUInt64LE(0);
+			coeffBlock2D.writeBigUInt64LE(c00Before ^ 1n, 0);
+
+			for (var kn2 = 0; kn2 < K; kn2++) {
+				outBufs[kn2].fill(0);
+			}
+			encoder.two_d_muladd_arr(outBufs, K, inBufs, G, coeffBlock2D, K_stride, negNumWords);
+
+			var negOk = true;
+			for (var kn3 = 0; kn3 < K && negOk; kn3++) {
+				if (!bufEq64(outBufs[kn3], refBufs[kn3], negNumWords)) negOk = false;
+			}
+			var negLabel = 'Section I negative-trap method=' + activeMethodLabel +
+				' K=' + K + ' G=' + G +
+				' (flipped bit in coeff_block_2d[0] must FAIL comparison)';
+			if (negOk) {
+				console.error('  FAIL: ' + negLabel + ' — kernel matched reference after coeff_block_2d[0] bit flip; test is non-discriminating.');
+				failed++;
+				process.exitCode = 1;
+			} else {
+				// Successful trap: kernel correctly differs after the bit flip.
+				console.log('  PASS: ' + negLabel);
+				passed++;
+				sectionINegatives++;
+			}
+
+			console.log('Section I tuple done: method=' + activeMethodLabel +
+				' K=' + K + ' G=' + G + ' trials=' + TRIALS_PER_TUPLE_I +
+				' (positive_pass=' + sectionITests + ', negative-trap=ok)');
+		}
+	}
+
+	console.log('\nSection I complete: ' + sectionITests +
+		' positive + ' + sectionINegatives + ' negative-trap scenarios passed\n');
+}
+
+_runTwoDMulAddParity(methodName);
+
+// ============================================================================
 // Summary
 // ============================================================================
 
