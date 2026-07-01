@@ -30,7 +30,20 @@ High-performance PAR3 create and repair with GF(2^64) recovery, written in C++ w
 | PA7 (`958e9d1`) | 30–33 MB/s | coupled-input kernel +40% over T2 |
 | PB7 (post-PD1, v2 HEAD) | ~20–30 MB/s | within env-ceiling noise (v2 intermediate; v3 plan shipped 13/24 tasks) |
 | Env ceiling | ~30 MB/s | host/branch artifact — same on every commit |
-| PAR3 create 1 GiB (v3 max-perf plan, 13/24 tasks shipped) | env-ceiling: ~30 MB/s; C++-only bench (T1) hit ~1097 MB/s on AVX2 | mmap + streaming NAPI + Buffer pool + LRU pool + worker_threads hash + AVX-512 threshold (16MiB→256MiB) + wider SIMD K=2 + parallel Cauchy + software prefetch |
+| PAR3 create 1 GiB (v3 max-perf plan, 13/24 tasks shipped) | env-ceiling: ~30 MB/s; C++-only bench (T1) hit ~1097 MB/s on AVX2; WSL2 dispatch is intermittent [†] | mmap + streaming NAPI + Buffer pool + LRU pool + worker_threads hash + AVX-512 threshold (16MiB→256MiB) + wider SIMD K=2 + parallel Cauchy + software prefetch + isolated detection TU + SIGILL probe |
+| `PAR3_GF64_USE_AVX512=1` (avx512-wsl2-detect, T0-T3) | 30 MB/s (JS env-ceiling); ~1097 MB/s (C++-only kernel) | operator escape hatch for reliable AVX-512 dispatch on WSL2/Hyper-V hosts; co-exists with `PAR3_AVX512_FORCE`; see [†] |
+
+[†] **WSL2 dispatch bug (issue #17):** on WSL2/Hyper-V hosts, `-march=native`
+compiles AVX-512 instructions into the binary, which the hypervisor detects
+and uses to mask CPUID's AVX-512 feature bits. The avx512-wsl2-detect work
+ships a three-layer fix: (1) isolated detection TU `gf64/cpu_detect.c` with a
+SIGILL probe for runtime ZMM execution testing, (2) `binding.gyp` builds the
+detection TU with `-mno-avx512f` to remove the architectural trigger,
+(3) `PAR3_GF64_USE_AVX512` operator escape hatch with `1/true/yes/on` /
+`0/false/no/off` / `auto` semantics. Architectural isolation alone is
+partial. The operator must set `PAR3_GF64_USE_AVX512=1` to force reliable
+AVX-512 dispatch on WSL2/Hyper-V hosts. See [BENCHMARKING.md §5](BENCHMARKING.md)
+for the full state and `test/par3-cpu-detect.js` for the regression test.
 
 The kernel work shipped is **bit-exact correct** (see the kernel-parity test
 below) and provides measurable inner-loop improvements that don't move past
