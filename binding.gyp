@@ -110,7 +110,16 @@
       ]
     },
     {
+      "target_name": "parpar_gf64_cpu_detect",
+      "type": "static_library",
+      "sources": ["gf64/cpu_detect.c"],
+      "include_dirs": ["gf64"],
+      "cflags": ["-fmax-include-depth=1024", "-mno-avx512f"],
+      "cflags_cc": ["-fpermissive"]
+    },
+    {
       "target_name": "parpar_gf64",
+      "dependencies": ["parpar_gf64_cpu_detect"],
       "conditions": [
         ['target_arch in "ia32 x64" and OS!="win"', {
           "sources": [
@@ -126,7 +135,6 @@
             "gf64/gf64_region_avx512.c",
             "gf64/gf64_region_avx512_arr.c",
             "gf64/gf64_dispatch.c",
-            "gf64/cpu_detect.c",
             "gf64/gf64_invert.c",
             "gf64/gf64_invert_ssse3.c",
             "gf64/gf64_invert_avx2.c",
