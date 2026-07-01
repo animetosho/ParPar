@@ -51,9 +51,17 @@
  */
 
 #include "gf64_global.h"
+#include <string.h>
+
+/* POSIX signal/sigsetjmp machinery is GCC/POSIX-only. Windows MSVC lacks
+ * sigjmp_buf, sigsetjmp, siglongjmp, sigaction etc. The SIGILL probe is
+ * a defence-in-depth layer for WSL2/Hyper-V hosts (Linux GCC); Windows
+ * builds skip it and trust CPUID+XCR0 (the dispatch still works correctly
+ * on Windows because Windows is never the WSL2 observer-effect context). */
+#if defined(__GNUC__) && !defined(__clang__) && !defined(__INTEL_COMPILER)
 #include <setjmp.h>
 #include <signal.h>
-#include <string.h>
+#endif
 
 HEDLEY_BEGIN_C_DECLS
 
@@ -109,6 +117,7 @@ static inline uint64_t gf64_xgetbv(uint32_t xcr) {
  * signal-mask state to be intact when the handler restores control.
  */
 
+#if defined(__GNUC__) && !defined(__clang__) && !defined(__INTEL_COMPILER)
 static __thread sigjmp_buf zmm_probe_jmp;
 static __thread volatile sig_atomic_t zmm_probe_active = 0;
 
@@ -126,7 +135,6 @@ static void gf64_sigill_handler(int sig) {
 	raise(SIGILL);
 }
 
-#if defined(__GNUC__) && !defined(__clang__) && !defined(__INTEL_COMPILER)
 /* Probe a single ZMM instruction. The function is the ONLY place in
  * this TU where AVX-512 codegen may appear; the file-level
  * `-mno-avx512f` override (binding.gyp, T2) keeps the rest of the TU
@@ -172,10 +180,12 @@ static int try_zmm_insn(void) {
 	return ok;
 }
 #else
-/* Non-GCC fallback: skip the probe entirely. Without GCC's inline asm
- * we can't emit a portable ZMM instruction; callers will fall through
- * to AVX-2 (the CPUID-only branch). The function still exists to keep
- * the call site in gf64_detect_method_internal uniform. */
+/* Non-GCC fallback (Windows MSVC, Clang, Intel CC): skip the probe
+ * entirely. Without GCC's inline asm we can't emit a portable ZMM
+ * instruction; without POSIX sigjmp_buf we can't safely catch SIGILL.
+ * Callers will fall through to AVX-2 (the CPUID-only branch) and
+ * trust CPUID+XCR0. The function still exists to keep the call site
+ * in gf64_detect_method_internal uniform across all compilers. */
 static int try_zmm_insn(void) {
 	return 0;
 }
