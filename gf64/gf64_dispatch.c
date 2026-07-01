@@ -33,6 +33,11 @@ extern void gf64_inverse_batch_scalar(gf64_t *HEDLEY_RESTRICT out, const gf64_t 
 extern void gf64_inverse_batch_ssse3 (gf64_t *HEDLEY_RESTRICT out, const gf64_t *HEDLEY_RESTRICT in, size_t N);
 extern void gf64_inverse_batch_avx2  (gf64_t *HEDLEY_RESTRICT out, const gf64_t *HEDLEY_RESTRICT in, size_t N);
 extern void gf64_inverse_batch_avx512(gf64_t *HEDLEY_RESTRICT out, const gf64_t *HEDLEY_RESTRICT in, size_t N);
+extern GF64Method gf64_detect_method_internal(void);
+
+/* Static forward decl — explicit `static` matches the definition below so
+ * call sites don't trigger -Wimplicit-function-declaration. */
+static int parse_avx512_force_env(GF64Method detected, int *forced);
 
 gf64_region_mul_fn gf64_region_mul;
 gf64_region_mul_arr_fn gf64_region_mul_arr;
@@ -42,71 +47,6 @@ gf64_region_fused_output_muladd_arr_fn gf64_region_fused_output_muladd_arr;
 gf64_region_2d_muladd_arr_fn gf64_region_2d_muladd_arr;
 gf64_inverse_batch_fn gf64_inverse_batch;
 GF64Method gf64_current_method;
-
-static void gf64_cpuid(int leaf, int subleaf, unsigned int *eax, unsigned int *ebx, unsigned int *ecx, unsigned int *edx) {
-#if defined(__GNUC__) && !defined(__clang__) && !defined(__INTEL_COMPILER)
-	__asm__ __volatile__ (
-		"mov %%ebx, %%esi\n\t"
-		"cpuid\n\t"
-		"mov %%esi, %%ebx"
-		: "=a"(*eax), "=b"(*ebx), "=c"(*ecx), "=d"(*edx)
-		: "a"(leaf), "c"(subleaf)
-		: "esi", "memory"
-	);
-#else
-	*eax = leaf;
-	*ebx = 0;
-	*ecx = subleaf;
-	*edx = 0;
-#endif
-}
-
-#if defined(__GNUC__) && !defined(__clang__) && !defined(__INTEL_COMPILER)
-static inline uint64_t gf64_xgetbv(uint32_t xcr) {
-	uint32_t lo, hi;
-	__asm__ __volatile__ (
-		"xgetbv"
-		: "=a"(lo), "=d"(hi)
-		: "c"(xcr)
-	);
-	return ((uint64_t)hi << 32) | lo;
-}
-#else
-static inline uint64_t gf64_xgetbv(uint32_t xcr) {
-	(void)xcr;
-	return 0;
-}
-#endif
-
-static GF64Method gf64_detect_method_internal(void) {
-	unsigned int eax, ebx, ecx, edx;
-	
-	/* Check AVX-512F (cpuid 7.0 EBX bit 16) + VPOPCNTDQ (cpuid 7.0 ECX bit 14) */
-	gf64_cpuid(7, 0, &eax, &ebx, &ecx, &edx);
-	if ((ebx & (1 << 16)) && (ecx & (1 << 14))) {
-		/* Confirm OS support: OSXSAVE (cpuid 1.0 ECX bit 27) + XCR0 ZMM/YMM/XMM (bits 5,2,1,0) */
-		gf64_cpuid(1, 0, &eax, &ebx, &ecx, &edx);
-		if (ecx & (1 << 27)) {
-			uint64_t xcr0 = gf64_xgetbv(0);
-			/* XCR0 bits 0 (SSE), 1 (AVX YMM), 2 (AVX-512 opmask), 5 (AVX-512 ZMM/H) must all be set */
-			if ((xcr0 & 0x27ULL) == 0x27ULL) {
-				return GF64_AVX512;
-			}
-		}
-	}
-	
-	gf64_cpuid(1, 0, &eax, &ebx, &ecx, &edx);
-	if ((ecx & (1 << 28)) && (ecx & (1 << 12)) && (ecx & (1 << 27))) {
-		return GF64_AVX2;
-	}
-	
-	gf64_cpuid(1, 0, &eax, &ebx, &ecx, &edx);
-	if ((ecx & (1 << 0)) && (ecx & (1 << 1))) {
-		return GF64_SSSE3;
-	}
-	
-	return GF64_SCALAR;
-}
 
 /* WSL2/Hyper-V workaround: poll detection 5 times, accept AVX512 if
  * any single poll (1 of 5) reports it. WSL2 doesn't honor sched_setaffinity
@@ -150,7 +90,32 @@ GF64Method gf64_detect_method(void) {
 }
 
 int gf64_init_dispatch(void) {
-	gf64_apply_method(gf64_detect_method());
+	/* Detection runs unconditionally; the parser needs `detected` for
+	 * the "force off" downgrade case, and we want a single deterministic
+	 * detection result for the fallthrough. The 5-poll aggregate is cheap. */
+	GF64Method detected = gf64_detect_method();
+	int use_avx512_forced;
+	if (parse_avx512_force_env(detected, &use_avx512_forced)) {
+		if (use_avx512_forced == 1) {
+			/* PAR3_GF64_USE_AVX512=1 (or true/yes/on): operator
+			 * force-on, bypass detection. If the host lacks AVX-512
+			 * (or the WSL2 hypervisor masks it via the observer
+			 * effect), dispatched kernels will SIGILL on the first
+			 * ZMM instruction; this is the operator's documented
+			 * acceptance of risk per the T1 comment. */
+			gf64_apply_method(GF64_AVX512);
+			return 0;
+		}
+		/* PAR3_GF64_USE_AVX512=0 (or false/no/off): operator force-off.
+		 * Sanity-check against detected: if host has AVX-512 but
+		 * operator says off, downgrade to AVX-2; otherwise honour the
+		 * detected best (the operator asked "no AVX-512", not "use
+		 * the worst implementation"). */
+		gf64_apply_method((detected == GF64_AVX512) ? GF64_AVX2 : detected);
+		return 0;
+	}
+	/* auto / unset / unrecognised → use detection (unchanged from pre-T3). */
+	gf64_apply_method(detected);
 	return 0;
 }
 
@@ -216,6 +181,16 @@ void gf64_apply_method(GF64Method method) {
  *   but it is preserved for forward-compatibility (e.g. if the bypass is
  *   later raised or removed).
  *
+ * - Runtime defence (SIGILL probe in gf64/cpu_detect.c): the heuristic above
+ *   assumes the host can actually execute AVX-512 when CPUID+XCR0 say it
+ *   can. The SIGILL probe in gf64_detect_method_internal() runs a single ZMM
+ *   instruction under a SIGILL handler as the final defence: even if CPUID
+ *   reports AVX-512 and this heuristic decides to dispatch it, a hypervisor
+ *   that masks CPUID only partially or fakes XCR0 without honouring lazy
+ *   XSAVE state loading will trip the probe and the detection falls back
+ *   to AVX-2. This complements the architectural isolation (-mno-avx512f
+ *   on the detection TU) and the PAR3_GF64_USE_AVX512 operator override.
+ *
  * - PAR3_GF64_WORKLOAD_SIZE env var: when set, overrides the inferred
  *   working-set size (which is computed as `block_size * sizeof(gf64_t) *
  *   (num_in + num_out)`). Useful for tests and for future C++ call sites
@@ -246,6 +221,68 @@ static size_t parse_workload_size_env(void) {
 	}
 	cached = val;
 	return (size_t)val;
+}
+
+/* Parse PAR3_GF64_USE_AVX512 env var (T3 upgrade of T1 binary stub).
+ *
+ * Supports the same "1/true/yes/on" / "0/false/no/off" vocabulary as
+ * gf64_parse_force_env (PAR3_AVX512_FORCE), PLUS an "auto" sentinel
+ * that explicitly signals "use detection". The "auto" value (or unset
+ * or unrecognised) returns 0; the caller falls through to normal
+ * detection / heuristic paths.
+ *
+ * Return semantics (DIFFERENT from gf64_parse_force_env):
+ *   - "1" / "true" / "yes" / "on"  → *forced = 1, return 1
+ *   - "0" / "false" / "no" / "off" → *forced = 0, return 1
+ *   - "auto" / "a" (or unset / empty) → *forced = -1, return 0
+ *     (caller falls through to normal detection / heuristic)
+ *   - unrecognised / malformed → return 0 (treated as "auto")
+ *
+ * The `detected` arg is accepted for API consistency with
+ * gf64_parse_force_env but is not consulted — PAR3_GF64_USE_AVX512 is
+ * an unconditional ISA override (or "use detection"); the detected ISA
+ * is the caller's responsibility for the fallthrough / downgraded path.
+ *
+ * Memoised. */
+static int parse_avx512_force_env(GF64Method detected, int *forced) {
+	(void)detected;  /* unused — see comment above */
+	static int cached = -1;  /* -1 = not yet parsed; 0 = auto/unset/unrecognised; 1 = forced on; 2 = forced off */
+	if (cached >= 0) {
+		if (cached == 0) {
+			*forced = -1;
+			return 0;
+		}
+		*forced = (cached == 1) ? 1 : 0;
+		return 1;
+	}
+
+	const char *env = getenv("PAR3_GF64_USE_AVX512");
+	if (env == NULL || *env == '\0') {
+		cached = 0;
+		*forced = -1;
+		return 0;
+	}
+
+	if (strcmp(env, "1") == 0 || strcasecmp(env, "true") == 0 ||
+	    strcasecmp(env, "yes") == 0 || strcasecmp(env, "on") == 0) {
+		cached = 1;
+		*forced = 1;
+		return 1;
+	}
+	if (strcmp(env, "0") == 0 || strcasecmp(env, "false") == 0 ||
+	    strcasecmp(env, "no") == 0 || strcasecmp(env, "off") == 0) {
+		cached = 2;
+		*forced = 0;
+		return 1;
+	}
+	if (strcasecmp(env, "auto") == 0 || strcasecmp(env, "a") == 0) {
+		cached = 0;
+		*forced = -1;
+		return 0;
+	}
+	cached = 0;  /* unrecognised → treat as "auto" */
+	*forced = -1;
+	return 0;
 }
 
 /* Parse PAR3_AVX512_FORCE env var. Three recognised values:
@@ -301,6 +338,12 @@ static int gf64_parse_force_env(GF64Method detected, GF64Method *out) {
 GF64Method gf64_method_for_workload(size_t num_in, size_t num_out, size_t block_size) {
 	GF64Method detected = gf64_detect_method();
 
+	/* Existing PAR3_AVX512_FORCE operator override (unchanged from v3 plan).
+	 * Placed BEFORE the heuristic AND before the new PAR3_GF64_USE_AVX512
+	 * check: PAR3_AVX512_FORCE's "1/true/yes/on" semantics explicitly request
+	 * "honour the detected ISA as-is", and its "2" semantics request
+	 * "unconditional AVX-512 force" — both should win over the heuristic
+	 * AND over the new ISA-level override. */
 	GF64Method forced;
 	if (gf64_parse_force_env(detected, &forced)) {
 		return forced;
@@ -330,6 +373,25 @@ GF64Method gf64_method_for_workload(size_t num_in, size_t num_out, size_t block_
 	 * ISA as-is (no heuristic downgrade). */
 	if (working_set_bytes > GF64_AVX512_HEURISTIC_BYPASS_WORKING_SET_BYTES) {
 		return detected;
+	}
+
+	/* PAR3_GF64_USE_AVX512 env var (T3 upgrade of T1 binary stub). Placed
+	 * AFTER the bypass check (so the bypass takes priority for very large
+	 * workloads — at that point AVX-512's throughput advantage already wins)
+	 * and BEFORE the downclock check (so the operator's ISA override can
+	 * win over heuristic downgrading for moderate workloads). "auto" /
+	 * unset / unrecognised fall through to the downclock / return-detected
+	 * paths below. */
+	int use_avx512_forced;
+	if (parse_avx512_force_env(detected, &use_avx512_forced)) {
+		if (use_avx512_forced == 1) {
+			/* Force-on: override the downclock heuristic, return
+			 * GF64_AVX512 regardless of detected. Operator accepts
+			 * SIGILL risk if the host lacks AVX-512. */
+			return GF64_AVX512;
+		}
+		/* Force-off: downgrade AVX-512 to AVX-2, honour other detected ISAs. */
+		return (detected == GF64_AVX512) ? GF64_AVX2 : detected;
 	}
 
 	if (working_set_bytes > GF64_AVX512_DOWNCLOCK_WORKING_SET_BYTES) {

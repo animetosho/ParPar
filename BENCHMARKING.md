@@ -168,8 +168,11 @@ taskset -c 0-3 node test/bench/run-all.js --mode=cliff
 | `PAR3_GF64_METHOD` | Force a specific SIMD method (bypasses auto-detection) | `AVX2`, `AVX512`, `SSSE3`, `SCALAR` |
 | `PAR3_USE_JS_KERNEL` | Fall back to the JS BigInt path | `1` |
 | `PAR3_AVX512_FORCE` | `1`/`true`/`yes`/`on` honour detected ISA (still subject to the downclock heuristic); `0`/`false`/`no`/`off` force AVX-512 off (downgrade to AVX-2 when detected); `2` **unconditionally** forces AVX-512, overriding both the heuristic AND the downclock threshold (operator's escape hatch — confirm hardware support via `test/par3-isa-check.js` first, or the AVX-512 kernel will raise SIGILL) | `1`, `0`, `2` |
+| `PAR3_GF64_USE_AVX512` | Overrides ISA *detection* (not the downclock heuristic). `1`/`true`/`yes`/`on` force AVX-512 dispatch even when CPUID reports it masked; `0`/`false`/`no`/`off` force AVX-2 (downgrade AVX-512 to AVX-2 when detected); `auto`/unset/unrecognised use the 5-poll detection aggregate. This is the WSL2 escape hatch for the observer-effect bug in §7. Confirm hardware support before forcing `1`, or the AVX-512 kernel raises SIGILL. | `1`, `0`, `auto` |
 
 These are read by `gf64_init_dispatch()` in C and by `ensureGfMethod()` in bench helpers. Always report which env vars were set when publishing numbers.
+
+`PAR3_GF64_USE_AVX512` and `PAR3_AVX512_FORCE` are distinct. The first overrides *which ISA the detector reports*; the second overrides *whether the workload-size downclock heuristic is allowed to downgrade a detected AVX-512*. On WSL2, reach for `PAR3_GF64_USE_AVX512=1` first: it is the one that defeats the CPUID masking documented in §7. See §7.4 for the full precedence order.
 
 ### Root causes of the cliff (for reference)
 
@@ -232,6 +235,19 @@ plan's per-phase bench gates are therefore **environmentally blocked**:
 The gate failure is not a kernel defect. The coupled-input kernel itself is
 **bit-exact verified** (Section G, 1407 new pass scenarios, see §5.4) and
 demonstrably **+40% faster** than the T2 baseline on this same host.
+
+> **Correction (avx512-wsl2-detect plan, issue #17):** the "20–32 MB/s
+> environmental ceiling" claim above conflated two separate effects. One
+> is a genuine end-to-end JS-pipeline ceiling (still real, see §6.7). The
+> other, hiding inside it, was a **WSL2 CPUID-masking dispatch bug**: the
+> hypervisor masked the AVX-512 feature bits whenever the binary contained
+> AVX-512 code, so dispatch silently fell back to AVX-2 on most runs. The
+> numbers above were therefore measured on the AVX-2 path far more often
+> than the tables imply. §7 documents the bug, the three-layer fix
+> (`7d43467`, `7531bcc`, `7a9b1c0`, `6a5a96b`), and the observed post-fix
+> dispatch behavior. A clean 1 GiB AVX-512 re-measurement on this host is
+> **to be measured in T9**; do not read the AVX-512 rows above as
+> representative until then.
 
 ### 5.3 The README's 395.99 MB/s baseline is stale
 
@@ -643,3 +659,222 @@ layer to expose the hardware-bound kernel throughput. See §6.2 for what
 it returned on this host. The C++ bench is **diagnostic**, not a
 replacement for §1–§4; it cannot generate actual PAR3 archives (it has
 no recovery data path), only throughput numbers for the kernel alone.
+
+
+## 7. WSL2 AVX-512 dispatch bug (issue #17)
+
+This section documents the `avx512-wsl2-detect` plan (Phase 1, todos
+T0–T5). It corrects a misdiagnosis baked into §5 and §6: part of what
+those sections attributed to a flat "environmental ceiling" was actually
+an ISA-dispatch bug that hid AVX-512 from the runtime detector on WSL2.
+**The protocol in §1–§4 is unchanged and remains the canonical way to
+measure throughput on this project.** This section is a bug write-up plus
+the observed post-fix behavior, not a new protocol.
+
+### 7.1 The bug: WSL2/Hyper-V masks the CPUID AVX-512 bits
+
+The dispatcher (`gf64_detect_method()` in `gf64/gf64_dispatch.c`) picks the
+SIMD kernel by reading the AVX-512 feature bits out of CPUID plus the XCR0
+state via XGETBV. On a bare-metal Zen4 host this reports AVX-512 and the
+AVX-512 kernel is selected.
+
+On this host (Zen4 under WSL2 / Hyper-V) the same detection intermittently
+reported AVX-2 even though the hardware supports AVX-512. The root cause is
+an "observer effect" in the hypervisor: when the compiled binary contains
+AVX-512 instructions anywhere (the `-march=native` build emits ZMM codegen
+in the kernel translation units), the hypervisor masks the AVX-512 feature
+bits in the CPUID leaf the guest observes. The detector then reads a
+masked leaf, concludes AVX-512 is unavailable, and falls back to AVX-2.
+
+The effect is non-deterministic on this host. The masked leaf appears on
+most polls but not all, so a single CPUID read is a coin flip. The
+dispatcher already mitigated this before Phase 1 with a **5-poll aggregate**
+(`gf64_detect_method()` polls detection five times and selects AVX-512 if
+**any** poll sees it, threshold 1 of 5). That aggregate is why AVX-512 is
+reachable at all on WSL2. It is not a full fix: many process starts still
+land on AVX-2 because all five polls came back masked.
+
+The consequence for §5 and §6: the "20–32 MB/s ceiling" tables were
+measured with dispatch landing on AVX-2 far more often than on AVX-512,
+because every fresh benchmark process re-rolled the masking. What looked
+like a single flat env ceiling was partly a flat env ceiling (the JS
+pipeline, see §6.7) and partly AVX-512 simply not being dispatched.
+
+### 7.2 The fix: three layers
+
+The fix landed across four commits and is deliberately layered, because no
+single layer fully defeats the hypervisor's binary inspection.
+
+**Layer 1: architectural isolation of the detection TU (T0 to T2).**
+
+- `7d43467` (T0) extracts CPU detection into a dedicated translation unit
+  `gf64/cpu_detect.c` (CPUID, XGETBV, and `gf64_detect_method_internal`),
+  and adds a SIGILL-guarded runtime probe `try_zmm_insn()` that actually
+  executes one ZMM instruction behind a `sigsetjmp`/`sigaction` guard. If
+  the probe faults, detection falls through to AVX-2 instead of trusting a
+  possibly-lying CPUID.
+- `7531bcc` (T1) rewires `gf64_dispatch.c` to delegate to the new TU and
+  removes the now-duplicated detection code, so there is a single detection
+  path.
+- `7a9b1c0` (T2) compiles `gf64/cpu_detect.c` with `-mno-avx512f` (via a
+  dedicated `parpar_gf64_cpu_detect` static-library target in
+  `binding.gyp`) so the detection TU emits **zero** AVX-512 codegen except
+  the one intentional instruction inside `try_zmm_insn` (which keeps its
+  per-function `target("avx512f")` attribute). The intent is to shrink the
+  AVX-512 footprint the hypervisor can see when it inspects the detection
+  path.
+
+**Layer 2: operator escape hatch (T3).**
+
+- `6a5a96b` (T3) adds the `PAR3_GF64_USE_AVX512` env var (parser
+  `parse_avx512_force_env`, modelled on the existing `PAR3_AVX512_FORCE`
+  parser). It lets an operator override detection entirely: force AVX-512
+  on, force AVX-2 on, or defer to detection (`auto`). See §7.4.
+
+**Layer 3: regression tests (T4 to T5).**
+
+- `c3985c8` (T4) adds `test/par3-cpu-detect.js`: it spawns fresh processes
+  across the env-var matrix and asserts dispatch stays functional and that
+  AVX-512 is still reachable (a regression gate against the original
+  "all polls masked, 0% AVX-512" failure).
+- `c5d3921` (T5) adds `test/bench/par3-cpu-detect-microbench.js`: it calls
+  `gf64_info()` 1000 times in one process and asserts the reported method
+  is stable within that process and that per-call detection cost stays
+  under budget.
+
+### 7.3 Post-fix measurements and observed behavior
+
+Be precise about what was and was not measured in Phase 1. The Phase 1
+gates were correctness and detection-stability gates, not a 1 GiB
+throughput re-run.
+
+**Detection / dispatch behavior (measured):**
+
+- **Architectural isolation alone does not defeat the observer effect.**
+  After T2, five consecutive fresh-process runs with no env var set gave
+  AVX-512 once and AVX-2 four times. The binary still contains ZMM codegen
+  in the kernel TUs (and in `try_zmm_insn`), so the hypervisor still masks
+  CPUID on most polls. The 5-poll aggregate is still doing the heavy
+  lifting: it occasionally gets a clean poll through and dispatches
+  AVX-512, but most process starts land on AVX-2.
+- **Within a single process, detection is stable.** The T5 microbench ran
+  1000 `gf64_info()` calls post-T2 and saw exactly one unique method per
+  run (all AVX-512 on the runs captured), at roughly 10 us per call. The
+  masking is decided per process start, not per call.
+- **Across fresh processes, detection is intermittent.** The T4 spawn
+  matrix measured roughly a 30–45% AVX-512 rate with no env var on this
+  host. That is the residual WSL2 observer effect: the 5-poll aggregate
+  raises the odds but does not reach 100%.
+- **The env var force-on is reliable.** With `PAR3_GF64_USE_AVX512=1`,
+  dispatch selects AVX-512 on every spawn (the detector is bypassed);
+  with `=0` it selects AVX-2 (downgrading a detected AVX-512). This is the
+  dependable path on WSL2.
+
+**Correctness (measured):**
+
+- `node test/par3-kernel-parity.js` → 9927 passed after T0, T1, and T2.
+- `node test/par3-full-recovery-parity.js` → 17 passed, 0 skipped, after
+  T0, T1, and T2.
+- T4 and T5 pass repeatedly and are safe to wire into CI.
+
+**Throughput (not measured in Phase 1, to be measured in T9):**
+
+The plan's hypothesis was that fixing dispatch would let the AVX-512 path
+show > 100 MB/s on a 1 GiB workload on this host. **That number was not
+measured in T0–T5 and must not be quoted as achieved.** Two honest reasons
+to withhold it:
+
+1. Phase 1 changed ISA *selection*, not the end-to-end JS pipeline. The
+   ~20–32 MB/s ceiling in §5.2 and §6.7 is dominated by the JS-layer
+   pipeline, and the C++-only bench (§6.2) already showed the kernel itself
+   is hardware-bound at ~1000+ MB/s. Selecting AVX-512 is a *precondition*
+   for any AVX-512 speedup, not proof that the 1 GiB end-to-end number
+   clears 100 MB/s.
+2. No 1 GiB / 10% / tmpfs / taskset run under §1–§4 was captured with
+   dispatch pinned to AVX-512 (via `PAR3_GF64_USE_AVX512=1`) versus pinned
+   to AVX-2. That A/B is exactly what **T9** is for.
+
+Until T9 captures that A/B under the §1–§4 protocol, treat the "> 100 MB/s
+AVX-512 on 1 GiB" figure as an unverified target, not a result.
+
+### 7.4 `PAR3_GF64_USE_AVX512` env var
+
+`PAR3_GF64_USE_AVX512` overrides ISA **detection**. It is the reliable
+escape hatch for the WSL2 masking bug: when the hypervisor lies about
+CPUID, this tells the dispatcher what the hardware actually is.
+
+| Value | Effect |
+|-------|--------|
+| `1`, `true`, `yes`, `on` | Force AVX-512 dispatch regardless of CPUID. Confirm the host truly supports AVX-512 first (see below), or the AVX-512 kernel raises SIGILL. |
+| `0`, `false`, `no`, `off` | Force AVX-2. Downgrades a detected AVX-512 to AVX-2. |
+| `auto`, `a`, unset, empty, unrecognised | Defer to the 5-poll detection aggregate (default behavior). |
+
+The parser (`parse_avx512_force_env` in `gf64/cpu_detect.c` path, wired via
+`gf64_dispatch.c`) is memoised, so the value is read once per process.
+
+**Distinct from `PAR3_AVX512_FORCE`.** These two env vars do different
+jobs and can be set independently:
+
+- `PAR3_GF64_USE_AVX512` overrides **which ISA the detector reports** (it
+  defeats the CPUID masking). Use this for the WSL2 bug.
+- `PAR3_AVX512_FORCE` overrides **whether the workload-size downclock
+  heuristic is allowed to downgrade a detected AVX-512** (`=2` forces
+  AVX-512 unconditionally past both the heuristic and the 256 MiB
+  threshold). Use this to override the Zen4 downclock heuristic, not the
+  detector.
+
+**Precedence in `gf64_method_for_workload()`** (highest wins):
+
+1. `PAR3_AVX512_FORCE` (heuristic override from the v3 plan).
+2. The 100 MiB heuristic-bypass check.
+3. `PAR3_GF64_USE_AVX512` (this ISA override).
+4. The 256 MiB downclock check.
+5. The detected ISA.
+
+`gf64_init_dispatch()` consults `PAR3_GF64_USE_AVX512` at the top: `=1`
+binds the AVX-512 kernel, `=0` binds AVX-2 (or the detected ISA if it was
+below AVX-512), and `auto` runs normal detection.
+
+**Caveat: `gf64_info()` does not honour this env var.** The NAPI
+`gf64_info()` binding re-runs `gf64_detect_method()` on every call, so it
+reports what detection sees, not what the env var forced. To observe the
+env var's effect, exercise an actual kernel call (the bound dispatch
+pointers set by `gf64_init_dispatch()` are what the env var changes), which
+is what the T4 test does.
+
+### 7.5 Operator guidance
+
+On a WSL2 (or other Hyper-V) guest where you know the CPU supports
+AVX-512, do not rely on auto-detection for benchmark runs. Force it:
+
+```bash
+# Confirm the hardware really has AVX-512 before forcing it on.
+node test/par3-isa-check.js
+
+# Force AVX-512 dispatch for a create bench (reliable on WSL2).
+PAR3_GF64_USE_AVX512=1 \
+	taskset -c 0-3 node test/bench/par3-create-bench.js --size=1G --slices=10000
+
+# For the AVX-2 vs AVX-512 A/B (this is the T9 measurement):
+PAR3_GF64_USE_AVX512=0 taskset -c 0-3 node test/bench/par3-create-bench.js --size=1G --slices=10000
+PAR3_GF64_USE_AVX512=1 taskset -c 0-3 node test/bench/par3-create-bench.js --size=1G --slices=10000
+```
+
+When you publish any number from a WSL2 host, always report the
+`PAR3_GF64_USE_AVX512` value alongside the other reproducibility knobs from
+§3 and §4. A number measured under `auto` on WSL2 is not reproducible: the
+next process might roll AVX-2 and report a different result.
+
+If you force `PAR3_GF64_USE_AVX512=1` on a host that does **not** support
+AVX-512, the AVX-512 kernel will execute a ZMM instruction the CPU cannot
+decode and the process dies with SIGILL. Verify with
+`test/par3-isa-check.js` first.
+
+### 7.6 Protocol is unchanged
+
+Sections §1–§4 remain the canonical way to measure throughput. Phase 1
+changed ISA dispatch, not the measurement protocol. The one durable
+operational change is that WSL2 benchmark runs should set
+`PAR3_GF64_USE_AVX512` explicitly rather than trusting auto-detection, and
+should record which value they used. The clean 1 GiB AVX-512 vs AVX-2 A/B
+under the §1–§4 protocol is deferred to T9.
