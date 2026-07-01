@@ -459,4 +459,300 @@ void gf64_region_muladd_avx2_arr(gf64_t *HEDLEY_RESTRICT out, const gf64_t *HEDL
 	}
 }
 
+/* Coupled-input kernel: out[i] ^= XOR_{g=0..G-1} (in_blocks[g][i] * coeff_blocks[g]).
+ * Each coefficient `coeff_blocks[g]` is paired with its OWN input block
+ * `in_blocks[g][]` (not a single shared `in[]` as in the existing
+ * gf64_region_mul_avx2_arr n_coeff>1 branch). The two semantics are NOT
+ * equivalent — see .omo/notepads/par3-par2-perf/learnings.md "Task 3 root
+ * cause" for the linear-collapse proof. This kernel is the corrected
+ * coupled-input variant used by the Cauchy recovery path in WorkerThread.
+ *
+ * Process 4 elements per outer iteration (2 pairs of 2). Each pair's two
+ * GF(2^64) products fit in a single 256-bit VPCLMULQDQ lane pair. The
+ * g-loop folds the per-g contributions into YMM acc_lo/acc_hi accumulators
+ * (XOR-fold over 128-bit carry-less products), then a single vectorized
+ * gf64_reduce_ymm per pair produces the 64-bit result which is XOR-ed
+ * into the existing out[]. Structural template:
+ * gf64_region_muladd_avx2_arr n_coeff>1 general case (lines 404-460).
+ */
+extern void gf64_region_coupled_muladd_avx2_arr(
+	gf64_t *HEDLEY_RESTRICT out,
+	const gf64_t *HEDLEY_RESTRICT *HEDLEY_RESTRICT in_blocks,
+	const gf64_t *HEDLEY_RESTRICT coeff_blocks,
+	size_t len,
+	size_t G);
+
+__attribute__((target("avx2,vpclmulqdq")))
+void gf64_region_coupled_muladd_avx2_arr(
+	gf64_t *HEDLEY_RESTRICT out,
+	const gf64_t *HEDLEY_RESTRICT *HEDLEY_RESTRICT in_blocks,
+	const gf64_t *HEDLEY_RESTRICT coeff_blocks,
+	size_t len,
+	size_t G) {
+	size_t i = 0;
+
+	/* Process 4 elements per outer iteration (2 pairs of 2). */
+	size_t blocks = len / 4;
+	for (size_t b = 0; b < blocks; b++) {
+		__m256i acc_lo_01 = _mm256_setzero_si256();
+		__m256i acc_hi_01 = _mm256_setzero_si256();
+		__m256i acc_lo_23 = _mm256_setzero_si256();
+		__m256i acc_hi_23 = _mm256_setzero_si256();
+
+		for (size_t g = 0; g < G; g++) {
+			__m256i in01_g = _mm256_setr_epi64x(
+				(int64_t)in_blocks[g][i + 0], 0,
+				(int64_t)in_blocks[g][i + 1], 0);
+			__m256i coeff_bc = _mm256_set1_epi64x((int64_t)coeff_blocks[g]);
+			__m256i prod01 = _mm256_clmulepi64_epi128(in01_g, coeff_bc, 0x00);
+			__m256i lo_v, hi_v;
+			gf64_split_prod_ymm(prod01, &lo_v, &hi_v);
+			acc_lo_01 = _mm256_xor_si256(acc_lo_01, lo_v);
+			acc_hi_01 = _mm256_xor_si256(acc_hi_01, hi_v);
+
+			__m256i in23_g = _mm256_setr_epi64x(
+				(int64_t)in_blocks[g][i + 2], 0,
+				(int64_t)in_blocks[g][i + 3], 0);
+			__m256i prod23 = _mm256_clmulepi64_epi128(in23_g, coeff_bc, 0x00);
+			gf64_split_prod_ymm(prod23, &lo_v, &hi_v);
+			acc_lo_23 = _mm256_xor_si256(acc_lo_23, lo_v);
+			acc_hi_23 = _mm256_xor_si256(acc_hi_23, hi_v);
+		}
+
+		__m256i result01 = gf64_reduce_ymm(acc_lo_01, acc_hi_01);
+		__m256i result23 = gf64_reduce_ymm(acc_lo_23, acc_hi_23);
+
+		__m128i prev01 = _mm_loadu_si128((const __m128i *)(out + i + 0));
+		__m128i prev23 = _mm_loadu_si128((const __m128i *)(out + i + 2));
+		_mm_storeu_si128((__m128i *)(out + i + 0),
+			_mm_xor_si128(prev01, _mm256_castsi256_si128(result01)));
+		_mm_storeu_si128((__m128i *)(out + i + 2),
+			_mm_xor_si128(prev23, _mm256_castsi256_si128(result23)));
+		i += 4;
+	}
+
+	/* Tail (0..3 elements) — scalar epilog. */
+	while (i < len) {
+		gf64_t acc = 0;
+		for (size_t g = 0; g < G; g++) {
+			acc ^= gf64_mul_reference(in_blocks[g][i], coeff_blocks[g]);
+		}
+		out[i] ^= acc;
+		i++;
+	}
+}
+
+/* Fused-output kernel: outs[k][w] ^= in[w] * coeff_block_starts[k] for k in [0..K).
+ * Structural template: gf64_region_coupled_muladd_avx2_arr. */
+extern void gf64_region_fused_output_muladd_avx2_arr(
+	gf64_t *HEDLEY_RESTRICT *HEDLEY_RESTRICT outs,
+	const gf64_t *HEDLEY_RESTRICT in,
+	const gf64_t *HEDLEY_RESTRICT *HEDLEY_RESTRICT coeff_block_starts,
+	size_t len,
+	size_t K);
+
+__attribute__((target("avx2,vpclmulqdq")))
+void gf64_region_fused_output_muladd_avx2_arr(
+	gf64_t *HEDLEY_RESTRICT *HEDLEY_RESTRICT outs,
+	const gf64_t *HEDLEY_RESTRICT in,
+	const gf64_t *HEDLEY_RESTRICT *HEDLEY_RESTRICT coeff_block_starts,
+	size_t len,
+	size_t K) {
+	size_t i = 0;
+
+	/* Process 4 elements per outer iteration (2 pairs of 2). */
+	size_t blocks = len / 4;
+	for (size_t b = 0; b < blocks; b++) {
+		__m256i in01 = _mm256_setr_epi64x((int64_t)in[i + 0], 0, (int64_t)in[i + 1], 0);
+		__m256i in23 = _mm256_setr_epi64x((int64_t)in[i + 2], 0, (int64_t)in[i + 3], 0);
+
+		for (size_t k = 0; k < K; k++) {
+			__m256i coeff_bc = _mm256_set1_epi64x((int64_t)*coeff_block_starts[k]);
+
+			__m256i prod01 = _mm256_clmulepi64_epi128(in01, coeff_bc, 0x00);
+			__m256i lo_v, hi_v;
+			gf64_split_prod_ymm(prod01, &lo_v, &hi_v);
+			__m256i result01 = gf64_reduce_ymm(lo_v, hi_v);
+			__m128i prev01 = _mm_loadu_si128((const __m128i *)(outs[k] + i + 0));
+			_mm_storeu_si128((__m128i *)(outs[k] + i + 0),
+				_mm_xor_si128(prev01, _mm256_castsi256_si128(result01)));
+
+			__m256i prod23 = _mm256_clmulepi64_epi128(in23, coeff_bc, 0x00);
+			gf64_split_prod_ymm(prod23, &lo_v, &hi_v);
+			__m256i result23 = gf64_reduce_ymm(lo_v, hi_v);
+			__m128i prev23 = _mm_loadu_si128((const __m128i *)(outs[k] + i + 2));
+			_mm_storeu_si128((__m128i *)(outs[k] + i + 2),
+				_mm_xor_si128(prev23, _mm256_castsi256_si128(result23)));
+		}
+
+		i += 4;
+	}
+
+	/* Tail (0..3 elements) — scalar epilog. */
+	while (i < len) {
+		gf64_t in_w = in[i];
+		for (size_t k = 0; k < K; k++) {
+			outs[k][i] ^= gf64_mul_reference(in_w, *coeff_block_starts[k]);
+		}
+		i++;
+	}
+}
+
+extern void gf64_region_2d_muladd_avx2_arr(
+	gf64_t *HEDLEY_RESTRICT *HEDLEY_RESTRICT outs,
+	size_t K,
+	const gf64_t *HEDLEY_RESTRICT *HEDLEY_RESTRICT in_blocks,
+	size_t G,
+	const gf64_t *HEDLEY_RESTRICT coeff_block_2d,
+	size_t K_stride,
+	size_t len);
+
+__attribute__((target("avx2,vpclmulqdq")))
+void gf64_region_2d_muladd_avx2_arr(
+	gf64_t *HEDLEY_RESTRICT *HEDLEY_RESTRICT outs,
+	size_t K,
+	const gf64_t *HEDLEY_RESTRICT *HEDLEY_RESTRICT in_blocks,
+	size_t G,
+	const gf64_t *HEDLEY_RESTRICT coeff_block_2d,
+	size_t K_stride,
+	size_t len) {
+	size_t i = 0;
+
+	size_t blocks = len / 4;
+	if (K == 2) {
+		/* K=2 fast path: wider SIMD utilization via YMM-pair unrolling.
+		 *
+		 * Per (w block, g), the serial K loop issues 2 K × 2 halves
+		 * = 4 VPCLMULQDQ, but only one is in flight at a time (each
+		 * clmul is followed by its dependent reduce/XOR-store). With
+		 * K=2 unrolled, we issue ALL 4 VPCLMULQDQ first (no deps
+		 * between them: different inputs × different coeff broadcasts),
+		 * then 4 reductions, then 4 prev-loads, then 4 XOR+stores. The
+		 * OOO engine can keep all 4 clmul + 4 reduces in flight
+		 * simultaneously, doubling the effective SIMD throughput.
+		 *
+		 * Per (w block, g) this path processes 2 K rows × 4 G-columns
+		 * = 8 gf64 elements via 4 YMMs (2 K × 2 halves). Each YMM
+		 * holds 2 gf64 elements (lanes 0-1 active, lanes 2-3 zero
+		 * padding for PCLMULQDQ).
+		 *
+		 * Bit-exact: uses the SAME polynomial reduction (PCLMULQDQ →
+		 * XOR → fold) as the serial path; the only difference is
+		 * loop ordering. Per-K-row accumulators are independent, so
+		 * moving them to parallel YMMs does not alter the bit result.
+		 *
+			 * Falls back to the serial K loop for K != 2 (general K
+			 * path below). Falls back to the scalar epilog for the
+			 * tail (len % 4). */
+		for (size_t b = 0; b < blocks; b++) {
+			for (size_t g = 0; g < G; g++) {
+				/* D2: prefetch the NEXT input block's current W-lane
+				 * into L1 (T0 hint) before the SIMD loads below. The
+				 * prefetch is bounded by g+1 < G to avoid reading past
+				 * the in_blocks[] pointer array on the last iteration. */
+				if (g + 1 < G) {
+					_mm_prefetch((const char *)&in_blocks[g + 1][i], _MM_HINT_T0);
+				}
+				__m256i in01 = _mm256_setr_epi64x(
+					(int64_t)in_blocks[g][i + 0], 0,
+					(int64_t)in_blocks[g][i + 1], 0);
+				__m256i in23 = _mm256_setr_epi64x(
+					(int64_t)in_blocks[g][i + 2], 0,
+					(int64_t)in_blocks[g][i + 3], 0);
+
+				/* Load both K row coefficients for this g in lockstep. */
+				__m256i COEFF_0G = _mm256_set1_epi64x(
+					(int64_t)*(coeff_block_2d + 0 * K_stride + g));
+				__m256i COEFF_1G = _mm256_set1_epi64x(
+					(int64_t)*(coeff_block_2d + 1 * K_stride + g));
+
+				/* PHASE 1: 4 back-to-back VPCLMULQDQ. All independent
+				 * (different inputs × different coeff broadcasts), so
+				 * the OOO engine keeps them in flight together. */
+				__m256i PROD_01_0 = _mm256_clmulepi64_epi128(in01, COEFF_0G, 0x00);
+				__m256i PROD_23_0 = _mm256_clmulepi64_epi128(in23, COEFF_0G, 0x00);
+				__m256i PROD_01_1 = _mm256_clmulepi64_epi128(in01, COEFF_1G, 0x00);
+				__m256i PROD_23_1 = _mm256_clmulepi64_epi128(in23, COEFF_1G, 0x00);
+
+				/* PHASE 2: 4 prev-loads (XOR-targets). Independent
+				 * across (K row, w-block half). Overlap with the
+				 * reductions below. */
+				__m128i PREV_01_0 = _mm_loadu_si128((const __m128i *)(outs[0] + i + 0));
+				__m128i PREV_23_0 = _mm_loadu_si128((const __m128i *)(outs[0] + i + 2));
+				__m128i PREV_01_1 = _mm_loadu_si128((const __m128i *)(outs[1] + i + 0));
+				__m128i PREV_23_1 = _mm_loadu_si128((const __m128i *)(outs[1] + i + 2));
+
+				/* PHASE 3: 4 reductions (split + reduce). */
+				__m256i lo_v, hi_v;
+				gf64_split_prod_ymm(PROD_01_0, &lo_v, &hi_v);
+				__m256i RESULT_01_0 = gf64_reduce_ymm(lo_v, hi_v);
+				gf64_split_prod_ymm(PROD_23_0, &lo_v, &hi_v);
+				__m256i RESULT_23_0 = gf64_reduce_ymm(lo_v, hi_v);
+				gf64_split_prod_ymm(PROD_01_1, &lo_v, &hi_v);
+				__m256i RESULT_01_1 = gf64_reduce_ymm(lo_v, hi_v);
+				gf64_split_prod_ymm(PROD_23_1, &lo_v, &hi_v);
+				__m256i RESULT_23_1 = gf64_reduce_ymm(lo_v, hi_v);
+
+				/* PHASE 4: 4 XOR + XMM stores (cast YMM → low XMM). */
+				_mm_storeu_si128((__m128i *)(outs[0] + i + 0),
+					_mm_xor_si128(PREV_01_0, _mm256_castsi256_si128(RESULT_01_0)));
+				_mm_storeu_si128((__m128i *)(outs[0] + i + 2),
+					_mm_xor_si128(PREV_23_0, _mm256_castsi256_si128(RESULT_23_0)));
+				_mm_storeu_si128((__m128i *)(outs[1] + i + 0),
+					_mm_xor_si128(PREV_01_1, _mm256_castsi256_si128(RESULT_01_1)));
+				_mm_storeu_si128((__m128i *)(outs[1] + i + 2),
+					_mm_xor_si128(PREV_23_1, _mm256_castsi256_si128(RESULT_23_1)));
+			}
+
+			i += 4;
+		}
+	} else {
+		/* General-K path: serial K loop. K=1, 4, 8, 16 fall here. */
+		for (size_t b = 0; b < blocks; b++) {
+			for (size_t g = 0; g < G; g++) {
+				/* D2: prefetch the NEXT input block's current W-lane
+				 * into L1 (T0 hint) before the SIMD loads below. The
+				 * prefetch is bounded by g+1 < G to avoid reading past
+				 * the in_blocks[] pointer array on the last iteration. */
+				if (g + 1 < G) {
+					_mm_prefetch((const char *)&in_blocks[g + 1][i], _MM_HINT_T0);
+				}
+				__m256i in01 = _mm256_setr_epi64x((int64_t)in_blocks[g][i + 0], 0, (int64_t)in_blocks[g][i + 1], 0);
+				__m256i in23 = _mm256_setr_epi64x((int64_t)in_blocks[g][i + 2], 0, (int64_t)in_blocks[g][i + 3], 0);
+
+				for (size_t k = 0; k < K; k++) {
+					__m256i coeff_bc = _mm256_set1_epi64x((int64_t)*(coeff_block_2d + k*K_stride + g));
+
+					__m256i prod01 = _mm256_clmulepi64_epi128(in01, coeff_bc, 0x00);
+					__m256i lo_v, hi_v;
+					gf64_split_prod_ymm(prod01, &lo_v, &hi_v);
+					__m256i result01 = gf64_reduce_ymm(lo_v, hi_v);
+					__m128i prev01 = _mm_loadu_si128((const __m128i *)(outs[k] + i + 0));
+					_mm_storeu_si128((__m128i *)(outs[k] + i + 0),
+						_mm_xor_si128(prev01, _mm256_castsi256_si128(result01)));
+
+					__m256i prod23 = _mm256_clmulepi64_epi128(in23, coeff_bc, 0x00);
+					gf64_split_prod_ymm(prod23, &lo_v, &hi_v);
+					__m256i result23 = gf64_reduce_ymm(lo_v, hi_v);
+					__m128i prev23 = _mm_loadu_si128((const __m128i *)(outs[k] + i + 2));
+					_mm_storeu_si128((__m128i *)(outs[k] + i + 2),
+						_mm_xor_si128(prev23, _mm256_castsi256_si128(result23)));
+				}
+			}
+
+			i += 4;
+		}
+	}
+
+	while (i < len) {
+		for (size_t g = 0; g < G; g++) {
+			gf64_t in_w = in_blocks[g][i];
+			for (size_t k = 0; k < K; k++) {
+				outs[k][i] ^= gf64_mul_reference(in_w, *(coeff_block_2d + k*K_stride + g));
+			}
+		}
+		i++;
+	}
+}
+
 HEDLEY_END_C_DECLS

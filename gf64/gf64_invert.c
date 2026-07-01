@@ -55,4 +55,12 @@ gf64_t gf64_inverse(gf64_t a) {
 	return s1;
 }
 
+/* Tail epilog for SIMD batches; also the SCALAR dispatch entry. Bit-exact
+ * with gf64_inverse by construction. */
+void gf64_inverse_batch_scalar(gf64_t *HEDLEY_RESTRICT out, const gf64_t *HEDLEY_RESTRICT in, size_t N) {
+	for (size_t i = 0; i < N; i++) {
+		out[i] = gf64_inverse(in[i]);
+	}
+}
+
 HEDLEY_END_C_DECLS

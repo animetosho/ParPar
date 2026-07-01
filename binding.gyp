@@ -115,6 +115,7 @@
         ['target_arch in "ia32 x64" and OS!="win"', {
           "sources": [
             "src/gf64_addon.cc",
+            "src/gf64_create_streaming.cc",
             "src/par3_engine.cc",
             "gf64/gf64_single.c",
             "gf64/gf64_region_scalar.c",
@@ -126,6 +127,9 @@
             "gf64/gf64_region_avx512_arr.c",
             "gf64/gf64_dispatch.c",
             "gf64/gf64_invert.c",
+            "gf64/gf64_invert_ssse3.c",
+            "gf64/gf64_invert_avx2.c",
+            "gf64/gf64_invert_avx512.c",
             "gf64/gf64_solve.c"
           ],
           "include_dirs": ["gf64"],

@@ -228,4 +228,133 @@ void gf64_region_muladd_ssse3_arr(gf64_t *HEDLEY_RESTRICT out, const gf64_t *HED
 	}
 }
 
+/* Coupled-input XOR-accumulating variant for Cauchy-style recovery.
+ *
+ * Unlike gf64_region_muladd_ssse3_arr (which sums over a single shared
+ * in[] buffer across all n_coeff), this kernel reads PER-INDEX input
+ * addressing: in_blocks[g] is the g-th input block and coeff_blocks[g]
+ * is its paired coefficient. The g-loop therefore varies both inputs
+ * and coefficients, giving the outer-product / coupled-input semantic
+ * required by PAR3 recovery:
+ *
+ *   for g in 0..G-1: out[i] ^= gf64_mul(in_blocks[g][i], coeff_blocks[g])
+ *
+ * Same packed 2-element SSSE3+pclmul inner loop as the dot-product
+ * variant above; one tail-element path covers odd len. Bit-exact against
+ * the gf64_mul_reference (PA1) path; not wired to dispatch (PA5). */
+void gf64_region_coupled_muladd_ssse3_arr(
+	gf64_t *HEDLEY_RESTRICT out,
+	const gf64_t *HEDLEY_RESTRICT *HEDLEY_RESTRICT in_blocks,
+	const gf64_t *HEDLEY_RESTRICT coeff_blocks,
+	size_t len,
+	size_t G)
+{
+	size_t blocks = len / 2;
+	size_t i = 0;
+
+	for (size_t b = 0; b < blocks; b++) {
+		uint64_t acc0 = 0, acc1 = 0;
+		for (size_t g = 0; g < G; g++) {
+			uint64_t r0, r1;
+			gf64_clmul_reduce_64x64_packed(in_blocks[g][2*b + 0], in_blocks[g][2*b + 1], coeff_blocks[g], &r0, &r1);
+			acc0 ^= r0;
+			acc1 ^= r1;
+		}
+		out[2*b + 0] ^= acc0;
+		out[2*b + 1] ^= acc1;
+		i += 2;
+	}
+
+	/* Tail (1 element) */
+	if (i < len) {
+		uint64_t acc = 0;
+		for (size_t g = 0; g < G; g++) {
+			acc ^= gf64_mul_reference(in_blocks[g][i], coeff_blocks[g]);
+		}
+		out[i] ^= acc;
+	}
+}
+
+/* Fused-output multiply-XOR-accumulate (SSSE3+pclmul). */
+__attribute__((target("ssse3,pclmul")))
+void gf64_region_fused_output_muladd_ssse3_arr(
+	gf64_t *HEDLEY_RESTRICT *HEDLEY_RESTRICT outs,
+	const gf64_t *HEDLEY_RESTRICT in,
+	const gf64_t *HEDLEY_RESTRICT *HEDLEY_RESTRICT coeff_block_starts,
+	size_t len,
+	size_t K)
+{
+	size_t blocks = len / 2;
+	size_t i = 0;
+
+	for (size_t b = 0; b < blocks; b++) {
+		for (size_t k = 0; k < K; k++) {
+			uint64_t r0, r1;
+			gf64_clmul_reduce_64x64_packed(in[i + 0], in[i + 1], (uint64_t)*coeff_block_starts[k], &r0, &r1);
+			outs[k][i + 0] ^= r0;
+			outs[k][i + 1] ^= r1;
+		}
+		i += 2;
+	}
+
+	/* Tail (1 element) */
+	if (i < len) {
+		for (size_t k = 0; k < K; k++) {
+			outs[k][i] ^= gf64_mul_reference(in[i], (gf64_t)*coeff_block_starts[k]);
+		}
+	}
+}
+
+/* 2D-blocked multiply-XOR-accumulate (SSSE3+pclmul). */
+extern void gf64_region_2d_muladd_ssse3_arr(
+	gf64_t *HEDLEY_RESTRICT *HEDLEY_RESTRICT outs,
+	size_t K,
+	const gf64_t *HEDLEY_RESTRICT *HEDLEY_RESTRICT in_blocks,
+	size_t G,
+	const gf64_t *HEDLEY_RESTRICT coeff_block_2d,
+	size_t K_stride,
+	size_t len);
+
+__attribute__((target("ssse3,pclmul")))
+void gf64_region_2d_muladd_ssse3_arr(
+	gf64_t *HEDLEY_RESTRICT *HEDLEY_RESTRICT outs,
+	size_t K,
+	const gf64_t *HEDLEY_RESTRICT *HEDLEY_RESTRICT in_blocks,
+	size_t G,
+	const gf64_t *HEDLEY_RESTRICT coeff_block_2d,
+	size_t K_stride,
+	size_t len)
+{
+	size_t blocks = len / 2;
+	size_t i = 0;
+
+	for (size_t b = 0; b < blocks; b++) {
+		for (size_t g = 0; g < G; g++) {
+			/* D2: prefetch the NEXT input block's current W-lane
+			 * into L1 (T0 hint) before the SIMD loads below. The
+			 * prefetch is bounded by g+1 < G to avoid reading past
+			 * the in_blocks[] pointer array on the last iteration. */
+			if (g + 1 < G) {
+				_mm_prefetch((const char *)&in_blocks[g + 1][i], _MM_HINT_T0);
+			}
+			for (size_t k = 0; k < K; k++) {
+				uint64_t r0, r1;
+				gf64_clmul_reduce_64x64_packed(in_blocks[g][2*b + 0], in_blocks[g][2*b + 1], *(coeff_block_2d + k*K_stride + g), &r0, &r1);
+				outs[k][2*b + 0] ^= r0;
+				outs[k][2*b + 1] ^= r1;
+			}
+		}
+		i += 2;
+	}
+
+	/* Tail (1 element) */
+	if (i < len) {
+		for (size_t g = 0; g < G; g++) {
+			for (size_t k = 0; k < K; k++) {
+				outs[k][i] ^= gf64_mul_reference(in_blocks[g][i], *(coeff_block_2d + k*K_stride + g));
+			}
+		}
+	}
+}
+
 HEDLEY_END_C_DECLS

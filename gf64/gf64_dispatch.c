@@ -1,5 +1,7 @@
 #include "gf64_global.h"
 #include <stdbool.h>
+#include <stdlib.h>
+#include <string.h>
 
 HEDLEY_BEGIN_C_DECLS
 
@@ -15,10 +17,30 @@ extern void gf64_region_muladd_scalar_arr(gf64_t *HEDLEY_RESTRICT out, const gf6
 extern void gf64_region_muladd_ssse3_arr(gf64_t *HEDLEY_RESTRICT out, const gf64_t *HEDLEY_RESTRICT in, const gf64_t *HEDLEY_RESTRICT coeff, size_t len, size_t n_coeff);
 extern void gf64_region_muladd_avx2_arr(gf64_t *HEDLEY_RESTRICT out, const gf64_t *HEDLEY_RESTRICT in, const gf64_t *HEDLEY_RESTRICT coeff, size_t len, size_t n_coeff);
 extern void gf64_region_muladd_avx512_arr(gf64_t *HEDLEY_RESTRICT out, const gf64_t *HEDLEY_RESTRICT in, const gf64_t *HEDLEY_RESTRICT coeff, size_t len, size_t n_coeff);
+extern void gf64_region_coupled_muladd_scalar_arr(gf64_t *HEDLEY_RESTRICT out, const gf64_t *HEDLEY_RESTRICT *HEDLEY_RESTRICT in_blocks, const gf64_t *HEDLEY_RESTRICT coeff_blocks, size_t len, size_t G);
+extern void gf64_region_coupled_muladd_ssse3_arr(gf64_t *HEDLEY_RESTRICT out, const gf64_t *HEDLEY_RESTRICT *HEDLEY_RESTRICT in_blocks, const gf64_t *HEDLEY_RESTRICT coeff_blocks, size_t len, size_t G);
+extern void gf64_region_coupled_muladd_avx2_arr(gf64_t *HEDLEY_RESTRICT out, const gf64_t *HEDLEY_RESTRICT *HEDLEY_RESTRICT in_blocks, const gf64_t *HEDLEY_RESTRICT coeff_blocks, size_t len, size_t G);
+extern void gf64_region_coupled_muladd_avx512_arr(gf64_t *HEDLEY_RESTRICT out, const gf64_t *HEDLEY_RESTRICT *HEDLEY_RESTRICT in_blocks, const gf64_t *HEDLEY_RESTRICT coeff_blocks, size_t len, size_t G);
+extern void gf64_region_fused_output_muladd_scalar_arr(gf64_t *HEDLEY_RESTRICT *HEDLEY_RESTRICT outs, const gf64_t *HEDLEY_RESTRICT in, const gf64_t *HEDLEY_RESTRICT *HEDLEY_RESTRICT coeff_block_starts, size_t len, size_t K);
+extern void gf64_region_fused_output_muladd_ssse3_arr(gf64_t *HEDLEY_RESTRICT *HEDLEY_RESTRICT outs, const gf64_t *HEDLEY_RESTRICT in, const gf64_t *HEDLEY_RESTRICT *HEDLEY_RESTRICT coeff_block_starts, size_t len, size_t K);
+extern void gf64_region_fused_output_muladd_avx2_arr(gf64_t *HEDLEY_RESTRICT *HEDLEY_RESTRICT outs, const gf64_t *HEDLEY_RESTRICT in, const gf64_t *HEDLEY_RESTRICT *HEDLEY_RESTRICT coeff_block_starts, size_t len, size_t K);
+extern void gf64_region_fused_output_muladd_avx512_arr(gf64_t *HEDLEY_RESTRICT *HEDLEY_RESTRICT outs, const gf64_t *HEDLEY_RESTRICT in, const gf64_t *HEDLEY_RESTRICT *HEDLEY_RESTRICT coeff_block_starts, size_t len, size_t K);
+extern void gf64_region_2d_muladd_scalar_arr(gf64_t *HEDLEY_RESTRICT *HEDLEY_RESTRICT outs, size_t K, const gf64_t *HEDLEY_RESTRICT *HEDLEY_RESTRICT in_blocks, size_t G, const gf64_t *HEDLEY_RESTRICT coeff_block_2d, size_t K_stride, size_t len);
+extern void gf64_region_2d_muladd_ssse3_arr(gf64_t *HEDLEY_RESTRICT *HEDLEY_RESTRICT outs, size_t K, const gf64_t *HEDLEY_RESTRICT *HEDLEY_RESTRICT in_blocks, size_t G, const gf64_t *HEDLEY_RESTRICT coeff_block_2d, size_t K_stride, size_t len);
+extern void gf64_region_2d_muladd_avx2_arr(gf64_t *HEDLEY_RESTRICT *HEDLEY_RESTRICT outs, size_t K, const gf64_t *HEDLEY_RESTRICT *HEDLEY_RESTRICT in_blocks, size_t G, const gf64_t *HEDLEY_RESTRICT coeff_block_2d, size_t K_stride, size_t len);
+extern void gf64_region_2d_muladd_avx512_arr(gf64_t *HEDLEY_RESTRICT *HEDLEY_RESTRICT outs, size_t K, const gf64_t *HEDLEY_RESTRICT *HEDLEY_RESTRICT in_blocks, size_t G, const gf64_t *HEDLEY_RESTRICT coeff_block_2d, size_t K_stride, size_t len);
+extern void gf64_inverse_batch_scalar(gf64_t *HEDLEY_RESTRICT out, const gf64_t *HEDLEY_RESTRICT in, size_t N);
+extern void gf64_inverse_batch_ssse3 (gf64_t *HEDLEY_RESTRICT out, const gf64_t *HEDLEY_RESTRICT in, size_t N);
+extern void gf64_inverse_batch_avx2  (gf64_t *HEDLEY_RESTRICT out, const gf64_t *HEDLEY_RESTRICT in, size_t N);
+extern void gf64_inverse_batch_avx512(gf64_t *HEDLEY_RESTRICT out, const gf64_t *HEDLEY_RESTRICT in, size_t N);
 
 gf64_region_mul_fn gf64_region_mul;
 gf64_region_mul_arr_fn gf64_region_mul_arr;
 gf64_region_muladd_arr_fn gf64_region_muladd_arr;
+gf64_region_coupled_muladd_arr_fn gf64_region_coupled_muladd_arr;
+gf64_region_fused_output_muladd_arr_fn gf64_region_fused_output_muladd_arr;
+gf64_region_2d_muladd_arr_fn gf64_region_2d_muladd_arr;
+gf64_inverse_batch_fn gf64_inverse_batch;
 GF64Method gf64_current_method;
 
 static void gf64_cpuid(int leaf, int subleaf, unsigned int *eax, unsigned int *ebx, unsigned int *ecx, unsigned int *edx) {
@@ -128,33 +150,197 @@ GF64Method gf64_detect_method(void) {
 }
 
 int gf64_init_dispatch(void) {
-	gf64_current_method = gf64_detect_method();
+	gf64_apply_method(gf64_detect_method());
+	return 0;
+}
 
-	switch (gf64_current_method) {
+void gf64_apply_method(GF64Method method) {
+	switch (method) {
 		case GF64_AVX512:
 			gf64_region_mul = gf64_region_mul_avx512;
 			gf64_region_mul_arr = gf64_region_mul_avx512_arr;
 			gf64_region_muladd_arr = gf64_region_muladd_avx512_arr;
+			gf64_region_coupled_muladd_arr = gf64_region_coupled_muladd_avx512_arr;
+			gf64_region_fused_output_muladd_arr = gf64_region_fused_output_muladd_avx512_arr;
+			gf64_region_2d_muladd_arr = gf64_region_2d_muladd_avx512_arr;
+			gf64_inverse_batch = gf64_inverse_batch_avx512;
 			break;
 		case GF64_AVX2:
 			gf64_region_mul = gf64_region_mul_avx2;
 			gf64_region_mul_arr = gf64_region_mul_avx2_arr;
 			gf64_region_muladd_arr = gf64_region_muladd_avx2_arr;
+			gf64_region_coupled_muladd_arr = gf64_region_coupled_muladd_avx2_arr;
+			gf64_region_fused_output_muladd_arr = gf64_region_fused_output_muladd_avx2_arr;
+			gf64_region_2d_muladd_arr = gf64_region_2d_muladd_avx2_arr;
+			gf64_inverse_batch = gf64_inverse_batch_avx2;
 			break;
 		case GF64_SSSE3:
 			gf64_region_mul = gf64_region_mul_ssse3;
 			gf64_region_mul_arr = gf64_region_mul_ssse3_arr;
 			gf64_region_muladd_arr = gf64_region_muladd_ssse3_arr;
+			gf64_region_coupled_muladd_arr = gf64_region_coupled_muladd_ssse3_arr;
+			gf64_region_fused_output_muladd_arr = gf64_region_fused_output_muladd_ssse3_arr;
+			gf64_region_2d_muladd_arr = gf64_region_2d_muladd_ssse3_arr;
+			gf64_inverse_batch = gf64_inverse_batch_ssse3;
 			break;
 		case GF64_SCALAR:
 		default:
 			gf64_region_mul = gf64_region_mul_scalar;
 			gf64_region_mul_arr = gf64_region_mul_scalar_arr;
 			gf64_region_muladd_arr = gf64_region_muladd_scalar_arr;
+			gf64_region_coupled_muladd_arr = gf64_region_coupled_muladd_scalar_arr;
+			gf64_region_fused_output_muladd_arr = gf64_region_fused_output_muladd_scalar_arr;
+			gf64_region_2d_muladd_arr = gf64_region_2d_muladd_scalar_arr;
+			gf64_inverse_batch = gf64_inverse_batch_scalar;
 			break;
 	}
+	gf64_current_method = method;
+}
 
+/* AVX-512 downclock heuristic thresholds (v3 max-perf plan, Phase C).
+ *
+ * - GF64_AVX512_HEURISTIC_BYPASS_WORKING_SET_BYTES (100 MiB): for working
+ *   sets above this, AVX-512's per-instruction throughput advantage dominates
+ *   Zen4's downclock penalty. The heuristic is bypassed entirely and the
+ *   detected ISA is honoured as-is (AVX-512 if available, otherwise whatever
+ *   the next-best ISA is). The 100 MiB cutoff is well above the L2-resident
+ *   region of typical 1 GiB bench workloads.
+ *
+ * - GF64_AVX512_DOWNCLOCK_WORKING_SET_BYTES (256 MiB, was 16 MiB in v2): the
+ *   upper bound of the "downclock zone" where AVX-512 downgrades to AVX-2.
+ *   The v2 16 MiB cutoff was over-conservative — Zen4's AVX-512 downclock is
+ *   most aggressive at very small working sets, but as the working set grows
+ *   past L2 the AVX-512 throughput advantage becomes meaningful again.
+ *   256 MiB matches the L2/L3 boundary on Zen4 7800X3D; in practice this
+ *   threshold is unreachable today because the 100 MiB bypass fires first,
+ *   but it is preserved for forward-compatibility (e.g. if the bypass is
+ *   later raised or removed).
+ *
+ * - PAR3_GF64_WORKLOAD_SIZE env var: when set, overrides the inferred
+ *   working-set size (which is computed as `block_size * sizeof(gf64_t) *
+ *   (num_in + num_out)`). Useful for tests and for future C++ call sites
+ *   that know the on-disk file size directly. Malformed / negative values
+ *   are treated as "unset" (the inferred value is used).
+ */
+#define GF64_AVX512_HEURISTIC_BYPASS_WORKING_SET_BYTES (100ULL * 1024 * 1024)
+#define GF64_AVX512_DOWNCLOCK_WORKING_SET_BYTES (256ULL * 1024 * 1024)
+
+/* Read PAR3_GF64_WORKLOAD_SIZE env var as a decimal byte count. Returns 0
+ * when unset / empty / malformed (matches the spec's "0 if unset" contract).
+ * Memoised — the env var is read at most once per process. */
+static size_t parse_workload_size_env(void) {
+	static long long cached = -1;  /* -1 = not yet parsed, 0 = unset, >0 = bytes */
+	if (cached >= 0) return (size_t)cached;
+
+	const char *env = getenv("PAR3_GF64_WORKLOAD_SIZE");
+	if (env == NULL || *env == '\0') {
+		cached = 0;
+		return 0;
+	}
+
+	char *end;
+	long long val = strtoll(env, &end, 10);
+	if (end == env || *end != '\0' || val < 0) {
+		cached = 0;  /* malformed / negative → treat as unset */
+		return 0;
+	}
+	cached = val;
+	return (size_t)val;
+}
+
+/* Parse PAR3_AVX512_FORCE env var. Three recognised values:
+ *
+ *   "1" / "true" / "yes" / "on"  — honour the detected ISA as-is. The caller
+ *     of gf64_method_for_workload() will still consult the heuristic
+ *     (bypass / downclock thresholds) and may downgrade to AVX-2 if the
+ *     workload is in the downclock zone. This is the original PD2 contract.
+ *
+ *   "0" / "false" / "no" / "off" — explicit AVX-512 OFF. If AVX-512 is the
+ *     detected ISA, downgrade to AVX-2; otherwise return detected as-is.
+ *
+ *   "2" (added in v3 max-perf, C3) — UNCONDITIONAL AVX-512 force. Override
+ *     both the heuristic AND the downclock threshold; *out is set to
+ *     GF64_AVX512 regardless of `detected`. This is the operator's escape
+ *     hatch for benchmarks that want pure AVX-512 throughput with no
+ *     heuristic interference. CAVEAT: when `detected` is NOT GF64_AVX512
+ *     (host lacks AVX-512, or detection is masked by the hypervisor), the
+ *     dispatched AVX-512 kernel will raise SIGILL on first ZMM instruction
+ *     and the calling process will abort. The operator is responsible for
+ *     confirming hardware support (e.g. via `test/par3-isa-check.js`)
+ *     before setting this value. This matches the documented "operator's
+ *     choice" trade-off — the env var is explicit acknowledgement of risk.
+ *
+ * Unrecognised / malformed values return 0 and leave `*out` untouched; the
+ * caller falls through to the normal heuristic path.
+ *
+ * Returns 1 on a recognised value (with `*out` set), 0 otherwise.
+ */
+static int gf64_parse_force_env(GF64Method detected, GF64Method *out) {
+	const char *env = getenv("PAR3_AVX512_FORCE");
+	if (env == NULL || *env == '\0') return 0;
+
+	if (strcmp(env, "1") == 0 || strcasecmp(env, "true") == 0 ||
+	    strcasecmp(env, "yes") == 0 || strcasecmp(env, "on") == 0) {
+		*out = detected;
+		return 1;
+	}
+	if (strcmp(env, "0") == 0 || strcasecmp(env, "false") == 0 ||
+	    strcasecmp(env, "no") == 0 || strcasecmp(env, "off") == 0) {
+		*out = (detected == GF64_AVX512) ? GF64_AVX2 : detected;
+		return 1;
+	}
+	if (strcmp(env, "2") == 0) {
+		/* Unconditional AVX-512 force (v3 / C3). Override the heuristic +
+		 * downclock threshold — *out is GF64_AVX512 regardless of detected. */
+		*out = GF64_AVX512;
+		return 1;
+	}
 	return 0;
+}
+
+GF64Method gf64_method_for_workload(size_t num_in, size_t num_out, size_t block_size) {
+	GF64Method detected = gf64_detect_method();
+
+	GF64Method forced;
+	if (gf64_parse_force_env(detected, &forced)) {
+		return forced;
+	}
+
+	/* Determine the effective working-set bytes. Two paths:
+	 *   1. PAR3_GF64_WORKLOAD_SIZE env var override (set by tests or future
+	 *      C++ call sites that know the on-disk file size directly).
+	 *   2. Inferred from num_in / num_out / block_size (the historical path).
+	 * Malformed env values fall through to path 2. */
+	size_t working_set_bytes;
+	size_t env_wb = parse_workload_size_env();
+	if (env_wb > 0) {
+		working_set_bytes = env_wb;
+	} else {
+		if (block_size > 0 &&
+		    (num_in + num_out) > 0 &&
+		    num_in + num_out > (SIZE_MAX / block_size / sizeof(gf64_t))) {
+			/* Overflow guard: degrade to per-ISA max (matches pre-heuristic behaviour). */
+			return detected;
+		}
+		working_set_bytes = block_size * sizeof(gf64_t) * (num_in + num_out);
+	}
+
+	/* Big-workload bypass: for working sets > 100 MiB, AVX-512's per-instruction
+	 * throughput advantage dominates the downclock penalty — honour the detected
+	 * ISA as-is (no heuristic downgrade). */
+	if (working_set_bytes > GF64_AVX512_HEURISTIC_BYPASS_WORKING_SET_BYTES) {
+		return detected;
+	}
+
+	if (working_set_bytes > GF64_AVX512_DOWNCLOCK_WORKING_SET_BYTES) {
+		/* Working set exceeds 256 MiB: AVX-512 downclock would lose.
+		 * Downgrade to AVX-2 if available; otherwise keep the per-ISA max.
+		 * Effectively unreachable today (the 100 MiB bypass fires first) but
+		 * preserved for forward-compatibility. */
+		return (detected == GF64_AVX512) ? GF64_AVX2 : detected;
+	}
+
+	return detected;
 }
 
 HEDLEY_END_C_DECLS
