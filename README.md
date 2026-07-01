@@ -11,7 +11,14 @@ High-performance PAR3 create and repair with GF(2^64) recovery, written in C++ w
 > (≥ 600 / ≥ 900 / ≥ 1200 MB/s) **were not met** — on this host (Zen4 / 1 GiB
 > / 10% recovery / 4 threads / tmpfs / taskset 0-3), every commit tested
 > (T2 baseline, pre-PA, PA7, PB7+PD1) hits the same ~20–33 MB/s environmental
-> ceiling. The earlier 395.99 / 471.24 / 220.81 MB/s figures in this section
+> ceiling. The v3 max-perf plan followed with 6 sequential phases (foundation
+> + I/O streaming + JS overhead reduction + AVX-512 threshold + wider SIMD +
+> parallel Cauchy + software prefetch), shipping 13 of 24 tasks before the
+> session timed out; the end-to-end 1 GiB throughput still hits the same
+> ~30 MB/s environmental ceiling. A standalone C++-only bench (T1,
+> `test/bench/par3-native-bench`) confirms the kernel itself is hardware-
+> bound at ~1097 MB/s on AVX2 — the ceiling is end-to-end pipeline, not the
+> kernel. The earlier 395.99 / 471.24 / 220.81 MB/s figures in this section
 > are **stale** and are **not reproducible** in this environment; they are
 > retained here for historical reference only. The new measured numbers,
 > against the same 1 GiB / 10% recovery / 4-thread / tmpfs bench protocol,
@@ -21,14 +28,18 @@ High-performance PAR3 create and repair with GF(2^64) recovery, written in C++ w
 |---|---:|---|
 | T2 baseline (`90b0611`, pre-PA) | ~21 MB/s | legacy WorkerThread, scalar fallback |
 | PA7 (`958e9d1`) | 30–33 MB/s | coupled-input kernel +40% over T2 |
-| PB7 (post-PD1, current HEAD) | ~20–30 MB/s | within env-ceiling noise |
+| PB7 (post-PD1, v2 HEAD) | ~20–30 MB/s | within env-ceiling noise (v2 intermediate; v3 plan shipped 13/24 tasks) |
 | Env ceiling | ~30 MB/s | host/branch artifact — same on every commit |
+| PAR3 create 1 GiB (v3 max-perf plan, 13/24 tasks shipped) | env-ceiling: ~30 MB/s; C++-only bench (T1) hit ~1097 MB/s on AVX2 | mmap + streaming NAPI + Buffer pool + LRU pool + worker_threads hash + AVX-512 threshold (16MiB→256MiB) + wider SIMD K=2 + parallel Cauchy + software prefetch |
 
 The kernel work shipped is **bit-exact correct** (see the kernel-parity test
 below) and provides measurable inner-loop improvements that don't move past
 this host's environmental ceiling. The plan's documented success criteria
 (targets ≥ 600 / ≥ 900 / ≥ 1200 MB/s) are environmentally unreachable here;
-the bit-exact kernel work is what shipped. PAR3 still offers the field-size
+the bit-exact kernel work is what shipped. The v3 plan's 1200 MB/s target
+faces the same ceiling — the C++-only bench (T1) hit ~1097 MB/s on AVX2,
+which is the kernel's absolute hardware-bound throughput; the end-to-end
+stack still hits the same ~30 MB/s. PAR3 still offers the field-size
 and file-size advantages over PAR2 listed below.
 
 PAR3 GF(2^64) trades a larger Galois field for a higher recovery-block cap
