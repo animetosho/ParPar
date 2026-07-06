@@ -142,12 +142,12 @@
             "gf64/gf64_solve.c"
           ],
           "include_dirs": ["gf64"],
-          "cflags": ["-fmax-include-depth=1024"],
-          "cxxflags": ["-fmax-include-depth=1024"],
+          "cflags": ["-fmax-include-depth=1024", "-mno-avx512f"],
+          "cxxflags": ["-fmax-include-depth=1024", "-mno-avx512f"],
           "conditions": [
             ["OS!=\"win\"", {
-              "cflags": ["-fmax-include-depth=1024"],
-              "cxxflags": ["-std=c++11", "-fmax-include-depth=1024", "-fpermissive"],
+              "cflags": ["-fmax-include-depth=1024", "-mno-avx512f"],
+              "cxxflags": ["-std=c++11", "-fmax-include-depth=1024", "-fpermissive", "-mno-avx512f"],
               "cflags_cc": ["-fpermissive"]
             }]
           ]

@@ -21,9 +21,9 @@
  *
  * THREE-LAYERED DEFENSE
  * -----------------------------------------------------------------------
- * (0) ARCHITECTURAL ISOLATION (this file + binding.gyp, T0+T2):
- *     All CPUID + dispatch logic lives in this TU. A per-file
- *     `-mno-avx512f` override on this source (binding.gyp, T2) ensures
+ * (0) ARCHITECTURAL ISOLATION (parpar_gf64 target + binding.gyp):
+ *     All CPUID + dispatch logic lives in this TU. A per-target
+ *     `-mno-avx512f` override on the `parpar_gf64` build target (binding.gyp) ensures
  *     NO AVX-512 instructions are emitted in this file's codegen
  *     EXCEPT inside the SIGILL probe (`try_zmm_insn`, marked with
  *     `__attribute__((target("avx512f")))`). The rest of the kernel
@@ -137,9 +137,9 @@ static void gf64_sigill_handler(int sig) {
 
 /* Probe a single ZMM instruction. The function is the ONLY place in
  * this TU where AVX-512 codegen may appear; the file-level
- * `-mno-avx512f` override (binding.gyp, T2) keeps the rest of the TU
- * clean of ZMM opcodes so the WSL2 hypervisor doesn't observe them
- * during the CPUID-poll phase.
+ * `-mno-avx512f` override (binding.gyp, `parpar_gf64` target) keeps all non-kernel
+ * TUs clean of ZMM opcodes; the per-function `__attribute__((target("avx512f")))`
+ * independently enables AVX-512 for the kernel functions that need it.
  *
  * Returns 1 if the ZMM instruction executed without SIGILL, 0 otherwise. */
 __attribute__((target("avx512f")))

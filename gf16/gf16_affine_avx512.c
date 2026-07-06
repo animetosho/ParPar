@@ -74,8 +74,8 @@ void gf16_affine_mul_avx512(const void *HEDLEY_RESTRICT scratch, void* dst, cons
 	uint8_t* _src = (uint8_t*)src + len;
 	uint8_t* _dst = (uint8_t*)dst + len;
 	for(intptr_t ptr = -(intptr_t)len; ptr; ptr += sizeof(__m512i)*2) {
-		__m512i ta = _mm512_load_si512((__m512i*)(_src + ptr));
-		__m512i tb = _mm512_load_si512((__m512i*)(_src + ptr) + 1);
+		__m512i ta = _mm512_loadu_si512((__m512i*)(_src + ptr));
+		__m512i tb = _mm512_loadu_si512((__m512i*)(_src + ptr) + 1);
 
 		__m512i tpl = _mm512_xor_si512(
 			_mm512_gf2p8affine_epi64_epi8(ta, mat_lh, 0),
@@ -86,8 +86,8 @@ void gf16_affine_mul_avx512(const void *HEDLEY_RESTRICT scratch, void* dst, cons
 			_mm512_gf2p8affine_epi64_epi8(tb, mat_hl, 0)
 		);
 
-		_mm512_store_si512 ((__m512i*)(_dst + ptr), tph);
-		_mm512_store_si512 ((__m512i*)(_dst + ptr) + 1, tpl);
+		_mm512_storeu_si512((__m512i*)(_dst + ptr), tph);
+		_mm512_storeu_si512((__m512i*)(_dst + ptr) + 1, tpl);
 	}
 	_mm256_zeroupper();
 #else
@@ -108,12 +108,12 @@ void gf16_affine2x_mul_avx512(const void *HEDLEY_RESTRICT scratch, void* dst, co
 	uint8_t* _dst = (uint8_t*)dst + len;
 	
 	for(intptr_t ptr = -(intptr_t)len; ptr; ptr += sizeof(__m512i)) {
-		__m512i data = _mm512_load_si512((__m512i*)(_src + ptr));
+		__m512i data = _mm512_loadu_si512((__m512i*)(_src + ptr));
 		__m512i result = _mm512_gf2p8affine_epi64_epi8(data, matNorm, 0);
 		__m512i swapped = _mm512_gf2p8affine_epi64_epi8(data, matSwap, 0);
 		
 		result = _mm512_xor_si512(result, _mm512_shuffle_epi32(swapped, _MM_SHUFFLE(1,0,3,2)));
-		_mm512_store_si512((__m512i*)(_dst + ptr), result);
+		_mm512_storeu_si512((__m512i*)(_dst + ptr), result);
 	}
 #else
 	UNUSED(scratch); UNUSED(dst); UNUSED(src); UNUSED(len); UNUSED(coefficient);

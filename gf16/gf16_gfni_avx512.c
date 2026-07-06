@@ -144,7 +144,7 @@ void gf16_mul_gfni_avx512(
             _mm_prefetch((char*)(dst + offset + 64), _MM_HINT_NTA);
         }
 
-        __m512i data = _mm512_load_si512(src_vec);
+        __m512i data = _mm512_loadu_si512(src_vec);
 
         __m512i result = _mm512_setzero_si512();
 
@@ -164,7 +164,7 @@ void gf16_mul_gfni_avx512(
         if(use_nt) {
             _mm512_stream_si512(dst_vec, result);
         } else {
-            _mm512_store_si512(dst_vec, result);
+            _mm512_storeu_si512(dst_vec, result);
         }
     }
 

@@ -30,8 +30,8 @@ static HEDLEY_ALWAYS_INLINE void _FN(gf16_checksum_block)(const void *HEDLEY_RES
 	for(unsigned i=0; i<(words & ~1); i+=2) {
 		__m512i w1, w2;
 		if(aligned) {
-			w1 = _mm512_load_si512(_src + i);
-			w2 = _mm512_load_si512(_src + i + 1);
+			w1 = _mm512_loadu_si512(_src + i);
+			w2 = _mm512_loadu_si512(_src + i + 1);
 		} else {
 			w1 = _mm512_loadu_si512(_src + i);
 			w2 = _mm512_loadu_si512(_src + i + 1);
@@ -40,7 +40,7 @@ static HEDLEY_ALWAYS_INLINE void _FN(gf16_checksum_block)(const void *HEDLEY_RES
 	}
 	if(words & 1) {
 		__m512i w;
-		if(aligned) w = _mm512_load_si512(_src + (words ^ 1));
+		if(aligned) w = _mm512_loadu_si512(_src + (words ^ 1));
 		else        w = _mm512_loadu_si512(_src + (words ^ 1));
 		v = _mm512_xor_si512(v, w);
 	}
