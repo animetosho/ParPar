@@ -223,6 +223,19 @@ static napi_value Gf64Encoder_NAPI_mul(napi_env env, napi_callback_info info) {
 		napi_throw_type_error(env, NULL, "Output buffer required");
 		return NULL;
 	}
+	void* aligned_out = (void*)out;
+	bool needs_out_temp = false;
+	if (gf64_current_method == GF64_AVX512 && ((uintptr_t)out & 63) != 0) {
+		void* tmp = nullptr;
+		if (ALIGN_ALLOC(tmp, outLen, 64)) {
+			memcpy(tmp, out, outLen);
+			aligned_out = tmp;
+			needs_out_temp = true;
+		} else {
+			napi_throw_error(env, NULL, "ALIGN_ALLOC failed");
+			return NULL;
+		}
+	}
 
 	uint64_t* in = NULL;
 	size_t inLen = 0;
@@ -230,6 +243,19 @@ static napi_value Gf64Encoder_NAPI_mul(napi_env env, napi_callback_info info) {
 	if(status != napi_ok) {
 		napi_throw_type_error(env, NULL, "Input buffer required");
 		return NULL;
+	}
+	void* aligned_in = (void*)in;
+	bool needs_in_temp = false;
+	if (gf64_current_method == GF64_AVX512 && ((uintptr_t)in & 63) != 0) {
+		void* tmp = nullptr;
+		if (ALIGN_ALLOC(tmp, inLen, 64)) {
+			memcpy(tmp, in, inLen);
+			aligned_in = tmp;
+			needs_in_temp = true;
+		} else {
+			napi_throw_error(env, NULL, "ALIGN_ALLOC failed");
+			return NULL;
+		}
 	}
 
 	int64_t len = 0;
@@ -246,7 +272,16 @@ static napi_value Gf64Encoder_NAPI_mul(napi_env env, napi_callback_info info) {
 		return NULL;
 	}
 
-	enc->Mul(out, in, (size_t)len, constant);
+	enc->Mul((uint64_t*)aligned_out, (uint64_t*)aligned_in, (size_t)len, constant);
+
+	if (needs_out_temp) {
+		memcpy(out, aligned_out, outLen);
+		ALIGN_FREE(aligned_out);
+	}
+	if (needs_in_temp) {
+		memcpy(in, aligned_in, inLen);
+		ALIGN_FREE(aligned_in);
+	}
 
 	return NULL;
 }
@@ -282,6 +317,19 @@ static napi_value Gf64Encoder_NAPI_mul_arr(napi_env env, napi_callback_info info
 		napi_throw_type_error(env, NULL, "Output buffer required");
 		return NULL;
 	}
+	void* aligned_out = (void*)out;
+	bool needs_out_temp = false;
+	if (gf64_current_method == GF64_AVX512 && ((uintptr_t)out & 63) != 0) {
+		void* tmp = nullptr;
+		if (ALIGN_ALLOC(tmp, outLen, 64)) {
+			memcpy(tmp, out, outLen);
+			aligned_out = tmp;
+			needs_out_temp = true;
+		} else {
+			napi_throw_error(env, NULL, "ALIGN_ALLOC failed");
+			return NULL;
+		}
+	}
 
 	uint64_t* in = NULL;
 	size_t inLen = 0;
@@ -290,6 +338,19 @@ static napi_value Gf64Encoder_NAPI_mul_arr(napi_env env, napi_callback_info info
 		napi_throw_type_error(env, NULL, "Input buffer required");
 		return NULL;
 	}
+	void* aligned_in = (void*)in;
+	bool needs_in_temp = false;
+	if (gf64_current_method == GF64_AVX512 && ((uintptr_t)in & 63) != 0) {
+		void* tmp = nullptr;
+		if (ALIGN_ALLOC(tmp, inLen, 64)) {
+			memcpy(tmp, in, inLen);
+			aligned_in = tmp;
+			needs_in_temp = true;
+		} else {
+			napi_throw_error(env, NULL, "ALIGN_ALLOC failed");
+			return NULL;
+		}
+	}
 
 	uint64_t* coeff = NULL;
 	size_t coeffLen = 0;
@@ -297,6 +358,19 @@ static napi_value Gf64Encoder_NAPI_mul_arr(napi_env env, napi_callback_info info
 	if(status != napi_ok) {
 		napi_throw_type_error(env, NULL, "Coefficients buffer required");
 		return NULL;
+	}
+	void* aligned_coeff = (void*)coeff;
+	bool needs_coeff_temp = false;
+	if (gf64_current_method == GF64_AVX512 && ((uintptr_t)coeff & 63) != 0) {
+		void* tmp = nullptr;
+		if (ALIGN_ALLOC(tmp, coeffLen, 64)) {
+			memcpy(tmp, coeff, coeffLen);
+			aligned_coeff = tmp;
+			needs_coeff_temp = true;
+		} else {
+			napi_throw_error(env, NULL, "ALIGN_ALLOC failed");
+			return NULL;
+		}
 	}
 	coeffLen /= sizeof(uint64_t);
 
@@ -314,7 +388,20 @@ static napi_value Gf64Encoder_NAPI_mul_arr(napi_env env, napi_callback_info info
 		return NULL;
 	}
 
-	enc->MulArr(out, in, coeff, (size_t)len, (size_t)n_coeff);
+	enc->MulArr((uint64_t*)aligned_out, (uint64_t*)aligned_in, (uint64_t*)aligned_coeff, (size_t)len, (size_t)n_coeff);
+
+	if (needs_out_temp) {
+		memcpy(out, aligned_out, outLen);
+		ALIGN_FREE(aligned_out);
+	}
+	if (needs_in_temp) {
+		memcpy(in, aligned_in, inLen);
+		ALIGN_FREE(aligned_in);
+	}
+	if (needs_coeff_temp) {
+		memcpy(coeff, aligned_coeff, coeffLen * sizeof(uint64_t));
+		ALIGN_FREE(aligned_coeff);
+	}
 
 	return NULL;
 }
@@ -359,6 +446,19 @@ static napi_value Gf64Encoder_NAPI_coupled_muladd_arr(napi_env env, napi_callbac
 		napi_throw_type_error(env, NULL, "Output buffer required");
 		return NULL;
 	}
+	void* aligned_out = (void*)out;
+	bool needs_out_temp = false;
+	if (gf64_current_method == GF64_AVX512 && ((uintptr_t)out & 63) != 0) {
+		void* tmp = nullptr;
+		if (ALIGN_ALLOC(tmp, outLen, 64)) {
+			memcpy(tmp, out, outLen);
+			aligned_out = tmp;
+			needs_out_temp = true;
+		} else {
+			napi_throw_error(env, NULL, "ALIGN_ALLOC failed");
+			return NULL;
+		}
+	}
 
 	int64_t G_signed = 0;
 	status = napi_get_value_int64(env, args[4], &G_signed);
@@ -389,6 +489,19 @@ static napi_value Gf64Encoder_NAPI_coupled_muladd_arr(napi_env env, napi_callbac
 	if(status != napi_ok) {
 		napi_throw_type_error(env, NULL, "Coefficients buffer required");
 		return NULL;
+	}
+	void* aligned_coeff = (void*)coeff;
+	bool needs_coeff_temp = false;
+	if (gf64_current_method == GF64_AVX512 && ((uintptr_t)coeff & 63) != 0) {
+		void* tmp = nullptr;
+		if (ALIGN_ALLOC(tmp, coeffLen, 64)) {
+			memcpy(tmp, coeff, coeffLen);
+			aligned_coeff = tmp;
+			needs_coeff_temp = true;
+		} else {
+			napi_throw_error(env, NULL, "ALIGN_ALLOC failed");
+			return NULL;
+		}
 	}
 	if(coeffLen < G * sizeof(uint64_t)) {
 		napi_throw_range_error(env, NULL, "Coefficients buffer too small for G");
@@ -448,9 +561,18 @@ static napi_value Gf64Encoder_NAPI_coupled_muladd_arr(napi_env env, napi_callbac
 		in_blocks[g] = p;
 	}
 
-	enc->CoupledMulAdd(out, in_blocks, coeff, (size_t)len, G);
+	enc->CoupledMulAdd((uint64_t*)aligned_out, in_blocks, (uint64_t*)aligned_coeff, (size_t)len, G);
 
 	if(heap_allocated) free(in_blocks);
+
+	if (needs_out_temp) {
+		memcpy(out, aligned_out, outLen);
+		ALIGN_FREE(aligned_out);
+	}
+	if (needs_coeff_temp) {
+		memcpy(coeff, aligned_coeff, coeffLen);
+		ALIGN_FREE(aligned_coeff);
+	}
 
 	return NULL;
 }
@@ -525,6 +647,19 @@ static napi_value Gf64Encoder_NAPI_fused_output_muladd_arr(napi_env env, napi_ca
 	if(status != napi_ok) {
 		napi_throw_type_error(env, NULL, "Input buffer required");
 		return NULL;
+	}
+	void* aligned_in = (void*)in;
+	bool needs_in_temp = false;
+	if (gf64_current_method == GF64_AVX512 && ((uintptr_t)in & 63) != 0) {
+		void* tmp = nullptr;
+		if (ALIGN_ALLOC(tmp, inLen, 64)) {
+			memcpy(tmp, in, inLen);
+			aligned_in = tmp;
+			needs_in_temp = true;
+		} else {
+			napi_throw_error(env, NULL, "ALIGN_ALLOC failed");
+			return NULL;
+		}
 	}
 	if(inLen < (size_t)len * sizeof(uint64_t)) {
 		napi_throw_range_error(env, NULL, "Input buffer too small for len");
@@ -638,9 +773,14 @@ static napi_value Gf64Encoder_NAPI_fused_output_muladd_arr(napi_env env, napi_ca
 		coeff_ptrs[k] = p;
 	}
 
-	enc->FusedOutputMulAdd(outs_ptrs, in, coeff_ptrs, (size_t)len, K);
+	enc->FusedOutputMulAdd(outs_ptrs, (const uint64_t*)aligned_in, coeff_ptrs, (size_t)len, K);
 
 	if(heap_allocated) { free(outs_ptrs); free(coeff_ptrs); }
+
+	if (needs_in_temp) {
+		memcpy((void*)in, aligned_in, inLen);
+		ALIGN_FREE(aligned_in);
+	}
 
 	return NULL;
 }
@@ -746,6 +886,19 @@ static napi_value Gf64Encoder_NAPI_two_d_muladd_arr(napi_env env, napi_callback_
 	if(status != napi_ok) {
 		napi_throw_type_error(env, NULL, "coeff_block_2d buffer required");
 		return NULL;
+	}
+	void* aligned_coeff_block_2d = (void*)coeff_block_2d;
+	bool needs_coeff_block_2d_temp = false;
+	if (gf64_current_method == GF64_AVX512 && ((uintptr_t)coeff_block_2d & 63) != 0) {
+		void* tmp = nullptr;
+		if (ALIGN_ALLOC(tmp, coeffLen, 64)) {
+			memcpy(tmp, coeff_block_2d, coeffLen);
+			aligned_coeff_block_2d = tmp;
+			needs_coeff_block_2d_temp = true;
+		} else {
+			napi_throw_error(env, NULL, "ALIGN_ALLOC failed");
+			return NULL;
+		}
 	}
 	if(coeffLen < K * K_stride * sizeof(uint64_t)) {
 		napi_throw_range_error(env, NULL, "coeff_block_2d buffer too small for K * K_stride");
@@ -859,9 +1012,14 @@ static napi_value Gf64Encoder_NAPI_two_d_muladd_arr(napi_env env, napi_callback_
 		in_ptrs[g] = p;
 	}
 
-	enc->TwoDMulAdd(outs_ptrs, K, in_ptrs, G, coeff_block_2d, K_stride, len);
+	enc->TwoDMulAdd(outs_ptrs, K, in_ptrs, G, (uint64_t*)aligned_coeff_block_2d, K_stride, len);
 
 	if(heap_allocated) { free(outs_ptrs); free(in_ptrs); }
+
+	if (needs_coeff_block_2d_temp) {
+		memcpy((void*)coeff_block_2d, aligned_coeff_block_2d, coeffLen);
+		ALIGN_FREE(aligned_coeff_block_2d);
+	}
 
 	return NULL;
 }
@@ -961,6 +1119,19 @@ static napi_value gf64_solve_NAPI(napi_env env, napi_callback_info info) {
 		napi_throw_type_error(env, NULL, "Matrix A buffer required");
 		return NULL;
 	}
+	void* aligned_A = (void*)A;
+	bool needs_A_temp = false;
+	if (gf64_current_method == GF64_AVX512 && ((uintptr_t)A & 63) != 0) {
+		void* tmp = nullptr;
+		if (ALIGN_ALLOC(tmp, ALen, 64)) {
+			memcpy(tmp, A, ALen);
+			aligned_A = tmp;
+			needs_A_temp = true;
+		} else {
+			napi_throw_error(env, NULL, "ALIGN_ALLOC failed");
+			return NULL;
+		}
+	}
 
 	gf64_t* b = NULL;
 	size_t bLen = 0;
@@ -968,6 +1139,19 @@ static napi_value gf64_solve_NAPI(napi_env env, napi_callback_info info) {
 	if(status != napi_ok) {
 		napi_throw_type_error(env, NULL, "Vector b buffer required");
 		return NULL;
+	}
+	void* aligned_b = (void*)b;
+	bool needs_b_temp = false;
+	if (gf64_current_method == GF64_AVX512 && ((uintptr_t)b & 63) != 0) {
+		void* tmp = nullptr;
+		if (ALIGN_ALLOC(tmp, bLen, 64)) {
+			memcpy(tmp, b, bLen);
+			aligned_b = tmp;
+			needs_b_temp = true;
+		} else {
+			napi_throw_error(env, NULL, "ALIGN_ALLOC failed");
+			return NULL;
+		}
 	}
 
 	int32_t n = 0;
@@ -995,7 +1179,7 @@ static napi_value gf64_solve_NAPI(napi_env env, napi_callback_info info) {
 
 	gf64_init_dispatch();
 
-	int result = gf64_solve(A, b, x, nSize);
+	int result = gf64_solve((gf64_t*)aligned_A, (gf64_t*)aligned_b, x, nSize);
 
 	napi_value result_val;
 	if(result == 0) {
@@ -1005,6 +1189,15 @@ static napi_value gf64_solve_NAPI(napi_env env, napi_callback_info info) {
 	}
 
 	free(x);
+
+	if (needs_A_temp) {
+		memcpy(A, aligned_A, nSize * nSize * sizeof(gf64_t));
+		ALIGN_FREE(aligned_A);
+	}
+	if (needs_b_temp) {
+		memcpy(b, aligned_b, nSize * sizeof(gf64_t));
+		ALIGN_FREE(aligned_b);
+	}
 
 	if(status != napi_ok) {
 		napi_throw_error(env, NULL, "Failed to create result");
@@ -1066,6 +1259,19 @@ static napi_value ComputeRecovery_NAPI(napi_env env, napi_callback_info info) {
 		napi_throw_type_error(env, NULL, "inputs must be a Buffer");
 		return NULL;
 	}
+	void* aligned_inputs = (void*)inputs;
+	bool needs_inputs_temp = false;
+	if (gf64_current_method == GF64_AVX512 && ((uintptr_t)inputs & 63) != 0) {
+		void* tmp = nullptr;
+		if (ALIGN_ALLOC(tmp, inputsLen, 64)) {
+			memcpy(tmp, inputs, inputsLen);
+			aligned_inputs = tmp;
+			needs_inputs_temp = true;
+		} else {
+			napi_throw_error(env, NULL, "ALIGN_ALLOC failed");
+			return NULL;
+		}
+	}
 
 	gf64_t* outputs = NULL;
 	size_t outputsLen = 0;
@@ -1073,6 +1279,19 @@ static napi_value ComputeRecovery_NAPI(napi_env env, napi_callback_info info) {
 	if(status != napi_ok) {
 		napi_throw_type_error(env, NULL, "outputs must be a Buffer");
 		return NULL;
+	}
+	void* aligned_outputs = (void*)outputs;
+	bool needs_outputs_temp = false;
+	if (gf64_current_method == GF64_AVX512 && ((uintptr_t)outputs & 63) != 0) {
+		void* tmp = nullptr;
+		if (ALIGN_ALLOC(tmp, outputsLen, 64)) {
+			memcpy(tmp, outputs, outputsLen);
+			aligned_outputs = tmp;
+			needs_outputs_temp = true;
+		} else {
+			napi_throw_error(env, NULL, "ALIGN_ALLOC failed");
+			return NULL;
+		}
 	}
 
 	// Extract integer args
@@ -1155,12 +1374,21 @@ static napi_value ComputeRecovery_NAPI(napi_env env, napi_callback_info info) {
 	// Call the engine
 	gf64_init_dispatch();
 	GF64Controller::ComputeRecoveryBlocks(
-		inputs, (size_t)numInputs,
-		outputs, (size_t)numRecovery,
+		(gf64_t*)aligned_inputs, (size_t)numInputs,
+		(gf64_t*)aligned_outputs, (size_t)numRecovery,
 		blockSize64,
 		firstInput, firstRecovery,
 		(int)numThreads
 	);
+
+	if (needs_inputs_temp) {
+		memcpy(inputs, aligned_inputs, (size_t)numInputs * blockSize);
+		ALIGN_FREE(aligned_inputs);
+	}
+	if (needs_outputs_temp) {
+		memcpy(outputs, aligned_outputs, (size_t)numRecovery * blockSize);
+		ALIGN_FREE(aligned_outputs);
+	}
 
 	return NULL;
 }
@@ -1197,6 +1425,19 @@ static napi_value ComputeRecoveryFull_NAPI(napi_env env, napi_callback_info info
 		napi_throw_type_error(env, NULL, "inputs must be a Buffer");
 		return NULL;
 	}
+	void* aligned_inputs = (void*)inputs;
+	bool needs_inputs_temp = false;
+	if (gf64_current_method == GF64_AVX512 && ((uintptr_t)inputs & 63) != 0) {
+		void* tmp = nullptr;
+		if (ALIGN_ALLOC(tmp, inputsLen, 64)) {
+			memcpy(tmp, inputs, inputsLen);
+			aligned_inputs = tmp;
+			needs_inputs_temp = true;
+		} else {
+			napi_throw_error(env, NULL, "ALIGN_ALLOC failed");
+			return NULL;
+		}
+	}
 
 	gf64_t* outputs = NULL;
 	size_t outputsLen = 0;
@@ -1204,6 +1445,19 @@ static napi_value ComputeRecoveryFull_NAPI(napi_env env, napi_callback_info info
 	if(status != napi_ok) {
 		napi_throw_type_error(env, NULL, "outputs must be a Buffer");
 		return NULL;
+	}
+	void* aligned_outputs = (void*)outputs;
+	bool needs_outputs_temp = false;
+	if (gf64_current_method == GF64_AVX512 && ((uintptr_t)outputs & 63) != 0) {
+		void* tmp = nullptr;
+		if (ALIGN_ALLOC(tmp, outputsLen, 64)) {
+			memcpy(tmp, outputs, outputsLen);
+			aligned_outputs = tmp;
+			needs_outputs_temp = true;
+		} else {
+			napi_throw_error(env, NULL, "ALIGN_ALLOC failed");
+			return NULL;
+		}
 	}
 
 	int32_t numInputs = 0;
@@ -1279,12 +1533,21 @@ static napi_value ComputeRecoveryFull_NAPI(napi_env env, napi_callback_info info
 
 	gf64_init_dispatch();
 	GF64Controller::ComputeRecoveryBlocksFull(
-		inputs, (size_t)numInputs,
-		outputs, (size_t)numRecovery,
+		(gf64_t*)aligned_inputs, (size_t)numInputs,
+		(gf64_t*)aligned_outputs, (size_t)numRecovery,
 		blockSize64,
 		firstInput, firstRecovery,
 		(int)numThreads
 	);
+
+	if (needs_inputs_temp) {
+		memcpy(inputs, aligned_inputs, (size_t)numInputs * blockSize);
+		ALIGN_FREE(aligned_inputs);
+	}
+	if (needs_outputs_temp) {
+		memcpy(outputs, aligned_outputs, (size_t)numRecovery * blockSize);
+		ALIGN_FREE(aligned_outputs);
+	}
 
 	return NULL;
 }
@@ -1314,6 +1577,19 @@ static napi_value ComputeRepair_NAPI(napi_env env, napi_callback_info info) {
 		napi_throw_type_error(env, NULL, "availBlocks must be a Buffer");
 		return NULL;
 	}
+	void* aligned_availBlocks = (void*)availBlocks;
+	bool needs_availBlocks_temp = false;
+	if (gf64_current_method == GF64_AVX512 && ((uintptr_t)availBlocks & 63) != 0) {
+		void* tmp = nullptr;
+		if (ALIGN_ALLOC(tmp, availLen, 64)) {
+			memcpy(tmp, availBlocks, availLen);
+			aligned_availBlocks = tmp;
+			needs_availBlocks_temp = true;
+		} else {
+			napi_throw_error(env, NULL, "ALIGN_ALLOC failed");
+			return NULL;
+		}
+	}
 
 	gf64_t* repairedBlocks = NULL;
 	size_t repairedLen = 0;
@@ -1321,6 +1597,19 @@ static napi_value ComputeRepair_NAPI(napi_env env, napi_callback_info info) {
 	if(status != napi_ok) {
 		napi_throw_type_error(env, NULL, "repairedBlocks must be a Buffer");
 		return NULL;
+	}
+	void* aligned_repairedBlocks = (void*)repairedBlocks;
+	bool needs_repairedBlocks_temp = false;
+	if (gf64_current_method == GF64_AVX512 && ((uintptr_t)repairedBlocks & 63) != 0) {
+		void* tmp = nullptr;
+		if (ALIGN_ALLOC(tmp, repairedLen, 64)) {
+			memcpy(tmp, repairedBlocks, repairedLen);
+			aligned_repairedBlocks = tmp;
+			needs_repairedBlocks_temp = true;
+		} else {
+			napi_throw_error(env, NULL, "ALIGN_ALLOC failed");
+			return NULL;
+		}
 	}
 
 	int32_t numAvail = 0;
@@ -1350,6 +1639,19 @@ static napi_value ComputeRepair_NAPI(napi_env env, napi_callback_info info) {
 	if(status != napi_ok) {
 		napi_throw_type_error(env, NULL, "solveMatrix must be a Buffer");
 		return NULL;
+	}
+	void* aligned_solveMatrix = (void*)solveMatrix;
+	bool needs_solveMatrix_temp = false;
+	if (gf64_current_method == GF64_AVX512 && ((uintptr_t)solveMatrix & 63) != 0) {
+		void* tmp = nullptr;
+		if (ALIGN_ALLOC(tmp, solveLen, 64)) {
+			memcpy(tmp, solveMatrix, solveLen);
+			aligned_solveMatrix = tmp;
+			needs_solveMatrix_temp = true;
+		} else {
+			napi_throw_error(env, NULL, "ALIGN_ALLOC failed");
+			return NULL;
+		}
 	}
 
 	int32_t numThreads = 0;
@@ -1389,11 +1691,24 @@ static napi_value ComputeRepair_NAPI(napi_env env, napi_callback_info info) {
 
 	gf64_init_dispatch();
 	GF64Controller::ComputeRepairBlocks(
-		availBlocks, (size_t)numAvail,
-		repairedBlocks, (size_t)numMissing,
-		solveMatrix, blockSize64,
+		(gf64_t*)aligned_availBlocks, (size_t)numAvail,
+		(gf64_t*)aligned_repairedBlocks, (size_t)numMissing,
+		(gf64_t*)aligned_solveMatrix, blockSize64,
 		(int)numThreads
 	);
+
+	if (needs_availBlocks_temp) {
+		memcpy(availBlocks, aligned_availBlocks, (size_t)numAvail * blockSize);
+		ALIGN_FREE(aligned_availBlocks);
+	}
+	if (needs_repairedBlocks_temp) {
+		memcpy(repairedBlocks, aligned_repairedBlocks, (size_t)numMissing * blockSize);
+		ALIGN_FREE(aligned_repairedBlocks);
+	}
+	if (needs_solveMatrix_temp) {
+		memcpy(solveMatrix, aligned_solveMatrix, solveLen);
+		ALIGN_FREE(aligned_solveMatrix);
+	}
 
 	return NULL;
 }
@@ -1421,6 +1736,19 @@ static napi_value SolveAndReconstruct_NAPI(napi_env env, napi_callback_info info
 		napi_throw_type_error(env, NULL, "A must be a Buffer");
 		return NULL;
 	}
+	void* aligned_A = (void*)A;
+	bool needs_A_temp = false;
+	if (gf64_current_method == GF64_AVX512 && ((uintptr_t)A & 63) != 0) {
+		void* tmp = nullptr;
+		if (ALIGN_ALLOC(tmp, ALen, 64)) {
+			memcpy(tmp, A, ALen);
+			aligned_A = tmp;
+			needs_A_temp = true;
+		} else {
+			napi_throw_error(env, NULL, "ALIGN_ALLOC failed");
+			return NULL;
+		}
+	}
 
 	gf64_t* rhsBlocks = NULL;
 	size_t rhsLen = 0;
@@ -1428,6 +1756,19 @@ static napi_value SolveAndReconstruct_NAPI(napi_env env, napi_callback_info info
 	if(status != napi_ok) {
 		napi_throw_type_error(env, NULL, "rhsBlocks must be a Buffer");
 		return NULL;
+	}
+	void* aligned_rhsBlocks = (void*)rhsBlocks;
+	bool needs_rhsBlocks_temp = false;
+	if (gf64_current_method == GF64_AVX512 && ((uintptr_t)rhsBlocks & 63) != 0) {
+		void* tmp = nullptr;
+		if (ALIGN_ALLOC(tmp, rhsLen, 64)) {
+			memcpy(tmp, rhsBlocks, rhsLen);
+			aligned_rhsBlocks = tmp;
+			needs_rhsBlocks_temp = true;
+		} else {
+			napi_throw_error(env, NULL, "ALIGN_ALLOC failed");
+			return NULL;
+		}
 	}
 
 	int32_t n = 0;
@@ -1458,7 +1799,7 @@ static napi_value SolveAndReconstruct_NAPI(napi_env env, napi_callback_info info
 	}
 
 	gf64_init_dispatch();
-	int result = GF64Controller::SolveAndReconstruct(A, rhsBlocks, nSize, blockSize64, 0);
+	int result = GF64Controller::SolveAndReconstruct((gf64_t*)aligned_A, (gf64_t*)aligned_rhsBlocks, nSize, blockSize64, 0);
 
 	napi_value ret;
 	if(result == 0) {
@@ -1469,6 +1810,15 @@ static napi_value SolveAndReconstruct_NAPI(napi_env env, napi_callback_info info
 	if(status != napi_ok) {
 		napi_throw_error(env, NULL, "Failed to create return value");
 		return NULL;
+	}
+
+	if (needs_A_temp) {
+		memcpy(A, aligned_A, nSize * nSize * sizeof(gf64_t));
+		ALIGN_FREE(aligned_A);
+	}
+	if (needs_rhsBlocks_temp) {
+		memcpy(rhsBlocks, aligned_rhsBlocks, nSize * (size_t)blockSize);
+		ALIGN_FREE(aligned_rhsBlocks);
 	}
 
 	return ret;

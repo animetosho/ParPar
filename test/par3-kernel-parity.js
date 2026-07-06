@@ -741,10 +741,11 @@ function _runGroupSizeParity(detectedMethodName) {
 		var G = GROUP_SIZES_F[gi];
 		var rngF = mulberry32(seedFor(activeMethodLabel, G));
 
-		var coeffBuf = Buffer.alloc(G * 8);
-		var inBuf = Buffer.alloc(BLOCK_BYTES_F);
-		var outBuf = Buffer.alloc(BLOCK_BYTES_F);
-		var refBuf = Buffer.alloc(BLOCK_BYTES_F);
+		var useAlignedF = (activeMethodLabel === 'avx512');
+		var coeffBuf = useAlignedF ? addon.allocAlignedBuffer(G * 8) : Buffer.alloc(G * 8);
+		var inBuf = useAlignedF ? addon.allocAlignedBuffer(BLOCK_BYTES_F) : Buffer.alloc(BLOCK_BYTES_F);
+		var outBuf = useAlignedF ? addon.allocAlignedBuffer(BLOCK_BYTES_F) : Buffer.alloc(BLOCK_BYTES_F);
+		var refBuf = useAlignedF ? addon.allocAlignedBuffer(BLOCK_BYTES_F) : Buffer.alloc(BLOCK_BYTES_F);
 
 		var tupleStart = passed;
 		for (var trial = 0; trial < TRIALS_PER_TUPLE_F; trial++) {
@@ -891,13 +892,14 @@ function _runCoupledInputParity(detectedMethodName) {
 		var G = GROUP_SIZES_G[gi];
 		var rngG = mulberry32(seedFor(activeMethodLabel, G + 1000));
 
-		var coeffBuf = Buffer.alloc(G * 8);
-		var outBuf = Buffer.alloc(BLOCK_BYTES_G);
+		var useAlignedG = (activeMethodLabel === 'avx512');
+		var coeffBuf = useAlignedG ? addon.allocAlignedBuffer(G * 8) : Buffer.alloc(G * 8);
+		var outBuf = useAlignedG ? addon.allocAlignedBuffer(BLOCK_BYTES_G) : Buffer.alloc(BLOCK_BYTES_G);
 		var inBufs = new Array(G);
 		for (var j = 0; j < G; j++) {
-			inBufs[j] = Buffer.alloc(BLOCK_BYTES_G);
+			inBufs[j] = useAlignedG ? addon.allocAlignedBuffer(BLOCK_BYTES_G) : Buffer.alloc(BLOCK_BYTES_G);
 		}
-		var refBuf = Buffer.alloc(BLOCK_BYTES_G);
+		var refBuf = useAlignedG ? addon.allocAlignedBuffer(BLOCK_BYTES_G) : Buffer.alloc(BLOCK_BYTES_G);
 
 		// ----- Positive scenarios: 200 per (method, G) tuple -----
 		for (var trial = 0; trial < TRIALS_PER_TUPLE_G; trial++) {
@@ -1051,14 +1053,15 @@ function _runFusedOutputParity(detectedMethodName) {
 		var rngH = mulberry32(seedFor(activeMethodLabel, K + 3000));
 
 		// Pre-allocate buffers at max size; per-trial we use only the first numWords*8 bytes.
-		var inBuf = Buffer.alloc(MAX_LEN_BYTES_H);
+		var useAlignedH = (activeMethodLabel === 'avx512');
+		var inBuf = useAlignedH ? addon.allocAlignedBuffer(MAX_LEN_BYTES_H) : Buffer.alloc(MAX_LEN_BYTES_H);
 		var outBufs = new Array(K);
 		var coeffBufs = new Array(K);
 		var refBufs = new Array(K);
 		for (var k = 0; k < K; k++) {
-			outBufs[k] = Buffer.alloc(MAX_LEN_BYTES_H);
-			coeffBufs[k] = Buffer.alloc(8); // single scalar per PB5 design (symmetric with coupled-input)
-			refBufs[k] = Buffer.alloc(MAX_LEN_BYTES_H);
+			outBufs[k] = useAlignedH ? addon.allocAlignedBuffer(MAX_LEN_BYTES_H) : Buffer.alloc(MAX_LEN_BYTES_H);
+			coeffBufs[k] = useAlignedH ? addon.allocAlignedBuffer(8) : Buffer.alloc(8);
+			refBufs[k] = useAlignedH ? addon.allocAlignedBuffer(MAX_LEN_BYTES_H) : Buffer.alloc(MAX_LEN_BYTES_H);
 		}
 
 		// ----- Positive scenarios: 200 per (method, K) tuple -----
@@ -1257,17 +1260,18 @@ function _runTwoDMulAddParity(detectedMethodName) {
 			// Pre-allocate buffers at max size; per-trial we use only the first numWords*8 bytes.
 			// outBufs[k] has length MAX_LEN_BYTES_I; inBufs[g] has length MAX_LEN_BYTES_I;
 			// coeff_block_2d has K * K_stride * 8 bytes (fixed across trials).
+			var useAlignedI = (activeMethodLabel === 'avx512');
 			var inBufs = new Array(G);
 			for (var g0 = 0; g0 < G; g0++) {
-				inBufs[g0] = Buffer.alloc(MAX_LEN_BYTES_I);
+				inBufs[g0] = useAlignedI ? addon.allocAlignedBuffer(MAX_LEN_BYTES_I) : Buffer.alloc(MAX_LEN_BYTES_I);
 			}
 			var outBufs = new Array(K);
 			var refBufs = new Array(K);
 			for (var k0 = 0; k0 < K; k0++) {
-				outBufs[k0] = Buffer.alloc(MAX_LEN_BYTES_I);
-				refBufs[k0] = Buffer.alloc(MAX_LEN_BYTES_I);
+				outBufs[k0] = useAlignedI ? addon.allocAlignedBuffer(MAX_LEN_BYTES_I) : Buffer.alloc(MAX_LEN_BYTES_I);
+				refBufs[k0] = useAlignedI ? addon.allocAlignedBuffer(MAX_LEN_BYTES_I) : Buffer.alloc(MAX_LEN_BYTES_I);
 			}
-			var coeffBlock2D = Buffer.alloc(K * K_stride * 8);
+			var coeffBlock2D = useAlignedI ? addon.allocAlignedBuffer(K * K_stride * 8) : Buffer.alloc(K * K_stride * 8);
 
 			// ----- Positive scenarios: 200 per (method, K, G) tuple -----
 			for (var trial = 0; trial < TRIALS_PER_TUPLE_I; trial++) {
