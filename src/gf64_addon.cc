@@ -20,6 +20,7 @@
 
 #include "gf64_global.h"
 #include "par3_engine.h"
+#include "platform.h"
 
 // Forward declaration of par3_create_streaming_NAPI (defined in
 // src/gf64_create_streaming.cc). Module-level export — NOT a method on
@@ -1473,6 +1474,93 @@ static napi_value SolveAndReconstruct_NAPI(napi_env env, napi_callback_info info
 	return ret;
 }
 
+static void AlignedBufferFinalizer(napi_env env, void* finalize_data, void* hint) {
+	(void)env;
+	(void)hint;
+	ALIGN_FREE(finalize_data);
+}
+
+static napi_value AllocAlignedBuffer(napi_env env, napi_callback_info info) {
+	napi_status status;
+	size_t argc = 1;
+	napi_value argv[1];
+
+	status = napi_get_cb_info(env, info, &argc, argv, NULL, NULL);
+	if(status != napi_ok) {
+		napi_throw_error(env, NULL, "Failed to get callback info");
+		return NULL;
+	}
+
+	int64_t size = 0;
+	status = napi_get_value_int64(env, argv[0], &size);
+	if(status != napi_ok || size <= 0) {
+		napi_throw_range_error(env, NULL, "Size must be positive");
+		return NULL;
+	}
+
+	void* data = NULL;
+	ALIGN_ALLOC(data, (size_t)size, 64);
+	if(data == NULL) {
+		napi_throw_error(env, NULL, "ALIGN_ALLOC failed");
+		return NULL;
+	}
+	memset(data, 0, (size_t)size);
+
+	napi_value buffer;
+	status = napi_create_external_buffer(env, (size_t)size, data, AlignedBufferFinalizer, NULL, &buffer);
+	if(status != napi_ok) {
+		ALIGN_FREE(data);
+		napi_throw_error(env, NULL, "napi_create_external_buffer failed");
+		return NULL;
+	}
+	return buffer;
+}
+
+static napi_value IsAlignedBuffer(napi_env env, napi_callback_info info) {
+	napi_status status;
+	size_t argc = 2;
+	napi_value argv[2];
+
+	status = napi_get_cb_info(env, info, &argc, argv, NULL, NULL);
+	if(status != napi_ok) {
+		napi_throw_error(env, NULL, "Failed to get callback info");
+		return NULL;
+	}
+
+	bool is_buffer = false;
+	status = napi_is_buffer(env, argv[0], &is_buffer);
+	if(status != napi_ok || !is_buffer) {
+		napi_value result;
+		napi_get_boolean(env, false, &result);
+		return result;
+	}
+
+	void* data = NULL;
+	size_t length = 0;
+	status = napi_get_buffer_info(env, argv[0], &data, &length);
+	(void)length;
+	if(status != napi_ok || data == NULL) {
+		napi_value result;
+		napi_get_boolean(env, false, &result);
+		return result;
+	}
+
+	int64_t alignment = 64;
+	if(argc >= 2) {
+		status = napi_get_value_int64(env, argv[1], &alignment);
+		if(status != napi_ok || alignment <= 0 || (alignment & (alignment - 1)) != 0) {
+			/* alignment must be a positive power of two for the bitmask
+			 * test to be correct; fall back to 64 on any malformed input */
+			alignment = 64;
+		}
+	}
+
+	bool aligned = (((uintptr_t)data & ((uintptr_t)alignment - 1)) == 0);
+	napi_value result;
+	napi_get_boolean(env, aligned, &result);
+	return result;
+}
+
 napi_value parpar_gf64_init_NAPI(napi_env env, napi_value exports) {
 	napi_status status;
 
@@ -1609,6 +1697,30 @@ napi_value create_fn;
 	status = napi_set_named_property(env, exports, "par3_create_streaming", par3_create_streaming_fn);
 	if(status != napi_ok) {
 		napi_throw_error(env, NULL, "Failed to set par3_create_streaming property");
+		return NULL;
+	}
+
+	napi_value alloc_aligned_buffer_fn;
+	status = napi_create_function(env, NULL, 0, AllocAlignedBuffer, NULL, &alloc_aligned_buffer_fn);
+	if(status != napi_ok) {
+		napi_throw_error(env, NULL, "Failed to create allocAlignedBuffer function");
+		return NULL;
+	}
+	status = napi_set_named_property(env, exports, "allocAlignedBuffer", alloc_aligned_buffer_fn);
+	if(status != napi_ok) {
+		napi_throw_error(env, NULL, "Failed to set allocAlignedBuffer property");
+		return NULL;
+	}
+
+	napi_value is_aligned_buffer_fn;
+	status = napi_create_function(env, NULL, 0, IsAlignedBuffer, NULL, &is_aligned_buffer_fn);
+	if(status != napi_ok) {
+		napi_throw_error(env, NULL, "Failed to create isAlignedBuffer function");
+		return NULL;
+	}
+	status = napi_set_named_property(env, exports, "isAlignedBuffer", is_aligned_buffer_fn);
+	if(status != napi_ok) {
+		napi_throw_error(env, NULL, "Failed to set isAlignedBuffer property");
 		return NULL;
 	}
 
