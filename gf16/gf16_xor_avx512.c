@@ -1054,22 +1054,22 @@ static HEDLEY_ALWAYS_INLINE void _gf16_xor_finish_copy_block_avx512(void* dst, c
 	// 32 registers available, so load entire block
 	
 	// Clang doesn't seem to like arrays (always spills them to memory), so write out everything
-	__m512i src0 = _mm512_load_si512(_src + 120 - 0*8);
-	__m512i src1 = _mm512_load_si512(_src + 120 - 1*8);
-	__m512i src2 = _mm512_load_si512(_src + 120 - 2*8);
-	__m512i src3 = _mm512_load_si512(_src + 120 - 3*8);
-	__m512i src4 = _mm512_load_si512(_src + 120 - 4*8);
-	__m512i src5 = _mm512_load_si512(_src + 120 - 5*8);
-	__m512i src6 = _mm512_load_si512(_src + 120 - 6*8);
-	__m512i src7 = _mm512_load_si512(_src + 120 - 7*8);
-	__m512i src8 = _mm512_load_si512(_src + 120 - 8*8);
-	__m512i src9 = _mm512_load_si512(_src + 120 - 9*8);
-	__m512i src10 = _mm512_load_si512(_src + 120 - 10*8);
-	__m512i src11 = _mm512_load_si512(_src + 120 - 11*8);
-	__m512i src12 = _mm512_load_si512(_src + 120 - 12*8);
-	__m512i src13 = _mm512_load_si512(_src + 120 - 13*8);
-	__m512i src14 = _mm512_load_si512(_src + 120 - 14*8);
-	__m512i src15 = _mm512_load_si512(_src + 120 - 15*8);
+	__m512i src0 = _mm512_loadu_si512(_src + 120 - 0*8);
+	__m512i src1 = _mm512_loadu_si512(_src + 120 - 1*8);
+	__m512i src2 = _mm512_loadu_si512(_src + 120 - 2*8);
+	__m512i src3 = _mm512_loadu_si512(_src + 120 - 3*8);
+	__m512i src4 = _mm512_loadu_si512(_src + 120 - 4*8);
+	__m512i src5 = _mm512_loadu_si512(_src + 120 - 5*8);
+	__m512i src6 = _mm512_loadu_si512(_src + 120 - 6*8);
+	__m512i src7 = _mm512_loadu_si512(_src + 120 - 7*8);
+	__m512i src8 = _mm512_loadu_si512(_src + 120 - 8*8);
+	__m512i src9 = _mm512_loadu_si512(_src + 120 - 9*8);
+	__m512i src10 = _mm512_loadu_si512(_src + 120 - 10*8);
+	__m512i src11 = _mm512_loadu_si512(_src + 120 - 11*8);
+	__m512i src12 = _mm512_loadu_si512(_src + 120 - 12*8);
+	__m512i src13 = _mm512_loadu_si512(_src + 120 - 13*8);
+	__m512i src14 = _mm512_loadu_si512(_src + 120 - 14*8);
+	__m512i src15 = _mm512_loadu_si512(_src + 120 - 15*8);
 	
 	// interleave to words, dwords, qwords etc
 	__m512i srcW0 = _mm512_unpacklo_epi8(src0, src1);

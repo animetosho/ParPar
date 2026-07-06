@@ -270,8 +270,8 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle_muladd_x_vbmi(
 	size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, const int doPrefetch, const char* _pf
 ) {
 	GF16_MULADD_MULTI_SRC_UNUSED(4);
-	__m512i mulLo = _mm512_load_si512((__m512i*)scratch + 1);
-	__m512i mulHi = _mm512_load_si512((__m512i*)scratch);
+	__m512i mulLo = _mm512_loadu_si512((__m512i*)scratch + 1);
+	__m512i mulHi = _mm512_loadu_si512((__m512i*)scratch);
 	
 	__m512i loA0, loA1, loA2, hiA0, hiA1, hiA2;
 	__m512i loB0, loB1, loB2, hiB0, hiB1, hiB2;
@@ -300,7 +300,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle_muladd_x_vbmi(
 	for(intptr_t ptr = -(intptr_t)len; ptr; ptr += sizeof(__m512i)*2) {
 		__m512i tpl, tph;
 		gf16_shuffle_mul_vbmi_round(
-			_mm512_load_si512((__m512i*)(_src1+ptr*srcScale)), _mm512_load_si512((__m512i*)(_src1+ptr*srcScale) +1),
+			_mm512_loadu_si512((__m512i*)(_src1+ptr*srcScale)), _mm512_loadu_si512((__m512i*)(_src1+ptr*srcScale) +1),
 			loA0, hiA0, loA1, hiA1, loA2, hiA2,
 			&tpl, &tph
 		);
@@ -308,28 +308,28 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle_muladd_x_vbmi(
 		__m512i tl, th;
 		if(srcCount > 1) {
 			gf16_shuffle_mul_vbmi_round_merge(
-				_mm512_load_si512((__m512i*)(_src2+ptr*srcScale)), _mm512_load_si512((__m512i*)(_src2+ptr*srcScale) +1),
+				_mm512_loadu_si512((__m512i*)(_src2+ptr*srcScale)), _mm512_loadu_si512((__m512i*)(_src2+ptr*srcScale) +1),
 				loB0, hiB0, loB1, hiB1, loB2, hiB2,
 				&tpl, &tph, &tl, &th
 			);
 			
-			tph = _mm512_ternarylogic_epi32(tph, th, _mm512_load_si512((__m512i*)(_dst+ptr)), 0x96);
-			tpl = _mm512_ternarylogic_epi32(tpl, tl, _mm512_load_si512((__m512i*)(_dst+ptr) + 1), 0x96);
+			tph = _mm512_ternarylogic_epi32(tph, th, _mm512_loadu_si512((__m512i*)(_dst+ptr)), 0x96);
+			tpl = _mm512_ternarylogic_epi32(tpl, tl, _mm512_loadu_si512((__m512i*)(_dst+ptr) + 1), 0x96);
 		} else {
-			th = _mm512_load_si512((__m512i*)(_dst+ptr));
-			tl = _mm512_load_si512((__m512i*)(_dst+ptr) + 1);
+			th = _mm512_loadu_si512((__m512i*)(_dst+ptr));
+			tl = _mm512_loadu_si512((__m512i*)(_dst+ptr) + 1);
 		}
 		
 		if(srcCount > 2) {
 			gf16_shuffle_mul_vbmi_round_merge(
-				_mm512_load_si512((__m512i*)(_src3+ptr*srcScale)), _mm512_load_si512((__m512i*)(_src3+ptr*srcScale) +1),
+				_mm512_loadu_si512((__m512i*)(_src3+ptr*srcScale)), _mm512_loadu_si512((__m512i*)(_src3+ptr*srcScale) +1),
 				loC0, hiC0, loC1, hiC1, loC2, hiC2,
 				&tpl, &tph, &tl, &th
 			);
 		}
 		if(srcCount > 3) {
-			__m512i ta = _mm512_load_si512((__m512i*)(_src4+ptr*srcScale));
-			__m512i tb = _mm512_load_si512((__m512i*)(_src4+ptr*srcScale) +1);
+			__m512i ta = _mm512_loadu_si512((__m512i*)(_src4+ptr*srcScale));
+			__m512i tb = _mm512_loadu_si512((__m512i*)(_src4+ptr*srcScale) +1);
 			
 			tph = _mm512_ternarylogic_epi32(
 				tph,
@@ -369,8 +369,8 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle_muladd_x_vbmi(
 			tpl = _mm512_xor_si512(tpl, tl);
 			tph = _mm512_xor_si512(tph, th);
 		}
-		_mm512_store_si512((__m512i*)(_dst+ptr), tph);
-		_mm512_store_si512((__m512i*)(_dst+ptr) + 1, tpl);
+		_mm512_storeu_si512((__m512i*)(_dst+ptr), tph);
+		_mm512_storeu_si512((__m512i*)(_dst+ptr) + 1, tpl);
 		
 		if(doPrefetch == 1) {
 			_mm_prefetch(_pf+(ptr>>1), MM_HINT_WT1);
@@ -393,7 +393,7 @@ void gf16_shuffle_mul_vbmi(const void *HEDLEY_RESTRICT scratch, void* dst, const
 	
 	// multiply by 64/16 to get remaining lookups
 	generate_remaining_lookup(
-		_mm512_load_si512((__m512i*)scratch + 1), _mm512_load_si512((__m512i*)scratch),
+		_mm512_loadu_si512((__m512i*)scratch + 1), _mm512_loadu_si512((__m512i*)scratch),
 		lo0, hi0, &lo1, &hi1, &lo2, &hi2
 	);
 	
@@ -403,13 +403,13 @@ void gf16_shuffle_mul_vbmi(const void *HEDLEY_RESTRICT scratch, void* dst, const
 	for(intptr_t ptr = -(intptr_t)len; ptr; ptr += sizeof(__m512i)*2) {
 		__m512i tpl, tph;
 		gf16_shuffle_mul_vbmi_round(
-			_mm512_load_si512((__m512i*)(_src+ptr)), _mm512_load_si512((__m512i*)(_src+ptr) +1),
+			_mm512_loadu_si512((__m512i*)(_src+ptr)), _mm512_loadu_si512((__m512i*)(_src+ptr) +1),
 			lo0, hi0, lo1, hi1, lo2, hi2,
 			&tpl, &tph
 		);
 		
-		_mm512_store_si512((__m512i*)(_dst+ptr), tph);
-		_mm512_store_si512((__m512i*)(_dst+ptr) + 1, tpl);
+		_mm512_storeu_si512((__m512i*)(_dst+ptr), tph);
+		_mm512_storeu_si512((__m512i*)(_dst+ptr) + 1, tpl);
 	}
 	_mm256_zeroupper();
 #else

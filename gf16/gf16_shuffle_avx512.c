@@ -57,8 +57,8 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle_avx512_round(
 	__m512i* src, __m512i* tpl, __m512i* tph,
 	__m512i prodLo0, __m512i prodHi0, __m512i prodLo1, __m512i prodHi1, __m512i prodLo2, __m512i prodHi2, __m512i prodLo3, __m512i prodHi3
 ) {
-	__m512i ta = _mm512_load_si512(src);
-	__m512i tb = _mm512_load_si512(src + 1);
+	__m512i ta = _mm512_loadu_si512(src);
+	__m512i tb = _mm512_loadu_si512(src + 1);
 	
 	__m512i til = _mm512_and_si512(_mm512_set1_epi8(0x0f), tb);
 	__m512i tih = _mm512_and_si512(_mm512_set1_epi8(0x0f), _mm512_srli_epi16(tb, 4));
@@ -144,8 +144,8 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle_muladd_x_avx512(
 	
 	
 	for(intptr_t ptr = -(intptr_t)len; ptr; ptr += sizeof(__m512i)*2) {
-		__m512i tph = _mm512_load_si512((__m512i*)(_dst+ptr));
-		__m512i tpl = _mm512_load_si512((__m512i*)(_dst+ptr) + 1);
+		__m512i tph = _mm512_loadu_si512((__m512i*)(_dst+ptr));
+		__m512i tpl = _mm512_loadu_si512((__m512i*)(_dst+ptr) + 1);
 		gf16_shuffle_avx512_round((__m512i*)(_src1+ptr*srcScale), &tpl, &tph, lowA0, highA0, lowA1, highA1, lowA2, highA2, lowA3, highA3);
 		if(srcCount >= 2)
 			gf16_shuffle_avx512_round((__m512i*)(_src2+ptr*srcScale), &tpl, &tph, lowB0, highB0, lowB1, highB1, lowB2, highB2, lowB3, highB3);
@@ -153,8 +153,8 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle_muladd_x_avx512(
 			gf16_shuffle_avx512_round((__m512i*)(_src3+ptr*srcScale), &tpl, &tph, lowC0, highC0, lowC1, highC1, lowC2, highC2, lowC3, highC3);
 		if(srcCount >= 4)
 			gf16_shuffle_avx512_round((__m512i*)(_src4+ptr*srcScale), &tpl, &tph, lowD0, highD0, lowD1, highD1, lowD2, highD2, lowD3, highD3);
-		_mm512_store_si512((__m512i*)(_dst+ptr), tph);
-		_mm512_store_si512((__m512i*)(_dst+ptr) + 1, tpl);
+		_mm512_storeu_si512((__m512i*)(_dst+ptr), tph);
+		_mm512_storeu_si512((__m512i*)(_dst+ptr) + 1, tpl);
 		
 		if(doPrefetch == 1)
 			_mm_prefetch(_pf+(ptr>>1), MM_HINT_WT1);
@@ -177,7 +177,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle2x_avx512_round1(
 	__m512i* src, __m512i* result, __m512i* swapped,
 	__m512i shufNormLo, __m512i shufNormHi, __m512i shufSwapLo, __m512i shufSwapHi
 ) {
-	__m512i data = _mm512_load_si512(src);
+	__m512i data = _mm512_loadu_si512(src);
 	
 	__m512i til = _mm512_and_si512(_mm512_set1_epi8(0x0f), data);
 	__m512i tih = _mm512_and_si512(_mm512_set1_epi8(0x0f), _mm512_srli_epi16(data, 4));
@@ -196,7 +196,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle2x_avx512_round(
 	__m512i* src, __m512i* result, __m512i* swapped,
 	__m512i shufNormLo, __m512i shufNormHi, __m512i shufSwapLo, __m512i shufSwapHi
 ) {
-	__m512i data = _mm512_load_si512(src);
+	__m512i data = _mm512_loadu_si512(src);
 	
 	__m512i til = _mm512_and_si512(_mm512_set1_epi8(0x0f), data);
 	__m512i tih = _mm512_and_si512(_mm512_set1_epi8(0x0f), _mm512_srli_epi16(data, 4));
@@ -306,7 +306,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle2x_muladd_x_avx512(
 	}
 	
 	for(intptr_t ptr = -(intptr_t)len; ptr; ptr += sizeof(__m512i)) {
-		__m512i swapped, result = _mm512_load_si512((__m512i*)(_dst+ptr));
+		__m512i swapped, result = _mm512_loadu_si512((__m512i*)(_dst+ptr));
 		gf16_shuffle2x_avx512_round1((__m512i*)(_src1+ptr*srcScale), &result, &swapped, shufNormLoA, shufNormHiA, shufSwapLoA, shufSwapHiA);
 		if(srcCount >= 2)
 			gf16_shuffle2x_avx512_round((__m512i*)(_src2+ptr*srcScale), &result, &swapped, shufNormLoB, shufNormHiB, shufSwapLoB, shufSwapHiB);
@@ -322,7 +322,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_shuffle2x_muladd_x_avx512(
 		swapped = _mm512_shuffle_i32x4(swapped, swapped, _MM_SHUFFLE(1,0,3,2));
 		result = _mm512_xor_si512(result, swapped);
 		
-		_mm512_store_si512((__m512i*)(_dst+ptr), result);
+		_mm512_storeu_si512((__m512i*)(_dst+ptr), result);
 		
 		if(doPrefetch == 1)
 			_mm_prefetch(_pf+ptr, MM_HINT_WT1);
