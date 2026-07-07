@@ -118,106 +118,13 @@ static inline void EnsureDispatch() {
 }
 
 // ============================================================================
-// Static Cauchy worker pool  (D1: shared across BuildCauchyMatrix calls)
+// Cauchy matrix construction worker count
 // ----------------------------------------------------------------------------
-// File-scope shared thread pool, lazily spawned on first BuildCauchyMatrix
-// call via std::call_once, then reused for all subsequent calls within the
-// same process. Workers are std::thread::detach()'d at spawn — they loop
-// forever on a shared condition_variable, picking up CauchyJob* from
-// `s_cauchyPool.currentJob`. This replaces the previous std::async pattern
-// which spawned fresh threads per call (or relied on std-lib-specific pool
-// reuse that is NOT guaranteed by the C++ standard).
-//
-// Work distribution: row-stealing via std::atomic<size_t> nextRow.
-// If one worker stalls on a cache miss / page fault, others steal the
-// remaining rows instead of waiting — load balance is near-optimal for
-// the Cauchy construction (per-row cost is uniform: numInputs gf64_inverse
-// calls).
-//
-// ComputeRecoveryBlocks still spawns per-call std::threads; migrating it
-// to share this pool is a future task (out of scope for D1).
-// ============================================================================
-static constexpr size_t kCauchyPoolMaxWorkers = 8;
-
-struct CauchyJob {
-	gf64_t*  coeffMatrix;
-	size_t   numInputs;
-	size_t   numRecovery;
-	uint64_t firstInput;
-	uint64_t firstRecovery;
-	std::atomic<size_t> nextRow{0};
-	std::atomic<size_t> doneCount{0};
-};
-
-static struct {
-	std::thread             threads[kCauchyPoolMaxWorkers];
-	size_t                  size = 0;
-	std::mutex              mu;
-	std::condition_variable cv;
-	CauchyJob*              currentJob = nullptr; // sentinel; nullptr = idle
-	bool                    stop       = false;
-} s_cauchyPool;
-
-static void CauchyWorkerLoop() {
-	while (true) {
-		CauchyJob* job;
-		{
-			std::unique_lock<std::mutex> lock(s_cauchyPool.mu);
-			s_cauchyPool.cv.wait(lock, []() {
-				return s_cauchyPool.currentJob != nullptr || s_cauchyPool.stop;
-			});
-			if (s_cauchyPool.stop) return;
-			job = s_cauchyPool.currentJob;
-		}
-
-		// Process job: row-stealing via std::atomic<size_t>.
-		// Each worker grabs the next available row index; the loop exits
-		// when fetch_add returns a row index >= numRecovery (i.e., all
-		// rows have been claimed by SOME worker).
-		size_t   nInputs = job->numInputs;
-		uint64_t firstIn = job->firstInput;
-		uint64_t firstRec = job->firstRecovery;
-		gf64_t*  coeff   = job->coeffMatrix;
-		size_t   nRec    = job->numRecovery;
-
-		for (size_t r = job->nextRow.fetch_add(1, std::memory_order_relaxed);
-		     r < nRec;
-		     r = job->nextRow.fetch_add(1, std::memory_order_relaxed)) {
-			uint64_t y = firstRec + r;
-			for (size_t c = 0; c < nInputs; c++) {
-				uint64_t x = firstIn + c;
-				uint64_t denom = x ^ y;
-				if (denom == 0) denom = 1;
-				coeff[r * nInputs + c] = gf64_inverse(denom);
-			}
-		}
-
-		// Signal completion: atomic increment; last worker clears the job
-		// and notifies the main thread.
-		size_t done = job->doneCount.fetch_add(1, std::memory_order_acq_rel) + 1;
-		if (done == s_cauchyPool.size) {
-			std::lock_guard<std::mutex> lock(s_cauchyPool.mu);
-			s_cauchyPool.currentJob = nullptr;
-			s_cauchyPool.cv.notify_all();
-		}
-	}
-}
-
-static std::once_flag s_cauchyPoolInitFlag;
-
-static void InitCauchyPool() {
-	size_t n = std::min((size_t)std::thread::hardware_concurrency(),
-	                     kCauchyPoolMaxWorkers);
-	if (n == 0) n = 1;
-	s_cauchyPool.size = n;
-	for (size_t i = 0; i < n; i++) {
-		s_cauchyPool.threads[i] = std::thread(CauchyWorkerLoop);
-		s_cauchyPool.threads[i].detach(); // workers live for process lifetime
-	}
-}
+static constexpr size_t kCauchyMaxWorkers = 8;
+static size_t s_cauchyWorkerCount = 0;
 
 // ============================================================================
-// GF64Controller::BuildCauchyMatrix  (D1: parallel via shared pool)
+// GF64Controller::BuildCauchyMatrix
 // ----------------------------------------------------------------------------
 // For each row r (recovery) and column c (input):
 //   M[r][c] = 1/(firstInput^c XOR firstRecovery^r)
@@ -225,21 +132,22 @@ static void InitCauchyPool() {
 //
 // Matches the JS implementation at lib/par3gen.js:594-604.
 //
-// Parallelization: distributes rows across the file-scope `s_cauchyPool`
-// worker pool via row-stealing (std::atomic<size_t> nextRow). Single-row
-// or single-worker workloads fall through to a serial loop to avoid the
-// mutex/cv overhead.
+// Parallelization: distributes rows across std::async workers via row-stealing
+// (std::atomic<size_t> nextRow).  Single-row or single-worker workloads fall
+// through to a serial loop.
 // ============================================================================
 void GF64Controller::BuildCauchyMatrix(
 	gf64_t* coeffMatrix,
 	size_t numInputs, size_t numRecovery,
 	uint64_t firstInput, uint64_t firstRecovery
 ) {
-	// Lazy pool init on first call (process-wide).
-	std::call_once(s_cauchyPoolInitFlag, InitCauchyPool);
+	if (s_cauchyWorkerCount == 0) {
+		size_t n = std::min((size_t)std::thread::hardware_concurrency(),
+		                     kCauchyMaxWorkers);
+		s_cauchyWorkerCount = (n == 0) ? 1 : n;
+	}
 
-	// Serial path: single row or single worker — no thread/cv overhead.
-	if (numRecovery <= 1 || s_cauchyPool.size <= 1) {
+	if (numRecovery <= 1 || s_cauchyWorkerCount <= 1) {
 		for (size_t r = 0; r < numRecovery; r++) {
 			uint64_t y = firstRecovery + r;
 			for (size_t c = 0; c < numInputs; c++) {
@@ -252,30 +160,31 @@ void GF64Controller::BuildCauchyMatrix(
 		return;
 	}
 
-	// Parallel path: row-stealing via std::atomic<size_t>.
-	// CauchyJob is stack-allocated and outlives the workers (we block on
-	// doneCount before returning), so the workers can safely reference it.
-	CauchyJob job;
-	job.coeffMatrix   = coeffMatrix;
-	job.numInputs     = numInputs;
-	job.numRecovery   = numRecovery;
-	job.firstInput    = firstInput;
-	job.firstRecovery = firstRecovery;
-	job.nextRow.store(0, std::memory_order_relaxed);
-	job.doneCount.store(0, std::memory_order_relaxed);
+	// Parallel path: row-stealing via std::async workers.  nextRow is
+	// destroyed only after all futures complete (we block below), so
+	// workers can safely reference it by reference.
+	std::atomic<size_t> nextRow{0};
+	std::vector<std::future<void>> futures;
+	futures.reserve(s_cauchyWorkerCount);
 
-	{
-		std::lock_guard<std::mutex> lock(s_cauchyPool.mu);
-		s_cauchyPool.currentJob = &job;
+	for (size_t w = 0; w < s_cauchyWorkerCount; w++) {
+		futures.push_back(std::async(std::launch::async, [=, &nextRow]() {
+			for (size_t r = nextRow.fetch_add(1, std::memory_order_relaxed);
+			     r < numRecovery;
+			     r = nextRow.fetch_add(1, std::memory_order_relaxed)) {
+				uint64_t y = firstRecovery + r;
+				for (size_t c = 0; c < numInputs; c++) {
+					uint64_t x = firstInput + c;
+					uint64_t denom = x ^ y;
+					if (denom == 0) denom = 1;
+					coeffMatrix[r * numInputs + c] = gf64_inverse(denom);
+				}
+			}
+		}));
 	}
-	s_cauchyPool.cv.notify_all();
 
-	// Wait for all pool workers to complete the job.
-	{
-		std::unique_lock<std::mutex> lock(s_cauchyPool.mu);
-		s_cauchyPool.cv.wait(lock, [&job]() {
-			return job.doneCount.load(std::memory_order_acquire) >= s_cauchyPool.size;
-		});
+	for (auto& f : futures) {
+		f.wait();
 	}
 }
 
