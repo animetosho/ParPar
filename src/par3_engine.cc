@@ -21,6 +21,10 @@
 #include <malloc.h>
 #endif
 
+#ifdef __linux__
+#include <sched.h>
+#endif
+
 #include <wmmintrin.h>
 #include <nmmintrin.h>
 
@@ -124,6 +128,37 @@ static constexpr size_t kCauchyMaxWorkers = 8;
 static size_t s_cauchyWorkerCount = 0;
 
 // ============================================================================
+// Effective CPU count  (affinity-aware)
+// ----------------------------------------------------------------------------
+// Returns the number of CPUs the process is allowed to run on according to
+// the thread's CPU affinity mask (sched_getaffinity), falling back to
+// std::thread::hardware_concurrency() when affinity info is unavailable or
+// on non-Linux platforms.  The result is cached after the first call and
+// capped at 32 to keep per-worker overhead bounded on large machines.
+// ============================================================================
+static size_t GetEffectiveCpuCount() {
+	static size_t s_cached = 0;
+	if (s_cached != 0) return s_cached;
+
+	size_t count = 0;
+#ifdef __linux__
+	cpu_set_t mask;
+	CPU_ZERO(&mask);
+	if (sched_getaffinity(0, sizeof(mask), &mask) == 0) {
+		count = (size_t)CPU_COUNT(&mask);
+	}
+#endif
+	if (count == 0) {
+		count = std::thread::hardware_concurrency();
+	}
+	if (count > 32) count = 32;
+	if (count == 0) count = 1;
+
+	s_cached = count;
+	return count;
+}
+
+// ============================================================================
 // GF64Controller::BuildCauchyMatrix
 // ----------------------------------------------------------------------------
 // For each row r (recovery) and column c (input):
@@ -142,7 +177,7 @@ void GF64Controller::BuildCauchyMatrix(
 	uint64_t firstInput, uint64_t firstRecovery
 ) {
 	if (s_cauchyWorkerCount == 0) {
-		size_t n = std::min((size_t)std::thread::hardware_concurrency(),
+		size_t n = std::min(GetEffectiveCpuCount(),
 		                     kCauchyMaxWorkers);
 		s_cauchyWorkerCount = (n == 0) ? 1 : n;
 	}
@@ -277,9 +312,14 @@ static int ParseGroupSizeEnv() {
 }
 
 static int GetGroupSize() {
-	static int v = ParseGroupSizeEnv();
-	return v > 0 ? v : static_cast<int>(kDefaultGroupSize);
-}
+		static int v = ParseGroupSizeEnv();
+		if (v > 0) return v;
+		EnsureDispatch();
+		// Default: 16 for AVX-2 (wider tiles improve cache utilisation without
+		// ZMM register pressure), 12 for all other methods (AVX-512 benefits
+		// diminish past 12 due to register file contention).
+		return gf64_current_method == GF64_AVX2 ? 16 : 12;
+	}
 
 // ============================================================================
 // Tunable K-group size for the Wave 3 fused-output engine refactor (PB7).
@@ -301,9 +341,14 @@ static int ParseKGroupSizeEnv() {
 }
 
 static int GetKGroupSize() {
-	static int v = ParseKGroupSizeEnv();
-	return v > 0 ? v : static_cast<int>(kDefaultKGroupSize);
-}
+		static int v = ParseKGroupSizeEnv();
+		if (v > 0) return v;
+		EnsureDispatch();
+		// Default: 16 for AVX-2 (wider tiles improve cache utilisation without
+		// ZMM register pressure), 12 for all other methods (AVX-512 benefits
+		// diminish past 12 due to register file contention).
+		return gf64_current_method == GF64_AVX2 ? 16 : 12;
+	}
 
 // ============================================================================
 // T0: binary flags for the v3 max-perf plan (env-gated; default off)
@@ -606,7 +651,7 @@ void GF64Controller::ComputeRepairBlocks(
 	EnsureDispatch();
 
 	size_t n_workers = (numThreads <= 0)
-		? std::thread::hardware_concurrency()
+		? GetEffectiveCpuCount()
 		: (size_t)numThreads;
 	if (n_workers == 0) n_workers = 1;
 	if (n_workers > numMissing) n_workers = numMissing;
@@ -807,7 +852,7 @@ void GF64Controller::ComputeRecoveryBlocks(
 	}
 
 	if (numThreads <= 0) {
-		numThreads = (int)std::thread::hardware_concurrency();
+		numThreads = (int)GetEffectiveCpuCount();
 		if (numThreads <= 0) numThreads = 1;
 	}
 

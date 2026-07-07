@@ -32,6 +32,7 @@ High-performance PAR3 create and repair with GF(2^64) recovery, written in C++ w
 | Env ceiling | ~30 MB/s | host/branch artifact — same on every commit |
 | PAR3 create 1 GiB (v3 max-perf plan, 13/24 tasks shipped) | env-ceiling: ~30 MB/s; C++-only bench (T1) hit ~1097 MB/s on AVX2; WSL2 dispatch is intermittent [†] | mmap + streaming NAPI + Buffer pool + LRU pool + worker_threads hash + AVX-512 threshold (16MiB→256MiB) + wider SIMD K=2 + parallel Cauchy + software prefetch + isolated detection TU + SIGILL probe |
 | `PAR3_GF64_USE_AVX512=1` (avx512-wsl2-detect, T0-T3) | 30 MB/s (JS env-ceiling); ~1097 MB/s (C++-only kernel) | operator escape hatch for reliable AVX-512 dispatch on WSL2/Hyper-V hosts; co-exists with `PAR3_AVX512_FORCE`; see [†] |
+| D1–D5 (W2-T1, parallel create) | env-ceiling: ~30 MB/s | see footnotes [D1]–[D5] below |
 
 [†] **WSL2 dispatch bug (issue #17):** on WSL2/Hyper-V hosts, `-march=native`
 compiles AVX-512 instructions into the binary, which the hypervisor detects
@@ -44,6 +45,39 @@ detection TU with `-mno-avx512f` to remove the architectural trigger,
 partial. The operator must set `PAR3_GF64_USE_AVX512=1` to force reliable
 AVX-512 dispatch on WSL2/Hyper-V hosts. See [BENCHMARKING.md §5](BENCHMARKING.md)
 for the full state and `test/par3-cpu-detect.js` for the regression test.
+
+[D1] **Affinity-aware worker count:** `HASH_POOL_SIZE` uses `os.cpus().length`
+which reflects the `taskset` affinity mask. When pinned to 4 cores (e.g.
+`taskset -c 0-3`), the pool allocates exactly 4 workers. Previously the
+count was hard-coded or derived from total system CPUs, risking
+oversubscription under `taskset`. See `lib/par3gen.js` line 286.
+
+[D2] **Parallel hash now enabled by default:** BLAKE3-16 hashing of data
+packets is dispatched across a `worker_threads` pool with
+`PAR3_GF64_PARALLEL_HASH` defaulting to enabled. Set
+`PAR3_GF64_PARALLEL_HASH=0` to disable (serial hash). When enabled, the
+read loop batches blocks in groups of `poolSize × 16 = 64` and dispatches
+hashes in parallel, preserving wire order via ordered writes. See
+`lib/par3gen.js` lines 287, 1449–1452.
+
+[D3] **Hasher batch size increased to 64:** The inner read loop accumulates
+`HASH_POOL_SIZE × HASH_BATCH_MULT = 4 × 16 = 64` blocks before flushing,
+reducing worker wakeup overhead and per-message IPC cost. The per-batch
+recovery path uses the same `PAR3_BATCH_SIZE` default of 64. See
+`lib/par3gen.js` lines 288, 1581–1582.
+
+[D4] **Single bulk read replaces per-block syscalls:** Each input file is
+read into one pre-allocated buffer via a single `fs.readSync()` call,
+replacing the previous pattern of one `fs.readSync()` per block (262 K
+syscalls for a 1 GiB file at 4 KiB blocks). On failure (e.g. file too
+large for a single allocation), the old per-block path is used as fallback.
+See `lib/par3gen.js` lines 1430–1445.
+
+[D5] **Batched output writes:** Recovery packets are accumulated in groups
+of 64, merged into a single `Buffer.allocUnsafe(totalLen)`, and written via
+`stream.cork()` / `stream.uncork()` to reduce event-loop round-trips and
+avoid one `write()` per packet. Backpressure is handled via the `drain`
+event on the merged write. See `lib/par3gen.js` lines 1789–1839.
 
 The kernel work shipped is **bit-exact correct** (see the kernel-parity test
 below) and provides measurable inner-loop improvements that don't move past

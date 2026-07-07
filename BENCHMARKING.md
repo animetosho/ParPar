@@ -896,3 +896,53 @@ operational change is that WSL2 benchmark runs should set
 `PAR3_GF64_USE_AVX512` explicitly rather than trusting auto-detection, and
 should record which value they used. The clean 1 GiB AVX-512 vs AVX-2 A/B
 under the §1–§3 and §5 protocol is deferred to T9.
+
+
+## 9. Baseline Regression Gate (`--mode=baseline`)
+
+The bench runner `test/bench/run-all.js` supports `--mode=baseline`, which
+runs the 1 GiB / 1M-slice PAR3 create benchmark with a regression assertion
+against a known-good throughput floor.
+
+### What it does
+
+1. Runs `par3-create-1G-1M` (1 GiB source, `blockSize=4096`, 1 000 000
+   slices, ~10% recovery) under the §2 taskset and §3 3-run median protocol.
+2. Runs 5 total iterations with a warmup discard: the first run is thrown
+   away (cold caches, dynamic dispatch initialisation), and the remaining 4
+   are reduced to a median-of-3 (sorted, middle value).
+3. Asserts the resulting median throughput is ≥ **88 MB/s**.
+4. Exits with code 0 on pass, code 1 on failure.
+
+### Usage
+
+```bash
+taskset -c 0-3 node test/bench/run-all.js --mode=baseline
+```
+
+### Calibration note
+
+The 88 MB/s threshold was calibrated on a **Zen 4 (7800X3D) host with
+AVX-512 dispatch, pinned to 4 physical cores (taskset -c 0-3), on tmpfs**
+under the §1 and §2 protocol. On any other microarchitecture, core count,
+storage medium, or without AVX-512 the floor may not hold. This gate is
+**LOCAL ONLY** and must never be wired into CI — it depends on a specific
+host environment that CI runners do not provide.
+
+### Relationship to other modes
+
+| Mode | What it runs | Assertion |
+|------|-------------|-----------|
+| `--mode=cliff` | 100M + 500M create (10k slices) | 500M ≥ 100M / 3 (cache cliff) |
+| `--mode=baseline` | 1 GiB / 1M create | median ≥ 88 MB/s (throughput floor) |
+| `--mode=large` | 10 GiB / 1M create | none (manual review) |
+| (default) | All 7 scenarios at 1 GiB | none (full diagnostic run) |
+
+### Protocol is unchanged
+
+Sections §1–§3 and §5 remain the canonical way to measure throughput. The
+`--mode=baseline` gate is a convenience wrapper around one specific scenario
+of that protocol (the 1 GiB / 1M-slice create bench) with a pre-calibrated
+threshold. It does not replace the protocol — it automates a single common
+checkpoint for operators who want a quick "is this host anywhere close to
+the expected zone?" answer.

@@ -53,3 +53,6 @@ node_modules/
 # OhMyOpenCode internal state (planning, evidence, boulder)
 /.omo/
 /.planning/
+
+# V8 profiler output (from node --prof runs, e.g. kernel parity test)
+/isolate-*.v8.log
