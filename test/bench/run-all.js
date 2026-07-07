@@ -28,6 +28,7 @@
 
 var fs = require('fs');
 var path = require('path');
+var os = require('os');
 var spawn = require('child_process').spawn;
 var helpers = require('./bench-helpers');
 
@@ -38,7 +39,8 @@ var SCENARIOS = [
   { id: 'par3-create-1G-1M',       script: 'par3-create-bench.js',  args: ['--size=1G', '--slices=1000000'] },
   { id: 'par3-repair-1G-10k-5p',   script: 'par3-repair-bench.js',  args: ['--size=1G', '--slices=10000', '--deletion=5'] },
   { id: 'par3-repair-1G-10k-10p',  script: 'par3-repair-bench.js',  args: ['--size=1G', '--slices=10000', '--deletion=10'] },
-  { id: 'par3-compare-1G-10k-5p',  script: 'par3-compare-turbo.js', args: ['--size=1G', '--slices=10000', '--deletion=5'] }
+  { id: 'par3-compare-1G-10k-5p',  script: 'par3-compare-turbo.js', args: ['--size=1G', '--slices=10000', '--deletion=5'] },
+  { id: 'par3-create-10G-1M', script: 'par3-create-bench.js', args: ['--size=10G', '--slices=1000000', '--block-size=4096'], largeOnly: true }
 ];
 
 function parseArgs() {
@@ -65,6 +67,7 @@ function printHelp() {
   console.log('  --only=<substr>  Only run scenarios whose id contains <substr>');
   console.log('  --keep         Pass --keep to child scripts (keep temp files)');
   console.log('  --mode=cliff   Run cliff-detection gate: 100M + 500M, assert 500M >= 100M/3');
+  console.log('  --mode=large   Run large-scale benchmarks: 10 GiB / 1M slices (requires 20 GiB free disk)');
   console.log('  --help, -h     Show this help');
   console.log('');
   console.log('See BENCHMARKING.md for the full benchmarking protocol and reproducibility guide.');
@@ -200,6 +203,70 @@ function runCliffMode(opts, callback) {
   nextCliff();
 }
 
+function runLargeMode(opts, callback) {
+  var tmpDirBase = os.tmpdir();
+
+  console.log('PARPARPAR LARGE-MODE BENCHMARK');
+  console.log('================================');
+  console.log('WARNING: Running 10 GiB benchmark. This will create a 10 GiB temp file');
+  console.log('and may take 30+ minutes. Ensure adequate disk space and cooling.');
+  console.log('');
+
+  // Check disk space
+  try {
+    var childProcess = require('child_process');
+    var dfOutput = childProcess.execSync('df -k ' + tmpDirBase).toString();
+    var lines = dfOutput.trim().split('\n');
+    var lastLine = lines[lines.length - 1];
+    var parts = lastLine.split(/\s+/);
+    // df -k output: Filesystem 1K-blocks Used Available Use% Mounted on
+    var availableKB = parseInt(parts[3], 10);
+    var availableGB = availableKB / (1024 * 1024);
+    console.log('Temp directory: ' + tmpDirBase);
+    console.log('Free space:     ' + availableGB.toFixed(1) + ' GiB');
+    if (availableKB < 20 * 1024 * 1024) {
+      console.log('WARNING: Less than 20 GiB free. The benchmark may fail if disk');
+      console.log('space is insufficient during the 10 GiB source file generation.');
+    }
+    console.log('');
+  } catch (e) {
+    console.log('WARNING: Could not check disk space: ' + e.message);
+    console.log('');
+  }
+
+  // Run only large-mode scenarios
+  var largeScenarios = SCENARIOS.filter(function(s) { return s.largeOnly; });
+  if (largeScenarios.length === 0) {
+    console.log('No large-mode scenarios configured.');
+    callback(0);
+    return;
+  }
+
+  var results = [];
+  var pending = largeScenarios.slice();
+  function next() {
+    if (pending.length === 0) return finalize();
+    var s = pending.shift();
+    runScenario(s, opts).then(function(r) {
+      results.push(r);
+      next();
+    });
+  }
+  next();
+
+  function finalize() {
+    var passed = results.filter(function(r) { return r.code === 0; }).length;
+    console.log('\n=== LARGE-MODE COMPLETE ===');
+    console.log('Passed: ' + passed + '/' + results.length);
+    for (var i = 0; i < results.length; i++) {
+      var r = results[i];
+      var status = r.code === 0 ? 'OK' : 'FAIL(' + r.code + ')';
+      console.log('  ' + status + '  ' + r.id + '  ' + helpers.formatDuration(r.durationMs));
+    }
+    callback(passed === results.length ? 0 : 1);
+  }
+}
+
 function main() {
   var opts = parseArgs();
   if (opts.help) { printHelp(); return; }
@@ -209,7 +276,15 @@ function main() {
     return;
   }
 
+  if (opts.mode === 'large') {
+    runLargeMode(opts, function(code) { process.exit(code); });
+    return;
+  }
+
   var scenarios = SCENARIOS.slice();
+  if (opts.mode !== 'large') {
+    scenarios = scenarios.filter(function(s) { return !s.largeOnly; });
+  }
   if (opts.only) {
     scenarios = scenarios.filter(function(s) { return s.id.indexOf(opts.only) >= 0; });
     if (scenarios.length === 0) {
@@ -294,4 +369,4 @@ if (require.main === module) {
   main();
 }
 
-module.exports = { SCENARIOS: SCENARIOS, runScenario: runScenario, runCliffMode: runCliffMode };
+module.exports = { SCENARIOS: SCENARIOS, runScenario: runScenario, runCliffMode: runCliffMode, runLargeMode: runLargeMode };
