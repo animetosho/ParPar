@@ -119,6 +119,12 @@ function run(opts) {
       var tFile = Date.now() - t0;
       console.log('  Source file ready: ' + helpers.formatDuration(tFile));
 
+      var diagBuf = Buffer.allocUnsafe(opts.blockSize);
+      var bufAddr = diagBuf.buffer ? Number(diagBuf.buffer) : 0;
+      console.log('  Buffer alignment:    ' + ((bufAddr % 64 === 0) ? '64-byte aligned' : 'NOT 64-byte aligned'));
+      console.log('  Total input blocks:  ' + Math.ceil(actualSize / opts.blockSize));
+      console.log('  PAR3_GF64_INPUT_POOL_SIZE: ' + (process.env.PAR3_GF64_INPUT_POOL_SIZE || '(not set)'));
+
       var tCreate = Date.now();
       var peakRSS = 0;
       var memTimer = setInterval(function() {
