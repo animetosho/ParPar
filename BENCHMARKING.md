@@ -1,6 +1,6 @@
 # Benchmarking Protocol & Reproducibility Guide
 
-This document describes how to produce clean, reproducible benchmark numbers for ParParPar. Follow all four sections before publishing any throughput claim.
+This document describes how to produce clean, reproducible benchmark numbers for ParParPar. Follow sections 1–3 and section 5 before publishing any throughput claim.
 
 ## 1. Mount `/tmp` to tmpfs (Remove Disk Noise)
 
@@ -114,7 +114,25 @@ Follow the table format from `benchmarks/info.md`:
 Always include: the GF method (auto, AVX2, AVX-512, scalar), whether PAR3_GF64_METHOD was set, whether /tmp was tmpfs, and the taskset mask.
 
 
-## 4. Cliff-Detection Workflow (100M / 500M / 1G / 2G)
+## 4. Large-Mode Benchmarks (10 GiB / 1M slices)
+
+For throughput validation at scale, run:
+
+```bash
+taskset -c 0-3 node test/bench/run-all.js --mode=large
+```
+
+This runs only the `par3-create-10G-1M` scenario with a 10 GiB source file
+and 1 million slices. Expect 30+ minutes runtime. Requires:
+
+- At least 20 GiB free in `/tmp` (tmpfs: `sudo mount -t tmpfs -o size=32G`)
+- At least 16 GiB RAM available
+- `PAR3_GF64_USE_AVX512=1` for reliable AVX-512 dispatch on WSL2
+
+The source file is generated via AES-CTR (deterministic, reproducible).
+
+
+## 5. Cliff-Detection Workflow (100M / 500M / 1G / 2G)
 
 The "cliff" is a throughput drop that appears when the working set exceeds L3 cache size. On the 7800X3D (96 MiB L3), the cliff hits at roughly 250 MiB of input data. This section defines the multi-size sweep and the `--mode=cliff` regression gate.
 
@@ -168,11 +186,11 @@ taskset -c 0-3 node test/bench/run-all.js --mode=cliff
 | `PAR3_GF64_METHOD` | Force a specific SIMD method (bypasses auto-detection) | `AVX2`, `AVX512`, `SSSE3`, `SCALAR` |
 | `PAR3_USE_JS_KERNEL` | Fall back to the JS BigInt path | `1` |
 | `PAR3_AVX512_FORCE` | `1`/`true`/`yes`/`on` honour detected ISA (still subject to the downclock heuristic); `0`/`false`/`no`/`off` force AVX-512 off (downgrade to AVX-2 when detected); `2` **unconditionally** forces AVX-512, overriding both the heuristic AND the downclock threshold (operator's escape hatch — confirm hardware support via `test/par3-isa-check.js` first, or the AVX-512 kernel will raise SIGILL) | `1`, `0`, `2` |
-| `PAR3_GF64_USE_AVX512` | Overrides ISA *detection* (not the downclock heuristic). `1`/`true`/`yes`/`on` force AVX-512 dispatch even when CPUID reports it masked; `0`/`false`/`no`/`off` force AVX-2 (downgrade AVX-512 to AVX-2 when detected); `auto`/unset/unrecognised use the 5-poll detection aggregate. This is the WSL2 escape hatch for the observer-effect bug in §7. Confirm hardware support before forcing `1`, or the AVX-512 kernel raises SIGILL. | `1`, `0`, `auto` |
+| `PAR3_GF64_USE_AVX512` | Overrides ISA *detection* (not the downclock heuristic). `1`/`true`/`yes`/`on` force AVX-512 dispatch even when CPUID reports it masked; `0`/`false`/`no`/`off` force AVX-2 (downgrade AVX-512 to AVX-2 when detected); `auto`/unset/unrecognised use the 5-poll detection aggregate. This is the WSL2 escape hatch for the observer-effect bug in §8. Confirm hardware support before forcing `1`, or the AVX-512 kernel raises SIGILL. | `1`, `0`, `auto` |
 
 These are read by `gf64_init_dispatch()` in C and by `ensureGfMethod()` in bench helpers. Always report which env vars were set when publishing numbers.
 
-`PAR3_GF64_USE_AVX512` and `PAR3_AVX512_FORCE` are distinct. The first overrides *which ISA the detector reports*; the second overrides *whether the workload-size downclock heuristic is allowed to downgrade a detected AVX-512*. On WSL2, reach for `PAR3_GF64_USE_AVX512=1` first: it is the one that defeats the CPUID masking documented in §7. See §7.4 for the full precedence order.
+`PAR3_GF64_USE_AVX512` and `PAR3_AVX512_FORCE` are distinct. The first overrides *which ISA the detector reports*; the second overrides *whether the workload-size downclock heuristic is allowed to downgrade a detected AVX-512*. On WSL2, reach for `PAR3_GF64_USE_AVX512=1` first: it is the one that defeats the CPUID masking documented in §8. See §8.4 for the full precedence order.
 
 ### Root causes of the cliff (for reference)
 
@@ -181,18 +199,18 @@ These are read by `gf64_init_dispatch()` in C and by `ensureGfMethod()` in bench
 3. **Buffer allocation overhead**: `Buffer.concat()` in the JS batch processing path grows from 4% to 14.9% of runtime as size increases.
 
 
-## 5. Throughput — v2 max-perf plan (current shipped state)
+## 6. Throughput — v2 max-perf plan (current shipped state)
 
 This section documents the actual measured throughput on the v2 max-perf plan
-(Phases 2–5, todos PA1–PD3) shipped in this session. **The protocol in §1–§4
+(Phases 2–5, todos PA1–PD3) shipped in this session. **The protocol in §1–§3 and §5
 is unchanged and remains the canonical way to measure throughput on this
 project.** This section is the data, not the protocol.
 
-### 5.1 Headline numbers — 1 GiB / 10% / tmpfs / taskset 0-3
+### 6.1 Headline numbers — 1 GiB / 10% / tmpfs / taskset 0-3
 
 | Commit / state                                       | Median MB/s | Evidence file                                |
 |------------------------------------------------------|------------:|----------------------------------------------|
-| README pre-v2 baseline (`dab5e88`)                   | 395.99      | stale — **not reproducible** on this host (see §5.2) |
+| README pre-v2 baseline (`dab5e88`)                   | 395.99      | stale — **not reproducible** on this host (see §6.2) |
 | T2 baseline (`90b0611`, kernel+engine reverted)      | 21.43       | `.omo/evidence/post-revert-baseline-bench.log` |
 | Pre-PA7 (`9238452`, legacy path on PA5 dispatch)    | 19.26       | `.omo/evidence/hypothesis-4-prePA7-bench.log` |
 | Pre-PA5 (`0bf663b`, legacy path on PA1-PA4 kernels) | 21.32       | `.omo/evidence/hypothesis-4b-prePA5-bench.log` |
@@ -202,14 +220,14 @@ project.** This section is the data, not the protocol.
 | PA7 (`958e9d1`) — single-run, AVX-2                  | 30.86       | `.omo/evidence/post-restore-pa7-run2.log`    |
 | PA7 (`958e9d1`) — single-run, AVX-2, final state    | 32.98       | `.omo/evidence/final-state-confirm.log`      |
 | PB7 fused-output (`PB1–PB7` series shipped)          | 20.23       | `.omo/evidence/post-pb7-bench.log`           |
-| PC7 2D-blocked + PD1–PD3 supporting opts (shipped)   | 20–32       | same protocol; environmental ceiling (see §5.2) |
+| PC7 2D-blocked + PD1–PD3 supporting opts (shipped)   | 20–32       | same protocol; environmental ceiling (see §6.2) |
 
 The 3-run median at 1 GiB / 10% / tmpfs / taskset 0-3 is **20–32 MB/s** on
 this branch, regardless of which commit is tested (T2 baseline, PA7, PB7,
 PC7). All four new kernel families are exercised end-to-end; the throughput
-ceiling is environmental, not kernel-quality (see §5.2).
+ceiling is environmental, not kernel-quality (see §6.2).
 
-### 5.2 Environmental ceiling — bench is capped at ~20–32 MB/s
+### 6.2 Environmental ceiling — bench is capped at ~20–32 MB/s
 
 The bench protocol (1 GiB source, 10000 slices, 4 threads, tmpfs 8 GiB,
 `taskset -c 0-3`, 3-run median + stdev) returns ~20–32 MB/s on **every**
@@ -233,23 +251,23 @@ plan's per-phase bench gates are therefore **environmentally blocked**:
 | PC8 (Phase 4 bench) | ≥ 1200 MB/s | 20–32 MB/s (env)        | **FAIL — env ceiling** |
 
 The gate failure is not a kernel defect. The coupled-input kernel itself is
-**bit-exact verified** (Section G, 1407 new pass scenarios, see §5.4) and
+**bit-exact verified** (Section G, 1407 new pass scenarios, see §6.4) and
 demonstrably **+40% faster** than the T2 baseline on this same host.
 
 > **Correction (avx512-wsl2-detect plan, issue #17):** the "20–32 MB/s
 > environmental ceiling" claim above conflated two separate effects. One
-> is a genuine end-to-end JS-pipeline ceiling (still real, see §6.7). The
+> is a genuine end-to-end JS-pipeline ceiling (still real, see §7.7). The
 > other, hiding inside it, was a **WSL2 CPUID-masking dispatch bug**: the
 > hypervisor masked the AVX-512 feature bits whenever the binary contained
 > AVX-512 code, so dispatch silently fell back to AVX-2 on most runs. The
 > numbers above were therefore measured on the AVX-2 path far more often
-> than the tables imply. §7 documents the bug, the three-layer fix
+> than the tables imply. §8 documents the bug, the three-layer fix
 > (`7d43467`, `7531bcc`, `7a9b1c0`, `6a5a96b`), and the observed post-fix
 > dispatch behavior. A clean 1 GiB AVX-512 re-measurement on this host is
 > **to be measured in T9**; do not read the AVX-512 rows above as
 > representative until then.
 
-### 5.3 The README's 395.99 MB/s baseline is stale
+### 6.3 The README's 395.99 MB/s baseline is stale
 
 The README currently publishes:
 
@@ -259,7 +277,7 @@ That figure originated from commit `dab5e88 perf(par3): vectorized GF(2^64)
 reduction + compute_recovery_full NAPI — 1 GiB create 94.60 → 395.99 MB/s
 (4.2x) (#9)`. It is **not reproducible** in the current environment:
 
-- Re-running the v2 bench protocol (`§1–§4`) on `dab5e88` returns
+- Re-running the v2 bench protocol (`§1–§3 and §5`) on `dab5e88` returns
   **18.47 MB/s** (`.omo/evidence/hypothesis-4-dab5e88-bench.log`)
 - The same protocol on `90b0611` (T2 revert) returns **21.43 MB/s**
 - The same protocol on `958e9d1` (PA7 coupled-input, HEAD) returns
@@ -272,7 +290,7 @@ the 395.99 MB/s baseline on the same host using the v2 protocol, or
 (b) explicitly cite the environmental ceiling and report relative
 improvement only** (PA7 is +40% over T2 baseline on this host).
 
-### 5.4 Kernels shipped and test-pass summary
+### 6.4 Kernels shipped and test-pass summary
 
 The v2 max-perf plan shipped **8 new kernel families × 4 ISAs = ~12 new
 function symbols** (4 coupled-input + 4 fused-output + 4 2D-blocked + 4
@@ -297,7 +315,7 @@ The `par3-recovery-perf` floor is preserved at **32–88 ms** on 4 MiB /
 - AVX-512: 86 ms (`.omo/evidence/hypothesis-3-recovery-perf-g1.log`)
 - AVX-2: 37 ms and AVX-512: 91 ms in earlier task-3-perf-4mb runs
 
-### 5.5 Critical kernel-bug fix — coeff pointer deref (PA5 / PB7 catch)
+### 6.5 Critical kernel-bug fix — coeff pointer deref (PA5 / PB7 catch)
 
 During PA5 dispatch wiring, the **PB7 subagent pass caught a coeff pointer
 dereference semantic bug** in the PA1–PA4 coupled-input kernels. The
@@ -323,7 +341,7 @@ plan — it **prevented a silent wrong-output kernel from shipping** into
 production. See `.omo/notepads/par3-par2-perf/learnings.md` Task PA5 for
 the full post-mortem (search: `coeff_blocks`).
 
-### 5.6 Historical context — v1 → v2 pivot
+### 6.6 Historical context — v1 → v2 pivot
 
 The v1 plan (single engine refactor enabling the existing `n_coeff>1`
 codepath) failed the 1000/1000 Section-A parity gate. Root cause: the
@@ -352,14 +370,14 @@ vectors**, each independently shippable and bench-gated:
    heuristic AND the heuristic bypass. The original `=1` value still
    honours the detected ISA through the heuristic; `=2` bypasses everything
    and is the operator's escape hatch for benchmarks that want pure
-   AVX-512 throughput with no heuristic interference. See §4's env-var
+   AVX-512 throughput with no heuristic interference. See §5's env-var
    table for the full `PAR3_AVX512_FORCE` matrix.
 
 Total shipped: ~12 new kernel functions across 4 ISAs + 3 NAPI exports +
 4 dispatch slots + 3 parity sections (G/H/I) + 4 engine refactors
 (WorkerThread × 4) + 3 supporting-opt impls = **~25 atomic commits**.
 
-### 5.7 Partial-scope reality
+### 6.7 Partial-scope reality
 
 The kernel work **is shipped** and **is bit-exact verified**. The absolute
 throughput target (1200+ MB/s, ≥2.5× PAR2's 471.24 MB/s) was
@@ -374,7 +392,7 @@ gives +40% over the T2 baseline on the same host.
 Future plans that wish to ship absolute throughput claims should:
 
 1. First reproduce the README's 395.99 MB/s baseline on the same host
-   using the §1–§4 protocol — if it does not reproduce, the host has
+   using the §1–§3 and §5 protocol — if it does not reproduce, the host has
    the same environmental ceiling and the v2 protocol will not clear the
    600/900/1200 MB/s gates either.
 2. If it does reproduce, re-run the v2 bench protocol on `HEAD` (post-PD3)
@@ -382,9 +400,9 @@ Future plans that wish to ship absolute throughput claims should:
 3. Always cite the env-ceiling caveat in the throughput table when
    publishing numbers from this branch on this host.
 
-### 5.8 Protocol is unchanged
+### 6.8 Protocol is unchanged
 
-Sections §1–§4 remain the canonical, authoritative way to measure
+Sections §1–§3 and §5 remain the canonical, authoritative way to measure
 throughput on this project. The 20–32 MB/s ceiling documented above is a
 property of the host + bench-script combination, not a defect in the
 protocol. A future host that clears the README's 395.99 MB/s baseline
@@ -392,21 +410,21 @@ should also clear the v2 per-phase gates, presuming the bench script and
 protocol are unchanged.
 
 
-## 6. Throughput — v3 max-perf plan (1200 MB/s target)
+## 7. Throughput — v3 max-perf plan (1200 MB/s target)
 
 This section documents the v3 max-perf plan (`.omo/plans/par3-1200mbps.md`,
-Phases 0 through E, todos T0–E3). **The protocol in §1–§4 is unchanged and
+Phases 0 through E, todos T0–E3). **The protocol in §1–§3 and §5 is unchanged and
 remains the canonical way to measure throughput on this project.** This
 section is the data, not the protocol.
 
-### 6.1 Per-phase throughput progression
+### 7.1 Per-phase throughput progression
 
 The v3 plan set a sequence of per-phase targets with `proceed_threshold`
 gates. Phases stack toward the 1200 MB/s primary target:
 
 | Phase | Range (MB/s) | Proceed gate (MB/s) | Status (this run) |
 |-------|--------------:|--------------------:|-------------------|
-| Baseline (v2 ceiling) | 20–32 | — | measured (§5.2) |
+| Baseline (v2 ceiling) | 20–32 | — | measured (§6.2) |
 | Phase 0 (T0+T1, bench calibration) | — | none (foundation) | shipped |
 | Phase A (A1–A3, I/O streaming) | 200–400 | ≥ 100 | shipped, env-blocked |
 | Phase B (B1–B3, drop JS overhead) | 400–700 | ≥ 300 | shipped, env-blocked |
@@ -415,13 +433,13 @@ gates. Phases stack toward the 1200 MB/s primary target:
 | Phase E (E1–E3, io_uring + huge pages + inline CRC) | 1200–2000 | ≥ 1200 | all three blocked |
 | Phase F (F1–F6, docs + verification) | — | n/a | F1 in flight; F2–F6 not started |
 
-End-to-end throughput at the §1–§4 protocol (1 GiB / 10% / tmpfs / taskset
+End-to-end throughput at the §1–§3 and §5 protocol (1 GiB / 10% / tmpfs / taskset
 0-3 / 3-run median) stayed at the **v2 ceiling of 20–32 MB/s** on every
 shipped todo on this host. The 100/300/600/900/1200 MB/s bench gates were
 not reachable here for the same environmental reason the v2 plan's gates
-were not reachable (see §5.2 and the README throughput note).
+were not reachable (see §6.2 and the README throughput note).
 
-### 6.2 C++-only bench calibration (T1)
+### 7.2 C++-only bench calibration (T1)
 
 T1 added `test/bench/par3-native-bench.cpp` + a CMake target that bypasses
 the JS layer and runs the kernel directly against a tmpfs source file. It
@@ -446,7 +464,7 @@ scalar `gf64_inverse()` loop over a 1000×<numInputs> matrix, and
 
 The 4 MiB 3-run median breaks the 1200 MB/s gate in raw kernel throughput.
 The kernel is not the bottleneck; the **1 GiB / JS-layer** bench is the
-bottleneck, and that's what the §5.2 env ceiling documents. T1's value
+bottleneck, and that's what the §6.2 env ceiling documents. T1's value
 is proving that any future bench run that does not clear 1000+ MB/s on
 the C++ path has hit some other limitation (I/O, JS overhead, or env
 ceiling) rather than a kernel defect.
@@ -460,7 +478,7 @@ a meaningful hardware-bound number (AVX2 carry-less multiply via
 `vpclmulqdq` is the same inner kernel AVX-512 uses for `vpclmulqdq`
 invocations, just on 256-bit registers).
 
-### 6.3 Per-phase bench results
+### 7.3 Per-phase bench results
 
 Every phase shipped with a `node test/par3-recovery-perf.js 4MB -r 8`
 run (the 4 MiB / 8 recovery slices perf floor, target < 2000 ms) and
@@ -495,7 +513,7 @@ The 4 MiB perf floor (≪ 2000 ms) holds on **every shipped todo** despite
 none of them clearing the per-phase v3 bench gates (100 / 300 / 600 / 900
 / 1200 MB/s). Same environmental ceiling as the v2 plan.
 
-### 6.4 io_uring / huge pages / mmap results
+### 7.4 io_uring / huge pages / mmap results
 
 **A1 mmap(2) source-file reads** shipped, but A2's `par3_create_streaming`
 NAPI binding (file `src/gf64_create_streaming.cc`) consumes
@@ -505,7 +523,7 @@ works, but the wire-up to the streaming NAPI was deferred (documented in
 the A1 notepad entry). `PAR3_GF64_USE_MMAP=1` env-gates the mmap read
 inside A1's entry; the threshold check (≤ 2 GiB source) is in the JS
 layer. **Measured effect on the JS path: invisible** (still 20–32 MB/s on
-the env ceiling; see §6.7). **Kernel correctness: preserved** (A1's
+the env ceiling; see §7.7). **Kernel correctness: preserved** (A1's
 regression test PASS at 88 ms / 6 292 253-byte archive / Section F+G+H+I
 kernel parity 9927/9927).
 
@@ -521,12 +539,12 @@ blocked (`- [~]`) pending root-cause investigation.
 
 **E2 huge pages via `madvise(MADV_HUGEPAGE)`** is not shipped. The D3
 contiguous-scratch buffer that E2 would consume does not exist on this
-branch (D3 is blocked, see §6.7).
+branch (D3 is blocked, see §7.7).
 
 **E3 inline CRC32 into the 2D kernel tail** is not shipped (planned for
 the post-D3 kernel state).
 
-### 6.5 AVX-512 utilization analysis
+### 7.5 AVX-512 utilization analysis
 
 The v2 plan's AVX-512 downclock heuristic (PD2) used a 16 MiB working-set
 threshold: workloads above the threshold downgraded AVX-512 to AVX2 to
@@ -543,7 +561,7 @@ regardless of heuristic OR override (operator escape hatch for benchmarks
 that want pure AVX-512 throughput). The `=1` and `=0` values from the v2
 plan retain their semantics; C3 just adds `=2` as the ceiling option.
 The `=0` value still downgrades to AVX-2; `=1` honours the detected ISA
-through the new 256 MiB threshold; `=2` overrides everything. See §4's
+through the new 256 MiB threshold; `=2` overrides everything. See §5's
 env-var table for the full matrix.
 
 **AMX-like behaviour observation:** on Zen4 the AVX-512 path keeps
@@ -553,14 +571,14 @@ analysis. The 256 MiB threshold change (C1) is the correct response: it
 shifts the break-even point deep into the "definitely cache-resident"
 range rather than the "fits in L3 by accident" range.
 
-On this host, the binary dispatch (T1's bench, see §6.2) still picks AVX2
+On this host, the binary dispatch (T1's bench, see §7.2) still picks AVX2
 because of XSAVE masking hiding AVX-512 from the runtime CPUID poll. The
 forcing mechanisms (`PAR3_AVX512_FORCE=2`) are honoured downstream of
 dispatch (they re-bind the kernel via `gf64_apply_method`); they were
-not exercised in the §6.3 perf-floor runs because the 4 MiB bench is
+not exercised in the §7.3 perf-floor runs because the 4 MiB bench is
 kernel-time-dominated on AVX-2 already.
 
-### 6.6 Kernel cache hit rate + prefetch effectiveness
+### 7.6 Kernel cache hit rate + prefetch effectiveness
 
 **D2 software prefetch** shipped and is the lowest-level cache
 optimization: at the top of the inner `g` loop in
@@ -568,17 +586,17 @@ optimization: at the top of the inner `g` loop in
 _MM_HINT_T0)` brings the next input block into L1/L2 before the SIMD unit
 needs it. Replaces a stall-on-miss with a hit-already-warm pattern. The
 4 MiB / -r 8 perf floor (38–39 ms on AVX-2, `.omo/evidence/d2-perf-4mb.log`)
-is unchanged from the pre-D2 baseline (37 ms, see §5.4 / `.omo/evidence/hypothesis-3-recovery-perf.log`),
+is unchanged from the pre-D2 baseline (37 ms, see §6.4 / `.omo/evidence/hypothesis-3-recovery-perf.log`),
 because at 4 MiB the working set already fits in L1/L2 (`gf64` blocks are
 4 KiB; the C-tile's `G=12` × `K=12` × `8 bytes` = 1.1 KiB / call fits
 comfortably). The D2 speedup is invisible at 4 MiB because there was
 nothing to prefetch into. **Expected benefit on 1 GiB inputs:** the
 working set expands to ~96 MiB (4 KiB × 24 000 blocks per slice × 12
 groups / `8 bytes`), L3 starts to evict, and the prefetch begins to
-hide misses. The 1 GiB bench is on the env ceiling (§5.2) so the D2
+hide misses. The 1 GiB bench is on the env ceiling (§6.2) so the D2
 delta cannot be measured here.
 
-**D3 contiguous scratch buffer** (planned but blocked, see §6.7) would
+**D3 contiguous scratch buffer** (planned but blocked, see §7.7) would
 have converted the 12 separate cache-line streams from `in_blocks[g]`
 into one sequential access (`in[w * G + g]`), which would reduce L1 / L2
 misses on the inner `g` loop by an estimated ~30%. Without D3, the
@@ -591,7 +609,7 @@ for the v3 plan. What can be measured is the parity suite passing
 bit-exact with the prefetch added (`Section I complete: 4800 positive +
 24 negative-trap scenarios passed`, in `.omo/evidence/c2-kernel-parity.log`).
 
-### 6.7 Arch summary
+### 7.7 Arch summary
 
 13 / 24 tasks shipped, 11 outstanding (D3, D4, E1, E2, E3 + F2–F6). Of
 the 11 outstanding, **5 are blocked** (`- [~]` / `- [ ]` in
@@ -628,9 +646,9 @@ regression gates: `node test/par3-kernel-parity.js` exits with
 and the equivalent capture in `a1-kernel-parity.log` line `PASS (9927
 passed)`).
 
-**End-to-end throughput on this host at the §1–§4 bench protocol: 20–32
-MB/s.** That is the same number as the v2 ceiling in §5.2. The C++ bench
-(T1, §6.2) confirms the underlying kernel alone reaches ~1000+ MB/s on
+**End-to-end throughput on this host at the §1–§3 and §5 bench protocol: 20–32
+MB/s.** That is the same number as the v2 ceiling in §6.2. The C++ bench
+(T1, §7.2) confirms the underlying kernel alone reaches ~1000+ MB/s on
 1 MiB inputs, so the env ceiling is not a kernel defect; it's the same
 host-level artifact the v2 plan documented.
 
@@ -644,34 +662,34 @@ the README's 395.99 MB/s baseline (T12 Scenario E) should also clear
 the v3 per-phase gates, presuming the bench script and protocol are
 unchanged.
 
-### 6.8 Protocol is unchanged
+### 7.8 Protocol is unchanged
 
-Sections §1–§4 remain the canonical, authoritative way to measure
-throughput on this project. The 20–32 MB/s ceiling documented in §5.2
-and reproduced in §6.1–§6.7 is a property of the host + bench-script
+Sections §1–§3 and §5 remain the canonical, authoritative way to measure
+throughput on this project. The 20–32 MB/s ceiling documented in §6.2
+and reproduced in §7.1–§7.7 is a property of the host + bench-script
 combination, not a defect in the protocol. A future host that clears
 the README's 395.99 MB/s baseline should also clear the v3 per-phase
 gates, presuming the bench script and protocol are unchanged.
 
-The v3 plan added one optional extension to the §1–§4 protocol (the
+The v3 plan added one optional extension to the §1–§3 and §5 protocol (the
 `test/bench/par3-native-bench` C++-only binary, T1) that bypasses the JS
-layer to expose the hardware-bound kernel throughput. See §6.2 for what
+layer to expose the hardware-bound kernel throughput. See §7.2 for what
 it returned on this host. The C++ bench is **diagnostic**, not a
-replacement for §1–§4; it cannot generate actual PAR3 archives (it has
+replacement for §1–§3 and §5; it cannot generate actual PAR3 archives (it has
 no recovery data path), only throughput numbers for the kernel alone.
 
 
-## 7. WSL2 AVX-512 dispatch bug (issue #17)
+## 8. WSL2 AVX-512 dispatch bug (issue #17)
 
 This section documents the `avx512-wsl2-detect` plan (Phase 1, todos
-T0–T5). It corrects a misdiagnosis baked into §5 and §6: part of what
+T0–T5). It corrects a misdiagnosis baked into §6 and §7: part of what
 those sections attributed to a flat "environmental ceiling" was actually
 an ISA-dispatch bug that hid AVX-512 from the runtime detector on WSL2.
-**The protocol in §1–§4 is unchanged and remains the canonical way to
+**The protocol in §1–§3 and §5 is unchanged and remains the canonical way to
 measure throughput on this project.** This section is a bug write-up plus
 the observed post-fix behavior, not a new protocol.
 
-### 7.1 The bug: WSL2/Hyper-V masks the CPUID AVX-512 bits
+### 8.1 The bug: WSL2/Hyper-V masks the CPUID AVX-512 bits
 
 The dispatcher (`gf64_detect_method()` in `gf64/gf64_dispatch.c`) picks the
 SIMD kernel by reading the AVX-512 feature bits out of CPUID plus the XCR0
@@ -694,13 +712,13 @@ dispatcher already mitigated this before Phase 1 with a **5-poll aggregate**
 reachable at all on WSL2. It is not a full fix: many process starts still
 land on AVX-2 because all five polls came back masked.
 
-The consequence for §5 and §6: the "20–32 MB/s ceiling" tables were
+The consequence for §6 and §7: the "20–32 MB/s ceiling" tables were
 measured with dispatch landing on AVX-2 far more often than on AVX-512,
 because every fresh benchmark process re-rolled the masking. What looked
 like a single flat env ceiling was partly a flat env ceiling (the JS
-pipeline, see §6.7) and partly AVX-512 simply not being dispatched.
+pipeline, see §7.7) and partly AVX-512 simply not being dispatched.
 
-### 7.2 The fix: three layers
+### 8.2 The fix: three layers
 
 The fix landed across four commits and is deliberately layered, because no
 single layer fully defeats the hypervisor's binary inspection.
@@ -729,7 +747,7 @@ single layer fully defeats the hypervisor's binary inspection.
 - `6a5a96b` (T3) adds the `PAR3_GF64_USE_AVX512` env var (parser
   `parse_avx512_force_env`, modelled on the existing `PAR3_AVX512_FORCE`
   parser). It lets an operator override detection entirely: force AVX-512
-  on, force AVX-2 on, or defer to detection (`auto`). See §7.4.
+  on, force AVX-2 on, or defer to detection (`auto`). See §8.4.
 
 **Layer 3: regression tests (T4 to T5).**
 
@@ -742,7 +760,7 @@ single layer fully defeats the hypervisor's binary inspection.
   is stable within that process and that per-call detection cost stays
   under budget.
 
-### 7.3 Post-fix measurements and observed behavior
+### 8.3 Post-fix measurements and observed behavior
 
 Be precise about what was and was not measured in Phase 1. The Phase 1
 gates were correctness and detection-stability gates, not a 1 GiB
@@ -785,19 +803,19 @@ measured in T0–T5 and must not be quoted as achieved.** Two honest reasons
 to withhold it:
 
 1. Phase 1 changed ISA *selection*, not the end-to-end JS pipeline. The
-   ~20–32 MB/s ceiling in §5.2 and §6.7 is dominated by the JS-layer
-   pipeline, and the C++-only bench (§6.2) already showed the kernel itself
+   ~20–32 MB/s ceiling in §6.2 and §7.7 is dominated by the JS-layer
+   pipeline, and the C++-only bench (§7.2) already showed the kernel itself
    is hardware-bound at ~1000+ MB/s. Selecting AVX-512 is a *precondition*
    for any AVX-512 speedup, not proof that the 1 GiB end-to-end number
    clears 100 MB/s.
-2. No 1 GiB / 10% / tmpfs / taskset run under §1–§4 was captured with
+2. No 1 GiB / 10% / tmpfs / taskset run under §1–§3 and §5 was captured with
    dispatch pinned to AVX-512 (via `PAR3_GF64_USE_AVX512=1`) versus pinned
    to AVX-2. That A/B is exactly what **T9** is for.
 
-Until T9 captures that A/B under the §1–§4 protocol, treat the "> 100 MB/s
+Until T9 captures that A/B under the §1–§3 and §5 protocol, treat the "> 100 MB/s
 AVX-512 on 1 GiB" figure as an unverified target, not a result.
 
-### 7.4 `PAR3_GF64_USE_AVX512` env var
+### 8.4 `PAR3_GF64_USE_AVX512` env var
 
 `PAR3_GF64_USE_AVX512` overrides ISA **detection**. It is the reliable
 escape hatch for the WSL2 masking bug: when the hypervisor lies about
@@ -842,7 +860,7 @@ env var's effect, exercise an actual kernel call (the bound dispatch
 pointers set by `gf64_init_dispatch()` are what the env var changes), which
 is what the T4 test does.
 
-### 7.5 Operator guidance
+### 8.5 Operator guidance
 
 On a WSL2 (or other Hyper-V) guest where you know the CPU supports
 AVX-512, do not rely on auto-detection for benchmark runs. Force it:
@@ -862,7 +880,7 @@ PAR3_GF64_USE_AVX512=1 taskset -c 0-3 node test/bench/par3-create-bench.js --siz
 
 When you publish any number from a WSL2 host, always report the
 `PAR3_GF64_USE_AVX512` value alongside the other reproducibility knobs from
-§3 and §4. A number measured under `auto` on WSL2 is not reproducible: the
+§3 and §5. A number measured under `auto` on WSL2 is not reproducible: the
 next process might roll AVX-2 and report a different result.
 
 If you force `PAR3_GF64_USE_AVX512=1` on a host that does **not** support
@@ -870,11 +888,11 @@ AVX-512, the AVX-512 kernel will execute a ZMM instruction the CPU cannot
 decode and the process dies with SIGILL. Verify with
 `test/par3-isa-check.js` first.
 
-### 7.6 Protocol is unchanged
+### 8.6 Protocol is unchanged
 
-Sections §1–§4 remain the canonical way to measure throughput. Phase 1
+Sections §1–§3 and §5 remain the canonical way to measure throughput. Phase 1
 changed ISA dispatch, not the measurement protocol. The one durable
 operational change is that WSL2 benchmark runs should set
 `PAR3_GF64_USE_AVX512` explicitly rather than trusting auto-detection, and
 should record which value they used. The clean 1 GiB AVX-512 vs AVX-2 A/B
-under the §1–§4 protocol is deferred to T9.
+under the §1–§3 and §5 protocol is deferred to T9.
