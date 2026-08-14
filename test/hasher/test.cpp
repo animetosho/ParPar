@@ -209,10 +209,116 @@ bool do_tests(IHasherInput* hasher, MD5SingleUpdate_t md5sgl, MD5CRC_Calc_t md5c
 	CHECK_BLOCK(99, "\x98\x4c\x32\x54\x8d\xee\xbf\xf8\x32\x3f\x82\x57\x96\xb5\xe8\x8a", 0x6f6f1bcf, "Long mix")
 	CHECK_END("\x08\xfc\xb7\x18\xe7\x2f\xbd\xe9\x5c\x92\x36\x66\xed\x91\x76\xfe", "Long mix")
 	
+	#undef ADD_DATA
 	#undef MD5_ACTION
 	#undef CHECK_BLOCK
 	#undef CHECK_END
 	#undef CHECK_CRC
+	return false;
+}
+
+bool do_ihasher_tests(IHasherInput* hasher) {
+	md5hash md5;
+	uint8_t md5crc[20];
+	
+	#define ADD_DATA(op, data) hasher->op(data, sizeof(data)-1);
+	#define CHECK_BLOCK(xMd5, xCrc, t) \
+		hasher->getBlock(md5crc, 0); \
+		if(memcmp(md5crc, xMd5, 16)) { printf("updateFile + getBlock-md5 (" t "): "); return true; } \
+		if(readUint32LE(md5crc+16) != xCrc) { printf("getBlock-crc (" t ") [%x <> %x]: ", readUint32LE(md5crc+16), xCrc); return true; }
+	#define CHECK_END(xMd5, t) \
+		hasher->end(md5); \
+		if(memcmp(md5, xMd5, 16)) { printf("updateFile + input-end (" t "): "); return true; }
+	
+	
+	#ifdef PARPAR_ENABLE_HASHER_MD5CRC
+	// test hashing file only with nothing
+	hasher->reset();
+	ADD_DATA(updateFile, "")
+	CHECK_BLOCK("\xd4\x1d\x8c\xd9\x8f\0\xb2\x04\xe9\x80\x09\x98\xec\xf8\x42\x7e", 0, "blank")
+	CHECK_END("\xd4\x1d\x8c\xd9\x8f\0\xb2\x04\xe9\x80\x09\x98\xec\xf8\x42\x7e", "blank")
+	
+	hasher->reset();
+	ADD_DATA(updateFile, "a")
+	CHECK_BLOCK("\xd4\x1d\x8c\xd9\x8f\0\xb2\x04\xe9\x80\x09\x98\xec\xf8\x42\x7e", 0, "blank (skip single byte)")
+	CHECK_END("\x0c\xc1\x75\xb9\xc0\xf1\xb6\xa8\x31\xc3\x99\xe2\x69\x77\x26\x61", "single byte")
+	
+	hasher->reset();
+	ADD_DATA(update, "a")
+	CHECK_BLOCK("\x0c\xc1\x75\xb9\xc0\xf1\xb6\xa8\x31\xc3\x99\xe2\x69\x77\x26\x61", 0xe8b7be43, "skip single")
+	ADD_DATA(updateFile, "b")
+	CHECK_BLOCK("\xd4\x1d\x8c\xd9\x8f\0\xb2\x04\xe9\x80\x09\x98\xec\xf8\x42\x7e", 0, "blank (skip single byte)")
+	CHECK_END("\x18\x7e\xf4\x43\x61\x22\xd1\xcc\x2f\x40\xdc\x2b\x92\xf0\xeb\xa0", "two bytes")
+	
+	hasher->reset();
+	ADD_DATA(update, "a")
+	ADD_DATA(updateFile, "b")
+	ADD_DATA(updateFile, "c")
+	CHECK_BLOCK("\xd4\x1d\x8c\xd9\x8f\0\xb2\x04\xe9\x80\x09\x98\xec\xf8\x42\x7e", 0, "blank (after reset)")
+	CHECK_END("\x90\x01\x50\x98\x3c\xd2\x4f\xb0\xd6\x96\x3f\x7d\x28\xe1\x7f\x72", "three bytes")
+	
+	hasher->reset();
+	ADD_DATA(update, "a")
+	ADD_DATA(updateFile, "b")
+	ADD_DATA(update, "c")
+	CHECK_BLOCK("\x4a\x8a\x08\xf0\x9d\x37\xb7\x37\x95\x64\x90\x38\x40\x8b\x5f\x33", 0x6b9df6f, "one byte")
+	CHECK_END("\x90\x01\x50\x98\x3c\xd2\x4f\xb0\xd6\x96\x3f\x7d\x28\xe1\x7f\x72", "three bytes (mixed update/File)")
+	
+	
+	// tests reaching/exceeding one block
+	hasher->reset();
+	ADD_DATA(update, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ01234567890")
+	ADD_DATA(updateFile, "-")
+	CHECK_END("\xea\x2a\x25\x02\x3e\xb5\x30\x90\x05\x58\x8a\x0c\x74\xe5\x2d\xab", "one block")
+	hasher->reset();
+	ADD_DATA(updateFile, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ01234567890")
+	ADD_DATA(update, "-")
+	CHECK_END("\xea\x2a\x25\x02\x3e\xb5\x30\x90\x05\x58\x8a\x0c\x74\xe5\x2d\xab", "one block")
+	
+	hasher->reset();
+	ADD_DATA(update, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ01234567890-")
+	ADD_DATA(updateFile, "a")
+	CHECK_END("\xe2\x52\x35\x35\x2b\xab\x4d\x3b\xdb\x7e\xae\x51\x13\x73\x08\x55", "block + 1 byte")
+	hasher->reset();
+	ADD_DATA(updateFile, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ01234567890-")
+	ADD_DATA(update, "a")
+	CHECK_END("\xe2\x52\x35\x35\x2b\xab\x4d\x3b\xdb\x7e\xae\x51\x13\x73\x08\x55", "block + 1 byte")
+	
+	hasher->reset();
+	ADD_DATA(update, "a")
+	ADD_DATA(updateFile, "bcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ01234567890-abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ01234567890-")
+	CHECK_END("\xd7\xd5\x86\x75\x2e\xb5\x44\x02\xe5\xdf\xff\x6f\x69\x34\x30\x08", "two blocks")
+	hasher->reset();
+	ADD_DATA(updateFile, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ01234567890-abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ01234567890-")
+	CHECK_END("\xd7\xd5\x86\x75\x2e\xb5\x44\x02\xe5\xdf\xff\x6f\x69\x34\x30\x08", "two blocks")
+	
+	hasher->reset();
+	ADD_DATA(update, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ01234567890")
+	ADD_DATA(updateFile, "-abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ01234567890-a")
+	CHECK_END("\xe0\x8d\x57\x03\x98\x68\x9b\xc1\x08\xef\xad\x30\x59\x55\xa5\x79", "two blocks + 1 byte")
+	
+	
+	// long test
+	hasher->reset();
+	uint8_t stuff[8128];
+	for(unsigned c=0; c<sizeof(stuff); c++)
+		stuff[c] = (c & 0xff) ^ 0x9d;
+	uint8_t* pStuff = stuff;
+	for(int l=0; l<128; l++) {
+		hasher->updateFile(pStuff, l ^ 0x55);
+		pStuff += l ^ 0x55;
+	}
+	memset(stuff, 0x37, 2000);
+	memset(stuff+2000, 0x9a, 1500);
+	hasher->updateFile(stuff, 1500);
+	hasher->updateFile(stuff+1500, 2000);
+	CHECK_END("\x08\xfc\xb7\x18\xe7\x2f\xbd\xe9\x5c\x92\x36\x66\xed\x91\x76\xfe", "Long mix")
+	
+	#endif // defined(PARPAR_ENABLE_HASHER_MD5CRC)
+	
+	#undef ADD_DATA
+	#undef CHECK_BLOCK
+	#undef CHECK_END
 	return false;
 }
 
@@ -291,6 +397,7 @@ int main(void) {
 		std::cout << "  " << hasherInput_methodName() << " ";
 		auto hasher = HasherInput_Create();
 		if(do_tests(hasher, nullptr, nullptr, nullptr)) ERROR(" - FAILED");
+		if(do_ihasher_tests(hasher)) ERROR(" - FAILED");
 		hasher->destroy();
 		std::cout << std::endl;
 	}

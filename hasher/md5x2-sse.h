@@ -41,6 +41,17 @@ static HEDLEY_ALWAYS_INLINE void md5_init_x2_sse(void* state) {
 	state_[2] = _mm_unpackhi_epi64(init, init);
 	state_[3] = _mm_shuffle_epi32(init, _MM_SHUFFLE(3,3,3,3));
 }
+static HEDLEY_ALWAYS_INLINE void md5_set_file_x2_sse(void* state, void* fileState) {
+	__m128i* state_ = (__m128i*)state;
+	__m128i init = _mm_set_epi32(
+		0x10325476L, 0x98badcfeL, 0xefcdab89L, 0x67452301L
+	);
+	__m128i file = _mm_loadu_si128((__m128i*)fileState);
+	state_[0] = _mm_unpacklo_epi64(init, file);
+	state_[1] = _mm_srli_epi64(state_[0], 32);
+	state_[2] = _mm_unpackhi_epi64(init, file);
+	state_[3] = _mm_srli_epi64(state_[2], 32);
+}
 // simulate a 32b rotate by duplicating lanes and doing a single 64b shift
 #define ROTATE(a, r) _mm_srli_epi64(_mm_shuffle_epi32(a, _MM_SHUFFLE(2,2,0,0)), 32-r)
 #define _FN(f) f##_sse
@@ -87,6 +98,7 @@ static HEDLEY_ALWAYS_INLINE void md5_extract_x2_sse(void* dst, void* state, cons
 	state_[3] = _mm_insert_epi32(state_[3], 0x10325476L, idx*2); \
 }
 #define md5_init_x2_avx md5_init_x2_sse
+#define md5_set_file_x2_avx md5_set_file_x2_sse
 // TODO: consider using PSHUFB for rotate by 16
 
 #undef ADDF
@@ -121,6 +133,7 @@ static HEDLEY_ALWAYS_INLINE void md5_extract_x2_sse(void* dst, void* state, cons
 #include <immintrin.h>
 #define md5_init_lane_x2_avx512 md5_init_lane_x2_avx
 #define md5_init_x2_avx512 md5_init_x2_avx
+#define md5_set_file_x2_avx512 md5_set_file_x2_avx
 #define ROTATE _mm_rol_epi32
 #define _FN(f) f##_avx512
 

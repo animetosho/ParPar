@@ -63,6 +63,14 @@ static HEDLEY_ALWAYS_INLINE void md5_init_x2_neon(void* state) {
 	state_[2]  = vdup_n_u32(0x98badcfeL);
 	state_[3]  = vdup_n_u32(0x10325476L);
 }
+static HEDLEY_ALWAYS_INLINE void md5_set_file_x2_neon(void* state, void* fileState) {
+	uint32x2_t* state_ = (uint32x2_t*)state;
+	uint32_t* src = (uint32_t*)fileState;
+	state_[0] = vcreate_u32(((uint64_t)src[0] << 32) | 0x67452301L);
+	state_[1] = vcreate_u32(((uint64_t)src[1] << 32) | 0xefcdab89L);
+	state_[2] = vcreate_u32(((uint64_t)src[2] << 32) | 0x98badcfeL);
+	state_[3] = vcreate_u32(((uint64_t)src[3] << 32) | 0x10325476L);
+}
 
 
 #define _FN(f) f##_neon

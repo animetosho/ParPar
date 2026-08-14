@@ -28,20 +28,22 @@ protected:
 	uint64_t dataLen[2];
 public:
 	virtual void update(const void* data, size_t len) = 0;
+	virtual void resetBlock() = 0;
 	virtual void getBlock(void* md5crc, uint64_t zeroPad) = 0;
 	virtual void end(void* md5) = 0;
 	virtual void reset() = 0;
 #ifdef PARPAR_ENABLE_HASHER_MD5CRC
 	virtual void extractFileMD5(MD5Single& outMD5) = 0;
+	virtual void updateFile(const void* data, size_t len) = 0;
 #endif
 	virtual ~IHasherInput() {}
 	inline void destroy() { ALIGN_FREE(this); } \
 };
 
 #ifdef PARPAR_ENABLE_HASHER_MD5CRC
-# define __DECL_HASHERINPUT_EXTRACT void extractFileMD5(MD5Single& outMD5);
+# define __DECL_HASHERINPUT_FILEOPS void extractFileMD5(MD5Single& outMD5); void updateFile(const void* data, size_t len);
 #else
-# define __DECL_HASHERINPUT_EXTRACT
+# define __DECL_HASHERINPUT_FILEOPS
 #endif
 #define __DECL_HASHERINPUT(name) \
 class HasherInput_##name : public IHasherInput { \
@@ -56,10 +58,11 @@ public: \
 		return new(ptr) HasherInput_##name(); \
 	} \
 	void update(const void* data, size_t len); \
+	void resetBlock(); \
 	void getBlock(void* md5crc, uint64_t zeroPad); \
 	void end(void* md5); \
 	void reset(); \
-	__DECL_HASHERINPUT_EXTRACT \
+	__DECL_HASHERINPUT_FILEOPS \
 }
 __DECL_HASHERINPUT(Scalar);
 __DECL_HASHERINPUT(SSE);
@@ -71,7 +74,7 @@ __DECL_HASHERINPUT(ARMCRC);
 __DECL_HASHERINPUT(NEON);
 __DECL_HASHERINPUT(NEONCRC);
 __DECL_HASHERINPUT(RVZbc);
-#undef __DECL_HASHERINPUT_EXTRACT
+#undef __DECL_HASHERINPUT_FILEOPS
 #undef __DECL_HASHERINPUT
 
 #endif /* __HASHER_INPUT_IMPL_H */
