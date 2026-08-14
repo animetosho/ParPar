@@ -123,7 +123,8 @@
 # if defined(__SSE2__) && _MSC_VER >= 1920
 	#define __GFNI__ 1
 # endif
-# if defined(__AVX512F__) && _MSC_VER >= 1951
+# if defined(__AVX512F__) && _MSC_VER >= 1951 && defined(PLATFORM_AMD64)
+	// BMM support added in v19.51, but whilst it's defined, 32-bit build doesn't recognise it as an intrinsic so fails during link
 	#define __AVX512BMM__ 1
 	#define _mm256_bmacxor16x16x16 _mm256_bmacxor16x16x16_epi16
 	#define _mm512_bmacxor16x16x16 _mm512_bmacxor16x16x16_epi16
