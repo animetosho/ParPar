@@ -87,7 +87,21 @@ _MD5x2_UPDATEFN_ATTRIB void HasherInput::update(const void* data, size_t len) {
 	tmpLen = len;
 }
 
-_MD5x2_UPDATEFN_ATTRIB void HasherInput::getBlock(void* md5crc, uint64_t zeroPad) {
+_MD5x2_UPDATEFN_ATTRIB void HasherInput::resetBlock() {
+	if(tmpLen >= MD5_BLOCKSIZE) {
+		// push through one block on file hash
+		_FNMD5x2(md5_update_block_x2)(md5State, (const char*)tmp, (const char*)tmp);
+		tmpLen -= MD5_BLOCKSIZE;
+		memcpy(tmp, tmp+MD5_BLOCKSIZE, tmpLen);
+	}
+	
+	_FNMD5x2(md5_init_lane_x2)(md5State, HASH2X_BLOCK);
+	_FNCRC(crc_init)(crcState);
+	posOffset = tmpLen;
+	dataLen[HASH2X_BLOCK] = 0;
+}
+
+void HasherInput::getBlock(void* md5crc, uint64_t zeroPad) {
 	_FNMD5x2(md5_extract_x2)(md5crc, md5State, HASH2X_BLOCK);
 	md5_final_block(md5crc, tmp + posOffset, dataLen[HASH2X_BLOCK], zeroPad);
 	
@@ -99,16 +113,7 @@ _MD5x2_UPDATEFN_ATTRIB void HasherInput::getBlock(void* md5crc, uint64_t zeroPad
 	_crc[2] = (crc >> 16) & 0xff;
 	_crc[3] = (crc >> 24) & 0xff;
 	
-	if(tmpLen >= MD5_BLOCKSIZE) {
-		// push through one block on file hash
-		_FNMD5x2(md5_update_block_x2)(md5State, (const char*)tmp, (const char*)tmp);
-		tmpLen -= MD5_BLOCKSIZE;
-		memcpy(tmp, tmp+MD5_BLOCKSIZE, tmpLen);
-	}
-	_FNMD5x2(md5_init_lane_x2)(md5State, HASH2X_BLOCK);
-	_FNCRC(crc_init)(crcState);
-	posOffset = tmpLen;
-	dataLen[HASH2X_BLOCK] = 0;
+	resetBlock();
 }
 
 _MD5x2_UPDATEFN_ATTRIB void HasherInput::end(void* md5) {
@@ -131,6 +136,62 @@ void HasherInput::extractFileMD5(MD5Single& outMD5) {
 	} else {
 		memcpy(outMD5.tmp, tmp, tmpLen);
 	}
+}
+
+void HasherInput::updateFile(const void* data, size_t len) {
+	dataLen[HASH2X_FILE] += len;
+	
+	// if small amount, and fits in tmp, just copy across
+	if(len + tmpLen < MD5_BLOCKSIZE*2) {
+		memcpy(tmp + tmpLen, data, len);
+		tmpLen += len;
+		resetBlock();
+		return;
+	}
+	
+	
+	// extract file hash and compute using single MD5
+	const char* data_ = (const char*)data;
+	MD5Single fileHash;
+	_FNMD5x2(md5_extract_x2)(fileHash.md5State, md5State, HASH2X_FILE);
+	if(tmpLen >= MD5_BLOCKSIZE) {
+		MD5Single::_update(fileHash.md5State, tmp, 1);
+		tmpLen -= MD5_BLOCKSIZE;
+		memcpy(fileHash.tmp, tmp + MD5_BLOCKSIZE, tmpLen);
+	} else {
+		memcpy(fileHash.tmp, tmp, tmpLen);
+	}
+	
+	if(len + tmpLen < MD5_BLOCKSIZE) {
+		memcpy(tmp, fileHash.tmp, tmpLen);
+		memcpy(tmp + tmpLen, data_, len);
+		tmpLen += len;
+	} else {
+		if(tmpLen>0) {
+			size_t consume = MD5_BLOCKSIZE - tmpLen;
+			memcpy(fileHash.tmp + tmpLen, data_, consume);
+			MD5Single::_update(fileHash.md5State, fileHash.tmp, 1);
+			data_ += consume;
+			len -= consume;
+		}
+		
+		// main process
+		size_t blocks = len/MD5_BLOCKSIZE;
+		size_t amount = blocks*MD5_BLOCKSIZE;
+		MD5Single::_update(fileHash.md5State, data_, blocks);
+		len -= amount;
+		data_ += amount;
+		
+		// copy remainder into hasher's tmp
+		memcpy(tmp, data_, len);
+		tmpLen = len;
+	}
+	
+	// add updated MD5 back to hasher + reset block hash
+	_FNMD5x2(md5_set_file_x2)(md5State, fileHash.md5State);
+	_FNCRC(crc_init)(crcState);
+	posOffset = tmpLen;
+	dataLen[HASH2X_BLOCK] = 0;
 }
 #endif
 #endif
