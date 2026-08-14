@@ -5,7 +5,7 @@ on:
 jobs:
   build-dev-linux-static-amd64:
     name: Build dev amd64 Linux static binary
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     env:
       BUILD_ARCH: x64
       BUILD_LOGLEVEL: verbose
