@@ -12,7 +12,7 @@ jobs:
       BUILD_STATIC: '--partly-static'
     steps:
       - uses: actions/checkout@v4
-      - uses: junelife/gha-ubuntu-cross@v6
+      - uses: cyberjunk/gha-ubuntu-cross@v5
         with:
           arch: 'arm64'
       - uses: actions/setup-python@v4

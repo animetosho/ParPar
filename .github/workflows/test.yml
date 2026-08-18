@@ -338,43 +338,6 @@ jobs:
       - run: ${{ matrix.t.emu }} test/gf16/build/test-pmul
       - run: ${{ matrix.t.emu }} test/hasher/build/test
   
-  # x32 is not supported on Ubuntu 22.10 or later kernels [https://bugs.launchpad.net/ubuntu/+source/linux/+bug/1994516], but the Azure instances use a 6.5+ kernel
-  # so we can only do this in a VM with a kernel built with x32 support
-  # Vagrant seems to be removed from the MacOS 13 image
-  test-x32-musl:
-    name: Test MUSL x32
-    runs-on: macos-12
-    timeout-minutes: 45
-    steps:
-      - uses: actions/checkout@v4
-      - uses: leleliu008/github-actions-vagrant@v2
-        with:
-          box: generic/debian12
-          run: |
-            apt install curl build-essential cmake
-            curl http://musl.cc/x86_64-linux-muslx32-cross.tgz | tar zxf -
-            MUSL_BIN=`pwd`/x86_64-linux-muslx32-cross/bin/x86_64-linux-muslx32
-            
-            mkdir test/gf16/build
-            cmake -Btest/gf16/build -Stest/gf16 -DSTATIC_LINK=1 -DCMAKE_BUILD_TYPE=Release \
-              -DCMAKE_C_COMPILER=$MUSL_BIN-cc \
-              -DCMAKE_CXX_COMPILER=$MUSL_BIN-c++ \
-              -DCMAKE_SYSTEM_PROCESSOR=amd64 \
-              -DCMAKE_SYSTEM_NAME=Linux
-            cmake --build test/gf16/build
-            
-            mkdir test/hasher/build
-            cmake -Btest/hasher/build -Stest/hasher -DSKIP_AUX=1 -DSTATIC_LINK=1   -DCMAKE_BUILD_TYPE=Release \
-              -DCMAKE_C_COMPILER=$MUSL_BIN-cc \
-              -DCMAKE_CXX_COMPILER=$MUSL_BIN-c++ \
-              -DCMAKE_SYSTEM_PROCESSOR=amd64 \
-              -DCMAKE_SYSTEM_NAME=Linux
-            cmake --build test/hasher/build
-            
-            test/gf16/build/test
-            test/gf16/build/test-pmul
-            test/hasher/build/test
-  
   test-linux-pocl:
     name: Test POCL (OpenCL)
     runs-on: ubuntu-22.04
@@ -395,15 +358,15 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-13, macos-14]  # 13=x64, 14=arm64
+        os: [macos-26, macos-15-intel]
         config: ['Debug', 'Release']
         compiler:
-          - {cc: 'gcc-12', cxx: 'g++-12'}
+          - {cc: 'gcc-15', cxx: 'g++-15'}
           - {cc: 'clang', cxx: 'clang++'}
         exclude:
           # arm_acle.h seems to be broken in Homebrew's GCC12? (type conflict between __builtin_aarch64_rndr and __rndr)
-          - os: macos-14
-            compiler: {cc: 'gcc-12', cxx: 'g++-12'}
+          - os: macos-26
+            compiler: {cc: 'gcc-15', cxx: 'g++-15'}
     name: Test MacOS ${{ matrix.compiler.cc }} (${{ matrix.os }} ${{ matrix.config }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
@@ -411,7 +374,7 @@ jobs:
       - uses: actions/checkout@v4
       # workaround https://forums.developer.apple.com/forums/thread/737707
       - run: echo "LDFLAGS=-Wl,-ld_classic" >> $GITHUB_ENV
-        if: ${{ matrix.os == 'macos-13' && matrix.compiler.cc == 'gcc-12' }}
+        if: ${{ matrix.os == 'macos-15-intel' && matrix.compiler.cc == 'gcc-15' }}
       - run: |
           mkdir test/gf16/build
           cmake -Btest/gf16/build -Stest/gf16 -DCMAKE_BUILD_TYPE=${{ matrix.config }} -DCMAKE_C_COMPILER=${{ matrix.compiler.cc }} -DCMAKE_CXX_COMPILER=${{ matrix.compiler.cxx }}

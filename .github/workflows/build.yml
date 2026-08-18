@@ -120,7 +120,7 @@ jobs:
         id: py
         with:
           python-version: '3.9' # workaround "cannot import name 'Mapping' from 'collections'" error
-      - uses: junelife/gha-ubuntu-cross@v6
+      - uses: cyberjunk/gha-ubuntu-cross@v5
         with:
           arch: arm64
       - name: Get release
@@ -175,7 +175,7 @@ jobs:
 #        id: py
 #        with:
 #          python-version: '3.9' # workaround "cannot import name 'Mapping' from 'collections'" error
-#      - uses: junelife/gha-ubuntu-cross@v6
+#      - uses: cyberjunk/gha-ubuntu-cross@v5
 #        with:
 #          arch: armhf
 #      - uses: ryankurte/action-apt@v0.3.0
@@ -212,8 +212,8 @@ jobs:
       fail-fast: false
       matrix:
         m:
-          - { os: macos-13, arch: x64, xz_flag: '--x86' }
-          - { os: macos-14, arch: arm64, xz_flag: '' }
+          - { os: macos-26-intel, arch: x64, xz_flag: '--x86' }
+          - { os: macos-26, arch: arm64, xz_flag: '' }
     name: Build ${{ matrix.m.arch }} MacOS binary
     runs-on: ${{ matrix.m.os }}
     env:

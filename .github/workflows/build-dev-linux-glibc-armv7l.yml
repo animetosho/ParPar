@@ -17,7 +17,7 @@ jobs:
         with:
           python-version: '3.9' # workaround "cannot import name 'Mapping' from 'collections'" error
       - uses: actions/checkout@v4
-      - uses: junelife/gha-ubuntu-cross@v6
+      - uses: cyberjunk/gha-ubuntu-cross@v5
         with:
           arch: 'armhf'
       - uses: ryankurte/action-apt@v0.3.0

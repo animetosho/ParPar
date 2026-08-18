@@ -17,6 +17,7 @@ jobs:
         with:
           python-version: '3.9' # workaround "cannot import name 'Mapping' from 'collections'" error
       - uses: actions/checkout@v4
+      # musl.cc blocks Github Actions, so this won't work any more
       - name: Setup musl
         run: |
           curl http://musl.cc/x86_64-linux-musl-native.tgz | tar zxf -
