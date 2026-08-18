@@ -279,6 +279,14 @@ goto msbuild-found
 			return next();
 		},
 		
+		// fix build failure on macOS
+		// this code seems to be unused, and was later removed [https://github.com/madler/zlib/commit/4bd9a71f3539b5ce47f0c67ab5e01f3196dc8ef9]
+		async (compiler, next) => {
+			await compiler.replaceInFileAsync('deps/zlib/zutil.h', /#\s*define fdopen\(fd,mode\) NULL/g, "");
+			return next();
+		},
+		
+		
 		// increase default UV_THREADPOOL_SIZE to 8 (allows higher --chunk-read-threads)
 		async (compiler, next) => {
 			await compiler.replaceInFileAsync('deps/uv/src/threadpool.c', /uv_thread_t default_threads[\d+];/, "uv_thread_t default_threads[8];");
