@@ -212,8 +212,9 @@ jobs:
       fail-fast: false
       matrix:
         m:
-          - { os: macos-26-intel, arch: x64, xz_flag: '--x86' }
-          - { os: macos-26, arch: arm64, xz_flag: '' }
+          # macOS 15 includes Clang 17/18, macOS 26 includes 21/20; the BitField class in deps/v8/src/utils/utils.h for Node 12 won't compile in Clang 20, raises a warning in 16-19
+          - { os: macos-15-intel, arch: x64, xz_flag: '--x86' }
+          - { os: macos-15, arch: arm64, xz_flag: '' }
     name: Build ${{ matrix.m.arch }} MacOS binary
     runs-on: ${{ matrix.m.os }}
     env:
