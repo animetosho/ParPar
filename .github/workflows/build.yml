@@ -51,7 +51,7 @@ jobs:
       fail-fast: false
       matrix:
         static:
-        - name: glibc2.31
+        - name: glibc2.39
           flag: --partly-static
         - name: static
           flag: --fully-static
@@ -104,7 +104,7 @@ jobs:
       fail-fast: false
       matrix:
         static:
-        - name: glibc2.35
+        - name: glibc2.39
           flag: --partly-static
         - name: static
           flag: --fully-static
@@ -157,7 +157,7 @@ jobs:
 #      fail-fast: false
 #      matrix:
 #        static:
-#        - name: glibc2.31
+#        - name: glibc2.39
 #          flag: --partly-static
 #        - name: static
 #          flag: --fully-static
