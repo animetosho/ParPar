@@ -5,7 +5,7 @@ on:
 jobs:
   build-dev-linux-glibc-armv7l:
     name: Build dev armv7l Linux glibc binary
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-24.04
     env:
       BUILD_ARCH: armhf
       BUILD_LOGLEVEL: verbose
@@ -17,7 +17,7 @@ jobs:
         with:
           python-version: '3.9' # workaround "cannot import name 'Mapping' from 'collections'" error
       - uses: actions/checkout@v4
-      - uses: junelife/gha-ubuntu-cross@v6
+      - uses: cyberjunk/gha-ubuntu-cross@v5
         with:
           arch: 'armhf'
       - uses: ryankurte/action-apt@v0.3.0

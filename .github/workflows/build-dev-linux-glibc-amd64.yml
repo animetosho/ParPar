@@ -5,7 +5,7 @@ on:
 jobs:
   build-dev-linux-glibc-amd64:
     name: Build dev amd64 Linux glibc binary
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-24.04
     env:
       BUILD_ARCH: x64
       BUILD_LOGLEVEL: verbose
@@ -18,7 +18,7 @@ jobs:
       - uses: actions/checkout@v4
       - run: |
           sudo apt-get update
-          sudo apt-get install -y gcc-10 g++-10
+          sudo apt-get install -y gcc-14 g++-14
       - run: npm install --production --ignore-scripts
       - run: npm install --production
         working-directory: nexe
@@ -29,8 +29,8 @@ jobs:
       - run: node build
         working-directory: nexe
         env:
-          CC: gcc-10
-          CXX: g++-10
+          CC: gcc-14
+          CXX: g++-14
       - run: nexe/parpar --version
       - run: nexe/parpar -r1 -s1M -onexe/test.par2 nexe/parpar
       - run: xz -9e --x86 --lzma2 nexe/parpar -c > parpar.xz

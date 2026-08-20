@@ -5,7 +5,7 @@ on:
 jobs:
   build-dev-linux-static-aarch64:
     name: Build dev aarch64 Linux static binary
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     env:
       BUILD_ARCH: arm64
       BUILD_LOGLEVEL: verbose
@@ -13,6 +13,7 @@ jobs:
       BUILD_NO_LTO: 1   # the MUSL setup doesn't support linker plugins
     steps:
       - uses: actions/checkout@v4
+      # musl.cc blocks Github Actions, so this won't work any more
       - name: Setup musl
         run: |
           curl http://musl.cc/aarch64-linux-musl-cross.tgz | tar zxf -

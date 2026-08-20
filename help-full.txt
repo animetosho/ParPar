@@ -237,7 +237,7 @@ I/O Tuning Options:
        --md5-batch-size      Number of recovery slices to submit as a batch for
                              hashing. Default `8`
        --recovery-buffers    Number of recovery slices to buffer from backend.
-                             Default is `ceil(--hash-batch-size * 1.5)`
+                             Default is `ceil(--md5-batch-size * 1.5)`
        --hash-method         Algorithm for hashing input data. Process can
                              crash if CPU does not support selected method.
                              Choices are (all platforms):

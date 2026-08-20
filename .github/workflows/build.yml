@@ -9,7 +9,7 @@ on:
 jobs:
   build-win64:
     name: Build x64 Windows binary
-    runs-on: windows-2022
+    runs-on: windows-2025
     env:
       BUILD_ARCH: x64
       BUILD_LOGLEVEL: verbose
@@ -51,12 +51,12 @@ jobs:
       fail-fast: false
       matrix:
         static:
-        - name: glibc2.31
+        - name: glibc2.39
           flag: --partly-static
         - name: static
           flag: --fully-static
     name: Build amd64 Linux ${{ matrix.static.name }} binary
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-24.04
     env:
       BUILD_ARCH: x64
       BUILD_LOGLEVEL: verbose
@@ -74,7 +74,7 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
       - run: |
           sudo apt-get update
-          sudo apt-get install -y gcc-10 g++-10
+          sudo apt-get install -y gcc-14 g++-14
       - run: npm install --production --ignore-scripts
       - run: npm install --production
         working-directory: nexe
@@ -85,8 +85,8 @@ jobs:
       - run: node build
         working-directory: nexe
         env:
-          CC: gcc-10
-          CXX: g++-10
+          CC: gcc-14
+          CXX: g++-14
       - run: nexe/parpar --version
       - run: nexe/parpar -r1 -s1M -onexe/test.par2 nexe/parpar
       - run: xz -9e --x86 --lzma2 nexe/parpar -c > parpar.xz
@@ -104,12 +104,12 @@ jobs:
       fail-fast: false
       matrix:
         static:
-        - name: glibc2.35
+        - name: glibc2.39
           flag: --partly-static
         - name: static
           flag: --fully-static
     name: Build aarch64 Linux ${{ matrix.static.name }} binary
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     env:
       BUILD_ARCH: arm64
       BUILD_LOGLEVEL: verbose
@@ -120,7 +120,7 @@ jobs:
         id: py
         with:
           python-version: '3.9' # workaround "cannot import name 'Mapping' from 'collections'" error
-      - uses: junelife/gha-ubuntu-cross@v6
+      - uses: cyberjunk/gha-ubuntu-cross@v5
         with:
           arch: arm64
       - name: Get release
@@ -157,12 +157,12 @@ jobs:
 #      fail-fast: false
 #      matrix:
 #        static:
-#        - name: glibc2.31
+#        - name: glibc2.39
 #          flag: --partly-static
 #        - name: static
 #          flag: --fully-static
 #    name: Build armv7l Linux ${{ matrix.static.name }} binary
-#    runs-on: ubuntu-20.04
+#    runs-on: ubuntu-24.04
 #    env:
 #      BUILD_ARCH: armhf
 #      BUILD_LOGLEVEL: verbose
@@ -175,7 +175,7 @@ jobs:
 #        id: py
 #        with:
 #          python-version: '3.9' # workaround "cannot import name 'Mapping' from 'collections'" error
-#      - uses: junelife/gha-ubuntu-cross@v6
+#      - uses: cyberjunk/gha-ubuntu-cross@v5
 #        with:
 #          arch: armhf
 #      - uses: ryankurte/action-apt@v0.3.0
@@ -212,8 +212,9 @@ jobs:
       fail-fast: false
       matrix:
         m:
-          - { os: macos-13, arch: x64, xz_flag: '--x86' }
-          - { os: macos-14, arch: arm64, xz_flag: '' }
+          # macOS 15 includes Clang 17/18, macOS 26 includes 21/20; the BitField class in deps/v8/src/utils/utils.h for Node 12 won't compile in Clang 20, raises a warning in 16-19
+          - { os: macos-15-intel, arch: x64, xz_flag: '--x86' }
+          - { os: macos-15, arch: arm64, xz_flag: '' }
     name: Build ${{ matrix.m.arch }} MacOS binary
     runs-on: ${{ matrix.m.os }}
     env:
