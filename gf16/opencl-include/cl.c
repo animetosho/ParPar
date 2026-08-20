@@ -7,7 +7,7 @@ static void* handle = NULL;
 #define LOAD_FN_REQ(n) if(!(LOAD_FN(n))) goto sym_load_failed
 #ifdef _WIN32
 # define WIN32_LEAN_AND_MEAN
-# include <Windows.h>
+# include <windows.h>
 # define LOAD_FN(n) *(void**)&n = GetProcAddress(handle, #n)
 #elif defined(PARPAR_LIBDL_SUPPORT)
 # include <dlfcn.h>

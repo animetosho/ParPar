@@ -222,7 +222,7 @@ typedef std::function<void(ThreadMessageQueue<void*>&)> thread_cb_t;
 #  define NOMINMAX
 # endif
 # define WIN32_LEAN_AND_MEAN
-# include <Windows.h>
+# include <windows.h>
 #else
 # include <pthread.h>
 # ifdef __OpenBSD__
