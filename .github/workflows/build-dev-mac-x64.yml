@@ -11,8 +11,8 @@ jobs:
       BUILD_LOGLEVEL: verbose
     steps:
       - uses: actions/checkout@v4
-      - run: npm install --production --ignore-scripts
-      - run: npm install --production
+      - run: npm install --omit=dev --ignore-scripts
+      - run: npm install --omit=dev
         working-directory: nexe
       - uses: actions/setup-python@v5
         with:

@@ -19,8 +19,8 @@ jobs:
       - run: |
           sudo apt-get update
           sudo apt-get install -y gcc-14 g++-14
-      - run: npm install --production --ignore-scripts
-      - run: npm install --production
+      - run: npm install --omit=dev --ignore-scripts
+      - run: npm install --omit=dev
         working-directory: nexe
       # diagnose weird failure between initial message and download message
       - run: sed -i '/return tryInvokeMiddleware/i try{console.log("Invoke middleware", mw.name);}catch(x){}' node_modules/app-builder/lib/compose.js

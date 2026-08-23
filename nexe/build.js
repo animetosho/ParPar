@@ -57,6 +57,19 @@ let b = browserify(['../bin/parpar.js'], {
 });
 
 
+// workaround child_process.spawn issue on Windows: https://nodejs.org/en/blog/vulnerability/april-2024-security-releases-2#command-injection-via-args-parameter-of-child_processspawn-without-shell-option-enabled-on-windows-cve-2024-27980---high
+if(os.platform() == 'win32') {
+	var cp = require('child_process');
+	var realSpawn = cp.spawn;
+	cp.spawn = function(cmd, args, opts) {
+		if(cmd == 'vcbuild.bat') {
+			opts.shell = true;
+			return realSpawn(cmd, args, opts);
+		} else
+			return realSpawn.apply(null, arguments);
+	};
+}
+
 // invoke nexe
 var configureArgs = [staticness, '--without-dtrace', '--without-etw', '--without-npm', '--with-intl=none', '--without-report', '--without-node-options', '--without-inspector', '--without-siphash', '--dest-cpu=' + buildArch];
 if(buildOs in osAliases)
@@ -153,6 +166,8 @@ nexe.compile({
 		// Xcode 15+ (Clang 15+) promotes -Wenum-constexpr-conversion to an error, breaking V8 in Node 12
 		async (compiler, next) => {
 			if(buildOs == 'darwin' || buildOs == 'mac') {
+				// '-Wenum-constexpr-conversion' available in Clang 16, not in 15, but doesn't error there
+				// not recognised by GCC, but it doesn't mind unknown '-Wno-*' flags
 				await compiler.replaceInFileAsync('common.gypi', /'WARNING_CFLAGS': \[(\s*'-Wno-enum-constexpr-conversion',)?/, "'WARNING_CFLAGS': [ '-Wno-enum-constexpr-conversion',");
 			}
 			return next();
@@ -283,6 +298,13 @@ goto msbuild-found
 		// this code seems to be unused, and was later removed [https://github.com/madler/zlib/commit/4bd9a71f3539b5ce47f0c67ab5e01f3196dc8ef9]
 		async (compiler, next) => {
 			await compiler.replaceInFileAsync('deps/zlib/zutil.h', /#\s*define fdopen\(fd,mode\) NULL/g, "");
+			return next();
+		},
+		
+		// fix build on musl toolchains
+		async (compiler, next) => {
+			// NodeJS has removed this option by default in later versions: https://github.com/nodejs/node/pull/62667
+			await compiler.replaceInFileAsync('common.gypi', / -fuse-linker-plugin /g, " ");
 			return next();
 		},
 		

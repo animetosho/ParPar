@@ -16,8 +16,8 @@ jobs:
         with:
           python-version: '2.7'
       - uses: actions/checkout@v4
-      - run: npm install --production --ignore-scripts
-      - run: npm install --production
+      - run: npm install --omit=dev --ignore-scripts
+      - run: npm install --omit=dev
         working-directory: nexe
       # workaround issue https://github.com/nodejs/node/issues/52681#issuecomment-2076426887
       - run: |

@@ -25,8 +25,8 @@ jobs:
         uses: bruceadams/get-release@v1.3.2
         env:
           GITHUB_TOKEN: ${{ github.token }}
-      - run: npm install --production --ignore-scripts
-      - run: npm install --production
+      - run: npm install --omit=dev --ignore-scripts
+      - run: npm install --omit=dev
         working-directory: nexe
       # workaround issue https://github.com/nodejs/node/issues/52681#issuecomment-2076426887
       - run: |
@@ -75,8 +75,8 @@ jobs:
       - run: |
           sudo apt-get update
           sudo apt-get install -y gcc-14 g++-14
-      - run: npm install --production --ignore-scripts
-      - run: npm install --production
+      - run: npm install --omit=dev --ignore-scripts
+      - run: npm install --omit=dev
         working-directory: nexe
       # diagnose weird failure between initial message and download message
       - run: sed -i '/return tryInvokeMiddleware/i try{console.log("Invoke middleware", mw.name);}catch(x){}' node_modules/app-builder/lib/compose.js
@@ -128,8 +128,8 @@ jobs:
         uses: bruceadams/get-release@v1.3.2
         env:
           GITHUB_TOKEN: ${{ github.token }}
-      - run: npm install --production --ignore-scripts
-      - run: npm install --production
+      - run: npm install --omit=dev --ignore-scripts
+      - run: npm install --omit=dev
         working-directory: nexe
       # diagnose weird failure between initial message and download message
       - run: sed -i '/return tryInvokeMiddleware/i try{console.log("Invoke middleware", mw.name);}catch(x){}' node_modules/app-builder/lib/compose.js
@@ -187,8 +187,8 @@ jobs:
 #        uses: bruceadams/get-release@v1.3.2
 #        env:
 #          GITHUB_TOKEN: ${{ github.token }}
-#      - run: npm install --production --ignore-scripts
-#      - run: npm install --production
+#      - run: npm install --omit=dev --ignore-scripts
+#      - run: npm install --omit=dev
 #        working-directory: nexe
 #      - run: node build
 #        working-directory: nexe
@@ -227,8 +227,8 @@ jobs:
         uses: bruceadams/get-release@v1.3.2
         env:
           GITHUB_TOKEN: ${{ github.token }}
-      - run: npm install --production --ignore-scripts
-      - run: npm install --production
+      - run: npm install --omit=dev --ignore-scripts
+      - run: npm install --omit=dev
         working-directory: nexe
       - uses: actions/setup-python@v5
         with:

@@ -13,18 +13,16 @@ jobs:
       BUILD_NO_LTO: 1   # the MUSL setup doesn't support linker plugins
     steps:
       - uses: actions/checkout@v4
-      # musl.cc blocks Github Actions, so this won't work any more
-      - name: Setup musl
-        run: |
-          curl http://musl.cc/aarch64-linux-musl-cross.tgz | tar zxf -
-          echo "CC=`pwd`/aarch64-linux-musl-cross/bin/aarch64-linux-musl-cc" >> $GITHUB_ENV
-          echo "CXX=`pwd`/aarch64-linux-musl-cross/bin/aarch64-linux-musl-c++" >> $GITHUB_ENV
+      - uses: arceos-org/setup-musl@v1.0.3
+        id: musl
+        with:
+          arch: aarch64
       - uses: actions/setup-python@v4
         id: py
         with:
           python-version: '3.9' # workaround "cannot import name 'Mapping' from 'collections'" error
-      - run: npm install --production --ignore-scripts
-      - run: npm install --production
+      - run: npm install --omit=dev --ignore-scripts
+      - run: npm install --omit=dev
         working-directory: nexe
       # diagnose weird failure between initial message and download message
       - run: sed -i '/return tryInvokeMiddleware/i try{console.log("Invoke middleware", mw.name);}catch(x){}' node_modules/app-builder/lib/compose.js
@@ -33,6 +31,8 @@ jobs:
       - run: node build
         working-directory: nexe
         env:
+          CC: ${{ steps.musl.outputs.cross_compile }}-cc
+          CXX: ${{ steps.musl.outputs.cross_compile }}-c++
           CC_host: cc
           CXX_host: c++
       - run: xz -9e --lzma2 nexe/parpar -c > parpar.xz

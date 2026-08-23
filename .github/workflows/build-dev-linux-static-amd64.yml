@@ -17,14 +17,12 @@ jobs:
         with:
           python-version: '3.9' # workaround "cannot import name 'Mapping' from 'collections'" error
       - uses: actions/checkout@v4
-      # musl.cc blocks Github Actions, so this won't work any more
-      - name: Setup musl
-        run: |
-          curl http://musl.cc/x86_64-linux-musl-native.tgz | tar zxf -
-          echo "CC=`pwd`/x86_64-linux-musl-native/bin/x86_64-linux-musl-cc" >> $GITHUB_ENV
-          echo "CXX=`pwd`/x86_64-linux-musl-native/bin/x86_64-linux-musl-c++" >> $GITHUB_ENV
-      - run: npm install --production --ignore-scripts
-      - run: npm install --production
+      - uses: arceos-org/setup-musl@v1.0.3
+        id: musl
+        with:
+          arch: x86_64
+      - run: npm install --omit=dev --ignore-scripts
+      - run: npm install --omit=dev
         working-directory: nexe
       # diagnose weird failure between initial message and download message
       - run: sed -i '/return tryInvokeMiddleware/i try{console.log("Invoke middleware", mw.name);}catch(x){}' node_modules/app-builder/lib/compose.js
@@ -32,6 +30,9 @@ jobs:
         continue-on-error: true
       - run: node build
         working-directory: nexe
+        env:
+          CC: ${{ steps.musl.outputs.cross_compile }}-cc
+          CXX: ${{ steps.musl.outputs.cross_compile }}-c++
       - run: nexe/parpar --version
       - run: nexe/parpar -r1 -s1M -onexe/test.par2 nexe/parpar
       - run: xz -9e --x86 --lzma2 nexe/parpar -c > parpar.xz
