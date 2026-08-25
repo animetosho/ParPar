@@ -59,7 +59,7 @@
       }],
     ],
     "cflags_c": ["-std=c99", "-D_DARWIN_C_SOURCE", "-D_GNU_SOURCE", "-D_DEFAULT_SOURCE"],
-    "defines": ["PARPAR_ENABLE_HASHER_MULTIMD5", "PARPAR_OPENCL_SUPPORT"],
+    "defines": ["PARPAR_ENABLE_HASHER_MULTIMD5", "PARPAR_ENABLE_HASHER_MD5CRC", "PARPAR_OPENCL_SUPPORT"],
     "msvs_settings": {"VCCLCompilerTool": {"Optimization": "MaxSpeed"}}
   },
   "targets": [
@@ -125,7 +125,7 @@
       "target_name": "hasher",
       "type": "static_library",
       "defines": ["NDEBUG"],
-      "sources": ["hasher/hasher.cpp", "hasher/hasher_input.cpp", "hasher/hasher_md5mb.cpp", "hasher/hasher_scalar.cpp", "hasher/tables.cpp"],
+      "sources": ["hasher/hasher.cpp", "hasher/hasher_input.cpp", "hasher/hasher_md5crc.cpp", "hasher/hasher_md5mb.cpp", "hasher/hasher_scalar.cpp", "hasher/tables.cpp"],
       "dependencies": ["hasher_c"],
       "cxxflags": ["-std=c++11"],
       "cflags!": ["-fno-omit-frame-pointer", "-fno-tree-vrp", "-fno-strict-aliasing"],

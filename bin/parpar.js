@@ -741,7 +741,7 @@ var inputFiles = argv._;
 		}, 200);
 	}
 	
-	scanningResults = ParPar.fileInfo(inputFiles, argv.recurse, argv['skip-symlinks'], argv.chunkReadThreads, function(err, info) {
+	scanningResults = ParPar.fileInfo(inputFiles, argv.recurse, argv['skip-symlinks'], {concurrency: argv.chunkReadThreads, md5Batch: argv.hashBatchSize}, function(err, info) {
 		if(progressInterval) {
 			clearInterval(progressInterval);
 			progressInterval = null;

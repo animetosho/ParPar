@@ -1254,6 +1254,87 @@ FUNC(HasherOutputMethod) {
 }
 
 
+#ifdef PARPAR_ENABLE_HASHER_MD5CRC
+FUNC(MD5_16k) {
+	FUNC_START;
+	if(args.Length() < 2)
+		RETURN_ERROR("Buffers + lengths required");
+	if(!args[1]->IsArray())
+		RETURN_ERROR("Lengths must be an array");
+	
+	unsigned numBufs = Local<Array>::Cast(args[1])->Length();
+	Local<Object> hashes = BUFFER_NEW(numBufs * 16);
+	char* pHashes = node::Buffer::Data(hashes);
+	Local<Object> oLens = ARG_TO_OBJ(args[1]);
+	MD5Single md5sgl;
+	
+	std::vector<const void*> bufs;
+	std::vector<char*> ppHashes;
+	bufs.reserve(numBufs);
+	ppHashes.reserve(numBufs);
+	unsigned fullCount = 0;
+	
+	const char* pBufs = nullptr;
+	Local<Object> oBufs;
+	if(args[0]->IsArray()) {
+		if(Local<Array>::Cast(args[0])->Length() != numBufs)
+			RETURN_ERROR("Arrays must have same number of items");
+		oBufs = ARG_TO_OBJ(args[0]);
+		
+		for(unsigned i = 0; i < numBufs; i++) {
+			Local<Value> buffer = GET_ARR(oBufs, i);
+			if (!node::Buffer::HasInstance(buffer))
+				RETURN_ERROR("All inputs must be Buffers");
+			if(node::Buffer::Length(buffer) < 16384)
+				RETURN_ERROR("All Buffers must be at least 16k");
+		}
+	} else if(node::Buffer::HasInstance(args[0])) {
+		if(node::Buffer::Length(buffer) < 16384*numBufs)
+			RETURN_ERROR("Buffer must hold 16k for each data stream");
+		pBufs = static_cast<const char*>(node::Buffer::Data(args[0]));
+	} else
+		RETURN_ERROR("Buffers must be an array or a buffer");
+	
+	for(unsigned i = 0; i < numBufs; i++) {
+		unsigned len = (unsigned)ARG_TO_NUM(Integer, GET_ARR(oLens, i));
+		if(len > 16384) len = 16384;
+		const void* buf = pBufs ?
+			pBufs + i*16384 :
+			static_cast<const void*>(node::Buffer::Data(GET_ARR(oBufs, i)));
+		char* outputMd5 = pHashes + i*16;
+		
+		// TODO: support using MD5Multi for buffers smaller than 16k
+		if(len == 16384) {
+			bufs[fullCount] = buf;
+			ppHashes[fullCount] = outputMd5;
+			fullCount++;
+		} else {
+			md5sgl.reset();
+			md5sgl.update(buf, len);
+			md5sgl.end(outputMd5);
+		}
+	}
+	
+	
+	if(fullCount > 1) {
+		MD5Multi hasher(fullCount);
+		hasher.update(bufs.data(), 16384);
+		hasher.end();
+		
+		if(fullCount == numBufs)
+			hasher.get(pHashes);
+		else for(unsigned i = 0; i < fullCount; i++)
+			hasher.get1(i, ppHashes[i]);
+	} else if(fullCount == 1) {
+		md5sgl.reset();
+		md5sgl.update(bufs[0], 16384);
+		md5sgl.end(ppHashes[0]);
+	}
+	
+	RETURN_BUFFER(hashes);
+}
+#endif
+
 void parpar_gf_init(
 #if NODE_VERSION_AT_LEAST(4, 0, 0)
  Local<Object> target,
@@ -1289,6 +1370,9 @@ void parpar_gf_init(
 	NODE_SET_METHOD(target, "set_HasherOutput", SetHasherOutput);
 	NODE_SET_METHOD(target, "hasherInput_method", HasherInputMethod);
 	NODE_SET_METHOD(target, "hasherOutput_method", HasherOutputMethod);
+#ifdef PARPAR_ENABLE_HASHER_MD5CRC
+	NODE_SET_METHOD(target, "md5_16k", MD5_16k);
+#endif
 	
 	setup_hasher();
 }
