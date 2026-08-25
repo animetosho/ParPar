@@ -125,7 +125,7 @@ struct GF16CpuCap {
 		_cpuid(cpuInfo, 0x80000000);
 		if((unsigned)cpuInfo[0] >= 0x80000021) {
 			_cpuid(cpuInfo, 0x80000021);
-			hasBMM = (cpuInfo[1] & 0x800000);
+			hasBMM = (cpuInfo[0] & 0x800000);
 		}
 		
 		_cpuid(cpuInfo, 0);
