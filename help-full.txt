@@ -220,7 +220,7 @@ I/O Tuning Options:
        --chunk-read-threads  Maximum number of concurrent read requests during
                              chunking. Note that this may be limited by 4 [see
                              https://nodejs.org/api/cli.html#uv_threadpool_sizesize]
-                             Default `2`
+                             Default `3`
        --read-buffers        Maximum number of read buffers to read into and
                              send to processing backend. Default `8`
        --seq-read-throttle   Throttle sequential read speed. The following
