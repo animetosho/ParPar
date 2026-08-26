@@ -187,6 +187,7 @@ var par2creator = require('@animetosho/parpar').run(
         seqReadSize: 4*1048576,
         readBuffers: 8,
         readHashQueue: 5,
+        hashQueueSizing: 'halve', // fixed or halve
         numThreads: null, // null => number of processors
         gfMethod: null, // null => '' (auto)
         loopTileSize: 0, // 0 = auto

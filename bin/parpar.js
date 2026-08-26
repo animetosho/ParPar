@@ -216,6 +216,12 @@ var opts = {
 		type: 'int',
 		map: 'readHashQueue'
 	},
+	'hash-queue-sizing': {
+		type: 'enum',
+		map: 'hashQueueSizing',
+		enum: ['fixed','halve'],
+		default: 'halve'
+	},
 	'proc-batch-size': {
 		type: 'int',
 		map: 'processBatchSize'

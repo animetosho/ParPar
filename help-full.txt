@@ -234,6 +234,12 @@ I/O Tuning Options:
                              before reading from a different file. Lower
                              values may be more optimal on disks with faster
                              random access. Default `5`
+       --hash-queue-sizing   The sizing policy used with `--read-hash-queue`
+                             Can be:
+                                 fixed: same queue size across all files
+                                 halve: queue size halves for every subsequent
+                                        open file
+                             Default `halve`
        --md5-batch-size      Number of recovery slices to submit as a batch for
                              hashing. Default `8`
        --recovery-buffers    Number of recovery slices to buffer from backend.
