@@ -1289,7 +1289,7 @@ FUNC(MD5_16k) {
 				RETURN_ERROR("All Buffers must be at least 16k");
 		}
 	} else if(node::Buffer::HasInstance(args[0])) {
-		if(node::Buffer::Length(buffer) < 16384*numBufs)
+		if(node::Buffer::Length(args[0]) < 16384*numBufs)
 			RETURN_ERROR("Buffer must hold 16k for each data stream");
 		pBufs = static_cast<const char*>(node::Buffer::Data(args[0]));
 	} else
