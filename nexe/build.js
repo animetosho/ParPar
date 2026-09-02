@@ -308,6 +308,13 @@ goto msbuild-found
 			return next();
 		},
 		
+		// macOS remove mutex around writes
+		// added to NodeJS 20.11.1 / 21.5.0
+		async (compiler, next) => {
+			// details in libuv patch: https://github.com/libuv/libuv/commit/737f4f953fa908863c3492e6c6a1188acb58370c
+			await compiler.replaceInFileAsync('deps/uv/src/unix/fs.c', /#if defined\(__APPLE__\)([^#{}]+?if \(pthread_mutex_)/g, "#if 0$1");
+			return next();
+		},
 		
 		// increase default UV_THREADPOOL_SIZE to 8 (allows higher --chunk-read-threads)
 		async (compiler, next) => {
