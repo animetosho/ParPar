@@ -12,8 +12,9 @@ var error = function(msg) {
 	console.error('Enter `' + cliFormat('1', 'parpar --help') + '` or `' + cliFormat('1', 'parpar --help-full') + '` for usage information');
 	process.exit(1);
 };
+var startTime = Date.now();
 var print_json = function(type, obj) {
-	var o = {type: type};
+	var o = {type: type, time: Date.now() - startTime};
 	for(var k in obj)
 		o[k] = obj[k];
 	console.log(JSON.stringify(o, null, 2));
@@ -431,17 +432,30 @@ if(argv.json)
 	};
 else if(argv.progress == 'stdout' || argv.progress == 'stderr') {
 	// TODO: display slices processed, pass# if verbose progress requested
-	writeProgress = function(data) {
-		// add formatting for aesthetics
-		var parts = data.progress_percent.toLocaleString().match(/^([0-9]+)([.,][0-9]+)?$/);
-		parts[1] = cliUtil.lpad(parts[1], 3, ' ');
-		parts[2] = cliUtil.rpad(parts[2] || cliUtil.decimalPoint, 3, '0');
-		var state = cliUtil.rpad(data.state, 18, ' ');
-		if(process[argv.progress].isTTY)
-			process[argv.progress].write(state + ': \x1b[1m' + (parts[1] + parts[2]) + '%\x1b[0m\x1b[0G');
-		else
-			process[argv.progress].write(state + ': ' + (parts[1] + parts[2]) + '%\r');
-	};
+	var percentPref = ': ', percentSuf = '\r';
+	if(process[argv.progress].isTTY) {
+		percentPref = ': \x1b[1m';
+		percentSuf = '\x1b[0m\x1b[0G';
+	}
+	if(typeof Intl == 'object' && Intl.NumberFormat) {
+		var numFmt = Intl.NumberFormat(undefined, {style: 'percent', minimumFractionDigits: 2, maximumFractionDigits: 2});
+		writeProgress = function(data) {
+			process[argv.progress].write(
+				cliUtil.rpad(data.state, 18) + percentPref
+				+ cliUtil.lpad(numFmt.format(data.progress_percent / 100), 7)
+				+ percentSuf
+			);
+		};
+	} else {
+		writeProgress = function(data) {
+			// add formatting for aesthetics
+			var parts = data.progress_percent.toLocaleString().match(/^([0-9]+)([.,][0-9]+)?$/);
+			parts[1] = cliUtil.lpad(parts[1], 3, ' ');
+			parts[2] = cliUtil.rpad(parts[2] || cliUtil.decimalPoint, 3, '0');
+			var state = cliUtil.rpad(data.state, 18, ' ');
+			process[argv.progress].write(state + percentPref + (parts[1] + parts[2]) + '%' + percentSuf);
+		};
+	}
 }
 
 if(argv['hash-method']) {
@@ -722,8 +736,6 @@ var inputFiles = argv._;
 	}
 	
 
-	var startTime = Date.now();
-
 	if(argv['ascii-charset']) {
 		ParPar.setAsciiCharset(argv['ascii-charset']);
 	}
@@ -813,7 +825,7 @@ var inputFiles = argv._;
 				if(g.opts.sliceSize > 1024*1048576) {
 					// par2j has 1GB slice size limit hard-coded; 32-bit version supports 1GB slices
 					// some 32-bit applications seem to have issues with 1GB slices as well (phpar2 v1.4 win32 seems to have trouble with 854M slices, 848M works in the test I did)
-					process.stderr.write(cliFormat('33', 'Warning') + ': selected slice size (' + cliUtil.friendlySize(g.opts.sliceSize) + ') is larger than 1GB, which is beyond what a number of PAR2 clients support. Consider increasing the number of slices or reducing the slice size so that it is under 1GB\n');
+					process.stderr.write(cliFormat('33', 'Warning') + ': selected slice size (' + cliUtil.friendlySize(g.opts.sliceSize) + ') is larger than 1GiB, which is beyond what a number of PAR2 clients support. Consider increasing the number of slices or reducing the slice size so that it is under 1GB\n');
 				}
 				else if(g.opts.sliceSize > 100*1000000 && g.totalSize <= 32768*100*1000000) { // we also check whether 100MB slices are viable by checking the input size - essentially there's a max of 32768 slices, so at 100MB, max size would be 3051.76GB
 					process.stderr.write(cliFormat('33', 'Warning') + ': selected slice size (' + cliUtil.friendlySize(g.opts.sliceSize) + ') may be too large to be compatible with QuickPar\n');
@@ -970,7 +982,7 @@ var inputFiles = argv._;
 				var endTime = Date.now();
 				var timeTaken = ((endTime - startTime)/1000);
 				if(argv.json)
-					print_json('process_complete', {duration_seconds: timeTaken});
+					print_json('process_complete', {duration_seconds: timeTaken}); // TODO: duration_seconds is now redundant, retain for compatibility
 				else
 					process.stderr.write('\nProcessing time   : ' + cliFormat('1', timeTaken + ' s') + '\n');
 			}
