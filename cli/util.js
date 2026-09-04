@@ -11,17 +11,16 @@ module.exports = {
 		}
 		return (Math.round(s *100)/100) + ' ' + units[i];
 	},
-	repeatChar: function(c, l) {
-		if(c.repeat) return c.repeat(l);
+	repeatChar: String.prototype.repeat ? Function.call.bind(String.prototype.repeat) : function(c, l) {
 		var buf = Buffer(l);
 		buf.fill(c);
 		return buf.toString();
 	},
-	lpad: function(s, l, c) {
+	lpad: String.prototype.padStart ? Function.call.bind(String.prototype.padStart) : function(s, l, c) {
 		if(s.length > l) return s;
 		return module.exports.repeatChar((c || ' '), l-s.length) + s;
 	},
-	rpad: function(s, l, c) {
+	rpad: String.prototype.padEnd ? Function.call.bind(String.prototype.padEnd) : function(s, l, c) {
 		if(s.length > l) return s;
 		return s + module.exports.repeatChar((c || ' '), l-s.length);
 	},
