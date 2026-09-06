@@ -143,8 +143,10 @@ private:
 			memcpy(dst, src, srcLen);
 	}
 	static void _finish_none(void *HEDLEY_RESTRICT, size_t) {}
-#ifdef PARPAR_INVERT_SUPPORT
+#ifdef PARPAR_INCLUDE_BASIC_OPS
 	static void _prepare_packed_none(void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t srcLen, size_t sliceLen, unsigned inputPackSize, unsigned inputNum, size_t chunkLen);
+#endif
+#ifdef PARPAR_INVERT_SUPPORT
 	static uint16_t _replace_word(void* data, size_t index, uint16_t newValue) {
 		uint8_t* p = (uint8_t*)data + index*2;
 		uint16_t oldValue = p[0] | (p[1]<<8);

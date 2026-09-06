@@ -143,7 +143,7 @@ static HEDLEY_ALWAYS_INLINE void gf16_muladd_prefetch_single(const void *HEDLEY_
 
 #define REMAINING_CASES CASE(17); CASE(16); CASE(15); CASE(14); CASE(13); CASE(12); CASE(11); CASE(10); CASE( 9); CASE( 8); CASE( 7); CASE( 6); CASE( 5); CASE( 4); CASE( 3); CASE( 2); CASE( 1)
 
-#ifdef PARPAR_INVERT_SUPPORT
+#if defined(PARPAR_INVERT_SUPPORT) || defined(PARPAR_INCLUDE_BASIC_OPS)
 static HEDLEY_ALWAYS_INLINE void gf16_muladd_multi(const void *HEDLEY_RESTRICT scratch, fBlkmacPF blkmac_pf, const unsigned interleave, unsigned regions, size_t offset, void *HEDLEY_RESTRICT dst, const void* const*HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients) IGNORE_NULL_ADD {
 	uint8_t* _dst = (uint8_t*)dst + offset + len;
 	
@@ -186,7 +186,9 @@ static HEDLEY_ALWAYS_INLINE void gf16_muladd_multi(const void *HEDLEY_RESTRICT s
 	}
 	#undef _SRC
 }
+#endif
 
+#ifdef PARPAR_INVERT_SUPPORT
 static HEDLEY_ALWAYS_INLINE void gf16_muladd_multi_stridepf(const void *HEDLEY_RESTRICT scratch, fBlkmacPF blkmac_pf, const unsigned interleave, unsigned regions, size_t srcStride, void *HEDLEY_RESTRICT dst, const void *HEDLEY_RESTRICT src, size_t len, const uint16_t *HEDLEY_RESTRICT coefficients, const unsigned pfFactor, const void* HEDLEY_RESTRICT prefetch) IGNORE_NULL_ADD {
 	uint8_t* _dst = (uint8_t*)dst + len;
 	uint8_t* srcEnd = (uint8_t*)src + len;
