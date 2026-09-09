@@ -871,7 +871,7 @@ var inputFiles = argv._;
 		}
 		
 		var infoShown = argv.quiet;
-		g.run(function(event, arg1, arg2) {
+		g.run(function(event, arg1, arg2, arg3) {
 			if(event == 'begin_chunk_pass' && !infoShown) {
 				var process_info = g.gf_info();
 				if(process_info) {
@@ -930,9 +930,9 @@ var inputFiles = argv._;
 			}
 			if(event == 'begin_chunk_pass')
 				currentState = 'Calculating';
-			if(event == 'processing_slice') {
-				currentSlice++;
-				curPassSlice++;
+			if(event == 'processing_slices') {
+				currentSlice += arg3;
+				curPassSlice += arg3;
 				currentSliceFrac = 0;
 			}
 			if(event == 'processing_slice_part') {

@@ -51,18 +51,12 @@ Install Via NPM
 If NPM is installed (usually comes bundled with [node.js](https://nodejs.org/en/download/)), the following command can be used to install ParPar:
 
 ```bash
-npm install -g @animetosho/parpar
+npm install -g --no-ignore-scripts @animetosho/parpar
 ```
 
 You’ll then be able to run ParPar via the **parpar** command.
 
 If the **npm** command isn’t available, it can probably be installed via your package manager (`apt-get install npm` for Debian), or see the [node.js website](https://nodejs.org/en/download/).
-
-If you get a `gyp ERR! stack Error: EACCES: permission denied` error when installing, try the following command instead:
-
-```bash
-npm install -g @animetosho/parpar --unsafe-perm
-```
 
 You can then later uninstall ParPar via:
 
@@ -204,8 +198,8 @@ par2creator.on('info', function(par) {
 par2creator.on('begin_chunk_pass', function(par, passNum, passChunkNum) {
     console.log('Begin read pass ' + passNum + ' of ' + par.passes + ' pass(es)');
 });
-par2creator.on('processing_slice', function(par, file, sliceNum) {
-    console.log('Processing slice #' + sliceNum + ' of ' + par.inputSlices + ' from ' + file.name);
+par2creator.on('processing_slices', function(par, file, sliceNum, sliceCount) {
+    console.log('Processing ' + sliceCount + ' slice(s) from #' + sliceNum + ' of ' + par.inputSlices + ' from ' + file.name);
 });
 par2creator.on('chunk_pass_write', function(par, passNum, passChunkNum) {
     console.log('Writing data for read pass ' + passNum);
