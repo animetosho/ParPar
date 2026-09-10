@@ -2,6 +2,10 @@
 
 "use strict";
 
+// this must be set before event loop is used; this doesn't work on Windows
+if(!('UV_THREADPOOL_SIZE' in process.env) && process.platform != 'win32')
+	process.env.UV_THREADPOOL_SIZE = '8';
+
 var ParPar = require('../lib/parpar.js');
 var cliUtil = require('../cli/util');
 var cliFormat = process.stderr.isTTY ? function(code, msg) {
@@ -356,6 +360,10 @@ if(!argv['skip-self-check']) {
 	if(expectedMd5 != actualMd5)
 		error('Self-check failed - this executable may be corrupt. If you are certain this is not a problem, you may use the `--skip-self-check` flag to bypass this check.');
 }
+
+// default pool size set in build
+if(!('UV_THREADPOOL_SIZE' in process.env))
+	process.env.UV_THREADPOOL_SIZE = '8';
 }}*/
 
 if(argv.help || argv['help-full']) {
@@ -476,6 +484,13 @@ if(argv['recovery-exponents']) {
 
 if(argv['filepath-base'] && !argv['filepath-format'])
 	argv['filepath-format'] = 'path';
+
+if(argv['chunk-read-threads']) {
+	var threadpool_size = (process.env.UV_THREADPOOL_SIZE|0) || 4;
+	if(argv['chunk-read-threads'] > threadpool_size)
+		// TODO: maybe it's possible to increase UV_THREADPOOL_SIZE automatically?
+		console.error('Specified `--chunk-read-threads` may be limited by UV_THREADPOOL_SIZE value of ' + threadpool_size);
+}
 
 var inputFiles = argv._;
 
