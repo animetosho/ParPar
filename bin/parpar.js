@@ -199,9 +199,9 @@ var opts = {
 		type: 'size',
 		map: 'seqReadSize'
 	},
-	'chunk-read-threads': {
+	'rnd-io-threads': {
 		type: 'int',
-		map: 'chunkReadThreads'
+		map: 'rndIoThreads'
 	},
 	'seq-read-throttle': {
 		type: 'string',
@@ -485,11 +485,11 @@ if(argv['recovery-exponents']) {
 if(argv['filepath-base'] && !argv['filepath-format'])
 	argv['filepath-format'] = 'path';
 
-if(argv['chunk-read-threads']) {
+if(argv['rnd-io-threads']) {
 	var threadpool_size = (process.env.UV_THREADPOOL_SIZE|0) || 4;
-	if(argv['chunk-read-threads'] > threadpool_size)
+	if(argv['rnd-io-threads'] > threadpool_size)
 		// TODO: maybe it's possible to increase UV_THREADPOOL_SIZE automatically?
-		console.error('Specified `--chunk-read-threads` may be limited by UV_THREADPOOL_SIZE value of ' + threadpool_size);
+		console.error('Specified `--rnd-io-threads` may be limited by UV_THREADPOOL_SIZE value of ' + threadpool_size);
 }
 
 var inputFiles = argv._;
@@ -774,7 +774,7 @@ var inputFiles = argv._;
 		}, 200);
 	}
 	
-	scanningResults = ParPar.fileInfo(inputFiles, argv.recurse, argv['skip-symlinks'], {concurrency: argv.chunkReadThreads, md5Batch: argv.hashBatchSize}, function(err, info) {
+	scanningResults = ParPar.fileInfo(inputFiles, argv.recurse, argv['skip-symlinks'], {concurrency: argv.rndIoThreads, md5Batch: argv.hashBatchSize}, function(err, info) {
 		if(progressInterval) {
 			clearInterval(progressInterval);
 			progressInterval = null;

@@ -217,11 +217,11 @@ I/O Tuning Options:
                              This option also limits the amount of recovery
                              that can be processed per slice on each read pass.
                              Default `2M`
-       --chunk-read-threads  Maximum number of concurrent read requests when
-                             performing non-sequential reads.
-                             Default `3`
        --read-buffers        Maximum number of read buffers to read into and
                              send to processing backend. Default `16`
+       --rnd-io-threads      Maximum number of concurrent I/O requests when
+                             performing non-sequential reads/writes.
+                             Default `3`
        --seq-read-throttle   Throttle sequential read speed. The following
                              examples demonstrate permitted values:
                                  `2.5s`: delay each read request by 2.5 seconds
