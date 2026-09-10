@@ -178,9 +178,9 @@ var par2creator = require('@animetosho/parpar').run(
         outputAltNamingScheme: true,
         displayNameFormat: 'common', // basename, keep, common, outrel or path
         displayNameBase: '.', // base path, only used if displayNameFormat is 'path'
-        seqReadSize: 4*1048576,
-        readBuffers: 8,
-        readHashQueue: 5,
+        seqReadSize: 2*1048576,
+        readBuffers: 16,
+        readHashQueue: 10,
         hashQueueSizing: 'halve', // fixed or halve
         numThreads: null, // null => number of processors
         gfMethod: null, // null => '' (auto)
