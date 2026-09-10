@@ -872,103 +872,106 @@ var inputFiles = argv._;
 		
 		var infoShown = argv.quiet;
 		g.run(function(event, arg1, arg2, arg3) {
-			if(event == 'begin_chunk_pass' && !infoShown) {
-				var process_info = g.gf_info();
-				if(process_info) {
-					if(argv.json) {
-						var info = {
-							cpu: {
-								device_name: require('os').cpus()[0].model.trim(),
-								threads: process_info.threads,
-								method: process_info.method_desc,
-								tile_size: process_info.chunk_size,
-								batch_slices: process_info.staging_size,
-								batches: process_info.staging_count,
-								slice_size: process_info.slice_mem,
-								recovery_slices: process_info.num_output_slices,
-								// TODO: transfer memory?
-							},
-							opencl: []
-						};
-						if(process_info.opencl_devices) process_info.opencl_devices.forEach(function(oclDev) {
-							info.opencl.push({
-								device_name: oclDev.device_name.trim(),
-								method: oclDev.method_desc,
-								output_grouping: oclDev.output_chunks,
-								tile_size: oclDev.chunk_size,
-								batch_slices: oclDev.staging_size,
-								batches: oclDev.staging_count,
-								slice_size: oclDev.slice_mem,
-								recovery_slices: oclDev.num_output_slices,
-							});
-						});
-						print_json('compute_info', info);
-					} else {
-						if(process_info.threads) {
-							var cpuName = require('os').cpus()[0].model.trim();
-							if(cpuName == 'unknown') cpuName = 'CPU';
-							process.stderr.write('\n' + cliFormat('4', cpuName) + '\n')
-							process.stderr.write('  Multiply method : ' + cliFormat('1', process_info.method_desc) + ' with ' + sizeDisp(process_info.chunk_size) + ' loop tiling, ' + pluralDisp(process_info.threads, 'thread') + '\n');
-							process.stderr.write('  Input batching  : ' + pluralDisp(process_info.staging_size, 'chunk') + ', ' + pluralDisp(process_info.staging_count, 'batch', 'es') + '\n');
-							var transMem = Math.max(g.opts.recDataSize * g._chunkSize, process_info.slice_mem * g.procInStagingBufferCount);
-							process.stderr.write('  Memory Usage    : ' + sizeDisp(process_info.slice_mem * process_info.num_output_slices + transMem) + ' (' + pluralDisp(process_info.num_output_slices, '* ' + sizeDisp(process_info.slice_mem) + ' chunk') + ' + ' + sizeDisp(transMem) + ' transfer buffer)\n');
-						} else {
-							process.stderr.write('Transfer Buffer   : ' + sizeDisp(g.opts.recDataSize * g._chunkSize) + '\n');
+			switch(event) {
+				case 'begin_chunk_pass':
+					if(!infoShown) {
+						var process_info = g.gf_info();
+						if(process_info) {
+							if(argv.json) {
+								var info = {
+									cpu: {
+										device_name: require('os').cpus()[0].model.trim(),
+										threads: process_info.threads,
+										method: process_info.method_desc,
+										tile_size: process_info.chunk_size,
+										batch_slices: process_info.staging_size,
+										batches: process_info.staging_count,
+										slice_size: process_info.slice_mem,
+										recovery_slices: process_info.num_output_slices,
+										// TODO: transfer memory?
+									},
+									opencl: []
+								};
+								if(process_info.opencl_devices) process_info.opencl_devices.forEach(function(oclDev) {
+									info.opencl.push({
+										device_name: oclDev.device_name.trim(),
+										method: oclDev.method_desc,
+										output_grouping: oclDev.output_chunks,
+										tile_size: oclDev.chunk_size,
+										batch_slices: oclDev.staging_size,
+										batches: oclDev.staging_count,
+										slice_size: oclDev.slice_mem,
+										recovery_slices: oclDev.num_output_slices,
+									});
+								});
+								print_json('compute_info', info);
+							} else {
+								if(process_info.threads) {
+									var cpuName = require('os').cpus()[0].model.trim();
+									if(cpuName == 'unknown') cpuName = 'CPU';
+									process.stderr.write('\n' + cliFormat('4', cpuName) + '\n')
+									process.stderr.write('  Multiply method : ' + cliFormat('1', process_info.method_desc) + ' with ' + sizeDisp(process_info.chunk_size) + ' loop tiling, ' + pluralDisp(process_info.threads, 'thread') + '\n');
+									process.stderr.write('  Input batching  : ' + pluralDisp(process_info.staging_size, 'chunk') + ', ' + pluralDisp(process_info.staging_count, 'batch', 'es') + '\n');
+									var transMem = Math.max(g.opts.recDataSize * g._chunkSize, process_info.slice_mem * g.procInStagingBufferCount);
+									process.stderr.write('  Memory Usage    : ' + sizeDisp(process_info.slice_mem * process_info.num_output_slices + transMem) + ' (' + pluralDisp(process_info.num_output_slices, '* ' + sizeDisp(process_info.slice_mem) + ' chunk') + ' + ' + sizeDisp(transMem) + ' transfer buffer)\n');
+								} else {
+									process.stderr.write('Transfer Buffer   : ' + sizeDisp(g.opts.recDataSize * g._chunkSize) + '\n');
+								}
+								
+								if(process_info.opencl_devices) process_info.opencl_devices.forEach(function(oclDev) {
+									process.stderr.write('\n' + cliFormat('4', oclDev.device_name.trim()) + '\n')
+									process.stderr.write('  Multiply method : ' + cliFormat('1', oclDev.method_desc) + ', split into ' + cliFormat('1', oclDev.output_chunks) + ' * ' + sizeDisp(oclDev.chunk_size) + ' workgroups\n');
+									process.stderr.write('  Input batching  : ' + pluralDisp(oclDev.staging_size, 'chunk') + ', ' + pluralDisp(oclDev.staging_count, 'batch', 'es') + '\n');
+									process.stderr.write('  Memory Usage    : ' + sizeDisp(oclDev.slice_mem * oclDev.num_output_slices) + ' (' + pluralDisp(oclDev.num_output_slices, '* ' + sizeDisp(oclDev.slice_mem) + ' chunk') + ')\n');
+								});
+								process.stderr.write('\n');
+							}
 						}
 						
-						if(process_info.opencl_devices) process_info.opencl_devices.forEach(function(oclDev) {
-							process.stderr.write('\n' + cliFormat('4', oclDev.device_name.trim()) + '\n')
-							process.stderr.write('  Multiply method : ' + cliFormat('1', oclDev.method_desc) + ', split into ' + cliFormat('1', oclDev.output_chunks) + ' * ' + sizeDisp(oclDev.chunk_size) + ' workgroups\n');
-							process.stderr.write('  Input batching  : ' + pluralDisp(oclDev.staging_size, 'chunk') + ', ' + pluralDisp(oclDev.staging_count, 'batch', 'es') + '\n');
-							process.stderr.write('  Memory Usage    : ' + sizeDisp(oclDev.slice_mem * oclDev.num_output_slices) + ' (' + pluralDisp(oclDev.num_output_slices, '* ' + sizeDisp(oclDev.slice_mem) + ' chunk') + ')\n');
-						});
-						process.stderr.write('\n');
+						infoShown = true;
 					}
-				}
+					currentState = 'Calculating';
+					if(argv.json) print_json('begin_subpass', {pass: arg1, subpass: arg2, input_chunks: g.numChunksThisChunkPass()});
+				break;
 				
-				infoShown = true;
-			}
-			if(event == 'begin_chunk_pass')
-				currentState = 'Calculating';
-			if(event == 'processing_slices') {
-				currentSlice += arg3;
-				curPassSlice += arg3;
-				currentSliceFrac = 0;
-			}
-			if(event == 'processing_slice_part') {
-				currentSliceFrac = arg1;
-			}
-			if(event == 'chunk_pass_write' || event == 'pass_write')
-				currentState = 'Writing';
-			if(event == 'writing_file') {
-				recSlicesWritten += prgLastRecFileSlices;
-				prgLastRecFileSlices = arg1.recoverySlices;
-				recSlicesWrittenFrac = 0;
-			}
-			if(event == 'writing_file_pos') {
-				recSlicesWrittenFrac = arg1.totalSize ? (arg2 / arg1.totalSize) * arg1.recoverySlices : 0;
-			}
-			if(event == 'chunk_pass_complete') {
-				recSlicesWritten += prgLastRecFileSlices;
-				prgLastRecFileSlices = 0;
-				recSlicesWrittenFrac = 0;
-				curPassSlice = 0;
-			}
-			if(event == 'closing_files')
-				currentState = 'Finalizing';
-			if(argv.json) {
-				if(event == 'begin_chunk_pass')
-					print_json('begin_subpass', {pass: arg1, subpass: arg2, input_chunks: g.numChunksThisChunkPass()});
-				if(event == 'chunk_pass_complete')
-					print_json('end_subpass', {pass: arg1, subpass: arg2});
-				if(event == 'chunk_pass_write')
-					print_json('subpass_write', {pass: arg1, subpass: arg2});
-				if(event == 'pass_write')
-					print_json('pass_write', {pass: arg1});
-				if(event == 'writing_file')
-					print_json('writing_data', {file_name: arg1.name});
-				if(event == 'closing_files')
-					print_json('closing_files', {});
+				case 'processing_slices':
+					currentSlice += arg3;
+					curPassSlice += arg3;
+					currentSliceFrac = 0;
+				break;
+				case 'processing_slice_part':
+					currentSliceFrac = arg1;
+				break;
+				case 'chunk_pass_write':
+					currentState = 'Writing';
+					if(argv.json) print_json('subpass_write', {pass: arg1, subpass: arg2});
+				break;
+				case 'pass_write':
+					currentState = 'Writing';
+					if(argv.json) print_json('pass_write', {pass: arg1});
+				break;
+				case 'writing_file':
+					recSlicesWritten += prgLastRecFileSlices;
+					prgLastRecFileSlices = arg1.recoverySlices;
+					recSlicesWrittenFrac = 0;
+					
+					if(argv.json) print_json('writing_data', {file_name: arg1.name});
+				break;
+				case 'writing_file_pos':
+					recSlicesWrittenFrac = arg1.totalSize ? (arg2 / arg1.totalSize) * arg1.recoverySlices : 0;
+				break;
+				case 'chunk_pass_complete':
+					recSlicesWritten += prgLastRecFileSlices;
+					prgLastRecFileSlices = 0;
+					recSlicesWrittenFrac = 0;
+					curPassSlice = 0;
+					
+					if(argv.json) print_json('end_subpass', {pass: arg1, subpass: arg2});
+				break;
+				case 'closing_files':
+					currentState = 'Finalizing';
+					if(argv.json) print_json('closing_files', {});
+				break;
 			}
 		}, function(err) {
 			if(err) throw err;
