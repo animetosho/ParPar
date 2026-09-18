@@ -132,7 +132,7 @@ async.waterfall([
 							if(err) return cb(err);
 							filePos += sliceSize; // advance to next slice
 							// process chunk
-							chunker.process(file, buf.slice(0, bytesRead), cb);
+							chunker.processData(file, buf.slice(0, bytesRead), cb);
 						});
 					}, function(err) {
 						if(err) return cb(err);

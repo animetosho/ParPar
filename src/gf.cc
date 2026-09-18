@@ -278,7 +278,7 @@ public:
 		if(!v->IsUndefined() && !v->IsNull()) \
 			var = ARG_TO_NUM(type, v); \
 	}
-		if(args.Length() >= 2) { // CPU processing props
+		if(args.Length() >= 2 && !args[1]->IsUndefined()) { // CPU processing props
 			if(args[1]->IsNull()) {
 				useCpu = false;
 				cpuSliceSize = 0;
