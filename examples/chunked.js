@@ -40,23 +40,16 @@ async.waterfall([
 				if(err) return cb(err);
 				
 				// read file and process data
-				var eof = false;
-				async.until(function(){return eof;}, function(cb) {
+				var doRead = function() {
 					fs.read(fd, buf, 0, sliceSize, null, function(err, bytesRead) {
 						if(err) return cb(err);
+						if(!bytesRead)
+							return fs.close(fd, cb);
 						
-						if(!bytesRead) {
-							eof = true;
-							return cb();
-						}
-						
-						// pump data
-						file.process(buf.slice(0, bytesRead), cb);
+						file.process(buf.slice(0, bytesRead), doRead);
 					});
-				}, function(err) {
-					if(err) return cb(err);
-					fs.close(fd, cb);
-				});
+				};
+				doRead();
 			});
 		}, cb);
 	},

@@ -38,24 +38,18 @@ ParPar.fileInfo(files, function(err, info) {
 			if(err) return cb(err);
 			
 			// read in all data and send it to file.process()
-			var eof = false;
-			async.until(function(){return eof;}, function(cb) {
+			var doRead = function() {
 				fs.read(fd, buf, 0, sliceSize, null, function(err, bytesRead) {
+					// file fully read or error occurred
 					if(err) return cb(err);
-					
-					if(!bytesRead) {
-						eof = true;
-						return cb();
-					}
+					if(!bytesRead)
+						return fs.close(fd, cb);
 					
 					// pump data
-					file.process(buf.slice(0, bytesRead), cb);
+					file.process(buf.slice(0, bytesRead), doRead);
 				});
-			}, function(err) {
-				// file fully read or error occurred
-				if(err) return cb(err);
-				fs.close(fd, cb);
-			});
+			};
+			doRead();
 		});
 		
 	}, function(err) {
