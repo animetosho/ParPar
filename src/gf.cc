@@ -1333,6 +1333,40 @@ FUNC(MD5_16k) {
 	
 	RETURN_BUFFER(hashes);
 }
+
+FUNC(MD5_Single) {
+	FUNC_START;
+	if(args.Length() < 3 || !node::Buffer::HasInstance(args[0]) || !node::Buffer::HasInstance(args[2]))
+		RETURN_ERROR("Buffers + offset required");
+	
+	unsigned dstOffset = (unsigned)ARG_TO_NUM(Uint32, args[1]);
+	if(node::Buffer::Length(args[0]) < 16+dstOffset)
+		RETURN_ERROR("Destination must be at least 16 bytes");
+	
+	char* dst = (char*)node::Buffer::Data(args[0]);
+	const char* src = (const char*)node::Buffer::Data(args[2]);
+	unsigned srcOffset = 0;
+	size_t srcEnd = node::Buffer::Length(args[2]);
+	
+	if(args.Length() >= 4) {
+		srcOffset = (unsigned)ARG_TO_NUM(Uint32, args[3]);
+		if(srcOffset > srcEnd)
+			RETURN_ERROR("Source offset exceeds source buffer length");
+		if(args.Length() >= 5) {
+			unsigned newEnd = (unsigned)ARG_TO_NUM(Uint32, args[4]);
+			if(newEnd > srcEnd)
+				RETURN_ERROR("Source offset exceeds source buffer length");
+			if(newEnd < srcOffset)
+				RETURN_ERROR("Source beginning cannot be after the end");
+			srcEnd = newEnd;
+		}
+	}
+	
+	MD5Single md5sgl;
+	if(srcEnd > srcOffset)
+		md5sgl.update(src + srcOffset, srcEnd - srcOffset);
+	md5sgl.end(dst + dstOffset);
+}
 #endif
 
 void parpar_gf_init(
@@ -1372,6 +1406,7 @@ void parpar_gf_init(
 	NODE_SET_METHOD(target, "hasherOutput_method", HasherOutputMethod);
 #ifdef PARPAR_ENABLE_HASHER_MD5CRC
 	NODE_SET_METHOD(target, "md5_16k", MD5_16k);
+	NODE_SET_METHOD(target, "md5", MD5_Single);
 #endif
 	
 	setup_hasher();
