@@ -195,6 +195,12 @@ var opts = {
 		type: 'size0',
 		map: 'minChunkSize'
 	},
+	'file-read-order': {
+		type: 'enum',
+		map: 'fileReadOrder',
+		enum: ['none','size','dir-inode','dir-creat'],
+		default: 'none'
+	},
 	'seq-read-size': {
 		type: 'size',
 		map: 'seqReadSize'

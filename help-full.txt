@@ -213,6 +213,14 @@ I/O Tuning Options:
                              generally improves efficiency, but increases
                              per-chunk overhead. Set to 0 to disable chunking.
                              Default `128K`.
+       --file-read-order     Order in which input files are read. Options are:
+                                 none: keep order specified in command
+                                 size: read from largest to smallest file
+                                 dir-inode: order by directory then file inode
+                                            (ascending order)
+                                 dir-creat: directory then file creation time
+                                            (oldest to newest)
+                             Default `none`
        --seq-read-size       Maximum read buffer size for sequential reading.
                              This option also limits the amount of recovery
                              that can be processed per slice on each read pass.

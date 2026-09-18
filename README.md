@@ -178,16 +178,17 @@ var par2creator = require('@animetosho/parpar').run(
         outputAltNamingScheme: true,
         displayNameFormat: 'common', // basename, keep, common, outrel or path
         displayNameBase: '.', // base path, only used if displayNameFormat is 'path'
+        fileReadOrder: 'none', // none, size, dir-inode, dir-creat
         seqReadSize: 2*1048576,
-		rndIoThreads: 3,
+        rndIoThreads: 3,
         readBuffers: 16,
         readHashQueue: 10,
         hashQueueSizing: 'halve', // fixed or halve
         numThreads: null, // null => number of processors
         gfMethod: null, // null => '' (auto)
         loopTileSize: 0, // 0 = auto
-		openclDevices: [], // each device (defaults listed): {platform: null, device: null, ratio: null, memoryLimit: null, method: null, input_batchsize: 0, target_iters: 0, target_grouping: 0, minChunkSize: 32768}
-		cpuMinChunkSize: 65536, // must be even
+        openclDevices: [], // each device (defaults listed): {platform: null, device: null, ratio: null, memoryLimit: null, method: null, input_batchsize: 0, target_iters: 0, target_grouping: 0, minChunkSize: 32768}
+        cpuMinChunkSize: 65536, // must be even
     },
     function(err) {
         console.log(err || 'Process finished');
