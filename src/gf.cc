@@ -1378,7 +1378,9 @@ void parpar_gf_init(
  Handle<Object> target
 #endif
 ) {
-#if NODE_VERSION_AT_LEAST(0, 11, 0)
+#if NODE_VERSION_AT_LEAST(25, 0, 0)
+	Isolate* isolate = Isolate::GetCurrent();
+#elif NODE_VERSION_AT_LEAST(0, 11, 0)
 	Isolate* isolate = target->GetIsolate();
 #endif
 	HANDLE_SCOPE;
