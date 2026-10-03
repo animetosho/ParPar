@@ -82,7 +82,6 @@ protected:
 	std::vector<uint16_t> outputExponents; // recovery exponents
 	
 	bool processingAdd;
-	virtual void run_kernel(unsigned stagingArea, unsigned numInputs) = 0;
 	unsigned currentStagingArea, currentStagingInputs;
 	unsigned inputBatchSize, minInBatchSize;
 	unsigned statBatchesStarted;

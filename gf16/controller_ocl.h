@@ -153,7 +153,7 @@ class PAR2ProcOCL : public IPAR2ProcBackend {
 	template<typename T> FUTURE_RETURN_T _addInput(const void* buffer, size_t size, T inputNumOrCoeffs, bool flush  IF_LIBUV(, const PAR2ProcPlainCb& cb));
 	
 	bool setup_kernels(Galois16OCLMethods method, unsigned targetInputBatch, unsigned targetIters, unsigned targetGrouping, bool outputSequential);
-	void run_kernel(unsigned buf, unsigned numInputs) override;
+	void run_kernel(unsigned buf, unsigned numInputs);
 	
 	
 	cl::Context context;

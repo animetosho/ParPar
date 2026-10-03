@@ -46,7 +46,7 @@ private:
 	
 	void set_coeffs(PAR2ProcCPUStaging& area, unsigned idx, uint16_t inputNum);
 	void set_coeffs(PAR2ProcCPUStaging& area, unsigned idx, const uint16_t* inputCoeffs);
-	void run_kernel(unsigned inBuf, unsigned numInputs) override;
+	void run_kernel(unsigned inBuf, unsigned numInputs);
 	
 	template<typename T> FUTURE_RETURN_T _addInput(const void* buffer, size_t size, T inputNumOrCoeffs, bool flush  IF_LIBUV(, const PAR2ProcPlainCb& cb));
 	
