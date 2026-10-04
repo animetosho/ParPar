@@ -211,9 +211,9 @@ public:
 #endif
 
 #ifdef USE_LIBUV
-typedef void(*thread_cb_t)(ThreadMessageQueue<void*>&);
+typedef void(*thread_cb_t)(void*, ThreadMessageQueue<void*>&);
 #else
-typedef std::function<void(ThreadMessageQueue<void*>&)> thread_cb_t;
+typedef std::function<void(void*, ThreadMessageQueue<void*>&)> thread_cb_t;
 #endif
 
 
@@ -238,6 +238,7 @@ class MessageThread {
 	thread_t thread;
 	bool threadActive;
 	bool threadCreated;
+	void* threadData;
 	thread_cb_t cb;
 	
 	static void thread_func(void* parent) {
@@ -321,7 +322,7 @@ class MessageThread {
 			#endif
 		}
 		
-		self->cb(self->q);
+		self->cb(self->threadData, self->q);
 	}
 	
 	// disable copy constructor
@@ -337,6 +338,7 @@ class MessageThread {
 #endif
 		threadActive = other.threadActive;
 		threadCreated = other.threadCreated;
+		threadData = other.threadData;
 		cb = other.cb;
 		name = other.name;
 		lowPrio = other.lowPrio;
@@ -350,20 +352,24 @@ public:
 	const char* name;
 	MessageThread() {
 		cb = NULL;
+		threadData = NULL;
 		threadActive = false;
 		threadCreated = false;
 		lowPrio = false;
 		name = NULL;
 	}
-	MessageThread(thread_cb_t callback) {
+	MessageThread(thread_cb_t callback, void* tData) {
 		cb = callback;
+		threadData = tData;
 		threadActive = false;
 		threadCreated = false;
 		lowPrio = false;
 		name = NULL;
 	}
-	void setCallback(thread_cb_t callback) {
+	// NOTE: this function only applies to the next time a thread is started
+	void setCallback(thread_cb_t callback, void* tData) {
 		cb = callback;
+		threadData = tData;
 	}
 	~MessageThread() {
 		if(threadActive)
@@ -402,6 +408,12 @@ public:
 		if(threadActive) {
 			q.push(NULL);
 			threadActive = false;
+		}
+	}
+	void join() {
+		if(threadCreated) {
+			thread_join(thread);
+			threadCreated = false;
 		}
 	}
 	

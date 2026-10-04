@@ -26,14 +26,12 @@ private:
 	
 	int numThreads;
 	std::vector<MessageThread> thWorkers; // main processing worker threads
-	std::vector<void*> gfScratch; // scratch memory for each thread
 	
 	Galois16Mul* gf;
 	size_t chunkLen; // loop tiling size
 	size_t numChunks;
 	unsigned alignment;
 	unsigned stride;
-	void freeGf();
 	
 	// staging area from which processing is performed
 	std::vector<PAR2ProcCPUStaging> staging;
@@ -56,8 +54,8 @@ private:
 	void _notifyProc(void* _req) override;
 #endif
 	
-	static void transfer_slice(ThreadMessageQueue<void*>& q);
-	static void compute_worker(ThreadMessageQueue<void*>& q);
+	static void transfer_slice(void* p, ThreadMessageQueue<void*>& q);
+	static void compute_worker(void* p, ThreadMessageQueue<void*>& q);
 	
 #ifdef DEBUG_STAT_THREAD_EMPTY
 	std::atomic<bool> endSignalled;

@@ -20,7 +20,7 @@ typedef std::function<void(unsigned)> PAR2ProcCompleteCb;
 #define FUTURE_RETURN_BOOL_T void
 #define IF_LIBUV(...) __VA_ARGS__
 #define IF_NOT_LIBUV(...)
-#define NOTIFY_DONE(obj, q, prom, ...) obj->parent->q.notify(obj)
+#define NOTIFY_DONE(obj, q, prom, ...) q.notify(obj)
 #define NOTIFY_DECL(cb, prom) PAR2ProcPlainCb cb
 #define NOTIFY_BOOL_DECL(cb, prom) PAR2ProcOutputCb cb
 #else
@@ -215,11 +215,9 @@ public:
 	virtual ~IPAR2ProcBackend() {}
 };
 
-template<class PClass>
 struct PAR2ProcBackendBaseComputeReq {
 	uint16_t numInputs;
 	unsigned procIdx;
-	PClass* parent;
 };
 
 

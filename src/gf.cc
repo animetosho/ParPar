@@ -854,10 +854,8 @@ struct input_blockHash {
 	char* ptr;
 };
 struct input_work_data {
-	IHasherInput* hasher;
 	const void* buffer;
 	size_t len;
-	struct input_blockHash* bh;
 	CallbackWrapper* cb;
 	HasherInput* self;
 };
@@ -926,33 +924,34 @@ protected:
 		RETURN_UNDEF;
 	}
 	
-	static void thread_func(ThreadMessageQueue<void*>& q) {
+	static void thread_func(void*, ThreadMessageQueue<void*>& q) {
 		struct input_work_data* data;
 		while((data = static_cast<struct input_work_data*>(q.pop())) != NULL) {
+			auto self = data->self;
 			char* src_ = (char*)data->buffer;
 			size_t len = data->len;
 			// feed initial part
-			uint64_t blockLeft = data->bh->size - data->bh->pos;
+			uint64_t blockLeft = self->bh.size - self->bh.pos;
 			while(len >= blockLeft) {
-				data->hasher->update(src_, blockLeft);
+				self->hasher->update(src_, blockLeft);
 				src_ += blockLeft;
 				len -= blockLeft;
-				blockLeft = data->bh->size;
-				data->bh->pos = 0;
+				blockLeft = self->bh.size;
+				self->bh.pos = 0;
 				
-				if(data->bh->count) {
-					data->hasher->getBlock(data->bh->ptr, 0);
-					data->bh->ptr += 20;
-					data->bh->count--;
+				if(self->bh.count) {
+					self->hasher->getBlock(self->bh.ptr, 0);
+					self->bh.ptr += 20;
+					self->bh.count--;
 				} // else there's an overflow
 			}
-			if(len) data->hasher->update(src_, len);
-			data->bh->pos += len;
+			if(len) self->hasher->update(src_, len);
+			self->bh.pos += len;
 			
 			
 			// signal main thread that hashing has completed
-			data->self->hashesDone.push(data);
-			uv_async_send(data->self->threadSignal.get());
+			self->hashesDone.push(data);
+			uv_async_send(self->threadSignal.get());
 		}
 	}
 	void after_process() {
@@ -968,7 +967,7 @@ protected:
 	inline void thread_send(struct input_work_data* data) {
 		if(thread == nullptr) {
 			if(HasherInputThreadPool.empty()) {
-				thread.reset(new MessageThread(thread_func));
+				thread.reset(new MessageThread(thread_func, nullptr));
 				thread->name = "par2_hash_input";
 			} else {
 				thread.reset(HasherInputThreadPool.back());
@@ -995,11 +994,9 @@ protected:
 		
 		struct input_work_data* data = new struct input_work_data;
 		data->cb = cb;
-		data->hasher = self->hasher;
 		data->buffer = node::Buffer::Data(args[0]);
 		data->len = node::Buffer::Length(args[0]);
 		data->self = self;
-		data->bh = &self->bh;
 		self->thread_send(data);
 		RETURN_UNDEF;
 	}

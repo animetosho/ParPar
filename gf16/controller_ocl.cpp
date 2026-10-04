@@ -118,7 +118,7 @@ static int parse_ocl_version(const std::string& ver) {
 }
 
 PAR2ProcOCL::PAR2ProcOCL(IF_LIBUV(uv_loop_t* _loop,) int platformId, int deviceId, int stagingAreas)
-: IPAR2ProcBackend(IF_LIBUV(_loop)), staging(stagingAreas), allocatedSliceSize(0), transferThread(PAR2ProcOCL::transfer_slice) {
+: IPAR2ProcBackend(IF_LIBUV(_loop)), staging(stagingAreas), allocatedSliceSize(0), transferThread(PAR2ProcOCL::transfer_slice, this) {
 	_initSuccess = false;
 	transferThread.name = "ocl_transfer";
 	
@@ -335,18 +335,15 @@ bool PAR2ProcOCL::setCurrentSliceSize(size_t newSliceSize) {
 struct transfer_data_ocl {
 	bool finish; // false = prepare, true = finish
 	
-	PAR2ProcOCL* parent;
 	void* local;
 	cl::Buffer* remote;
 	size_t remoteOffset;
 	size_t sliceLen, totalLen;
-	Galois16Mul* gf;
 	
 	// prepare specific
 	size_t srcLen;
 	unsigned submitInBufs;
 	unsigned inBufId;
-	int oclPlatVersion;
 	NOTIFY_DECL(cbPrep, promPrep);
 	
 	// finish specific
@@ -379,33 +376,34 @@ void PAR2ProcOCL::waitForAdd() {
 }
 #endif
 
-void PAR2ProcOCL::transfer_slice(ThreadMessageQueue<void*>& q) {
+void PAR2ProcOCL::transfer_slice(void* _parent, ThreadMessageQueue<void*>& q) {
+	auto parent = static_cast<PAR2ProcOCL*>(_parent);
 	struct transfer_data_ocl* data;
 	while((data = static_cast<struct transfer_data_ocl*>(q.pop())) != NULL) {
 		// TODO: consider doing a single mapping for the entire slice (if not, consider async mapping)
 		if(data->finish) {
-			void* remote = data->parent->queue.enqueueMapBuffer(*(data->remote), CL_TRUE, CL_MAP_READ, data->remoteOffset, data->totalLen*data->grpSize);
+			void* remote = parent->queue.enqueueMapBuffer(*(data->remote), CL_TRUE, CL_MAP_READ, data->remoteOffset, data->totalLen*data->grpSize);
 			if(data->grpSize == 2) {
 				// TODO: look at a way to avoid unnecessary map/unmap calls
-				data->cksumSuccess = data->gf->finish_grp2_cksum(data->local, remote, data->sliceLen, data->region & (data->grpSize-1));
+				data->cksumSuccess = parent->gf->finish_grp2_cksum(data->local, remote, data->sliceLen, data->region & (data->grpSize-1));
 			} else {
-				data->cksumSuccess = data->gf->copy_cksum_check(data->local, remote, data->sliceLen);
+				data->cksumSuccess = parent->gf->copy_cksum_check(data->local, remote, data->sliceLen);
 			}
-			data->parent->queue.enqueueUnmapMemObject(*(data->remote), remote);
-			NOTIFY_DONE(data, _queueRecv, data->promOut, data->cksumSuccess);
+			parent->queue.enqueueUnmapMemObject(*(data->remote), remote);
+			NOTIFY_DONE(data, parent->_queueRecv, data->promOut, data->cksumSuccess);
 		} else {
 			if(data->local) {
-				void* remote = data->parent->queue.enqueueMapBuffer(*(data->remote), CL_TRUE, data->oclPlatVersion>=1002 ? CL_MAP_WRITE_INVALIDATE_REGION : CL_MAP_WRITE, data->remoteOffset, data->totalLen);
-				data->gf->copy_cksum(remote, data->local, data->srcLen, data->sliceLen);
-				data->parent->queue.enqueueUnmapMemObject(*(data->remote), remote);
+				void* remote = parent->queue.enqueueMapBuffer(*(data->remote), CL_TRUE, parent->oclPlatVersion>=1002 ? CL_MAP_WRITE_INVALIDATE_REGION : CL_MAP_WRITE, data->remoteOffset, data->totalLen);
+				parent->gf->copy_cksum(remote, data->local, data->srcLen, data->sliceLen);
+				parent->queue.enqueueUnmapMemObject(*(data->remote), remote);
 			}
 			if(data->submitInBufs) {
 				// queue async compute
-				data->parent->run_kernel(data->inBufId, data->submitInBufs);
+				parent->run_kernel(data->inBufId, data->submitInBufs);
 			}
 			
 			// signal main thread that prepare has completed
-			NOTIFY_DONE(data, _queueSent, data->promPrep);
+			NOTIFY_DONE(data, parent->_queueSent, data->promPrep);
 		}
 		IF_NOT_LIBUV(delete data);
 	}
@@ -430,13 +428,10 @@ FUTURE_RETURN_T PAR2ProcOCL::_addInput(const void* buffer, size_t size, T inputN
 	data->finish = false;
 	data->local = (void*)buffer;
 	data->srcLen = size;
-	data->parent = this;
 	data->remote = &area.input;
 	data->remoteOffset = currentStagingInputs * sliceSizeAligned;
 	data->sliceLen = sliceSize;
 	data->totalLen = sliceSizeCksum;
-	data->gf = gf.get();
-	data->oclPlatVersion = oclPlatVersion;
 	IF_LIBUV(data->cbPrep = cb);
 	
 	currentStagingInputs++;
@@ -523,11 +518,8 @@ void PAR2ProcOCL::flush() {
 	struct transfer_data_ocl* data = new struct transfer_data_ocl;
 	data->finish = false;
 	data->local = NULL;
-	data->parent = this;
 	data->submitInBufs = currentStagingInputs;
 	data->inBufId = currentStagingArea;
-	data->gf = gf.get();
-	data->oclPlatVersion = oclPlatVersion;
 	
 	stagingActiveCount_inc();
 	staging[currentStagingArea].setIsActive(true); // lock this buffer until processing is complete
@@ -560,13 +552,10 @@ void PAR2ProcOCL::_notifyRecv(void* _req) {
 FUTURE_RETURN_BOOL_T PAR2ProcOCL::getOutput(unsigned index, void* output  IF_LIBUV(, const PAR2ProcOutputCb& cb)) {
 	struct transfer_data_ocl* data = new struct transfer_data_ocl;
 	data->finish = true;
-	data->parent = this;
 	data->remote = &buffer_output;
 	data->remoteOffset = index*sliceSizeAligned;
 	data->sliceLen = sliceSize;
 	data->totalLen = sliceSizeAligned;
-	data->gf = gf.get();
-	data->oclPlatVersion = oclPlatVersion;
 	data->local = output;
 	data->region = index;
 	data->grpSize = 1;
@@ -588,7 +577,9 @@ FUTURE_RETURN_BOOL_T PAR2ProcOCL::getOutput(unsigned index, void* output  IF_LIB
 
 
 
-typedef struct PAR2ProcBackendBaseComputeReq<PAR2ProcOCL> compute_req;
+typedef struct __compute_req : PAR2ProcBackendBaseComputeReq {
+	PAR2ProcOCL* parent;
+} compute_req;
 
 
 #ifdef USE_LIBUV

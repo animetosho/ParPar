@@ -15,7 +15,7 @@ PAR2ProcCPUStaging::~PAR2ProcCPUStaging() {
 
 /** initialization **/
 PAR2ProcCPU::PAR2ProcCPU(IF_LIBUV(uv_loop_t* _loop,) int stagingAreas)
-: IPAR2ProcBackend(IF_LIBUV(_loop)), sliceSize(0), numThreads(0), gf(NULL), staging(stagingAreas), memProcessing(NULL), transferThread(PAR2ProcCPU::transfer_slice) {
+: IPAR2ProcBackend(IF_LIBUV(_loop)), sliceSize(0), numThreads(0), gf(NULL), staging(stagingAreas), memProcessing(NULL), transferThread(PAR2ProcCPU::transfer_slice, this) {
 	
 	// default number of threads = number of CPUs available
 	setNumThreads(-1);
@@ -30,25 +30,6 @@ void PAR2ProcCPU::setSliceSize(size_t _sliceSize) {
 	sliceSize = _sliceSize;
 }
 
-void PAR2ProcCPU::freeGf() {
-	for(auto& area : staging) {
-		if(area.src) ALIGN_FREE(area.src);
-		area.src = nullptr;
-		area.procCoeffs.clear();
-	}
-	
-	freeProcessingMem();
-	
-	if(!gfScratch.empty()) {
-		for(unsigned i=0; i<gfScratch.size(); i++)
-			if(gfScratch[i])
-				gf->mutScratch_free(gfScratch[i]);
-		gfScratch.clear();
-	}
-	delete gf;
-	gf = NULL;
-}
-
 void PAR2ProcCPU::setNumThreads(int threads) {
 	if(threads < 0) {
 		threads = hardware_concurrency();
@@ -56,28 +37,23 @@ void PAR2ProcCPU::setNumThreads(int threads) {
 	numThreads = threads;
 	if(!gf) return;
 	
-	int oldThreads = gfScratch.size();
+	int oldThreads = thWorkers.size();
 	if(threads == oldThreads) return;
 	
-	for(int i=oldThreads-1; i>=threads; i--) {
-		if(gfScratch[i])
-			gf->mutScratch_free(gfScratch[i]);
+	for(int i=oldThreads-1; i>=threads; i--)
 		thWorkers[i].end();
-	}
-	gfScratch.resize(threads);
 	thWorkers.resize(threads);
 	for(int i=oldThreads; i<threads; i++) {
-		gfScratch[i] = gf->mutScratch_alloc();
 		thWorkers[i].lowPrio = true;
 		thWorkers[i].name = "gf_worker";
-		thWorkers[i].setCallback(PAR2ProcCPU::compute_worker);
+		thWorkers[i].setCallback(PAR2ProcCPU::compute_worker, this);
 	}
 	
 	if(alignedCurrentSliceSize) calcChunkSize();
 }
 
 bool PAR2ProcCPU::init(Galois16Methods method, unsigned _inputGrouping, size_t _chunkLen) {
-	freeGf();
+	_deinit();
 	bool ret = true;
 	
 	// TODO: accept & pass on hint info
@@ -199,9 +175,20 @@ void PAR2ProcCPU::freeProcessingMem() {
 void PAR2ProcCPU::_deinit() {
 	for(auto& worker : thWorkers)
 		worker.end();
-	// TODO: join threads?
+	// wait for workers to clean up before free'ing more memory
+	for(auto& worker : thWorkers)
+		worker.join();
 	
-	freeGf();
+	for(auto& area : staging) {
+		if(area.src) ALIGN_FREE(area.src);
+		area.src = nullptr;
+		area.procCoeffs.clear();
+	}
+	
+	freeProcessingMem();
+	
+	delete gf;
+	gf = NULL;
 }
 
 PAR2ProcCPU::~PAR2ProcCPU() {
@@ -213,13 +200,11 @@ PAR2ProcCPU::~PAR2ProcCPU() {
 struct transfer_data {
 	bool finish; // false = prepare, true = finish
 	
-	PAR2ProcCPU* parent;
 	void* dst;
 	const void* src;
 	size_t size;
 	unsigned index;
 	size_t chunkLen;
-	Galois16Mul* gf;
 	unsigned numBufs;
 	
 	// prepare specific
@@ -234,22 +219,23 @@ struct transfer_data {
 };
 
 // prepare thread process function
-void PAR2ProcCPU::transfer_slice(ThreadMessageQueue<void*>& q) {
+void PAR2ProcCPU::transfer_slice(void* _parent, ThreadMessageQueue<void*>& q) {
+	auto parent = static_cast<PAR2ProcCPU*>(_parent);
 	struct transfer_data* data;
 	while((data = static_cast<struct transfer_data*>(q.pop())) != NULL) {
 		if(data->finish) {
-			data->cksumSuccess = data->gf->finish_packed_cksum(data->dst, data->src, data->size, data->numBufs, data->index, data->chunkLen);
-			NOTIFY_DONE(data, _queueRecv, data->promOut, data->cksumSuccess);
+			data->cksumSuccess = parent->gf->finish_packed_cksum(data->dst, data->src, data->size, data->numBufs, data->index, data->chunkLen);
+			NOTIFY_DONE(data, parent->_queueRecv, data->promOut, data->cksumSuccess);
 		} else {
 			if(data->src)
-				data->gf->prepare_packed_cksum(data->dst, data->src, data->size, data->dstLen, data->numBufs, data->index, data->chunkLen);
+				parent->gf->prepare_packed_cksum(data->dst, data->src, data->size, data->dstLen, data->numBufs, data->index, data->chunkLen);
 			if(data->submitInBufs) {
 				// queue async compute
-				data->parent->run_kernel(data->inBufId, data->submitInBufs);
+				parent->run_kernel(data->inBufId, data->submitInBufs);
 			}
 			
 			// signal main thread that prepare has completed
-			NOTIFY_DONE(data, _queueSent, data->promPrep);
+			NOTIFY_DONE(data, parent->_queueSent, data->promPrep);
 		}
 		IF_NOT_LIBUV(delete data);
 	}
@@ -299,13 +285,11 @@ FUTURE_RETURN_T PAR2ProcCPU::_addInput(const void* buffer, size_t size, T inputN
 	data->finish = false;
 	data->src = buffer;
 	data->size = size;
-	data->parent = this;
 	data->dst = area.src;
 	data->dstLen = alignedCurrentSliceSize - stride;
 	data->numBufs = inputBatchSize;
 	data->index = currentStagingInputs++;
 	data->chunkLen = chunkLen;
-	data->gf = gf;
 	IF_LIBUV(data->cbPrep = cb);
 	
 	data->submitInBufs = (flush || currentStagingInputs == inputBatchSize || (
@@ -391,10 +375,8 @@ void PAR2ProcCPU::flush() {
 	struct transfer_data* data = new struct transfer_data;
 	data->finish = false;
 	data->src = NULL;
-	data->parent = this;
 	data->submitInBufs = currentStagingInputs;
 	data->inBufId = currentStagingArea;
-	data->gf = gf;
 	
 	stagingActiveCount_inc();
 	staging[currentStagingArea].setIsActive(true); // lock this buffer until processing is complete
@@ -423,10 +405,8 @@ void PAR2ProcCPU::_notifyRecv(void* _req) {
 FUTURE_RETURN_BOOL_T PAR2ProcCPU::getOutput(unsigned index, void* output  IF_LIBUV(, const PAR2ProcOutputCb& cb)) {
 	struct transfer_data* data = new struct transfer_data;
 	data->finish = true;
-	data->parent = this;
 	data->src = memProcessing;
 	data->size = currentSliceSize;
-	data->gf = gf;
 	data->dst = output;
 	data->numBufs = outputExponents.size();
 	data->index = index;
@@ -444,7 +424,7 @@ FUTURE_RETURN_BOOL_T PAR2ProcCPU::getOutput(unsigned index, void* output  IF_LIB
 
 
 /** main processing **/
-typedef struct __compute_req : PAR2ProcBackendBaseComputeReq<PAR2ProcCPU> {
+typedef struct __compute_req : PAR2ProcBackendBaseComputeReq {
 	unsigned inputGrouping;
 	uint16_t numOutputs;
 	const uint16_t *outNonZero;
@@ -454,17 +434,16 @@ typedef struct __compute_req : PAR2ProcBackendBaseComputeReq<PAR2ProcCPU> {
 	void* output;
 	bool add;
 	
-	void* mutScratch;
-	
-	const Galois16Mul* gf;
 	std::atomic<int>* procRefs;
 } compute_req;
 
-void PAR2ProcCPU::compute_worker(ThreadMessageQueue<void*>& q) {
+void PAR2ProcCPU::compute_worker(void* _parent, ThreadMessageQueue<void*>& q) {
+	auto parent = static_cast<PAR2ProcCPU*>(_parent);
+	void* mutScratch = parent->gf->mutScratch_alloc();
 	compute_req* req;
 	while((req = static_cast<compute_req*>(q.pop())) != NULL) {
 		
-		const Galois16MethodInfo& gfInfo = req->gf->info();
+		const Galois16MethodInfo& gfInfo = parent->gf->info();
 		// compute how many inputs regions get prefetched in a muladd_multi call
 		// TODO: should this be done across all threads?
 		unsigned inputsPrefetchedPerInvok = (req->numInputs / gfInfo.idealInputMultiple);
@@ -496,20 +475,20 @@ void PAR2ProcCPU::compute_worker(ThreadMessageQueue<void*>& q) {
 				if(round == req->numChunks-1) {
 					if(out+1 < req->numOutputs) {
 						if(req->outNonZero[out])
-							req->gf->blkmac_packpf(req->inputGrouping, req->numInputs, 1, dstPtr, srcPtr, procSize, vals, req->mutScratch, NULL, dstPtr+procSize);
+							parent->gf->blkmac_packpf(req->inputGrouping, req->numInputs, 1, dstPtr, srcPtr, procSize, vals, mutScratch, NULL, dstPtr+procSize);
 						else
-							req->gf->add_multi_packpf(req->inputGrouping, req->numInputs, dstPtr, srcPtr, procSize, NULL, dstPtr+procSize);
+							parent->gf->add_multi_packpf(req->inputGrouping, req->numInputs, dstPtr, srcPtr, procSize, NULL, dstPtr+procSize);
 					} else
 						// TODO: this could also be a 0 output, so consider add_multi optimisation?
-						req->gf->blkmac_packed(req->inputGrouping, req->numInputs, 1, dstPtr, srcPtr, procSize, vals, req->mutScratch);
+						parent->gf->blkmac_packed(req->inputGrouping, req->numInputs, 1, dstPtr, srcPtr, procSize, vals, mutScratch);
 				} else {
 					const char* pfInput = out >= inputPrefetchOutOffset ? static_cast<const char*>(req->input) + (round+1)*req->chunkSize*req->inputGrouping + ((inputsPrefetchedPerInvok*(out-inputPrefetchOutOffset)*procSize)>>MAX_PF_FACTOR) : NULL;
 					// procSize input prefetch may be wrong for final round, but it's the closest we've got; TODO: perhaps consider skipping out of prefetching, if the final round has a different region size
 					
 					if(req->outNonZero[out])
-						req->gf->blkmac_packpf(req->inputGrouping, req->numInputs, 1, dstPtr, srcPtr, procSize, vals, req->mutScratch, pfInput, dstPtr+procSize);
+						parent->gf->blkmac_packpf(req->inputGrouping, req->numInputs, 1, dstPtr, srcPtr, procSize, vals, mutScratch, pfInput, dstPtr+procSize);
 					else
-						req->gf->add_multi_packpf(req->inputGrouping, req->numInputs, dstPtr, srcPtr, procSize, pfInput, dstPtr+procSize);
+						parent->gf->add_multi_packpf(req->inputGrouping, req->numInputs, dstPtr, srcPtr, procSize, pfInput, dstPtr+procSize);
 				}
 			}
 		}
@@ -517,23 +496,25 @@ void PAR2ProcCPU::compute_worker(ThreadMessageQueue<void*>& q) {
 		// TODO: allow worker to peek into next queue entry for prefetching?
 		
 #ifdef DEBUG_STAT_THREAD_EMPTY
-		if(q.empty() && !(req->parent->endSignalled IF_NOT_LIBUV(.load(std::memory_order_relaxed))))
-			req->parent->statWorkerIdleEvents.fetch_add(1, std::memory_order_relaxed);
+		if(q.empty() && !(parent->endSignalled IF_NOT_LIBUV(.load(std::memory_order_relaxed))))
+			parent->statWorkerIdleEvents.fetch_add(1, std::memory_order_relaxed);
 #endif
 		
 		// mark that we've done processing this request
 		if(req->procRefs->fetch_sub(1, std::memory_order_acq_rel) <= 1) { // ensure all prior memory operations to be complete at this point; even though a cross-thread signal requires stricter ordering, it's only guaranteed on the sending thread
 			// signal this input group is done with
 #ifdef USE_LIBUV
-			req->parent->_queueProc.notify(req);
+			parent->_queueProc.notify(req);
 #else
-			req->parent->stagingActiveCount_dec();
-			req->parent->_setAreaActive(req->procIdx, false);
+			parent->stagingActiveCount_dec();
+			parent->_setAreaActive(req->procIdx, false);
 			delete req;
 #endif
 		} else
 			delete req;
 	}
+	if(mutScratch)
+		parent->gf->mutScratch_free(mutScratch);
 }
 
 void PAR2ProcCPU::run_kernel(unsigned inBuf, unsigned numInputs) {
@@ -545,16 +526,13 @@ void PAR2ProcCPU::run_kernel(unsigned inBuf, unsigned numInputs) {
 	bool oldProcessingAdd = processingAdd;
 	processingAdd = true;
 	
-	auto makeReq = [&, this](unsigned thread, size_t sliceOffset) -> compute_req* {
+	auto makeReq = [&, this](size_t sliceOffset) -> compute_req* {
 		compute_req* req = new compute_req;
 		req->numInputs = numInputs;
 		req->inputGrouping = inputBatchSize;
 		req->chunkSize = chunkLen;
 		req->input = static_cast<const char*>(area.src) + sliceOffset*inputBatchSize;
 		req->add = oldProcessingAdd;
-		req->mutScratch = gfScratch[thread]; // TODO: should this be assigned to the thread instead?
-		req->gf = gf;
-		req->parent = this;
 		req->procRefs = &(area.procRefs);
 		req->procIdx = inBuf;
 		return req;
@@ -586,7 +564,7 @@ void PAR2ProcCPU::run_kernel(unsigned inBuf, unsigned numInputs) {
 			unsigned outputIdx = 0;
 			for(unsigned tc = 0; tc < threadsPerChunk; tc++) {
 				assert(thread < usedThreads);
-				auto req = makeReq(thread, sliceOffset);
+				auto req = makeReq(sliceOffset);
 				req->numOutputs = (unsigned)(outputsPerThread*(tc+1) + 0.5) - outputIdx;
 				assert(req->numOutputs >= 1);
 				req->outNonZero = outputExponents.data() + outputIdx;
@@ -608,7 +586,7 @@ void PAR2ProcCPU::run_kernel(unsigned inBuf, unsigned numInputs) {
 	if(fullChunksPerThread) {
 		for(int thread=0; thread<numThreads; thread++) {
 			size_t sliceOffset = chunk*chunkLen;
-			auto req = makeReq(thread, sliceOffset);
+			auto req = makeReq(sliceOffset);
 			req->numOutputs = outputExponents.size();
 			req->outNonZero = outputExponents.data();
 			req->coeffs = area.procCoeffs.data();

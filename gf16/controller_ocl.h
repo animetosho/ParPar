@@ -140,7 +140,7 @@ class PAR2ProcOCL : public IPAR2ProcBackend {
 	std::unique_ptr<Galois16Mul> gf;
 	Galois16Methods gfMethod;
 	MessageThread transferThread;
-	static void transfer_slice(ThreadMessageQueue<void*>& q);
+	static void transfer_slice(void* parent, ThreadMessageQueue<void*>& q);
 	
 	unsigned outputsInterleaved; // must be a power of 2
 	

@@ -55,7 +55,6 @@ struct Galois16RecMatrixWorkerMessage {
 	unsigned coeffWidth;
 	void(Galois16RecMatrix::*fn)(unsigned, unsigned, unsigned, unsigned, unsigned, unsigned, uint16_t*, unsigned, void*(&)[PP_INVERT_MAX_MULTI_ROWS], Galois16Mul&, void*, const void*, unsigned);
 	unsigned pfFactor;
-	Galois16RecMatrix* parent;
 	std::atomic<int>* procRefs;
 	std::promise<void>* done;
 	
@@ -63,10 +62,11 @@ struct Galois16RecMatrixWorkerMessage {
 	: rowCoeffs(state.coeff), gf(&state.gf), srcRowsBase(state.srcRowsBase), pfFactor(state.pfFactor) {}
 };
 
-static void invert_worker(ThreadMessageQueue<void*>& q) {
+static void invert_worker(void* _parent, ThreadMessageQueue<void*>& q) {
 	Galois16RecMatrixWorkerMessage* req;
+	auto parent = static_cast<Galois16RecMatrix*>(_parent);
 	while((req = static_cast<Galois16RecMatrixWorkerMessage*>(q.pop())) != NULL) {
-		(req->parent->*(req->fn))(req->stripeStart, req->stripeEnd, req->recFirst, req->recLast, req->recSrc, req->recSrcCount, req->rowCoeffs, req->coeffWidth, req->srcRowsBase, *(req->gf), req->gfScratch, nullptr, req->pfFactor);
+		(parent->*(req->fn))(req->stripeStart, req->stripeEnd, req->recFirst, req->recLast, req->recSrc, req->recSrcCount, req->rowCoeffs, req->coeffWidth, req->srcRowsBase, *(req->gf), req->gfScratch, nullptr, req->pfFactor);
 		if(req->procRefs->fetch_sub(1, std::memory_order_acq_rel) <= 1) {
 			req->done->set_value();
 		}
@@ -314,7 +314,6 @@ void Galois16RecMatrix::applyRows(Galois16RecMatrixComputeState& state, unsigned
 			req->recSrcCount = recCount;
 			req->coeffWidth = coeffWidth;
 			req->fn = &Galois16RecMatrix::invertLoop<rows>;
-			req->parent = this;
 			req->procRefs = &procRefs;
 			req->done = &done;
 			return req;
@@ -610,7 +609,7 @@ bool Galois16RecMatrix::Compute(const std::vector<bool>& inputValid, unsigned va
 		for(unsigned i=0; i<_numThreads; i++) {
 			state.workers.emplace_back(state.gf);
 			state.workers[i].thread.name = "gauss_worker";
-			state.workers[i].thread.setCallback(invert_worker);
+			state.workers[i].thread.setCallback(invert_worker, this);
 		}
 		state.gfScratch = state.workers[0].gfScratch;
 	} else
