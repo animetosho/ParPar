@@ -853,6 +853,9 @@ var inputFiles = argv._;
 				}
 				
 				process.stderr.write('Input data        : ' + sizeDisp(g.totalSize) + ' (' + pluralDisp(g.inputSlices, 'slice') + ' from ' + pluralDisp(info.length, 'file') + ')\n');
+				process.stderr.write('Output data       : ' + sizeDisp(g.recoveryFiles.reduce(function(a, rf) {
+					return a + rf.totalSize;
+				}, 0)) + ' across ' + pluralDisp(g.recoveryFiles.length, 'file') + '\n');
 				if(g.opts.recoverySlices) {
 					process.stderr.write('Recovery data     : ' + sizeDisp(g.opts.recoverySlices*g.opts.sliceSize) + ' (' + pluralDisp(g.opts.recoverySlices, '* ' + sizeDisp(g.opts.sliceSize) + ' slice') + ')\n');
 					process.stderr.write('Input pass(es)    : ' + cliFormat('1', g.chunks * g.passes) + ', processing ' + pluralDisp(g.slicesPerPass, '* ' + sizeDisp(g._chunkSize) + ' chunk') + ' per pass\n');
