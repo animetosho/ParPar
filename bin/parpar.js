@@ -170,7 +170,7 @@ var opts = {
 	'recovery-files': {
 		alias: 'F',
 		type: 'int',
-		map: 'outputFileCount'
+		map: 'outputVolumeCount'
 	},
 	'noindex': {
 		type: 'bool',

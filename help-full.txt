@@ -204,6 +204,10 @@ Output Options:
                                  pow2:    overrides `--slices-first-file`
                              If the requested file count cannot be met, an
                              error will be generated.
+                             A special value of 0 can be used to create no
+                             volumes and place all recovery slices into the
+                             index file. Other volume related options,
+                             including `--noindex`, will have no effect.
        --noindex             Don't output an index file (file with no recovery
                              blocks). This option takes no value.
 
